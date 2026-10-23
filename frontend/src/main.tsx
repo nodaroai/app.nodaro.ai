@@ -57,7 +57,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { PickerUiLocaleBridge } from "@/components/picker-ui-locale-bridge"
 import { AppDirectionProvider, I18nHtmlDir } from "@/components/i18n-html-dir"
 import { BrandDocumentHead } from "@/components/brand-document-head"
-import { Toaster } from "sonner"
+import { AppToaster } from "@/components/app-toaster"
 import { AccessBlockedScreen } from "@/components/access-blocked-screen"
 import { queryClient } from "@/lib/query-client"
 import { router } from "./router"
@@ -81,7 +81,7 @@ createRoot(document.getElementById("root")!).render(
           <PickerUiLocaleBridge>
             <RouterProvider router={router} />
           </PickerUiLocaleBridge>
-          <Toaster richColors position="bottom-right" />
+          <AppToaster />
           {/* A blocked account or network: one notice over every page. */}
           <AccessBlockedScreen />
         </AppDirectionProvider>

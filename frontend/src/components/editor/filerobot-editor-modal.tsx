@@ -4,6 +4,7 @@ import { Loader2, Check, X } from "lucide-react"
 import { useTheme } from "next-themes"
 import FilerobotImageEditor, { TABS } from "react-filerobot-image-editor"
 import { useT, type TFunction } from "@/lib/i18n"
+import { useFilerobotA11y } from "./filerobot-a11y"
 
 interface FilerobotEditorModalProps {
   readonly imageUrl: string
@@ -168,6 +169,13 @@ export function FilerobotEditorModal({
 }: FilerobotEditorModalProps) {
   const t = useT()
   const { resolvedTheme } = useTheme()
+  // Keyboard and screen-reader access to the editor itself (filerobot-a11y.ts).
+  const a11yRootRef = useRef<HTMLDivElement>(null)
+  const a11yWords = useMemo(
+    () => ({ toolsMenu: t("mediaed.toolsMenu"), cropPresets: t("mediaed.cropPresets"), textSize: t("mediaed.textSize") }),
+    [t],
+  )
+  useFilerobotA11y(a11yRootRef, a11yWords)
   const isDark = resolvedTheme !== "light"
 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -245,7 +253,7 @@ export function FilerobotEditorModal({
   )
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+    <div ref={a11yRootRef} role="dialog" aria-modal="true" aria-label={t("mediaed.imageEditor")} className="fixed inset-0 z-[9999] bg-black flex flex-col">
       {saveState !== "idle" && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[10001] flex items-center gap-2 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm border border-white/10 shadow-lg pointer-events-none">
           {saveState === "saving" && (

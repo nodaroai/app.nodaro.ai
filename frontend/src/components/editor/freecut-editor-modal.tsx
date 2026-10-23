@@ -6,6 +6,7 @@ import { X, Loader2, Check, FilePlus } from "lucide-react"
 import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_READY, FREECUT_EXPORT_COMPLETE, FREECUT_REQUEST_IMPORT } from "@nodaro/shared/media"
 import { runtimeFreecutOrigin, runtimeFreecutUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
+import { useInertBehind } from "@/lib/use-inert-behind"
 
 /**
  * Read at RUNTIME, not inlined at build time (#767). The published community
@@ -45,6 +46,9 @@ interface FreeCutEditorModalProps {
 
 export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAssets, onExportComplete, onClose, onImportRequest, sendImportFilesRef }: FreeCutEditorModalProps) {
   const t = useT()
+  // The page behind stays out of reach while the editor is open (use-inert-behind.ts).
+  const dialogRootRef = useRef<HTMLDivElement>(null)
+  useInertBehind(dialogRootRef)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -240,7 +244,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+    <div ref={dialogRootRef} role="dialog" aria-modal="true" aria-label={t("mediaed.nodarcutFrameTitle")} className="fixed inset-0 z-[9999] bg-black flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#1E1E1E] border-b border-[#2D2D2D] shrink-0">
         <div className="flex items-center gap-3">
