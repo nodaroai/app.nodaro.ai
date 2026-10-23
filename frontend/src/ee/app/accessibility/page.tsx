@@ -5,40 +5,25 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useLocaleStore } from "@/lib/locale-store"
+import { getLocaleDirection, type LocaleId } from "@nodaro/shared/i18n"
+import { statementFor, type StatementForm } from "./statement-content"
 
 /**
  * The accessibility statement (Israeli Equal Rights for Persons with
  * Disabilities (Service Accessibility Adjustments) Regulations 2013, reg 35ה).
  *
- * Hebrew only, whatever the interface language (owner's decision 2026-10-23):
- * the text lives here, not in the five dictionaries, and the page sets its own
- * `lang="he" dir="rtl"`. It names no accessibility coordinator (fewer than 25
- * employees, reg 91). It is short on purpose (owner's decision 2026-10-23):
- * the level, what was made accessible, the accessibility menu, the content not
- * fully accessible, and how to report — the parts reg 35ה asks for.
+ * In the interface language (owner's decision 2026-10-23; the text and its
+ * five copies live in statement-content.ts, a language without a copy reads
+ * the English). It names no accessibility coordinator (fewer than 25
+ * employees, reg 91). It is short on purpose: the level, what was made
+ * accessible, the accessibility menu, the content not fully accessible, and
+ * how to report — the parts reg 35ה asks for.
  * Reports go to the founders through POST /v1/accessibility/report; when that
  * cannot deliver, the page gives the email instead.
  */
 
-export const STATEMENT_UPDATED = "23 באוקטובר 2026"
 export const REPORT_EMAIL = "info@nodaro.ai"
-
-const DONE: readonly string[] = [
-  "ניווט במקלדת, עם סימון ברור של המקום שבו נמצא המיקוד.",
-  "תמיכה בקוראי מסך: לכפתורים, לשדות ולאזורים בדף יש שמות מתאימים.",
-  "קישור ״דלג לתוכן״ באזור האישי ובעורך, ושם משלו לכל אחד מהדפים הראשיים.",
-  "מבנה כותרות ותוויות לשדות בטפסים.",
-  "ניגודיות צבעים לפי התקן בכפתורים ובטקסט של הממשק, וטקסט בגודל קריא.",
-  "התאמה למחשב ולטלפון, ואפשרות להגדיל את התצוגה בדפדפן.",
-  "תמיכה בעברית מימין לשמאל ובשפות נוספות.",
-  "הפחתת אנימציות ומעברים למי שהגדיר ״הפחתת תנועה״ במכשיר.",
-  "בעורך התהליכים אפשר לעבור בין רכיבים ולחבר ביניהם מהמקלדת.",
-]
-
-const LIMITS: readonly string[] = [
-  "תמונות, סרטונים וקול שמשתמשים יוצרים או מעלים, כולל תוכן שנוצר בבינה מלאכותית.",
-  "עורכי התמונה, הקול והווידאו המובנים, שמגיעים מצד שלישי.",
-]
 
 function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   const id = useId()
@@ -54,7 +39,7 @@ function Section({ title, children }: { readonly title: string; readonly childre
 
 type ReportState = { kind: "idle" } | { kind: "sending" } | { kind: "sent" } | { kind: "failed"; message: string }
 
-function ReportForm() {
+function ReportForm({ text }: { readonly text: StatementForm }) {
   const [message, setMessage] = useState("")
   const [page, setPage] = useState("")
   const [contact, setContact] = useState("")
@@ -97,20 +82,17 @@ function ReportForm() {
       }
       setState({
         kind: "failed",
-        message:
-          res.status === 429
-            ? "שלחתם כמה דיווחים ברצף. נסו שוב בעוד כמה דקות, או כתבו לנו במייל."
-            : "הדיווח לא נשלח. אפשר לכתוב לנו במייל.",
+        message: res.status === 429 ? text.rateLimited : text.failed,
       })
     } catch {
-      setState({ kind: "failed", message: "הדיווח לא נשלח. אפשר לכתוב לנו במייל." })
+      setState({ kind: "failed", message: text.failed })
     }
   }
 
   return (
     <form onSubmit={submit} noValidate className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="a11y-report-message">מה הבעיה? (חובה)</Label>
+        <Label htmlFor="a11y-report-message">{text.message}</Label>
         <Textarea
           ref={messageRef}
           id="a11y-report-message"
@@ -125,16 +107,16 @@ function ReportForm() {
         />
         {missing && (
           <p id="a11y-report-message-error" role="alert" className="text-sm text-destructive">
-            כתבו כמה מילים על הבעיה.
+            {text.messageMissing}
           </p>
         )}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="a11y-report-page">באיזה דף? (לא חובה)</Label>
+        <Label htmlFor="a11y-report-page">{text.page}</Label>
         <Input id="a11y-report-page" value={page} onChange={(e) => setPage(e.target.value)} maxLength={500} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="a11y-report-contact">איך נחזור אליכם? מייל או טלפון (לא חובה)</Label>
+        <Label htmlFor="a11y-report-contact">{text.contact}</Label>
         <Input
           id="a11y-report-contact"
           value={contact}
@@ -156,10 +138,10 @@ function ReportForm() {
       </div>
       {/* aria-disabled, not disabled: a disabled button drops the keyboard focus. */}
       <Button type="submit" aria-disabled={sending || undefined}>
-        {sending ? "שולח…" : "שליחת הדיווח"}
+        {sending ? text.sending : text.send}
       </Button>
       <div aria-live="polite" role="status">
-        {state.kind === "sent" && <p className="text-sm">תודה. הדיווח הגיע אלינו ונטפל בו.</p>}
+        {state.kind === "sent" && <p className="text-sm">{text.sent}</p>}
       </div>
       {state.kind === "failed" && (
         <p role="alert" className="text-sm text-destructive">
@@ -174,84 +156,79 @@ function ReportForm() {
 }
 
 export default function AccessibilityStatementPage() {
-  // The page is Hebrew whatever the interface language, so the document says so
-  // too (WCAG 3.1.1 reads <html lang>); the interface's values come back on leave.
+  const locale = useLocaleStore((st) => st.locale)
+  const text = statementFor(locale)
+  const dir = getLocaleDirection(text.lang as LocaleId)
+
+  // The copy shown may be the English one for a language without its own, so
+  // the document follows the copy (WCAG 3.1.1 reads <html lang>); the
+  // interface's values come back on leave.
   useEffect(() => {
     const html = document.documentElement
     const previous = { title: document.title, lang: html.lang, dir: html.dir }
-    document.title = "הצהרת נגישות | Nodaro"
-    html.lang = "he"
-    html.dir = "rtl"
+    document.title = `${text.pageTitle} | Nodaro`
+    html.lang = text.lang
+    html.dir = dir
     return () => {
       document.title = previous.title
       html.lang = previous.lang
       html.dir = previous.dir
     }
-  }, [])
+  }, [text, dir])
 
   return (
-    <div lang="he" dir="rtl" className="min-h-screen bg-background text-foreground">
+    <div lang={text.lang} dir={dir} className="min-h-screen bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
           <span className="text-lg font-semibold">Nodaro</span>
           <Link to="/" className="text-sm underline underline-offset-4">
-            חזרה לאתר
+            {text.backToSite}
           </Link>
         </div>
       </header>
       <main id="main" className="mx-auto max-w-3xl space-y-10 px-4 py-10 leading-relaxed">
         <div className="space-y-3">
-          <h1 className="text-3xl font-bold">הצהרת נגישות</h1>
-          <p>
-            אנחנו ב-Nodaro רוצים שכל אחד יוכל להשתמש באתר, כולל אנשים עם מוגבלות. ההצהרה הזו מתארת את מצב הנגישות של
-            האתר app.nodaro.ai, לפי תקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), התשע״ג-2013.
-          </p>
+          <h1 className="text-3xl font-bold">{text.title}</h1>
+          <p>{text.intro}</p>
         </div>
 
-        <Section title="רמת הנגישות">
-          <p>
-            ביצענו באתר התאמות נגישות לפי התקן הישראלי ת״י 5568 (חלק 1, ספטמבר 2023), שמבוסס על הנחיות WCAG 2.0
-            ברמה AA.
-          </p>
+        <Section title={text.levelTitle}>
+          <p>{text.level}</p>
         </Section>
 
-        <Section title="מה הונגש באתר">
+        <Section title={text.doneTitle}>
           <ul className="list-disc space-y-1.5 ps-6">
-            {DONE.map((line) => (
+            {text.done.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
         </Section>
 
-        <Section title="תפריט הנגישות">
-          <p>
-            בפינת המסך יש כפתור נגישות שפותח תפריט, וגם המקשים Alt+A פותחים אותו. בתפריט אפשר להגדיל את הטקסט, להגביר
-            ניגודיות, להדגיש קישורים וכותרות, לעבור לגופן קריא, להגדיל ריווח, להגדיל את הסמן ולהפחית אנימציות. הבחירות
-            נשמרות בדפדפן לביקור הבא.
-          </p>
+        <Section title={text.menuTitle}>
+          <p>{text.menu}</p>
         </Section>
 
-        <Section title="רכיבים שאינם נגישים במלואם">
-          <p>למרות מאמצינו, ייתכן שתכנים מסוימים אינם נגישים במלואם:</p>
+        <Section title={text.limitsTitle}>
+          <p>{text.limitsIntro}</p>
           <ul className="list-disc space-y-1.5 ps-6">
-            {LIMITS.map((line) => (
+            {text.limits.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
-          <p>אם נתקלתם בקושי, כתבו לנו ונעזור.</p>
+          <p>{text.limitsOutro}</p>
         </Section>
 
-        <Section title="נתקלתם בבעיית נגישות?">
+        <Section title={text.reportTitle}>
           <p>
-            ספרו לנו מה ניסיתם לעשות ובאיזה דף. כל דיווח מגיע ישירות אלינו. אפשר גם לכתוב במייל:{" "}
+            {text.reportIntro}{" "}
             <a href={`mailto:${REPORT_EMAIL}`} dir="ltr" className="underline">
               {REPORT_EMAIL}
             </a>
           </p>
-          <ReportForm />
+          <ReportForm text={text.form} />
         </Section>
 
-        <p className="text-sm">ההצהרה עודכנה לאחרונה: {STATEMENT_UPDATED}.</p>
+        <p className="text-sm">{text.updated}</p>
       </main>
     </div>
   )

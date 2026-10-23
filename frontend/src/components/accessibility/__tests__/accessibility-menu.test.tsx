@@ -70,6 +70,20 @@ describe("accessibility menu", () => {
     expect(document.documentElement.hasAttribute("data-a11y-canvas")).toBe(false)
   })
 
+  it("hides the corner button for a while, Alt+A still opens the menu, and it can come back", async () => {
+    renderMenu()
+    fireEvent.click(screen.getByRole("button", { name: "Accessibility menu" }))
+    fireEvent.click(await screen.findByRole("button", { name: "3 months" }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Accessibility menu" })).toBeNull())
+    expect(Number(window.localStorage.getItem("nodaro.a11y.button-hidden-until"))).toBeGreaterThan(Date.now())
+
+    press("KeyA")
+    expect(await screen.findByText(/The button is hidden until/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Show it again" }))
+    expect(screen.getByRole("button", { name: "Accessibility menu" })).toBeInTheDocument()
+    expect(window.localStorage.getItem("nodaro.a11y.button-hidden-until")).toBeNull()
+  })
+
   it("links to the statement through the router", async () => {
     const { onNavigate } = renderMenu()
     fireEvent.click(screen.getByRole("button", { name: "Accessibility menu" }))

@@ -99,6 +99,44 @@ export function applyPreferences(
   else root.removeAttribute("data-a11y-text")
 }
 
+/*
+ * Hiding the corner button: the viewer may put it away for a month, three
+ * months or half a year. Kept in this browser as the moment it comes back;
+ * Alt+A opens the menu all the while (the statement says so), and the menu
+ * offers to bring the button back early.
+ */
+export const HIDE_KEY = "nodaro.a11y.button-hidden-until"
+
+export type HideMonths = 1 | 3 | 6
+
+/** The moment the button returns, `months` calendar months from `now`. */
+export function hiddenUntilAfter(months: HideMonths, now: Date = new Date()): number {
+  const until = new Date(now.getTime())
+  until.setMonth(until.getMonth() + months)
+  return until.getTime()
+}
+
+/** When the button is hidden, the moment it returns; null when it shows. */
+export function loadHiddenUntil(now: number = Date.now()): number | null {
+  try {
+    const stored = Number(window.localStorage.getItem(HIDE_KEY))
+    if (Number.isFinite(stored) && stored > now) return stored
+    window.localStorage.removeItem(HIDE_KEY)
+    return null
+  } catch {
+    return null
+  }
+}
+
+export function saveHiddenUntil(until: number | null): void {
+  try {
+    if (until === null) window.localStorage.removeItem(HIDE_KEY)
+    else window.localStorage.setItem(HIDE_KEY, String(until))
+  } catch {
+    // Storage blocked: the choice holds for this visit only.
+  }
+}
+
 export function isDefault(prefs: AccessibilityPreferences): boolean {
   return prefs.textScale === 0 && TOGGLE_KEYS.every((key) => !prefs[key])
 }

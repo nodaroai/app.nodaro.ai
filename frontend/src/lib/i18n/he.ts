@@ -655,6 +655,12 @@ export const he: ChromeDict = {
   "a11yMenu.motion": "הפחתת תנועה",
   "a11yMenu.reset": "איפוס",
   "a11yMenu.shortcut": "אפשר לפתוח את התפריט בכל מקום עם Alt+A",
+  "a11yMenu.hide": "הסתרת הכפתור ל:",
+  "a11yMenu.hide1": "חודש",
+  "a11yMenu.hide3": "3 חודשים",
+  "a11yMenu.hide6": "חצי שנה",
+  "a11yMenu.hiddenUntil": "הכפתור מוסתר עד {date}.",
+  "a11yMenu.showAgain": "להציג שוב",
   "page.editor": "עורך תהליכים",
   "page.login": "כניסה",
 

@@ -17,12 +17,17 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/compon
 import { useT } from "@/lib/i18n"
 import type { MessageKey } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { formatDate } from "@/lib/i18n/format"
 import {
   applyPreferences,
   DEFAULT_PREFERENCES,
+  hiddenUntilAfter,
   isDefault,
+  loadHiddenUntil,
   loadPreferences,
+  saveHiddenUntil,
   savePreferences,
+  type HideMonths,
   type AccessibilityPreferences,
   type TextScale,
   type ToggleKey,
@@ -34,7 +39,8 @@ import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
  * clear of the sidebar's footer) that opens a panel of display choices, also
  * opened with Alt+A from anywhere. On the editor, embeds and presentations the
  * corners belong to the canvas, so the button is not drawn there and Alt+A
- * opens the panel from the same corner.
+ * opens the panel from the same corner. The viewer may also hide the button
+ * for one, three or six months (kept in this browser); Alt+A still works.
  *
  * The panel is a Radix popover: focus moves in and Escape closes it. Focus
  * goes back to where it was before Alt+A (a canvas node, a field), or to the
@@ -52,6 +58,12 @@ const TOGGLES: ReadonlyArray<{ readonly key: ToggleKey; readonly label: MessageK
 ]
 
 const TEXT_SCALE_PERCENT: Readonly<Record<TextScale, number>> = { 0: 100, 1: 115, 2: 130 }
+
+const HIDE_LABELS: Readonly<Record<HideMonths, MessageKey>> = {
+  1: "a11yMenu.hide1",
+  3: "a11yMenu.hide3",
+  6: "a11yMenu.hide6",
+}
 
 const TYPING_TARGETS =
   "input, textarea, select, [contenteditable=''], [contenteditable='true'], [contenteditable='plaintext-only'], [role='textbox']"
@@ -82,8 +94,10 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
   const t = useT()
   const [open, setOpen] = useState(false)
   const [prefs, setPrefs] = useState<AccessibilityPreferences>(loadPreferences)
+  const [hiddenUntil, setHiddenUntil] = useState<number | null>(() => loadHiddenUntil())
   const returnFocus = useRef<HTMLElement | null>(null)
   const onCanvasPage = buttonHiddenOn(pathname)
+  const showButton = !onCanvasPage && hiddenUntil === null
 
   useEffect(() => {
     applyPreferences(prefs)
@@ -114,6 +128,17 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
     savePreferences(next)
   }, [])
 
+  const hideFor = (months: HideMonths) => {
+    const until = hiddenUntilAfter(months)
+    saveHiddenUntil(until)
+    setHiddenUntil(until)
+    setOpen(false)
+  }
+  const showAgain = () => {
+    saveHiddenUntil(null)
+    setHiddenUntil(null)
+  }
+
   const toggle = (key: ToggleKey) => update({ ...prefs, [key]: !prefs[key] })
   const scaleBy = (delta: 1 | -1) =>
     update({ ...prefs, textScale: Math.min(2, Math.max(0, prefs.textScale + delta)) as TextScale })
@@ -140,7 +165,7 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      {!onCanvasPage ? (
+      {showButton ? (
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -258,7 +283,35 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
             </a>
           )}
         </div>
-        <p className="px-4 pb-3 text-xs text-muted-foreground">{t("a11yMenu.shortcut")}</p>
+        <div className="space-y-2 border-t px-4 py-3 text-sm">
+          {hiddenUntil !== null ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                {t("a11yMenu.hiddenUntil", { date: formatDate(hiddenUntil, { dateStyle: "medium" }) })}
+              </span>
+              <button type="button" onClick={showAgain} className="shrink-0 underline underline-offset-4">
+                {t("a11yMenu.showAgain")}
+              </button>
+            </div>
+          ) : (
+            <div role="group" aria-labelledby="a11y-hide-label" className="flex flex-wrap items-center gap-1.5">
+              <span id="a11y-hide-label" className="me-1 text-xs text-muted-foreground">
+                {t("a11yMenu.hide")}
+              </span>
+              {([1, 3, 6] as const).map((months) => (
+                <button
+                  key={months}
+                  type="button"
+                  onClick={() => hideFor(months)}
+                  className="rounded-md border px-2 py-1 text-xs hover:bg-accent"
+                >
+                  {t(HIDE_LABELS[months])}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">{t("a11yMenu.shortcut")}</p>
+        </div>
       </PopoverContent>
     </Popover>
   )

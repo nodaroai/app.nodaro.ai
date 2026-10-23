@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest"
 import {
   applyPreferences,
   DEFAULT_PREFERENCES,
+  HIDE_KEY,
+  hiddenUntilAfter,
   isDefault,
+  loadHiddenUntil,
+  saveHiddenUntil,
   loadPreferences,
   parsePreferences,
   savePreferences,
@@ -45,6 +49,17 @@ describe("accessibility preferences", () => {
     }
     applyPreferences(DEFAULT_PREFERENCES, root)
     expect(root.getAttributeNames().filter((n) => n.startsWith("data-a11y-"))).toEqual([])
+  })
+
+  it("hides the button for calendar months and forgets an expired choice", () => {
+    const now = new Date("2026-10-23T12:00:00Z")
+    expect(new Date(hiddenUntilAfter(1, now)).getUTCMonth()).toBe(10)
+    expect(new Date(hiddenUntilAfter(6, now)).getUTCFullYear()).toBe(2027)
+    const until = hiddenUntilAfter(3, now)
+    saveHiddenUntil(until)
+    expect(loadHiddenUntil(now.getTime())).toBe(until)
+    expect(loadHiddenUntil(until + 1)).toBeNull()
+    expect(window.localStorage.getItem(HIDE_KEY)).toBeNull()
   })
 
   it("knows the defaults", () => {

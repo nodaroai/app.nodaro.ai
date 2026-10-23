@@ -659,6 +659,12 @@ export const en = {
   "a11yMenu.motion": "Reduce motion",
   "a11yMenu.reset": "Reset",
   "a11yMenu.shortcut": "Open this menu anytime with Alt+A",
+  "a11yMenu.hide": "Hide the button for:",
+  "a11yMenu.hide1": "1 month",
+  "a11yMenu.hide3": "3 months",
+  "a11yMenu.hide6": "6 months",
+  "a11yMenu.hiddenUntil": "The button is hidden until {date}.",
+  "a11yMenu.showAgain": "Show it again",
   "page.editor": "Workflow editor",
   "page.login": "Sign in",
 
