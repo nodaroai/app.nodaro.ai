@@ -72,6 +72,8 @@ import {
   uiResolutionFill,
   type FrameFit,
   type FrameDelivery,
+  characterReferencesFromWired,
+  videoCharacterRefCap,
 } from "@nodaro/shared/video"
 import {
   defaultImageModel,
@@ -251,6 +253,7 @@ import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
+import { kling4InputProblem } from "../../lib/kling4-inputs.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
@@ -4115,8 +4118,11 @@ export function buildPayload(
       // endFrame as the start so providers (veo3, minimax, kling-turbo, etc.)
       // get at least one image in their primary slot. We then clear
       // endFrameUrl to avoid the worker repeating the same image twice.
-      const startFrameUrl = resolvedInputs.startFrameUrl ?? resolvedInputs.imageUrl ?? resolvedInputs.endFrameUrl
-      const endFrameUrl = (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl)
+      // A keyframes model (Kling 4.0 Keyframes) takes an end frame alone, so
+      // its end frame stays the END.
+      const keyframesModel = hasFeature(provider, "keyframes")
+      const startFrameUrl = resolvedInputs.startFrameUrl ?? resolvedInputs.imageUrl ?? (keyframesModel ? undefined : resolvedInputs.endFrameUrl)
+      const endFrameUrl = (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || keyframesModel)
         ? resolvedInputs.endFrameUrl
         : undefined
       const hasStart = !!startFrameUrl
@@ -4128,7 +4134,9 @@ export function buildPayload(
       // without modification. Shared with the frontend executor: a start
       // frame is i2v; refs alone are i2v only for a split-id model whose t2v
       // twin cannot carry them (Grok Imagine 1, #861).
-      const mode = resolveVideoModeForInputs(provider, { hasStartFrame: hasStart, hasImageRefs: hasImageRef })
+      // A keyframes model takes an end frame on its own (no start frame); only
+      // the image-to-video lane carries it, so any wired frame picks that lane.
+      const mode = resolveVideoModeForInputs(provider, { hasStartFrame: hasStart || (keyframesModel && !!endFrameUrl), hasImageRefs: hasImageRef })
 
       // Gemini Omni family (video + flash): a connected source video is a
       // video-edit (V2V) job, routed through the image-to-video worker path (one
@@ -4209,7 +4217,10 @@ export function buildPayload(
         },
       )
       composedPrompt = appendScene3DStillScopingLines(mentionResult.prompt, gvScene3D)
-      if (mentionResult.additionalUrls.length > 0) {
+      // A keyframes model's Image References are its in-between FRAMES: a
+      // wired asset's image must not join them (the provider runner drops the
+      // `@` from any seat this leaves undeclared).
+      if (mentionResult.additionalUrls.length > 0 && !hasFeature(resolvedProvider, "keyframes")) {
         let remaining = mentionResult.additionalUrls
         // Seedance 2 frame-numbering guard (shared helper — see
         // keepSeedance2MentionsAsRefs). generate-video is the PRIMARY path (only
@@ -4223,7 +4234,9 @@ export function buildPayload(
           refVideoCount: resolvedInputs.referenceVideoUrls?.length ?? 0,
           refAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
         })
-        if (!imageUrl && !keepMentionsAsRefs) {
+        // A `character-subjects` model (Kling 4.0) has no frame for a character
+        // to fill: its image stays a reference seat the provider names.
+        if (!imageUrl && !keepMentionsAsRefs && !hasFeature(resolvedProvider, "character-subjects")) {
           imageUrl = remaining[0]
           remaining = remaining.slice(1)
         }
@@ -4254,6 +4267,14 @@ export function buildPayload(
         referenceAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
       })
 
+      // Wired characters reach a `character-subjects` model (Kling 4.0) as
+      // named subjects too — the same shared grouping the editor sends. The
+      // character's seat in the image list stays: the provider runner turns
+      // that seat into the subject's name.
+      const gvCharacterReferences = hasFeature(resolvedProvider, "character-subjects")
+        ? characterReferencesFromWired(expandWiredCharacterRefs(node.id, buildCtx)).slice(0, videoCharacterRefCap(resolvedProvider))
+        : undefined
+
       // R5: the identifier already used `resolvedProvider` while the ui-fills
       // used the stored `provider` — a pre-existing disagreement. Both now read
       // `resolvedProvider`: it is the id whose catalog governs the request that
@@ -4274,6 +4295,17 @@ export function buildPayload(
           gvNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
         )
       }
+      const kling4Problem = kling4InputProblem({
+        provider: resolvedProvider,
+        durationSec: typeof gvNorm.duration === "number" ? gvNorm.duration : undefined,
+        hasStartFrame: !!imageUrl,
+        hasEndFrame: !!endFrameUrl,
+        referenceImageCount: referenceImageUrls?.length ?? 0,
+        referenceVideoCount: resolvedInputs.referenceVideoUrls?.length ?? 0,
+        referenceAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
+        characterCount: 0,
+      })
+      if (kling4Problem) throw new Error(kling4Problem.message)
       return {
         jobName: effectiveMode,
         queueName: "video-generation",
@@ -4319,6 +4351,8 @@ export function buildPayload(
           multiShot: data.multiShot,
           shots: data.shots,
           elements: data.elements,
+          ...(gvCharacterReferences && gvCharacterReferences.length > 0 ? { characterReferences: gvCharacterReferences } : {}),
+          keepOriginalSound: data.keepOriginalSound,
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,

@@ -14,6 +14,7 @@ import {
   isGeminiOmniProvider,
   isWan3Provider,
   isViduQ4Provider,
+  isKling4Provider,
   supportsAutoVideoDuration,
 } from "@nodaro/shared/models"
 import {
@@ -116,8 +117,8 @@ export function generateVideoProviderSnap(
     // path fills for an untouched node.
     if (data.aspectRatio == null) updates.aspectRatio = "adaptive"
   }
-  if (isViduQ4Provider(provider)) {
-    // Same rule as Wan 3.0: the bare credit identifier is the 5s @ 720p tier
+  if (isViduQ4Provider(provider) || isKling4Provider(provider)) {
+    // Same rule as Wan 3.0 (Vidu Q4 and Kling 4.0): the bare credit identifier is the 5s @ 720p tier
     // while the catalog ladders start at 3s / 540p, so persist the declared
     // defaults rather than `opts[0]`. No aspect fill — a frame run takes the
     // frame's shape and a reference run defaults to 16:9.

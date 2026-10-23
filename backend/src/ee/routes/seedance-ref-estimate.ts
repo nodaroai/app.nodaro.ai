@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { isSeedance2Provider, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared/models"
+import { billsReferenceVideoSeconds, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared/models"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
@@ -70,8 +70,8 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     }
     const { provider, resolution, duration, draft, referenceVideoUrls } = parsed.data
     const unknownClips = parsed.data.unknownReferenceVideos ?? 0
-    if (!isSeedance2Provider(provider)) {
-      return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a Seedance 2 model; its price does not follow the reference clips.` } })
+    if (!billsReferenceVideoSeconds(provider)) {
+      return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0).` } })
     }
     if (referenceVideoUrls.length + unknownClips === 0) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Name at least one reference video (referenceVideoUrls or unknownReferenceVideos)." } })

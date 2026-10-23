@@ -1262,6 +1262,14 @@ const CAST_SWAP_FULL_QUALITY_TOOLS_BYTES = 1_767
 // with and without the change: 496_133 total − 495_994 = 139 B; the 73 B of headroom carry across.
 const CAST_SWAP_DEFAULT_ZONE_BYTES = 139
 
+// RAISED 2026-10-23 by Kling 4.0 (`kling-4`, `kling-4-keyframes`) and nothing else: the two ids
+// join every catalog-derived model enum and the character-reference provider list, and
+// `generate_video` gains `character_references[].extra_image_urls` (a Kling subject takes 2-4
+// images) and `keep_original_sound` (a reference video's own sound), each one clause. No tool was
+// added, so the fixture does NOT move. Measured by this suite: 496_450 total − 496_133 = 317 B,
+// after trimming generate_video back under the per-tool budget; the 73 B of headroom carry across.
+const KLING_4_MODELS_BYTES = 317
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1415,7 +1423,8 @@ export const TOOL_WIRE_BUDGET = {
     TRENDS_PREVIEW_JOB_ID_BYTES +
     CAST_SWAP_REFERENCES_BYTES +
     CAST_SWAP_FULL_QUALITY_TOOLS_BYTES +
-    CAST_SWAP_DEFAULT_ZONE_BYTES,
+    CAST_SWAP_DEFAULT_ZONE_BYTES +
+    KLING_4_MODELS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

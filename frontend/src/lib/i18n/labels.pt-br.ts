@@ -681,6 +681,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "Wan 3.0 de alta velocidade, 2–30 s, 480p/720p/1080p, áudio nativo, refs. de imagem/vídeo/áudio",
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio, start frame or 15 image + 3 MP3 audio refs": "ShengShu Vidu Q4, 3–16 s, 540p–4K, áudio nativo, quadro inicial ou 15 refs. de imagem + 3 refs. de áudio MP3",
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio (image required)": "ShengShu Vidu Q4, 3–16 s, 540p–4K, áudio nativo (imagem obrigatória)",
+  "Kuaishou Kling 4.0, 3\u201330s, 720p/1080p, native audio, image/video/character/voice refs": "Kuaishou Kling 4.0, 3–30 s, 720p/1080p, áudio nativo, referências de imagem/vídeo/personagem/voz",
+  "Kuaishou Kling 4.0, 3\u201330s, start + up to 8 in-between + end frames, native audio": "Kuaishou Kling 4.0, 3–30 s, quadro inicial + até 8 quadros intermediários + quadro final, áudio nativo",
   "Higher detail, production images": "Mais detalhes, imagens de produção",
   "Higher detail, production-ready images": "Mais detalhes, imagens prontas para produção",
   "Higher quality Bytedance": "Bytedance de maior qualidade",

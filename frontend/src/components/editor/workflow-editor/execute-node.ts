@@ -106,7 +106,9 @@ import {
   validateVideoOverlayRequest,
   videoOverlayCompositionKey,
   videoOverlaySlotSources,
-  uiResolutionFill
+  uiResolutionFill,
+  characterReferencesFromWired,
+  videoCharacterRefCap,
 } from "@nodaro/shared/video";
 import {
   generateMusicApi,
@@ -502,6 +504,7 @@ import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_
 import {
   stripVideoImageTokens,
   expandCharacterNodeIntoRefs,
+  expandWiredCharacterRefsForVideo,
   resolveVideoPromptMentions,
 } from "@/lib/video-prompt-assembly";
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
@@ -3016,9 +3019,14 @@ function executeNodeCore(
     });
     prompt = appendScene3DStillScopingLines(i2vMention.prompt, i2vScene3D);
     let i2vMergedRefs: string[] | undefined = referenceImageUrls?.length ? [...referenceImageUrls] : undefined;
-    if (i2vMention.additionalUrls.length > 0) {
+    // A keyframes model's Image References are its in-between FRAMES: a wired
+    // asset's image must not join them. A `character-subjects` model (Kling 4.0)
+    // has no frame for a character to fill — its image stays a reference seat
+    // the provider names. Mirrors payload-builder.ts.
+    const i2vKeyframesModel = !!nodeProvider && hasFeature(nodeProvider, "keyframes");
+    if (i2vMention.additionalUrls.length > 0 && !i2vKeyframesModel) {
       let remainingMentionUrls = i2vMention.additionalUrls;
-      if (!startFrameUrl) {
+      if (!startFrameUrl && !(nodeProvider && hasFeature(nodeProvider, "character-subjects"))) {
         startFrameUrl = remainingMentionUrls[0];
         remainingMentionUrls = remainingMentionUrls.slice(1);
       }
@@ -3057,7 +3065,9 @@ function executeNodeCore(
     // as i2v). Video/audio-only refs keep the older provider-specific checks.
     const i2vRefsCarried =
       (VIDEO_REF_LIMITS_BY_PROVIDER[nodeProvider ?? ""]?.images ?? 0) > 0 && (i2vMergedRefs?.length ?? 0) > 0
-    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried) {
+    // Kling 4.0 Keyframes takes an end frame alone.
+    const i2vLoneEndFrame = i2vKeyframesModel && !!endFrameUrl
+    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried && !i2vLoneEndFrame) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(nodeRunError(i2vData.label, "nodeRun.noStartFrameImageFound", { startFrame: inputs.startFrameUrl ?? "none", imageUrl: inputs.imageUrl ?? "none", edges: debugSources || "none" }));
       return Promise.reject(new Error("No start frame image"));
@@ -3142,6 +3152,12 @@ function executeNodeCore(
         frameFit: i2vData.frameFit,
         frameDelivery: i2vData.frameDelivery,
         ...(i2vDraft ? { draft: true } : {}),
+        // Kling 4.0: wired characters as named subjects (the same shared
+        // grouping payload-builder sends) and the keep-original-sound lever.
+        ...(nodeProvider && hasFeature(nodeProvider, "character-subjects")
+          ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(nodeProvider)) }
+          : {}),
+        keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
         videoTrimStart: i2vData.videoTrimStart,
         videoTrimEnd: i2vData.videoTrimEnd,
         // Identity injection — populated by node-input-resolver when an upstream
@@ -3454,7 +3470,9 @@ function executeNodeCore(
     // Merge upstream refs with mention-resolved URLs (mention URLs appended,
     // deduped by URL). Backend payload-builder.ts t2v branch does the same.
     let t2vRefImages: string[] | undefined = upstreamRefImages?.length ? [...upstreamRefImages] : undefined;
-    if (t2vMention.additionalUrls.length > 0) {
+    // A keyframes model's Image References are its in-between FRAMES: a wired
+    // asset's image must not join them (mirrors payload-builder.ts).
+    if (t2vMention.additionalUrls.length > 0 && !(t2vProvider && hasFeature(t2vProvider, "keyframes"))) {
       const existing = t2vRefImages ?? [];
       const merged: string[] = [];
       const seen = new Set<string>();
@@ -3525,6 +3543,12 @@ function executeNodeCore(
       referenceAudioUrls: t2vRefAudios?.length ? t2vRefAudios : undefined,
       webSearch: (t2vRaw.webSearch as boolean | undefined) ?? (isSeedance2T2V ? false : undefined),
       nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,
+      // Kling 4.0: wired characters as named subjects (the same shared grouping
+      // payload-builder sends) and the keep-original-sound lever.
+      ...(t2vProvider && hasFeature(t2vProvider, "character-subjects")
+        ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(t2vProvider)) }
+        : {}),
+      keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
     };
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(

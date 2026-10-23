@@ -657,3 +657,81 @@ describe("payload-builder.vidu-q4.test.ts", () => {
     })
   })
 })
+
+describe("payload-builder.kling-4.test.ts", () => {
+  /**
+   * Kling 4.0 in the DAG payload builder — the workflow run must send what the
+   * single-node run sends (execute-node.ts):
+   *   - Keyframes takes an end frame alone; only the image-to-video lane carries
+   *     one, so any wired frame picks that lane (a text-to-video job would drop
+   *     the end frame silently).
+   *   - Keyframes refuses more frames than its duration allows, before any job.
+   *   - Kling 4.0 sends a wired character as a named subject (characterReferences),
+   *     its portrait first, and never promotes it into a start frame.
+   */
+  const JOB_ID = "job-kling4-1"
+  const END = "https://cdn.example/end.png"
+  const MID = (i: number) => `https://cdn.example/mid${i}.png`
+
+  function n(provider: string, data: Record<string, unknown> = {}): SimpleNode {
+    return { id: "k4-1", type: "generate-video", data: { provider, prompt: "she walks out", ...data } }
+  }
+  function build(node: SimpleNode, inputs: ResolvedInputs = {}, extra: { nodes?: SimpleNode[]; edges?: SimpleEdge[] } = {}) {
+    return buildPayload(node, JOB_ID, inputs, undefined, { nodes: [node, ...(extra.nodes ?? [])], edges: extra.edges ?? [], nodeStates: {} })
+  }
+
+  it("Keyframes with only an end frame runs image-to-video and keeps it as the END frame", () => {
+    const r = build(n("kling-4-keyframes"), { endFrameUrl: END })
+    expect(r.jobName).toBe("image-to-video")
+    expect(r.payload.endFrameUrl).toBe(END)
+    expect(r.payload.imageUrl).toBeUndefined()
+    expect(r.modelIdentifier).toBe("kling-4-keyframes:5s:720p")
+  })
+
+  it("Keyframes with in-between frames and an end frame (no start) keeps both", () => {
+    const r = build(n("kling-4-keyframes"), { endFrameUrl: END, referenceImageUrls: [MID(1), MID(2)] })
+    expect(r.jobName).toBe("image-to-video")
+    expect(r.payload.endFrameUrl).toBe(END)
+    expect(r.payload.referenceImageUrls).toEqual([MID(1), MID(2)])
+  })
+
+  it("Keyframes over its frame cap is refused before any job exists", () => {
+    expect(() =>
+      build(n("kling-4-keyframes", { duration: 3 }), { startFrameUrl: MID(0), endFrameUrl: END, referenceImageUrls: [MID(1), MID(2), MID(3)] }),
+    ).toThrow(/at most 4 frames in all/)
+  })
+
+  it("Kling 4.0 with nothing wired is text-to-video at the 5s / 720p defaults", () => {
+    const r = build(n("kling-4"))
+    expect(r.jobName).toBe("text-to-video")
+    expect(r.payload.resolution).toBe("720p")
+    expect(r.modelIdentifier).toBe("kling-4:5s:720p")
+  })
+
+  it("a reference video bills the -ref rate", () => {
+    const r = build(n("kling-4", { duration: 10 }), { referenceVideoUrls: ["https://cdn.example/v.mp4"] })
+    expect(r.modelIdentifier).toBe("kling-4:10s:720p-ref")
+  })
+
+  it("a wired Character becomes a named subject, portrait first, and never the start frame", () => {
+    const character: SimpleNode = {
+      id: "char-1",
+      type: "character",
+      data: {
+        characterName: "Maya",
+        defaultAssetUrl: "https://cdn.example/maya.png",
+        canonicalDescription: "Short silver hair",
+        expressions: [{ name: "smile", url: "https://cdn.example/maya-smile.png" }],
+      },
+    }
+    const r = build(n("kling-4", { keepOriginalSound: true }), {}, {
+      nodes: [character],
+      edges: [{ id: "char-1->k4-1", source: "char-1", target: "k4-1", sourceHandle: "characterRef", targetHandle: "assets" }],
+    })
+    expect(r.payload.imageUrl).toBeUndefined()
+    expect(r.payload.characterReferences).toEqual([
+      { imageUrl: "https://cdn.example/maya.png", extraImageUrls: ["https://cdn.example/maya-smile.png"], description: "Short silver hair", name: "Maya" },
+    ])
+    expect(r.payload.keepOriginalSound).toBe(true)
+  })
+})

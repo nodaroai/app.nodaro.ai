@@ -4,6 +4,7 @@ import {
   VIDEO_CHARACTER_REFS_WIRE_MAX,
   VIDEO_CHARACTER_DESCRIPTION_MAX,
   VIDEO_CHARACTER_NAME_MAX,
+  VIDEO_CHARACTER_EXTRA_IMAGES_MAX,
   VIDEO_CHARACTER_VOICE_DESCRIPTION_MAX,
   VIDEO_CHARACTER_VOICE_EXAMPLE_MAX,
 } from "@nodaro/shared/video"
@@ -44,6 +45,8 @@ export const characterReferenceSchema = z.object({
   imageUrl: safeUrlSchema,
   /** Optional full-body image; costs a second input unit on the provider. */
   bodyImageUrl: safeUrlSchema.optional(),
+  /** More views of the same person (Kling 4.0 subjects take up to 4 images). */
+  extraImageUrls: z.array(safeUrlSchema).max(VIDEO_CHARACTER_EXTRA_IMAGES_MAX).optional(),
   /** Who this is — appearance, identity, clothing. Required by the upstream. */
   description: z.string().trim().min(1).max(VIDEO_CHARACTER_DESCRIPTION_MAX),
   /** Optional display name. */

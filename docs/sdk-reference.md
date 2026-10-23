@@ -2707,6 +2707,20 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > videos, end frame or seed. `duration` 3–16 (default 5); `resolution`
 > `540p` / `720p` / `1080p` / `2k` / `4k` (omitted or unsupported → 720p);
 > one per-second price ladder for both modes and audio on or off.
+> **Kling 4.0** (`kling-4`) runs text-to-video with no materials, or from
+> `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5, each 2–30 s),
+> `characterReferences` (≤ 7, as named subjects) and `referenceAudioUrls`
+> (≤ 3, as named voices) — at most 15 materials in all, else a `400` before
+> anything is reserved. A sent `imageUrl` / `endFrameUrl` joins the reference
+> images. `keepOriginalSound: true` keeps a reference video's own sound. A
+> reference-video run bills output + max(output, total clip seconds) at the
+> `-ref` rate. **Kling 4.0 Keyframes** (`kling-4-keyframes`) takes
+> `imageUrl`, up to 8 in-between frames as `referenceImageUrls` (in order) and
+> `endFrameUrl`; the frames in all are capped by `duration` (3 s → 4 … 9 s or
+> longer → 10), more is a `400`. Both: `duration` 3–30 (default 5);
+> `resolution` `720p` / `1080p` (anything else → 720p); `aspectRatio` `auto` /
+> `16:9` / `9:16` / `1:1` / `21:9`; audio always on; no seed. See
+> [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
@@ -2867,11 +2881,14 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
-> Only `gemini-omni-video` / `gemini-omni-flash` accept them (any other model
-> answers `400`), they cannot be combined with a start frame (`imageUrl`), and
-> they share the model's 7-unit input budget with reference images and a source
-> video (a character is 1 unit, 2 with a `bodyImageUrl`). They add no credit
-> charge. Prefer them over `referenceImageUrls` whenever the face must hold.
+> Only `gemini-omni-video` / `gemini-omni-flash` and `kling-4` accept them (any
+> other model answers `400`). On Gemini Omni they cannot be combined with a
+> start frame (`imageUrl`), and they share the model's 7-unit input budget with
+> reference images and a source video (a character is 1 unit, 2 with a
+> `bodyImageUrl`). On `kling-4` (up to 7) each one is a named subject built from
+> `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
+> allowed, and `voice` is refused. They add no credit charge. Prefer them over
+> `referenceImageUrls` whenever the face must hold.
 
 > **Naming an image reference in the prompt.** On
 > `run("generate-image", …)`, a media reference (`source: "wired-image"` or

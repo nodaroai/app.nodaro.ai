@@ -16,6 +16,7 @@ import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
+import { kling4InputProblem } from "../lib/kling4-inputs.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { voicedAddonBaseCredits } from "../lib/voiced-dialogue-lines.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -25,8 +26,8 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
-import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
+import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
@@ -79,7 +80,7 @@ export const generateVideoBody = z.object({
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   motionPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21", "adaptive", "Auto"]).optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21", "adaptive", "Auto", "auto"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
@@ -105,6 +106,10 @@ export const generateVideoBody = z.object({
   // data (`characters` in VIDEO_REF_LIMITS_BY_PROVIDER), enforced in the
   // handler by `videoCharacterRefProblem`; any other model → 400.
   characterReferences: characterReferencesSchema.optional(),
+  // Kling 4.0: keep the reference videos' own sound instead of generating new
+  // sound (KIE `keep_original_sound`). Ignored without a reference video and by
+  // every other model.
+  keepOriginalSound: z.boolean().optional(),
   // Structured references (parity with generate-image). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired-ref URLs to `referenceImageUrls`, emitting per-ref
@@ -775,7 +780,7 @@ export const generateVideoPricing: RoutePricing = {
       // base UP FRONT (commit_credits only refunds — never up-charges). Core
       // may not statically import ee/, so the helper is loaded dynamically
       // (the allowed escape hatch — same pattern the credit-guard shim uses).
-      if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
+      if (billsReferenceVideoSeconds(b?.provider as string | undefined) && hasVideoRef) {
         const { seedance2RefVideoBaseCreditsFromDurations } =
           await import("../ee/billing/seedance2-ref-video-credits.js")
         const priceArgs = {
@@ -930,7 +935,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
     if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
 
-    const { audioUrl, prompt: rawPrompt, provider: rawProvider, generateAudio, duration: rawDuration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType: rawGenerationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue, frameFit, frameDelivery, draft: rawDraft } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider: rawProvider, generateAudio, duration: rawDuration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType: rawGenerationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue, frameFit, frameDelivery, draft: rawDraft, keepOriginalSound } = parsed.data
     // Platform default when the request omits provider/duration — the SAME
     // helper the DAG payload builder uses, so the two paths cannot drift.
     const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
@@ -1173,13 +1178,20 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // measured on the ASSEMBLED image list (after connectedReferences expansion)
     // and BEFORE the imageUrl gate below, so an unsupported model answers
     // "not supported" rather than a misleading "imageUrl is required".
+    // On a one-budget model (Kling 4.0) a character whose portrait the editor
+    // already seated in the reference images is ONE material: the runner turns
+    // that seat into the subject. Count the seat once.
+    const seatedCharacters = refCaps?.materials !== undefined
+      ? (parsed.data.characterReferences ?? []).filter((c) => (referenceImageUrls ?? []).includes(c.imageUrl)).length
+      : 0
     const characterProblem = videoCharacterRefProblem({
       provider,
       characterReferences: parsed.data.characterReferences,
-      imageCount: referenceImageUrls?.length ?? 0,
+      imageCount: (referenceImageUrls?.length ?? 0) - seatedCharacters,
       videoCount: referenceVideoUrls?.length ?? 0,
       hasStartFrame: imageUrl !== undefined,
       hasEndFrame: endFrameUrl !== undefined,
+      audioCount: referenceAudioUrls?.length ?? 0,
     })
     if (characterProblem) {
       return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
@@ -1189,7 +1201,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // payload and the recorded input_data carry the policed text.
     const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
     if (characterReferences) parsed.data.characterReferences = characterReferences
-    const foldsLoneEndFrame = endFrameUrl !== undefined && videoProviderFoldsLoneEndFrame(provider)
+    // Kling 4.0 Keyframes takes an end frame alone as its last frame.
+    const foldsLoneEndFrame = endFrameUrl !== undefined && (videoProviderFoldsLoneEndFrame(provider) || hasFeature(provider, "keyframes"))
     const hasMultimodalRef =
       ((refCaps?.images ?? 0) > 0 && ((referenceImageUrls?.length ?? 0) > 0 || foldsLoneEndFrame)) ||
       ((refCaps?.videos ?? 0) > 0 && (referenceVideoUrls?.length ?? 0) > 0) ||
@@ -1242,6 +1255,24 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     })
     if (viduProblem) {
       return reply.status(400).send({ error: viduProblem })
+    }
+    // Kling 4.0's frame cap (Keyframes) and 15-material budget (Reference) —
+    // refused here, before the reservation, rather than by KIE after it.
+    const kling4Problem = kling4InputProblem({
+      provider,
+      durationSec: typeof normDuration === "number" ? normDuration : undefined,
+      hasStartFrame: imageUrl !== undefined,
+      hasEndFrame: endFrameUrl !== undefined,
+      referenceImageCount: referenceImageUrls?.length ?? 0,
+      referenceVideoCount: referenceVideoUrls?.length ?? 0,
+      referenceAudioCount: referenceAudioUrls?.length ?? 0,
+      // A character whose portrait already sits in the reference images (the
+      // editor seats it there; the runner turns that seat into the subject) is
+      // ONE material, not two.
+      characterCount: (characterReferences ?? []).filter((c) => !(referenceImageUrls ?? []).includes(c.imageUrl)).length,
+    })
+    if (kling4Problem) {
+      return reply.status(400).send({ error: kling4Problem })
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
@@ -1366,6 +1397,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       referenceVideoUrls,
       referenceAudioUrls,
       characterReferences,
+      keepOriginalSound,
       refVideoDurationsSec: req.refVideoDurationsSec,
       webSearch,
       nsfwChecker,

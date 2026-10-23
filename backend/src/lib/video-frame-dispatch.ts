@@ -47,7 +47,10 @@ export interface FrameDispatchResult {
 
 function supportsReferenceImages(model: string | undefined): boolean {
   if (!model) return false
-  return Boolean(getModel(model)?.features?.includes("reference-image"))
+  const features = getModel(model)?.features
+  // A keyframes model's reference images are in-between FRAMES: a start/end
+  // frame delivered "as a reference" would become one of them.
+  return Boolean(features?.includes("reference-image") && !features.includes("keyframes"))
 }
 
 /**

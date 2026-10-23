@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isGeminiOmniProvider, VIDEO_REF_LIMITS_BY_PROVIDER, GEMINI_OMNI_VOICE_PRESET_IDS } from "@nodaro/shared/models"
+import { isGeminiOmniProvider, isKling4Provider, VIDEO_REF_LIMITS_BY_PROVIDER, GEMINI_OMNI_VOICE_PRESET_IDS } from "@nodaro/shared/models"
 import { videoCharacterRefProviders } from "@nodaro/shared/video"
 import { characterReferenceSchema, characterReferencesSchema } from "../character-reference-schema.js"
 
@@ -52,9 +52,9 @@ describe("characterReferenceSchema — description and name", () => {
 })
 
 describe("characterReferencesSchema — count", () => {
-  it("allows up to 3 and rejects 4", () => {
-    expect(characterReferencesSchema.safeParse([ok, ok, ok]).success).toBe(true)
-    expect(characterReferencesSchema.safeParse([ok, ok, ok, ok]).success).toBe(false)
+  it("allows up to the widest provider cap (Kling 4.0's 7 subjects) and rejects one more", () => {
+    expect(characterReferencesSchema.safeParse(Array(7).fill(ok)).success).toBe(true)
+    expect(characterReferencesSchema.safeParse(Array(8).fill(ok)).success).toBe(false)
   })
 })
 
@@ -69,7 +69,8 @@ describe("characterReferences consumer guard", () => {
       .filter(([, l]) => (l?.characters ?? 0) > 0)
       .map(([id]) => id)
     expect(withCap.length).toBeGreaterThan(0)
-    for (const id of withCap) expect(isGeminiOmniProvider(id), `${id} declares characters but has no consumer`).toBe(true)
+    // Consumers: `runGeminiOmni` (character_ids) and `runKling4` (elements).
+    for (const id of withCap) expect(isGeminiOmniProvider(id) || isKling4Provider(id), `${id} declares characters but has no consumer`).toBe(true)
     expect(videoCharacterRefProviders().sort()).toEqual(withCap.sort())
   })
 })

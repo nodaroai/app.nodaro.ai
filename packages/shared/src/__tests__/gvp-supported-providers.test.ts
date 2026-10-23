@@ -60,6 +60,7 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       "veo3_lite",
       "gemini-omni-video",
       "gemini-omni-flash",
+      "kling-4",
       "grok-i2v",
       "wan-3",
       "wan-3-prime",
@@ -95,8 +96,14 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
    * does — fail the build rather than advertise a dropped capability.
    */
   it("agrees with VIDEO_REF_LIMITS_BY_PROVIDER (the forwarding-path audit)", () => {
+    // A `keyframes` model (Kling 4.0 Keyframes) forwards its Image References
+    // as in-between FRAMES — a real forwarding path, deliberately kept out of
+    // the pro node (its segments would send cast references as frames).
     const withRefLimits = Object.keys(VIDEO_REF_LIMITS_BY_PROVIDER).filter(
-      (id) => MODEL_CATALOG[id]?.kind === "video" && !VIDEO_PROVIDERS_WITHOUT_DISPATCH.has(id),
+      (id) =>
+        MODEL_CATALOG[id]?.kind === "video" &&
+        !VIDEO_PROVIDERS_WITHOUT_DISPATCH.has(id) &&
+        !MODEL_CATALOG[id]?.features?.includes("keyframes"),
     )
     expect([...GVP_SUPPORTED_PROVIDERS].sort()).toEqual(withRefLimits.sort())
   })

@@ -80,14 +80,14 @@ describe("MCP generate_video — character_references", () => {
     expect("characterReferences" in (received.body ?? {})).toBe(false)
   })
 
-  it("advertises the argument on the tool surface, capped at 3", async () => {
+  it("advertises the argument on the tool surface, capped at the widest provider cap (Kling 4.0: 7)", async () => {
     const { fastify } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-4" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
 
     const tool = (await listTools(server)).find((t) => t.name === "generate_video")
     const props = (tool?.inputSchema as { properties?: Record<string, { maxItems?: number }> } | undefined)?.properties
-    expect(props?.character_references?.maxItems).toBe(3)
+    expect(props?.character_references?.maxItems).toBe(7)
   })
 
   it("maps a character's voice_preset onto the route's voice, and omits it when absent", async () => {

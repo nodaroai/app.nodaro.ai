@@ -1,5 +1,5 @@
-import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoProviderAppendsFrames } from "@nodaro/shared/models"
-import { getModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoProviderAppendsFrames, kling4KeyframeFrameCap } from "@nodaro/shared/models"
+import { getModel, hasFeature, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
   PROVIDERS_WITH_END_FRAME,
@@ -196,6 +196,13 @@ export function getHandleConnectionLimit(
         // keep their flat capability cap straight off
         // VIDEO_REF_LIMITS_BY_PROVIDER. Floor at 0 so the popover shows
         // "N of 0 max" (handle full) rather than a negative max.
+        // Kling 4.0 Keyframes: the in-between frames share the clip's frame
+        // cap with the start/end frames (3s → 4 … 9s or longer → 10).
+        if (hasFeature(provider, "keyframes")) {
+          const seconds = Number((node.data as { duration?: unknown } | undefined)?.duration) || 5
+          const ends = counts?.seedance2ImagePoolConsumed ?? 0
+          return { limit: Math.max(0, Math.min(poolMax, kling4KeyframeFrameCap(seconds) - ends)), providerLabel, isMultiProviderMin: false }
+        }
         const limit = videoProviderAppendsFrames(provider)
           ? Math.max(0, poolMax - (counts?.seedance2ImagePoolConsumed ?? 0))
           : poolMax

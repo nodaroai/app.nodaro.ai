@@ -30,7 +30,7 @@ import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
 import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
-import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
+import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
@@ -197,7 +197,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, " +
             "gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and " +
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
@@ -214,7 +214,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio for soundtrack-driven motion, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5). " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, kling-4 3). " +
             "Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without " +
             "audio-reference support.",
           ),
@@ -222,6 +222,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .array(z.object({
             image_url: z.string(),
             body_image_url: z.string().optional(),
+            extra_image_urls: z.array(z.string()).max(VIDEO_CHARACTER_EXTRA_IMAGES_MAX).optional().describe("kling-4: more views (2-4 per subject)."),
             description: z.string(),
             name: z.string().optional(),
             voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
@@ -231,6 +232,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
           ),
+        keep_original_sound: z.boolean().optional().describe("kling-4: keep reference videos' own sound."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -407,6 +409,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
               characterReferences: args.character_references.map((c) => ({
                 imageUrl: c.image_url,
                 ...(c.body_image_url ? { bodyImageUrl: c.body_image_url } : {}),
+                ...(c.extra_image_urls?.length ? { extraImageUrls: c.extra_image_urls } : {}),
                 description: c.description,
                 ...(c.name ? { name: c.name } : {}),
                 // Preset only: the full voice object (description, example line) does
@@ -415,6 +418,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
               })),
             }
           : {}),
+        ...(args.keep_original_sound !== undefined ? { keepOriginalSound: args.keep_original_sound } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

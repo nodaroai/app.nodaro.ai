@@ -24,7 +24,7 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { SeedanceRefEstimateRequest } from "@/lib/api"
 import {
   applyDefaultVideoSelection,
-  isSeedance2Provider,
+  billsReferenceVideoSeconds,
   isSeedanceVideoEditProvider,
 } from "@nodaro/shared/models"
 import {
@@ -86,7 +86,7 @@ export function seedanceRefQuoteRequest(
     resolution = data.v2vResolution as string | undefined
     duration = VIDEO_DURATION_AUTO
   }
-  if (!isSeedance2Provider(provider)) return undefined
+  if (!billsReferenceVideoSeconds(provider)) return undefined
 
   // Resolve only the wires whose clip is already what the run will send.
   const stale = new Set(clipEdges.filter((e) => rerunIds.has(e.source)).map((e) => e.id))

@@ -1315,6 +1315,54 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "vidu-q4:3s:4k": 470, "vidu-q4:4s:4k": 630, "vidu-q4:5s:4k": 780, "vidu-q4:6s:4k": 940, "vidu-q4:7s:4k": 1100,
   "vidu-q4:8s:4k": 1250, "vidu-q4:9s:4k": 1410, "vidu-q4:10s:4k": 1560, "vidu-q4:11s:4k": 1720, "vidu-q4:12s:4k": 1880,
   "vidu-q4:13s:4k": 2030, "vidu-q4:14s:4k": 2190, "vidu-q4:15s:4k": 2340, "vidu-q4:16s:4k": 2500,
+  // ── Kling 4.0 (KIE kling-4.0/reference-to-video + kling-4.0/keyframe-to-video) ──
+  //    Two ids, one per endpoint, ONE ROW PER SECOND across 3-30s at 720p /
+  //    1080p: credits = KIE cr/s × seconds × 2.5, rounded UP to the next 10
+  //    (the wan-3 / gemini-omni rule). KIE cr/s: 28.5 @720p, 42.5 @1080p on
+  //    both endpoints. `kling-4` adds `-ref` rows for a run with a reference
+  //    VIDEO, from KIE's with-video rate (17 / 25.5 cr/s): they price one
+  //    second of BILLED duration — the reservation scales the 8s row ÷ 8 by
+  //    output + max(output, input seconds) (ee/billing/seedance2-ref-video-credits.ts).
+  //    The bare ids are the DEFAULT render (5s @ 720p). Audio is always on and
+  //    priced in. Machine-generated with migration 556 — never edit one value by hand.
+  "kling-4": 360,         // (5s 720p default render)
+  "kling-4:3s:720p": 220, "kling-4:4s:720p": 290, "kling-4:5s:720p": 360, "kling-4:6s:720p": 430, "kling-4:7s:720p": 500,
+  "kling-4:8s:720p": 570, "kling-4:9s:720p": 650, "kling-4:10s:720p": 720, "kling-4:11s:720p": 790, "kling-4:12s:720p": 860,
+  "kling-4:13s:720p": 930, "kling-4:14s:720p": 1000, "kling-4:15s:720p": 1070, "kling-4:16s:720p": 1140, "kling-4:17s:720p": 1220,
+  "kling-4:18s:720p": 1290, "kling-4:19s:720p": 1360, "kling-4:20s:720p": 1430, "kling-4:21s:720p": 1500, "kling-4:22s:720p": 1570,
+  "kling-4:23s:720p": 1640, "kling-4:24s:720p": 1710, "kling-4:25s:720p": 1790, "kling-4:26s:720p": 1860, "kling-4:27s:720p": 1930,
+  "kling-4:28s:720p": 2000, "kling-4:29s:720p": 2070, "kling-4:30s:720p": 2140,
+  "kling-4:3s:1080p": 320, "kling-4:4s:1080p": 430, "kling-4:5s:1080p": 540, "kling-4:6s:1080p": 640, "kling-4:7s:1080p": 750,
+  "kling-4:8s:1080p": 850, "kling-4:9s:1080p": 960, "kling-4:10s:1080p": 1070, "kling-4:11s:1080p": 1170, "kling-4:12s:1080p": 1280,
+  "kling-4:13s:1080p": 1390, "kling-4:14s:1080p": 1490, "kling-4:15s:1080p": 1600, "kling-4:16s:1080p": 1700, "kling-4:17s:1080p": 1810,
+  "kling-4:18s:1080p": 1920, "kling-4:19s:1080p": 2020, "kling-4:20s:1080p": 2130, "kling-4:21s:1080p": 2240, "kling-4:22s:1080p": 2340,
+  "kling-4:23s:1080p": 2450, "kling-4:24s:1080p": 2550, "kling-4:25s:1080p": 2660, "kling-4:26s:1080p": 2770, "kling-4:27s:1080p": 2870,
+  "kling-4:28s:1080p": 2980, "kling-4:29s:1080p": 3090, "kling-4:30s:1080p": 3190,
+  "kling-4:3s:720p-ref": 130, "kling-4:4s:720p-ref": 170, "kling-4:5s:720p-ref": 220, "kling-4:6s:720p-ref": 260, "kling-4:7s:720p-ref": 300,
+  "kling-4:8s:720p-ref": 340, "kling-4:9s:720p-ref": 390, "kling-4:10s:720p-ref": 430, "kling-4:11s:720p-ref": 470, "kling-4:12s:720p-ref": 510,
+  "kling-4:13s:720p-ref": 560, "kling-4:14s:720p-ref": 600, "kling-4:15s:720p-ref": 640, "kling-4:16s:720p-ref": 680, "kling-4:17s:720p-ref": 730,
+  "kling-4:18s:720p-ref": 770, "kling-4:19s:720p-ref": 810, "kling-4:20s:720p-ref": 850, "kling-4:21s:720p-ref": 900, "kling-4:22s:720p-ref": 940,
+  "kling-4:23s:720p-ref": 980, "kling-4:24s:720p-ref": 1020, "kling-4:25s:720p-ref": 1070, "kling-4:26s:720p-ref": 1110, "kling-4:27s:720p-ref": 1150,
+  "kling-4:28s:720p-ref": 1190, "kling-4:29s:720p-ref": 1240, "kling-4:30s:720p-ref": 1280,
+  "kling-4:3s:1080p-ref": 200, "kling-4:4s:1080p-ref": 260, "kling-4:5s:1080p-ref": 320, "kling-4:6s:1080p-ref": 390, "kling-4:7s:1080p-ref": 450,
+  "kling-4:8s:1080p-ref": 510, "kling-4:9s:1080p-ref": 580, "kling-4:10s:1080p-ref": 640, "kling-4:11s:1080p-ref": 710, "kling-4:12s:1080p-ref": 770,
+  "kling-4:13s:1080p-ref": 830, "kling-4:14s:1080p-ref": 900, "kling-4:15s:1080p-ref": 960, "kling-4:16s:1080p-ref": 1020, "kling-4:17s:1080p-ref": 1090,
+  "kling-4:18s:1080p-ref": 1150, "kling-4:19s:1080p-ref": 1220, "kling-4:20s:1080p-ref": 1280, "kling-4:21s:1080p-ref": 1340, "kling-4:22s:1080p-ref": 1410,
+  "kling-4:23s:1080p-ref": 1470, "kling-4:24s:1080p-ref": 1530, "kling-4:25s:1080p-ref": 1600, "kling-4:26s:1080p-ref": 1660, "kling-4:27s:1080p-ref": 1730,
+  "kling-4:28s:1080p-ref": 1790, "kling-4:29s:1080p-ref": 1850, "kling-4:30s:1080p-ref": 1920,
+  "kling-4-keyframes": 360,  // (5s 720p default render)
+  "kling-4-keyframes:3s:720p": 220, "kling-4-keyframes:4s:720p": 290, "kling-4-keyframes:5s:720p": 360, "kling-4-keyframes:6s:720p": 430, "kling-4-keyframes:7s:720p": 500,
+  "kling-4-keyframes:8s:720p": 570, "kling-4-keyframes:9s:720p": 650, "kling-4-keyframes:10s:720p": 720, "kling-4-keyframes:11s:720p": 790, "kling-4-keyframes:12s:720p": 860,
+  "kling-4-keyframes:13s:720p": 930, "kling-4-keyframes:14s:720p": 1000, "kling-4-keyframes:15s:720p": 1070, "kling-4-keyframes:16s:720p": 1140, "kling-4-keyframes:17s:720p": 1220,
+  "kling-4-keyframes:18s:720p": 1290, "kling-4-keyframes:19s:720p": 1360, "kling-4-keyframes:20s:720p": 1430, "kling-4-keyframes:21s:720p": 1500, "kling-4-keyframes:22s:720p": 1570,
+  "kling-4-keyframes:23s:720p": 1640, "kling-4-keyframes:24s:720p": 1710, "kling-4-keyframes:25s:720p": 1790, "kling-4-keyframes:26s:720p": 1860, "kling-4-keyframes:27s:720p": 1930,
+  "kling-4-keyframes:28s:720p": 2000, "kling-4-keyframes:29s:720p": 2070, "kling-4-keyframes:30s:720p": 2140,
+  "kling-4-keyframes:3s:1080p": 320, "kling-4-keyframes:4s:1080p": 430, "kling-4-keyframes:5s:1080p": 540, "kling-4-keyframes:6s:1080p": 640, "kling-4-keyframes:7s:1080p": 750,
+  "kling-4-keyframes:8s:1080p": 850, "kling-4-keyframes:9s:1080p": 960, "kling-4-keyframes:10s:1080p": 1070, "kling-4-keyframes:11s:1080p": 1170, "kling-4-keyframes:12s:1080p": 1280,
+  "kling-4-keyframes:13s:1080p": 1390, "kling-4-keyframes:14s:1080p": 1490, "kling-4-keyframes:15s:1080p": 1600, "kling-4-keyframes:16s:1080p": 1700, "kling-4-keyframes:17s:1080p": 1810,
+  "kling-4-keyframes:18s:1080p": 1920, "kling-4-keyframes:19s:1080p": 2020, "kling-4-keyframes:20s:1080p": 2130, "kling-4-keyframes:21s:1080p": 2240, "kling-4-keyframes:22s:1080p": 2340,
+  "kling-4-keyframes:23s:1080p": 2450, "kling-4-keyframes:24s:1080p": 2550, "kling-4-keyframes:25s:1080p": 2660, "kling-4-keyframes:26s:1080p": 2770, "kling-4-keyframes:27s:1080p": 2870,
+  "kling-4-keyframes:28s:1080p": 2980, "kling-4-keyframes:29s:1080p": 3090, "kling-4-keyframes:30s:1080p": 3190,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,

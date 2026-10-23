@@ -1,4 +1,4 @@
-import { isSeedance2Provider } from "@nodaro/shared/models"
+import { billsReferenceVideoSeconds, isSeedance2Provider } from "@nodaro/shared/models"
 import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
 import { hasCredits } from "./config.js"
 
@@ -37,9 +37,12 @@ export async function measureSeedance2RefVideoBaseCredits(args: {
 }): Promise<number | undefined> {
   if (!hasCredits()) return undefined
   const { provider, referenceVideoUrls } = args
-  if (!isSeedance2Provider(provider)) return undefined
+  // Every model whose reference-video runs bill the clips' seconds (Seedance 2,
+  // Kling 4.0) settles here; only Seedance has the Auto-duration case below.
+  if (!billsReferenceVideoSeconds(provider)) return undefined
   const hasVideoRef = Array.isArray(referenceVideoUrls) && referenceVideoUrls.length > 0
   if (!hasVideoRef) {
+    if (!isSeedance2Provider(provider)) return undefined
     // AUTO duration, nothing wired: reserved at the model's longest clip, so
     // settle to the tier of the length the model actually chose.
     if (!isAutoVideoDuration(args.duration)) return undefined

@@ -123,6 +123,9 @@ export interface ProviderOptions {
   // a positive `characters` cap in VIDEO_REF_LIMITS_BY_PROVIDER — Gemini Omni 3).
   // The provider mints/caches whatever upstream ids it needs; never loose images.
   characterReferences?: VideoCharacterReference[]
+  // Kling 4.0 reference-to-video: keep the reference videos' own sound instead
+  // of generating new sound (KIE `keep_original_sound`; ignored without a video).
+  keepOriginalSound?: boolean
   // Start/end FRAME handling, applied once at dispatch (lib/video-frame-dispatch.ts),
   // never inside a provider. `frameFit` reshapes the frame to the model's MEASURED
   // output canvas, because a frame that is not already that size gets reshaped by

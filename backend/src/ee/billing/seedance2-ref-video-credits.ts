@@ -1,5 +1,5 @@
 import { MODEL_CATALOG, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
+import { VIDEO_REF_VIDEO_DURATION_LIMITS, VIDEO_REF_RATE_PROVIDERS, isKling4Provider, normalizeKling4Resolution } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 // The probe lives in CORE (lib/ref-video-probe.ts) because the routes' duration
@@ -64,9 +64,14 @@ export function seedance2RefVideoBaseCredits(args: {
 
   // Clamp the requested resolution to the provider's catalog resolutions, snapping
   // an unsupported tier to the top (last) priced tier — mirrors credit-identifiers.ts.
+  // A VIDEO_REF_RATE_PROVIDERS model (Kling 4.0) renders through its own
+  // normalizer instead, which collapses an unknown tier to 720p — billed the
+  // same way, so render == billed.
   const supported = MODEL_CATALOG[provider]?.resolutions ?? ["480p", "720p", "1080p"]
   const want = resolution === "4k" ? "4k" : resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
-  const res = supported.includes(want) ? want : (supported[supported.length - 1] ?? "480p")
+  const res = isKling4Provider(provider)
+    ? normalizeKling4Resolution(resolution)
+    : supported.includes(want) ? want : (supported[supported.length - 1] ?? "480p")
 
   const identifier = `${provider}:8s:${res}-ref`
   const composite8s = STATIC_CREDIT_COSTS[identifier]
@@ -77,7 +82,31 @@ export function seedance2RefVideoBaseCredits(args: {
   }
 
   const perSecBase = composite8s / 8
-  return Math.ceil(perSecBase * (inputVideoDurationSec + outputDurationSec))
+  return Math.ceil(perSecBase * billedRefVideoSeconds(provider, outputDurationSec, inputVideoDurationSec))
+}
+
+/**
+ * The seconds a reference-video run bills, from its output and its summed
+ * input clips — the provider's own rule:
+ *  - Seedance 2 family: input + output;
+ *  - Kling 4.0 (VIDEO_REF_RATE_PROVIDERS): output + max(output, input) — "if the
+ *    input is shorter than the output, the input is counted as the output
+ *    duration" (kie.ai/kling-4-0 billing: a 10s output with a 5s input bills
+ *    20s, with a 15s input 25s).
+ */
+export function billedRefVideoSeconds(provider: string, outputDurationSec: number, inputVideoDurationSec: number): number {
+  return VIDEO_REF_RATE_PROVIDERS.has(provider)
+    ? outputDurationSec + Math.max(outputDurationSec, inputVideoDurationSec)
+    : inputVideoDurationSec + outputDurationSec
+}
+
+/**
+ * Whether the provider may render LONGER than the requested duration because
+ * of its reference clip. Only Seedance does (an edit renders the clip's own
+ * length); Kling 4.0 always renders the requested duration.
+ */
+function outputFollowsReferenceClip(provider: string): boolean {
+  return !VIDEO_REF_RATE_PROVIDERS.has(provider)
 }
 
 /**
@@ -128,7 +157,7 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
 }): number {
   const { provider, resolution, outputDurationSec, durationsSec } = args
   const { perClip, totalSec } = billedInputSeconds(provider, durationsSec)
-  const billableOutputSec = Math.max(outputDurationSec, ...perClip)
+  const billableOutputSec = outputFollowsReferenceClip(provider) ? Math.max(outputDurationSec, ...perClip) : outputDurationSec
   return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec: billableOutputSec, inputVideoDurationSec: totalSec })
 }
 
@@ -156,7 +185,7 @@ export function seedance2RefVideoExpectedBaseCredits(args: {
   const { provider, resolution, outputDurationSec, autoDuration, durationsSec } = args
   if (durationsSec.length === 0 || !durationsSec.every(isUsableDuration)) return undefined
   const { perClip, totalSec } = billedInputSeconds(provider, durationsSec)
-  const renderedSec = autoDuration ? perClip[0]! : outputDurationSec
+  const renderedSec = autoDuration && outputFollowsReferenceClip(provider) ? perClip[0]! : outputDurationSec
   return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec: renderedSec, inputVideoDurationSec: totalSec })
 }
 
@@ -214,10 +243,16 @@ export async function seedance2RefVideoActualBaseCredits(args: {
   durationsSec?: readonly unknown[]
 }): Promise<number> {
   const { provider, resolution, outputUrl, referenceVideoUrls } = args
-  const [outputDurationSec, durationsSec] = await Promise.all([
+  const [measuredOutputSec, durationsSec] = await Promise.all([
     probeMediaDuration(outputUrl),
     Array.isArray(args.durationsSec) ? args.durationsSec : probeRefVideoDurations({ provider, referenceVideoUrls }),
   ])
+  // Kling 4.0 renders whole seconds (a 3s clip measures 3.04s — live
+  // 2026-10-23), so the measured length rounds to the second it was billed at.
+  const outputDurationSec = outputFollowsReferenceClip(provider)
+    ? measuredOutputSec
+    : Math.max(1, Math.round(measuredOutputSec))
+  if (!isUsableDuration(outputDurationSec)) throw new Error(`unusable output duration: ${measuredOutputSec}`)
   return seedance2RefVideoBaseCredits({
     provider,
     resolution,

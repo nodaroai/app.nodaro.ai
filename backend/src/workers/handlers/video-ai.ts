@@ -286,7 +286,7 @@ async function chainVeoBaseTo4k(
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft } = job.data as {
     jobId: string
     /** Seedance Draft: render a 480p draft the 1080p finalize can re-render. */
     draft?: boolean
@@ -316,6 +316,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     referenceAudioUrls?: string[]
     /** Identity inputs (Gemini Omni `character_ids` after the provider mints them). */
     characterReferences?: VideoCharacterReference[]
+    /** Kling 4.0: keep the reference videos' own sound. */
+    keepOriginalSound?: boolean
     /** Start/end frame handling; absent = platform defaults. */
     frameFit?: FrameFit
     frameDelivery?: FrameDelivery
@@ -380,7 +382,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const baseResolution = wantsVeo4k ? VEO_4K_BASE_RESOLUTION : resolution
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -591,7 +593,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat } = job.data as {
     jobId: string
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
@@ -619,6 +621,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     referenceAudioUrls?: string[]
     /** See the image-to-video payload above. */
     characterReferences?: VideoCharacterReference[]
+    /** See the image-to-video payload above. */
+    keepOriginalSound?: boolean
     /** See the image-to-video payload above. */
     refVideoDurationsSec?: Array<number | null>
     webSearch?: boolean
@@ -664,7 +668,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
   // job): the mp4 options stay key-for-key what they were.
   const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, draft, contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)

@@ -131,7 +131,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
@@ -1323,7 +1323,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 8000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported value. -1 = Auto (Seedance 2): the model picks the length. |
 | `aspect_ratio` | string |  | Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. |
@@ -1391,15 +1391,17 @@ Needs `workflows:execute`.
 | `described_references[].description` | string | yes | At most 2000 characters. |
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
 | `reference_image_urls` | string[] or string |  | Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, gemini-omni-video / gemini-omni-flash 7, veo3/veo3.1 3, ...). Dropped on models with no reference path. Accepts an array; a lone URL or JSON-stringified array is coerced. |
-| `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
+| `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
 | `reference_video_captions` | string[] |  | Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`. At most 10 items. |
-| `reference_audio_urls` | string[] or string |  | Reference audio for soundtrack-driven motion, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5). Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without audio-reference support. |
-| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash only); see docs/nodes/ai-video/generate-video.md. At most 3 items. |
+| `reference_audio_urls` | string[] or string |  | Reference audio for soundtrack-driven motion, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, kling-4 3). Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without audio-reference support. |
+| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash / kling-4 only); see docs/nodes/ai-video/generate-video.md. At most 7 items. |
 | `character_references[].image_url` | string | yes |  |
 | `character_references[].body_image_url` | string |  |  |
+| `character_references[].extra_image_urls` | string[] |  | kling-4: more views (2-4 per subject). At most 3 items. |
 | `character_references[].description` | string | yes |  |
 | `character_references[].name` | string |  |  |
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
+| `keep_original_sound` | boolean |  | kling-4: keep reference videos' own sound. |
 
 ## `get_app_inputs`
 

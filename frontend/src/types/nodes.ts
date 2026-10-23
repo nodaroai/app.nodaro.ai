@@ -2279,7 +2279,11 @@ export type GenerateVideoNodeData =
   & {
     provider: VideoGenProvider
     /** Unified aspect ratio — superset of i2v and t2v values. */
-    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"
+    /** Kling 4.0: keep the reference videos' own sound instead of generating
+     *  new sound (KIE `keep_original_sound`). Ignored without a reference video
+     *  and by every other model. */
+    keepOriginalSound?: boolean
     /** Loosened from required (text-to-video) to optional, matching i2v. */
     prompt?: string
     /** Loosened from required (text-to-video) to optional, matching i2v. */

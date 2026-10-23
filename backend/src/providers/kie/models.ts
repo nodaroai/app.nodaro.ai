@@ -23,6 +23,12 @@ export const KIE_CREDIT_USD = 0.005
  *  admin credit audit) resolves it back to `vidu-q4`. */
 export const VIDU_Q4_REFERENCE_MODEL = "vidu-q4/reference-to-video"
 
+/** Kling 4.0's two KIE endpoints, one Nodaro id each (`kling-4`,
+ *  `kling-4-keyframes`). Exported for the request builder (kling4.ts) and every
+ *  reverse map of KIE ids (the admin credit audit). */
+export const KLING_4_REFERENCE_MODEL = "kling-4.0/reference-to-video"
+export const KLING_4_KEYFRAME_MODEL = "kling-4.0/keyframe-to-video"
+
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
   cost: number            // Cost in USD per generation
@@ -1108,6 +1114,34 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
   },
 
+  // Kling 4.0 — two KIE endpoints, two Nodaro ids, each registered in BOTH
+  // maps (each endpoint also runs with no image, like wan-3). Dispatched
+  // through the bespoke `runKling4` in video.ts (bodies built by kling4.ts):
+  // both schemas are `additionalProperties: false` with an INTEGER duration,
+  // so the generic builder never runs and these configs carry no extraParams.
+  // 3-30s, 720p/1080p, native audio always on (no lever), no seed.
+  // `credits`/`cost` are the KIE-side default tier (5s @720p: 28.5 KIE cr/s)
+  // for audit logging only; runKling4 reports the per-tier cost.
+  // See: docs.kie.ai/market/kling/v4-reference-to-video.md + v4-keyframe-to-video.md
+  "kling-4": {
+    model: KLING_4_REFERENCE_MODEL,
+    credits: 142.5,
+    cost: 0.7125,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p | 1080p (both Kling 4.0 schemas)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+  "kling-4-keyframes": {
+    model: KLING_4_KEYFRAME_MODEL,
+    credits: 142.5,
+    cost: 0.7125,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p | 1080p (both Kling 4.0 schemas)
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
   // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher
   // per-second rate, NOT a higher-quality tier). Identical request surface to
   // wan-3; same bespoke runWan3 dispatch and the same declarative-only
@@ -1391,6 +1425,32 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.40,
     extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Kling 4.0 — two KIE endpoints, two Nodaro ids, the t2v twins of the i2v
+  // entries (each endpoint also runs with no image, like wan-3). Dispatched
+  // through the bespoke `runKling4` in video.ts (bodies built by kling4.ts):
+  // both schemas are `additionalProperties: false` with an INTEGER duration,
+  // so the generic builder never runs and these configs carry no extraParams.
+  // 3-30s, 720p/1080p, native audio always on (no lever), no seed.
+  // `credits`/`cost` are the KIE-side default tier (5s @720p: 28.5 KIE cr/s)
+  // for audit logging only; runKling4 reports the per-tier cost.
+  // See: docs.kie.ai/market/kling/v4-reference-to-video.md + v4-keyframe-to-video.md
+  "kling-4": {
+    model: KLING_4_REFERENCE_MODEL,
+    credits: 142.5,
+    cost: 0.7125,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p | 1080p (both Kling 4.0 schemas)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+  "kling-4-keyframes": {
+    model: KLING_4_KEYFRAME_MODEL,
+    credits: 142.5,
+    cost: 0.7125,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p | 1080p (both Kling 4.0 schemas)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
   },
 
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).

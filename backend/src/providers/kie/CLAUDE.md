@@ -88,6 +88,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `vidu-q4` | `vidu-q4/image-to-video` (bespoke `runViduQ4`; swaps to `vidu-q4/reference-to-video` — `VIDU_Q4_REFERENCE_MODEL` — when a reference image or audio is wired). No t2v entry: KIE has no Q4 text-to-video. | [vidu q4 i2v](https://docs.kie.ai/market/vidu-q4/image-to-video.md) / [r2v](https://docs.kie.ai/market/vidu-q4/reference-to-video.md) |
+| `kling-4` | `kling-4.0/reference-to-video` (bespoke `runKling4`, body from `kling4.ts`) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
+| `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan-i2v` | `wan/2-6-image-to-video` | [wan 2.6 i2v](https://docs.kie.ai/market/wan/2-6-image-to-video.md) |
@@ -116,6 +118,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `minimax-h3` | `minimax-h3/text-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired) | [minimax-h3 t2v](https://docs.kie.ai/market/minimax-h3/text-to-video.md) |
 | `wan-3` | `wan/3-0-video` (ONE KIE id serves both modes) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
+| `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
+| `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan` | `wan/2-6-text-to-video` | [wan 2.6 t2v](https://docs.kie.ai/market/wan/2-6-text-to-video.md) |
@@ -216,6 +220,43 @@ runs) and it declares no `end-frame`.
 - Pricing is ONE per-second `vidu-q4:<N>s:<res>` ladder for both endpoints and
   for audio on/off (no `-ref`, no `:audio`). The 4k rows are closed to the free
   tier (`blockedModels`, derived from the duration tiers).
+
+### Kling 4.0 wire notes (`kling-4` / `kling-4-keyframes`, bespoke `runKling4`)
+
+Two Nodaro ids, one per KIE endpoint; both run with no image (text-to-video),
+so each is in BOTH model maps. The bodies are built by the pure
+`buildKling4Request` (`kling4.ts`) and `runKling4` normalizes every image
+afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
+
+- Both schemas are `additionalProperties: false`: explicit allow-list, INTEGER
+  `duration` 3-30, lowercase `resolution` via `normalizeKling4Resolution`
+  (`720p` / `1080p`, anything else → 720p, billed the same), no seed, no audio
+  lever (native audio always on). `aspect_ratio` (`auto` / `16:9` / `9:16` /
+  `1:1` / `21:9`) is sent on reference runs, and on keyframe runs only when no
+  frame is attached (the output follows the start frame otherwise).
+- **Names are the whole risk.** KIE refuses a prompt that mentions a material
+  the request does not carry ("prompt references undeclared material @image_1",
+  a 422, live 2026-10-23). The builder maps the platform's numbering onto
+  Kling's — reference: a character's seat `@image_N` → its subject `@Name`
+  (`elements`, 2-4 images, `tag: "character"`; one-image characters stay images),
+  `@audio_N` → `@VoiceN` (`voices`); keyframes: `@image_N` → `@keyframe_N` —
+  then strips the `@` from every mention left undeclared. The sweep test in
+  `__tests__/kling4.test.ts` holds "every mention is declared".
+- Reference: a start/end frame joins `image_urls` after the caller's own
+  (`placeFramesAfterReferences`). `keep_original_sound` is sent only with
+  `video_urls`. 15 materials in all (images + videos + subjects + voices) —
+  `lib/kling4-inputs.ts` refuses more before the reservation.
+- Keyframes: `first_frame_url` / `keyframe_urls` (Image References, in order,
+  max 8) / `last_frame_url`; total frames capped by duration
+  (`kling4KeyframeFrameCap`: 3s → 4 … 9s or longer → 10 — live 422 "duration 3s
+  allows at most 4 frames (first + keyframes + last), got 5"). The route and
+  the DAG refuse an over-cap run; the builder trims as a backstop.
+- **Billing:** per second (KIE 28.5 cr/s @720p, 42.5 @1080p — live-billed 85.5
+  for 3s). With a reference video KIE bills 17 / 25.5 cr/s over output +
+  max(output, Σ input seconds) — live: 5s out + a 4.04s clip = 170. The
+  reservation and settlement reuse the Seedance machinery
+  (`billsReferenceVideoSeconds`, `billedRefVideoSeconds` in
+  `ee/billing/seedance2-ref-video-credits.ts`); subjects and voices are free.
 
 ### Seedance 2.5 edit mode (`runVideoTaskWithSeedanceEditRetry`, video.ts)
 

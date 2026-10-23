@@ -88,6 +88,7 @@ vi.mock("@/lib/video-schemas.js", async () => {
 
 import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
 import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame } from "@nodaro/shared/models"
+import { hasFeature } from "@nodaro/shared/model-catalog"
 import type { ConnectedReference } from "@nodaro/shared/types"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
@@ -1438,8 +1439,10 @@ describe("POST /v1/generate-video — end-frame-only (folded into the provider's
   // loop goes red. (The refusal CODE differs by lane, as it always has: an
   // i2v-only model has nowhere else to go and gets `image_required`; a model
   // with a text-to-video mode is simply on the wrong endpoint.)
+  // A keyframes model (Kling 4.0 Keyframes) takes a lone end frame as its
+  // LAST frame on its own channel — it is not a non-folder to refuse.
   const refCapableNonFolders = VIDEO_GEN_PROVIDERS.filter(
-    (p) => !videoProviderFoldsLoneEndFrame(p) && (VIDEO_REF_LIMITS_BY_PROVIDER[p]?.images ?? 0) > 0,
+    (p) => !videoProviderFoldsLoneEndFrame(p) && !hasFeature(p, "keyframes") && (VIDEO_REF_LIMITS_BY_PROVIDER[p]?.images ?? 0) > 0,
   )
 
   it("there is at least one ref-capable non-folder to refuse (an empty set would guard nothing)", () => {

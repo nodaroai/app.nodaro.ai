@@ -418,16 +418,26 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
   referenceAudioUrls?: string[]
   /**
    * Identity inputs that keep a real person's face — a portrait + description
-   * per person, up to 3. Only models with a dedicated character channel take
-   * them (Gemini Omni: `gemini-omni-video`, `gemini-omni-flash`); any other
-   * model answers `400`. Distinct from `referenceImageUrls`, which a multimodal
-   * model treats as loose context. Cannot be combined with a start frame
-   * (`imageUrl`); each character uses 1 of the model's 7 input units (2 with a
-   * `bodyImageUrl`). Adds no credit charge. Give a character a `voice` to pin one
-   * voice persona (a Gemini preset + optional description / example line) across
-   * clips — up to 3 distinct voices a request.
+   * per person. Only models with a dedicated character channel take them; any
+   * other model answers `400`. Distinct from `referenceImageUrls`, which a
+   * multimodal model treats as loose context. Adds no credit charge.
+   *
+   * - Gemini Omni (`gemini-omni-video`, `gemini-omni-flash`): up to 3. Cannot be
+   *   combined with a start frame (`imageUrl`); each character uses 1 of the
+   *   model's 7 input units (2 with a `bodyImageUrl`). Give a character a
+   *   `voice` to pin one voice persona (a Gemini preset + optional description /
+   *   example line) across clips — up to 3 distinct voices a request.
+   * - Kling 4.0 (`kling-4`): up to 7 named subjects, written in the prompt as
+   *   `@Name`. A subject takes 2–4 images — the portrait, then `bodyImageUrl` /
+   *   `extraImageUrls`; one with a single image is sent as a reference image.
+   *   Counts toward the model's 15 materials. No `voice` (send a recorded
+   *   voice as `referenceAudioUrls`).
    */
   characterReferences?: VideoCharacterReference[]
+  /** Kling 4.0 (`kling-4`): keep the reference videos' own sound instead of
+   *  generating new sound. Ignored without a reference video and by every
+   *  other model. */
+  keepOriginalSound?: boolean
   /** How a start/end frame is reshaped before the model sees it. Default
    *  `"resolution"`: resize it to the pixel size that model actually renders,
    *  which is what stops the provider reshaping it mid-clip. `"ratio"` corrects
@@ -473,6 +483,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   referenceAudioUrls?: string[]
   /** Identity inputs that keep a real person's face — see {@link GenerateVideoParams.characterReferences}. */
   characterReferences?: VideoCharacterReference[]
+  /** Kling 4.0 (`kling-4`): keep the reference videos' own sound — see {@link GenerateVideoParams.keepOriginalSound}. */
+  keepOriginalSound?: boolean
   /** Cinematic direction as catalog IDS — the route renders the wording. */
   direction?: DirectionFields
   /** WHO is in the shot as picker-catalog ids ({@link Subject}), folded ahead of the direction clauses. */

@@ -22,11 +22,12 @@ const portrait = (over: Partial<VideoCharacterReference> = {}): VideoCharacterRe
 })
 
 describe("character reference capability (data-driven)", () => {
-  it("both Gemini Omni SKUs declare a 3-character cap; nothing else does", () => {
+  it("both Gemini Omni SKUs declare a 3-character cap, Kling 4.0 a 7-subject cap; nothing else does", () => {
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-video"]?.characters).toBe(3)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-flash"]?.characters).toBe(3)
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"]?.characters).toBe(7)
     const others = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
-      .filter(([id, l]) => !id.startsWith("gemini-omni") && (l?.characters ?? 0) > 0)
+      .filter(([id, l]) => !id.startsWith("gemini-omni") && id !== "kling-4" && (l?.characters ?? 0) > 0)
     expect(others).toEqual([])
   })
 

@@ -943,6 +943,29 @@ describe("computeGenerateVideoProPricing — flat-priced providers", () => {
     expect(p.resolution).toBe("1080p")
   })
 
+  it("kling-4 prices each keyframes segment at its own ladder row, like a single-shot run", async () => {
+    // Kling 4.0 is per-second priced (`kling-4:<N>s:<res>`) and is offered in
+    // keyframes mode only (no `video-reference`, so no extend transport): every
+    // segment resolves the composite a single-shot run of that length would.
+    // Its `-ref` rows (reference-video runs) must not pull it onto the
+    // Seedance per-second closed form.
+    const p = await computeGenerateVideoProPricing({
+      provider: "kling-4",
+      resolution: "1080p",
+      durationSec: 23,
+      segmentDurations: [10, 8, 6],
+      renderMethod: "keyframes",
+      aspectRatio: "16:9",
+    })
+    expect(p.segmentCosts).toEqual([
+      STATIC_CREDIT_COSTS["kling-4:10s:1080p"]!,
+      STATIC_CREDIT_COSTS["kling-4:8s:1080p"]!,
+      STATIC_CREDIT_COSTS["kling-4:6s:1080p"]!,
+    ])
+    expect(p.segmentCosts).toEqual([1070, 850, 640])
+    expect(p.resolution).toBe("1080p")
+  })
+
   it("vidu-q4 prices a 4K keyframes run on the 4k rows", async () => {
     const p = await computeGenerateVideoProPricing({
       provider: "vidu-q4",
