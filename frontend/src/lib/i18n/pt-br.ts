@@ -607,8 +607,9 @@ export const ptBR: ChromeDict = {
   "legal.terms": "Termos de serviço",
   "legal.privacy": "Política de privacidade",
   "legal.refund": "Política de reembolso",
-
   "legal.accessibility": "Declaração de acessibilidade",
+  "a11y.skipToContent": "Pular para o conteúdo",
+  "page.editor": "Editor de fluxos",
   "lang.label": "Idioma",
   "lang.pick": "Escolher idioma",
   "lang.pickerLabel": "Idioma dos seletores",

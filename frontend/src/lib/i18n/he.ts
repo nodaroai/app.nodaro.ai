@@ -626,8 +626,9 @@ export const he: ChromeDict = {
   "legal.terms": "תנאי שימוש",
   "legal.privacy": "מדיניות פרטיות",
   "legal.refund": "מדיניות החזרים",
-
   "legal.accessibility": "הצהרת נגישות",
+  "a11y.skipToContent": "דלג לתוכן",
+  "page.editor": "עורך תהליכים",
 
   // Language switcher
   "lang.label": "שפה",

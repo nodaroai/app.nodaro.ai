@@ -36,7 +36,7 @@ vi.mock("@/lib/shared-header", () => ({ sharedHeaderActive: () => gate.on, useSh
 // The real slot renders the header only when the gate is open.
 vi.mock("@/components/layout/site-header-slot", () => ({ SiteHeaderSlot: () => (gate.on ? <HeaderStandIn /> : null) }))
 vi.mock("@/components/layout/welcome-offer-popup-slot", () => ({ WelcomeOfferPopupSlot: () => <AppPopupStandIn /> }))
-vi.mock("@/components/layout/app-sidebar", () => ({ AppSidebar: () => <aside />, MobileHeader: () => <header /> }))
+vi.mock("@/components/layout/app-sidebar", () => ({ AppSidebar: () => <aside />, MobileHeader: () => <header />, NAV_ITEMS: [] }))
 vi.mock("@/components/layout/free-grant-banner-slot", () => ({ FreeGrantBannerSlot: () => null }))
 vi.mock("@/components/layout/consent-gate-slot", () => ({ ConsentGateSlot: () => null }))
 vi.mock("@/hooks/use-load-user-settings", () => ({ useLoadUserSettings: () => {} }))
