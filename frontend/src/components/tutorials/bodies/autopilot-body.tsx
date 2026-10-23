@@ -10,6 +10,7 @@
 // image drawn for it — says more than describing the machine. Every strip and
 // chip that names a slide selects it.
 
+import { pressable } from "@/lib/pressable"
 import { useMemo, useState } from "react"
 import { nodeText, nodeMedia, nodeOutputText } from "../derive-tutorial-data"
 import { TutorialLightbox, useLightbox } from "../tutorial-lightbox"
@@ -107,10 +108,8 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
           <div
             className="ap-step-img tl-openable"
             style={{ backgroundImage: `url(${url})` }}
-            role="button"
-            tabIndex={0}
             aria-label={t("tut.openSlide", { n: slide })}
-            onClick={() => lightbox.show(url, t("tut.slideN", { n: slide }))}
+            {...pressable(() => lightbox.show(url, t("tut.slideN", { n: slide })))}
           />
         ) : (
           "—"
@@ -193,13 +192,11 @@ export default function AutopilotBody({ nodes }: TutorialBodyProps) {
               <div
                 className="ap-post-img tl-openable"
                 style={imageFor(slide) ? { backgroundImage: `url(${imageFor(slide)})` } : undefined}
-                role="button"
-                tabIndex={0}
                 aria-label={t("tut.openSlide", { n: slide })}
-                onClick={() => {
+                {...pressable(() => {
                   const url = imageFor(slide)
                   if (url) lightbox.show(url, t("tut.slideN", { n: slide }))
-                }}
+                })}
               />
               <div className="ap-post-cap">{t(POST_CAPTION, { n: slide })}</div>
             </div>

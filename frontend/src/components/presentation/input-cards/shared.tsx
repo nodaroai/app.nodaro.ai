@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Upload, Link } from "lucide-react"
 import { useFileUpload } from "@/hooks/use-file-upload"
@@ -222,6 +223,7 @@ export function FileDropZone({
           e.target.value = ""
         }}
       />
+      <CoverButton label={t("common.upload")} onActivate={onClick} />
     </div>
   )
 }

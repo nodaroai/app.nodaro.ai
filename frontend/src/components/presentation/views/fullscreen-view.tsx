@@ -220,7 +220,7 @@ export function FullscreenView({
       </div>
 
       {/* Left arrow */}
-      <button
+      <button aria-label={t("common.previous")}
         type="button"
         onClick={goPrev}
         disabled={safeIndex === 0}
@@ -234,7 +234,7 @@ export function FullscreenView({
       </button>
 
       {/* Right arrow */}
-      <button
+      <button aria-label={t("common.next")}
         type="button"
         onClick={goNext}
         disabled={safeIndex >= items.length - 1}

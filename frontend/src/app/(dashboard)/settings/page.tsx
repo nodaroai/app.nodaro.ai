@@ -894,7 +894,7 @@ function TemplateGroupCard({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+              <button aria-label={t("common.details")} type="button" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Info className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
@@ -944,7 +944,7 @@ function TemplateGroupCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("settings.resetToDefault")}
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
@@ -1068,7 +1068,7 @@ function TemplateCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("settings.resetToDefault")}
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"

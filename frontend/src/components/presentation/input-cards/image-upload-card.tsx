@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { X, Download, Copy } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaEditorModal } from "@/components/editor/media-editor"
@@ -34,14 +35,15 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
           {media.effectiveUrl ? (
             <div className="relative w-fit">
-              <CachedImage
-                src={media.effectiveUrl}
-                alt={label}
-                thumbnail
-                thumbnailWidth={128}
-                className="h-16 w-16 rounded-md object-cover bg-black/20 cursor-pointer"
-                onClick={handleOpen}
-              />
+              <button type="button" onClick={handleOpen} aria-label={t("common.preview")} className="block w-full h-full rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]">
+                <CachedImage
+                  src={media.effectiveUrl}
+                  alt={label}
+                  thumbnail
+                  thumbnailWidth={128}
+                  className="h-16 w-16 rounded-md object-cover bg-black/20 cursor-pointer"
+                />
+              </button>
               {!readOnly && (
                 <button
                   type="button"
@@ -113,6 +115,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                   onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "image" })}
                 />
               </div>
+              <CoverButton label={t("common.preview")} onActivate={handleOpen} />
             </div>
             {/* Mobile action bar */}
             <ActionBar

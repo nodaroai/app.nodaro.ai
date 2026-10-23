@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { memo } from "react"
 import { Download, Copy, ImageIcon } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -65,6 +66,7 @@ function ImageOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementS
                 onHide={bound.onHide}
               />
             </div>
+            <CoverButton label={t("common.preview")} onActivate={handleClick} />
           </div>
           <ActionBar
             mediaType="image"

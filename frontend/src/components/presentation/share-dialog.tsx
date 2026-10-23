@@ -194,7 +194,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
             <>
               <div className="flex gap-2">
                 <Input value={shareUrl} readOnly className="text-xs" />
-                <Button variant="outline" size="sm" onClick={handleCopy}>
+                <Button aria-label={t("common.copy")} variant="outline" size="sm" onClick={handleCopy}>
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>

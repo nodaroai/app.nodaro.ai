@@ -373,7 +373,7 @@ export default function AppsPage() {
                 className="ps-9 h-9"
               />
               {searchInput && (
-                <button
+                <button aria-label={t("common.clear")}
                   type="button"
                   className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setSearchInput("")}
@@ -689,7 +689,10 @@ function MyAppCard({
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ms-2">
           {/* Marketplace status badge */}
-          <span
+          <button
+            type="button"
+            aria-pressed={app.isListed}
+            aria-label={t("apps.listed")}
             className={cn(
               "text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
               app.isListed
@@ -700,7 +703,7 @@ function MyAppCard({
             title={app.isListed ? t("apps.clickToUnlist") : t("apps.clickToList")}
           >
             {app.isListed ? t("apps.listed") : t("apps.unlisted")}
-          </span>
+          </button>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
             v{app.version}
           </span>
@@ -851,7 +854,7 @@ function MyAppCard({
                   className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
                 >
                   {origin}
-                  <button
+                  <button aria-label={t("common.remove")}
                     type="button"
                     onClick={() => handleRemoveOrigin(origin)}
                     className="hover:text-destructive"
@@ -1121,7 +1124,7 @@ function EditAppDialog({
                     className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
                   >
                     {tag}
-                    <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
+                    <button aria-label={t("common.remove")} type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
                       <X className="h-3 w-3" />
                     </button>
                   </span>

@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useCallback, useEffect, useMemo, useState, memo } from "react"
 import { hasCredits } from "@/lib/edition"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
@@ -135,7 +136,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
         )}
 
         {/* Checkbox overlay */}
-        <button
+        <button aria-label={t("common.select")} aria-pressed={isSelected}
           type="button"
           className={`absolute top-2 start-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
           onClick={(e) => {
@@ -149,6 +150,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
             <Square className="h-5 w-5 text-muted-foreground/60" />
           )}
         </button>
+        {asset.url && <CoverButton label={t("common.preview")} onActivate={() => onOpenPreview(index)} />}
       </div>
 
       {/* Info */}

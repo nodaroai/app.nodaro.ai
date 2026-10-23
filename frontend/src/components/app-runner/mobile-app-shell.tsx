@@ -4,6 +4,7 @@
  * Reads from existing stores and wires them to mobile-specific sub-components.
  */
 
+import { pressable } from "@/lib/pressable"
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Plus, Inbox, Play, PenLine, Loader2, Square } from "lucide-react"
@@ -709,7 +710,7 @@ export function MobileAppShell({
         <div
           key={node.id}
           className="rounded-lg border border-border bg-card overflow-hidden cursor-pointer"
-          onClick={() => setConfigNode(node)}
+          {...pressable(() => setConfigNode(node))}
         >
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-xs font-medium text-foreground">{getCardTitle(node)}</span>

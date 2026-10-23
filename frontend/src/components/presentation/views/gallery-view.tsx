@@ -1,3 +1,5 @@
+import { CoverButton } from "@/components/ui/cover-button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { useState, useMemo } from "react"
 import { ImageIcon, VideoIcon, Music, FileText, Play, Settings } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -101,16 +103,18 @@ export function GalleryView({
                               <Play className="w-3.5 h-3.5 text-white ms-0.5" fill="white" />
                             </div>
                           </div>
+                          <CoverButton label={t("common.preview")} onActivate={() => onOpenMedia?.(node.id)} />
                         </div>
                       ) : result.url ? (
-                        <CachedImage
-                          src={result.url}
-                          alt=""
-                          thumbnail
-                          thumbnailWidth={320}
-                          className="w-full h-full object-cover rounded-lg cursor-pointer"
-                          onClick={() => onOpenMedia?.(node.id)}
-                        />
+                        <button type="button" onClick={() => onOpenMedia?.(node.id)} aria-label={t("common.preview")} className="block w-full h-full rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]">
+                          <CachedImage
+                            src={result.url}
+                            alt=""
+                            thumbnail
+                            thumbnailWidth={320}
+                            className="w-full h-full object-cover rounded-lg cursor-pointer"
+                          />
+                        </button>
                       ) : result.text ? (
                         <p className="text-xs px-2 line-clamp-4">{result.text}</p>
                       ) : (
@@ -156,20 +160,15 @@ export function GalleryView({
       </div>
 
       {/* Text preview dialog */}
-      {textPreview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setTextPreview(null)}
-        >
-          <div
-            className="bg-card border border-border rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-sm font-medium text-foreground mb-3">{textPreview.title}</h3>
-            <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{textPreview.text}</p>
-          </div>
-        </div>
-      )}
+      {/* A real dialog: Escape and its close button work, focus stays inside and returns on close. */}
+      <Dialog open={textPreview !== null} onOpenChange={(open) => { if (!open) setTextPreview(null) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogTitle className="text-sm font-medium text-foreground">{textPreview?.title}</DialogTitle>
+          <DialogDescription asChild>
+            <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{textPreview?.text}</p>
+          </DialogDescription>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -224,7 +223,7 @@ function GalleryCard({
         </span>
         <StatusBadge status={status} />
       </div>
-      <div className="aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>
+      <div className="relative aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>
         {status === "running" ? (
           <div className="w-6 h-6 border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin" />
         ) : node.type === "social-media-format" ? (
@@ -291,6 +290,7 @@ function GalleryCard({
             </span>
           </div>
         )}
+        {hasContent && <CoverButton label={t("common.preview")} onActivate={handleClick} />}
       </div>
     </GlassCard>
   )

@@ -5,6 +5,7 @@
  * Works in both "tab" mode (inside editor) and "fullscreen" mode (shared link).
  */
 
+import { pressable } from "@/lib/pressable"
 import { useState, useMemo, useCallback, useRef, useEffect, lazy, Suspense } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Plus, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
@@ -1184,7 +1185,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const status = getNodeStatus(node.id)
       const platform = (nodeData.platform as string) ?? "instagram"
       return (
-        <div className="rounded-lg border border-border bg-card overflow-hidden cursor-pointer" onClick={() => setConfigNode(node)}>
+        <div className="rounded-lg border border-border bg-card overflow-hidden cursor-pointer" {...pressable(() => setConfigNode(node))}>
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-xs font-medium text-foreground">{getCardTitle(node)}</span>
             <div className="flex items-center gap-2">
@@ -1666,7 +1667,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={signOut} className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground touch-manipulation">
+                    <Button aria-label={t("nav.signOut")} variant="ghost" size="sm" onClick={signOut} className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground touch-manipulation">
                       <LogOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -1813,7 +1814,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("nav.signOut")}
                     variant="ghost"
                     size="sm"
                     onClick={signOut}

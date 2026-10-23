@@ -247,7 +247,7 @@ export default function ExplorePage() {
                 className="ps-9 h-9"
               />
               {searchInput && (
-                <button
+                <button aria-label={t("common.clear")}
                   type="button"
                   className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setSearchInput("")}

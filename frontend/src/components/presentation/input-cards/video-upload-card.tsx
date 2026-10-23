@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useState } from "react"
 import { X, Play, Download, Copy } from "lucide-react"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -48,6 +49,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                   <X className="size-3" />
                 </button>
               )}
+              <CoverButton label={t("common.preview")} onActivate={() => setPreviewOpen(true)} />
             </div>
           ) : readOnly ? (
             <span className="text-xs text-muted-foreground">{t("present.noVideo")}</span>
@@ -118,6 +120,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                   onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "video" })}
                 />
               </div>
+              <CoverButton label={t("common.preview")} onActivate={() => setPreviewOpen(true)} />
             </div>
             {/* Mobile action bar */}
             <ActionBar

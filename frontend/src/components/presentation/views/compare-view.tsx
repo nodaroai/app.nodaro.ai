@@ -274,7 +274,7 @@ export function CompareView({
       {/* Fullscreen overlay */}
       {isFullscreen && leftItem && rightItem && bothVisual && (
         <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             onClick={() => setIsFullscreen(false)}
             className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"

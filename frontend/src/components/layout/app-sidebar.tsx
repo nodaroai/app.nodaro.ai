@@ -222,7 +222,7 @@ export function AppSidebar({
     <TooltipProvider delayDuration={0}>
       {/* Mobile overlay */}
       {isMobileOpen && (
-        <div
+        <div aria-hidden="true"
           className="fixed inset-0 z-30 bg-black/50 md:hidden"
           onClick={onMobileClose}
         />

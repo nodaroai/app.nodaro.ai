@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { Heart, Play, Sparkles } from "lucide-react"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { PreviewVideo } from "@/components/ui/preview-video"
@@ -126,7 +127,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
       </div>
 
       {/* Favorite button — after overlay in DOM so it receives clicks on hover */}
-      <button
+      <button aria-label={t("templates.favorite")} aria-pressed={isFavorited}
         type="button"
         className="absolute top-2 end-2 z-10 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
         onClick={(e) => {
@@ -142,6 +143,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
           )}
         />
       </button>
+      <CoverButton label={t("common.open")} onActivate={() => onPreview ? onPreview(app) : onSelect ? onSelect(app) : navigate(`/app/${app.slug}`)} />
     </div>
   )
 }

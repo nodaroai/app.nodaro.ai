@@ -1,3 +1,4 @@
+import { pressable } from "@/lib/pressable"
 import { useNavigate } from "react-router-dom"
 import { useT, tx } from "@/lib/i18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -279,7 +280,8 @@ export function SidebarCreditCard({ isCollapsed, isRtl }: SidebarCreditCardProps
         // scrolls instead (see its min-h-0 + overflow-y-auto).
         flexShrink: 0,
       }}
-      onClick={selfServe ? () => navigate("/billing") : undefined}
+      // Self-serve: the whole card opens Billing, by mouse or keyboard.
+      {...(selfServe ? pressable(() => navigate("/billing")) : {})}
     >
       <div style={{ padding: "14px 16px 14px" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>

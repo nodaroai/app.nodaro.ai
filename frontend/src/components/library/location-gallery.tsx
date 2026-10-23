@@ -419,7 +419,7 @@ function PermanentDeleteModal({
   const t = useT()
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center">
-      <div
+      <div aria-hidden="true"
         className="absolute inset-0 bg-black/60"
         onClick={deleting ? undefined : onCancel}
       />

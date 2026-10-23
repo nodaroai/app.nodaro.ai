@@ -1,3 +1,5 @@
+import { pressable } from "@/lib/pressable"
+import { CoverButton } from "@/components/ui/cover-button"
 import { useCallback, useMemo, useRef, useState } from "react"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { toast } from "sonner"
@@ -143,6 +145,7 @@ function RichMediaCell({
               className="w-full object-contain rounded-lg"
             />
             <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
+            <CoverButton label={t("common.preview")} onActivate={() => setPreviewOpen(true)} />
           </div>
         )}
         {mimePrefix === "video/" && (
@@ -159,6 +162,7 @@ function RichMediaCell({
               </div>
             </div>
             <MediaOverlayButtons url={value} onPreview={() => setPreviewOpen(true)} onRemove={() => onChange("")} readOnly={readOnly} />
+            <CoverButton label={t("common.preview")} onActivate={() => setPreviewOpen(true)} />
           </div>
         )}
         {mimePrefix === "audio/" && (
@@ -207,7 +211,7 @@ function RichMediaCell({
       }}
       onDragLeave={() => setIsDragOver(false)}
       onDrop={handleDrop}
-      onClick={() => fileInputRef.current?.click()}
+      {...pressable(() => fileInputRef.current?.click())}
     >
       {isUploading ? (
         <div className="flex items-center gap-2">
@@ -265,7 +269,7 @@ function BottomDropZone({
         const files = Array.from(e.dataTransfer.files)
         if (files.length > 0) onDrop(files)
       }}
-      onClick={() => fileInputRef.current?.click()}
+      {...pressable(() => fileInputRef.current?.click())}
     >
       <div className="flex items-center gap-1.5">
         <Upload className="w-4 h-4 text-muted-foreground/40" />
