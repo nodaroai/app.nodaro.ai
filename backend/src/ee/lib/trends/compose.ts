@@ -22,7 +22,7 @@
  */
 import { CAST_SWAP_POST_PROMPT_MAX } from "@nodaro/shared/models"
 import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
-import { CHIPS_BY_KIND, misplacedChip } from "./schemas.js"
+import { CHIPS_BY_KIND, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
 import type {
   Choice,
@@ -39,6 +39,7 @@ export type TrendRunErrorCode =
   | "missing_slot"
   | "unknown_slot"
   | "invalid_choice"
+  | "chip_not_offered"
   | "example_out_of_range"
   | "preview_unavailable"
   | "invalid_slot_mention"
@@ -50,6 +51,8 @@ export class TrendRunError extends Error {
     readonly code: TrendRunErrorCode,
     message: string,
     readonly slot?: string,
+    /** The chip, for `chip_not_offered`. */
+    readonly chip?: string,
   ) {
     super(message)
     this.name = "TrendRunError"
@@ -122,20 +125,38 @@ function entryOf(req: TrendRunRequest, key: string): TrendRunSlot | undefined {
   return Object.hasOwn(req.slots, key) ? req.slots[key] : undefined
 }
 
-/** The slot kind's chips: the request's, else the slot's default, else "new". */
-function chipsOf(slot: TrendSlot, entry: TrendRunSlot | undefined): Chips {
+/**
+ * The slot kind's chips: a chip the request may set (shown to the person, or
+ * any chip on an admin test run) is the request's, else the slot's default,
+ * else "new"; a chip hidden from the person is fixed at the default, else "new".
+ */
+function chipsOf(slot: TrendSlot, entry: TrendRunSlot | undefined, allowHiddenChips: boolean): Chips {
   const defaults = (slot.defaults ?? {}) as Chips
+  const shown: readonly ChipKey[] = shownChips(slot)
   const out: Chips = {}
   for (const chip of CHIPS_BY_KIND[slot.kind]) {
-    out[chip] = entry?.[chip] ?? defaults[chip] ?? "new"
+    const settable = allowHiddenChips || shown.includes(chip)
+    out[chip] = (settable ? entry?.[chip] : undefined) ?? defaults[chip] ?? "new"
   }
   return out
+}
+
+export interface ComposeOptions {
+  /**
+   * The admin's test run: every chip of the slot's kind may be set, including
+   * the ones the trend hides from people, so each variant can be tried before
+   * choosing what to show. Off (the default) for everyone else: a chip the
+   * slot hides is refused (`chip_not_offered`).
+   */
+  allowHiddenChips?: boolean
 }
 
 export function composeTrendRun(
   trend: { id: string; slug: string; version: number; data: TrendVersionData },
   req: TrendRunRequest,
+  options: ComposeOptions = {},
 ): ComposedTrendRun {
+  const allowHiddenChips = options.allowHiddenChips === true
   const { data } = trend
 
   if (!data.source) throw new TrendRunError("source_missing", "This trend has no source clip yet.")
@@ -148,6 +169,18 @@ export function composeTrendRun(
   const misplaced = misplacedChip(req, data)
   if (misplaced) {
     throw new TrendRunError("invalid_choice", `Slot "${misplaced.slot}" does not take "${misplaced.chip}".`, misplaced.slot)
+  }
+
+  if (!allowHiddenChips) {
+    const hidden = hiddenChip(req, data)
+    if (hidden) {
+      throw new TrendRunError(
+        "chip_not_offered",
+        `Slot "${hidden.slot}" does not offer the "${hidden.chip}" chip: this trend fixes it.`,
+        hidden.slot,
+        hidden.chip,
+      )
+    }
   }
 
   const example = req.example ?? 1
@@ -181,7 +214,7 @@ export function composeTrendRun(
       fromExample = true
     }
 
-    const chips = chipsOf(slot, entry)
+    const chips = chipsOf(slot, entry, allowHiddenChips)
     roles.push({ kind: slot.kind, name: slot.roleName, images, ...chips })
     slots.push({ key: slot.key, label: pickText(slot.label, "en")!, kind: slot.kind, images: [...images], fromExample, ...chips })
   }

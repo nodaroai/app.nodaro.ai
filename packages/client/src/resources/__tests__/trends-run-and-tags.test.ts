@@ -3,7 +3,17 @@
  * own run, and the catalog's tags with their labels (`tags`).
  */
 import { describe, expect, expectTypeOf, it, vi } from "vitest"
-import { createClient, NotFoundError, StaticTokenAuth, type TrendRun, type TrendTag, type TrendRunRequest } from "../../index.js"
+import {
+  createClient,
+  NodaroError,
+  NotFoundError,
+  StaticTokenAuth,
+  type TrendChipKey,
+  type TrendDetailSlot,
+  type TrendRun,
+  type TrendTag,
+  type TrendRunRequest,
+} from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
   return Promise.resolve({ ok: true, status, json: async () => body } as unknown as Response)
@@ -134,5 +144,24 @@ describe("reserved slugs", () => {
       }
     }
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("chips a trend slot offers", () => {
+  it("a slot lists its offered chips as chip keys", () => {
+    expectTypeOf<TrendDetailSlot["chips"]>().toEqualTypeOf<TrendChipKey[]>()
+    expectTypeOf<TrendChipKey>().toEqualTypeOf<"body" | "outfit" | "hair" | "coat" | "shape" | "finish">()
+  })
+
+  it("a chip the slot does not offer is a NodaroError chip_not_offered whose details name the slot and the chip", async () => {
+    const body = { error: { code: "chip_not_offered", message: 'Slot "lead" does not offer the "hair" chip: this trend fixes it.', slot: "lead", chip: "hair" } }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(400, body))
+    const err = await make(fetchMock)
+      .trends.estimate("dance-off", { slots: { lead: { images: ["https://cdn.example.com/me.png"], hair: "new" } } })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).code).toBe("chip_not_offered")
+    expect((err as NodaroError).status).toBe(400)
+    expect((err as NodaroError).details).toEqual({ slot: "lead", chip: "hair" })
   })
 })

@@ -820,7 +820,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
 | `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
@@ -2607,7 +2607,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
 | `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |

@@ -42,12 +42,16 @@ interface TrendSlotBase {
   roleName: string
 }
 
-/** A slot's `defaults` are the chips of its own kind. */
+/**
+ * A slot's `defaults` are the chips of its own kind. Its `chips` are the ones
+ * shown to the person (absent = all of the kind's; `[]` = none). A chip not
+ * shown is fixed at its default (else "new"): a run cannot change it.
+ */
 export type TrendSlot =
-  | (TrendSlotBase & { kind: "person"; defaults?: PersonChips })
-  | (TrendSlotBase & { kind: "pet"; defaults?: PetChips })
-  | (TrendSlotBase & { kind: "product"; defaults?: ProductChips })
-  | (TrendSlotBase & { kind: "location"; defaults?: never })
+  | (TrendSlotBase & { kind: "person"; defaults?: PersonChips; chips?: Array<keyof PersonChips> })
+  | (TrendSlotBase & { kind: "pet"; defaults?: PetChips; chips?: Array<keyof PetChips> })
+  | (TrendSlotBase & { kind: "product"; defaults?: ProductChips; chips?: Array<keyof ProductChips> })
+  | (TrendSlotBase & { kind: "location"; defaults?: never; chips?: never })
 
 /** HIDDEN. A fixed reference sent with every run: 1–3 images and its prompt line (1–500). */
 export interface TrendReference { images: string[]; line: string }

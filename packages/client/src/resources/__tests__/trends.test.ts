@@ -58,8 +58,8 @@ const detail: TrendDetail = {
   previewSec: 4,
   resolutions: ["480p", "720p", "1080p"],
   slots: [
-    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", defaults: { outfit: "original" } },
-    { key: "place", label: "Place", kind: "location", required: false },
+    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
+    { key: "place", label: "Place", kind: "location", required: false, chips: [] },
   ],
   examples: [
     { videoUrl: "https://cdn.example.com/ex1.mp4", width: 720, height: 1280, slots: { lead: ["https://cdn.example.com/a.png"] } },

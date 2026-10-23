@@ -1,7 +1,8 @@
 // The trend's slots: what a user replaces (people, a place, products, pets).
 // A slot's key is stable once saved (examples and runs name slots by key);
 // its label and hint are per language; its roleName (hidden) names who it is
-// in the source clip; a person / pet / product carries its kind's default chips.
+// in the source clip; a person / pet / product carries its kind's default chips,
+// each shown to people (they may change it) or hidden (fixed at its value).
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,8 @@ import {
   SLOT_KEY_RE,
   SLOT_KINDS,
   newSlot,
+  shownChips,
+  withChipShown,
   withKind,
   type FormSlot,
 } from "../model"
@@ -39,6 +42,11 @@ const CHOICES: ReadonlyArray<{ value: TrendChoice | "default"; label: string }> 
   { value: "new", label: "New" },
   { value: "original", label: "Keep original" },
 ]
+
+/** What a hidden chip is fixed at: its value, else the engine's default (New). */
+function fixedLabel(v: TrendChoice | undefined): string {
+  return v === "original" ? "Keep original" : "New"
+}
 
 interface Props {
   readonly slots: FormSlot[]
@@ -189,25 +197,39 @@ function SlotCard({ slot, index, count, kindFull, onChange, onMove, onRemove }: 
 
       {CHIPS_BY_KIND[slot.kind].length > 0 && (
         <div className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Defaults</span>
+          <span className="font-medium">Chips</span>
+          <span className="text-xs text-muted-foreground">
+            Each chip's starting value, and whether people see it. A hidden chip is fixed at its value: people's runs cannot change it (test runs can).
+          </span>
           <div className="grid gap-2 sm:grid-cols-3">
-            {CHIPS_BY_KIND[slot.kind].map((chip) => (
-              <div key={chip} className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">{CHIP_LABELS[chip]}</span>
-                <Select value={slot.defaults?.[chip] ?? "default"} onValueChange={(v) => setChip(chip, v as TrendChoice | "default")}>
-                  <SelectTrigger className="h-9" aria-label={`Slot ${n} ${CHIP_LABELS[chip]}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHOICES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
+            {CHIPS_BY_KIND[slot.kind].map((chip) => {
+              const shown = shownChips(slot).includes(chip)
+              return (
+                <div key={chip} className="flex flex-col gap-1" data-chip={chip}>
+                  <span className="text-xs text-muted-foreground">{CHIP_LABELS[chip]}</span>
+                  <Select value={slot.defaults?.[chip] ?? "default"} onValueChange={(v) => setChip(chip, v as TrendChoice | "default")}>
+                    <SelectTrigger className="h-9" aria-label={`Slot ${n} ${CHIP_LABELS[chip]}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHOICES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <label className="flex min-h-9 items-center gap-2 text-xs">
+                    <Switch
+                      aria-label={`Slot ${n} ${CHIP_LABELS[chip]} shown to people`}
+                      checked={shown}
+                      onCheckedChange={(on) => onChange(withChipShown(slot, chip, on))}
+                    />
+                    {shown ? "Shown to people" : `Hidden: fixed at ${fixedLabel(slot.defaults?.[chip])}`}
+                  </label>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

@@ -4269,7 +4269,7 @@ slug is a `404` on every route.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length and resolutions). Query: `locale`. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length and resolutions). Each slot is `{ key, label, kind, required, hint?, chips, defaults? }`: `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
@@ -4286,10 +4286,12 @@ The estimate and run body is
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
-  example `example` (1-based, default 1). The chips are the slot kind's own,
-  each `"new"` (from your pictures) or `"original"` (as in the clip): a person
-  `body` / `outfit` / `hair`, a pet `body` / `coat`, a product `shape` /
-  `finish`, a location none.
+  example `example` (1-based, default 1). The chips are the ones the slot's
+  `chips` lists (of its kind's own: a person `body` / `outfit` / `hair`, a pet
+  `body` / `coat`, a product `shape` / `finish`, a location none), each
+  `"new"` (from your pictures) or `"original"` (as in the clip). A chip the
+  slot does not list is fixed by the trend (at its default, else `"new"`);
+  sending it is refused with `chip_not_offered`.
 - `details`: your own words, at most 1,000 characters; mention a slot as
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
@@ -4315,7 +4317,7 @@ run (plus `assets:write` to pass a `sessionId`), and `assets:write` for
 favorites.
 
 Refusals (bodies are `{ error: { code, message } }`; the slot errors also
-carry the slot's key as `slot`). The `400`s on estimate and run come before
+carry the slot's key as `slot`, and `chip_not_offered` the chip as `chip`). The `400`s on estimate and run come before
 anything is charged:
 
 | Status | `code` | When |
@@ -4324,6 +4326,7 @@ anything is charged:
 | `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
+| `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend does not have, or an optional slot is left empty and the trend has no example (1, by default) to fill it. |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
 | `400` | `invalid_slot_mention` | `details` mentions `{slot:<key>}` with a key the trend does not have. |

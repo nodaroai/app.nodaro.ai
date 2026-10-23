@@ -51,13 +51,13 @@ function req(over: Partial<TrendRunRequest> = {}): TrendRunRequest {
   return { slots: { lead: { images: [img("me")] } }, ...over }
 }
 
-function codeOf(fn: () => unknown): { code: string; slot?: string } {
+function codeOf(fn: () => unknown): { code: string; slot?: string; chip?: string } {
   try {
     fn()
   } catch (e) {
     expect(e).toBeInstanceOf(TrendRunError)
     const err = e as TrendRunError
-    return { code: err.code, slot: err.slot }
+    return { code: err.code, slot: err.slot, chip: err.chip }
   }
   throw new Error("expected a TrendRunError")
 }
@@ -132,6 +132,16 @@ describe("composeTrendRun — slots", () => {
     expect(codeOf(() => composeTrendRun(trend(), req({ slots: { lead: { images: [img("me")] }, place: { body: "new" } } })))).toEqual({
       code: "invalid_choice",
       slot: "place",
+    })
+  })
+
+  it("keeps a non-kind chip `invalid_choice` even when the slot hides chips", () => {
+    const data = version()
+    const lead = { ...data.slots[0]!, chips: [] } as TrendSlot
+    const hiding = version({ slots: [lead, ...data.slots.slice(1)] })
+    expect(codeOf(() => composeTrendRun(trend(hiding), req({ slots: { lead: { images: [img("me")], coat: "new" } } })))).toEqual({
+      code: "invalid_choice",
+      slot: "lead",
     })
   })
 
@@ -401,5 +411,83 @@ describe("composeTrendRun — face masking and pre prompt", () => {
       req({ previewJobId: "00000000-0000-4000-8000-0000000000f1" }),
     )
     expect(JSON.stringify(body)).not.toContain("previewJobId")
+  })
+})
+
+describe("composeTrendRun — chips shown to the person", () => {
+  // The lead shows only its outfit: body (default "original") and hair
+  // (default "original") are fixed; the friend shows only hair, so its body
+  // and outfit (no default) are fixed at "new".
+  function hiding(): TrendVersionData {
+    const data = version()
+    const [lead, friend, place] = data.slots as [TrendSlot, TrendSlot, TrendSlot]
+    return version({
+      slots: [{ ...lead, chips: ["outfit"] } as TrendSlot, { ...friend, chips: ["hair"] } as TrendSlot, place],
+    })
+  }
+  const roleChips = (body: { roles: unknown[] }, i: number) => {
+    const { body: b, outfit, hair } = body.roles[i] as Record<string, unknown>
+    return { body: b, outfit, hair }
+  }
+
+  it("refuses a chip the slot hides, naming the slot and the chip", () => {
+    expect(codeOf(() => composeTrendRun(trend(hiding()), req({ slots: { lead: { images: [img("me")], hair: "new" } } })))).toEqual({
+      code: "chip_not_offered",
+      slot: "lead",
+      chip: "hair",
+    })
+    expect(codeOf(() => composeTrendRun(trend(hiding()), req({ slots: { lead: { images: [img("me")] }, friend: { body: "original" } } })))).toEqual({
+      code: "chip_not_offered",
+      slot: "friend",
+      chip: "body",
+    })
+  })
+
+  it("refuses a hidden chip even when it sends the fixed value", () => {
+    expect(codeOf(() => composeTrendRun(trend(hiding()), req({ slots: { lead: { images: [img("me")], body: "original" } } }))).code).toBe(
+      "chip_not_offered",
+    )
+  })
+
+  it("refuses every chip of a slot that shows none", () => {
+    const data = version()
+    const lead = { ...data.slots[0]!, chips: [] } as TrendSlot
+    const none = version({ slots: [lead, ...data.slots.slice(1)] })
+    expect(codeOf(() => composeTrendRun(trend(none), req({ slots: { lead: { images: [img("me")], outfit: "new" } } })))).toEqual({
+      code: "chip_not_offered",
+      slot: "lead",
+      chip: "outfit",
+    })
+  })
+
+  it("takes a shown chip from the request and fixes the hidden ones at the slot's value, else new", () => {
+    const { body } = composeTrendRun(
+      trend(hiding()),
+      req({ slots: { lead: { images: [img("me")], outfit: "original" }, friend: { images: [img("you")], hair: "original" } } }),
+    )
+    expect(roleChips(body, 0)).toEqual({ body: "original", outfit: "original", hair: "original" })
+    expect(roleChips(body, 1)).toEqual({ body: "new", outfit: "new", hair: "original" })
+    expect(body.trendRun.display.slots[0]).toMatchObject({ body: "original", outfit: "original", hair: "original" })
+  })
+
+  it("an admin test run sets any chip, hidden ones included", () => {
+    const { body } = composeTrendRun(
+      trend(hiding()),
+      req({ slots: { lead: { images: [img("me")], body: "new", hair: "new" }, friend: { images: [img("you")], outfit: "original" } } }),
+      { allowHiddenChips: true },
+    )
+    expect(roleChips(body, 0)).toEqual({ body: "new", outfit: "new", hair: "new" })
+    expect(roleChips(body, 1)).toEqual({ body: "new", outfit: "original", hair: "new" })
+  })
+
+  it("an admin test run still refuses a chip that is not the kind's own", () => {
+    expect(
+      codeOf(() => composeTrendRun(trend(hiding()), req({ slots: { lead: { images: [img("me")], coat: "new" } } }), { allowHiddenChips: true })).code,
+    ).toBe("invalid_choice")
+  })
+
+  it("a slot without `chips` shows them all: every chip of its kind may be sent", () => {
+    const { body } = composeTrendRun(trend(), req({ slots: { lead: { images: [img("me")], body: "new", outfit: "original", hair: "new" } } }))
+    expect(roleChips(body, 0)).toEqual({ body: "new", outfit: "original", hair: "new" })
   })
 })

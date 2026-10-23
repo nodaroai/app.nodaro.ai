@@ -48,7 +48,7 @@ import {
   listPublished,
   setFavorite,
 } from "../lib/trends/store.js"
-import { CHIPS_BY_KIND, trendRunRequestSchema } from "../lib/trends/schemas.js"
+import { shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
@@ -106,7 +106,13 @@ export interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null
   resolutions: TrendResolution[]
-  slots: Array<{ key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string; defaults?: Chips }>
+  /**
+   * `chips`: the chips the person may set on this slot (its kind's order; `[]`
+   * = none, so no chips row). A chip not listed is fixed by the trend, and a
+   * run that sends it is refused (`chip_not_offered`). `defaults` covers only
+   * the listed chips.
+   */
+  slots: Array<{ key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string; chips: ChipKey[]; defaults?: Chips }>
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
 }
 
@@ -221,10 +227,11 @@ function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorit
   }
 }
 
+/** The slot's defaults of the chips it shows (a hidden chip's value is the trend's, not a starting value). */
 function slotDefaults(slot: TrendSlot): Chips | undefined {
   const given = (slot.defaults ?? {}) as Chips
   const out: Chips = {}
-  for (const chip of CHIPS_BY_KIND[slot.kind] as readonly (keyof Chips)[]) {
+  for (const chip of shownChips(slot)) {
     const v = given[chip]
     if (v === "new" || v === "original") out[chip] = v
   }
@@ -249,6 +256,7 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
         kind: s.kind,
         required: s.required,
         ...(hint ? { hint } : {}),
+        chips: shownChips(s),
         ...(defaults ? { defaults } : {}),
       }
     }),
@@ -296,7 +304,10 @@ function trendRunError(reply: FastifyReply, e: TrendRunError) {
     case "source_missing":
       return err(reply, 503, "trend_unavailable", "This trend is not available right now.")
     default:
-      return err(reply, 400, e.code, e.message, e.slot !== undefined ? { slot: e.slot } : {})
+      return err(reply, 400, e.code, e.message, {
+        ...(e.slot !== undefined ? { slot: e.slot } : {}),
+        ...(e.chip !== undefined ? { chip: e.chip } : {}),
+      })
   }
 }
 

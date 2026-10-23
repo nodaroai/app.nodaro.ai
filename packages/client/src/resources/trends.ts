@@ -23,11 +23,14 @@ import type { NodaroClientCore } from "../core.js"
  *   `missing_slot` (a required slot without pictures, or an optional one
  *   left empty that the chosen example has no pictures for), `unknown_slot`,
  *   `invalid_choice` (a chip the slot's kind does not take),
+ *   `chip_not_offered` (a chip of the kind that the slot's
+ *   {@link TrendDetailSlot.chips} does not list: the trend fixes it),
  *   `example_out_of_range` (`example` names none, or an optional slot is left
  *   empty and the trend has no example to fill it), `preview_unavailable` (the trend offers no
  *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
  *   slot), `prompt_too_long` (shorten `details`). The slot errors carry the
- *   slot's key as `slot`.
+ *   slot's key as `slot` (in `NodaroError.details`), and `chip_not_offered`
+ *   the chip as `chip` too.
  * - 401 `unauthorized`.
  * - 404 `not_found`: the trend is not published (every method), or `run()`'s
  *   `sessionId` is not a session you may use.
@@ -81,6 +84,9 @@ export interface TrendChips {
   finish?: TrendChoice
 }
 
+/** A chip's name: `body`, `outfit`, `hair`, `coat`, `shape` or `finish`. */
+export type TrendChipKey = keyof TrendChips
+
 export type TrendResolution = "480p" | "720p" | "1080p"
 
 /** A trend in the catalog (`list()`). Text is in the resolved locale. */
@@ -110,7 +116,13 @@ export interface TrendDetailSlot {
   /** A required slot needs pictures; an optional one left empty takes the chosen example's. */
   required: boolean
   hint?: string
-  /** The chips this slot starts with (only its kind's own). */
+  /**
+   * The chips you may set on this slot, in its kind's order; `[]` = none (show
+   * no chips row). A chip of the kind that is not listed is fixed by the
+   * trend: sending it is refused with `400 chip_not_offered`.
+   */
+  chips: TrendChipKey[]
+  /** The starting value of the chips in {@link chips} (only those). */
   defaults?: TrendChips
 }
 
@@ -135,7 +147,7 @@ export interface TrendDetail extends TrendCard {
   examples: TrendExample[]
 }
 
-/** What you put in one slot of a run: 1–3 pictures, and the chips of the slot's kind. */
+/** What you put in one slot of a run: 1–3 pictures, and the chips the slot offers ({@link TrendDetailSlot.chips}). */
 export interface TrendRunSlot extends TrendChips {
   images?: string[]
 }

@@ -18,7 +18,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { argOf, has, type QueryResult, type RecordedQuery } from "../../../lib/__tests__/fake-supabase-query.js"
-import type { TrendRow, TrendVersionData } from "../../lib/trends/types.js"
+import type { TrendRow, TrendSlot, TrendVersionData } from "../../lib/trends/types.js"
 
 const db = vi.hoisted(() => ({
   log: [] as RecordedQuery[],
@@ -336,8 +336,8 @@ describe("GET /v1/trends/:slug", () => {
       resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
     })
     expect(d.slots).toEqual([
-      { key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", defaults: { hair: "original" } },
-      { key: "place", label: "Place", kind: "location", required: false },
+      { key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: ["body", "outfit", "hair"], defaults: { hair: "original" } },
+      { key: "place", label: "Place", kind: "location", required: false, chips: [] },
     ])
     expect(d.examples).toEqual([
       {
@@ -349,6 +349,21 @@ describe("GET /v1/trends/:slug", () => {
       },
     ])
     expectNoHidden(res.body)
+  })
+
+  it("lists only the chips a slot shows, with the defaults of those only", async () => {
+    const [lead, place] = versionData().slots
+    mem.trends[0]!.versions[2] = versionData({
+      slots: [{ ...lead!, defaults: { hair: "original", outfit: "original" }, chips: ["outfit"] } as TrendSlot, place!],
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(res.json().data.slots[0]).toEqual({
+      key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: ["outfit"], defaults: { outfit: "original" },
+    })
+
+    mem.trends[0]!.versions[2] = versionData({ slots: [{ ...lead!, chips: [] } as TrendSlot, place!] })
+    const none = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(none.json().data.slots[0]).toEqual({ key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: [] })
   })
 
   it("previewSec is null when the trend offers no preview", async () => {
@@ -471,6 +486,41 @@ describe("POST /v1/trends/:slug/runs", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toMatchObject({ code: "unknown_slot", slot: "ghost" })
+  })
+
+  describe("a chip the slot hides from the person", () => {
+    beforeEach(() => {
+      const [lead, place] = versionData().slots
+      // hair shows; body is fixed at "new" (no default); outfit at its default.
+      mem.trends[0]!.versions[2] = versionData({
+        slots: [{ ...lead!, defaults: { outfit: "original" }, chips: ["hair"] } as TrendSlot, place!],
+      })
+    })
+
+    it("is a 400 chip_not_offered naming the slot and the chip, with no dispatch", async () => {
+      for (const url of ["/v1/trends/neon-dance/runs", "/v1/trends/neon-dance/estimate"]) {
+        const res = await app.inject({
+          method: "POST", url, headers: as(),
+          payload: { slots: { lead: { images: ["https://u.example/me.png"], outfit: "new" } } },
+        })
+        expect(res.statusCode, url).toBe(400)
+        const err = res.json().error
+        expect(err).toMatchObject({ code: "chip_not_offered", slot: "lead", chip: "outfit" })
+        expect(err.message).toMatch(/lead/)
+        expect(err.message).toMatch(/outfit/)
+      }
+      expect(engine.calls).toHaveLength(0)
+    })
+
+    it("a shown chip still runs, and the engine gets the fixed values for the hidden ones", async () => {
+      const res = await app.inject({
+        method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(),
+        payload: { slots: { lead: { images: ["https://u.example/me.png"], hair: "new" } } },
+      })
+      expect(res.statusCode).toBe(202)
+      const [role] = engine.calls[0]!.body.roles as Array<Record<string, unknown>>
+      expect(role).toMatchObject({ body: "new", outfit: "original", hair: "new" })
+    })
   })
 
   it("4 images in one slot is a 400 before anything else", async () => {

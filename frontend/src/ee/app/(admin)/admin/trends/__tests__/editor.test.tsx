@@ -77,6 +77,56 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(body.data.source).toEqual(detail().draft.source)
   })
 
+  it("hides a chip from people with its switch and saves the chips still shown", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    const hair = await screen.findByRole("switch", { name: "Slot 1 Hair shown to people" })
+    expect(hair).toBeChecked()
+    await user.click(hair)
+    expect(hair).not.toBeChecked()
+    expect(screen.getByText("Hidden: fixed at New")).toBeInTheDocument()
+    await user.click(screen.getByRole("switch", { name: "Slot 1 Body shown to people" }))
+    expect(screen.getAllByText("Hidden: fixed at New")).toHaveLength(2)
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: { slots: AdminTrendSlot[] } }>
+    expect(body.data.slots).toEqual([{ ...slot(), chips: ["outfit"] }])
+  })
+
+  it("shows a stored hidden chip as hidden, fixed at its value", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots: [slot({ defaults: { hair: "original" }, chips: ["body", "outfit"] })] }) } })
+    renderEditor()
+    expect(await screen.findByRole("switch", { name: "Slot 1 Hair shown to people" })).not.toBeChecked()
+    expect(screen.getByRole("switch", { name: "Slot 1 Body shown to people" })).toBeChecked()
+    expect(screen.getByText("Hidden: fixed at Keep original")).toBeInTheDocument()
+  })
+
+  it("a test run can set every chip, marks the hidden ones, and sends the chips set", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots: [slot({ chips: ["outfit"] })] }) } })
+    routes[`POST ${BASE}/test-runs`] = () => ({ status: 202, body: { data: { jobId: RUN_ID } } })
+    renderEditor()
+
+    const hair = await screen.findByRole("combobox", { name: "Test dancer Hair" })
+    expect(hair).toHaveTextContent("Slot's value (New)")
+    expect(screen.getByRole("combobox", { name: "Test dancer Outfit" })).toBeInTheDocument()
+    const hiddenCells = ["body", "hair"].map((c) => document.querySelector(`[data-test-chip="dancer.${c}"]`) as HTMLElement)
+    for (const cell of hiddenCells) expect(within(cell).getByText("Hidden from people")).toBeInTheDocument()
+    const outfitCell = document.querySelector('[data-test-chip="dancer.outfit"]') as HTMLElement
+    expect(within(outfitCell).queryByText("Hidden from people")).not.toBeInTheDocument()
+
+    await user.click(hair)
+    await user.click(screen.getByRole("option", { name: "Keep original" }))
+    await user.type(screen.getByLabelText("Pictures for dancer (0 / 3): URL"), "https://u.example/me.png{Enter}")
+    await user.click(screen.getByRole("button", { name: /run test/i }))
+
+    await waitFor(() => expect(sentTo(`POST ${BASE}/test-runs`)).toHaveLength(1))
+    const [body] = sentTo(`POST ${BASE}/test-runs`) as Array<{ slots: Record<string, Record<string, unknown>> }>
+    expect(body.slots).toEqual({ dancer: { images: ["https://u.example/me.png"], hair: "original" } })
+  })
+
   it("saves the pre prompt and the face masking setting as edited, and nothing more", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "auto", fill: "depth" } }) } })

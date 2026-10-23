@@ -11045,6 +11045,12 @@ export interface AdminTrendSlot {
   roleName: string
   /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
   defaults?: Partial<Record<TrendChipKey, TrendChoice>>
+  /**
+   * The chips shown to people (only the kind's own, each once). Absent = all
+   * of them; `[]` = none. A chip not shown is fixed at its default (else
+   * "new"): a user's run cannot set it; an admin test run can.
+   */
+  chips?: TrendChipKey[]
 }
 
 export interface AdminTrendReference {

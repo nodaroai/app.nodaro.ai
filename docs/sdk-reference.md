@@ -2170,6 +2170,7 @@ type TrendSlotKind = "person" | "location" | "product" | "pet"
 type TrendChoice = "new" | "original"       // make the trait anew from your pictures, or keep the clip's
 // The chips of a slot's kind: person body/outfit/hair, pet body/coat, product shape/finish, location none
 interface TrendChips { body?: TrendChoice; outfit?: TrendChoice; hair?: TrendChoice; coat?: TrendChoice; shape?: TrendChoice; finish?: TrendChoice }
+type TrendChipKey = keyof TrendChips          // "body" | "outfit" | "hair" | "coat" | "shape" | "finish"
 
 interface ListTrendsParams {
   q?: string; tag?: string
@@ -2191,12 +2192,18 @@ interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
   resolutions: ("480p" | "720p" | "1080p")[]
-  slots: Array<{ key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string; defaults?: TrendChips }>
+  slots: TrendDetailSlot[]
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
 }
 
+interface TrendDetailSlot {
+  key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
+  chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
+  defaults?: TrendChips                  // the starting value of those chips
+}
+
 interface TrendRunRequest {
-  slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + its kind's chips
+  slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + the slot's `chips`
   example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
@@ -2261,7 +2268,8 @@ or is refused with `missing_slot` when that example has none for it
 (`example_out_of_range` when the trend has no such example).
 `estimate()` and `run()` answer `400` before charging for `missing_slot`,
 `unknown_slot`, `invalid_choice` (a chip the slot's kind does not take),
-`example_out_of_range`, `preview_unavailable`, `invalid_slot_mention` (a
+`chip_not_offered` (a chip of the kind that the slot's `chips` does not list:
+the trend fixes it; `err.details` is `{ slot, chip }`), `example_out_of_range`, `preview_unavailable`, `invalid_slot_mention` (a
 `{slot:<key>}` naming no slot), `prompt_too_long` and `validation_error`; the
 slot errors carry the key as `slot`. Other refusals: `401`, `404 not_found`
 (the trend is not published; for `run()` also a `sessionId` you may not use),

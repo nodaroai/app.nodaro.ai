@@ -10,6 +10,7 @@ export {
   type TrendSlotKind,
   type TrendChoice,
   type TrendChips,
+  type TrendChipKey,
   type TrendResolution,
   type TrendCard,
   type TrendDetailSlot,
