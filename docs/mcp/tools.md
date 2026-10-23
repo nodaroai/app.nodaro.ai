@@ -242,7 +242,8 @@ project regardless of nesting.
       "version": 1,
       "thumbnail_url": null,
       "created_at": "2026-05-01T12:00:00.000Z",
-      "updated_at": "2026-05-01T12:00:00.000Z"
+      "updated_at": "2026-05-01T12:00:00.000Z",
+      "editorUrl": "https://app.nodaro.ai/editor/uuid"
     }
   ],
   "next_cursor": "2026-04-30T08:00:00.000Z"
@@ -251,6 +252,12 @@ project regardless of nesting.
 
 Pass `next_cursor` as `cursor` in the next call to get the next page. When
 `next_cursor` is `null`, you've reached the last page.
+
+**Editor links.** Every workflow tool hands back the workflow's `editorUrl` — the
+link that opens it in the editor on this deployment: `list_workflows` on each row,
+`get_workflow` and `get_workflow_json` in the payload, and `create_workflow`,
+`import_workflow`, `update_workflow_json` and `run_workflow` in structured content
+and in the reply text. Share it with the user as returned, never build one.
 
 ---
 
@@ -541,7 +548,8 @@ registers an async task for progress tracking.
 | `from_failed` | boolean | With `continue_from_execution_id`: run only the nodes that run did not complete, plus each node you name in `node_ids` that no run of its chain ever ran (it runs and is priced) |
 | `node_ids` | string[] | Optional; run only these nodes. With `from_failed`, the nodes to consider (default: the nodes the run's chain was first started on, every node for a run of every node, plus every node left failed or held back — see [Continuing a failed run](../api-integration.md#continuing-a-failed-run)); every id counts as named: a node of work no run of the chain ever ran runs and is priced (so naming every node also runs each one the chain's runs all left out), while a source, trigger, parameter or container node keeps what the run handed on and a skipped node never runs. With `continue_from_execution_id` alone, the nodes the continuation runs. An empty list is refused in every mode: leave it out instead. A continuation its payer cannot cover (of a completed run, or `from_failed`, priced on what it still runs) is refused (`insufficient_credits`) before it starts |
 
-**Response:** `{ executionId: "...", name: "..." }` — read the run with
+**Response:** `{ executionId: "...", name: "...", editorUrl: "..." }` (`editorUrl`
+opens the workflow, where the run shows live) — read the run with
 [`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
 id (`get_job` will not find it), and `get_app_run` returns every node's status,
 text and media, why a node was skipped, and the run's `outcome` once it
