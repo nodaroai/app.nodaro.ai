@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.40.0
+
+### Minor Changes
+
+- b9864da: `GenerateVideoParams` and `TextToVideoParams` type `keepOriginalSound` (Kling 4.0: keep a reference video's own sound), and the `characterReferences` docs cover Kling 4.0's named subjects (up to 7, 2–4 images each through `bodyImageUrl` / the new `extraImageUrls`).
+
+### Patch Changes
+
+- Updated dependencies [b9864da]
+  - @nodaro/shared@3.40.0
+  - @nodaro/prompts@1.41.0
+
 ## 2.39.0
 
 ### Minor Changes
