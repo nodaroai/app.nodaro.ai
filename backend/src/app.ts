@@ -182,6 +182,7 @@ import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
 import { registerCopilotRoutes } from "./ee/routes/copilot.js"
 import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
 import { welcomeOfferRoutes } from "./ee/routes/welcome-offer.js"
+import { accessibilityReportRoutes } from "./ee/routes/accessibility-report.js"
 import { adminFreeGrantRoutes } from "./ee/routes/admin-free-grants.js"
 import { adminUsersLinkageRoutes } from "./ee/routes/admin-users-linkage.js"
 import { adminAccessRoutes } from "./ee/routes/admin-access.js"
@@ -698,6 +699,8 @@ export async function buildApp() {
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasCredits()) await app.register(claimSignupGrantRoutes)
   if (hasCredits()) await app.register(welcomeOfferRoutes)
+  // The accessibility statement's report form (Cloud: the statement is Nodaro's own).
+  if (hasCredits()) await app.register(accessibilityReportRoutes)
   if (hasCredits()) for (const route of Object.values(UNIT_EE_ROUTES)) await app.register(route)
   // Marketing-email consent prompt + Loops sync (Cloud-only).
   if (hasCredits()) await app.register(consentRoutes)

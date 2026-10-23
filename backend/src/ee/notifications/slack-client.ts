@@ -23,6 +23,8 @@ export interface SlackMessage {
   text: string
   /** Optional Block Kit blocks for a richer in-channel render (digest list). */
   blocks?: unknown[]
+  /** Turn off link and media previews (text that came from a stranger). */
+  noUnfurl?: boolean
 }
 
 /** Post one message. Resolves `{ ok:false }` (never throws) on any failure so a
@@ -38,7 +40,11 @@ export async function sendSlack(webhookUrl: string, message: SlackMessage): Prom
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(message.blocks ? { text: message.text, blocks: message.blocks } : { text: message.text }),
+      body: JSON.stringify({
+        text: message.text,
+        ...(message.blocks ? { blocks: message.blocks } : {}),
+        ...(message.noUnfurl ? { unfurl_links: false, unfurl_media: false } : {}),
+      }),
       signal: controller.signal,
     })
     if (!res.ok) {

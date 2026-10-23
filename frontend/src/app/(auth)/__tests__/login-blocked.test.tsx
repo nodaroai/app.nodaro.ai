@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 
-vi.mock("@/lib/edition", () => ({ isCloud: () => false }))
+vi.mock("@/lib/edition", () => ({ isCloud: () => false, hasCredits: () => false }))
 const signInWithEmail = vi.hoisted(() => vi.fn())
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ signInWithGoogle: vi.fn(), signInWithEmail }),

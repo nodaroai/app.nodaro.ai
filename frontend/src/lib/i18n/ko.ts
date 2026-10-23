@@ -607,6 +607,8 @@ export const ko: ChromeDict = {
   "legal.terms": "서비스 약관",
   "legal.privacy": "개인정보 처리방침",
   "legal.refund": "환불 정책",
+
+  "legal.accessibility": "접근성 성명",
   "lang.label": "언어",
   "lang.pick": "언어 선택",
   "lang.pickerLabel": "피커 언어",

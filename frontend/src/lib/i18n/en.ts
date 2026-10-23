@@ -631,6 +631,8 @@ export const en = {
   "legal.privacy": "Privacy Policy",
   "legal.refund": "Refund Policy",
 
+  "legal.accessibility": "Accessibility statement",
+
   // ── Language switcher ───────────────────────────────────────────────────
   "lang.label": "Language",
   "lang.pick": "Pick language",

@@ -208,6 +208,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   // billing routes): a pricing page's data, the same for every caller — no
   // per-user data, so it must answer tokenless. Exact path, GET only.
   { method: "GET", path: "/v1/billing/plans" },
+  // The accessibility statement's report form (Cloud only; ee route): someone
+  // who cannot use the site cannot be asked to sign in to report it. Exact
+  // path, POST only; rate-limited per network in the route.
+  { method: "POST", path: "/v1/accessibility/report" },
   { path: "/v1/image-proxy" },
   // Bundled overlay fonts for the canvas preview — static, immutable, no user data.
   { method: "GET", path: "/v1/fonts", prefix: true },

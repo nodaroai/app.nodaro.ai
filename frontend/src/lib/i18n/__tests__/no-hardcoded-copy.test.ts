@@ -32,7 +32,14 @@ const SRC = path.resolve(__dirname, "../../..")
 const SCAN_ROOTS = ["components", "app", "routes", "hooks", "ee"]
 const SKIP_DIR = new Set(["__tests__", "node_modules", "(admin)"])
 /** Operator-only surfaces outside the `(admin)` route group. */
-const SKIP_PATHS = ["ee/components/admin", "ee/layouts/admin-layout.tsx"]
+const SKIP_PATHS = [
+  "ee/components/admin",
+  "ee/layouts/admin-layout.tsx",
+  // The accessibility statement is Hebrew in every interface language (an Israeli
+  // legal page, owner decision 2026-10-23): its copy is written in Hebrew on
+  // purpose and never goes through the dictionary.
+  "ee/app/accessibility",
+]
 const TIMEOUT = 60_000
 
 /** Attributes whose string value is rendered to the user. */

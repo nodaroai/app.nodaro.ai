@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
 import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { accessibilityStatementShown } from "@/lib/accessibility-statement"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -59,6 +60,7 @@ const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-pag
 const DeletedAppsPage = lazy(() => import("@/app/(dashboard)/apps/deleted/page"))
 const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
 const ExplorePage = lazy(() => import("@/ee/app/explore/page"))
+const AccessibilityStatementPage = lazy(() => import("@/ee/app/accessibility/page"))
 const InvitationPage = lazy(() => import("@/ee/app/join/invitation-page"))
 const JoinCodePage = lazy(() => import("@/ee/app/join/join-code-page"))
 const NewOrgPage = lazy(() => import("@/ee/app/org/new-org-page"))
@@ -257,6 +259,15 @@ export const router = createBrowserRouter([
         element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
         errorElement: <RouteErrorBoundary />,
       }]),
+  // The accessibility statement: public (someone who cannot use the site cannot
+  // be asked to sign in to read it), Cloud only, Hebrew only.
+  ...(accessibilityStatementShown()
+    ? [{
+        path: "/accessibility",
+        element: <SuspenseWrapper><AccessibilityStatementPage /></SuspenseWrapper>,
+        errorElement: <RouteErrorBoundary />,
+      }]
+    : []),
   // Public, no-auth return page for embedded Stripe Checkout (new-tab flow).
   // Only reachable by returning from Stripe, which never happens without
   // billing — and the page talks about plans and credits. Also withheld when

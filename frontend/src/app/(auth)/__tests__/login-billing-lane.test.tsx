@@ -29,7 +29,7 @@ import { MemoryRouter } from "react-router-dom"
 // The target deployment is EDITION=cloud — the edition on which
 // `codeDefaultAuthMethods` omits "email" entirely. Using anything else would
 // test the easy case.
-vi.mock("@/lib/edition", () => ({ isCloud: () => true }))
+vi.mock("@/lib/edition", () => ({ isCloud: () => true, hasCredits: () => true }))
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ signInWithGoogle: vi.fn(), signInWithEmail: vi.fn() }),
 }))

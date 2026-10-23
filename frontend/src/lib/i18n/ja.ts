@@ -673,6 +673,8 @@ export const ja: ChromeDict = {
   "legal.terms": "利用規約",
   "legal.privacy": "プライバシーポリシー",
   "legal.refund": "返金ポリシー",
+
+  "legal.accessibility": "アクセシビリティ方針",
   "lang.label": "言語",
   "lang.pick": "言語を選択",
   "lang.pickerLabel": "ピッカーの言語",

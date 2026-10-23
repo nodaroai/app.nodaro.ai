@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 
-vi.mock("@/lib/edition", () => ({ isCloud: () => false }))
+vi.mock("@/lib/edition", () => ({ isCloud: () => false, hasCredits: () => false }))
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ signInWithGoogle: vi.fn(), signInWithEmail: vi.fn() }),
 }))

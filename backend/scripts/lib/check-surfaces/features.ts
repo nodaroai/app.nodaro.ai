@@ -122,6 +122,7 @@ export const PLUGIN_ROUTE_PREFIXES: readonly string[] = [
  * over REST on purpose, without an SDK resource (yet)".
  */
 export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
+  accessibility: "the accessibility statement's report form (Cloud, public)",
   "ai-writer": "the AI Writer node's routes",
   api: "the original run-a-workflow API (`/v1/api/run`, schema, status, result)",
   "api-tokens": "personal API tokens",

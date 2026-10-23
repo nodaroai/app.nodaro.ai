@@ -72,6 +72,8 @@ export interface SiteHeaderProps {
   /** The app IS the Nodaro app: its account pages are its own routes, never an iframe of itself. */
   readonly accountPages?: "embed" | "in-app"
   readonly onAccountPage?: (path: string, page: SiteAccountPage) => void
+  /** Rows added to the account menu (the accessibility statement); the function form is handed the menu's close. */
+  readonly accountMenuExtras?: ReactNode | ((menu: { readonly close: () => void }) => ReactNode)
   /** The app claims the signup grant on its own boot path. */
   readonly claimSignupGrant?: boolean
   /** One phone row on pages whose height belongs to the app (the editor). */

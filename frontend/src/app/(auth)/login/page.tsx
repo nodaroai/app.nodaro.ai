@@ -6,6 +6,8 @@ import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
 import { surfaceAuthMethods, surfaceAuthSsoLabel, surfacePlatformLinks } from "@/lib/surface-selectors"
+import { accessibilityStatementShown } from "@/lib/accessibility-statement"
+import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
 import { runtimeSurfaceProfile, type AuthMethod } from "@/lib/surface-profile"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
@@ -365,7 +367,7 @@ export default function LoginPage() {
       </div>
 
       {/* The platform legal policies apply only when the deployment shows its links. */}
-      {surfacePlatformLinks() && <div className="absolute bottom-6 flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
+      {surfacePlatformLinks() && <div className="absolute bottom-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
         <a href="https://nodaro.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
           {t("legal.terms")}
         </a>
@@ -377,6 +379,12 @@ export default function LoginPage() {
         <a href="https://nodaro.ai/refund" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
           {t("legal.refund")}
         </a>
+        {accessibilityStatementShown() && (
+          <>
+            <span aria-hidden="true">&middot;</span>
+            <AccessibilityStatementLink className="hover:text-foreground transition-colors" />
+          </>
+        )}
       </div>}
     </div>
   )
