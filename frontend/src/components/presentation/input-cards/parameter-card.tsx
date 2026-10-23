@@ -89,7 +89,7 @@ export function ParameterCard({
       readOnly={readOnly}
       mode={inputMode ?? "oneline"}
       minLines={minLines}
-      icon={<span className="text-muted-foreground/50">{getTypeIcon(nodeType)}</span>}
+      icon={<span className="text-muted-foreground">{getTypeIcon(nodeType)}</span>}
       promptHelper={ENHANCEABLE_PARAM_TYPES.has(nodeType) ? promptHelper : undefined}
     />
   )

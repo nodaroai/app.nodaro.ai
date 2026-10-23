@@ -106,7 +106,7 @@ function FilterPill({ active, onClick, icon, label, count }: FilterPillProps) {
       {icon}
       <span>{label}</span>
       {count !== undefined && (
-        <span className={cn("text-[10px]", active ? "opacity-70" : "opacity-50")}>
+        <span className={cn("text-[11px]", active ? "opacity-70" : "opacity-50")}>
           {count}
         </span>
       )}
@@ -155,7 +155,7 @@ function CompactVideoCard({
       </div>
       <div className="p-2">
         <p className="text-xs font-medium text-foreground truncate">{video.title}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+        <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
           <Play className="h-2.5 w-2.5" fill="currentColor" />
           {t("home.tutorials.video")}
         </p>
@@ -212,7 +212,7 @@ function CompactFlowCard({
         {complexity && (
           <span
             className={cn(
-              "absolute top-1.5 end-1.5 text-[9px] px-1.5 py-0.5 rounded border font-medium",
+              "absolute top-1.5 end-1.5 text-[11px] px-1.5 py-0.5 rounded border font-medium",
               complexity.color,
             )}
           >
@@ -222,7 +222,7 @@ function CompactFlowCard({
       </div>
       <div className="p-2">
         <p className="text-xs font-medium text-foreground truncate">{flow.title}</p>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
           <span className="flex items-center gap-1">
             <Zap className="h-2.5 w-2.5" fill="currentColor" />
             {t("home.tutorials.tutorial")}

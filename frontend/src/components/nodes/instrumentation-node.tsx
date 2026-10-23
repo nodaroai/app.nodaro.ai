@@ -43,7 +43,7 @@ function InstrumentationNodeComponent({ id, data, selected }: NodeProps) {
           {detailParts.join(" / ")}
         </p>
       )}
-      {composed && <p className="text-muted-foreground text-[10px] italic leading-snug">{composed}</p>}
+      {composed && <p className="text-muted-foreground text-[11px] italic leading-snug">{composed}</p>}
     </ParameterNodeShell>
   )
 }

@@ -276,7 +276,7 @@ function PlaceholderTile({ kind }: { kind: EntityKind }) {
   const { Icon } = KIND_META[kind]
   return (
     <div className="w-full aspect-square rounded bg-muted flex items-center justify-center">
-      <Icon className="h-6 w-6 text-muted-foreground/40" />
+      <Icon className="h-6 w-6 text-muted-foreground" />
     </div>
   )
 }
@@ -361,10 +361,10 @@ function LibraryTab({
                     ) : (
                       <PlaceholderTile kind={kind} />
                     )}
-                    <div className="px-1.5 py-1 text-[10px] truncate">{item.name}</div>
+                    <div className="px-1.5 py-1 text-[11px] truncate">{item.name}</div>
                   </button>
                   {isCurrent && (
-                    <span className="absolute top-1 end-1 bg-primary text-primary-foreground rounded-full p-0.5 pointer-events-none">
+                    <span className="absolute top-1 end-1 bg-cta text-primary-foreground rounded-full p-0.5 pointer-events-none">
                       <Check className="h-3 w-3" />
                     </span>
                   )}
@@ -443,7 +443,7 @@ function DupChoicePanel({
               ) : (
                 <PlaceholderTile kind={kind} />
               )}
-              <div className="px-1.5 py-1 text-[10px] truncate">{c.name}</div>
+              <div className="px-1.5 py-1 text-[11px] truncate">{c.name}</div>
               {isBinding && (
                 <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -565,15 +565,15 @@ function GalleryTab({
                       <PlaceholderTile kind={kind} />
                     )}
                     <div className="px-1.5 py-1">
-                      <div className="text-[10px] truncate">{card.title}</div>
-                      <div className="text-[9px] text-muted-foreground truncate">
+                      <div className="text-[11px] truncate">{card.title}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">
                         {card.creator_display_name ?? t("entity.communityFallback")} · {t("entity.usesCount", { n: card.clone_count })}
                       </div>
                     </div>
                     {isBinding && (
                       <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-[9px]">{t("entity.adding")}</span>
+                        <span className="text-[11px]">{t("entity.adding")}</span>
                       </div>
                     )}
                   </button>

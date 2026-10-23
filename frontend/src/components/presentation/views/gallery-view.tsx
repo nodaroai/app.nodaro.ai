@@ -1,3 +1,5 @@
+import { CoverButton } from "@/components/ui/cover-button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { useState, useMemo } from "react"
 import { ImageIcon, VideoIcon, Music, FileText, Play, Settings } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -81,7 +83,7 @@ export function GalleryView({
         {showInputs && (
           <>
             {activeTab === "all" && inputItems.length > 0 && (
-              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{t("preview.inputs")}</h3>
+              <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{t("preview.inputs")}</h3>
             )}
             {inputItems.length === 0 && activeTab !== "all" ? (
               <div className="text-sm text-muted-foreground text-center py-16">{t("present.noInputsConfigured")}</div>
@@ -101,16 +103,18 @@ export function GalleryView({
                               <Play className="w-3.5 h-3.5 text-white ms-0.5" fill="white" />
                             </div>
                           </div>
+                          <CoverButton label={t("common.preview")} onActivate={() => onOpenMedia?.(node.id)} />
                         </div>
                       ) : result.url ? (
-                        <CachedImage
-                          src={result.url}
-                          alt=""
-                          thumbnail
-                          thumbnailWidth={320}
-                          className="w-full h-full object-cover rounded-lg cursor-pointer"
-                          onClick={() => onOpenMedia?.(node.id)}
-                        />
+                        <button type="button" onClick={() => onOpenMedia?.(node.id)} aria-label={t("common.preview")} className="block w-full h-full rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]">
+                          <CachedImage
+                            src={result.url}
+                            alt=""
+                            thumbnail
+                            thumbnailWidth={320}
+                            className="w-full h-full object-cover rounded-lg cursor-pointer"
+                          />
+                        </button>
                       ) : result.text ? (
                         <p className="text-xs px-2 line-clamp-4">{result.text}</p>
                       ) : (
@@ -128,7 +132,7 @@ export function GalleryView({
         {showOutputs && (
           <>
             {activeTab === "all" && outputItems.length > 0 && (
-              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{t("preview.outputs")}</h3>
+              <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{t("preview.outputs")}</h3>
             )}
             {outputItems.length === 0 && activeTab !== "all" ? (
               <div className="text-sm text-muted-foreground text-center py-16">{t("present.noOutputsConfigured")}</div>
@@ -156,20 +160,15 @@ export function GalleryView({
       </div>
 
       {/* Text preview dialog */}
-      {textPreview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setTextPreview(null)}
-        >
-          <div
-            className="bg-card border border-border rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-sm font-medium text-foreground mb-3">{textPreview.title}</h3>
-            <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{textPreview.text}</p>
-          </div>
-        </div>
-      )}
+      {/* A real dialog: Escape and its close button work, focus stays inside and returns on close. */}
+      <Dialog open={textPreview !== null} onOpenChange={(open) => { if (!open) setTextPreview(null) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogTitle className="text-sm font-medium text-foreground">{textPreview?.title}</DialogTitle>
+          <DialogDescription asChild>
+            <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{textPreview?.text}</p>
+          </DialogDescription>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -218,13 +217,13 @@ function GalleryCard({
   return (
     <GlassCard className={hasContent ? "cursor-pointer hover:border-[#ff0073]/30 transition-colors" : ""}>
       <div className="flex items-center justify-between mb-2">
-        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
           <span className="truncate">{title}</span>
           {preview && <PreviewBadge className="shrink-0" />}
         </span>
         <StatusBadge status={status} />
       </div>
-      <div className="aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>
+      <div className="relative aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>
         {status === "running" ? (
           <div className="w-6 h-6 border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin" />
         ) : node.type === "social-media-format" ? (
@@ -235,7 +234,7 @@ function GalleryCard({
               <div className="flex flex-col items-center w-full h-full">
                 <div className="flex items-center gap-1.5 py-1.5">
                   <span
-                    className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                    className="text-[11px] px-1.5 py-0.5 rounded-full font-medium"
                     style={{
                       backgroundColor: (PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888") + "20",
                       color: PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888",
@@ -271,26 +270,27 @@ function GalleryCard({
         ) : outputType === "audio" && url ? (
           <div className="flex flex-col items-center gap-2">
             <WaveformBars />
-            <Music className="w-6 h-6 text-muted-foreground/60" />
+            <Music className="w-6 h-6 text-muted-foreground" />
           </div>
         ) : text ? (
-          <p className="text-xs text-muted-foreground/80 px-3 line-clamp-6 text-center">{text}</p>
+          <p className="text-xs text-muted-foreground px-3 line-clamp-6 text-center">{text}</p>
         ) : isConfigType ? (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Settings className="w-8 h-8" />
-            <span className="text-[10px]">{t("present.clickToEdit")}</span>
+            <span className="text-[11px]">{t("present.clickToEdit")}</span>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
+          <div className="flex flex-col items-center gap-1 text-muted-foreground">
             {outputType === "image" ? <ImageIcon className="w-8 h-8" /> :
              outputType === "video" ? <VideoIcon className="w-8 h-8" /> :
              outputType === "audio" ? <Music className="w-8 h-8" /> :
              <FileText className="w-8 h-8" />}
-            <span className="text-[10px]">
+            <span className="text-[11px]">
               {status === "failed" ? t("common.failed") : t("present.pending")}
             </span>
           </div>
         )}
+        {hasContent && <CoverButton label={t("common.preview")} onActivate={handleClick} />}
       </div>
     </GlassCard>
   )

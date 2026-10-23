@@ -160,27 +160,27 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 flex-1 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /><span className="font-medium">{t("node.failed")}</span></div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
               )}
             </div>
           )}
 
           {status !== "running" && !hasResult && status !== "failed" && (
-            <div className="flex flex-col items-center justify-center gap-1.5 flex-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 p-2">
+            <div className="flex flex-col items-center justify-center gap-1.5 flex-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground p-2">
               <Users className="w-5 h-5" />
               {ctx ? (
                 <>
-                  <span className="text-[10px] text-center px-2" data-testid="speaker-view-summary">{summary}</span>
-                  <span className="text-[10px] text-center px-2">{t("speakerView.inputSummary", { speakers: ctx.clips[0]!.speakerCount, cameras: ctx.clips[0]!.cameras })}</span>
+                  <span className="text-[11px] text-center px-2" data-testid="speaker-view-summary">{summary}</span>
+                  <span className="text-[11px] text-center px-2">{t("speakerView.inputSummary", { speakers: ctx.clips[0]!.speakerCount, cameras: ctx.clips[0]!.cameras })}</span>
                   <EdlValidityBadge verdict={verdict} />
                 </>
               ) : inputState.kind === "not-run" ? (
-                <span className="text-[10px] text-center px-2" data-testid="speaker-view-waiting">{t("speakerView.state.notRun", { producer: inputState.producer })}</span>
+                <span className="text-[11px] text-center px-2" data-testid="speaker-view-waiting">{t("speakerView.state.notRun", { producer: inputState.producer })}</span>
               ) : (
-                <span className="text-[10px] text-center px-2">{t("speakerView.connect")}</span>
+                <span className="text-[11px] text-center px-2">{t("speakerView.connect")}</span>
               )}
               {!SPEAKER_VIEW_PRICED && (
-                <span data-testid="speaker-view-not-priced" className="text-[10px] text-center px-2 text-amber-700 dark:text-amber-400">{t("speakerView.notPriced")}</span>
+                <span data-testid="speaker-view-not-priced" className="text-[11px] text-center px-2 text-amber-700 dark:text-amber-400">{t("speakerView.notPriced")}</span>
               )}
             </div>
           )}

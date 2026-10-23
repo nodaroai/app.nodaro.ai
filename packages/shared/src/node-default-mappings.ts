@@ -202,6 +202,9 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // Vidu Q4 — five tiers; the quality rungs stop at 1080p so "high" never
   // lands on the 2k/4k ladder (4k is closed to the free tier).
   "vidu-q4":             { field: "resolution", values: { low: "540p", mid: "720p", high: "1080p" } },
+  // Kling 4.0 — two tiers on both endpoints.
+  "kling-4":             { field: "resolution", values: { low: "720p", mid: "720p", high: "1080p" } },
+  "kling-4-keyframes":   { field: "resolution", values: { low: "720p", mid: "720p", high: "1080p" } },
   "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

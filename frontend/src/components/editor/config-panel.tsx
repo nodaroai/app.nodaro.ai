@@ -998,7 +998,7 @@ export function ConfigPanel() {
         : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:end-0 sm:h-full sm:w-96 sm:border-s border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />
+        <div aria-hidden="true" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
@@ -1044,7 +1044,7 @@ export function ConfigPanel() {
             </div>
             <div className="flex items-center justify-between px-4 pb-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#64748B]">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#64748B]">
                   {localizeNodeLabel(nodeTypeDefaultLabel(nodeType))}
                 </span>
                 <span className="text-sm font-medium text-gray-900 dark:text-white truncate">

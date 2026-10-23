@@ -151,7 +151,7 @@ export function AssetSelectionModal({
   if (!isOpen) return null
 
   return (
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
@@ -300,7 +300,7 @@ export function AssetSelectionModal({
                   )}
                   <span className="text-xs font-medium mt-1.5 truncate w-full text-center">{asset.name}</span>
                   <span className={cn(
-                    "text-[9px] px-1.5 py-0.5 rounded mt-0.5",
+                    "text-[11px] px-1.5 py-0.5 rounded mt-0.5",
                     asset.type === "character" && "bg-pink-500/10 text-pink-500",
                     asset.type === "object" && "bg-emerald-500/10 text-emerald-500",
                     asset.type === "creature" && "bg-[#A78BFA]/10 text-[#A78BFA]",

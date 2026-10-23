@@ -30,7 +30,7 @@ export function AdminOnlyPill({ className }: { readonly className?: string }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded px-1 py-px text-[8.5px] font-bold tracking-[0.7px]",
+        "shrink-0 rounded px-1 py-px text-[11px] font-bold tracking-[0.7px]",
         "bg-amber-500/15 text-amber-600 dark:text-amber-400",
         className,
       )}

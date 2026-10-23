@@ -257,7 +257,7 @@ function EncryptionCard({ check }: { readonly check: EncryptionCheck }) {
             </span>
           </span>
           {check.source === "generated" && (
-            <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
+            <span style={{ fontFamily: MONO, fontSize: 11, color: MUTED }}>
               {t("setup.encryptionKeyLocation")}
             </span>
           )}
@@ -776,7 +776,7 @@ export default function SetupPage() {
                       <span
                         style={{
                           fontFamily: MONO,
-                          fontSize: 9.5,
+                          fontSize: 11,
                           letterSpacing: ".1em",
                           color: st.whereKey === "setup.whereOpensNodaro" ? "oklch(0.45 0.09 205)" : SUBTLE,
                           border: `1px solid ${st.whereKey === "setup.whereOpensNodaro" ? "#bfe3ea" : "rgba(11,13,18,.14)"}`,
@@ -790,7 +790,7 @@ export default function SetupPage() {
                         {t(st.whereKey)}
                       </span>
                       {active && (
-                        <span style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: ".1em", color: "#b60a43", background: "#fce4ec", borderRadius: 999, padding: "4px 10px" }}>
+                        <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: ".1em", color: "#b60a43", background: "#fce4ec", borderRadius: 999, padding: "4px 10px" }}>
                           {t("setup.doThisNow")}
                         </span>
                       )}
@@ -1101,7 +1101,7 @@ export default function SetupPage() {
                     <span
                       style={{
                         fontFamily: MONO,
-                        fontSize: 10.5,
+                        fontSize: 11,
                         letterSpacing: ".1em",
                         color: connected ? "#166534" : "#b60a43",
                         background: connected ? "#dcfce7" : "#fce4ec",
@@ -1223,10 +1223,10 @@ export default function SetupPage() {
                   borderTop: "1px solid rgba(11,13,18,.05)",
                 }}
               >
-                <span style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: SUBTLE }}>
+                <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: SUBTLE }}>
                   {t("integ.usedBySpecificNodes")}
                 </span>
-                <span style={{ fontFamily: MONO, fontSize: 10.5, color: FAINT }}>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: FAINT }}>
                   {t("setup.nodeSpecificHint")}
                 </span>
               </div>

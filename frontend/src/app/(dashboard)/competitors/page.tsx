@@ -129,7 +129,7 @@ export default function CompetitorsPage() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{t("apiErr.loadCompetitors")}</div>
       ) : competitors.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Radar className="mb-3 h-10 w-10 text-muted-foreground/40" />
+          <Radar className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="max-w-md text-sm text-muted-foreground">{t("competitors.empty")}</p>
         </div>
       ) : (

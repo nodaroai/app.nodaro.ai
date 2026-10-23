@@ -61,7 +61,7 @@ function UgcClipsNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {d.errorMessage && (
-                <p dir="auto" className="text-[10px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
+                <p dir="auto" className="text-[11px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
                   {ugcNodeMessageText(d.errorMessage)}
                 </p>
               )}
@@ -83,7 +83,7 @@ function UgcClipsNodeComponent({ id, data, selected }: NodeProps) {
           )}
           {hasCredits() && <UgcClipsQuote quote={d.quote} status={status} />}
           {!running && clips.length === 0 && status !== "failed" && (
-            <div className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 80 }}>
+            <div className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 80 }}>
               <Scissors className="w-6 h-6" />
             </div>
           )}

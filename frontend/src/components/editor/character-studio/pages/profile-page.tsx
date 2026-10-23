@@ -44,14 +44,14 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-5">
       <div className="space-y-2.5">
-        <div className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.portrait")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500">{t("studio.portrait")}</div>
         {s.sourceImageUrl ? (
           <ApprovedPortrait
             url={s.sourceImageUrl}
             onEnlarge={() => setPortraitLightboxOpen(true)}
           />
         ) : (
-          <div className="w-40 h-52 rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-slate-500">
+          <div className="w-40 h-52 rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[11px] text-slate-500">
             {t("studio.generatePortraitBelow")}
           </div>
         )}
@@ -232,7 +232,7 @@ function NameInput({ name, onChange }: { name: string; onChange: (v: string) => 
         }`}
       />
       {isPlaceholder && (
-        <div className="text-[9px] text-[#3b82f699]">↻ {t("studio.giveCharacterName")}</div>
+        <div className="text-[11px] text-[#3b82f699]">↻ {t("studio.giveCharacterName")}</div>
       )}
     </div>
   )

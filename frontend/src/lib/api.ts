@@ -18,7 +18,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
-import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery } from "@nodaro/shared/video"
+import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 import type { EditPlanMode } from "@nodaro/shared/edl"
 import type {
   VideoDepthProvider,
@@ -3164,6 +3164,11 @@ export interface GenerateVideoOptions {
    *  reference (the layout-scoping line); an API caller fills the same field. */
   referenceVideoCaptions?: string[]
   referenceAudioUrls?: string[]  // Seedance 2 (up to 3 reference audio files)
+  /** Characters as named subjects (Kling 4.0: wired Character nodes, built by
+   *  `characterReferencesFromWired` — the same grouping the orchestrator sends). */
+  characterReferences?: VideoCharacterReference[]
+  /** Kling 4.0: keep the reference videos' own sound. */
+  keepOriginalSound?: boolean
   webSearch?: boolean            // Seedance 2 (required field)
   nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
@@ -3244,6 +3249,8 @@ export async function generateVideo(
       referenceVideoUrls: opts.referenceVideoUrls,
       referenceVideoCaptions: opts.referenceVideoCaptions,
       referenceAudioUrls: opts.referenceAudioUrls,
+      characterReferences: opts.characterReferences?.length ? opts.characterReferences : undefined,
+      keepOriginalSound: opts.keepOriginalSound,
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
@@ -3500,6 +3507,10 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
    *  reference (the layout-scoping line); an API caller fills the same field. */
   referenceVideoCaptions?: string[]
   referenceAudioUrls?: string[]
+  /** Kling 4.0: wired characters as named subjects — see GenerateVideoOptions. */
+  characterReferences?: VideoCharacterReference[]
+  /** Kling 4.0: keep the reference videos' own sound. */
+  keepOriginalSound?: boolean
   webSearch?: boolean
   nsfwChecker?: boolean
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).

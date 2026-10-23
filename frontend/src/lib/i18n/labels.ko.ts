@@ -681,6 +681,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "고속 Wan 3.0, 2–30초, 480p/720p/1080p, 네이티브 오디오, 이미지/동영상/오디오 레퍼런스",
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio, start frame or 15 image + 3 MP3 audio refs": "ShengShu Vidu Q4, 3–16초, 540p–4K, 네이티브 오디오, 시작 프레임 또는 이미지 레퍼런스 15장 + MP3 오디오 레퍼런스 3개",
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio (image required)": "ShengShu Vidu Q4, 3–16초, 540p–4K, 네이티브 오디오(이미지 필수)",
+  "Kuaishou Kling 4.0, 3\u201330s, 720p/1080p, native audio, image/video/character/voice refs": "Kuaishou Kling 4.0, 3–30초, 720p/1080p, 네이티브 오디오, 이미지/동영상/캐릭터/보이스 레퍼런스",
+  "Kuaishou Kling 4.0, 3\u201330s, start + up to 8 in-between + end frames, native audio": "Kuaishou Kling 4.0, 3–30초, 시작 프레임 + 중간 프레임 최대 8장 + 끝 프레임, 네이티브 오디오",
   "Higher detail, production images": "디테일이 높은 프로덕션용 이미지",
   "Higher detail, production-ready images": "디테일이 높고 실무에 바로 쓸 수 있는 이미지",
   "Higher quality Bytedance": "더 높은 품질의 Bytedance",

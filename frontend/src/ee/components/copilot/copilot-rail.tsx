@@ -74,11 +74,11 @@ function CopilotStrip({ replies, onOpen }: { readonly replies: number; readonly 
       className="absolute inset-0 bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
     >
       <span className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]" aria-hidden />
-      <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold" aria-hidden>{t("editor.copilotTabLabel")}</span>
+      <span className="[writing-mode:vertical-rl] text-[11px] tracking-[0.18em] font-semibold" aria-hidden>{t("editor.copilotTabLabel")}</span>
       {replies > 0 && (
         <span
           aria-hidden
-          className="mt-1 min-w-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-[16px] text-center tabular-nums"
+          className="mt-1 min-w-[18px] px-1 rounded-full bg-cta text-primary-foreground text-[11px] font-bold leading-[16px] text-center tabular-nums"
         >
           {replies}
         </span>

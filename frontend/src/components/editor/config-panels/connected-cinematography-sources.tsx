@@ -285,7 +285,7 @@ export function ConnectedCinematographySources({ consumerNodeId, nodes, edges, c
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-0.5">
+      <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground px-0.5">
         {t("cfgext.connCineHeader", { n: entries.length })}
       </p>
       <div className="flex flex-col gap-2">
@@ -307,7 +307,7 @@ export function ConnectedCinematographySources({ consumerNodeId, nodes, edges, c
                   <p className="text-[11px] font-medium text-foreground truncate">{e.title}</p>
                 </div>
                 {e.description && (
-                  <p className="text-[10px] text-muted-foreground leading-snug break-words">{e.description}</p>
+                  <p className="text-[11px] text-muted-foreground leading-snug break-words">{e.description}</p>
                 )}
               </div>
             </div>

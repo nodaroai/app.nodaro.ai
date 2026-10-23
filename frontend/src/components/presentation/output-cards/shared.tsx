@@ -34,12 +34,13 @@ export function IterationProgress({ status, iterationTotal, iterationCompleted }
   )
 }
 
+// Text at -700 on the light tint and -400 on the dark one: at least 4.5:1 both ways (WCAG 1.4.3).
 const STATUS_COLORS: Record<string, string> = {
-  waiting: "bg-amber-500/10 text-amber-500 border border-amber-500/20",
-  running: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
-  completed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
-  failed: "bg-red-500/10 text-red-500 border border-red-500/20",
-  skipped: "bg-slate-500/10 text-slate-400 border border-slate-500/20",
+  waiting: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20",
+  running: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20",
+  completed: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20",
+  failed: "bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20",
+  skipped: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20",
 }
 
 const STATUS_LABELS: Record<Exclude<OutputStatus, "idle">, MessageKey> = {
@@ -54,7 +55,7 @@ export function StatusBadge({ status }: { status: OutputStatus }) {
   const t = useT()
   if (status === "idle") return null
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${STATUS_COLORS[status] ?? ""}`}>
+    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${STATUS_COLORS[status] ?? ""}`}>
       {t(STATUS_LABELS[status])}
     </span>
   )

@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { memo, useCallback, useMemo, useState } from "react"
@@ -173,7 +174,9 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
         <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 shadow-lg dark:border-white/10 dark:bg-zinc-900">
           {/* Neutral (no tint) */}
           <div
-            onClick={(e) => { e.stopPropagation(); updateNodeData(id, { color: undefined }) }}
+            {...pressable((e) => { e.stopPropagation(); updateNodeData(id, { color: undefined }) })}
+            aria-label={t("node.noColour")}
+            aria-pressed={!nodeData.color}
             title={t("node.noColour")}
             className={`w-4 h-4 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${!nodeData.color ? "border-foreground dark:border-white" : "border-foreground/15 dark:border-white/20"}`}
             style={{ backgroundColor: NEUTRAL_BORDER }}
@@ -181,7 +184,9 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
           {NODE_COLORS.map((c) => (
             <div
               key={c}
-              onClick={(e) => { e.stopPropagation(); updateNodeData(id, { color: c }) }}
+              {...pressable((e) => { e.stopPropagation(); updateNodeData(id, { color: c }) })}
+              aria-label={t("node.colourN", { n: NODE_COLORS.indexOf(c) + 1 })}
+              aria-pressed={nodeData.color === c}
               className={`w-4 h-4 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${nodeData.color === c ? "border-foreground dark:border-white" : "border-foreground/15 dark:border-white/20"}`}
               style={{ backgroundColor: getEffectiveColor(c, isDark) }}
             />
@@ -204,7 +209,7 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
         className={`absolute left-0 flex items-center max-w-full ${
           tint
             ? "bottom-full font-semibold"
-            : "-top-6 gap-1.5 text-[12px] font-medium text-foreground/70 dark:text-white/70"
+            : "-top-6 gap-1.5 text-[12px] font-medium text-foreground/80 dark:text-white/70"
         } ${editing ? "nopan nodrag nowheel" : "select-none"}`}
         style={bannerStyle}
       >

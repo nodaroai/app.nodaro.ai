@@ -79,7 +79,7 @@ function useNowTick(mode: "off" | "slow" | "fast"): number {
 function PeekRow({ glyph, text, href }: { readonly glyph: string; readonly text: string; readonly href?: string | null }) {
   return (
     <div className="flex items-baseline gap-1.5 min-w-0">
-      <span className="w-[14px] shrink-0 text-[10px] text-muted-foreground/70 text-right">{glyph}</span>
+      <span className="w-[14px] shrink-0 text-[11px] text-muted-foreground text-right">{glyph}</span>
       {href ? (
         // A real link on the card (#779). `nodrag` is what keeps a mousedown
         // from starting a canvas drag (React Flow's drag filter checks the
@@ -166,7 +166,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="p-3 flex flex-col gap-1.5">
           {/* Identity block: actor + query, one truncated line each. */}
-          <span className="text-[10px] font-medium uppercase tracking-wide text-[#38BDF8]">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[#38BDF8]">
             {actorLabel}
           </span>
           <p className="text-muted-foreground truncate max-w-[180px]">{summary}</p>
@@ -181,9 +181,9 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                   <StatusDot color="var(--muted-foreground)" />
                   {t("node.notRunYet")}
                 </span>
-                <span className="text-muted-foreground/60">—</span>
+                <span className="text-muted-foreground">—</span>
               </div>
-              <p className="text-[10px] text-muted-foreground/70">{t("node.runToFetchResults")}</p>
+              <p className="text-[11px] text-muted-foreground">{t("node.runToFetchResults")}</p>
             </>
           )}
 
@@ -194,7 +194,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                   <StatusDot color="#38BDF8" />
                   {t("node.scraping")}
                 </span>
-                <span className="tabular-nums text-muted-foreground/80">{elapsedLabel(state.startedAt, now)}</span>
+                <span className="tabular-nums text-muted-foreground">{elapsedLabel(state.startedAt, now)}</span>
               </div>
               {/* Skeleton rows sit exactly where results land — no jump. */}
               <SkeletonRows />
@@ -204,7 +204,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
           {state.kind !== "never-ran" && state.kind !== "running" && (
             <>
               {state.stale && (
-                <div className="rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] px-1.5 py-0.5">
+                <div className="rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] px-1.5 py-0.5">
                   {t("node.inputsChangedStale")}
                 </div>
               )}
@@ -227,7 +227,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                     {t("node.failed")}
                   </span>
                 )}
-                <span className="text-muted-foreground/60 tabular-nums">{relativeTime(state.at, now)}</span>
+                <span className="text-muted-foreground tabular-nums">{relativeTime(state.at, now)}</span>
               </div>
 
               {state.kind === "success" && (
@@ -236,19 +236,19 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                     <PeekRow key={i} glyph={peek.glyph(item, i)} text={webScrapePeekLine(actor, item)} href={webScrapeItemLink(actor, item)} />
                   ))}
                   {state.count > peekItems.length && (
-                    <span className="text-[10px] text-[#FF0073]">{t("node.viewAllN", { n: state.count })}</span>
+                    <span className="text-[11px] text-[#FF0073]">{t("node.viewAllN", { n: state.count })}</span>
                   )}
                 </div>
               )}
 
               {state.kind === "empty" && (
-                <p className="text-[10px] text-muted-foreground/70 leading-snug">
+                <p className="text-[11px] text-muted-foreground leading-snug">
                   {t("node.queryMatchedNothing")}
                 </p>
               )}
 
               {state.kind === "failed" && (
-                <p className="text-[10px] text-muted-foreground/80 leading-snug">
+                <p className="text-[11px] text-muted-foreground leading-snug">
                   {nodeData.errorMessage || t("node.scrapeFailed")}
                   {state.kept && (
                     <>

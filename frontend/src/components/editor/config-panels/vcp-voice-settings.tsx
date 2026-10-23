@@ -84,7 +84,7 @@ export function VcpVoiceSettings({ index: i, voice: v, updateVoice }: VcpVoiceSe
           </button>
         </div>
         {isRespeak && (
-          <p className="text-[10px] text-amber-600 mt-1">{t("audiocfg.hintRespeakWarning")}</p>
+          <p className="text-[11px] text-amber-600 mt-1">{t("audiocfg.hintRespeakWarning")}</p>
         )}
       </div>
       {engine === "v3" ? (
@@ -106,7 +106,7 @@ export function VcpVoiceSettings({ index: i, voice: v, updateVoice }: VcpVoiceSe
         <div>
           <Label htmlFor={`stability-${i}`}>{t("field.stability")} ({v.stability ?? 0.5})</Label>
           <Input id={`stability-${i}`} type="range" min={0} max={1} step={0.05} value={v.stability ?? 0.5} onChange={(e) => updateVoice(i, { stability: parseFloat(e.target.value) })} className="h-2" />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
         </div>
       )}
       {/* Similarity: honoured by the speech-to-speech recast and by Re-speak
@@ -115,7 +115,7 @@ export function VcpVoiceSettings({ index: i, voice: v, updateVoice }: VcpVoiceSe
         <div>
           <Label htmlFor={`similarity-${i}`}>{t("audiocfg.similarity")} ({v.similarityBoost ?? 0.75})</Label>
           <Input id={`similarity-${i}`} type="range" min={0} max={1} step={0.05} value={v.similarityBoost ?? 0.75} onChange={(e) => updateVoice(i, { similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
         </div>
       )}
       {/* Recast-only levers — both Re-speak lanes ignore style and speaker
@@ -125,14 +125,14 @@ export function VcpVoiceSettings({ index: i, voice: v, updateVoice }: VcpVoiceSe
         <div>
           <Label htmlFor={`style-${i}`}>{t("audiocfg.styleExaggeration")} ({v.style ?? 0})</Label>
           <Input id={`style-${i}`} type="range" min={0} max={1} step={0.05} value={v.style ?? 0} onChange={(e) => updateVoice(i, { style: parseFloat(e.target.value) })} className="h-2" />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
         </div>
         <div>
           <div className="flex items-center justify-between">
             <Label htmlFor={`speaker-boost-${i}`}>{t("field.speakerBoost")}</Label>
             <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             {t("audiocfg.hintSpeakerBoostRecast")}
           </p>
         </div>

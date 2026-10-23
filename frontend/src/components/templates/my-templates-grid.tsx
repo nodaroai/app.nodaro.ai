@@ -24,7 +24,7 @@ export function MyTemplatesGrid({
   if (!templates || templates.length === 0) {
     return (
       <div className="text-center py-16">
-        <LayoutTemplate className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+        <LayoutTemplate className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-lg font-semibold text-foreground mb-2">{t("templates.emptyMyTitle")}</h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           {t("templates.emptyMyDesc")}
@@ -81,7 +81,7 @@ function MyTemplateCard({
           <button
             type="button"
             className={cn(
-              "text-[10px] px-2 py-0.5 rounded-full transition-colors",
+              "text-[11px] px-2 py-0.5 rounded-full transition-colors",
               template.isListed
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
                 : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
@@ -93,7 +93,7 @@ function MyTemplateCard({
           </button>
           {/* Complexity badge */}
           {complexity && (
-            <span className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium", complexity.color)}>
+            <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-medium", complexity.color)}>
               {complexity.label}
             </span>
           )}

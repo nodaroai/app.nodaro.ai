@@ -34,18 +34,18 @@ export function AppearancePage({ state, jobs }: StudioPageProps<CharacterStudioS
         <div className="flex items-center justify-between gap-2">
           <div className="text-[11px] font-medium text-slate-200">{t("studio.identityAnchorSet")}</div>
           <div
-            className={`text-[10px] tabular-nums ${anchorHave === anchorTotal ? "text-emerald-400" : "text-slate-400"}`}
+            className={`text-[11px] tabular-nums ${anchorHave === anchorTotal ? "text-emerald-400" : "text-slate-400"}`}
           >
             {t("studio.nOfTotalAngles", { have: anchorHave, total: anchorTotal })}
           </div>
         </div>
-        <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
           {t("studio.anchorSetExplainer")}
           {!hasPortrait && `${t("common.fragmentGap")}${t("studio.approvePortraitFirstAngles")}`}
         </p>
       </div>
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-2">{t("studio.headFaceAngles")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">{t("studio.headFaceAngles")}</div>
         <ImageAssetTab
           state={state}
           jobs={jobs}
@@ -57,7 +57,7 @@ export function AppearancePage({ state, jobs }: StudioPageProps<CharacterStudioS
         />
       </div>
       <div className="border-t border-[#1e293b] pt-4">
-        <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-2">{t("studio.bodyAngles")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">{t("studio.bodyAngles")}</div>
         <ImageAssetTab
           state={state}
           jobs={jobs}
@@ -69,7 +69,7 @@ export function AppearancePage({ state, jobs }: StudioPageProps<CharacterStudioS
         />
       </div>
       <div className="border-t border-[#1e293b] pt-4">
-        <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-2">{t("studio.lightingVariations")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">{t("studio.lightingVariations")}</div>
         <ImageAssetTab
           state={state}
           jobs={jobs}

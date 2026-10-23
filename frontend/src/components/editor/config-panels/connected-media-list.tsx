@@ -260,9 +260,9 @@ function SortableMediaItem({
           {...listeners}
           className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
         >
-          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
         </span>
-        <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[10px]">
+        <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[11px]">
           #{index + 1}
         </span>
         {mediaType === "image" && entry.thumbnailUrl ? (
@@ -275,11 +275,11 @@ function SortableMediaItem({
           />
         ) : mediaType === "image" ? (
           <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0">
-            <ImageIcon className="w-4 h-4 text-muted-foreground/40" />
+            <ImageIcon className="w-4 h-4 text-muted-foreground" />
           </div>
         ) : (
           <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
-            <MediaIcon mediaType={mediaType} className="w-4 h-4 text-muted-foreground/40" />
+            <MediaIcon mediaType={mediaType} className="w-4 h-4 text-muted-foreground" />
           </div>
         )}
         <div className="flex flex-col flex-1 min-w-0">
@@ -287,18 +287,18 @@ function SortableMediaItem({
             {localizeNode(entry.label)}
           </span>
           {isPrimary && primaryLabel && (
-            <span className="text-[9px] text-pink-500 font-medium">
+            <span className="text-[11px] text-pink-500 font-medium">
               {primaryLabel}
             </span>
           )}
         </div>
         {entry.targetHandle && (
-          <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+          <span className="text-[11px] px-1 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
             {localizeHandle(entry.targetHandle)}
           </span>
         )}
         <span
-          className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}
+          className={`text-[11px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}
         >
           {badge.label}
         </span>
@@ -361,7 +361,7 @@ export function ConnectedMediaList({
   if (orderedEntries.length === 0) {
     if (emptyMessage) {
       return (
-        <p className="text-[10px] text-muted-foreground/60">{emptyMessage}</p>
+        <p className="text-[11px] text-muted-foreground">{emptyMessage}</p>
       )
     }
     return null
@@ -418,7 +418,7 @@ export function ConnectedMediaList({
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[10px]">
+                <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[11px]">
                   #{i + 1}
                 </span>
                 {mediaType === "image" && entry.thumbnailUrl ? (
@@ -431,11 +431,11 @@ export function ConnectedMediaList({
                   />
                 ) : mediaType === "image" ? (
                   <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0">
-                    <ImageIcon className="w-4 h-4 text-muted-foreground/40" />
+                    <ImageIcon className="w-4 h-4 text-muted-foreground" />
                   </div>
                 ) : (
                   <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
-                    <MediaIcon mediaType={mediaType} className="w-4 h-4 text-muted-foreground/40" />
+                    <MediaIcon mediaType={mediaType} className="w-4 h-4 text-muted-foreground" />
                   </div>
                 )}
                 <div className="flex flex-col flex-1 min-w-0">
@@ -443,13 +443,13 @@ export function ConnectedMediaList({
                     {localizeNode(entry.label)}
                   </span>
                   {primaryLabel && (
-                    <span className="text-[9px] text-pink-500 font-medium">
+                    <span className="text-[11px] text-pink-500 font-medium">
                       {primaryLabel}
                     </span>
                   )}
                 </div>
                 <span
-                  className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${getTypeBadge(entry.type).className}`}
+                  className={`text-[11px] px-1 py-0.5 rounded shrink-0 ${getTypeBadge(entry.type).className}`}
                 >
                   {getTypeBadge(entry.type).label}
                 </span>
@@ -463,7 +463,7 @@ export function ConnectedMediaList({
       )}
 
       {orderedEntries.length > 1 && (
-        <p className="text-[10px] text-muted-foreground mt-1.5">
+        <p className="text-[11px] text-muted-foreground mt-1.5">
           {t("cfgshared.dragToReorderPrimaryHint")}
         </p>
       )}

@@ -165,7 +165,7 @@ export function CinematicAvatarConfig({
               snippets={promptSnippets}
             />
             {(data.prompt?.length ?? 0) > 0 && (
-              <span className="text-[10px] text-muted-foreground text-end block">
+              <span className="text-[11px] text-muted-foreground text-end block">
                 {data.prompt?.length ?? 0} / {CINEMATIC_PROMPT_MAX}
               </span>
             )}
@@ -177,7 +177,7 @@ export function CinematicAvatarConfig({
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">
           {t("cfgext.cinAvAvatarLooks")}
-          <span className="ms-1.5 text-muted-foreground/60 font-normal">
+          <span className="ms-1.5 text-muted-foreground font-normal">
             {t("cfgext.cinAvPickRange", { max: MAX_LOOKS })}
           </span>
         </Label>
@@ -188,7 +188,7 @@ export function CinematicAvatarConfig({
             {looks.map((id, i) => (
               <span
                 key={id}
-                className="flex items-center gap-1 rounded-full bg-[#ff0073]/10 border border-[#ff0073]/40 px-2 py-0.5 text-[10.5px] text-[#ff0073]"
+                className="flex items-center gap-1 rounded-full bg-[#ff0073]/10 border border-[#ff0073]/40 px-2 py-0.5 text-[11px] text-[#ff0073]"
               >
                 {lookNames[i] ?? id}
                 <button
@@ -242,7 +242,7 @@ export function CinematicAvatarConfig({
               onValueChange={([v]) => onUpdate({ duration: v })}
               className="w-full"
             />
-            <div className="flex justify-between text-[9px] text-muted-foreground/60">
+            <div className="flex justify-between text-[11px] text-muted-foreground">
               <span>{t("proccfg.s2", { n: 4 })}</span>
               <span>{t("proccfg.s2", { n: 15 })}</span>
             </div>
@@ -298,7 +298,7 @@ export function CinematicAvatarConfig({
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">
           {t("cfgext.cinAvReferences")}
-          <span className="ms-1.5 text-muted-foreground/60 font-normal">{t("cfgext.cinAvRefsOptional")}</span>
+          <span className="ms-1.5 text-muted-foreground font-normal">{t("cfgext.cinAvRefsOptional")}</span>
         </Label>
         {hasWiredReferences ? (
           <div className="flex flex-col gap-1">
@@ -317,7 +317,7 @@ export function CinematicAvatarConfig({
               ))}
           </div>
         ) : (
-          <p className="text-[10.5px] text-muted-foreground/60">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.cinAvWireRefsHint")}
           </p>
         )}

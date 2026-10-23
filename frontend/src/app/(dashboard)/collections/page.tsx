@@ -94,7 +94,7 @@ export default function CollectionsPage() {
         <div className="rounded-lg border bg-muted/40 p-6 text-center text-sm text-muted-foreground">{t("collections.notAvailable")}</div>
       ) : collections.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Database className="mb-3 h-10 w-10 text-muted-foreground/40" />
+          <Database className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="max-w-md text-sm text-muted-foreground">{t("collections.empty")}</p>
         </div>
       ) : (

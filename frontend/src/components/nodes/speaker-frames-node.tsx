@@ -81,7 +81,7 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
               )}
             </div>
           )}
@@ -89,7 +89,7 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
           {status !== "running" && result && (
             <div className="flex flex-col gap-1" data-testid="speaker-frames-node-result">
               {result.sources.map((s) => (
-                <span key={s.sourceId} className="text-[10px] rounded bg-muted px-1.5 py-0.5">
+                <span key={s.sourceId} className="text-[11px] rounded bg-muted px-1.5 py-0.5">
                   {labelOf(s.sourceId)}: {t("speakerFrames.tracks", { count: s.tracks })}
                   {s.speakers.length > 0 && ` · ${s.speakers.join(", ")}`}
                 </span>
@@ -98,14 +98,14 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status !== "running" && status !== "failed" && !result && (
-            <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 p-2" style={{ minHeight: 90, flex: 1 }}>
+            <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground p-2" style={{ minHeight: 90, flex: 1 }}>
               <ScanFace className="w-5 h-5" />
               {ticked.length > 0 ? (
-                <span className="text-[10px] text-center tabular-nums" data-testid="speaker-frames-node-summary">{t("speakerFrames.total", { frames, cameras: ticked.length })}</span>
+                <span className="text-[11px] text-center tabular-nums" data-testid="speaker-frames-node-summary">{t("speakerFrames.total", { frames, cameras: ticked.length })}</span>
               ) : speakerFramesBareVideoWired(id, edges) ? (
-                <span className="text-[10px] text-center px-2" data-testid="speaker-frames-node-whole-video">{t("speakerFrames.wholeVideoShort")}</span>
+                <span className="text-[11px] text-center px-2" data-testid="speaker-frames-node-whole-video">{t("speakerFrames.wholeVideoShort")}</span>
               ) : (
-                <span className="text-[10px] text-center px-2">{t("speakerFrames.connect")}</span>
+                <span className="text-[11px] text-center px-2">{t("speakerFrames.connect")}</span>
               )}
             </div>
           )}

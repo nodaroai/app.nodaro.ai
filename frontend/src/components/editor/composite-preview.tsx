@@ -55,7 +55,7 @@ export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps)
               }}
             >
               <span
-                className="text-[9px] font-mono font-medium px-1 rounded"
+                className="text-[11px] font-mono font-medium px-1 rounded"
                 style={{ backgroundColor: color, color: "#fff" }}
               >
                 {layer.inputHandle}
@@ -65,7 +65,7 @@ export function CompositePreview({ layers, aspectRatio }: CompositePreviewProps)
         })}
 
         {sortedLayers.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground/50">
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
             {t("preview.noLayers")}
           </div>
         )}

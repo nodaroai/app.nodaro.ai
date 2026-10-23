@@ -244,7 +244,7 @@ export function TrainingSection({ characterNodeId, data }: TrainingSectionProps)
               size="sm"
               onClick={handleStart}
               disabled={busy || insufficientPhotos}
-              className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white text-xs font-medium"
+              className="bg-cta hover:bg-cta-hover text-white text-xs font-medium"
             >
               {busy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

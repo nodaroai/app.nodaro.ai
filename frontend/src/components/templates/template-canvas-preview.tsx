@@ -127,8 +127,8 @@ export function TemplateCanvasPreview({ slug, open, fallback, onBack }: Template
             <div className="relative overflow-hidden rounded-[17px] bg-[var(--home-panel)] p-[18px]">
               <div className="templates-clone-glow" aria-hidden />
               <div className="relative flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-[1.4px] text-[var(--primary)]">{t("templates.templateEyebrow")}</span>
-                <span className="text-[10px] text-[var(--home-muted)]">{t("preview.by", { name: templateCreatorName() })}</span>
+                <span className="text-[11px] font-bold uppercase tracking-[1.4px] text-[var(--primary)]">{t("templates.templateEyebrow")}</span>
+                <span className="text-[11px] text-[var(--home-muted)]">{t("preview.by", { name: templateCreatorName() })}</span>
               </div>
               <div className="relative mt-1.5 text-[22px] font-extrabold leading-[1.15] tracking-[-0.4px] text-[var(--home-strong)]"><span dir="auto">{summary.name}</span></div>
               <TemplateCover template={summary} className="relative mt-3 aspect-video border border-[var(--home-line-2)]" />

@@ -131,7 +131,7 @@ const VoiceRow = memo(function VoiceRow({
         className={cn(
           "shrink-0 flex items-center justify-center size-6 rounded-full border transition-colors",
           isPlaying
-            ? "border-[#ff0073] bg-[#ff0073] text-white"
+            ? "border-[#ff0073] bg-cta text-white"
             : "border-gray-300 dark:border-[#3D3D3D] text-muted-foreground hover:border-[#ff0073] hover:text-[#ff0073]",
           !voice.previewAudio && "opacity-30 cursor-not-allowed",
         )}
@@ -156,21 +156,21 @@ const VoiceRow = memo(function VoiceRow({
           </span>
           {/* Feature badges */}
           {voice.emotionSupport && (
-            <span className="shrink-0 inline-flex items-center text-[9px] font-medium px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+            <span className="shrink-0 inline-flex items-center text-[11px] font-medium px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
               {t("heygen.badgeEmotion")}
             </span>
           )}
           {voice.supportPause && (
-            <span className="shrink-0 inline-flex items-center text-[9px] font-medium px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+            <span className="shrink-0 inline-flex items-center text-[11px] font-medium px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
               {t("heygen.badgePause")}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[10px] text-muted-foreground truncate">
+          <span className="text-[11px] text-muted-foreground truncate">
             {voice.language}
           </span>
-          <span className="text-[10px] text-muted-foreground/60 capitalize">
+          <span className="text-[11px] text-muted-foreground capitalize">
             · {voice.gender}
           </span>
         </div>
@@ -341,12 +341,12 @@ export const VoicePicker = memo(function VoicePicker({
       </div>
 
       {/* Item count + "still arriving" while the server fills */}
-      <p className="text-[10px] text-muted-foreground px-0.5">
+      <p className="text-[11px] text-muted-foreground px-0.5">
         {filtered.length === 1
           ? t("heygen.voiceCountOne", { n: formatNumber(filtered.length) })
           : t("heygen.voiceCount", { n: formatNumber(filtered.length) })}
         {!complete && (
-          <span className="ms-1.5 text-muted-foreground/70" data-testid="voice-picker-loading-more">
+          <span className="ms-1.5 text-muted-foreground" data-testid="voice-picker-loading-more">
             {t("heygen.loadingMore")}
           </span>
         )}

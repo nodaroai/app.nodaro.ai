@@ -64,7 +64,7 @@ export function FindBar({ find, matches, inputRef, fromWord, onChange }: FindBar
       >
         <Search className="h-3.5 w-3.5" />
         {t("edlReview.find")}
-        <kbd className="rounded border border-border px-1 text-[10px]">⌘F</kbd>
+        <kbd className="rounded border border-border px-1 text-[11px]">⌘F</kbd>
       </button>
     )
   }

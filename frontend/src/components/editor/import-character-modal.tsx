@@ -93,7 +93,7 @@ export function ImportCharacterModal({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">{t("entity.importCharactersTitle")}</h3>
-          <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+          <button aria-label={t("common.close")} type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -165,7 +165,7 @@ export function ImportCharacterModal({
                             </div>
                           )}
                           <span className="text-xs font-medium truncate w-full text-center">{char.name}</span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${
                             char.type === "reference" ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
                           }`}>
                             {char.type === "reference" ? t("entity.badgeRef") : t("entity.badgeDesc")}
@@ -175,7 +175,7 @@ export function ImportCharacterModal({
                     })}
                   </div>
                   {duplicateChars.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-2">
+                    <p className="text-[11px] text-muted-foreground mt-2">
                       {duplicateChars.length === 1
                         ? t("entity.skippedCharactersOne", { names: duplicateChars.map((c) => c.name).join(", ") })
                         : t("entity.skippedCharactersMany", { n: duplicateChars.length, names: duplicateChars.map((c) => c.name).join(", ") })}
@@ -200,7 +200,7 @@ export function ImportCharacterModal({
             type="button"
             onClick={handleImport}
             disabled={selectedCharIds.size === 0}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-cta text-primary-foreground hover:bg-cta-hover transition-colors disabled:opacity-50"
           >
             <Download className="w-3 h-3" />
             {selectedCharIds.size > 0 ? t("entity.importCount", { n: selectedCharIds.size }) : t("entity.importSelected")}

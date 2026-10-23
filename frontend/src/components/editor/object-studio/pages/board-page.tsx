@@ -19,7 +19,7 @@ export function BoardPage({ state }: StudioPageProps<ObjectStudioState, ObjectSt
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
         <p className="text-sm text-muted-foreground">{t("studio.noReferenceBoardsYet")}</p>
-        <p className="mt-1 text-xs text-muted-foreground/70">{t("studio.boardsFromStudioHint")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("studio.boardsFromStudioHint")}</p>
       </div>
     )
   }

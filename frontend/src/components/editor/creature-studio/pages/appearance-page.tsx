@@ -98,7 +98,7 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
         <section className="space-y-3">
           <h2 className="text-[12px] font-medium text-slate-300">{t("creature.identity")}</h2>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.name")}</span>
+            <span className="text-[11px] text-slate-500 uppercase tracking-wider">{t("common.name")}</span>
             <input
               type="text"
               value={data.creatureName || ""}
@@ -112,7 +112,7 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
               hybrid creatures aren't locked to the catalog. Distinct from the
               object's hard category enum. Mirrors CreatureConfig. */}
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("cfgext.entSpeciesType")}</span>
+            <span className="text-[11px] text-slate-500 uppercase tracking-wider">{t("cfgext.entSpeciesType")}</span>
             <input
               type="text"
               list="creature-studio-species-suggestions"
@@ -126,12 +126,12 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
                 <option key={a.id} value={a.label} />
               ))}
             </datalist>
-            <span className="block mt-1 text-[9px] text-slate-600">
+            <span className="block mt-1 text-[11px] text-slate-600">
               {t("creature.speciesHint")}
             </span>
           </label>
           <label className="block">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{t("common.description")}</span>
+            <span className="text-[11px] text-slate-500 uppercase tracking-wider">{t("common.description")}</span>
             <textarea
               value={data.description || ""}
               onChange={(e) => studio.patch({ description: e.target.value })}
@@ -167,13 +167,13 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
               type="button"
               onClick={() => void cands.generate(count)}
               disabled={generateDisabled}
-              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-cta hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
             >
               {t("common.generate")}
             </button>
           </div>
           {cands.tracked.length > 0 && (
-            <div className="mt-2 text-[10px] text-slate-500">
+            <div className="mt-2 text-[11px] text-slate-500">
               {cands.tracked.length === 1 ? t("creature.generatingCandidatesOne") : t("creature.generatingCandidatesMany", { n: cands.tracked.length })}
             </div>
           )}
@@ -231,7 +231,7 @@ export function AppearancePage({ state }: StudioPageProps<CreatureStudioState, C
           <section className="text-[11px] bg-[#0e1117] border border-[#1e293b] p-3 rounded">
             <div className="font-medium text-slate-300 mb-1">{t("creature.canonicalDescription")}</div>
             <div className="text-slate-400 italic">{data.canonicalDescription}</div>
-            <div className="text-[9px] text-slate-600 mt-1">{t("creature.canonicalDescriptionHint")}</div>
+            <div className="text-[11px] text-slate-600 mt-1">{t("creature.canonicalDescriptionHint")}</div>
           </section>
         )}
       </div>

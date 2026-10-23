@@ -8,7 +8,7 @@ export function FlagBadge({ clusterId, tier }: { readonly clusterId: number; rea
     <span
       data-testid="cluster-flag"
       title="Linked-account cluster"
-      className="inline-flex h-4 min-w-4 flex-none items-center justify-center rounded px-1 text-[10px] font-extrabold tracking-wide"
+      className="inline-flex h-4 min-w-4 flex-none items-center justify-center rounded px-1 text-[11px] font-extrabold tracking-wide"
       style={{ background: tierVar(tier, "color"), color: ON_TIER }}
     >
       #{clusterId}
@@ -23,7 +23,7 @@ export function DecisionChip({ decision }: { readonly decision: string }) {
   if (!DECISION_KINDS.has(decision)) return null
   return (
     <span
-      className="rounded px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide"
+      className="rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide"
       style={decisionVars(decision as DecisionKind)}
     >
       {decision}

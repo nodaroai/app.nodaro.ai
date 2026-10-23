@@ -154,7 +154,7 @@ export function ResultsGallery({
                   />
                 )}
                 {tilePreview && (
-                  <PreviewBadge className="absolute inset-x-0 bottom-0 justify-center rounded-none bg-amber-500/90 px-0 py-px text-[8px] text-black dark:text-black" />
+                  <PreviewBadge className="absolute inset-x-0 bottom-0 justify-center rounded-none bg-amber-500/90 px-0 py-px text-[11px] text-black dark:text-black" />
                 )}
               </button>
             )

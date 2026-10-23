@@ -27,7 +27,7 @@ export function SeedanceDraftResultBadge({
   const { data: settings } = useResultGenerationSettings(jobId, { enabled: lookup && result?.draft !== true })
   if (result?.draft !== true && settings?.draft !== true) return null
   return (
-    <span className="absolute bottom-2 left-2 z-10 px-1.5 py-0.5 rounded-md bg-amber-500/80 text-white text-[10px] font-medium pointer-events-none transition-opacity group-hover/video:opacity-0">
+    <span className="absolute bottom-2 left-2 z-10 px-1.5 py-0.5 rounded-md bg-amber-500/80 text-white text-[11px] font-medium pointer-events-none transition-opacity group-hover/video:opacity-0">
       {t("node.draftBadge")}
     </span>
   )
@@ -52,7 +52,7 @@ export function SeedanceHdAudioWarning({ result }: { readonly result: GeneratedR
   return (
     <div
       role="status"
-      className="absolute top-2 left-2 right-2 z-10 px-2 py-1 rounded-md bg-amber-500/90 text-white text-[10px] leading-snug pointer-events-none transition-opacity group-hover/node:opacity-0"
+      className="absolute top-2 left-2 right-2 z-10 px-2 py-1 rounded-md bg-amber-500/90 text-white text-[11px] leading-snug pointer-events-none transition-opacity group-hover/node:opacity-0"
     >
       {t("node.draftAudioNotReapplied")}
     </div>

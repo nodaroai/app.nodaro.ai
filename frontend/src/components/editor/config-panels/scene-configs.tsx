@@ -287,12 +287,12 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             {data.video_model
               ? videoModelCanSpeakDialogue(data.video_model)
                 ? (
-                  <p className="text-[10px] text-emerald-500/80 mt-1">
+                  <p className="text-[11px] text-emerald-500/80 mt-1">
                     {t("cfgext.sceneSpeaksDialogue")}
                   </p>
                 )
                 : (
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-[11px] text-muted-foreground mt-1">
                     {t("cfgext.sceneNoDialogueSync")}
                   </p>
                 )
@@ -732,11 +732,11 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                           <li key={fIdx} className="text-xs space-y-0.5">
                             <div className="flex items-center gap-1">
                               <span
-                                className={`inline-block text-[10px] px-1.5 py-0 rounded-full font-medium ${severityClass}`}
+                                className={`inline-block text-[11px] px-1.5 py-0 rounded-full font-medium ${severityClass}`}
                               >
                                 {finding.severity}
                               </span>
-                              <span className="font-mono text-[10px] text-zinc-400">
+                              <span className="font-mono text-[11px] text-zinc-400">
                                 {finding.category}
                               </span>
                             </div>
@@ -753,7 +753,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                   )}
 
                   {retryCount !== undefined && retryCount > 0 && (
-                    <p className="text-[10px] text-zinc-500">
+                    <p className="text-[11px] text-zinc-500">
                       {t("cfgext.sceneRetriesUsed", { count: retryCount })}
                     </p>
                   )}

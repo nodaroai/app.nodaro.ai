@@ -247,7 +247,7 @@ export function AppRenderReviewBar({ review }: { readonly review: AppRenderRevie
   if (review.kind === "final") {
     return (
       <div className="flex items-center gap-2 px-1">
-        <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
           {t("appReview.final")}
         </span>
         <button type="button" className="text-xs text-[#ff0073] hover:underline" onClick={review.togglePreview}>
@@ -301,15 +301,15 @@ function AppRenderFinalAction({
   return (
     <div className="flex flex-col gap-1 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 p-2" role="alertdialog" aria-label={price}>
       <p className="text-xs font-medium text-foreground">{price}</p>
-      {reason && <p className="text-[10px] leading-snug text-muted-foreground">{reason}</p>}
-      <p className="text-[10px] leading-snug text-muted-foreground">{note}</p>
+      {reason && <p className="text-[11px] leading-snug text-muted-foreground">{reason}</p>}
+      <p className="text-[11px] leading-snug text-muted-foreground">{note}</p>
       <div className="flex justify-end gap-1.5">
         <button type="button" className="rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent" onClick={() => setConfirming(false)}>
           {t("common.cancel")}
         </button>
         <button
           type="button"
-          className="rounded-md bg-[#ff0073] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#ff0073]/90"
+          className="rounded-md bg-cta px-2 py-1 text-[11px] font-medium text-white hover:bg-cta-hover"
           onClick={() => {
             setConfirming(false)
             onRender(renderId)

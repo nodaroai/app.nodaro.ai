@@ -41,7 +41,7 @@ export function groupHitsByFamily(hits: readonly NodeOption[]): SearchNodeGroup[
 
 function Header({ label }: { label: string }) {
   return (
-    <div className="sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
+    <div className="sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
       {label}
     </div>
   )
@@ -52,7 +52,7 @@ export function FromOtherTabsSeparator() {
   const t = useT()
   return (
     <div className="mt-4 flex items-center gap-2.5 px-2.5 pb-1.5">
-      <span className="text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
+      <span className="text-[11px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
         {t("addnode.blockOther")}
       </span>
       <span className="h-px flex-1 bg-[var(--npk-border)]" />

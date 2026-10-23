@@ -50,7 +50,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the item mode panel 1`]
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -69,7 +69,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the item mode panel 1`]
       value=""
     />
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       1-based. Supports 
       <code>
@@ -83,7 +83,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the item mode panel 1`]
     </p>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>
@@ -140,7 +140,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the list mode panel 1`]
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -159,7 +159,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the list mode panel 1`]
       value=""
     />
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Examples: 
       <code>
@@ -180,7 +180,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the list mode panel 1`]
     </p>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>
@@ -237,7 +237,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the modulo mode panel 1
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -256,7 +256,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the modulo mode panel 1
       value=""
     />
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Literal integer or 
       <code>
@@ -266,7 +266,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the modulo mode panel 1
     </p>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>
@@ -323,7 +323,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the named-key mode pane
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -359,7 +359,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the named-key mode pane
         value=""
       />
       <p
-        class="text-[10px] text-muted-foreground"
+        class="text-[11px] text-muted-foreground"
       >
         Shortcut for predicate 
         <code>
@@ -374,7 +374,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the named-key mode pane
     </div>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>
@@ -431,7 +431,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the predicate mode pane
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -446,7 +446,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the predicate mode pane
         class="flex flex-col gap-1"
       >
         <label
-          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
           for="selector-pred-field"
         >
           Field
@@ -461,7 +461,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the predicate mode pane
         class="flex flex-col gap-1"
       >
         <label
-          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
           for="selector-pred-op"
         >
           Operator
@@ -552,7 +552,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the predicate mode pane
         value=""
       />
       <p
-        class="text-[10px] text-muted-foreground"
+        class="text-[11px] text-muted-foreground"
       >
         Supports 
         <code>
@@ -568,7 +568,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the predicate mode pane
         class="flex flex-col gap-1"
       >
         <label
-          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
           Match
         </label>
@@ -628,7 +628,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the predicate mode pane
     </div>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>
@@ -685,7 +685,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the random mode panel 1
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -707,7 +707,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the random mode panel 1
         value=""
       />
       <p
-        class="text-[10px] text-muted-foreground"
+        class="text-[11px] text-muted-foreground"
       >
         Supports 
         <code>
@@ -731,14 +731,14 @@ exports[`SelectorConfig — per-mode snapshots > renders the random mode panel 1
         value=""
       />
       <p
-        class="text-[10px] text-muted-foreground"
+        class="text-[11px] text-muted-foreground"
       >
         Number of items to sample without replacement. Defaults to 1.
       </p>
     </div>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>
@@ -795,7 +795,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`
       </option>
     </select>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
     </p>
@@ -813,7 +813,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`
         class="flex flex-col gap-1"
       >
         <span
-          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
           From
         </span>
@@ -826,7 +826,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`
         class="flex flex-col gap-1"
       >
         <span
-          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
           To
         </span>
@@ -839,7 +839,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`
         class="flex flex-col gap-1"
       >
         <span
-          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
           Step
         </span>
@@ -851,7 +851,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`
       </div>
     </div>
     <p
-      class="text-[10px] text-muted-foreground"
+      class="text-[11px] text-muted-foreground"
     >
       Both bounds are inclusive and 1-based. Step 
       <code>
@@ -864,7 +864,7 @@ exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`
     </p>
   </div>
   <p
-    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+    class="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
   >
     Run the node to see picked / rest counts here.
   </p>

@@ -188,13 +188,13 @@ export function CharacterGalleryButton() {
         <Users className="h-4 w-4" />
         {t("entity.btnCharacters")}
         {charCount > 0 && (
-          <span className="ms-auto text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
+          <span className="ms-auto text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
         )}
       </Button>
 
       {open && (
         <div className="fixed inset-0 z-[60]">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+          <div aria-hidden="true" className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border rounded-xl shadow-2xl w-[420px] max-w-[90vw] max-h-[70vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -335,7 +335,7 @@ function ActivePane({
                   </div>
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-                    <UserCircle className="w-8 h-8 text-muted-foreground/30" />
+                    <UserCircle className="w-8 h-8 text-muted-foreground" />
                   </div>
                 )}
                 {c.loraTrainingStatus === "succeeded" && (
@@ -345,7 +345,7 @@ function ActivePane({
                 )}
               </div>
               <span className="text-xs truncate w-full text-center">{c.name}</span>
-              {isOnCanvas && <span className="text-[9px] text-muted-foreground">{t("assetlib.onCanvas")}</span>}
+              {isOnCanvas && <span className="text-[11px] text-muted-foreground">{t("assetlib.onCanvas")}</span>}
             </button>
             {/* Top-right hover archive button. */}
             <button
@@ -359,7 +359,7 @@ function ActivePane({
             {/* Bottom-right hover add-to-canvas. */}
             <button
               type="button"
-              className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
+              className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-cta text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
               onClick={(e) => onAdd(e, c)}
               title={t("assetlib.addToCanvas", { name: c.name })}
             >
@@ -422,7 +422,7 @@ function ArchivedPane({
             </div>
           ) : (
             <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-              <UserCircle className="w-8 h-8 text-muted-foreground/30" />
+              <UserCircle className="w-8 h-8 text-muted-foreground" />
             </div>
           )}
           <span className="text-xs truncate w-full text-center opacity-70">{c.name}</span>
@@ -457,7 +457,7 @@ function ArchiveConfirmModal({
   const t = useT()
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={archiving ? undefined : onCancel} />
+      <div aria-hidden="true" className="absolute inset-0 bg-black/60" onClick={archiving ? undefined : onCancel} />
       <div className="relative bg-card border rounded-xl shadow-2xl w-[400px] max-w-[90vw] p-5">
         <h4 className="text-sm font-semibold mb-2">{t("entity.archiveConfirmTitle", { name: character.name })}</h4>
         <p className="text-xs text-muted-foreground mb-3">

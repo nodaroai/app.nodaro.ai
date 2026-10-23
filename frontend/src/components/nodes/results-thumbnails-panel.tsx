@@ -213,7 +213,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
           const tileClass = `w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
             isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
           }`
-          const handleClick = (e: React.MouseEvent) => {
+          const handleClick = (e: React.SyntheticEvent) => {
             e.stopPropagation()
             onSelect(absoluteIndex)
           }
@@ -265,20 +265,19 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
                   />
                 </>
               ) : (
-                <CachedImage
+                <button type="button" onClick={handleClick} aria-label={t("node.switchToResultN", { n: absoluteIndex + 1 })} aria-pressed={isActive} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                   src={r.url ?? ""}
                   alt={t("node.resultN", { n: absoluteIndex + 1 })}
                   className={tileClass}
                   thumbnail
                   thumbnailWidth={96}
-                  onClick={handleClick}
-                />
+                /></button>
               )}
               <span
                 aria-hidden
-                className={`absolute top-0.5 left-0.5 text-[9px] leading-none font-semibold px-1 py-0.5 rounded-sm tabular-nums shadow-sm pointer-events-none ${
+                className={`absolute top-0.5 left-0.5 text-[11px] leading-none font-semibold px-1 py-0.5 rounded-sm tabular-nums shadow-sm pointer-events-none ${
                   isActive
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-black/70 text-white/85"
                 }`}
               >

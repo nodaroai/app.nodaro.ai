@@ -52,7 +52,7 @@ export function ComposerBar({
           type="button"
           onClick={onLaunch}
           disabled={isRunning || !allInputsFilled}
-          className="flex items-center gap-1.5 rounded-xl bg-[#ff0073] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="flex items-center gap-1.5 rounded-xl bg-cta px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {isRunning ? (
             <>

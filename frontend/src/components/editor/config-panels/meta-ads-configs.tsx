@@ -531,7 +531,7 @@ export function MetaAdsScrapeResultsTab({
       </div>
 
       {view === "json" && (
-        <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 text-[10px]">{json}</pre>
+        <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 text-[11px]">{json}</pre>
       )}
 
       {view !== "json" && visible.length === 0 && (
@@ -604,7 +604,7 @@ export function MetaAdsScrapeResultsTab({
                     {metaAdPlatforms(ad).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {metaAdPlatforms(ad).map((p) => (
-                          <span key={p} className="rounded-md bg-[var(--meta-ads-chip)] px-[7px] py-[3px] text-[10.5px] font-bold text-[var(--meta-ads-text-2)]">{metaAdPlatformLabel(p)}</span>
+                          <span key={p} className="rounded-md bg-[var(--meta-ads-chip)] px-[7px] py-[3px] text-[11px] font-bold text-[var(--meta-ads-text-2)]">{metaAdPlatformLabel(p)}</span>
                         ))}
                       </div>
                     )}

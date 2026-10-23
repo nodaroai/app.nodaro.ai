@@ -255,7 +255,7 @@ export function ExtraRefsSection({
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
           {t("cfgshared.extraRefsTitle")}
           {refs.length > 0 && (
-            <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary normal-case tracking-normal">
+            <span className="ms-1 text-[11px] px-1.5 py-0.5 rounded bg-primary/20 text-primary normal-case tracking-normal">
               {refs.length}
             </span>
           )}
@@ -294,7 +294,7 @@ export function ExtraRefsSection({
               <Upload className="w-3.5 h-3.5 text-primary" />
               <div className="flex-1">
                 <div className="font-medium">{t("cfgshared.extraRefsUploadDevice")}</div>
-                <div className="text-[10px] text-muted-foreground">PNG, JPG, WebP</div>
+                <div className="text-[11px] text-muted-foreground">PNG, JPG, WebP</div>
               </div>
             </button>
             {hasCharacterUpstream ? (
@@ -307,7 +307,7 @@ export function ExtraRefsSection({
                     <UserCircle className="w-3.5 h-3.5 text-pink-500" />
                     <div className="flex-1">
                       <div className="font-medium">{t("cfgshared.extraRefsPickCharacter")}</div>
-                      <div className="text-[10px] text-muted-foreground">{t("cfgshared.extraRefsWiredMany", { count: groupedOptions.length })}</div>
+                      <div className="text-[11px] text-muted-foreground">{t("cfgshared.extraRefsWiredMany", { count: groupedOptions.length })}</div>
                     </div>
                     <ChevronRight className={cn("w-3 h-3 text-muted-foreground", isRtl && "rotate-180")} />
                   </button>
@@ -316,7 +316,7 @@ export function ExtraRefsSection({
                   <div className="flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
                     {groupedOptions.map((group) => (
                       <div key={group.characterSlug}>
-                        <div className="text-[10px] font-semibold text-muted-foreground uppercase px-2 py-1">
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase px-2 py-1">
                           {localizeNode(group.characterName)}
                         </div>
                         {group.variants.map((opt) => (
@@ -340,7 +340,7 @@ export function ExtraRefsSection({
                             <div className="flex-1 min-w-0">
                               <div className="truncate">{opt.variantDisplayName}</div>
                               {opt.description && (
-                                <div className="text-[10px] text-muted-foreground truncate">
+                                <div className="text-[11px] text-muted-foreground truncate">
                                   {opt.description}
                                 </div>
                               )}
@@ -353,11 +353,11 @@ export function ExtraRefsSection({
                 </PopoverContent>
               </Popover>
             ) : (
-              <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground/60">
+              <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                 <UserCircle className="w-3.5 h-3.5" />
                 <div className="flex-1">
                   <div>{t("cfgshared.extraRefsPickCharacter")}</div>
-                  <div className="text-[10px]">{t("cfgshared.extraRefsNoCharacterWired")}</div>
+                  <div className="text-[11px]">{t("cfgshared.extraRefsNoCharacterWired")}</div>
                 </div>
               </div>
             )}
@@ -368,7 +368,7 @@ export function ExtraRefsSection({
       {expanded && (
         <div className="flex flex-col gap-1.5">
           {refs.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground/60 px-1">
+            <p className="text-[11px] text-muted-foreground px-1">
               {t("cfgshared.extraRefsEmptyHint")}
             </p>
           ) : (
@@ -415,9 +415,9 @@ function ExtraRefRow({ ref, onRemove, onUpdate }: ExtraRefRowProps) {
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <div className="flex items-center gap-1">
-          <span className="text-[10px] font-medium truncate" title={label}>{label}</span>
+          <span className="text-[11px] font-medium truncate" title={label}>{label}</span>
           {ref.characterSlug && (
-            <span className="text-[8px] px-1 py-0 rounded bg-pink-500/10 text-pink-500">{t("cfgshared.extraRefsCharacterBadge")}</span>
+            <span className="text-[11px] px-1 py-0 rounded bg-pink-500/10 text-pink-500">{t("cfgshared.extraRefsCharacterBadge")}</span>
           )}
           <button
             type="button"
@@ -441,7 +441,7 @@ function ExtraRefRow({ ref, onRemove, onUpdate }: ExtraRefRowProps) {
             onUpdate({ usageMode: v === "__inherit__" ? undefined : (v as UsageMode) })
           }
         >
-          <SelectTrigger className="h-6 text-[10px]" aria-label={t("cfgshared.extraRefsUsageMode")}>
+          <SelectTrigger className="h-6 text-[11px]" aria-label={t("cfgshared.extraRefsUsageMode")}>
             <SelectValue placeholder={t("cfgshared.extraRefsInherit")} />
           </SelectTrigger>
           <SelectContent>

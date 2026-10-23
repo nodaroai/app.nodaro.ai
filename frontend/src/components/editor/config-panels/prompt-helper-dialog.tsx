@@ -458,8 +458,8 @@ export function PromptHelperDialog({
             <Settings className="w-3.5 h-3.5" />
           </button>
           <div className="flex items-center gap-1.5 flex-wrap mt-1">
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{effectiveNodeType}</span>
-            {provider && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{provider}</span>}
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{effectiveNodeType}</span>
+            {provider && <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{provider}</span>}
           </div>
         </DialogHeader>
 
@@ -468,7 +468,7 @@ export function PromptHelperDialog({
           {showPreference && (
             <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-[#ff0073]/20 bg-[#ff0073]/5">
               <label className="text-xs font-medium text-muted-foreground">
-                {t("cfgext.phdGeneralPreference")} <span className="text-[10px] font-normal">{t("cfgext.phdGeneralPreferenceNote")}</span>
+                {t("cfgext.phdGeneralPreference")} <span className="text-[11px] font-normal">{t("cfgext.phdGeneralPreferenceNote")}</span>
               </label>
               <Textarea
                 rows={2}
@@ -479,7 +479,7 @@ export function PromptHelperDialog({
                 maxLength={500}
               />
               {userPreference && (
-                <p className="text-[10px] text-muted-foreground">{t("cfgext.phdPrefSaved")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("cfgext.phdPrefSaved")}</p>
               )}
             </div>
           )}
@@ -500,11 +500,11 @@ export function PromptHelperDialog({
                       {downstreamTargets && downstreamTargets.length > 0 && (
                         <>
                           <SelectGroup>
-                            <SelectLabel className="text-[10px] text-muted-foreground">{t("integ.connected")}</SelectLabel>
+                            <SelectLabel className="text-[11px] text-muted-foreground">{t("integ.connected")}</SelectLabel>
                             {downstreamTargets.map((target) => (
                               <SelectItem key={target.id} value={target.type}>
                                 <span>{localizeNode(target.label)}</span>
-                                <span className="ms-1.5 text-[10px] text-muted-foreground">{target.type}</span>
+                                <span className="ms-1.5 text-[11px] text-muted-foreground">{target.type}</span>
                               </SelectItem>
                             ))}
                           </SelectGroup>
@@ -516,7 +516,7 @@ export function PromptHelperDialog({
                         if (!filtered.length) return null
                         return (
                           <SelectGroup key={group.group}>
-                            <SelectLabel className="text-[10px] text-muted-foreground">{group.group}</SelectLabel>
+                            <SelectLabel className="text-[11px] text-muted-foreground">{group.group}</SelectLabel>
                             {filtered.map((item) => (
                               <SelectItem key={item.value} value={item.value}>{localizeNode(item.label)}</SelectItem>
                             ))}
@@ -598,7 +598,7 @@ export function PromptHelperDialog({
                             <div>
                               <span className="text-xs font-medium">{opt.label}</span>
                               {opt.description && (
-                                <p className="text-[10px] text-muted-foreground">{opt.description}</p>
+                                <p className="text-[11px] text-muted-foreground">{opt.description}</p>
                               )}
                             </div>
                           </label>
@@ -620,7 +620,7 @@ export function PromptHelperDialog({
                                 <div className="flex flex-col">
                                   <span>{opt.label}</span>
                                   {opt.description && (
-                                    <span className="text-[10px] text-muted-foreground leading-tight">{opt.description}</span>
+                                    <span className="text-[11px] text-muted-foreground leading-tight">{opt.description}</span>
                                   )}
                                 </div>
                               </SelectItem>
@@ -657,18 +657,18 @@ export function PromptHelperDialog({
                   <label className="text-xs font-medium text-muted-foreground">
                     {outputFormat === "json" ? t("cfgext.phdGeneratedPromptJson") : t("cfgext.phdGeneratedPrompt")}
                   </label>
-                  <div className="inline-flex rounded-md border bg-background p-0.5 text-[10px]">
+                  <div className="inline-flex rounded-md border bg-background p-0.5 text-[11px]">
                     <button
                       type="button"
                       onClick={() => setOutputFormat("natural")}
-                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "natural" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "natural" ? "bg-cta text-white" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       {t("cfgext.phdNatural")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setOutputFormat("json")}
-                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "json" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "json" ? "bg-cta text-white" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       {t("out.json")}
                     </button>
@@ -697,7 +697,7 @@ export function PromptHelperDialog({
                   <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium">{t("cfgext.phdRecommended", { label: recommendedModel.label })}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{recommendedModel.reason}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{recommendedModel.reason}</p>
                   </div>
                   <Button
                     size="sm"
@@ -724,7 +724,7 @@ export function PromptHelperDialog({
             <Button
               onClick={handleAnalyze}
               disabled={loading}
-              className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              className="w-full bg-cta hover:bg-cta-hover text-white"
             >
               {loading ? (
                 <><Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" />{t("cfgext.phdAnalyzing")}</>
@@ -732,7 +732,7 @@ export function PromptHelperDialog({
                 <>
                   <Sparkles className="w-3.5 h-3.5 me-1.5" />
                   {t("cfgext.phdBuildPrompt")}
-                  <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditLabel}</span>
+                  <span className="ms-1.5 text-[11px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditLabel}</span>
                 </>
               )}
             </Button>
@@ -747,19 +747,19 @@ export function PromptHelperDialog({
               >
                 <ArrowLeft className={cn("w-3.5 h-3.5 me-1", isRtl && "rotate-180")} />
                 {t("cfgext.phdReanalyze")}
-                <span className="ms-1 text-[10px] opacity-60">{creditLabel}</span>
+                <span className="ms-1 text-[11px] opacity-60">{creditLabel}</span>
               </Button>
               <Button
                 onClick={handleGenerate}
                 disabled={!canGenerate}
-                className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                className="flex-1 bg-cta hover:bg-cta-hover text-white"
               >
                 {loading ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" />{t("cfgext.entGenerating")}</>
                 ) : (
                   <>
                     {t("cfgext.phdGeneratePrompt")}
-                    <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditLabel}</span>
+                    <span className="ms-1.5 text-[11px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditLabel}</span>
                   </>
                 )}
               </Button>
@@ -778,7 +778,7 @@ export function PromptHelperDialog({
               </Button>
               <Button
                 onClick={() => handleAccept(false)}
-                className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                className="flex-1 bg-cta hover:bg-cta-hover text-white"
               >
                 {t("cfgext.phdUseThisPrompt")}
               </Button>

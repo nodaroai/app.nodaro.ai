@@ -98,7 +98,7 @@ function TightenEpisodeNodeComponent({ id, type, data, selected }: NodeProps) {
           <ReviewCutButton renderId={id} />
           {cameraNote.length > 0 && (
             <div data-testid="use-case-camera-note" className="flex flex-col gap-0.5 px-1">
-              {cameraNote.map((line) => <p key={line} className="text-[10px] leading-snug text-muted-foreground">{line}</p>)}
+              {cameraNote.map((line) => <p key={line} className="text-[11px] leading-snug text-muted-foreground">{line}</p>)}
             </div>
           )}
           {/* "pending" is the runtime-only queued state, not in the narrower data type. */}

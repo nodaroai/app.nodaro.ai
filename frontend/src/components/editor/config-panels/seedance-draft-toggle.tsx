@@ -60,7 +60,7 @@ export function SeedanceDraftToggle({
         />
         <label htmlFor={id} className="text-xs">{t("vidcfg.seedanceDraft")}</label>
       </div>
-      <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.seedanceDraftHelp")}</p>
+      <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.seedanceDraftHelp")}</p>
     </div>
   )
 }
@@ -69,5 +69,5 @@ export function SeedanceDraftToggle({
 export function SeedanceDraftResolutionHint({ provider, draft }: { provider: string | undefined; draft: unknown }) {
   const t = useT()
   if (!isSeedanceDraftOn(provider, draft)) return null
-  return <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.seedanceDraftResolutionLocked")}</p>
+  return <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.seedanceDraftResolutionLocked")}</p>
 }

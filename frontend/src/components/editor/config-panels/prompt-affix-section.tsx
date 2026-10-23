@@ -79,7 +79,7 @@ function PromptAffixSectionInner({
           {setCount > 0 && (
             <span
               data-testid="prompt-affix-badge"
-              className="ms-auto rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-300"
+              className="ms-auto rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[11px] font-medium text-teal-700 dark:text-teal-300"
             >
               {t("cfgshared.promptAffixSetCount", { count: setCount })}
             </span>
@@ -105,7 +105,7 @@ function PromptAffixSectionInner({
                 {...editorProps}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("cfgshared.promptAffixHint")}
             </p>
           </div>

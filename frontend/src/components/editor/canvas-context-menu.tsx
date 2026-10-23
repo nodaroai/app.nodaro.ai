@@ -141,7 +141,7 @@ export function CanvasContextMenu({
     >
       {quickNodes.length > 0 && (
         <>
-          <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#64748B] dark:text-[#94A3B8]">
+          <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748B] dark:text-[#94A3B8]">
             {t("canvas.addNode")}
           </div>
           {quickNodes.map((entry) => (

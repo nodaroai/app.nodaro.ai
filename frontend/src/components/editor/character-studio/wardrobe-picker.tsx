@@ -28,7 +28,7 @@ export function WardrobePicker({ value, onChange }: { value: WardrobeValue; onCh
     <div className="space-y-3">
       {WARDROBE_DIMENSION_ORDER.map((dim) => (
         <div key={dim}>
-          <div className="text-[10px] text-slate-400 mb-1">{MULTI.has(dim) ? t("common.qualified", { token: WARDROBE_CATEGORY_LABELS[dim], qualifier: t("wardrobe.multiPick") }) : WARDROBE_CATEGORY_LABELS[dim]}</div>
+          <div className="text-[11px] text-slate-400 mb-1">{MULTI.has(dim) ? t("common.qualified", { token: WARDROBE_CATEGORY_LABELS[dim], qualifier: t("wardrobe.multiPick") }) : WARDROBE_CATEGORY_LABELS[dim]}</div>
           <div className="flex flex-wrap gap-1.5">
             {getWardrobeEntriesByDimension(dim).map((e) => (
               <button

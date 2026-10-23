@@ -133,7 +133,7 @@ export function GroupCard({
                     e.stopPropagation()
                     onDelete()
                   }}
-                  className="flex items-center justify-center w-6 h-6 text-muted-foreground/50 hover:text-red-400 rounded-md hover:bg-red-500/10 transition-colors"
+                  className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-red-400 rounded-md hover:bg-red-500/10 transition-colors"
                   title={t("present.removeGroup")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -179,7 +179,7 @@ export function GroupCard({
             onClick={() => onShowTitleChange?.(!showTitle)}
             className={cn(
               "flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors",
-              showTitle ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted",
+              showTitle ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
             title={showTitle ? t("present.hideTitle") : t("present.showTitle")}
           >
@@ -191,7 +191,7 @@ export function GroupCard({
             onClick={() => onShowBackgroundChange?.(!showBackground)}
             className={cn(
               "flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors",
-              showBackground ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted",
+              showBackground ? "text-purple-400 bg-purple-500/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
             title={showBackground ? t("present.hideBackground") : t("present.showBackground")}
           >

@@ -14,7 +14,7 @@ type Update = (patch: Record<string, unknown>) => void
 function Reasons({ testId, reasons }: { readonly testId: string; readonly reasons: readonly string[] }) {
   if (reasons.length === 0) return null
   return (
-    <ul className="flex flex-col gap-0.5 text-[10px] text-muted-foreground" data-testid={testId}>
+    <ul className="flex flex-col gap-0.5 text-[11px] text-muted-foreground" data-testid={testId}>
       {reasons.map((r) => <li key={r}>{r}</li>)}
     </ul>
   )
@@ -51,10 +51,10 @@ export function SpeakerViewLayoutSection({ options, value, aspect, snapped, onUp
     <section className="flex flex-col gap-1.5">
       <Label>{t("speakerView.section.layout")}</Label>
       <SpeakerLayoutPicker options={speakerViewPickerOptions(options, SPEAKER_LAYOUT_LABEL_KEYS, t)} value={value} aspect={aspect} ariaLabel={t("speakerView.field.layout")} onChange={(layout) => onUpdate({ layout })} />
-      <p className="text-[10px] text-muted-foreground">{t("speakerView.layoutAutoHint")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("speakerView.layoutAutoHint")}</p>
       <Reasons testId="speaker-view-layout-reasons" reasons={distinctReasons(options, t)} />
       {snapped.map((n) => (
-        <p key={n.from} role="status" data-testid="speaker-view-snap" className="text-[10px] text-amber-700 dark:text-amber-400">{speakerViewSnapText(n, t)}</p>
+        <p key={n.from} role="status" data-testid="speaker-view-snap" className="text-[11px] text-amber-700 dark:text-amber-400">{speakerViewSnapText(n, t)}</p>
       ))}
     </section>
   )
@@ -105,7 +105,7 @@ export function SpeakerViewSwitchSection({ options, crossfade, value, durationMs
         onChange={(switchType) => onUpdate({ switchType })}
       />
       {notes.length > 0 && (
-        <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground" data-testid="speaker-view-switch-notes">
+        <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground" data-testid="speaker-view-switch-notes">
           {notes.map((n) => <p key={n}>{n}</p>)}
         </div>
       )}

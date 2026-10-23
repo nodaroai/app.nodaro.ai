@@ -135,7 +135,7 @@ export function BoardCreateModal({
 
         {startFromBoards.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               {t("studio.startFromBoardHint")}
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -165,7 +165,7 @@ export function BoardCreateModal({
           ) : (
             groups.map((g) => (
               <section key={g.id} className="mb-4">
-                <h3 className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">{g.label}</h3>
+                <h3 className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">{g.label}</h3>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
                   {g.items.map((it) => {
                     const order = selected.indexOf(it.url)
@@ -189,17 +189,17 @@ export function BoardCreateModal({
                           className="h-full w-full object-cover"
                         />
                         {on && (
-                          <span className="absolute start-1 top-1 grid size-5 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                          <span className="absolute start-1 top-1 grid size-5 place-items-center rounded-full bg-cta text-[11px] font-semibold text-primary-foreground">
                             {order + 1}
                           </span>
                         )}
                         {on && (
-                          <span className="absolute end-1 top-1 rounded-sm bg-primary p-0.5 text-primary-foreground">
+                          <span className="absolute end-1 top-1 rounded-sm bg-cta p-0.5 text-primary-foreground">
                             <Check className="size-3" />
                           </span>
                         )}
                         {it.name && (
-                          <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1 py-0.5 text-start text-[10px] text-white">
+                          <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1 py-0.5 text-start text-[11px] text-white">
                             {it.name}
                           </span>
                         )}

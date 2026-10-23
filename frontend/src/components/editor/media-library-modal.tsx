@@ -64,7 +64,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
           onAddToCanvas={onAddToCanvas}
           autoFocusSearch
           owned
-          footerHint={<p className="text-xs text-muted-foreground/40">{t("assetlib.toggleHint", { sc: formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac) })}</p>}
+          footerHint={<p className="text-xs text-muted-foreground">{t("assetlib.toggleHint", { sc: formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac) })}</p>}
         />
       </div>
     </div>,

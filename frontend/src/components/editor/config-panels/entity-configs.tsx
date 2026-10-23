@@ -59,9 +59,9 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Character Asset")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Character Asset")}</div>
         <div className="text-[13px] font-semibold text-foreground">{data.characterName || t("cfgext.entUnnamed")}</div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-[11px] text-muted-foreground">
           {t("cfgext.entCharacterSummary", {
             style: data.style ?? "",
             gender: data.gender ?? "",
@@ -87,7 +87,7 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <span className="text-base leading-none">⬡</span>
         <span>
           <span className="block text-[11px] font-semibold text-[#93c5fd]">{t("cfgext.entOpenCharacterStudio")}</span>
-          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entCharacterStudioSub")}</span>
+          <span className="block text-[11px] text-muted-foreground">{t("cfgext.entCharacterStudioSub")}</span>
         </span>
         <span className="ms-auto text-[#3b82f6]">→</span>
       </button>
@@ -107,7 +107,7 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectItem value="strict">{t("cfgext.entIdentityLockStrict")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             {t("cfgext.entIdentityLockHint")}
           </p>
         </div>
@@ -129,11 +129,11 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
               {t("cfgext.entInjectIdentity")}
             </Label>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.entInjectIdentityHint")}
           </p>
           {data.injectIdentityInPrompts && !(data.canonicalDescription && data.canonicalDescription.trim().length > 0) && (
-            <p className="text-[10px] text-amber-500">
+            <p className="text-[11px] text-amber-500">
               {t("cfgext.entNoCanonicalDescription")}
             </p>
           )}
@@ -246,7 +246,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
     <div className="flex flex-col gap-3">
       <MappableField field="faceName" label={t("cfgext.entFaceName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input id="face-name" value={data.faceName} onChange={(e) => onUpdate({ faceName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder={t("cfgext.entFaceNamePlaceholder")} />
-        {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
+        {duplicateWarning && (<p className="text-[11px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
       </MappableField>
       <MappableField field="description" label={t("settings.descriptionTab")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea id="face-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder={t("cfgext.entFaceDescriptionPlaceholder")} rows={3} />
@@ -266,7 +266,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
 
       <div>
         <Label htmlFor="face-image">{t("cfgext.entReferencePhoto")}</Label>
-        <p className="text-[10px] text-muted-foreground mb-1">{t("cfgext.entReferencePhotoHint")}</p>
+        <p className="text-[11px] text-muted-foreground mb-1">{t("cfgext.entReferencePhotoHint")}</p>
         <div className="flex gap-1.5">
           <Input id="face-image" value={data.sourceImageUrl} onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })} placeholder={t("cfgext.entUrlOrUploadPlaceholder")} className="flex-1" />
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/heic,image/heif" className="hidden" onChange={handleUploadImage} />
@@ -301,7 +301,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
         {isRunning ? (<><Loader2 className="w-3 h-3 me-1.5 animate-spin" />{t("cfgext.entGenerating")}</>) : (<><Play className="w-3 h-3 me-1.5" />{t("cfgext.entGenerateHeadshot")}{creditCost > 0 ? ` (${formatCreditUnits(creditCost)})` : ""}</>)}
       </Button>
       {!data.sourceImageUrl && !hasConnectedImage && data.faceName && (
-        <p className="text-[10px] text-muted-foreground">{t("cfgext.entFaceNoReferenceHint", { node: localizeNode("Upload Image") })}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.entFaceNoReferenceHint", { node: localizeNode("Upload Image") })}</p>
       )}
 
       <MediaEditorModal editor={faceMediaEditor} />
@@ -325,9 +325,9 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Object/Props Asset")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Object/Props Asset")}</div>
         <div className="text-[13px] font-semibold text-foreground">{data.objectName || t("cfgext.entUnnamedObject")}</div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-[11px] text-muted-foreground">
           {t("cfgext.entObjectSummary", {
             style: data.style ?? "",
             category: data.category ?? "",
@@ -352,7 +352,7 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         <span className="text-base leading-none">⬡</span>
         <span>
           <span className="block text-[11px] font-semibold text-[#6ee7b7]">{t("cfgext.entOpenObjectStudio")}</span>
-          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entStudioSubMotionRefs")}</span>
+          <span className="block text-[11px] text-muted-foreground">{t("cfgext.entStudioSubMotionRefs")}</span>
         </span>
         <span className="ms-auto text-[#34D399]">→</span>
       </button>
@@ -373,7 +373,7 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
               {t("cfgext.entStyleLock")}
             </Label>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.entStyleLockHintObject")}
           </p>
         </div>
@@ -416,9 +416,9 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Animal/Creature Asset")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Animal/Creature Asset")}</div>
         <div className="text-[13px] font-semibold text-foreground">{data.creatureName || t("cfgext.entUnnamedCreature")}</div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-[11px] text-muted-foreground">
           {t("cfgext.entCreatureSummary", {
             style: data.style ?? "",
             species: data.species || data.category || "",
@@ -443,7 +443,7 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
         <span className="text-base leading-none">⬡</span>
         <span>
           <span className="block text-[11px] font-semibold text-[#c4b5fd]">{t("cfgext.entOpenCreatureStudio")}</span>
-          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entStudioSubMotionRefs")}</span>
+          <span className="block text-[11px] text-muted-foreground">{t("cfgext.entStudioSubMotionRefs")}</span>
         </span>
         <span className="ms-auto text-[#A78BFA]">→</span>
       </button>
@@ -469,7 +469,7 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
               <option key={a.id} value={a.label} />
             ))}
           </datalist>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.entSpeciesHint")}
           </p>
         </div>
@@ -489,7 +489,7 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
               {t("cfgext.entStyleLock")}
             </Label>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.entStyleLockHintCreature")}
           </p>
         </div>
@@ -526,9 +526,9 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Location Asset")}</div>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Location Asset")}</div>
         <div className="text-[13px] font-semibold text-foreground">{data.locationName || t("cfgext.entUnnamedLocation")}</div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-[11px] text-muted-foreground">
           {t("cfgext.entLocationSummary", {
             style: data.style ?? "",
             category: data.category ?? "",
@@ -553,7 +553,7 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
         <span className="text-base leading-none">⬡</span>
         <span>
           <span className="block text-[11px] font-semibold text-[#67e8f9]">{t("cfgext.entOpenLocationStudio")}</span>
-          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entLocationStudioSub")}</span>
+          <span className="block text-[11px] text-muted-foreground">{t("cfgext.entLocationStudioSub")}</span>
         </span>
         <span className="ms-auto text-[#22D3EE]">→</span>
       </button>
@@ -574,7 +574,7 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
               {t("cfgext.entStyleLock")}
             </Label>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.entStyleLockHintLocation")}
           </p>
         </div>

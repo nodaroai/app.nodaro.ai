@@ -118,7 +118,7 @@ export function PromptInjectionPreview({ hints, className }: PromptInjectionPrev
     <div className={cn("flex flex-col gap-1", className)}>
       <div className="flex items-center justify-between gap-2 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground truncate">
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground truncate">
             {t("cfgext.pipWillInject")}
           </p>
           {picker && (
@@ -135,10 +135,10 @@ export function PromptInjectionPreview({ hints, className }: PromptInjectionPrev
           aria-label={t("cfgext.pipCopyAria")}
           title={joined ? t("cfgshared.copyToClipboard") : t("cfgshared.nothingToCopy")}
           className={cn(
-            "flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
+            "flex items-center gap-1 text-[11px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
             joined
               ? "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2D2D2D] cursor-pointer"
-              : "text-muted-foreground/40 cursor-not-allowed",
+              : "text-muted-foreground opacity-40 cursor-not-allowed",
           )}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}

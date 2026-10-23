@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-17T21:51:14.626Z
-generated_from: e2fb75877
+generated_at: 2026-10-23T10:21:06.170Z
+generated_from: 78a012a30
 ---
 
 # image-to-video
@@ -455,6 +455,35 @@ subject → action → scene/environment → lighting → camera movement → st
 
 Source: KIE Vidu Q4 market contracts (docs.kie.ai/market/vidu-q4/image-to-video,
 docs.kie.ai/market/vidu-q4/reference-to-video). Captured 2026-10-17.
+
+### Kling 4.0 (kling-4, kling-4-keyframes)
+
+Prompt structure (no public Kling 4.0 prompt guide is captured — the KIE API contract is the
+doctrine source; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**Two models**
+- Kling 4.0 (kling-4) — reference-to-video. With no materials it is plain text-to-video. Materials: up to 10 reference images, 5 reference videos (2-30 seconds each), 7 subjects (characters) and 3 voices, at most 15 together. A wired start frame cannot be a frame here, so the platform adds it to the reference images and names it as the opening frame.
+- Kling 4.0 Keyframes (kling-4-keyframes) — keyframe-to-video. A start frame, up to 8 in-between frames in time order, and an end frame; the story passes through each. With no frame it is text-to-video.
+
+**Naming materials in the prompt**
+- Every material is named with "@": @image_1 … for reference images, @video_1 … for reference videos, a character by its own name (@Maya), a voice clip as @audio_1 (sent to Kling as a named voice). Keyframes: @first_frame, @keyframe_1 … @keyframe_8, @last_frame.
+- Kling refuses a prompt that names a material the request does not carry; the platform removes the "@" from such a mention so the run still starts — wire the material if the mention matters.
+- Write the binding explicitly: "@Maya walks through the street from @image_1 and greets the camera in the voice of @audio_1".
+
+**Keyframe rules**
+- Total frames (start + in-between + end) are capped by duration: 3s → 4, 4s → 5, 5s → 6, 6s → 7, 7s → 8, 8s → 9, 9s or longer → 10. Describe how the shot moves from one frame to the next.
+- Once any frame is attached the output takes the start frame's shape; aspect ratio applies to text-only runs.
+
+**Reference videos**
+- A reference video lends its camera moves and pacing — swap the characters or products in the prompt ("recreate the camera move of @video_1 with …"). Keep original sound keeps the clip's own audio; otherwise new sound is generated.
+
+**Duration, resolution, audio**
+- 3-30 seconds (default 5); 720p (default) or 1080p; aspect auto (follows the materials, 16:9 with none) / 16:9 / 9:16 / 1:1 / 21:9. Prompts up to 8,000 characters.
+- Native audio is always generated (the contract cites lip-sync and dialogue in 10+ languages); not yet verified for scripted lines here, so plan key dialogue as a TTS + lip-sync pass.
+
+Source: KIE Kling 4.0 market contracts (docs.kie.ai/market/kling/v4-reference-to-video,
+docs.kie.ai/market/kling/v4-keyframe-to-video), live-probed 2026-10-23.
 
 ### HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)
 

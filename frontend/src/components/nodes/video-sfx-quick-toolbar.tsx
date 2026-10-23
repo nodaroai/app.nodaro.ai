@@ -131,7 +131,7 @@ export function VideoSfxQuickToolbar({
   // dark mode is light text on the same. Matches the other quick toolbars
   // so the editor's hover-bar aesthetic stays uniform across node types.
   const ghostTriggerClass =
-    "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[10px] " +
+    "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[11px] " +
     "text-neutral-900/85 hover:!bg-black/10 dark:text-white/85 dark:hover:!bg-white/10 " +
     "rounded-md min-w-0 w-auto whitespace-nowrap [&_svg]:!size-3 [&_svg]:opacity-70 " +
     "[&[data-state=open]]:bg-black/10 dark:[&[data-state=open]]:bg-white/10"
@@ -157,7 +157,7 @@ export function VideoSfxQuickToolbar({
           thinking they can switch providers here. Reserved as a slot so
           future MMAudio variants can join without disrupting the layout. */}
       <span
-        className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] whitespace-nowrap text-neutral-900/85 dark:text-white/85"
+        className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] whitespace-nowrap text-neutral-900/85 dark:text-white/85"
         title={t("node.mmaudioReplicate")}
       >
         <Music2 className="w-3 h-3 opacity-70" />

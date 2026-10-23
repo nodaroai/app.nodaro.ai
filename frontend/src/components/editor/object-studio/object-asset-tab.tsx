@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
@@ -229,7 +230,7 @@ export function ObjectAssetTab({
               fallbackAspect={fallbackAspect}
               className="w-full rounded"
             />
-            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5">
+            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5">
               {item.name}
             </div>
             <button
@@ -239,10 +240,11 @@ export function ObjectAssetTab({
                 void handleRemove(idx)
               }}
               aria-label={t("cfgshared.removeModel", { name: item.name })}
-              className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+              className="absolute top-1 end-1 px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
             >
               {t("common.remove")}
             </button>
+            <CoverButton label={t("common.preview")} onActivate={() => (() => setLightboxIndex(idx))()} />
           </div>
         ))}
         {trackedForBucket.map((j) => (
@@ -295,7 +297,7 @@ export function ObjectAssetTab({
             void handleCustom()
           }}
           disabled={customDisabled}
-          className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+          className="px-4 py-2 text-[12px] rounded bg-cta hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
           {t("common.generate")}
         </button>
@@ -352,7 +354,7 @@ export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrow
       <h3 className="text-[11px] font-medium text-slate-300">
         {t("studio.browseMaterialCatalog")}
       </h3>
-      <p className="text-[10px] text-slate-500">
+      <p className="text-[11px] text-slate-500">
         {t("studio.materialCatalogHint")}
       </p>
       {MATERIAL_CATEGORY_ORDER.map((category) => {
@@ -360,7 +362,7 @@ export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrow
         if (entries.length === 0) return null
         return (
           <div key={category}>
-            <div className="text-[9px] uppercase tracking-widest text-slate-600 mb-1.5">
+            <div className="text-[11px] uppercase tracking-widest text-slate-600 mb-1.5">
               {MATERIAL_CATEGORY_LABELS[category]}
             </div>
             <div className="flex flex-wrap gap-2">

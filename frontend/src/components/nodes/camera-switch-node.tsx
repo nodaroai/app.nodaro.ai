@@ -93,7 +93,7 @@ function CameraSwitchNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -105,7 +105,7 @@ function CameraSwitchNodeComponent({ id, data, selected }: NodeProps) {
               {perCamera.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {perCamera.map(([name, cuts]) => (
-                    <span key={name} className="text-[10px] rounded bg-muted px-1.5 py-0.5 tabular-nums">
+                    <span key={name} className="text-[11px] rounded bg-muted px-1.5 py-0.5 tabular-nums">
                       {t("node.cameraSwitchCuts", { camera: name, count: cuts })}
                     </span>
                   ))}
@@ -119,11 +119,11 @@ function CameraSwitchNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && status !== "failed" && (edl === undefined || edl === null) && (
             <div
-              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"
+              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"
               style={{ minHeight: 110, flex: 1 }}
             >
               <SwitchCamera className="w-6 h-6" />
-              <span className="text-[10px] text-center">{t("node.cameraSwitchConnect")}</span>
+              <span className="text-[11px] text-center">{t("node.cameraSwitchConnect")}</span>
             </div>
           )}
         </div>

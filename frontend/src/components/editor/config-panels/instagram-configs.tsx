@@ -243,7 +243,7 @@ function InstagramResultsTab({ data, onUpdate }: { readonly data: InstagramScrap
       </div>
 
       {view === "json" && (
-        <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 text-[10px]">{json}</pre>
+        <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 text-[11px]">{json}</pre>
       )}
 
       {view === "list" && (

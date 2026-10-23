@@ -182,7 +182,7 @@ export function FullscreenView({
     return (
       <div className={`${rootClass} text-muted-foreground gap-3 p-6`}>
         {closeButton}
-        <FileText className="w-12 h-12 text-muted-foreground/30" />
+        <FileText className="w-12 h-12 text-muted-foreground" />
         <p className="text-sm">{t("present.runToSeeIO")}</p>
       </div>
     )
@@ -201,7 +201,7 @@ export function FullscreenView({
       {/* Corner badge: Input / Output + node name */}
       <div className="absolute top-4 start-4 flex items-center gap-2 z-10">
         <span
-          className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+          className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
             current.kind === "input"
               ? "bg-sky-500/15 text-sky-500"
               : "bg-green-500/15 text-green-600"
@@ -214,19 +214,19 @@ export function FullscreenView({
       </div>
 
       {/* Counter + run-nav hint */}
-      <div className="absolute top-4 end-4 flex items-center gap-2 text-[11px] text-muted-foreground/60 z-10">
+      <div className="absolute top-4 end-4 flex items-center gap-2 text-[11px] text-muted-foreground z-10">
         <span>{safeIndex + 1} / {items.length}</span>
         {hasRunNav && <span className="hidden sm:inline">{t("present.navHint")}</span>}
       </div>
 
       {/* Left arrow */}
-      <button
+      <button aria-label={t("common.previous")}
         type="button"
         onClick={goPrev}
         disabled={safeIndex === 0}
         className={`absolute start-2 sm:start-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
           safeIndex === 0
-            ? "bg-muted/40 text-muted-foreground/30 cursor-default"
+            ? "bg-muted/40 text-muted-foreground cursor-default"
             : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
         }`}
       >
@@ -234,13 +234,13 @@ export function FullscreenView({
       </button>
 
       {/* Right arrow */}
-      <button
+      <button aria-label={t("common.next")}
         type="button"
         onClick={goNext}
         disabled={safeIndex >= items.length - 1}
         className={`absolute end-2 sm:end-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
           safeIndex >= items.length - 1
-            ? "bg-muted/40 text-muted-foreground/30 cursor-default"
+            ? "bg-muted/40 text-muted-foreground cursor-default"
             : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
         }`}
       >

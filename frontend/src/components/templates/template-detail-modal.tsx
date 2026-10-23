@@ -246,7 +246,7 @@ export function TemplateDetailModal({
                     </div>
                     {index < steps.length - 1 && (
                       <div className="relative h-px w-[34px] bg-[var(--home-line)]" aria-hidden>
-                        <span className="absolute -top-1 end-[-2px] text-[10px] text-[var(--home-dim)]">{isRtl ? "‹" : "›"}</span>
+                        <span className="absolute -top-1 end-[-2px] text-[11px] text-[var(--home-dim)]">{isRtl ? "‹" : "›"}</span>
                       </div>
                     )}
                   </div>

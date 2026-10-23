@@ -31,7 +31,7 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
       <PopoverTrigger
         aria-label={t("node.mix")}
         title={t("node.mix")}
-        className="h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-[10px] text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10 [&_svg]:size-3 [&_svg]:opacity-70"
+        className="h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-[11px] text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10 [&_svg]:size-3 [&_svg]:opacity-70"
       >
         <Sliders />
         <span>{t("node.mix")}</span>
@@ -53,7 +53,7 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
                 onChange={(e) => updateNodeData(nodeId, { [s.key]: parseFloat(e.target.value) } as Partial<SunoGenerateData>)}
                 className="w-full accent-[#ff0073]"
               />
-              <p className="text-[10px] leading-tight text-muted-foreground/70">{t(SUNO_SLIDER_DESC_KEYS[s.key])}</p>
+              <p className="text-[11px] leading-tight text-muted-foreground">{t(SUNO_SLIDER_DESC_KEYS[s.key])}</p>
             </div>
           )
         })}

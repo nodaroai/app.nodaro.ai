@@ -25,6 +25,9 @@ import {
   isGeminiOmniProvider,
   isWan3Provider,
   isViduQ4Provider,
+  isKling4Provider,
+  normalizeKling4Resolution,
+  VIDEO_REF_RATE_PROVIDERS,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
   normalizeViduQ4Resolution,
@@ -346,6 +349,7 @@ function ltxPricedTier(
 function wireNormalizedResolution(provider: string, resolution: string | undefined): string | undefined {
   if (isWan3Provider(provider)) return normalizeWan3Resolution(resolution).toLowerCase()
   if (isViduQ4Provider(provider)) return normalizeViduQ4Resolution(resolution)
+  if (isKling4Provider(provider)) return normalizeKling4Resolution(resolution)
   return resolution
 }
 
@@ -497,6 +501,8 @@ export function buildVideoCreditModelIdentifier(
     const requested = wireNormalizedResolution(effectiveProvider, resolution)
     const res = requested && resTiers.includes(requested) ? requested : fallback
     identifier += `:${res}`
+    // A reference VIDEO bills at its own per-second rate (Kling 4.0).
+    if (hasVideoRef && VIDEO_REF_RATE_PROVIDERS.has(effectiveProvider)) identifier += "-ref"
   }
 
   // MiniMax Hailuo 3 (768P lever, 2026-08-03): bare duration composites stay

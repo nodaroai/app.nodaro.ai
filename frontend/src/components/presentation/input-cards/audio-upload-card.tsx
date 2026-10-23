@@ -28,7 +28,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
     return (
       <>
         <div className="flex flex-col gap-1">
-          <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
           {media.effectiveUrl ? (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2">
               <WaveformAudioPlayer url={media.effectiveUrl} variant="compact" className="min-w-0 flex-1" />

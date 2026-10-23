@@ -138,14 +138,14 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded border border-[#1e293b]"
                 />
-                <span className="absolute top-1 start-1 bg-black/70 text-[9px] text-white px-1 rounded">
+                <span className="absolute top-1 start-1 bg-black/70 text-[11px] text-white px-1 rounded">
                   {p.kind}
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(originalIdx)}
                   aria-label={t("cfgshared.removeModel", { name: p.kind })}
-                  className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[11px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕
                 </button>
@@ -167,7 +167,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
         </div>
       )}
       {showConsentGate && (
-        <label className="flex items-start gap-2 mb-2 text-[10px] text-slate-400 leading-snug cursor-pointer select-none">
+        <label className="flex items-start gap-2 mb-2 text-[11px] text-slate-400 leading-snug cursor-pointer select-none">
           <input
             type="checkbox"
             checked={consentChecked}
@@ -181,7 +181,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
         </label>
       )}
       {!showConsentGate && piiConsentAt && (
-        <p className="text-[9px] text-slate-500 mb-2">
+        <p className="text-[11px] text-slate-500 mb-2">
           {t("studio.consentRecorded", { date: formatDate(piiConsentAt) })}
         </p>
       )}

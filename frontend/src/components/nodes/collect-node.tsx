@@ -142,7 +142,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
                   {buckets.text.slice(0, 3).map((t, i) => (
                     <div
                       key={i}
-                      className="px-1 text-[10px] leading-snug text-foreground/75"
+                      className="px-1 text-[11px] leading-snug text-foreground/80"
                       style={{
                         display: "-webkit-box",
                         WebkitBoxOrient: "vertical",
@@ -155,25 +155,25 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                   ))}
                   {buckets.text.length > 3 && (
-                    <div className="px-1 text-[9px] text-muted-foreground">
+                    <div className="px-1 text-[11px] text-muted-foreground">
                       {t("node.plusNMore", { n: buckets.text.length - 3 })}
                     </div>
                   )}
                 </div>
               )}
               {buckets.video.length > 0 && (
-                <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
                   <Film className="w-3 h-3" />
                   {buckets.video.length === 1 ? t("node.videoCountOne", { n: buckets.video.length }) : t("node.videoCountMany", { n: buckets.video.length })}
                 </div>
               )}
               {buckets.audio.length > 0 && (
-                <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
                   <Music className="w-3 h-3" />
                   {t("node.audioCount", { n: buckets.audio.length })}
                 </div>
               )}
-              <div className="px-1 text-[9px] text-muted-foreground/60">
+              <div className="px-1 text-[11px] text-muted-foreground">
                 {incomingCount === 1 ? t("node.connectionCountOne", { n: incomingCount }) : t("node.connectionCountMany", { n: incomingCount })}
               </div>
             </>

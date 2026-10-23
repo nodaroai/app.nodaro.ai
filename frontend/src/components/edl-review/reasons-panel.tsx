@@ -187,7 +187,7 @@ export function ReviewIssues({ problems }: { readonly problems: readonly ApplyEd
       <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t("edlReview.issuesTitle")}</h3>
       <ul dir="ltr" data-testid="review-issues" className="flex flex-col gap-0.5">
         {problems.map((issue, i) => (
-          <li key={i} className="break-words rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] leading-snug">{issue.message}</li>
+          <li key={i} className="break-words rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-snug">{issue.message}</li>
         ))}
       </ul>
     </section>

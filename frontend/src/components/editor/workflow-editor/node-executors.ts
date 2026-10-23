@@ -1,4 +1,4 @@
-import type { FrameFit, FrameDelivery } from "@nodaro/shared/video";
+import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video";
 import type { ScriptSettings } from "@nodaro/shared/nodes";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
@@ -322,6 +322,10 @@ export function runVideoGeneration(
     frameDelivery?: FrameDelivery;
     /** Seedance Draft: a 480p draft the Seedance 2.5 HD upscale can finalize. */
     draft?: boolean;
+    /** Kling 4.0: wired characters as named subjects. */
+    characterReferences?: VideoCharacterReference[];
+    /** Kling 4.0: keep the reference videos' own sound. */
+    keepOriginalSound?: boolean;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,
@@ -355,6 +359,8 @@ export function runVideoGeneration(
         referenceVideoUrls: extras?.referenceVideoUrls,
         referenceVideoCaptions: extras?.referenceVideoCaptions,
         referenceAudioUrls: extras?.referenceAudioUrls,
+        characterReferences: extras?.characterReferences,
+        keepOriginalSound: extras?.keepOriginalSound,
         webSearch: extras?.webSearch,
         nsfwChecker: extras?.nsfwChecker,
         generationType,
@@ -473,6 +479,10 @@ export function runTextToVideoGeneration(
     nsfwChecker?: boolean;
     /** VEO 3.x: opt out of KIE's auto-translate-to-English. */
     enableTranslation?: boolean;
+    /** Kling 4.0: wired characters as named subjects. */
+    characterReferences?: VideoCharacterReference[];
+    /** Kling 4.0: keep the reference videos' own sound. */
+    keepOriginalSound?: boolean;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,

@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useCallback, useEffect, useMemo, useState, memo } from "react"
 import { hasCredits } from "@/lib/edition"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
@@ -119,23 +120,23 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
             </div>
           ) : (
             <div className="relative flex items-center justify-center">
-              <Film className="h-10 w-10 text-muted-foreground/30" />
+              <Film className="h-10 w-10 text-muted-foreground" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <Play className="h-4 w-4 text-muted-foreground/50" />
+                <Play className="h-4 w-4 text-muted-foreground" />
               </div>
             </div>
           )
         ) : (
           <div className="relative flex items-center justify-center">
-            <Music className="h-10 w-10 text-muted-foreground/30" />
+            <Music className="h-10 w-10 text-muted-foreground" />
             <div className="absolute inset-0 flex items-center justify-center mt-6">
-              <Play className="h-4 w-4 text-muted-foreground/50" />
+              <Play className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>
         )}
 
         {/* Checkbox overlay */}
-        <button
+        <button aria-label={t("common.select")} aria-pressed={isSelected}
           type="button"
           className={`absolute top-2 start-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
           onClick={(e) => {
@@ -146,9 +147,10 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
           {isSelected ? (
             <CheckSquare className="h-5 w-5 text-[#ff0073]" />
           ) : (
-            <Square className="h-5 w-5 text-muted-foreground/60" />
+            <Square className="h-5 w-5 text-muted-foreground" />
           )}
         </button>
+        {asset.url && <CoverButton label={t("common.preview")} onActivate={() => onOpenPreview(index)} />}
       </div>
 
       {/* Info */}
@@ -158,17 +160,17 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
         </p>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize flex items-center gap-1">
+            <Badge variant="secondary" className="text-[11px] px-1.5 py-0 h-4 capitalize flex items-center gap-1">
               <TypeIcon type={asset.type} />
               {asset.type}
             </Badge>
             {/* A render made at proxy quality: a private 720p Preview (F1). */}
             {isPreviewQuality(asset.metadata) && <PreviewBadge />}
             {asset.sizeBytes > 0 && (
-              <span className="text-[10px] text-muted-foreground">{formatBytes(asset.sizeBytes)}</span>
+              <span className="text-[11px] text-muted-foreground">{formatBytes(asset.sizeBytes)}</span>
             )}
           </div>
-          <span className="text-[10px] text-muted-foreground">{formatDate(asset.createdAt)}</span>
+          <span className="text-[11px] text-muted-foreground">{formatDate(asset.createdAt)}</span>
         </div>
 
         {/* Delete button */}

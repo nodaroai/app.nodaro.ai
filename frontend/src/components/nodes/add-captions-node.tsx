@@ -132,14 +132,14 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
               </div>
             )}
             {status !== "running" && !activeUrl && status !== "failed" && (
-              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <Captions className="w-5 h-5" />
               </div>
             )}
@@ -153,7 +153,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-20 transition-opacity ${
             showThumbnails
-              ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+              ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
               : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/node:opacity-100"
           }`}
           onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}

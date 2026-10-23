@@ -97,7 +97,7 @@ export default function InspirationPage() {
               type="button"
               onClick={() => setTag(undefined)}
               aria-label={t("inspiration.clearTag", { tag })}
-              className="ms-2 flex items-center gap-1 rounded-full bg-[#FF0073] px-2.5 py-1 text-[12px] font-bold text-white"
+              className="ms-2 flex items-center gap-1 rounded-full bg-cta px-2.5 py-1 text-[12px] font-bold text-white"
               dir="auto"
             >
               #{tag}
@@ -117,7 +117,7 @@ export default function InspirationPage() {
         </div>
       ) : saves.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Bookmark className="mb-3 h-10 w-10 text-muted-foreground/40" />
+          <Bookmark className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="max-w-md text-sm text-muted-foreground">{filtered ? t("inspiration.noMatches") : t("inspiration.empty")}</p>
         </div>
       ) : (

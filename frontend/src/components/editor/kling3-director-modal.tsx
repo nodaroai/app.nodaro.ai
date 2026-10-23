@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useEffect, useCallback, useState, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
 import {
@@ -340,12 +341,12 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
   const tabClass = (tab: DirectorTab) =>
     `flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all ${
       activeTab === tab
-        ? "bg-[#ff0073] text-white shadow-md"
+        ? "bg-cta text-white shadow-md"
         : "text-gray-500 dark:text-[#94A3B8] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] hover:text-gray-700 dark:hover:text-white"
     }`
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm dark:bg-black/70 dark:backdrop-blur-md"
       onClick={onClose}
     >
@@ -362,20 +363,20 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
             </h2>
             {/* Status badges */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
                 {(data as Record<string, unknown>).kling3Mode === "std" ? "Std" : (data as Record<string, unknown>).kling3Mode === "4K" ? "4K" : "Pro"}
               </span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
                 {data.aspectRatio ?? "16:9"}
               </span>
               {(data as Record<string, unknown>).kling3Sound !== false && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">
                   {t("kling3.soundBadge")}
                 </span>
               )}
             </div>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="p-1.5 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-[#2D2D2D] transition-colors"
             onClick={onClose}
@@ -404,7 +405,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                   <div className="flex items-center justify-center h-32 rounded-xl border-2 border-dashed border-gray-300 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] text-gray-400 dark:text-[#64748B]">
                     <div className="flex flex-col items-center gap-1.5">
                       <ImageIcon className="w-6 h-6" />
-                      <span className="text-[10px] font-mono">{t("kling3.connectStartFrame")}</span>
+                      <span className="text-[11px] font-mono">{t("kling3.connectStartFrame")}</span>
                     </div>
                   </div>
                 )}
@@ -412,7 +413,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
 
               {/* End Frame */}
               {data.multiShot ? (
-                <p className="text-[10px] text-muted-foreground italic">{t("kling3.endFrameUnavailable")}</p>
+                <p className="text-[11px] text-muted-foreground italic">{t("kling3.endFrameUnavailable")}</p>
               ) : (
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
@@ -428,7 +429,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     <div className="flex items-center justify-center h-32 rounded-xl border-2 border-dashed border-gray-300 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] text-gray-400 dark:text-[#64748B]">
                       <div className="flex flex-col items-center gap-1.5">
                         <ImageIcon className="w-6 h-6" />
-                        <span className="text-[10px] font-mono">{t("kling3.connectEndFrame")}</span>
+                        <span className="text-[11px] font-mono">{t("kling3.connectEndFrame")}</span>
                       </div>
                     </div>
                   )}
@@ -470,7 +471,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                   <div className="flex items-center justify-center h-36 rounded-xl border-2 border-dashed border-gray-300 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] text-gray-400 dark:text-[#64748B]">
                     <div className="flex flex-col items-center gap-1.5">
                       <Film className="w-6 h-6" />
-                      <span className="text-[10px] font-mono">{t("kling3.noVideoYet")}</span>
+                      <span className="text-[11px] font-mono">{t("kling3.noVideoYet")}</span>
                     </div>
                   </div>
                 )}
@@ -486,10 +487,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                               ? "opacity-100 ring-2 ring-primary"
                               : "opacity-50 hover:opacity-80"
                           }`}
-                          onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedVideoUrl: r.url })}
+                          {...pressable(() => updateNodeData(nodeId, { activeResultIndex: i, generatedVideoUrl: r.url }))}
                         >
                           <Film className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-[9px] text-muted-foreground ms-0.5">{i + 1}</span>
+                          <span className="text-[11px] text-muted-foreground ms-0.5">{i + 1}</span>
                         </div>
                       </div>
                     ))}
@@ -517,9 +518,9 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         <div className="w-16 h-16 rounded-lg overflow-hidden border border-border">
                           <img src={optimizedImageUrl(el.urls[0]!)} alt={el.name} className="w-full h-full object-cover" />
                         </div>
-                        <span className="text-[9px] text-muted-foreground font-mono">@{el.name}</span>
+                        <span className="text-[11px] text-muted-foreground font-mono">@{el.name}</span>
                         {el.urls.length > 1 && (
-                          <span className="text-[8px] text-muted-foreground/60">{t("kling3.moreCount", { n: el.urls.length - 1 })}</span>
+                          <span className="text-[11px] text-muted-foreground">{t("kling3.moreCount", { n: el.urls.length - 1 })}</span>
                         )}
                       </div>
                     ))}
@@ -579,7 +580,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       rows={5}
                       className="w-full p-3 text-sm min-h-[150px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
                     />
-                    <p className="text-[10px] text-muted-foreground mt-1">
+                    <p className="text-[11px] text-muted-foreground mt-1">
                       {t("kling3.mentionTipPre")} <code className="font-mono text-[#ff0073]">@name</code> {t("kling3.mentionTipPost")}
                     </p>
                   </div>
@@ -603,7 +604,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-[10px] text-muted-foreground mb-1 block">{t("field.mode")}</label>
+                            <label className="text-[11px] text-muted-foreground mb-1 block">{t("field.mode")}</label>
                             <select
                               value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
                               onChange={(e) => handleUpdate({ kling3Mode: e.target.value })}
@@ -615,7 +616,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                             </select>
                           </div>
                           <div>
-                            <label className="text-[10px] text-muted-foreground mb-1 block">{t("field.aspectRatio")}</label>
+                            <label className="text-[11px] text-muted-foreground mb-1 block">{t("field.aspectRatio")}</label>
                             <select
                               value={data.aspectRatio ?? "16:9"}
                               onChange={(e) => handleUpdate({ aspectRatio: e.target.value })}
@@ -639,14 +640,14 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           />
                           <label htmlFor="directorSound" className={`text-xs ${data.multiShot ? "text-muted-foreground" : ""}`}>{t("cfgext.kling3SoundEffects")}</label>
                           {data.multiShot ? (
-                            <span className="text-[10px] text-muted-foreground ms-auto italic">{t("cfgext.kling3RequiredForMultiShot")}</span>
+                            <span className="text-[11px] text-muted-foreground ms-auto italic">{t("cfgext.kling3RequiredForMultiShot")}</span>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground ms-auto">{t("cfgext.kling3LipSyncSfx")}</span>
+                            <span className="text-[11px] text-muted-foreground ms-auto">{t("cfgext.kling3LipSyncSfx")}</span>
                           )}
                         </div>
 
                         <div>
-                          <label className="text-[10px] text-muted-foreground mb-1 block">{t("field.duration")}</label>
+                          <label className="text-[11px] text-muted-foreground mb-1 block">{t("field.duration")}</label>
                           {data.multiShot ? (
                             <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-border bg-muted/30 text-xs text-muted-foreground">
                               {t("cfgext.kling3DurationFromShots", { n: totalDuration })}
@@ -668,7 +669,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                   </div>
 
                   {/* Info */}
-                  <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {t("cfgext.kling3Blurb")}
                   </p>
                 </div>
@@ -773,23 +774,23 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                             rows={4}
                             className="w-full p-3 text-sm min-h-[100px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
                           />
-                          <p className="text-[10px] text-muted-foreground/60">
+                          <p className="text-[11px] text-muted-foreground">
                             {t("kling3.shotHint")}
                           </p>
                           {elements.some((el) => el.name.trim()) && (
                             <div className="flex items-center gap-1 flex-wrap">
-                              <span className="text-[9px] text-muted-foreground">{t("cfgext.kling3ReferenceColon")}</span>
-                              {copiedName && <span className="text-[9px] text-green-400 animate-pulse">{t("cfgext.kling3Copied")}</span>}
+                              <span className="text-[11px] text-muted-foreground">{t("cfgext.kling3ReferenceColon")}</span>
+                              {copiedName && <span className="text-[11px] text-green-400 animate-pulse">{t("cfgext.kling3Copied")}</span>}
                               {elements.filter((el) => el.name.trim()).map((el) => (
                                 <span
                                   key={el.name}
-                                  className="text-[9px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
+                                  className="text-[11px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
                                   title={t("cfgext.kling3ClickCopyName")}
-                                  onClick={() => {
+                                  {...pressable(() => {
                                     navigator.clipboard.writeText(`@${el.name}`)
                                     setCopiedName(el.name)
                                     setTimeout(() => setCopiedName(null), 1500)
-                                  }}
+                                  })}
                                 >
                                   @{el.name}
                                 </span>
@@ -817,7 +818,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center h-32 text-muted-foreground/60">
+                    <div className="flex items-center justify-center h-32 text-muted-foreground">
                       <p className="text-sm">{t("kling3.enableMultiShotHint")}</p>
                     </div>
                   )}
@@ -829,7 +830,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                 <div className="flex flex-col gap-4">
                   {elements.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-12 gap-3">
-                      <Users className="w-12 h-12 text-muted-foreground/30" />
+                      <Users className="w-12 h-12 text-muted-foreground" />
                       <span className="text-sm font-medium text-foreground">{t("cfgext.kling3NoElements")}</span>
                       <p className="text-xs text-muted-foreground max-w-[300px] text-center">
                         {t("kling3.elementsHint")}
@@ -853,7 +854,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         <button
                           type="button"
                           onClick={() => handleUpdateElement(i, "type", el.type === "image" ? "video" : "image")}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors shrink-0 ${
                             el.type === "image"
                               ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                               : "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
@@ -875,10 +876,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       {/* DESCRIPTION */}
                       <div>
                         <div className="flex items-baseline gap-1 mb-1">
-                          <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">{t("common.description")}</span>
-                          <span className="text-[9px] text-[#ff0073]">*</span>
+                          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t("common.description")}</span>
+                          <span className="text-[11px] text-[#ff0073]">*</span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground/70 mb-1.5 leading-relaxed">
+                        <p className="text-[11px] text-muted-foreground mb-1.5 leading-relaxed">
                           {t("kling3.elementDescPre")} <span className="font-mono">@{el.name || t("utilcfg.phParamName")}</span> {t("kling3.elementDescPost")}
                         </p>
                         <textarea
@@ -888,14 +889,14 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           placeholder={t("kling3.elementDescPlaceholder")}
                           className="w-full min-h-[60px] px-3 py-2 text-sm rounded-xl border-2 border-border bg-background outline-none focus:border-[#ff0073] resize-none leading-relaxed transition-colors"
                         />
-                        <span className={`text-[9px] mt-0.5 block text-end ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
+                        <span className={`text-[11px] mt-0.5 block text-end ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
                           {el.description.length}/100
                         </span>
                       </div>
 
                       {/* REFERENCE IMAGES */}
                       <div>
-                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">{el.type === "video" ? t("kling3.referenceVideos") : t("kling3.referenceImages")}</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">{el.type === "video" ? t("kling3.referenceVideos") : t("kling3.referenceImages")}</span>
                         {el.urls.length > 0 ? (
                           <div className="flex items-center gap-3 flex-wrap">
                             {el.urls.map((url, ui) => (
@@ -982,14 +983,14 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                                     <img src={optimizedImageUrl(wfNode.thumbUrl, { width: 64 })} alt={wfNode.label} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
                                   ) : (
                                     <div className="w-8 h-8 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
-                                      <ImageIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
+                                      <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
                                     </div>
                                   )}
                                   <div className="flex flex-col min-w-0">
                                     <span className="text-xs font-medium truncate">{wfNode.label}</span>
-                                    <span className="text-[10px] text-muted-foreground">{wfNode.type}</span>
+                                    <span className="text-[11px] text-muted-foreground">{wfNode.type}</span>
                                   </div>
-                                  {!wfNode.thumbUrl && <span className="text-[10px] text-muted-foreground/60 ms-auto">{t("cfgext.kling3NoOutput")}</span>}
+                                  {!wfNode.thumbUrl && <span className="text-[11px] text-muted-foreground ms-auto">{t("cfgext.kling3NoOutput")}</span>}
                                 </button>
                               ))
                             )}
@@ -999,7 +1000,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
 
                       {/* VOICE HINT */}
                       {el.type === "image" && (
-                        <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
                           {t("kling3.voiceTip")}
                         </p>
                       )}
@@ -1030,7 +1031,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
               <button
                 type="button"
                 disabled={status === "running"}
-                className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-cta hover:bg-cta-hover disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                 onClick={() => runSingleNode?.(nodeId)}
               >
                 {status === "running" ? (

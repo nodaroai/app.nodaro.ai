@@ -62,7 +62,7 @@ export function PickerUpdateButton({ hasPending, onApply }: { hasPending: boolea
       onClick={onApply}
       className={`mb-2 w-full rounded-md px-2 py-1 text-xs font-medium ${
         hasPending
-          ? "bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
+          ? "bg-cta text-white hover:bg-cta-hover"
           : "bg-muted text-muted-foreground cursor-not-allowed"
       }`}
     >

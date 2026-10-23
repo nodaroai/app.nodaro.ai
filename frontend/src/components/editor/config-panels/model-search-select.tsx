@@ -192,7 +192,7 @@ function ModelCommandItem({
         )}
       </span>
       {option.desc && (
-        <span className={cn(indent, "text-[11px] leading-tight text-muted-foreground/60")}>
+        <span className={cn(indent, "text-[11px] leading-tight text-muted-foreground")}>
           {localizeDesc(option.desc)}
         </span>
       )}

@@ -459,12 +459,12 @@ export const TEXT_CELL_VERTICAL_PADDING_PX = 16
 export const TEXT_CELL_CONTROLS_MIN_LINES = 3
 
 /** Line height in px matching each TEXT_FONT_SIZE_CLASS value:
- *  - small:  text-[10px] leading-tight (1.25) → 12.5 → 13
+ *  - small:  text-[11px] leading-tight (1.25) → 13.75 → 14
  *  - medium: text-xs → line-height 1rem = 16
  *  - large:  text-sm → line-height 1.25rem = 20
  */
 export const TEXT_FONT_LINE_HEIGHT_PX: Record<TextFontSize, number> = {
-  small: 13,
+  small: 14,
   medium: 16,
   large: 20,
 }
@@ -524,7 +524,7 @@ export type LoopNodeData = {
 
 /** Tailwind class for each text font size setting. */
 export const TEXT_FONT_SIZE_CLASS: Record<TextFontSize, string> = {
-  small: "text-[10px] leading-tight",
+  small: "text-[11px] leading-tight",
   medium: "text-xs",
   large: "text-sm",
 }
@@ -2279,7 +2279,11 @@ export type GenerateVideoNodeData =
   & {
     provider: VideoGenProvider
     /** Unified aspect ratio — superset of i2v and t2v values. */
-    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"
+    /** Kling 4.0: keep the reference videos' own sound instead of generating
+     *  new sound (KIE `keep_original_sound`). Ignored without a reference video
+     *  and by every other model. */
+    keepOriginalSound?: boolean
     /** Loosened from required (text-to-video) to optional, matching i2v. */
     prompt?: string
     /** Loosened from required (text-to-video) to optional, matching i2v. */

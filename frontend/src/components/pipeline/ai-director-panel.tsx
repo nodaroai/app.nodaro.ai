@@ -22,7 +22,7 @@ const SUGGESTION_KEYS: readonly MessageKey[] = [
   "pipe.cinemaSuggestEmeraldGrade",
 ]
 
-const LABEL = "font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground"
+const LABEL = "font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground"
 
 export function AiDirectorPanel({
   pipelineId,
@@ -78,14 +78,14 @@ export function AiDirectorPanel({
           </div>
           <div className={LABEL}>{t("pipe.cinemaSpatialCopilot")}</div>
         </div>
-        <span className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#ff0073]">
+        <span className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider text-[#ff0073]">
           {t("pipe.cinemaAutoDrive")}
         </span>
       </div>
 
       <div ref={feedRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {sent.length === 0 && lines.length === 0 && (
-          <p className="font-mono text-[10px] text-muted-foreground">
+          <p className="font-mono text-[11px] text-muted-foreground">
             {t("pipe.cinemaDirectorWillNarrate")}
           </p>
         )}
@@ -95,7 +95,7 @@ export function AiDirectorPanel({
             the SSE feed is the authoritative director stream). */}
         {sent.map((m, i) => (
           <div key={`s${i}`} className="ms-8 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2">
-            <div className="mb-1 text-end font-mono text-[9px] font-bold uppercase tracking-wider text-sky-300">
+            <div className="mb-1 text-end font-mono text-[11px] font-bold uppercase tracking-wider text-sky-300">
               {t("pipe.cinemaYouWriter")}
             </div>
             <p className="text-end text-[11px] text-foreground">{m}</p>
@@ -104,7 +104,7 @@ export function AiDirectorPanel({
 
         {lines.slice(-40).map((l, i) => (
           <div key={`l${i}`} className="me-4 rounded-lg border border-[#2a2a2a] bg-[#111] p-2">
-            <div className="mb-1 font-mono text-[9px] font-bold uppercase tracking-wider text-[#ff0073]">
+            <div className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider text-[#ff0073]">
               ✦ {t("pipe.cinemaNodaroAiDirector")}
             </div>
             <p className="text-[11px] leading-relaxed text-foreground">{l.text}</p>
@@ -115,7 +115,7 @@ export function AiDirectorPanel({
       <div className="border-t border-[#1d1d1d] p-3">
         <div className="mb-2 flex items-center gap-2">
           <span className="text-[#ff0073]">≡</span>
-          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-foreground">
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">
             {t("pipe.cinemaInteractiveSuggestions")}
           </span>
         </div>
@@ -127,7 +127,7 @@ export function AiDirectorPanel({
                 key={k}
                 type="button"
                 onClick={() => setDraft(s.replace(/^\+\s*/, ""))}
-                className="flex w-full items-center justify-between rounded-md border border-[#2a2a2a] bg-[#111] px-2 py-1.5 text-start font-mono text-[10px] uppercase tracking-wider text-foreground hover:border-[#ff0073]/50"
+                className="flex w-full items-center justify-between rounded-md border border-[#2a2a2a] bg-[#111] px-2 py-1.5 text-start font-mono text-[11px] uppercase tracking-wider text-foreground hover:border-[#ff0073]/50"
               >
                 {s}
                 <span className="text-[#ff0073]">→</span>
@@ -138,7 +138,7 @@ export function AiDirectorPanel({
       </div>
 
       <div className="border-t border-[#1d1d1d] p-3">
-        {err && <p className="mb-1 font-mono text-[9px] text-amber-400">{err}</p>}
+        {err && <p className="mb-1 font-mono text-[11px] text-amber-400">{err}</p>}
         <div className="flex items-center gap-2">
           <input
             value={draft}
@@ -153,12 +153,12 @@ export function AiDirectorPanel({
             type="button"
             onClick={() => void send()}
             disabled={!draft.trim() || busy}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#ff0073] text-white disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-cta text-white disabled:opacity-40"
           >
             →
           </button>
         </div>
-        <div className="mt-1.5 flex items-center justify-between font-mono text-[9px] text-muted-foreground">
+        <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
           <span>{t("pipe.cinemaActiveModel")}</span>
           <span>{t("pipe.cinemaTypeAtToInject")}</span>
         </div>

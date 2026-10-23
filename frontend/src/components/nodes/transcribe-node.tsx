@@ -35,7 +35,7 @@ function TranscriptPreviewModal({
   if (!isOpen) return null
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8"
       onClick={onClose}
     >
@@ -53,7 +53,7 @@ function TranscriptPreviewModal({
               </span>
             )}
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="text-muted-foreground hover:text-foreground transition-colors"
             onClick={onClose}
@@ -194,7 +194,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -202,7 +202,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !activeText && status !== "failed" && (
-              <div className="flex items-center justify-center py-6 text-muted-foreground/40">
+              <div className="flex items-center justify-center py-6 text-muted-foreground">
                 <span className="text-xs">{t("node.noOutputYet")}</span>
               </div>
             )}

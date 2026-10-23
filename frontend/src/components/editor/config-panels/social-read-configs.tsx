@@ -28,7 +28,7 @@ import type { CompetitorReadData, InspirationReadData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
 const LABEL_CLASS = "text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]"
-const HINT_CLASS = "text-[10px] text-muted-foreground mt-1"
+const HINT_CLASS = "text-[11px] text-muted-foreground mt-1"
 
 const clampWindow = (n: number, unit: CollectionReadWindowUnit): number =>
   Math.max(1, Math.min(unit === "days" ? SOCIAL_READ_WINDOW_DAYS_MAX : SOCIAL_READ_WINDOW_HOURS_MAX, n))
@@ -255,7 +255,7 @@ export function CompetitorReadConfig({ data, onUpdate }: ConfigProps<CompetitorR
           </SelectContent>
         </Select>
         {brands && brands.length === 0 && <p className={HINT_CLASS}>{t("socialRead.noCompetitors")}</p>}
-        <Link to="/competitors" className="mt-1 inline-block text-[10px] text-muted-foreground underline">{t("socialRead.manageCompetitors")}</Link>
+        <Link to="/competitors" className="mt-1 inline-block text-[11px] text-muted-foreground underline">{t("socialRead.manageCompetitors")}</Link>
       </div>
       <PlatformField value={platform} platforms={platforms} onChange={(p) => onUpdate({ platform: p })} />
       <div>

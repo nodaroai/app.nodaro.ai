@@ -217,7 +217,7 @@ function StudioModalBody({
             <div className="text-[13px] font-semibold text-slate-200">
               {studio.staged.characterName || t("studio.unnamedCharacter")}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-[11px] text-slate-500">
               {studio.staged.style} · {studio.staged.gender} ·{" "}
               {t("studio.assetCounts", { expr: counts.expr, poses: counts.poses, motions: counts.motions })}
               {errored.size > 0 && <span className="text-[#ef4444]"> · {t("exec.failedNodes", { n: errored.size })}</span>}
@@ -252,7 +252,7 @@ function StudioModalBody({
               </Tooltip>
             </TooltipProvider>
           )}
-          <button onClick={onClose} className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
+          <button onClick={onClose} className="text-[11px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
             ✕ {t("common.close")}
           </button>
         </div>
@@ -291,7 +291,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
         ? { dot: "bg-emerald-500", text: t("common.saved") }
         : { dot: "bg-red-500", text: t("editor.saveFailed") }
   return (
-    <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+    <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
       <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
       {text}
     </span>

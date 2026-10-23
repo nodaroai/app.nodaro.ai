@@ -71,7 +71,7 @@ export function PromptInjectionSection({
                 onCheckedChange={(v) => updateNodeData(selectedNodeId, { injectPrompt: v })}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground -mt-1">
+            <p className="text-[11px] text-muted-foreground -mt-1">
               {t("cfgshared.injectPromptHint")}
             </p>
           </>
@@ -86,7 +86,7 @@ export function PromptInjectionSection({
                 onCheckedChange={(v) => updateNodeData(selectedNodeId, { injectNegative: v })}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground -mt-1">
+            <p className="text-[11px] text-muted-foreground -mt-1">
               {t("cfgshared.injectNegativeHint")}
             </p>
           </>
@@ -101,7 +101,7 @@ export function PromptInjectionSection({
                 onCheckedChange={(v) => updateNodeData(selectedNodeId, { injectLook: v })}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground -mt-1">
+            <p className="text-[11px] text-muted-foreground -mt-1">
               {t("cfgshared.injectLookHint")}
             </p>
           </>
@@ -116,7 +116,7 @@ export function PromptInjectionSection({
                 onCheckedChange={(v) => updateNodeData(selectedNodeId, { injectElements: v })}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground -mt-1">
+            <p className="text-[11px] text-muted-foreground -mt-1">
               {t("cfgshared.injectElementsHint")}
             </p>
           </>

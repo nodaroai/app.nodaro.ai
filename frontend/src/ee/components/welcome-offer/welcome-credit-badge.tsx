@@ -19,7 +19,7 @@ export function WelcomeCreditBadge({ credits, size }: { readonly credits: string
       )}
     >
       <span className={cn("font-extrabold leading-none tabular-nums", lg ? "text-[22px]" : "text-[13px]")}>{credits}</span>
-      <span className={cn("font-bold uppercase tracking-[0.18em]", lg ? "mt-1.5 text-[9px]" : "mt-0.5 text-[6px]")}>
+      <span className={cn("font-bold uppercase tracking-[0.18em]", lg ? "mt-1.5 text-[11px]" : "mt-0.5 text-[11px]")}>
         {t("welcome.badge")}
       </span>
     </div>

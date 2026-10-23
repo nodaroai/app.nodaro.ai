@@ -48,7 +48,7 @@ export function VideoOverlayTimeline({
   return (
     // A time axis runs left → right in every language, so the ruler pins LTR.
     <div dir="ltr" className="space-y-1" aria-label={t("proccfg.videoOverlay.timeline")}>
-      <div className="relative h-4 border-b border-border/60 text-[9px] text-muted-foreground tabular-nums">
+      <div className="relative h-4 border-b border-border/60 text-[11px] text-muted-foreground tabular-nums">
         {ticks.map((s) => (
           <span key={s} className="absolute top-0 -translate-x-1/2" style={{ left: pct(s) }}>
             {s}
@@ -90,7 +90,7 @@ export function VideoOverlayTimeline({
                 )}
               </>
             )}
-            <span className="absolute start-1 top-0 text-[9px] leading-4 text-white/90 mix-blend-difference">{b.n}</span>
+            <span className="absolute start-1 top-0 text-[11px] leading-4 text-white/90 mix-blend-difference">{b.n}</span>
           </button>
         )
       })}

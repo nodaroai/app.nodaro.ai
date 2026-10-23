@@ -36,7 +36,7 @@ function FieldBlock({ field }: { readonly field: InspectorField }) {
   return (
     <section className="mb-3 last:mb-0">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[1.2px] text-[var(--home-muted)]">
+        <span className="text-[11px] font-bold uppercase tracking-[1.2px] text-[var(--home-muted)]">
           {field.source ? t("templates.inspector.receivedFrom", { label: field.label, source: field.source }) : field.label}
         </span>
         <button

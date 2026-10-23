@@ -463,7 +463,7 @@ export default function CopilotHomeComposer() {
                 <button
                   type="submit"
                   disabled={building || prompt.trim().length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-[9px] bg-primary text-primary-foreground text-[12.5px] font-semibold whitespace-nowrap disabled:opacity-50 transition-opacity"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-[9px] bg-cta text-primary-foreground text-[12.5px] font-semibold whitespace-nowrap disabled:opacity-50 transition-opacity"
                 >
                   {building ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   {t(K.homeBuild)}

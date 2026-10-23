@@ -170,7 +170,7 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("utilcfg.splitSeparatorHint")}
         </p>
       </div>
@@ -519,7 +519,7 @@ export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: Co
               <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1">
             {actorOptions.length > 0
               ? <>{t("utilcfg.extractFieldHintDetected")}</>
               : <>{t("utilcfg.fieldHintNoSchema")}</>}
@@ -533,7 +533,7 @@ export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: Co
             onChange={(e) => setField(e.target.value)}
             placeholder={t("utilcfg.phExtractPath")}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("utilcfg.extractPathHint")}
           </p>
           <button
@@ -559,7 +559,7 @@ export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: Co
             <SelectItem value="json">JSON</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("utilcfg.outputTypeHint")}
         </p>
       </div>
@@ -658,7 +658,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <Label>{t("utilcfg.connectedValues", { count: items.length })}</Label>
-        <span className="text-[10px] text-muted-foreground">{t("utilcfg.visibleCount", { count: visibleCount })}</span>
+        <span className="text-[11px] text-muted-foreground">{t("utilcfg.visibleCount", { count: visibleCount })}</span>
       </div>
       <div className="flex flex-col gap-1.5">
         {items.map((item, i) => {
@@ -682,31 +682,31 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
             >
               {/* Header row: drag handle, icon, label, type badge, visibility toggle, arrows */}
               <div className="flex items-center gap-1 px-2 py-1.5">
-                <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 cursor-grab shrink-0" />
+                <GripVertical className="w-3.5 h-3.5 text-muted-foreground cursor-grab shrink-0" />
                 {PREVIEW_TYPE_ICON[item.type]}
                 <span className="text-xs font-medium text-foreground/80 truncate flex-1 min-w-0">
                   {item.sourceNodeLabel}
                 </span>
-                <span className="text-[9px] text-muted-foreground uppercase shrink-0">{item.type}</span>
-                <button
+                <span className="text-[11px] text-muted-foreground uppercase shrink-0">{item.type}</span>
+                <button aria-label={t("common.moveUp")}
                   type="button"
-                  className="p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0"
+                  className="p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0 disabled:opacity-40"
                   onClick={() => { if (i > 0) moveItem(i, i - 1) }}
                   disabled={i === 0}
                 >
-                  <ChevronUp className={"w-3 h-3 " + (i === 0 ? "text-muted-foreground/20" : "text-muted-foreground")} />
+                  <ChevronUp className={"w-3 h-3 " + (i === 0 ? "text-muted-foreground" : "text-muted-foreground")} />
                 </button>
-                <button
+                <button aria-label={t("common.moveDown")}
                   type="button"
-                  className="p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0"
+                  className="p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0 disabled:opacity-40"
                   onClick={() => { if (i < items.length - 1) moveItem(i, i + 1) }}
                   disabled={i === items.length - 1}
                 >
-                  <ChevronDown className={"w-3 h-3 " + (i === items.length - 1 ? "text-muted-foreground/20" : "text-muted-foreground")} />
+                  <ChevronDown className={"w-3 h-3 " + (i === items.length - 1 ? "text-muted-foreground" : "text-muted-foreground")} />
                 </button>
                 <button
                   type="button"
-                  className={"p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0 " + (isVisible ? "text-foreground/70" : "text-muted-foreground/40")}
+                  className={"p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0 " + (isVisible ? "text-foreground/80" : "text-muted-foreground")}
                   onClick={() => toggleVisibility(i)}
                   title={isVisible ? t("utilcfg.hideOnCanvas") : t("utilcfg.showOnCanvas")}
                 >
@@ -1029,7 +1029,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                 className="h-8 text-sm flex-1"
               />
               {routes.length > (isConditional ? 1 : 2) && (
-                <button type="button" onClick={() => removeRoute(i)} className="text-muted-foreground hover:text-destructive">
+                <button aria-label={t("common.remove")} type="button" onClick={() => removeRoute(i)} className="text-muted-foreground hover:text-destructive">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -1068,7 +1068,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
           </div>
 
           {conditionGroups.length === 0 && (
-            <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+            <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
               {t("utilcfg.noConditionGroups")}
             </p>
           )}
@@ -1126,7 +1126,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                 </button>
 
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px]">{t("utilcfg.activates")}</Label>
+                  <Label className="text-[11px]">{t("utilcfg.activates")}</Label>
                   <div className="flex flex-wrap gap-1">
                     {routes.map((r) => {
                       const on = groupRouteIds.includes(r.id)
@@ -1136,7 +1136,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                           type="button"
                           onClick={() => toggleGroupRoute(group.id, r.id)}
                           className={
-                            "text-[10px] px-2 py-0.5 rounded-full border transition-colors " +
+                            "text-[11px] px-2 py-0.5 rounded-full border transition-colors " +
                             (on
                               ? "border-green-500/50 bg-green-500/15 text-green-400"
                               : "border-border text-muted-foreground hover:text-foreground")
@@ -1152,7 +1152,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
             )
           })}
 
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("utilcfg.routerGroupsHint")}
           </p>
         </div>
@@ -1271,8 +1271,8 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         const preview = result.slice(0, 5)
         return (
           <div className="space-y-0.5">
-            <p className="text-[10px] text-muted-foreground">{t(result.length === 1 ? "utilcfg.firstOfItemsOne" : "utilcfg.firstOfItems", { shown: Math.min(5, result.length), total: result.length })}</p>
-            <pre className="text-[10px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
+            <p className="text-[11px] text-muted-foreground">{t(result.length === 1 ? "utilcfg.firstOfItemsOne" : "utilcfg.firstOfItems", { shown: Math.min(5, result.length), total: result.length })}</p>
+            <pre className="text-[11px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
               {JSON.stringify(preview, null, 2)}
             </pre>
           </div>
@@ -1282,8 +1282,8 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         const entries = Object.entries(result as Record<string, unknown>).slice(0, 10)
         return (
           <div className="space-y-0.5">
-            <p className="text-[10px] text-muted-foreground">{t("utilcfg.fieldsCount", { count: Object.keys(result as object).length })}</p>
-            <div className="text-[10px] font-mono bg-muted/20 rounded p-1.5 space-y-0.5 overflow-x-auto">
+            <p className="text-[11px] text-muted-foreground">{t("utilcfg.fieldsCount", { count: Object.keys(result as object).length })}</p>
+            <div className="text-[11px] font-mono bg-muted/20 rounded p-1.5 space-y-0.5 overflow-x-auto">
               {entries.map(([k, v]) => (
                 <div key={k} className="flex gap-1.5">
                   <span className="text-blue-400 shrink-0">{k}:</span>
@@ -1295,13 +1295,13 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         )
       }
       return (
-        <pre className="text-[10px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
+        <pre className="text-[11px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
           {JSON.stringify(result)}
         </pre>
       )
     }
     return (
-      <p className="text-[10px] text-muted-foreground italic">{t("utilcfg.runToSeePreview")}</p>
+      <p className="text-[11px] text-muted-foreground italic">{t("utilcfg.runToSeePreview")}</p>
     )
   }
 
@@ -1342,7 +1342,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                   placeholder={t("utilcfg.phEgDataItems")}
                   className="text-xs h-8"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   {t("utilcfg.inputPathHint")}
                 </p>
               </AccordionContent>
@@ -1449,7 +1449,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                   {projections.map((p) => (
                     <span
                       key={p}
-                      className="inline-flex items-center gap-0.5 text-[10px] font-mono bg-muted rounded px-1.5 py-0.5"
+                      className="inline-flex items-center gap-0.5 text-[11px] font-mono bg-muted rounded px-1.5 py-0.5"
                     >
                       {p}
                       <button
@@ -1471,7 +1471,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                     className="bg-transparent border-none outline-none text-xs text-foreground placeholder:text-muted-foreground min-w-[100px] flex-1"
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   {t("utilcfg.projectionHint")}
                 </p>
               </AccordionContent>
@@ -1479,7 +1479,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
           </Accordion>
 
           {/* Generated expression preview */}
-          <div className="text-[10px] text-muted-foreground bg-muted/20 rounded px-2 py-1.5 border border-border font-mono break-all">
+          <div className="text-[11px] text-muted-foreground bg-muted/20 rounded px-2 py-1.5 border border-border font-mono break-all">
             <span className="not-italic text-muted-foreground">{t("utilcfg.generatedPrefix")}</span>
             <code className="text-foreground/80">{visualExpression}</code>
           </div>
@@ -1505,7 +1505,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                 {t("utilcfg.syntaxReference")}
               </AccordionTrigger>
               <AccordionContent className="px-3 pb-3 pt-0">
-                <pre dir="ltr" className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{t("utilcfg.syntaxReferenceBody")}</pre>
+                <pre dir="ltr" className="text-[11px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{t("utilcfg.syntaxReferenceBody")}</pre>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -1514,7 +1514,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
 
       {/* Preview block — always visible */}
       <div className="rounded-md border border-border bg-muted/10 px-2.5 py-2">
-        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">{t("pubTemplate.previewToggle")}</p>
+        <p className="text-[11px] font-medium text-muted-foreground mb-1.5">{t("pubTemplate.previewToggle")}</p>
         {renderPreview()}
       </div>
     </div>
@@ -1550,7 +1550,7 @@ export function FilterJsonPreview({
       return (
         <>
           <span>[</span>
-          <span className="text-muted-foreground/60">{hint}</span>
+          <span className="text-muted-foreground">{hint}</span>
           {"\n"}
           <span>{pad}  </span>
           {render(v[0], path, indent + 1)}
@@ -1591,7 +1591,7 @@ export function FilterJsonPreview({
   }
 
   return (
-    <pre className="text-[10px] font-mono bg-muted/20 rounded p-2 overflow-auto max-h-56 whitespace-pre leading-relaxed">
+    <pre className="text-[11px] font-mono bg-muted/20 rounded p-2 overflow-auto max-h-56 whitespace-pre leading-relaxed">
       {render(value, "", 0)}
     </pre>
   )
@@ -1664,7 +1664,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
             <>
               <FilterJsonPreview value={sampleItem} highlightedPaths={highlightedPaths} />
               {highlightedPaths.size > 0 && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   {t("utilcfg.grayFieldsHint")}
                 </p>
               )}
@@ -1690,7 +1690,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
       </div>
 
       {conditions.length === 0 && (
-        <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+        <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
           {t("utilcfg.noConditions")}
         </p>
       )}
@@ -1714,7 +1714,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
         </button>
       </div>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("utilcfg.filterListHint")}
       </p>
     </div>
@@ -1770,7 +1770,7 @@ export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: Con
               <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {actorOptions.length > 0
               ? <>{t("utilcfg.dedupeHintDetected")}</>
               : <>{t("utilcfg.fieldHintNoSchema")}</>}
@@ -1784,7 +1784,7 @@ export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: Con
             onChange={(e) => setField(e.target.value)}
             placeholder={t("utilcfg.phDedupePath")}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("utilcfg.dedupePathHint")}
           </p>
           <button
@@ -1842,7 +1842,7 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
             {t("utilcfg.zipMergeItems")}
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {mode === "concat"
             ? t("utilcfg.concatHint")
             : t("utilcfg.zipHint")}
@@ -1924,7 +1924,7 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
               <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {actorOptions.length > 0
               ? <>{t("utilcfg.sortHintDetected")}</>
               : <>{t("utilcfg.fieldHintNoSchema")}</>}
@@ -1938,7 +1938,7 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
             onChange={(e) => setField(e.target.value)}
             placeholder={t("utilcfg.phSortPath")}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("utilcfg.sortPathHint")}
           </p>
           <button
@@ -1962,7 +1962,7 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
             <SelectItem value="date">{t("utilcfg.sortDate")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("utilcfg.sortTypeHint")}
         </p>
       </div>
@@ -1989,7 +1989,7 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
             {t("utilcfg.descending")}
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("utilcfg.sortDirectionHint")}
         </p>
       </div>

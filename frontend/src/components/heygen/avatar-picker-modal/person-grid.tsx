@@ -54,7 +54,7 @@ function StatusBadge({ person, className }: { person: Person; className?: string
   const status = avatarStatus(person.cover)
   if (!status) return null
   return (
-    <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold text-white pointer-events-none", status === "failed" ? "bg-red-600/90" : "bg-amber-500/90", className)} aria-hidden>
+    <span className={cn("rounded-[5px] px-1.5 py-0.5 text-[11px] font-bold text-white pointer-events-none", status === "failed" ? "bg-red-600/90" : "bg-amber-500/90", className)} aria-hidden>
       {avatarStatusLabel(person.cover, t)}
     </span>
   )
@@ -101,14 +101,14 @@ function PersonCard({ person, selected, onPick, roving }: ItemProps) {
             <div className="h-full w-full animate-pulse bg-muted/60" />
           )}
           <VTag person={person} className="absolute start-2 top-2" />
-          <span className="absolute bottom-2 start-2 rounded-[5px] bg-black/80 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.06em] text-zinc-200 whitespace-nowrap pointer-events-none" aria-hidden>
+          <span className="absolute bottom-2 start-2 rounded-[5px] bg-black/80 px-1.5 py-0.5 font-mono text-[11px] tracking-[0.06em] text-zinc-200 whitespace-nowrap pointer-events-none" aria-hidden>
             {looksCount(person, t)}
           </span>
           <StatusBadge person={person} className="absolute start-2 top-8" />
           <span
             aria-hidden
             className={cn(
-              "absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-[#ff0073] text-white transition-opacity",
+              "absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-cta text-white transition-opacity",
               selected ? "opacity-100" : "opacity-0",
             )}
           >
@@ -147,11 +147,11 @@ function PersonRow({ person, selected, onPick, roving }: ItemProps) {
         <span className="block truncate text-[11px] text-muted-foreground">{personMeta(person, t)}</span>
       </span>
       <StatusBadge person={person} />
-      <span className="font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap" aria-hidden>
+      <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap" aria-hidden>
         {looksCount(person, t)}
       </span>
       <VTag person={person} />
-      <span className={cn("grid size-5 place-items-center rounded-full bg-[#ff0073] text-white", selected ? "opacity-100" : "opacity-0")} aria-hidden>
+      <span className={cn("grid size-5 place-items-center rounded-full bg-cta text-white", selected ? "opacity-100" : "opacity-0")} aria-hidden>
         <Check className="size-3" />
       </span>
     </button>

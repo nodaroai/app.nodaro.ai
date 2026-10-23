@@ -548,9 +548,9 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
             <Separator className="my-1.5" />
             <p className="font-medium text-[var(--text-primary)]">{t("cfgext.compGuidePromptTips")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li>{t("cfgext.compTipQuotes")}{t("common.fragmentGap")}<span className="font-mono text-[10px]">{t("cfgext.compTipQuotesExample")}</span></li>
+              <li>{t("cfgext.compTipQuotes")}{t("common.fragmentGap")}<span className="font-mono text-[11px]">{t("cfgext.compTipQuotesExample")}</span></li>
               <li>{t("cfgext.compTipStyle")}</li>
-              <li>{t("cfgext.compTipColors")}{t("common.fragmentGap")}<span className="font-mono text-[10px]">{t("cfgext.compTipColorsExample")}</span></li>
+              <li>{t("cfgext.compTipColors")}{t("common.fragmentGap")}<span className="font-mono text-[11px]">{t("cfgext.compTipColorsExample")}</span></li>
               <li>{t("cfgext.compTipAnimationFeel")}</li>
             </ul>
             <Separator className="my-1.5" />
@@ -735,7 +735,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
             <button
               type="button"
               onClick={() => addLayer(availableHandles[0])}
-              className="text-[10px] text-[#ff0073] hover:underline"
+              className="text-[11px] text-[#ff0073] hover:underline"
             >
               {t("cfgext.compAddLayer")}
             </button>
@@ -743,7 +743,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
         </div>
 
         {data.layers.length === 0 && (
-          <div className="text-xs text-muted-foreground/60 py-2 text-center">
+          <div className="text-xs text-muted-foreground py-2 text-center">
             {t("cfgext.compNoLayers")}
           </div>
         )}
@@ -752,14 +752,14 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
           <div key={layer.id} className="p-2.5 rounded-md border border-[var(--border-primary)] bg-muted/10 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">{layer.inputHandle}</span>
-              <button type="button" onClick={() => removeLayer(layer.id)} className="text-muted-foreground hover:text-red-500 transition-colors">
+              <button aria-label={t("common.delete")} type="button" onClick={() => removeLayer(layer.id)} className="text-muted-foreground hover:text-red-500 transition-colors">
                 <Trash2 className="w-3 h-3" />
               </button>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="mb-1 block text-[10px]">{t("proccfg.position")}</Label>
+                <Label className="mb-1 block text-[11px]">{t("proccfg.position")}</Label>
                 <Select value={layer.position} onValueChange={(v) => updateLayer(layer.id, { position: v as "fullscreen" | "positioned" })}>
                   <SelectTrigger aria-label={t("proccfg.position")} className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -769,7 +769,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 </Select>
               </div>
               <div>
-                <Label className="mb-1 block text-[10px]">{t("cfgext.compBlendMode")}</Label>
+                <Label className="mb-1 block text-[11px]">{t("cfgext.compBlendMode")}</Label>
                 <Select value={layer.blendMode} onValueChange={(v) => updateLayer(layer.id, { blendMode: v as CompositeLayerConfig["blendMode"] })}>
                   <SelectTrigger aria-label={t("cfgext.compBlendMode")} className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -783,7 +783,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
             </div>
 
             <div>
-              <Label className="mb-1 block text-[10px]">{t("cfgext.compOpacityPercent", { value: Math.round(layer.opacity * 100) })}</Label>
+              <Label className="mb-1 block text-[11px]">{t("cfgext.compOpacityPercent", { value: Math.round(layer.opacity * 100) })}</Label>
               <input
                 type="range"
                 min={0}
@@ -797,7 +797,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="mb-1 block text-[10px]">{t("cfgext.compZIndex")}</Label>
+                <Label className="mb-1 block text-[11px]">{t("cfgext.compZIndex")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -808,7 +808,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 />
               </div>
               <div>
-                <Label className="mb-1 block text-[10px]">{t("vidcfg.startFrame")}</Label>
+                <Label className="mb-1 block text-[11px]">{t("vidcfg.startFrame")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -822,19 +822,19 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
             {layer.position === "positioned" && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="mb-1 block text-[10px]">{t("cfgext.compXPercent")}</Label>
+                  <Label className="mb-1 block text-[11px]">{t("cfgext.compXPercent")}</Label>
                   <Input type="number" min={0} max={100} value={layer.x ?? ""} onChange={(e) => updateLayer(layer.id, { x: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-[10px]">{t("cfgext.compYPercent")}</Label>
+                  <Label className="mb-1 block text-[11px]">{t("cfgext.compYPercent")}</Label>
                   <Input type="number" min={0} max={100} value={layer.y ?? ""} onChange={(e) => updateLayer(layer.id, { y: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-[10px]">{t("cfgext.compWidthPercent")}</Label>
+                  <Label className="mb-1 block text-[11px]">{t("cfgext.compWidthPercent")}</Label>
                   <Input type="number" min={1} max={100} value={layer.width ?? ""} onChange={(e) => updateLayer(layer.id, { width: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-[10px]">{t("cfgext.compHeightPercent")}</Label>
+                  <Label className="mb-1 block text-[11px]">{t("cfgext.compHeightPercent")}</Label>
                   <Input type="number" min={1} max={100} value={layer.height ?? ""} onChange={(e) => updateLayer(layer.id, { height: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
               </div>

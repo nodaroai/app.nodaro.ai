@@ -226,7 +226,7 @@ export default function BillingPage() {
         <CreditActivity transactions={transactions} loading={txLoading} />
 
         {/* Legal links (preserved) */}
-        <div className="mt-8 flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
+        <div className="mt-8 flex items-center justify-center gap-4 text-xs text-muted-foreground">
           <a
             href="https://nodaro.ai/terms"
             target="_blank"

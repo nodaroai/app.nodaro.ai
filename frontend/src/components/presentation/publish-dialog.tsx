@@ -540,7 +540,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
             <>
               <div className="flex gap-2">
                 <Input value={publishedUrl} readOnly className="text-xs" />
-                <Button variant="outline" size="sm" onClick={handleCopyPublished}>
+                <Button aria-label={t("common.copy")} variant="outline" size="sm" onClick={handleCopyPublished}>
                   {publishCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
@@ -649,7 +649,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             {handle.required && (
                               <span className="text-[11px] text-amber-500 shrink-0">{t("pubDialog.requiredBadge")}</span>
                             )}
-                            <button
+                            <button aria-label={t("common.remove")}
                               type="button"
                               onClick={() => setComponentHandles((prev) => ({
                                 ...prev,
@@ -705,7 +705,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                               />
                               {t("pubDialog.previewRadioLabel")}
                             </label>
-                            <button
+                            <button aria-label={t("common.remove")}
                               type="button"
                               onClick={() => setComponentHandles((prev) => ({
                                 ...prev,
@@ -803,7 +803,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                               className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
                             >
                               {tag}
-                              <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
+                              <button aria-label={t("common.remove")} type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-destructive">
                                 <X className="h-3 w-3" />
                               </button>
                             </span>
@@ -876,7 +876,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
                               isActive
                                 ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
-                                : "text-muted-foreground/40 border-border hover:text-muted-foreground hover:border-border"
+                                : "text-muted-foreground border-border hover:text-muted-foreground hover:border-border"
                             }`}
                           >
                             <Icon className="h-4 w-4" />

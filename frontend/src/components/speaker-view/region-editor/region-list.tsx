@@ -59,7 +59,7 @@ export function RegionList({ cameras, rowsOf, cameraId, selectedKey, onSelect, q
               >
                 {open ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className={cn("w-3 h-3 shrink-0", flip)} />}
                 <span className="truncate">{camera.id}</span>
-                {!boxed && <span className="ms-auto text-[10px] text-muted-foreground">{t("speakerView.framing.fullFrame")}</span>}
+                {!boxed && <span className="ms-auto text-[11px] text-muted-foreground">{t("speakerView.framing.fullFrame")}</span>}
               </button>
               {open && (
                 <ul className="mt-0.5 flex flex-col gap-0.5 ps-4">

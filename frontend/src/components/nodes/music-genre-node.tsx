@@ -35,7 +35,7 @@ function MusicGenreNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground text-[11px] leading-snug">{era.label}</p>
       )}
       {composed && (
-        <p className="text-muted-foreground text-[10px] italic leading-snug">{composed}</p>
+        <p className="text-muted-foreground text-[11px] italic leading-snug">{composed}</p>
       )}
     </ParameterNodeShell>
   )

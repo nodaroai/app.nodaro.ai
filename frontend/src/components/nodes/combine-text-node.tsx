@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useT, type TFunction } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -40,7 +41,7 @@ function TextPreviewModal({
   if (!isOpen) return null
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8"
       onClick={onClose}
     >
@@ -53,7 +54,7 @@ function TextPreviewModal({
             <Merge className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">{t("node.combinedText")}</span>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="text-muted-foreground hover:text-foreground transition-colors"
             onClick={onClose}
@@ -117,15 +118,15 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
             <div className="relative group">
               <div
                 className="w-full rounded-md bg-muted/30 p-2 cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={(e) => {
+                {...pressable((e) => {
                   e.stopPropagation()
                   setPreviewOpen(true)
-                }}
+                })}
               >
                 <p className="text-xs text-foreground/80 line-clamp-3 break-words">
                   {lineCount === 1 ? t("node.linesCombinedOne", { n: lineCount }) : t("node.linesCombinedMany", { n: lineCount })}
                 </p>
-                <span className="text-[10px] text-muted-foreground mt-1 block">
+                <span className="text-[11px] text-muted-foreground mt-1 block">
                   {t("node.clickToExpand")}
                 </span>
               </div>
@@ -144,7 +145,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+            <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <FileText className="w-5 h-5" />
             </div>
           )}

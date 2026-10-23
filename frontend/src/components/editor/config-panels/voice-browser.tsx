@@ -542,7 +542,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 onClick={() => { setLibraryHighQuality(!libraryHighQuality) }}
                 className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${libraryHighQuality ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
               >
-                <span className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border text-[8px] leading-none ${libraryHighQuality ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                <span className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm border text-[11px] leading-none ${libraryHighQuality ? "border-primary bg-cta text-primary-foreground" : "border-muted-foreground/40"}`}>
                   {libraryHighQuality && "✓"}
                 </span>
                 {t("cfgext.voiceHighQuality")}
@@ -773,7 +773,7 @@ function MyVoicesTab({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <FitText text={clone.name} className="text-sm font-medium" />
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
                         {t("cfgshared.custom")}
                       </span>
                       {isSelected && (
@@ -907,7 +907,7 @@ function VoiceList({
                 <div className="flex items-center gap-1.5">
                   <FitText text={voice.name} className="text-sm font-medium" />
                   {showCategory && voice.category && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                       {voice.category}
                     </span>
                   )}

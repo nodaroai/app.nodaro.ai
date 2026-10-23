@@ -93,14 +93,14 @@ function Libraries({ libraries, active, onPick }: { libraries: readonly LibraryE
             aria-label={t("heygen.libraryLooksAria", { label: lib.label, n: formatNumber(lib.count) })}
             className={cn(
               "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-start text-[12.5px] transition-colors",
-              on ? "bg-muted text-foreground" : "text-foreground/75 hover:bg-muted/60",
+              on ? "bg-muted text-foreground" : "text-foreground/80 hover:bg-muted/60",
             )}
             onClick={() => onPick(lib.id)}
             {...roving(i)}
           >
-            <Icon className={cn("size-3.5 shrink-0", on ? "text-[#ff0073]" : "text-muted-foreground/70")} aria-hidden />
+            <Icon className={cn("size-3.5 shrink-0", on ? "text-[#ff0073]" : "text-muted-foreground")} aria-hidden />
             <span className="flex-1 whitespace-nowrap">{lib.label}</span>
-            <span className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{formatNumber(lib.count)}</span>
+            <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{formatNumber(lib.count)}</span>
           </button>
         )
       })}

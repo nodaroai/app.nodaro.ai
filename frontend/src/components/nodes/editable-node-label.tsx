@@ -1,4 +1,5 @@
 "use client"
+import { pressable } from "@/lib/pressable"
 import { useT } from "@/lib/i18n"
 import { useState, useRef, useEffect } from "react"
 import type { ReactNode } from "react"
@@ -103,7 +104,7 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
         <span
           dir={textDir}
           className="truncate cursor-text hover:text-[#ff0073] transition-colors"
-          onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+          {...pressable((e) => { e.stopPropagation(); setEditing(true) })}
           onMouseDown={(e) => e.stopPropagation()}
           title={t("node.clickToRename")}
         >

@@ -296,7 +296,7 @@ export function AiAvatarInputCard({
               )}
               aria-label={t("present.avatarScript")}
             />
-            <p className="mt-1 text-end text-[10px] text-muted-foreground">
+            <p className="mt-1 text-end text-[11px] text-muted-foreground">
               {script.length}/5000
             </p>
           </div>

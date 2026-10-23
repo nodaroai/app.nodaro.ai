@@ -10,7 +10,7 @@ import { CodeXml } from "lucide-react"
  */
 export function SnippetCategoryHeader({ category }: { category: string }) {
   return (
-    <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-2.5 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+    <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-2.5 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
       {category}
     </div>
   )
@@ -33,11 +33,11 @@ export function SnippetRowContent({
   return (
     <>
       <CodeXml
-        className={`w-3 h-3 mt-0.5 shrink-0 ${selected ? "text-amber-600 dark:text-amber-300" : "text-muted-foreground/70"}`}
+        className={`w-3 h-3 mt-0.5 shrink-0 ${selected ? "text-amber-600 dark:text-amber-300" : "text-muted-foreground"}`}
       />
       <span className="flex-1 min-w-0">
         <span className="block text-[11px] font-medium truncate">{item.name}</span>
-        <span className="block text-[10px] text-muted-foreground truncate">{item.text}</span>
+        <span className="block text-[11px] text-muted-foreground truncate">{item.text}</span>
       </span>
     </>
   )

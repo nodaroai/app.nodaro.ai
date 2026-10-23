@@ -209,7 +209,7 @@ export function MotionTab({ studio }: MotionTabProps) {
               )}
               className="w-full rounded"
             />
-            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
+            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5 pointer-events-none">
               {item.name}
             </div>
             <div className="absolute top-1 end-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
@@ -232,7 +232,7 @@ export function MotionTab({ studio }: MotionTabProps) {
                   void handleRemove(idx)
                 }}
                 aria-label={t("cfgshared.removeModel", { name: item.name })}
-                className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
+                className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80"
               >
                 {t("common.remove")}
               </button>
@@ -329,7 +329,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           }}
           disabled={customDisabled}
           title={presetTooltip}
-          className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+          className="px-4 py-2 text-[12px] rounded bg-cta hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
           {t("common.generate")}
         </button>

@@ -83,7 +83,7 @@ import {
   type ComponentMetadata,
 } from "@nodaro/shared/apps"
 import { resolveNodeRefs } from "@nodaro/shared/workflow"
-import { isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider } from "@nodaro/shared/models"
+import { billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider } from "@nodaro/shared/models"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { ugcFailure, ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
@@ -1563,7 +1563,7 @@ export function buildSyncHttpBody(
 async function probeRefVideosForReservation(payload: Record<string, unknown>): Promise<number[] | undefined> {
   const provider = payload.provider as string | undefined
   const referenceVideoUrls = payload.referenceVideoUrls
-  if (!isSeedance2Provider(provider) || !Array.isArray(referenceVideoUrls) || referenceVideoUrls.length === 0) {
+  if (!billsReferenceVideoSeconds(provider) || !Array.isArray(referenceVideoUrls) || referenceVideoUrls.length === 0) {
     return undefined
   }
   return probeRefVideoDurations({ provider: provider as string, referenceVideoUrls })
@@ -1742,7 +1742,7 @@ async function computeSeedance2RefVideoCreditOverride(
 ): Promise<number | undefined> {
   const provider = payload.provider as string | undefined
   const referenceVideoUrls = payload.referenceVideoUrls
-  if (!isSeedance2Provider(provider) || !Array.isArray(referenceVideoUrls) || referenceVideoUrls.length === 0) {
+  if (!billsReferenceVideoSeconds(provider) || !Array.isArray(referenceVideoUrls) || referenceVideoUrls.length === 0) {
     return undefined
   }
 

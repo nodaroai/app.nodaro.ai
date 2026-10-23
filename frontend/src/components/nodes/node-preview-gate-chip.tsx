@@ -33,7 +33,7 @@ export function NodePreviewGateChip({ nodeId }: { readonly nodeId: string }) {
     <div
       role="note"
       title={t("previewGate.chipHint")}
-      className="absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-sky-500/50 bg-sky-950/85 px-2 py-0.5 text-[10px] font-medium text-sky-100 backdrop-blur-[2px]"
+      className="absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-sky-500/50 bg-sky-950/85 px-2 py-0.5 text-[11px] font-medium text-sky-100 backdrop-blur-[2px]"
     >
       <PauseCircle className="h-3 w-3 text-sky-300" aria-hidden />
       <span>{t("previewGate.chip")}</span>

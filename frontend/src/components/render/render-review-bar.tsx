@@ -103,7 +103,7 @@ export function RenderReviewBarView({
       <div className="flex items-center gap-1.5" role="group">
         <button
           type="button"
-          className={cn(BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
+          className={cn(BUTTON, "border-[#ff0073]/60 bg-cta text-white hover:bg-cta-hover")}
           disabled={off}
           aria-busy={checking === "final" || undefined}
           aria-describedby={described}
@@ -129,11 +129,11 @@ export function RenderReviewBarView({
         )}
       </div>
       {blocked && (
-        <p id={reasonId} data-testid="render-review-refusal" className="text-[10px] leading-snug text-amber-700 dark:text-amber-400">
+        <p id={reasonId} data-testid="render-review-refusal" className="text-[11px] leading-snug text-amber-700 dark:text-amber-400">
           {disabledReason}
         </p>
       )}
-      {note && <p className="text-[10px] leading-snug text-muted-foreground">{note}</p>}
+      {note && <p className="text-[11px] leading-snug text-muted-foreground">{note}</p>}
     </div>
   )
 }

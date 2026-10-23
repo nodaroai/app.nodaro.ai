@@ -53,7 +53,7 @@ async function fetchMine(type: LibraryType): Promise<MineItem[]> {
 }
 
 const LABEL =
-  "font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground"
+  "font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground"
 
 export function LibraryDrawer({
   type,
@@ -106,8 +106,8 @@ export function LibraryDrawer({
         <button
           type="button"
           onClick={() => setTab("featured")}
-          className={`rounded-md px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${
-            tab === "featured" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+          className={`rounded-md px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-wider ${
+            tab === "featured" ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           ★ {t("cfgext.voiceCatFeatured")}
@@ -115,8 +115,8 @@ export function LibraryDrawer({
         <button
           type="button"
           onClick={() => setTab("mine")}
-          className={`rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-            tab === "mine" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+          className={`rounded-md px-2 py-1 font-mono text-[11px] uppercase tracking-wider ${
+            tab === "mine" ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           + {t("pipe.cinemaMyCast", { n: mine?.length ?? 0 })}
@@ -124,8 +124,8 @@ export function LibraryDrawer({
         <button
           type="button"
           onClick={() => setTab("new")}
-          className={`rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-            tab === "new" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+          className={`rounded-md px-2 py-1 font-mono text-[11px] uppercase tracking-wider ${
+            tab === "new" ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           + {t("common.new")}
@@ -135,7 +135,7 @@ export function LibraryDrawer({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {tab === "featured" && (
           <>
-            <p className="rounded-md border border-[#2a2a2a] p-2 font-mono text-[10px] text-muted-foreground">
+            <p className="rounded-md border border-[#2a2a2a] p-2 font-mono text-[11px] text-muted-foreground">
               <span className="text-[#ff0073]">ⓘ</span> {t("pipe.cinemaFeaturedInfoPre")}{t("common.fragmentGap")}
               <span className="text-foreground">{t("pipe.cinemaUseInShotQuoted")}</span>{t("common.fragmentGap")}{t("pipe.cinemaFeaturedInfoPost")}
             </p>
@@ -152,9 +152,9 @@ export function LibraryDrawer({
         )}
         {tab === "mine" &&
           (mine === null ? (
-            <p className="font-mono text-[10px] text-muted-foreground">{t("pipe.loadingLibrary")}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">{t("pipe.loadingLibrary")}</p>
           ) : mine.length === 0 ? (
-            <p className="font-mono text-[10px] text-muted-foreground">
+            <p className="font-mono text-[11px] text-muted-foreground">
               {t("pipe.cinemaNothingSavedYet")}
             </p>
           ) : (
@@ -186,7 +186,7 @@ export function LibraryDrawer({
                 onUseInShot?.(`new ${type}`, newDesc)
                 setNewDesc("")
               }}
-              className="w-full rounded-md bg-[#ff0073] py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
+              className="w-full rounded-md bg-cta py-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
             >
               {t("pipe.cinemaUseInShot")}
             </button>
@@ -218,7 +218,7 @@ function Card({
           {thumb ? (
             <img src={thumb} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="flex h-full w-full items-center justify-center font-mono text-[8px] text-muted-foreground">
+            <span className="flex h-full w-full items-center justify-center font-mono text-[11px] text-muted-foreground">
               @
             </span>
           )}
@@ -228,17 +228,17 @@ function Card({
             <span className="truncate font-mono text-[11px] font-bold text-foreground">
               @{name.replace(/\s+/g, "")}
             </span>
-            <span className="shrink-0 font-mono text-[8px] uppercase tracking-wider text-muted-foreground">
+            <span className="shrink-0 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
               {tag}
             </span>
           </div>
-          <p className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{description}</p>
+          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{description}</p>
         </div>
       </div>
       <button
         type="button"
         onClick={onUse}
-        className="mt-2 hidden w-full rounded bg-[#ff0073]/15 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-[#ff0073] group-hover:block"
+        className="mt-2 hidden w-full rounded bg-[#ff0073]/15 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-[#ff0073] group-hover:block"
       >
         {t("pipe.cinemaUseInShot")}
       </button>

@@ -79,7 +79,7 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
               disabled={busy}
               className="h-8 flex-1 min-w-[200px] font-mono text-xs"
             />
-            <Button type="submit" size="sm" disabled={busy} className="h-8 bg-[#ff0073] hover:bg-[#e0005f] text-white">
+            <Button type="submit" size="sm" disabled={busy} className="h-8 bg-cta hover:bg-cta-hover text-white">
               {phase === "saving" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {phase === "saving" ? t("common.saving") : t("common.save")}
             </Button>
@@ -147,7 +147,7 @@ function StateBadge({ tile }: { readonly tile: ProviderTile }) {
   const t = useT()
   if (tile.disabled && tile.present) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
         {t("integ.stateDisabled")}
       </span>
@@ -155,14 +155,14 @@ function StateBadge({ tile }: { readonly tile: ProviderTile }) {
   }
   if (tile.present) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
         {tile.state}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center rounded-full border border-dashed border-gray-300 dark:border-gray-600 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+    <span className="inline-flex items-center rounded-full border border-dashed border-gray-300 dark:border-gray-600 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
       {t("integ.stateMissing")}
     </span>
   )

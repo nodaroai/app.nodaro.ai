@@ -26,7 +26,7 @@ function Field({
 }) {
   return (
     <div>
-      <div className="text-[10px] text-slate-400 mb-1">{label}</div>
+      <div className="text-[11px] text-slate-400 mb-1">{label}</div>
       {area ? (
         <textarea
           value={value}
@@ -64,12 +64,12 @@ export function PersonalityTab({ state }: { state: CharacterStudioState }) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-lg">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.personality")}</div>
+      <div className="text-[11px] uppercase tracking-wide text-slate-500">{t("studio.personality")}</div>
       <Field label={t("studio.moodLabel")} value={p.mood} onChange={(v) => set({ mood: v })} ph={t("studio.moodPh")} />
       <Field label={t("studio.speechStyleLabel")} value={p.speechStyle} onChange={(v) => set({ speechStyle: v })} ph={t("studio.speechStylePh")} />
       <Field label={t("studio.movementStyleLabel")} value={p.movementStyle} onChange={(v) => set({ movementStyle: v })} ph={t("studio.movementStylePh")} />
       <Field label={t("studio.behavioralNotesLabel")} value={p.behavioralNotes} onChange={(v) => set({ behavioralNotes: v })} area ph={t("studio.behavioralNotesPh")} />
-      <div className="text-[9px] text-slate-500">{t("studio.personalityStoredNote")}</div>
+      <div className="text-[11px] text-slate-500">{t("studio.personalityStoredNote")}</div>
     </div>
   )
 }

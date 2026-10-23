@@ -110,7 +110,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
               node's permanent shape: only an exact-locked credential pins the
               address. A prefix lock or no credential leaves it editable. */}
           {lockedUrl !== null && (
-            <span className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            <span className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
               <Lock className="h-2.5 w-2.5" />
               {t("utilcfg.webhookLockedChip")}
             </span>
@@ -120,7 +120,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
             stays a real, labelled input even when disabled, which is what the
             locked state is — a field you cannot edit, not a picture of one. */}
         <div className="relative">
-          <span className="pointer-events-none absolute inset-y-0 start-2 flex items-center text-[9.5px] font-bold tracking-[0.06em] text-emerald-700 dark:text-emerald-400">
+          <span className="pointer-events-none absolute inset-y-0 start-2 flex items-center text-[11px] font-bold tracking-[0.06em] text-emerald-700 dark:text-emerald-400">
             POST
           </span>
           <Input dir="ltr"
@@ -137,15 +137,15 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
           <div role="alert" className="mt-1 flex items-start gap-2 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-2 py-1.5">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] text-amber-800 dark:text-amber-300">{t("utilcfg.webhookCredentialUrlMismatch")}</p>
-              <p className="text-[10px] font-mono text-muted-foreground truncate" title={lockedUrl}>{lockedUrl}</p>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300">{t("utilcfg.webhookCredentialUrlMismatch")}</p>
+              <p className="text-[11px] font-mono text-muted-foreground truncate" title={lockedUrl}>{lockedUrl}</p>
             </div>
-            <Button variant="outline" size="sm" className="h-6 text-[10px] shrink-0" onClick={() => onUpdate({ url: lockedUrl })}>
+            <Button variant="outline" size="sm" className="h-6 text-[11px] shrink-0" onClick={() => onUpdate({ url: lockedUrl })}>
               {t("utilcfg.webhookUseLockedUrl")}
             </Button>
           </div>
         ) : (
-          <p className="text-[10px] text-muted-foreground mt-1">{urlHint}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{urlHint}</p>
         )}
       </div>
 
@@ -190,7 +190,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
             )}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {credentialHint}{" "}
           <Link to="/integrations" className="underline underline-offset-2">
             {t("utilcfg.webhookCredentialManage")}
@@ -208,7 +208,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
         </div>
 
         {params.length === 0 && (
-          <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+          <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
             {t("utilcfg.noParamsDefined")}
           </p>
         )}
@@ -218,7 +218,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
             <div key={param.id} className="flex items-center gap-1.5">
               <span
                 aria-hidden
-                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9.5px] font-bold text-white"
+                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white"
                 title={param.type}
               >
                 {PARAM_TYPE_MARK[param.type]}
@@ -243,7 +243,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
                   <SelectItem value="audioUrl">{t("utilcfg.audioUrl")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
+              <Button aria-label={t("common.delete")}
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
@@ -256,7 +256,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
         </div>
 
         {params.length > 0 && (
-          <p className="mt-2 text-[10px] text-muted-foreground">
+          <p className="mt-2 text-[11px] text-muted-foreground">
             {params.length === 1
               ? t("utilcfg.webhookParamCountOne")
               : t("utilcfg.webhookParamCount", { n: params.length })}
@@ -269,7 +269,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
           it: nothing records WHEN, and a guessed time on a delivery receipt
           is the worst place to guess. Cleared by Clear Results along with the
           rest of the run data, so it never outlives what it describes. */}
-      <div className="flex items-center gap-2 border-t border-border pt-3 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
         <span>{t("utilcfg.webhookLastRun")}</span>
         {statusCode === null ? (
           <span>{t("utilcfg.webhookNoRunYet")}</span>

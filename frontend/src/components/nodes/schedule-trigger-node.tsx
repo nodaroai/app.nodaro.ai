@@ -78,7 +78,7 @@ function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
             <Clock className="h-3 w-3 shrink-0 text-[#ff0073]" />
             <span className="truncate">{view.nextRun} · {timezone}</span>
           </p>
-          <div className="mt-0.5 pt-2 border-t border-border/60 flex items-center gap-2 text-[10px] text-muted-foreground">
+          <div className="mt-0.5 pt-2 border-t border-border/60 flex items-center gap-2 text-[11px] text-muted-foreground">
             <span
               data-testid="schedule-state"
               data-state={state}

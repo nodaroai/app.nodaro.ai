@@ -52,7 +52,7 @@ const chipTriggerClass =
   "rounded-md text-[11px] font-medium min-w-0 w-auto whitespace-nowrap [&_svg]:!size-3 [&_svg]:opacity-60 " +
   "[&[data-state=open]]:!border-[#ff0073]"
 
-const kickerClass = "text-[9px] font-mono uppercase tracking-[0.12em] text-muted-foreground/70"
+const kickerClass = "text-[11px] font-mono uppercase tracking-[0.12em] text-muted-foreground"
 
 const clamp = (lines: number): CSSProperties => ({
   display: "-webkit-box",
@@ -207,7 +207,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                   <SelectItem key={s.id} value={s.id} className="text-xs">
                     <span className="flex flex-col gap-0.5">
                       <span>{t(REDUCE_STRATEGY_COPY[s.id].label)}</span>
-                      <span className="text-[10px] leading-tight text-muted-foreground/70">{t(REDUCE_STRATEGY_COPY[s.id].description)}</span>
+                      <span className="text-[11px] leading-tight text-muted-foreground">{t(REDUCE_STRATEGY_COPY[s.id].description)}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -224,7 +224,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                     <SelectItem key={m.id} value={m.id} className="text-xs">
                       <span className="flex flex-col gap-0.5">
                         <span>{m.displayName}</span>
-                        <span className="text-[10px] leading-tight text-muted-foreground/70">{localizeDesc(m.desc)}</span>
+                        <span className="text-[11px] leading-tight text-muted-foreground">{localizeDesc(m.desc)}</span>
                       </span>
                     </SelectItem>
                   ))}
@@ -245,7 +245,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                     <SelectItem key={o.value} value={o.value} className="text-xs">
                       <span className="flex flex-col gap-0.5">
                         <span>{o.label}</span>
-                        <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
+                        <span className="text-[11px] leading-tight text-muted-foreground">{o.description}</span>
                       </span>
                     </SelectItem>
                   ))}
@@ -253,7 +253,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
               </Select>
             )}
             <span className="flex-1" />
-            {countLabel && <span className="text-[10px] font-mono text-muted-foreground">{countLabel}</span>}
+            {countLabel && <span className="text-[11px] font-mono text-muted-foreground">{countLabel}</span>}
           </div>
 
           <div className="px-3 py-3 flex flex-col gap-3">
@@ -328,16 +328,16 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className={kickerClass}>{t("cfgext.reduceTabCandidates")}</span>
-                <span className="text-[10px] text-muted-foreground/70">
+                <span className="text-[11px] text-muted-foreground">
                   {candidates.length === 0
                     ? (upstreamCount ? t("node.runToSeeThem") : t("node.connectCandidates"))
                     : isAI ? t("node.winnerMarkedBelow") : strategyLabel.toLowerCase()}
                 </span>
               </div>
               {candidates.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 gap-1">
+                <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground gap-1">
                   <FileText className="w-4 h-4" />
-                  <span className="text-[10px]">{strategyLabel}</span>
+                  <span className="text-[11px]">{strategyLabel}</span>
                 </div>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
@@ -353,9 +353,9 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                         }
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-mono text-muted-foreground/70">#{i + 1}</span>
+                          <span className="text-[11px] font-mono text-muted-foreground">#{i + 1}</span>
                           {win && (
-                            <span className="text-[8px] font-mono tracking-[0.1em] px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073]">
+                            <span className="text-[11px] font-mono tracking-[0.1em] px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073]">
                               {t("node.winner")}
                             </span>
                           )}
@@ -389,13 +389,13 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                   </span>
                 )}
                 {reasoning && (
-                  <p className="text-[10px] italic text-muted-foreground/80 border-l-2 border-muted-foreground/30 pl-1.5" style={clamp(2)}>
+                  <p className="text-[11px] italic text-muted-foreground border-l-2 border-muted-foreground/30 pl-1.5" style={clamp(2)}>
                     {reasoning}
                   </p>
                 )}
               </div>
             ) : (
-              <span className="text-[11px] text-muted-foreground/60">
+              <span className="text-[11px] text-muted-foreground">
                 {status === "running" ? t("node.choosingEllipsis") : t("node.runToSeeTheResult")}
               </span>
             )}

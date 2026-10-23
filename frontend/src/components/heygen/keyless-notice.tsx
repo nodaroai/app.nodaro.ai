@@ -7,7 +7,7 @@ import { useT } from "@/lib/i18n"
  * The one way a "this install has no key for this catalog" state renders.
  *
  * A keyless HeyGen catalog used to draw the same empty state as "no results"
- * — dim icon, grey title, the remedy in `text-muted-foreground/70` at the
+ * — dim icon, grey title, the remedy in `text-muted-foreground` at the
  * bottom of a large void — and read as a broken picker (#865, founder soak).
  * The state is not empty, it is BLOCKED ON CONFIGURATION, and the product
  * already has a house treatment for exactly that: the amber banner the voice
@@ -68,7 +68,7 @@ export function KeylessNotice({
       >
         <Icon aria-hidden className={cn("mx-auto opacity-80", compact ? "size-5" : "size-7")} />
         <p className={cn("mt-1.5 font-semibold", compact ? "text-[11px]" : "text-sm")}>{title}</p>
-        <p className={cn("mt-1 leading-snug", compact ? "text-[10px]" : "text-xs")}>{hint}</p>
+        <p className={cn("mt-1 leading-snug", compact ? "text-[11px]" : "text-xs")}>{hint}</p>
         {showAction && <KeysScreenLink compact={compact} />}
       </div>
     </div>
@@ -82,7 +82,7 @@ function KeysScreenLink({ compact }: { readonly compact: boolean }) {
   // mousedown otherwise starts a canvas drag instead of following the link.
   const className = cn(
     "nodrag nopan mt-2 inline-block rounded-full bg-amber-500/15 font-semibold hover:bg-amber-500/25",
-    compact ? "px-2.5 py-0.5 text-[10px]" : "px-3 py-1 text-xs",
+    compact ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs",
   )
   const label = t("heygen.openIntegrations")
   return inRouter ? (

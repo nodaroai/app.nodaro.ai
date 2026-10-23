@@ -193,7 +193,7 @@ export function PublishDialog({
                     {t("community.attestLikeness")}
                   </span>
                 </label>
-                <p className="text-xs text-muted-foreground/80 ps-7">
+                <p className="text-xs text-muted-foreground ps-7">
                   {t("community.likenessPublicNote")}
                 </p>
               </>

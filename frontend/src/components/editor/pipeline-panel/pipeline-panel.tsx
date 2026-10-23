@@ -594,7 +594,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           >
             {t("pipe.originalPipeline")}
           </button>
-          <span className="text-muted-foreground/70">
+          <span className="text-muted-foreground">
             {t("pipe.branchedAtStageLabel", { stage: stageLabel(pipeline.branched_from_stage ?? "", t) })}
           </span>
         </div>

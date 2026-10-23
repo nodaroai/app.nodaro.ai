@@ -50,9 +50,9 @@ function Unavailable({ reason }: { reason: string }) {
   const t = useT()
   return (
     <div className="flex flex-col items-center justify-center gap-1.5 h-full w-full rounded-md border border-dashed border-[var(--border-primary)] bg-muted/20 p-3 text-center">
-      <MonitorX className="w-5 h-5 text-muted-foreground/60" />
+      <MonitorX className="w-5 h-5 text-muted-foreground" />
       <p className="text-[11px] text-muted-foreground">{reason}</p>
-      <p className="text-[10px] text-muted-foreground/70">{t("cfgext.scene3dDataIntact")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("cfgext.scene3dDataIntact")}</p>
     </div>
   )
 }

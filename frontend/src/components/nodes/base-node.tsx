@@ -136,17 +136,17 @@ const CATEGORY_STYLES: Record<string, string> = {
 const CATEGORY_HEADER: Record<string, string> = {
   input: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#007AFF] dark:bg-[#38BDF8] dark:text-white dark:border-t-0",
   parameter: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#6366F1] dark:bg-[#818CF8] dark:text-white dark:border-t-0",
-  ai: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  ai: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   processing: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#475569] dark:bg-[#475569] dark:text-white dark:border-t-0",
   output: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#22C55E] dark:bg-green-600 dark:text-white dark:border-t-0",
-  scene: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  scene: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   character: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#EC4899] dark:bg-[#F472B6] dark:text-white dark:border-t-0",
   face: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#F97316] dark:bg-[#FB923C] dark:text-white dark:border-t-0",
   object: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#10B981] dark:bg-[#34D399] dark:text-white dark:border-t-0",
   creature: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#8B5CF6] dark:bg-[#A78BFA] dark:text-white dark:border-t-0",
   location: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#06B6D4] dark:bg-[#22D3EE] dark:text-white dark:border-t-0",
-  script: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
-  i2v: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  script: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  i2v: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   component: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#A855F7] dark:bg-[#A855F7] dark:text-white dark:border-t-0",
 }
 
@@ -801,7 +801,7 @@ function BaseNodeComponent({
               category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-[#ff0073]" :
               (category === "character" || category === "location" || category === "object" || category === "creature" ||
                category === "ai"        || category === "scene"    || category === "script" || category === "i2v")
-                                        ? "bg-[#ff0073] dark:bg-white/20 text-white hover:opacity-70" :
+                                        ? "bg-cta dark:bg-white/20 text-white hover:opacity-70" :
               cn(CATEGORY_ICON_COLOR[category], "hover:text-[#ff0073]")
             )}
           >
@@ -818,12 +818,12 @@ function BaseNodeComponent({
               to its own start — the right edge — and truncates on the left. */}
           <span dir={textDir} className="flex-1 truncate">{localizeNode(label)}</span>
           {listProgress && (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
+            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
               {listProgress}
             </span>
           )}
           {!listProgress && listCount !== undefined && listCount > 1 && (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
               x{listCount}
             </span>
           )}
@@ -834,7 +834,7 @@ function BaseNodeComponent({
               community/business the numbers would be fiction. */}
           {hasCredits() && credits !== undefined && credits > 0 && (
             <span className={cn(
-              "font-mono text-[10px]",
+              "font-mono text-[11px]",
               (category === "ai" || category === "scene" || category === "script" || category === "i2v")
                 ? "text-white/70 dark:text-[#ff0073]"
                 : "text-[#64748B] dark:text-[#ff0073]"
@@ -847,7 +847,7 @@ function BaseNodeComponent({
               data-testid="node-credits-range"
               title={t(creditsRangeBasis === "length" ? "node.creditsRangeTitleLength" : "node.creditsRangeTitle", { min: creditsRange.min, max: creditsRange.max })}
               className={cn(
-                "font-mono text-[10px]",
+                "font-mono text-[11px]",
                 (category === "ai" || category === "scene" || category === "script" || category === "i2v")
                   ? "text-white/70 dark:text-[#ff0073]"
                   : "text-[#64748B] dark:text-[#ff0073]"
@@ -855,14 +855,14 @@ function BaseNodeComponent({
             >{t("node.creditsRange", { min: creditsRange.min, max: creditsRange.max })}</span>
           )}
           {isSkipped && (
-            <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
+            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
               {t("node.skipBadge")}
             </span>
           )}
           {runSkipReason === "empty_input" && (
             <span
               title={t("node.skippedEmptyInputTitle")}
-              className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/25"
+              className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/25"
             >
               {t("node.skippedEmptyInputChip")}
             </span>
@@ -875,10 +875,10 @@ function BaseNodeComponent({
           <div className="flex items-center justify-between mb-1">
             {/* Status text follows the user's language; the percentage next
                 to it is digits, which read the same either way. */}
-            <span dir={textDir} className="text-[10px] font-mono text-cyan-300">
+            <span dir={textDir} className="text-[11px] font-mono text-cyan-300">
               {listProgressPercent < 100 ? t("node.processingList") : t("node.listComplete")}
             </span>
-            <span className="text-[10px] font-mono text-cyan-300">
+            <span className="text-[11px] font-mono text-cyan-300">
               {listProgressPercent}%
             </span>
           </div>
@@ -1014,7 +1014,7 @@ function BaseNodeComponent({
               // bidi runs (a localized port name mixing Hebrew and Latin).
               dir={textDir}
               className={cn(
-                "absolute text-[9px] font-medium pointer-events-none select-none leading-none px-1 py-0.5 rounded",
+                "absolute text-[11px] font-medium pointer-events-none select-none leading-none px-1 py-0.5 rounded",
                 "text-muted-foreground bg-background/80 dark:bg-muted/60",
                 h.type === "target" ? "left-3" : "right-3",
               )}

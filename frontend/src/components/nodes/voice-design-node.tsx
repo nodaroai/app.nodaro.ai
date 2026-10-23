@@ -140,7 +140,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -148,7 +148,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 120, flex: 1 }}>
             <Wand2 className="w-5 h-5" />
           </div>
         )}
@@ -157,7 +157,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); handleCopyVoiceId() }}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground hover:bg-muted transition-colors truncate"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 text-[11px] text-muted-foreground hover:bg-muted transition-colors truncate"
             title={t("node.voiceIdValue", { id: nodeData.generatedVoiceId ?? "" })}
           >
             {copied ? <Check className="w-2.5 h-2.5 shrink-0" /> : <Copy className="w-2.5 h-2.5 shrink-0" />}

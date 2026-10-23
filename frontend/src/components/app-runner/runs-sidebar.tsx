@@ -116,7 +116,7 @@ export function RunsSidebar({
       {/* Version selector — only shown when multiple versions exist */}
       {hasMultipleVersions && (
         <div className="px-4 py-2 border-b border-border/50">
-          <label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
+          <label className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 block">
             {t("runner.runOnVersion")}
           </label>
           <select

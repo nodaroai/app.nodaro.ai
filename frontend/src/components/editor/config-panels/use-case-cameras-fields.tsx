@@ -86,7 +86,7 @@ export function UseCaseCamerasFields({
           mediaOrder={ordered.map((r) => r.nodeId)}
           onUpdateOrder={(order) => onUpdate({ mediaOrder: order })}
           mediaType="any"
-          renderRowExtra={(entry) => <span className="text-[10px] text-muted-foreground">{rowName(entry.id)}</span>}
+          renderRowExtra={(entry) => <span className="text-[11px] text-muted-foreground">{rowName(entry.id)}</span>}
         />
         {hasMaster && (
           <p className="text-xs text-muted-foreground">

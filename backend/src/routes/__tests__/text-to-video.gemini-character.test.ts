@@ -219,10 +219,14 @@ describe("POST /v1/text-to-video — characterReferences", () => {
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
-  it("rejects more than 3 characters at the schema", async () => {
-    const res = await post({ provider: "gemini-omni-video", characterReferences: [char(), char(), char(), char()] })
-    expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe("validation_error")
+  it("rejects more characters than the widest provider cap at the schema, and a 4th on Gemini Omni at its own cap", async () => {
+    // The wire ceiling is the widest declared cap (Kling 4.0: 7).
+    const overWire = await post({ provider: "gemini-omni-video", characterReferences: Array.from({ length: 8 }, () => char()) })
+    expect(overWire.statusCode).toBe(400)
+    expect(overWire.json().error.code).toBe("validation_error")
+    const overGemini = await post({ provider: "gemini-omni-video", characterReferences: [char(), char(), char(), char()] })
+    expect(overGemini.statusCode).toBe(400)
+    expect(overGemini.json().error.code).toBe("character_references_over_limit")
   })
 
   it("enforces the shared 7-unit budget", async () => {

@@ -302,7 +302,7 @@ export default function LoginPage() {
               {showGoogle && (
                 <div className="flex items-center gap-3">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground/60">{t("auth.or")}</span>
+                  <span className="text-xs text-muted-foreground">{t("auth.or")}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
@@ -325,7 +325,7 @@ export default function LoginPage() {
               {(showEmailAuth || showGoogle) && (
                 <div className="flex items-center gap-3">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground/60">{t("auth.or")}</span>
+                  <span className="text-xs text-muted-foreground">{t("auth.or")}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
@@ -348,7 +348,7 @@ export default function LoginPage() {
           )}
 
           {showSelfRegistration ? (
-            <p className="text-xs text-muted-foreground/60 pt-1">
+            <p className="text-xs text-muted-foreground pt-1">
               {t("auth.newHere")}{" "}
               <Link to="/signup" className="underline underline-offset-2 hover:text-muted-foreground">
                 {t("auth.createAccount")}
@@ -359,7 +359,7 @@ export default function LoginPage() {
               </Link>
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground/60 pt-1">
+            <p className="text-xs text-muted-foreground pt-1">
               {t("auth.freeCredits", { credits: formatNumber(FREE_TIER_CREDITS) })}
             </p>
           )}

@@ -59,7 +59,7 @@ const MOTION_LEVEL_KEYS: Record<MotionLevel, MessageKey> = {
 }
 
 const LABEL =
-  "block font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
+  "block font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
 
 export function ComposerSpec({ pipelineId }: { pipelineId: string }) {
   const t = useT()
@@ -208,11 +208,11 @@ function ComposerPanel({
           <div className="flex items-center gap-2 text-sm font-semibold tracking-wide text-foreground">
             <span className="text-[#ff0073]">≡</span> {t("pipe.cinemaComposerSpec")}
           </div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             {t("pipe.cinemaSelectedShotParams")}
           </div>
         </div>
-        <span className="rounded-sm bg-[#ff0073] px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white">
+        <span className="rounded-sm bg-cta px-1.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider text-white">
           {t("pipe.cinemaProView")}
         </span>
       </div>
@@ -226,7 +226,7 @@ function ComposerPanel({
             onClick={() => setTab(id)}
             className={`rounded-md border px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors ${
               tab === id
-                ? "border-[#ff0073] bg-[#ff0073] text-white"
+                ? "border-[#ff0073] bg-cta text-white"
                 : "border-[#2a2a2a] bg-transparent text-muted-foreground hover:border-[#ff0073]/50"
             }`}
           >
@@ -245,7 +245,7 @@ function ComposerPanel({
       <div className="mb-4">
         <div className="mb-1 flex items-center justify-between">
           <span className={LABEL}>{t("pipe.cinemaInjectedEntities")}</span>
-          <span className="font-mono text-[9px] text-muted-foreground">
+          <span className="font-mono text-[11px] text-muted-foreground">
             {t("pipe.cinemaNLoaded", { n: stems.length })}
           </span>
         </div>
@@ -253,7 +253,7 @@ function ComposerPanel({
           {stems.map(({ k, kind }) => (
             <span
               key={`${kind}:${k}`}
-              className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] ${
+              className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px] ${
                 kind === "cast"
                   ? "border-sky-500/50 text-sky-300"
                   : kind === "loc"
@@ -264,7 +264,7 @@ function ComposerPanel({
               <span className="h-1.5 w-1.5 rounded-full bg-current" />@{k}
             </span>
           ))}
-          <span className="rounded-md border border-dashed border-[#2a2a2a] px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="rounded-md border border-dashed border-[#2a2a2a] px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
             {t("pipe.cinemaPlusInject")}
           </span>
         </div>
@@ -323,9 +323,9 @@ function ComposerPanel({
               key={d}
               type="button"
               onClick={() => setDuration(d)}
-              className={`rounded px-2 py-0.5 font-mono text-[10px] ${
+              className={`rounded px-2 py-0.5 font-mono text-[11px] ${
                 duration === d
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -344,7 +344,7 @@ function ComposerPanel({
               MOTION_LEVELS[(MOTION_LEVELS.indexOf(motionLevel as never) + 1) % MOTION_LEVELS.length],
             )
           }
-          className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[10px] text-[#ff0073]"
+          className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[11px] text-[#ff0073]"
         >
           {t(MOTION_LEVEL_KEYS[motionLevel])}
         </button>
@@ -352,17 +352,17 @@ function ComposerPanel({
 
       <div className="mb-4 flex items-center justify-between">
         <span className={LABEL}>{t("pipe.cinemaTtsVoice")}</span>
-        <span className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[10px] text-[#ff0073]">
+        <span className="rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 font-mono text-[11px] text-[#ff0073]">
           {t("pipe.cinemaTtsAutoOn")}
         </span>
       </div>
 
       <div className="mt-auto flex items-center gap-2 rounded-md border border-[#2a2a2a] p-2">
         <div className="flex-1">
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             {t("pipe.cinemaTokenOverhead")}
           </div>
-          <div className="font-mono text-[10px] text-foreground">
+          <div className="font-mono text-[11px] text-foreground">
             {note ?? t("pipe.cinemaReady4k")}
           </div>
         </div>
@@ -371,7 +371,7 @@ function ComposerPanel({
           onClick={() => void (tab === "framing" ? generate() : save())}
           disabled={busy || !shot.shot_id}
           title={tab === "framing" ? t("pipe.cinemaRerollKeyframe") : t("pipe.cinemaSaveDirectingSpec")}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ff0073] text-white disabled:opacity-40"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cta text-white disabled:opacity-40"
         >
           {busy ? "…" : "✦"}
         </button>
@@ -381,12 +381,12 @@ function ComposerPanel({
           type="button"
           onClick={() => void save()}
           disabled={busy || !shot.shot_id}
-          className="mt-2 rounded-md border border-[#2a2a2a] py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-40"
+          className="mt-2 rounded-md border border-[#2a2a2a] py-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-40"
         >
           {t("pipe.cinemaSaveSpec")}
         </button>
       )}
-      <div className="mt-2 font-mono text-[9px] text-muted-foreground">
+      <div className="mt-2 font-mono text-[11px] text-muted-foreground">
         {t("pipe.cinemaShotGrade", { n: shotNumber, grade: STYLE_PRESETS.find((s) => s.id === grade)?.label ?? "" })}
       </div>
     </div>
@@ -408,7 +408,7 @@ function SlatePreview({
     <div className="flex min-w-0 flex-1 flex-col p-4">
       <div className="mb-2 flex items-start justify-between">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#ff0073]">
+          <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-[#ff0073]">
             {t("pipe.cinemaShotSeconds", { n: String(number).padStart(2, "0"), s: shot.duration_seconds ?? 6 })} ·{" "}
             <span className="text-emerald-400">{t("node.ready")}</span>
           </div>
@@ -417,10 +417,10 @@ function SlatePreview({
           </div>
         </div>
         <div className="text-end">
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground">
+          <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-foreground">
             {t("pipe.cinema4kDci")}
           </div>
-          <div className="font-mono text-[9px] text-muted-foreground">
+          <div className="font-mono text-[11px] text-muted-foreground">
             {t("pipe.cinemaCodec")}
           </div>
         </div>
@@ -449,10 +449,10 @@ function SlatePreview({
             {t("pipe.cinemaKeyframePending")}
           </span>
         )}
-        <span className="absolute bottom-3 start-3 rounded border border-[#2a2a2a] bg-black/70 px-2 py-0.5 font-mono text-[10px] text-[#ff0073]">
+        <span className="absolute bottom-3 start-3 rounded border border-[#2a2a2a] bg-black/70 px-2 py-0.5 font-mono text-[11px] text-[#ff0073]">
           {t("pipe.cinemaTimecode", { n: number })}
         </span>
-        <span className="absolute bottom-3 end-3 rounded border border-[#2a2a2a] bg-black/70 px-2 py-0.5 font-mono text-[10px] text-foreground">
+        <span className="absolute bottom-3 end-3 rounded border border-[#2a2a2a] bg-black/70 px-2 py-0.5 font-mono text-[11px] text-foreground">
           {t("pipe.cinemaLensStatus")}
         </span>
       </div>
@@ -472,7 +472,7 @@ function ShotFilmstrip({
   const t = useT()
   return (
     <div className="flex items-center gap-3 border-t border-[#1d1d1d] p-3">
-      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+      <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
         {t("pipe.cinemaFilmstripSequence")}
       </span>
       <div className="flex gap-1.5 overflow-x-auto">
@@ -488,7 +488,7 @@ function ShotFilmstrip({
             {s.shot.keyframe_url ? (
               <img src={s.shot.keyframe_url} alt="" className="h-full w-full object-cover" />
             ) : (
-              <span className="flex h-full w-full items-center justify-center bg-[#161616] font-mono text-[8px] text-muted-foreground">
+              <span className="flex h-full w-full items-center justify-center bg-[#161616] font-mono text-[11px] text-muted-foreground">
                 {t("pipe.cinemaShotAbbrev", { n: String(s.n).padStart(2, "0") })}
               </span>
             )}

@@ -144,7 +144,7 @@ export default function SignupPage() {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           {!awaitingConfirmation && (
-            <p className="text-xs text-muted-foreground/60 pt-1">
+            <p className="text-xs text-muted-foreground pt-1">
               {t("signup.alreadyHaveAccount")}{" "}
               <Link to="/login" className="underline underline-offset-2 hover:text-muted-foreground">
                 {t("auth.signIn")}

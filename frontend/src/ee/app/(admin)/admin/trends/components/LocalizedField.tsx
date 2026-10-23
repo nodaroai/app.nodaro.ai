@@ -52,7 +52,7 @@ export function LocalizedField({ label, value, onChange, maxLength, multiline, o
               onClick={() => setLang(l)}
               className={cn(
                 "relative h-8 min-w-9 rounded-md border px-2 text-xs font-medium",
-                lang === l ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted",
+                lang === l ? "border-primary bg-cta text-primary-foreground" : "bg-background hover:bg-muted",
               )}
             >
               {byId.get(l)?.shortCode ?? l}

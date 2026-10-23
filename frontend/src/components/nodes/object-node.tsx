@@ -157,17 +157,16 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               )}
-              <CachedImage
+              <button type="button" onClick={(e) => {
+                  e.stopPropagation()
+                  setLightboxSrc(activeUrl)
+                }} aria-label={t("common.preview")} className="block w-full h-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                 src={activeUrl}
                 alt={nodeData.objectName || t("node.objectProps")}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setLightboxSrc(activeUrl)
-                }}
-              />
+              /></button>
             </div>
             {/* Save to library button */}
             <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -250,7 +249,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
               <span className="text-xs font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[9px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -258,7 +257,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <ImageIcon className="w-5 h-5" />
           </div>
         )}
@@ -301,7 +300,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
             motion clips). referencePhotos has no async status (manual upload
             only) so renders with the same neutral idle state as a 0-count
             badge. */}
-        <div className="grid grid-cols-5 gap-1 text-[9px]">
+        <div className="grid grid-cols-5 gap-1 text-[11px]">
           <AssetBadge icon="📐" label={t("node.assetBadgeAngles")} count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
           <AssetBadge icon="🧱" label={t("node.assetBadgeMaterials")} count={counts.materials} status={nodeData.materialsStatus ?? "idle"} />
           <AssetBadge icon="✨" label={t("node.assetBadgeVariations")} count={counts.variations} status={nodeData.variationsStatus ?? "idle"} />
@@ -316,7 +315,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         <button
           type="button"
           aria-label={t("cfgext.entOpenObjectStudio")}
-          className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium bg-[#0e3a2e] border border-[#34D39944] text-[#6ee7b7] rounded hover:bg-[#114b3b] transition-colors"
+          className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-medium bg-[#0e3a2e] border border-[#34D39944] text-[#6ee7b7] rounded hover:bg-[#114b3b] transition-colors"
           onClick={(e) => {
             e.stopPropagation()
             setObjectStudioNodeId(id)
@@ -327,7 +326,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         </button>
 
         {/* Metadata */}
-        <div className="flex justify-between text-muted-foreground text-[10px]">
+        <div className="flex justify-between text-muted-foreground text-[11px]">
           <span>{nodeData.style in STYLE_LABEL_KEYS ? t(STYLE_LABEL_KEYS[nodeData.style]) : nodeData.style}</span>
           <span>{nodeData.category in CATEGORY_LABEL_KEYS ? t(CATEGORY_LABEL_KEYS[nodeData.category]) : nodeData.category}</span>
         </div>
@@ -377,7 +376,7 @@ function AssetBadge({
         className="flex flex-col items-center gap-0 px-0.5 py-0.5 rounded bg-muted/40"
       >
         <Loader2 className="w-2.5 h-2.5 animate-spin" />
-        <span className="text-[8px] text-muted-foreground">{label}</span>
+        <span className="text-[11px] text-muted-foreground">{label}</span>
       </span>
     )
   }
@@ -392,11 +391,11 @@ function AssetBadge({
     <span
       title={`${label}${hasItems ? ` — ${count}` : ""}`}
       className={`flex flex-col items-center gap-0 px-0.5 py-0.5 rounded ${
-        hasItems ? filledClass : "bg-muted/30 text-muted-foreground/40"
+        hasItems ? filledClass : "bg-muted/30 text-muted-foreground"
       }`}
     >
       <span className="leading-none">{icon}</span>
-      <span className="text-[8px] leading-tight">{hasItems ? `${label} ${display}` : label}</span>
+      <span className="text-[11px] leading-tight">{hasItems ? `${label} ${display}` : label}</span>
     </span>
   )
 }

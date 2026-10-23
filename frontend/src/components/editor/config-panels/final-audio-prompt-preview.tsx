@@ -116,7 +116,7 @@ export function FinalAudioPromptPreview({
       {preview.kind === "suno" ? (
         preview.fields.map((f) => (
           <div key={f.key} className="flex flex-col gap-1">
-            <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
               {f.label}
             </div>
             <pre dir="auto" className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
@@ -126,7 +126,7 @@ export function FinalAudioPromptPreview({
         ))
       ) : (
         <>
-          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+          <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
             {preview.label}
           </div>
           <pre dir="auto" className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
@@ -135,7 +135,7 @@ export function FinalAudioPromptPreview({
           {preview.warnings.length > 0 && (
             <div className="flex flex-col gap-0.5">
               {preview.warnings.map((w, i) => (
-                <div key={i} className="text-[10px] text-amber-600 dark:text-amber-400">
+                <div key={i} className="text-[11px] text-amber-600 dark:text-amber-400">
                   ⚠ {w}
                 </div>
               ))}

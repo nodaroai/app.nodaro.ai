@@ -130,7 +130,7 @@ function InstanceRow({ inst, onChanged }: { inst: ConnectedInstance; onChanged: 
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontFamily: MONO_FONT, fontSize: 10, letterSpacing: "0.14em", color: "var(--blg-t2-dim)" }}>
+        <div style={{ fontFamily: MONO_FONT, fontSize: 11, letterSpacing: "0.14em", color: "var(--blg-t2-dim)" }}>
           {t("billing.spentThisMonth")}
         </div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--blg-t1)" }}>

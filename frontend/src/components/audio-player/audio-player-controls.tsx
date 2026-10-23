@@ -5,6 +5,7 @@
 // the wavesurfer instance. This is the only place the transport UI is defined,
 // so a fix or restyle here applies to every audio surface in the app.
 
+import { seekSlider } from "@/lib/seek-slider"
 import { memo } from "react"
 import { Play, Pause, Square, Download } from "lucide-react"
 import { useT } from "@/lib/i18n"
@@ -56,7 +57,7 @@ function AudioPlayerControlsComponent({
           type="button"
           aria-label={isPlaying ? t("common.pause") : t("common.play")}
           onClick={(e) => { e.stopPropagation(); onPlayPause() }}
-          className={`${BTN} w-7 h-7 rounded-full bg-[#ff0073] text-white hover:bg-[#ff0073]/90`}
+          className={`${BTN} w-7 h-7 rounded-full bg-cta text-white hover:bg-cta-hover`}
         >
           {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 translate-x-px" />}
         </button>
@@ -67,7 +68,7 @@ function AudioPlayerControlsComponent({
           type="button"
           aria-label={t("common.stop")}
           onClick={(e) => { e.stopPropagation(); onStop() }}
-          className={`${BTN} w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-foreground/70 hover:text-foreground hover:bg-black/20 dark:hover:bg-white/20`}
+          className={`${BTN} w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-foreground/80 hover:text-foreground hover:bg-black/20 dark:hover:bg-white/20`}
         >
           <Square className="w-3 h-3" />
         </button>
@@ -76,6 +77,7 @@ function AudioPlayerControlsComponent({
       {showProgressBar && (
         <div
           className="flex-1 min-w-[40px] h-1.5 rounded-full bg-foreground/15 cursor-pointer"
+          {...seekSlider({ label: t("common.position"), fraction: progress, onSeek })}
           onClick={(e) => {
             e.stopPropagation()
             const rect = e.currentTarget.getBoundingClientRect()

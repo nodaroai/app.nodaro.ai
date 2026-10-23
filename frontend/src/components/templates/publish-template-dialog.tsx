@@ -380,7 +380,7 @@ export function PublishTemplateDialog({
                     className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
                   >
                     {tag}
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
                       className="hover:text-destructive"
@@ -472,7 +472,7 @@ export function PublishTemplateDialog({
                   {detectedNodeTypes.map((type) => (
                     <span
                       key={type}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
+                      className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
                     >
                       {type}
                     </span>
@@ -490,7 +490,7 @@ export function PublishTemplateDialog({
                   {detectedProviders.map((provider) => (
                     <span
                       key={provider}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20 font-medium"
+                      className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20 font-medium"
                     >
                       {provider}
                     </span>

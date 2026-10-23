@@ -10,6 +10,7 @@
 // the way down — its prompt, its still, its motion, its clip in the timeline —
 // rather than describe the machine. Clicking a clip re-traces everything.
 
+import { pressable } from "@/lib/pressable"
 import { useMemo, useState } from "react"
 import { nodeText, nodeMedia } from "../derive-tutorial-data"
 import { TutorialAudio } from "../tutorial-audio"
@@ -82,10 +83,8 @@ export default function UnderwaterBody({ nodes }: TutorialBodyProps) {
               <span
                 className="uw-still tl-openable"
                 style={{ backgroundImage: `url(${url})` }}
-                role="button"
-                tabIndex={0}
                 aria-label={t("tut.openSceneStill", { n: scene })}
-                onClick={() => lightbox.show(url, t("tut.sceneN", { n: scene }))}
+                {...pressable(() => lightbox.show(url, t("tut.sceneN", { n: scene })))}
               />
             )}
             <span>

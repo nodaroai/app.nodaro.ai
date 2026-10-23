@@ -173,7 +173,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
           <span className="text-sm font-medium truncate">{localizeNode(nodeData.label || "Component")}</span>
         </div>
         {nodeData.pinnedVersion > 0 && (
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 mt-1">
+          <Badge variant="secondary" className="text-[11px] px-1.5 py-0 mt-1">
             v{nodeData.pinnedVersion}
           </Badge>
         )}
@@ -188,14 +188,14 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
             return (
               <div key={h.id}>
                 <div className="flex items-center justify-between mb-1">
-                  <Label className="text-[10px] text-muted-foreground">
+                  <Label className="text-[11px] text-muted-foreground">
                     {h.name}
                     {h.required && <span className="text-red-400 ms-0.5">*</span>}
                   </Label>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0">{handleType(h.type)}</Badge>
+                  <Badge variant="outline" className="text-[11px] px-1 py-0">{handleType(h.type)}</Badge>
                 </div>
                 {isConnected ? (
-                  <div className="text-[10px] text-muted-foreground/60 italic px-2 py-1.5 bg-muted/30 rounded-md">
+                  <div className="text-[11px] text-muted-foreground italic px-2 py-1.5 bg-muted/30 rounded-md">
                     {t("cfgext.cmpCfgConnectedUpstream")}
                   </div>
                 ) : h.type === "text" ? (
@@ -206,7 +206,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                     onChange={(e) => handleInputChange(h.id, h.fieldKey, e.target.value)}
                   />
                 ) : (
-                  <div className="text-[10px] text-muted-foreground/60 italic px-2 py-1.5 bg-muted/30 rounded-md">
+                  <div className="text-[11px] text-muted-foreground italic px-2 py-1.5 bg-muted/30 rounded-md">
                     {t("cfgext.cmpCfgConnectTypeFromUpstream", { type: handleType(h.type) })}
                   </div>
                 )}
@@ -242,7 +242,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                 const opts = setting.options ?? (setting.allowedValues ?? []).map((v) => ({ value: String(v), label: String(v) }))
                 return (
                   <div key={key}>
-                    <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                    <Label className="text-[11px] text-muted-foreground">{setting.label}</Label>
                     <AspectRatioSelector
                       options={opts}
                       value={String(value ?? "")}
@@ -262,7 +262,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                 if (setting.field === "aspectRatio") {
                   return (
                     <div key={key}>
-                      <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                      <Label className="text-[11px] text-muted-foreground">{setting.label}</Label>
                       <AspectRatioSelector
                         options={opts}
                         value={String(value ?? "")}
@@ -280,7 +280,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                 const displayOpts = hasCurrentValue ? opts : [{ value: strVal, label: strVal }, ...opts]
                 return (
                   <div key={key}>
-                    <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                    <Label className="text-[11px] text-muted-foreground">{setting.label}</Label>
                     <Select
                       value={strVal}
                       onValueChange={(v) => handleSettingChange(setting, v)}
@@ -302,7 +302,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
               case "toggle":
                 return (
                   <div key={key} className="flex items-center justify-between">
-                    <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                    <Label className="text-[11px] text-muted-foreground">{setting.label}</Label>
                     <Switch
                       checked={!!value}
                       onCheckedChange={(v) => handleSettingChange(setting, v)}
@@ -312,7 +312,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
               case "number":
                 return (
                   <div key={key}>
-                    <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                    <Label className="text-[11px] text-muted-foreground">{setting.label}</Label>
                     <Input
                       type="number"
                       className="mt-1 h-8 text-xs"
@@ -325,7 +325,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
               default:
                 return (
                   <div key={key}>
-                    <Label className="text-[10px] text-muted-foreground">{setting.label}</Label>
+                    <Label className="text-[11px] text-muted-foreground">{setting.label}</Label>
                     <Input
                       className="mt-1 h-8 text-xs"
                       value={String(value ?? "")}
@@ -344,9 +344,9 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
           <Label className="text-xs font-medium">{t("preview.outputs")}</Label>
           <div className="flex flex-col gap-1 mt-1">
             {meta.outputs.map((h) => (
-              <div key={h.id} className="flex items-center justify-between text-[10px]">
+              <div key={h.id} className="flex items-center justify-between text-[11px]">
                 <span className="text-muted-foreground">{h.name}</span>
-                <Badge variant="outline" className="text-[9px] px-1 py-0">{handleType(h.type)}</Badge>
+                <Badge variant="outline" className="text-[11px] px-1 py-0">{handleType(h.type)}</Badge>
               </div>
             ))}
           </div>

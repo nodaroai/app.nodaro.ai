@@ -99,7 +99,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
             </SelectContent>
           </Select>
           {strategy?.description && (
-            <p className="text-[10px] text-muted-foreground">{t(REDUCE_STRATEGY_COPY[strategy.id].description)}</p>
+            <p className="text-[11px] text-muted-foreground">{t(REDUCE_STRATEGY_COPY[strategy.id].description)}</p>
           )}
         </div>
 
@@ -177,7 +177,7 @@ function ReduceInputsTab({
                   <span className="text-muted-foreground font-mono shrink-0">[{i}]</span>
                   <span className="flex-1 min-w-0">{truncated}</span>
                   {isSelected && (
-                    <span className="shrink-0 text-[10px] uppercase font-medium tracking-wide text-[#ff0073]">
+                    <span className="shrink-0 text-[11px] uppercase font-medium tracking-wide text-[#ff0073]">
                       {t("cfgext.reduceChosen")}
                     </span>
                   )}

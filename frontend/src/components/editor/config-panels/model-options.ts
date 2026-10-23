@@ -159,6 +159,8 @@ export const VIDEO_I2V_MODELS = [
   { value: "wan-3", label: "Wan 3.0", desc: "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "wan-3-prime", label: "Wan 3.0 Prime", desc: "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "vidu-q4", label: "Vidu Q4", desc: "ShengShu Vidu Q4, 3–16s, 540p–4K, native audio, start frame or 15 image + 3 MP3 audio refs" },
+  { value: "kling-4", label: "Kling 4.0", desc: "Kuaishou Kling 4.0, 3–30s, 720p/1080p, native audio, image/video/character/voice refs" },
+  { value: "kling-4-keyframes", label: "Kling 4.0 Keyframes", desc: "Kuaishou Kling 4.0, 3–30s, start + up to 8 in-between + end frames, native audio" },
   { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
 ]
 
@@ -192,6 +194,8 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "wan-3", label: "Wan 3.0", desc: "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "wan-3-prime", label: "Wan 3.0 Prime", desc: "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "vidu-q4", label: "Vidu Q4", desc: "ShengShu Vidu Q4, 3–16s, 540p–4K, native audio (image required)" },
+  { value: "kling-4", label: "Kling 4.0", desc: "Kuaishou Kling 4.0, 3–30s, 720p/1080p, native audio, image/video/character/voice refs" },
+  { value: "kling-4-keyframes", label: "Kling 4.0 Keyframes", desc: "Kuaishou Kling 4.0, 3–30s, start + up to 8 in-between + end frames, native audio" },
   { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
 ]
 

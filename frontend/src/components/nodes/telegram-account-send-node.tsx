@@ -61,20 +61,20 @@ function TelegramAccountSendNodeComponent({ id, data, selected }: NodeProps) {
                 {asBot ? <Bot className="h-3.5 w-3.5 shrink-0" /> : <User className="h-3.5 w-3.5 shrink-0" />}
                 <span className="truncate">{t(fromKey)}</span>
               </div>
-              <span className="text-[10.5px] text-muted-foreground">{t(toKey)}</span>
+              <span className="text-[11px] text-muted-foreground">{t(toKey)}</span>
             </>
           ) : (
             <span className="text-muted-foreground">{t("tgsend.cardConfigure")}</span>
           )}
           {running && (
-            <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
               {t("tgsend.cardSending")}
             </span>
           )}
           {!running && sent && (
             <div className="rounded-md bg-muted/30 p-2">
-              <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">{t("tgsend.cardSent")}</span>
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">{t("tgsend.cardSent")}</span>
               <p className="mt-0.5 line-clamp-4 whitespace-pre-line text-[11px] text-foreground/80" dir="auto">
                 {sent}
               </p>

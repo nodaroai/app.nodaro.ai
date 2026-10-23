@@ -23,7 +23,7 @@ export function ConfigPanel({ data: raw, onUpdate }: ConfigProps<never> & { read
         />
         <label htmlFor="gif-loop-to-minimum" className="text-xs">{t("proccfg.extendShortGifsToATarget")}</label>
       </div>
-      <p className="text-[10px] text-muted-foreground px-1 leading-snug">
+      <p className="text-[11px] text-muted-foreground px-1 leading-snug">
         {t("proccfg.mostGifsAreShorterThanThe")}
       </p>
 
@@ -40,7 +40,7 @@ export function ConfigPanel({ data: raw, onUpdate }: ConfigProps<never> & { read
             onChange={(e) => onUpdate({ targetDuration: parseInt(e.target.value, 10) })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>{t("proccfg.s2", { n: 2 })}</span>
             <span>{t("proccfg.s2", { n: 5 })}</span>
             <span>{t("proccfg.s2", { n: 8 })}</span>
@@ -57,7 +57,7 @@ export function ConfigPanel({ data: raw, onUpdate }: ConfigProps<never> & { read
             <SelectItem value="stepped">{t("proccfg.preserveOriginalTiming")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+        <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
           {t("proccfg.smoothSynthesisesInBetweenFramesFor")}
         </p>
       </div>
@@ -71,7 +71,7 @@ export function ConfigPanel({ data: raw, onUpdate }: ConfigProps<never> & { read
             <SelectItem value="black">{t("proccfg.black")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+        <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
           {t("proccfg.mp4CanTCarryTransparencyA")}
         </p>
       </div>

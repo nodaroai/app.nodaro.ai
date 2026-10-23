@@ -59,7 +59,7 @@ export default function AdminReviewPage() {
           <TabsTrigger value="queue">
             {t("adminReview.tabQueue")}
             {(data?.total ?? 0) > 0 && (
-              <span className="ms-2 rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+              <span className="ms-2 rounded-full bg-cta px-1.5 text-xs text-primary-foreground">
                 {data?.total}
               </span>
             )}

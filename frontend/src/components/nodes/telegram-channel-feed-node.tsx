@@ -107,7 +107,7 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {lastSeen !== null && !running && state.kind !== "empty" && (
-            <p className="text-[10px] text-[var(--meta-ads-faint)]">{t("node.feedLastSeen", { id: lastSeen })}</p>
+            <p className="text-[11px] text-[var(--meta-ads-faint)]">{t("node.feedLastSeen", { id: lastSeen })}</p>
           )}
         </div>
       </BaseNode>

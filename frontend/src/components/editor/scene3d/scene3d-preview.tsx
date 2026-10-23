@@ -247,7 +247,7 @@ function Scene3DV1Preview({
   /** "Base pose" / "Keyframe @ N" — so the write is labelled, not guessed. */
   const modeBadge = (mode: PoseEditMode) => (
     <span
-      className={`text-[9px] shrink-0 ${mode === "base" ? "text-muted-foreground/60" : "text-[#ff0073]"}`}
+      className={`text-[11px] shrink-0 ${mode === "base" ? "text-muted-foreground" : "text-[#ff0073]"}`}
       title={mode === "base" ? t("cfgext.scene3dModeBaseHint") : t("cfgext.scene3dModeKeyframeHint")}
     >
       {mode === "base" ? t("cfgext.scene3dModeBase") : t("cfgext.scene3dModeKeyframe", { frame })}
@@ -294,7 +294,7 @@ function Scene3DV1Preview({
           onChange={(e) => seek(Number.parseInt(e.target.value, 10))}
           className="w-full accent-[#ff0073]"
         />
-        <span className="text-[10px] font-mono text-muted-foreground shrink-0 tabular-nums">
+        <span className="text-[11px] font-mono text-muted-foreground shrink-0 tabular-nums">
           {(frame / fps).toFixed(2)}s
         </span>
       </div>
@@ -318,7 +318,7 @@ function Scene3DV1Preview({
 
       {/* Objects */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Boxes className="w-3 h-3" />
           <span>{t("cfgext.scene3dObjectCount", { count: objects.length })}</span>
           {revisionId && <span className="ms-auto font-mono">{t("scene3dcfg.revShort", { id: revisionId.slice(0, 8) })}</span>}
@@ -345,9 +345,9 @@ function Scene3DV1Preview({
                     style={{ backgroundColor: object.color }}
                   />
                   <span className="truncate">{object.name}</span>
-                  <span className="text-[9px] text-muted-foreground shrink-0">{object.primitive}</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0">{object.primitive}</span>
                   {object.keyframeCount > 0 && (
-                    <span className="text-[9px] text-muted-foreground/70 shrink-0">{object.keyframeCount}k</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0">{object.keyframeCount}k</span>
                   )}
                 </button>
                 {readOnly ? (
@@ -361,7 +361,7 @@ function Scene3DV1Preview({
                     type="button"
                     aria-label={isLocked ? t("scene3dcfg.unlockObject", { name: object.name }) : t("scene3dcfg.lockObject", { name: object.name })}
                     aria-pressed={isLocked}
-                    className={isLocked ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"}
+                    className={isLocked ? "text-amber-500" : "text-muted-foreground hover:text-foreground"}
                     onClick={() => toggleLocked(object.id)}
                   >
                     {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
@@ -384,7 +384,7 @@ function Scene3DV1Preview({
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium truncate">{activeObjectView.name}</span>
               {locked.includes(activeObjectView.id) && (
-                <span className="text-[9px] text-amber-500 inline-flex items-center gap-0.5">
+                <span className="text-[11px] text-amber-500 inline-flex items-center gap-0.5">
                   <Lock className="w-2.5 h-2.5" /> {t("cfgext.scene3dLockedForModel")}
                 </span>
               )}
@@ -425,7 +425,7 @@ function Scene3DV1Preview({
               )
             })}
             <div className="grid grid-cols-[52px_1fr] items-center gap-1">
-              <span className="text-[10px] text-muted-foreground">{t("cfgext.scene3dColor")}</span>
+              <span className="text-[11px] text-muted-foreground">{t("cfgext.scene3dColor")}</span>
               <input
                 type="color"
                 aria-label={t("scene3dcfg.objectColor", { name: activeObjectView.name })}
@@ -480,7 +480,7 @@ function Scene3DV1Preview({
           )
         })}
         <div className="grid grid-cols-[52px_1fr] items-center gap-1">
-          <span className="text-[10px] text-muted-foreground">{t("cfgext.scene3dLens")}</span>
+          <span className="text-[11px] text-muted-foreground">{t("cfgext.scene3dLens")}</span>
           <Scene3DNumberField
             value={cameraSample?.focalLengthMm ?? baseCamera.focalLengthMm}
             step={1}
@@ -500,7 +500,7 @@ function Scene3DV1Preview({
           />
         </div>
         <div className="grid grid-cols-[52px_1fr] items-center gap-1">
-          <span className="text-[10px] text-muted-foreground">{t("cfgext.scene3dBackdrop")}</span>
+          <span className="text-[11px] text-muted-foreground">{t("cfgext.scene3dBackdrop")}</span>
           <input
             type="color"
             aria-label={t("scene3dcfg.backgroundColor")}
@@ -522,7 +522,7 @@ function Scene3DV1Preview({
 
 
       {isGenerating && (
-        <p className="text-[10px] text-muted-foreground">{t("cfgext.scene3dLiveWhileRunning")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.scene3dLiveWhileRunning")}</p>
       )}
     </div>
   )

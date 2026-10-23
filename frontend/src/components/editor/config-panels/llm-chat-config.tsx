@@ -1,5 +1,6 @@
 "use client"
 
+import { CoverButton } from "@/components/ui/cover-button"
 import { useT, tx } from "@/lib/i18n"
 import { useEffect, useMemo, useState } from "react"
 import { AdvancedModeToggle } from "./advanced-mode-toggle"
@@ -60,7 +61,7 @@ function MediaRefRow({
       <div className="flex items-center gap-2">
         {icon}
         <span className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</span>
-        <span className="text-[10px] text-muted-foreground ms-auto">{urls.length}/{max}</span>
+        <span className="text-[11px] text-muted-foreground ms-auto">{urls.length}/{max}</span>
       </div>
       {urls.length > 0 && (
         <ul className="space-y-1">
@@ -533,7 +534,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
               {t("txtcfg.generatedPrompts")}
             </Label>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
               {t("txtcfg.itemCount", { n: data.generatedItems.length })}
             </span>
           </div>
@@ -541,10 +542,10 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             {data.generatedItems.map((item, idx) => (
               <div key={idx} className="group">
                 <div
-                  className="flex items-start gap-2 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] hover:bg-gray-100 dark:hover:bg-[#1a1a1a] cursor-pointer transition-colors"
+                  className="relative flex items-start gap-2 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] hover:bg-gray-100 dark:hover:bg-[#1a1a1a] cursor-pointer transition-colors"
                   onClick={() => setExpandedItemIndex(expandedItemIndex === idx ? null : idx)}
                 >
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-500/10 text-violet-500 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-500/10 text-violet-500 text-[11px] font-bold flex items-center justify-center mt-0.5">
                     {idx + 1}
                   </span>
                   {expandedItemIndex === idx ? (
@@ -562,7 +563,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                   ) : (
                     <p className="flex-1 text-xs text-muted-foreground line-clamp-2">{item}</p>
                   )}
-                  <button
+                  <button aria-label={t("common.remove")}
                     onClick={(e) => {
                       e.stopPropagation()
                       const updated = data.generatedItems!.filter((_, i) => i !== idx)
@@ -573,6 +574,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                   >
                     <X className="w-3 h-3 text-red-500" />
                   </button>
+                  <CoverButton label={t("common.expand")} onActivate={() => (() => setExpandedItemIndex(expandedItemIndex === idx ? null : idx))()} />
                 </div>
               </div>
             ))}
@@ -593,12 +595,12 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
               : t("txtcfg.createImageNodes", { n: data.generatedItems.length })}
           </button>
           {createdIds.length > 0 && (
-            <p className="text-[10px] text-center text-muted-foreground">
+            <p className="text-[11px] text-center text-muted-foreground">
               {t("txtcfg.nodesPreviouslyCreated", { n: createdIds.length })}
             </p>
           )}
           {!hasRefImage && (
-            <p className="text-[10px] text-center text-amber-600 dark:text-amber-400">
+            <p className="text-[11px] text-center text-amber-600 dark:text-amber-400">
               {t("txtcfg.noRefImageConnected")}
             </p>
           )}
@@ -634,7 +636,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             </div>
           )}
           {!isGenerating && (imageNodeStatuses.completed > 0 || imageNodeStatuses.failed > 0) && (
-            <p className="text-[10px] text-center text-muted-foreground">
+            <p className="text-[11px] text-center text-muted-foreground">
               {t("txtcfg.succeededCount", { n: imageNodeStatuses.completed })}{imageNodeStatuses.failed > 0 ? t("txtcfg.failedCountSuffix", { n: imageNodeStatuses.failed }) : ""}
             </p>
           )}
@@ -647,7 +649,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           <div className="flex items-center justify-between">
             <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("audiocfg.result")}</Label>
             {results.length > 1 && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <button
                   onClick={() => {
                     const prev = Math.max(0, activeIdx - 1)

@@ -91,7 +91,7 @@ export function CharactersPanel({ pipelineId, plan, mode }: Props) {
         <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
           {t("pipe.stageLabelCharacters")}
         </div>
-        <div className="text-[10px] uppercase tracking-wider text-sky-700 dark:text-sky-300 font-semibold">
+        <div className="text-[11px] uppercase tracking-wider text-sky-700 dark:text-sky-300 font-semibold">
           {t("pipe.stepADescription")}
         </div>
       </div>
@@ -308,7 +308,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
           onClick={handleApprove}
           disabled={!canApprove || busy !== null}
           data-testid="step-a-approve"
-          className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+          className="bg-cta hover:bg-cta-hover text-white"
         >
           {busy === "approve" && <Loader2 className="w-3 h-3 me-1 animate-spin" />}
           {isEdited ? t("pipe.saveAndApprove") : t("pipe.approve")}

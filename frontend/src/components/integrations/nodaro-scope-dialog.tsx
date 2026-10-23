@@ -180,7 +180,7 @@ export function NodaroScopeDialog({
           <Button
             onClick={() => void commit({ scope, precedence })}
             disabled={saving}
-            className="bg-[#ff0073] hover:bg-[#e0005f] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {saving && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
             {t("common.save")}

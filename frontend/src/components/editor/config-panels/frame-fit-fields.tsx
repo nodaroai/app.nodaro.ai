@@ -35,7 +35,10 @@ import { useT } from "@/lib/i18n"
 /** Does the model accept reference images at all? Same test the backend runs. */
 export function supportsReferenceDelivery(provider: string | undefined): boolean {
   if (!provider) return false
-  return Boolean(getModel(provider)?.features?.includes("reference-image"))
+  const features = getModel(provider)?.features
+  // A keyframes model's reference images are in-between FRAMES — a frame
+  // delivered as a reference would become one (mirrors video-frame-dispatch.ts).
+  return Boolean(features?.includes("reference-image") && !features.includes("keyframes"))
 }
 
 /** Is a persisted value one this select can render? Anything else is stale. */
@@ -115,7 +118,7 @@ export function FrameFitFields({ provider, resolution, aspectRatio, frameFit, fr
           </SelectContent>
         </Select>
         {canvas && (
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.frameFitCanvasHint", { width: canvas[0], height: canvas[1] })}
           </p>
         )}

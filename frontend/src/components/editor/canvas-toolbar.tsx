@@ -345,7 +345,7 @@ export function CanvasToolbar({
           onPointerUp={onDragEnd}
           onPointerCancel={onDragEnd}
           onDoubleClick={resetPos}
-          className="flex items-center justify-center h-4 mb-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground transition-colors touch-none"
+          className="flex items-center justify-center h-4 mb-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors touch-none"
           aria-label={t("ctb.dragAria")}
           title={t("ctb.dragTitle")}
         >

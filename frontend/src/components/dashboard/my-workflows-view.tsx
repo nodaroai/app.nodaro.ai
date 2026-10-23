@@ -161,7 +161,7 @@ export function MyWorkflowsView({
                 <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} priority={i < 5} />
                 <div className="px-3 py-2.5">
                   <p className="text-[13px] font-semibold truncate">{wf.name}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground truncate flex items-center gap-1">
+                  <p className="mt-0.5 text-[11px] text-muted-foreground truncate flex items-center gap-1">
                     {wf.projectIsDefault && (
                       <Star
                         className="h-2.5 w-2.5 text-[#ff0073] fill-[#ff0073] flex-shrink-0"

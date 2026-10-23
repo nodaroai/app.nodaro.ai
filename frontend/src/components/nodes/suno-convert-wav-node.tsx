@@ -101,8 +101,8 @@ function SunoConvertWavNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
         {activeUrl && (<div className="px-3 py-2"><AudioResultOverlay url={activeUrl} label={nodeData.label} hasResults={results.length > 0} onExpand={() => setPreviewOpen(true)} onDelete={() => setDeleteConfirm(activeIndex)} /></div>)}
-        {status === "failed" && !activeUrl && (<div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2"><div className="flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /><span className="font-medium">{t("node.failed")}</span></div>{nodeData.errorMessage && (<p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>)}</div>)}
-        {status !== "running" && !activeUrl && status !== "failed" && (<div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}><FileAudio className="w-5 h-5" /></div>)}
+        {status === "failed" && !activeUrl && (<div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2"><div className="flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /><span className="font-medium">{t("node.failed")}</span></div>{nodeData.errorMessage && (<p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>)}</div>)}
+        {status !== "running" && !activeUrl && status !== "failed" && (<div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 120, flex: 1 }}><FileAudio className="w-5 h-5" /></div>)}
         <span className="text-xs text-muted-foreground">{t("node.convertWav")}</span>
       </div>
     </BaseNode>

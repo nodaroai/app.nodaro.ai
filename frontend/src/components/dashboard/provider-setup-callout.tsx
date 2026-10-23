@@ -77,7 +77,7 @@ export function ProviderSetupCallout({ userId }: { readonly userId: string | und
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <Button asChild size="sm" className="bg-[#ff0073] hover:bg-[#e6006a] text-white gap-1.5">
+        <Button asChild size="sm" className="bg-cta hover:bg-[#e6006a] text-white gap-1.5">
           <Link to="/setup">
             <Cloud className="h-4 w-4" />
             {t("dash.connectNodaro")}

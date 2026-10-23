@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { memo, useRef, useState, useCallback } from "react"
 import { Download, Copy, Play, Pause, Volume2, VolumeX, VideoIcon } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
@@ -113,6 +114,7 @@ function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementS
                 onHide={bound.onHide}
               />
             </div>
+            <CoverButton label={t("common.preview")} onActivate={handleClick} />
           </div>
           <ActionBar
             mediaType="video"

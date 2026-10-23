@@ -48,14 +48,14 @@ export function DialogueVoiceSettings({ provider, data, onUpdate }: Props) {
         <div>
           <Label htmlFor="dlg-stability">{t("field.stability")} ({stability})</Label>
           <Input id="dlg-stability" type="range" min={0} max={1} step={0.05} value={stability} onChange={(e) => onUpdate({ stability: parseFloat(e.target.value) })} className="h-2" />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
         </div>
       )}
       {dialogueHasLever(provider, "similarity") && (
         <div>
           <Label htmlFor="dlg-similarity">{t("audiocfg.similarity")} ({data.similarityBoost ?? TTS_VOICE_SETTING_DEFAULTS.similarityBoost})</Label>
           <Input id="dlg-similarity" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? TTS_VOICE_SETTING_DEFAULTS.similarityBoost} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
         </div>
       )}
     </>

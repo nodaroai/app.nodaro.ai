@@ -4,6 +4,7 @@ import { createPortal } from "react-dom"
 import { X, Loader2, Check } from "lucide-react"
 import { runtimeAudiomassOrigin, runtimeAudiomassUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
+import { useInertBehind } from "@/lib/use-inert-behind"
 
 /**
  * Read at RUNTIME, not inlined at build time — same reason as FreeCut (#767):
@@ -23,6 +24,9 @@ interface AudiomassEditorModalProps {
 
 export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: AudiomassEditorModalProps) {
   const t = useT()
+  // The page behind stays out of reach while the editor is open (use-inert-behind.ts).
+  const dialogRootRef = useRef<HTMLDivElement>(null)
+  useInertBehind(dialogRootRef)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done">("idle")
@@ -106,11 +110,11 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
   }, [])
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+    <div ref={dialogRootRef} role="dialog" aria-modal="true" aria-label={t("mediaed.audioEditorTitle")} className="fixed inset-0 z-[9999] bg-black flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 bg-[#1a1a2e] border-b border-white/10 shrink-0">
         <span className="text-sm font-medium text-white/80">{t("mediaed.audioEditorTitle")}</span>
-        <button
+        <button aria-label={t("common.close")}
           type="button"
           onClick={() => setShowCloseConfirm(true)}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"

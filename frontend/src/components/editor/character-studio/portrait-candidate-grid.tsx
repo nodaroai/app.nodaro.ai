@@ -45,7 +45,7 @@ export function PortraitCandidateGrid({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-[9px] uppercase tracking-wide text-slate-500">{t("cfgext.reduceTabCandidates")}</span>
+        <span className="text-[11px] uppercase tracking-wide text-slate-500">{t("cfgext.reduceTabCandidates")}</span>
         <div className="flex gap-1">
           {COUNTS.map((c) => (
             <button
@@ -53,7 +53,7 @@ export function PortraitCandidateGrid({
               type="button"
               aria-pressed={count === c}
               onClick={() => setCount(c)}
-              className={`text-[10px] h-6 w-7 rounded-md ${
+              className={`text-[11px] h-6 w-7 rounded-md ${
                 count === c
                   ? "bg-[#3b82f6] text-white"
                   : "bg-[#1e293b] text-slate-300 hover:bg-[#253245]"
@@ -67,7 +67,7 @@ export function PortraitCandidateGrid({
           type="button"
           disabled={busy}
           onClick={() => onGenerate(count)}
-          className="ms-auto text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
+          className="ms-auto text-[11px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
         >
           {generateLabel}
         </button>
@@ -112,20 +112,20 @@ function CandidateCard({
           className="block w-full h-full"
         >
           <img src={optimizedImageUrl(candidate.url)} alt={t("studio.candidateAltId", { id: candidate.jobId })} className="w-full h-full object-cover object-top" />
-          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] py-1 text-center">
+          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] py-1 text-center">
             {t("studio.clickToApprove")}
           </div>
         </button>
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center">
           {candidate.status === "failed" ? (
-            <span className="text-red-400 text-[10px]">{t("studio.failedLower")}</span>
+            <span className="text-red-400 text-[11px]">{t("studio.failedLower")}</span>
           ) : candidate.status === "cancelled" ? (
-            <span className="text-slate-500 text-[10px]">{t("studio.cancelledLower")}</span>
+            <span className="text-slate-500 text-[11px]">{t("studio.cancelledLower")}</span>
           ) : (
             <>
-              <div className="text-[10px] text-slate-400 mb-1">{candidate.status}</div>
-              <div className="text-[10px] text-slate-300">{Math.round(candidate.progress ?? 0)}%</div>
+              <div className="text-[11px] text-slate-400 mb-1">{candidate.status}</div>
+              <div className="text-[11px] text-slate-300">{Math.round(candidate.progress ?? 0)}%</div>
             </>
           )}
           {(candidate.status === "pending" || candidate.status === "running") && (

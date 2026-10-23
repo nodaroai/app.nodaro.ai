@@ -123,7 +123,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -131,7 +131,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !activeUrl && status !== "failed" && (
-              <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <ArrowUpFromLine className="w-6 h-6" />
               </div>
             )}
@@ -141,7 +141,10 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                 {results.slice(0, 5).map((r, i) => (
                   <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                     {r.thumbnailUrl ? (
-                      <CachedImage
+                      <button type="button" onClick={(e) => {
+                          e.stopPropagation()
+                          updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                        }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                         src={r.thumbnailUrl}
                         alt=""
                         className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
@@ -151,11 +154,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                         }`}
                         thumbnail
                         thumbnailWidth={80}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                        }}
-                      />
+                      /></button>
                     ) : (
                       <video
                         src={r.url}

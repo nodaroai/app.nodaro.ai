@@ -28,6 +28,7 @@ export function AppRunnerLayout({
       {showHistory && sidebar && (
         <>
           <div
+            aria-hidden="true"
             className="app-runner-sidebar-backdrop md:hidden"
             onClick={onCloseHistory}
           />

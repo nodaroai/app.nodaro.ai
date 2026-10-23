@@ -71,9 +71,9 @@ export function SpeakerViewTrackingSection({ nodeId, wired, tracks, motion, read
           />
         ))}
       </div>
-      <p className="text-[10px] text-muted-foreground">{t("speakerView.motion.hint")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("speakerView.motion.hint")}</p>
       {reasons.length > 0 && (
-        <ul className="flex flex-col gap-0.5 text-[10px] text-muted-foreground" data-testid="speaker-view-motion-reasons">
+        <ul className="flex flex-col gap-0.5 text-[11px] text-muted-foreground" data-testid="speaker-view-motion-reasons">
           {reasons.map((r) => <li key={r}>{r}</li>)}
         </ul>
       )}

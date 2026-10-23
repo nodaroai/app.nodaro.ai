@@ -247,7 +247,7 @@ export default function ExplorePage() {
                 className="ps-9 h-9"
               />
               {searchInput && (
-                <button
+                <button aria-label={t("common.clear")}
                   type="button"
                   className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setSearchInput("")}
@@ -283,7 +283,7 @@ export default function ExplorePage() {
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-16">
-          <Compass className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+          <Compass className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-foreground mb-2">
             {view === "favorites" ? t("explore.emptyFavoritesTitle") : t("explore.emptyBrowseTitle")}
           </h2>

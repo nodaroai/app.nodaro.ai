@@ -97,7 +97,7 @@ function AudioSyncNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
               ))}
               {notes.length > 0 && (
-                <div className="flex items-start gap-1 pt-1 text-[10px] text-amber-500" title={notes.join("\n")}>
+                <div className="flex items-start gap-1 pt-1 text-[11px] text-amber-500" title={notes.join("\n")}>
                   <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
                   <span className="line-clamp-2">{t("node.audioSyncNotes", { count: notes.length })}</span>
                 </div>
@@ -112,7 +112,7 @@ function AudioSyncNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -120,9 +120,9 @@ function AudioSyncNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status !== "running" && offsets.length === 0 && status !== "failed" && (
-            <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 80, flex: 1 }}>
+            <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 80, flex: 1 }}>
               <AudioLines className="w-5 h-5" />
-              <span className="text-[10px] text-center px-2">{t("node.audioSyncConnect")}</span>
+              <span className="text-[11px] text-center px-2">{t("node.audioSyncConnect")}</span>
             </div>
           )}
 

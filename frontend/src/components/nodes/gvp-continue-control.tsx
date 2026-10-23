@@ -15,7 +15,7 @@ import {
 import type { GeneratedResult } from "@/types/nodes"
 
 const continueTriggerClass =
-  "inline-flex items-center gap-1 !h-6 !px-1.5 text-[10px] font-medium " +
+  "inline-flex items-center gap-1 !h-6 !px-1.5 text-[11px] font-medium " +
   "text-neutral-900/85 hover:!bg-black/10 dark:text-white/85 dark:hover:!bg-white/10 " +
   "rounded-md whitespace-nowrap [&_svg]:!size-3 [&_svg]:opacity-70 " +
   "[&[data-state=open]]:bg-black/10 dark:[&[data-state=open]]:bg-white/10"

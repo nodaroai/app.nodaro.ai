@@ -632,7 +632,7 @@ export default function SettingsPage() {
           <Button
             onClick={handleSaveTemplates}
             disabled={templatesMutation.isPending || !hasTemplateChanges}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {templatesMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin me-2" />
@@ -691,7 +691,7 @@ export default function SettingsPage() {
           <Button
             onClick={handleSaveTextTemplates}
             disabled={templatesMutation.isPending || !hasTextTemplateChanges}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {templatesMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin me-2" />
@@ -894,7 +894,7 @@ function TemplateGroupCard({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+              <button aria-label={t("common.details")} type="button" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Info className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
@@ -906,7 +906,7 @@ function TemplateGroupCard({
         </TooltipProvider>
 
         {hasOverride && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
             {t("settings.custom")}
           </span>
         )}
@@ -944,7 +944,7 @@ function TemplateGroupCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("settings.resetToDefault")}
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
@@ -1055,7 +1055,7 @@ function TemplateCard({
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-semibold">{t(info.labelKey)}</h4>
             {hasOverride && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
                 {t("settings.custom")}
               </span>
             )}
@@ -1068,7 +1068,7 @@ function TemplateCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("settings.resetToDefault")}
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"

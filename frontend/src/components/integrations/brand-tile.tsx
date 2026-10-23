@@ -122,7 +122,7 @@ export function BrandTile({ platformId, label, muted = false, size = "md" }: Bra
       style={tinted ? ({ "--brand-ink": ink } as React.CSSProperties) : undefined}
     >
       {icon ?? (
-        <span className={`font-mono font-medium ${size === "sm" ? "text-[10.5px]" : "text-[11px]"}`}>
+        <span className={`font-mono font-medium ${size === "sm" ? "text-[11px]" : "text-[11px]"}`}>
           {monogram(label)}
         </span>
       )}

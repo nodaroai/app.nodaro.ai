@@ -184,7 +184,7 @@ export default function VideoDirectorPage() {
             rows={4}
             className="resize-none bg-card"
           />
-          <div className="mt-0.5 text-end text-[10px] text-muted-foreground">
+          <div className="mt-0.5 text-end text-[11px] text-muted-foreground">
             {t("vd.charCount", { n: brief.length, max: MAX_BRIEF })}
           </div>
         </div>

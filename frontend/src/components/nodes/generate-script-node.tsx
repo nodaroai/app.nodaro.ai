@@ -120,10 +120,10 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                       scene.imageStatus === "failed" ? "border-red-500/40" : "border-border/40"
                     }`}
                   >
-                    <div className="text-[9px] font-medium text-muted-foreground">
+                    <div className="text-[11px] font-medium text-muted-foreground">
                       #{scene.sceneNumber}
                     </div>
-                    <div className="w-full aspect-video rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center text-muted-foreground/30">
+                    <div className="w-full aspect-video rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center text-muted-foreground">
                       {scene.imageStatus === "completed" && (scene.generatedImages ?? []).length > 0 ? (
                         <CachedImage src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={t("node.sceneN", { n: scene.sceneNumber })} className="w-full h-full object-cover" thumbnail thumbnailWidth={120} />
                       ) : scene.imageStatus === "running" ? (
@@ -132,8 +132,8 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                         <ImageIcon className="w-3.5 h-3.5" />
                       )}
                     </div>
-                    <div className="text-[9px] text-muted-foreground">{scene.durationHint}s</div>
-                    <div className="text-[8px] text-muted-foreground/60 truncate w-full text-center">
+                    <div className="text-[11px] text-muted-foreground">{scene.durationHint}s</div>
+                    <div className="text-[11px] text-muted-foreground truncate w-full text-center">
                       {scene.action}
                     </div>
                   </div>
@@ -141,7 +141,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               </div>
 
               {/* Credits estimate */}
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 pt-0.5 border-t border-border/30">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5 border-t border-border/30">
                 <span className="flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
                   {t("node.estCredits", { n: creditUnits(totalEstimatedCredits) })}
@@ -156,7 +156,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               {/* Expand fullscreen */}
               <button
                 type="button"
-                className="w-full h-6 flex items-center justify-center gap-1 text-[10px] font-medium rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
+                className="w-full h-6 flex items-center justify-center gap-1 text-[11px] font-medium rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowFullscreen(true)
@@ -212,7 +212,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -220,7 +220,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeScript && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <BookOpen className="w-5 h-5" />
           </div>
         )}

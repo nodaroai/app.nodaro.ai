@@ -104,7 +104,7 @@ export function JobConfigDisplay({ jobId }: JobConfigDisplayProps) {
     <dl className="text-xs space-y-2 px-3 py-2">
       {promoted.map(([k, v]) => (
         <div key={k}>
-          <dt className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-0.5">
+          <dt className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-0.5">
             {formatKey(k)}
           </dt>
           <dd className="text-gray-900 dark:text-[#E2E8F0] whitespace-pre-wrap break-words">

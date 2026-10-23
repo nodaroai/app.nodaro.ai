@@ -199,7 +199,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
           </span>
         </div>
         <span
-          className="ms-auto flex-none rounded-full px-2 py-[3px] text-[10.5px] font-bold"
+          className="ms-auto flex-none rounded-full px-2 py-[3px] text-[11px] font-bold"
           style={
             isConnected
               ? { background: "color-mix(in oklab, var(--integ-ok) 16%, transparent)", color: "var(--integ-ok)" }
@@ -248,7 +248,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
           className={`flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[10px] text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${
             isConnected
               ? "border border-dashed hover:border-solid"
-              : "bg-foreground font-bold text-background hover:opacity-90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+              : "bg-foreground font-bold text-background hover:opacity-90 dark:bg-cta dark:text-primary-foreground dark:hover:bg-cta-hover"
           }`}
           style={
             isConnected

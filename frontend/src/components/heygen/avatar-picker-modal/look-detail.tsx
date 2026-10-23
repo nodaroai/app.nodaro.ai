@@ -103,13 +103,13 @@ export function LookDetail({ person, look, onPickLook, onUse, voice, costLabel }
       <div className="relative h-[300px] shrink-0 overflow-hidden border-b border-border/60 bg-muted/40">
         <CachedImage key={look.avatarId} src={look.previewImageUrl} alt={look.name} className="h-full w-full object-cover object-top" />
         {avatarSupportsV(look) && (
-          <span className={cn(V_TAG, "absolute start-3 top-3 flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[9.5px] tracking-[0.08em]")}>
+          <span className={cn(V_TAG, "absolute start-3 top-3 flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] tracking-[0.08em]")}>
             <Sparkles className="size-2.5" aria-hidden />
             AVATAR V
           </span>
         )}
         {status && (
-          <span className={cn("absolute end-3 top-3 rounded-md px-2 py-1 text-[10px] font-bold text-white", statusKind === "failed" ? "bg-red-600/90" : "bg-amber-500/90")}>
+          <span className={cn("absolute end-3 top-3 rounded-md px-2 py-1 text-[11px] font-bold text-white", statusKind === "failed" ? "bg-red-600/90" : "bg-amber-500/90")}>
             {status}
           </span>
         )}
@@ -147,7 +147,7 @@ export function LookDetail({ person, look, onPickLook, onUse, voice, costLabel }
           onClick={() => onUse(look)}
           disabled={!usable}
           title={usable ? undefined : t("heygen.lookNotFinished")}
-          className="flex-1 rounded-lg bg-[#ff0073] py-2.5 text-center text-[13px] font-medium text-white hover:bg-[#e6006a] disabled:cursor-not-allowed disabled:opacity-40 whitespace-nowrap"
+          className="flex-1 rounded-lg bg-cta py-2.5 text-center text-[13px] font-medium text-white hover:bg-[#e6006a] disabled:cursor-not-allowed disabled:opacity-40 whitespace-nowrap"
         >
           {t("heygen.useThisAvatar")}
         </button>

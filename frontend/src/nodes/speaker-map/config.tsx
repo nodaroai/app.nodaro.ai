@@ -63,13 +63,13 @@ export function ConfigPanel({ data: raw, onUpdate, sources = [], kit }: ConfigPr
       <div className="flex flex-col gap-1.5">
         <Label>{t("proccfg.speakerMapMaster")}</Label>
         {pick("masterSourceId", "proccfg.speakerMapMasterAria")}
-        <p className="text-[10px] text-muted-foreground">{t("proccfg.speakerMapMasterHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("proccfg.speakerMapMasterHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("proccfg.speakerMapWide")}</Label>
         {pick("wideSourceId", "proccfg.speakerMapWideAria")}
-        <p className="text-[10px] text-muted-foreground">{t("proccfg.speakerMapWideHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("proccfg.speakerMapWideHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -86,7 +86,7 @@ export function ConfigPanel({ data: raw, onUpdate, sources = [], kit }: ConfigPr
           onValueChange={([v]) => onUpdate({ marginDb: v })}
           className="w-full"
         />
-        <p className="text-[10px] text-muted-foreground">{t("proccfg.speakerMapMarginHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("proccfg.speakerMapMarginHint")}</p>
       </div>
     </div>
   )

@@ -19,7 +19,7 @@ export function PaintMaskConfig({ data, onUpdate }: ConfigProps<PaintMaskData> &
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] tracking-[.12em] text-muted-foreground uppercase">{t("configPanel.label")}</label>
+        <label className="text-[11px] tracking-[.12em] text-muted-foreground uppercase">{t("configPanel.label")}</label>
         <Input
           value={data.label ?? ""}
           onChange={(e) => onUpdate({ label: e.target.value })}
@@ -28,7 +28,7 @@ export function PaintMaskConfig({ data, onUpdate }: ConfigProps<PaintMaskData> &
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] tracking-[.12em] text-muted-foreground uppercase">{t("cfgext.paintDefaultBrush")}</label>
+        <label className="text-[11px] tracking-[.12em] text-muted-foreground uppercase">{t("cfgext.paintDefaultBrush")}</label>
         <div className="flex gap-2">
           <div className="flex-1 flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11.5px]">

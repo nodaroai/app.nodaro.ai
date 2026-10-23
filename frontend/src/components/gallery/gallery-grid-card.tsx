@@ -44,11 +44,23 @@ export const GalleryGridCard = memo(function GalleryGridCard({
   const activate = () => (selecting ? onToggleSelected(item) : onSelect(index))
   const overlay = (
     <>
+      {/* The card's own control: a real button over the media, BESIDE the action
+          buttons rather than around them (a control inside a control is lost to
+          a screen reader, WCAG 4.1.2). It covers the card, so a click anywhere
+          still opens or selects it; the actions and the audio player sit above. */}
+      <button
+        type="button"
+        role={selecting ? "checkbox" : undefined}
+        aria-checked={selecting ? selected : undefined}
+        aria-label={t(selecting ? "gallery.selectItem" : "gallery.viewItem", { type: t(TYPE_LABEL_KEY[item.type]) })}
+        onClick={activate}
+        className="absolute inset-0 z-[2] cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ff0073]"
+      />
       {/* A render made at proxy quality (the owner's own view only): always visible, not on hover. */}
-      {item.preview && <PreviewBadge className={cn("absolute top-2 z-[3] text-[10px]", selecting ? "start-9" : "start-2")} />}
+      {item.preview && <PreviewBadge className={cn("pointer-events-none absolute top-2 z-[3] text-[11px]", selecting ? "start-9" : "start-2")} />}
 
       {/* Overlay */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-[3] pointer-events-none">
         <div className="flex items-center justify-between">
           <TypeBadge type={item.type} />
           <span className="text-white/60 text-xs">
@@ -58,12 +70,12 @@ export const GalleryGridCard = memo(function GalleryGridCard({
       </div>
 
       {selecting ? (
-        <span className="absolute top-2 start-2 z-[4] rounded bg-black/50 p-0.5" aria-hidden>
+        <span className="pointer-events-none absolute top-2 start-2 z-[4] rounded bg-black/50 p-0.5" aria-hidden>
           {selected ? <CheckSquare className="h-5 w-5 text-[#ff0073]" /> : <Square className="h-5 w-5 text-white" />}
         </span>
       ) : (
         /* Action buttons (top-right corner on hover) */
-        <div className="absolute top-2 end-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+        <div className="absolute top-2 end-2 flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-[3]">
           {showFavorite && (
             <button
               onClick={(e) => onToggleFavorite(item, e)}
@@ -101,21 +113,10 @@ export const GalleryGridCard = memo(function GalleryGridCard({
 
   return (
     <div
-      role={selecting ? "checkbox" : "button"}
-      aria-checked={selecting ? selected : undefined}
-      aria-label={t(selecting ? "gallery.selectItem" : "gallery.viewItem", { type: t(TYPE_LABEL_KEY[item.type]) })}
-      tabIndex={0}
       className={cn(
         "group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer",
         selected && "ring-4 ring-[#ff0073] hover:ring-[#ff0073]",
       )}
-      onClick={activate}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          activate()
-        }
-      }}
     >
       {item.type === "image" ? (
         <>

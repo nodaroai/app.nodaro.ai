@@ -140,10 +140,10 @@ export function PromptFieldFinalView({
           aria-label={t("cfgshared.copyFinalPrompt")}
           title={hasContent ? t("cfgshared.copyToClipboard") : t("cfgshared.nothingToCopy")}
           className={cn(
-            "absolute end-1.5 top-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
+            "absolute end-1.5 top-1.5 flex items-center gap-1 text-[11px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
             hasContent
               ? "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2D2D2D] cursor-pointer"
-              : "text-muted-foreground/40 cursor-not-allowed",
+              : "text-muted-foreground opacity-40 cursor-not-allowed",
           )}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -179,7 +179,7 @@ export function PromptFieldFinalView({
         </div>
       )}
       {routingCaption && (
-        <p className="px-0.5 text-[10px] text-muted-foreground">{routingCaption}</p>
+        <p className="px-0.5 text-[11px] text-muted-foreground">{routingCaption}</p>
       )}
     </div>
   )

@@ -169,7 +169,7 @@ function TrendRow({ trend }: { readonly trend: AdminTrendListItem }) {
           {trend.tags.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
               {trend.tags.map((g) => (
-                <Badge key={g} variant="secondary" className="text-[10px]">
+                <Badge key={g} variant="secondary" className="text-[11px]">
                   {g}
                 </Badge>
               ))}

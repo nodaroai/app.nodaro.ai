@@ -78,7 +78,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                   href={nodeData.platformPostUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] text-[#ff0073] hover:underline truncate max-w-[180px]"
+                  className="text-[11px] text-[#ff0073] hover:underline truncate max-w-[180px]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {t("cfgext.socialViewPost")}
@@ -92,7 +92,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
               <AlertCircle className="w-6 h-6 text-red-500" />
               <span className="text-[11px] font-medium text-red-500">{t("node.failed")}</span>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2 max-w-[180px]" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2 max-w-[180px]" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -100,7 +100,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status === "idle" && (
-            <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
+            <div className="flex flex-col items-center gap-2 text-muted-foreground">
               <Send className="w-8 h-8" />
               <span className="text-[11px]">
                 {nodeData.caption
@@ -108,7 +108,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                   : t("node.postToPlatform", { platform: PLATFORM_LABELS[platform] })}
               </span>
               {nodeData.action === "post-carousel" && listTotal && listTotal > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">
                   {listTotal === 1 ? t("inputcfg.itemOne", { n: listTotal }) : t("inputcfg.items2", { n: listTotal })}
                 </span>
               )}

@@ -100,11 +100,11 @@ export default function ProjectPage() {
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <Link to="/projects">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+        <Button asChild variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <Link to="/projects" aria-label={t("common.back")}>
             <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} />
-          </Button>
-        </Link>
+          </Link>
+        </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             {project.isDefault && (
@@ -120,7 +120,7 @@ export default function ProjectPage() {
             )}
             <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
             {readOnly && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
+              <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
                 {t("project.viewOnly")}
               </Badge>
             )}
@@ -132,7 +132,7 @@ export default function ProjectPage() {
         {!readOnly && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button aria-label={t("common.more")} variant="outline" size="sm">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

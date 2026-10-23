@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useState } from "react"
 import { X, Play, Download, Copy } from "lucide-react"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -30,7 +31,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
     return (
       <>
         <div className="flex flex-col gap-1">
-          <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
           {media.effectiveUrl ? (
             // eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions
             <div className="relative w-fit cursor-pointer" onClick={() => setPreviewOpen(true)}>
@@ -48,6 +49,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                   <X className="size-3" />
                 </button>
               )}
+              <CoverButton label={t("common.preview")} onActivate={() => setPreviewOpen(true)} />
             </div>
           ) : readOnly ? (
             <span className="text-xs text-muted-foreground">{t("present.noVideo")}</span>
@@ -118,6 +120,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                   onShare={() => shareMedia({ url: media.effectiveUrl!, title: label, type: "video" })}
                 />
               </div>
+              <CoverButton label={t("common.preview")} onActivate={() => setPreviewOpen(true)} />
             </div>
             {/* Mobile action bar */}
             <ActionBar

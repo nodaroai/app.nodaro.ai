@@ -5,6 +5,7 @@
  * Works in both "tab" mode (inside editor) and "fullscreen" mode (shared link).
  */
 
+import { pressable } from "@/lib/pressable"
 import { useState, useMemo, useCallback, useRef, useEffect, lazy, Suspense } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Plus, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
@@ -1184,12 +1185,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const status = getNodeStatus(node.id)
       const platform = (nodeData.platform as string) ?? "instagram"
       return (
-        <div className="rounded-lg border border-border bg-card overflow-hidden cursor-pointer" onClick={() => setConfigNode(node)}>
+        <div className="rounded-lg border border-border bg-card overflow-hidden cursor-pointer" {...pressable(() => setConfigNode(node))}>
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-xs font-medium text-foreground">{getCardTitle(node)}</span>
             <div className="flex items-center gap-2">
               <span
-                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                className="text-[11px] px-1.5 py-0.5 rounded-full font-medium"
                 style={{ backgroundColor: (PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888") + "20", color: PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888" }}
               >
                 {PLATFORM_LABELS[platform as keyof typeof PLATFORM_LABELS] ?? platform}
@@ -1666,7 +1667,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={signOut} className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground touch-manipulation">
+                    <Button aria-label={t("nav.signOut")} variant="ghost" size="sm" onClick={signOut} className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground touch-manipulation">
                       <LogOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -1697,7 +1698,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 className={`shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 ${
                   isResetAction(newRunAction)
                     ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
-                    : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+                    : "text-white bg-cta hover:bg-cta-hover"
                 }`}
               >
                 {isResetAction(newRunAction)
@@ -1724,7 +1725,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   <button
                     type="button"
                     onClick={() => setShowGetCreditsModal(true)}
-                    className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
+                    className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200"
                   >
                     <Sparkles className="h-4 w-4" />
                     {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
@@ -1737,7 +1738,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     <button
                       type="button"
                       onClick={handleRunClick}
-                      className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!!user && !allInputsFilled}
                     >
                       {!user ? (
@@ -1813,7 +1814,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("nav.signOut")}
                     variant="ghost"
                     size="sm"
                     onClick={signOut}
@@ -1944,7 +1945,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={handleRunClick}
-                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
                 >
                   {isFullscreen && !user ? (
@@ -2086,7 +2087,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               className={`shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
                 isResetAction(newRunAction)
                   ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
-                  : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+                  : "text-white bg-cta hover:bg-cta-hover"
               }`}
             >
               {isResetAction(newRunAction)
@@ -2112,7 +2113,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={() => setShowGetCreditsModal(true)}
-                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 touch-manipulation"
                 >
                   <Sparkles className="h-4 w-4" />
                   {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
@@ -2121,7 +2122,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={handleRunClick}
-                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                   disabled={!!user && !allInputsFilled}
                 >
                   {!user ? (

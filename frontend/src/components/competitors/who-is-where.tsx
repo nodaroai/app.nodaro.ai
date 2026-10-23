@@ -189,7 +189,7 @@ function BrandCell({
             >
               {c.brand}
             </button>
-            {c.isOwn && <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10.5px] font-bold text-muted-foreground">{t("competitors.yours")}</span>}
+            {c.isOwn && <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[11px] font-bold text-muted-foreground">{t("competitors.yours")}</span>}
             <span id={nameIdOf(c)} hidden>
               {c.brand}
             </span>

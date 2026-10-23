@@ -45,7 +45,7 @@ function AuditReportStrip({ report, compact }: { readonly report: VideoAuditRepo
   const t = useT()
   return (
     <div className="rounded-md border bg-muted/30 px-2 py-1.5 flex flex-col gap-1 shrink-0">
-      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground tabular-nums">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
         <SearchCheck className="w-3 h-3 shrink-0" />
         <span>{summariseFindings(report)}</span>
         {/* The run's OWN truth about which credit family it billed — the wired
@@ -54,7 +54,7 @@ function AuditReportStrip({ report, compact }: { readonly report: VideoAuditRepo
       </div>
       {report.summary && (
         <p
-          className={`text-[10px] leading-snug text-foreground/80 ${compact ? "line-clamp-3" : ""}`}
+          className={`text-[11px] leading-snug text-foreground/80 ${compact ? "line-clamp-3" : ""}`}
           title={report.summary}
         >
           {report.summary}
@@ -143,7 +143,7 @@ function VideoAuditNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -189,18 +189,18 @@ function VideoAuditNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && status !== "failed" && scenes.length === 0 && !report && (
             <div
-              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"
+              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"
               style={{ minHeight: 120, flex: 1 }}
             >
               <SearchCheck className="w-6 h-6" />
-              <span className="text-[10px]">{t("node.connectAVideoToAudit")}</span>
+              <span className="text-[11px]">{t("node.connectAVideoToAudit")}</span>
             </div>
           )}
 
           {/* Honest pre-run disclosure of the pricier family. Hidden while
               running (the strip's own `autoAnalysis` reports the run's truth). */}
           {status !== "running" && !analysisWired && (
-            <p className="text-[10px] leading-snug text-muted-foreground/70 shrink-0">
+            <p className="text-[11px] leading-snug text-muted-foreground shrink-0">
               {t("node.noAnalysisWiredRunsOwn")}
             </p>
           )}

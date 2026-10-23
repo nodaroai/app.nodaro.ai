@@ -115,7 +115,7 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-2 rounded-md bg-muted/30">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 <NodeJobProgress progress={nodeData.currentJobProgress} />
-                <span className="text-[10px] text-muted-foreground">{t("node.buildingAndRendering")}</span>
+                <span className="text-[11px] text-muted-foreground">{t("node.buildingAndRendering")}</span>
               </div>
             )}
 
@@ -124,7 +124,7 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
             {!isRunning && scenePlan && !activeUrl && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
                 <div className="text-sm font-medium text-[#ff0073]">{t("node.nObjects", { n: objectCount })}</div>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground">
                   {revision ? t("node.revShort", { rev: revision.slice(0, 6) }) : t("node.sceneReady")}
                 </div>
               </div>
@@ -133,8 +133,8 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
             {!isRunning && activeUrl && videoError && (
               <div className="flex-1 min-h-24 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                 <AlertCircle className="w-5 h-5 text-amber-500" />
-                <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>
                   {t("node.openUrl")}
                 </a>
               </div>
@@ -146,7 +146,7 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
                   <AlertCircle className="w-4 h-4 text-red-500" />
                   <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                   {nodeData.errorMessage && (
-                    <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>
+                    <p className="text-[11px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>
                       {nodeData.errorMessage}
                     </p>
                   )}
@@ -162,7 +162,7 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {!isRunning && !scenePlan && !activeUrl && status !== "failed" && (
-              <div className="flex-1 min-h-24 flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex-1 min-h-24 flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <Boxes className="w-5 h-5" />
               </div>
             )}
@@ -192,14 +192,14 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             )}
 
-            <p className="text-muted-foreground text-[10px] line-clamp-1">
+            <p className="text-muted-foreground text-[11px] line-clamp-1">
               {summary}
             </p>
             {/* The quoted CEILING, not a charge. Shown where the canvas already
                 shows what a run costs, so the user sees the most this run may
                 spend before committing to it. */}
             {typeof nodeData.lastQuoteMaxCredits === "number" && (
-              <p className="text-muted-foreground text-[10px]">
+              <p className="text-muted-foreground text-[11px]">
                 {t("pro3d.ceiling", { credits: String(nodeData.lastQuoteMaxCredits) })}
               </p>
             )}
@@ -244,10 +244,10 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
                 <img src={stillSrcs[index]!} alt="" className="w-10 h-10 object-cover" />
               ) : (
                 <span className="flex w-10 h-10 items-center justify-center bg-muted/40">
-                  <Images className="w-3 h-3 text-muted-foreground/50" />
+                  <Images className="w-3 h-3 text-muted-foreground" />
                 </span>
               )}
-              <span className="absolute bottom-0 right-0 px-0.5 text-[8px] leading-none bg-black/60 text-white">
+              <span className="absolute bottom-0 right-0 px-0.5 text-[11px] leading-none bg-black/60 text-white">
                 {still.shotIndex + 1}
               </span>
             </button>

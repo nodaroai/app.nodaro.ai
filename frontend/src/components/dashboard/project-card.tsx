@@ -123,13 +123,13 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
             )}
             <h2 className="font-medium text-sm truncate">{displayName}</h2>
             {readOnly && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+              <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
                 {t("project.studioBadge")}
               </Badge>
             )}
           </div>
           {showOwner && isOwn && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
               {t("dash.mine")}
             </Badge>
           )}
@@ -174,18 +174,18 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
               )}
               <h2 className="font-medium text-sm truncate">{displayName}</h2>
               {readOnly && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
                   {t("project.studioBadge")}
                 </Badge>
               )}
               {showOwner && isOwn && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
                   {t("dash.mine")}
                 </Badge>
               )}
             </div>
             {showOwner && project.ownerEmail && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                 {project.ownerEmail}
               </p>
             )}
@@ -194,7 +194,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
                 {displayDescription}
               </p>
             )}
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-muted-foreground mt-1">
               {formatDate(project.updatedAt)}
             </p>
           </div>

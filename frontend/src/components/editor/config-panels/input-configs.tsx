@@ -129,7 +129,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
                 className={`rounded-md border px-2 py-1.5 text-start transition-colors ${checked ? "border-[#ff0073] bg-[#ff0073]/10" : "border-border hover:border-[#ff0073]/50"}`}
               >
                 <div className="text-xs font-medium">{t.label}</div>
-                <div className="text-[10px] text-muted-foreground">{t.hint}</div>
+                <div className="text-[11px] text-muted-foreground">{t.hint}</div>
               </button>
             )
           })}
@@ -247,7 +247,7 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
               value={item}
               onChange={(e) => updateItem(i, e.target.value)}
             />
-            <button
+            <button aria-label={t("common.remove")}
               type="button"
               className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
               onClick={() => removeItem(i)}
@@ -362,7 +362,7 @@ function MediaCellInput({
         <>
           <button
             type="button"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-md border-2 border-dashed border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8] transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-md border-2 border-dashed border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground hover:text-[#38BDF8] transition-colors cursor-pointer"
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="w-3.5 h-3.5" />
@@ -375,7 +375,7 @@ function MediaCellInput({
             </span>
           </button>
           <div className="flex items-center gap-1.5">
-            <Link className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+            <Link className="w-3 h-3 text-muted-foreground shrink-0" />
             <input
               type="text"
               value={value}
@@ -388,7 +388,7 @@ function MediaCellInput({
       )}
 
       {uploadError && (
-        <div className="flex items-center gap-1 text-[10px] text-red-400">
+        <div className="flex items-center gap-1 text-[11px] text-red-400">
           <AlertCircle className="w-3 h-3 shrink-0" />
           <span className="truncate">{uploadError}</span>
         </div>
@@ -507,7 +507,7 @@ function DelimiterSelect({
     <div className="flex flex-col gap-0.5">
       <Select value={selectValue} onValueChange={handleChange}>
         <SelectTrigger
-          className={`h-5 px-1.5 text-[10px] border-none gap-0.5 ${
+          className={`h-5 px-1.5 text-[11px] border-none gap-0.5 ${
             current ? "text-[#ff0073]" : "text-muted-foreground"
           }`}
         >
@@ -535,7 +535,7 @@ function DelimiterSelect({
       {!!current && current !== NO_SPLIT_DELIMITER && (
         <button
           type="button"
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
           onClick={() => onSplit(colIndex)}
         >
           <Scissors className="w-3 h-3" />
@@ -763,7 +763,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
           </div>
 
           {columns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/50">
+            <div className="flex flex-col items-center justify-center py-6 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <p className="text-sm">{t("inputcfg.noColumnsYet")}</p>
               <p className="text-xs mt-1">{t("inputcfg.addAColumnToGetStarted")}</p>
             </div>
@@ -784,7 +784,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                             readOnly={!!col.connectedSourceId}
                           />
                           {col.connectedSourceId && (
-                            <span className="shrink-0 flex items-center gap-0.5 text-[9px] text-muted-foreground/60" title={t("inputcfg.connectedToUpstreamNode")}>
+                            <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-muted-foreground" title={t("inputcfg.connectedToUpstreamNode")}>
                               <Link className="w-3 h-3" />
                               {getSourceLabel(nodes, col.connectedSourceId)}
                             </span>
@@ -798,7 +798,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                             />
                           )}
                           {!singleColumn && (
-                            <button
+                            <button aria-label={t("common.remove")}
                               type="button"
                               className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
                               onClick={() => removeColumn(ci)}
@@ -811,9 +811,9 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                           value={col.type ?? "text"}
                           onValueChange={(v) => updateColumnType(ci, v as LoopColumn["type"])}
                         >
-                          <SelectTrigger className="h-5 mt-0.5 px-1.5 text-[10px] border-none bg-transparent hover:bg-muted/30 gap-0.5">
+                          <SelectTrigger className="h-5 mt-0.5 px-1.5 text-[11px] border-none bg-transparent hover:bg-muted/30 gap-0.5">
                             <span
-                              className="inline-block rounded-full px-1.5 py-0 text-[10px] font-medium leading-4 text-white"
+                              className="inline-block rounded-full px-1.5 py-0 text-[11px] font-medium leading-4 text-white"
                               style={{ backgroundColor: COLUMN_TYPES.find((t) => t.value === (col.type ?? "text"))?.color ?? "#38BDF8" }}
                             >
                               {t(COLUMN_TYPE_LABEL_KEYS[col.type ?? "text"] ?? "field.text")}
@@ -847,15 +847,15 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                 <div className="flex items-center gap-0.5">
                                   <button
                                     type="button"
-                                    className="shrink-0 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
+                                    className="shrink-0 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
                                     {...attributes}
                                     {...listeners}
                                   >
                                     <GripVertical className="w-3 h-3" />
                                   </button>
-                                  <button
+                                  <button aria-label={t("common.remove")}
                                     type="button"
-                                    className="shrink-0 text-muted-foreground/40 hover:text-red-500 transition-colors"
+                                    className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
                                     onClick={() => removeRow(ri)}
                                   >
                                     <X className="w-2.5 h-2.5" />
@@ -872,7 +872,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                     />
                                   ) : col.connectedSourceId ? (
                                     <div className="w-full min-w-[60px] text-xs bg-muted/20 rounded px-1.5 py-1 border border-border opacity-70 truncate">
-                                      {row[ci] || <span className="text-muted-foreground/50 italic">{t("inputcfg.waiting")}</span>}
+                                      {row[ci] || <span className="text-muted-foreground italic">{t("inputcfg.waiting")}</span>}
                                     </div>
                                   ) : (
                                     <input
@@ -1034,19 +1034,19 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-[#1a1a1a] sticky top-0">
-                    <th className="px-3 py-2 text-start text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-8">#</th>
+                    <th className="px-3 py-2 text-start text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-8">#</th>
                     {columns.map((col) => {
                       const meta = LOOP_COLUMN_TYPE_META[col.type ?? "text"] ?? LOOP_COLUMN_TYPE_META.text
                       return (
                         <th key={col.id} className="px-3 py-2 text-start">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded"
+                            <span className="text-[11px] font-semibold uppercase px-1.5 py-0.5 rounded"
                               style={{ background: `${meta.color}20`, color: meta.color }}>
                               {meta.shortLabel}
                             </span>
                             <span className={`text-[11px] font-medium text-muted-foreground ${col.connectedSourceId ? "opacity-70" : ""}`}>{col.name}</span>
                             {col.connectedSourceId && (
-                              <span className="shrink-0 flex items-center gap-0.5 text-[9px] text-muted-foreground/60">
+                              <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-muted-foreground">
                                 <Link className="w-3 h-3" />
                                 {getSourceLabel(nodes, col.connectedSourceId)}
                               </span>
@@ -1060,7 +1060,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                 <tbody>
                   {displayRows.map((row, ri) => (
                     <tr key={ri} className={ri % 2 === 1 ? "bg-muted/5" : ""}>
-                      <td className="px-3 py-2 text-[10px] text-muted-foreground/50 font-mono">{ri + 1}</td>
+                      <td className="px-3 py-2 text-[11px] text-muted-foreground font-mono">{ri + 1}</td>
                       {columns.map((col, ci) => {
                         const val = row[ci] ?? ""
                         const isMedia = col.type !== "text"
@@ -1076,9 +1076,9 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                 <WaveformAudioPlayer url={val} variant="compact" className="w-full max-w-[160px]" />
                               )
                             ) : isConnected ? (
-                              <span className="text-muted-foreground/70">{val || <span className="italic text-muted-foreground/50">{t("inputcfg.waiting")}</span>}</span>
+                              <span className="text-muted-foreground">{val || <span className="italic text-muted-foreground">{t("inputcfg.waiting")}</span>}</span>
                             ) : (
-                              <span className={val ? "" : "text-muted-foreground/40"}>{val || "—"}</span>
+                              <span className={val ? "" : "text-muted-foreground"}>{val || "—"}</span>
                             )}
                           </td>
                         )
@@ -1089,7 +1089,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               </table>
             </div>
           )}
-          <p className="text-[10px] text-muted-foreground/50 text-center">
+          <p className="text-[11px] text-muted-foreground text-center">
             {t("inputcfg.rowsColumns", { rows: displayRows.length, cols: columns.length })}
             {isConnectedData && t("inputcfg.fromConnectedNode")}
           </p>

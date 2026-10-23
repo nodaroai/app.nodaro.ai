@@ -113,7 +113,7 @@ export function ExpandStoryboardDialog({
                           {hasImage ? (
                             <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
                           ) : (
-                            <Circle className="w-3 h-3 text-muted-foreground/50" />
+                            <Circle className="w-3 h-3 text-muted-foreground" />
                           )}
                           <span className={hasImage ? "text-muted-foreground" : ""}>
                             {t("cfgext.sceneNumbered", { index: scene.sceneNumber })}
@@ -127,7 +127,7 @@ export function ExpandStoryboardDialog({
                   })
                 )}
                 {scenesWithImages.length > 0 && scenesNeedingImages > 0 && (
-                  <div className="text-muted-foreground/70 pt-0.5">
+                  <div className="text-muted-foreground pt-0.5">
                     {t("storyboard.scenesHaveImages", { ready: scenesWithImages.length, total: sceneCount })}
                   </div>
                 )}
@@ -147,11 +147,11 @@ export function ExpandStoryboardDialog({
                 </div>
                 <div className="flex justify-between">
                   <span>{t("storyboard.mergeNodesCount", { n: sceneCount })}</span>
-                  <span className="text-muted-foreground/60">{t("storyboard.zeroCredits")}</span>
+                  <span className="text-muted-foreground">{t("storyboard.zeroCredits")}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>{t("storyboard.textPromptNodesCount", { n: sceneCount })}</span>
-                  <span className="text-muted-foreground/60">{t("storyboard.zeroCredits")}</span>
+                  <span className="text-muted-foreground">{t("storyboard.zeroCredits")}</span>
                 </div>
                 {includeCombine && (
                   <div className="flex justify-between">

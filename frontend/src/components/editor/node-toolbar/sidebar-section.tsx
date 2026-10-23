@@ -50,10 +50,10 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
             open ? "rotate-90" : isRtl && "rotate-180",
           )}
         />
-        <span className="flex-1 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-accent)]">
+        <span className="flex-1 font-sans text-[11px] font-semibold uppercase tracking-wider text-[var(--npk-accent)]">
           {tabLabel(section.tab)}
         </span>
-        <span className="font-sans text-[10px] font-semibold tabular-nums text-[var(--npk-faint)]">
+        <span className="font-sans text-[11px] font-semibold tabular-nums text-[var(--npk-faint)]">
           {section.count}
         </span>
       </button>
@@ -64,7 +64,7 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
       <div id={panelId} hidden={!open}>
         {open && section.families.map((family) => (
           <div key={family.id}>
-            <div className="px-2.5 pb-1 ps-4 pt-2 text-[10px] font-medium uppercase tracking-wider text-[var(--npk-dim)]">
+            <div className="px-2.5 pb-1 ps-4 pt-2 text-[11px] font-medium uppercase tracking-wider text-[var(--npk-dim)]">
               {familyLabel(family)}
             </div>
             {family.options.map((node) => (

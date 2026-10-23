@@ -51,7 +51,7 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
   return (
     <div className="border-t border-[#1e293b] p-2.5 bg-[#090c12] space-y-2">
       <div className="flex gap-1.5 flex-wrap items-center">
-        <span className="text-[9px] text-slate-500 pe-1">{t("studio.quickColon")}</span>
+        <span className="text-[11px] text-slate-500 pe-1">{t("studio.quickColon")}</span>
         {presets.map((p) => {
           const st = presetState(p, createdNames ?? EMPTY_SET, busyNames ?? EMPTY_SET)
           const inactive = st !== "idle"
@@ -72,7 +72,7 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
                         ? t("studio.generateNamedCost", { name: p, cost: formatCreditUnits(cost) })
                         : t("studio.generateNamed", { name: p })
               }
-              className="text-[10px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-300 inline-flex items-center gap-1 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 data-[state=created]:opacity-70 data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
+              className="text-[11px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-300 inline-flex items-center gap-1 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 data-[state=created]:opacity-70 data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
               onClick={() => onGenerate(p, true, model)}
             >
               {st === "creating" && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
@@ -87,7 +87,7 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
             type="button"
             disabled={disabled}
             title={generateAllCount ? t("studio.generateAllCostTitle", { n: generateAllCount, each: formatCreditUnits(cost), total: formatCreditUnits(allCost) }) : undefined}
-            className="text-[10px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-400 ms-auto transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
+            className="text-[11px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-400 ms-auto transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
             onClick={onGenerateAll}
           >⟳ {allCost > 0 ? t("studio.generateAllCost", { cost: formatCreditUnits(allCost) }) : t("studio.generateAll")}</button>
         )}
@@ -100,14 +100,14 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
           placeholder={customPlaceholder}
           className="flex-1 text-[11px] bg-[#13161f] border border-[#334155] rounded px-3 py-1.5 text-slate-200 disabled:opacity-40"
         />
-        <select value={model} onChange={(e) => setModelAndNotify(e.target.value)} className="text-[10px] bg-[#1e293b] border border-[#334155] rounded px-2 py-1 text-slate-300">
+        <select value={model} onChange={(e) => setModelAndNotify(e.target.value)} className="text-[11px] bg-[#1e293b] border border-[#334155] rounded px-2 py-1 text-slate-300">
           {models.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <button
           type="button"
           disabled={disabled || text.trim().length === 0}
           title={disabled ? disabledHint : generateLabel}
-          className="text-[10px] bg-[#3b82f6] text-white font-medium rounded px-4 py-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
+          className="text-[11px] bg-[#3b82f6] text-white font-medium rounded px-4 py-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
           onClick={() => { onGenerate(text.trim(), false, model); setText("") }}
         >{generateLabel}</button>
       </div>

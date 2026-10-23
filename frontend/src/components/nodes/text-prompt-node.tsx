@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
@@ -357,13 +358,15 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           {NODE_COLORS.map((c) => (
             <div
               key={c}
-              onClick={(e) => {
+              aria-label={t("node.colourN", { n: NODE_COLORS.indexOf(c) + 1 })}
+              aria-pressed={color === c}
+              {...pressable((e) => {
                 e.stopPropagation()
                 // Toggle: re-pressing the active swatch clears the color
                 // and the node falls back to a canvas-matching transparent
                 // background.
                 updateNodeData(id, { color: color === c ? null : c })
-              }}
+              })}
               className={`w-4 h-4 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${color === c ? "border-foreground dark:border-white" : "border-foreground/15 dark:border-white/20"}`}
               style={{ backgroundColor: getEffectiveColor(c, isDark) }}
             />
@@ -663,7 +666,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             <DialogTitle>{localizeNode(nodeData.label ?? "Text")}</DialogTitle>
           </VisuallyHidden>
           {/* Header: icon + editable title, top-left. */}
-          <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70">
+          <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/80 dark:text-white/70">
             <Type className="w-3.5 h-3.5" />
             {titleEditing ? (
               <input
@@ -687,7 +690,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             ) : (
               <span
                 className="truncate cursor-text hover:text-foreground dark:hover:text-white/90 transition-colors"
-                onClick={() => setTitleEditing(true)}
+                {...pressable(() => setTitleEditing(true))}
                 title={t("node.clickToRename")}
               >
                 {localizeNode(nodeData.label ?? "Text")}

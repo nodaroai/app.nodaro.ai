@@ -15,8 +15,8 @@ export function TrainedPill({ size = "xs", className }: TrainedPillProps) {
   const t = useT()
   const sizeClass =
     size === "xs"
-      ? "px-1 py-0 text-[9px]"
-      : "px-1.5 py-0.5 text-[10px]"
+      ? "px-1 py-0 text-[11px]"
+      : "px-1.5 py-0.5 text-[11px]"
   return (
     <span
       className={

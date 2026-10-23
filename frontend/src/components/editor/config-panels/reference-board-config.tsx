@@ -55,7 +55,7 @@ function SourceSegmented({
           className={[
             "flex-1 py-1.5 text-xs font-medium transition-colors",
             value === v
-              ? "bg-[#ff0073] text-white"
+              ? "bg-cta text-white"
               : "bg-transparent text-muted-foreground hover:bg-muted",
           ].join(" ")}
           aria-pressed={value === v}
@@ -109,7 +109,7 @@ function BoardTemplateSelect({
       <SelectContent>
         {Object.entries(groups).map(([kind, templates]) => (
           <div key={kind}>
-            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
               {kindLabels[kind] ?? kind}
             </div>
             {templates.map((t) => (
@@ -245,7 +245,7 @@ function ReferenceBoardConfigImpl({
           value={data.sourceMode ?? "image"}
           onChange={(v) => onUpdate({ sourceMode: v })}
         />
-        <p className="text-[10px] text-muted-foreground mt-0.5">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {data.sourceMode === "entity"
             ? t("cfgext.refBoardSourceEntityHint")
             : t("cfgext.refBoardSourceImageHint")}
@@ -264,7 +264,7 @@ function ReferenceBoardConfigImpl({
           value={data.boardTemplate ?? "character/full-board"}
           onChange={handleTemplateChange}
         />
-        <p className="text-[10px] text-muted-foreground mt-0.5">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {t("cfgext.refBoardTemplateHint")}
         </p>
       </MappableField>
@@ -345,7 +345,7 @@ function ReferenceBoardConfigImpl({
           placeholder={t("cfgext.refBoardNegativePlaceholder")}
           className="resize-none text-sm"
         />
-        <p className="text-[10px] text-muted-foreground mt-0.5">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {t("imgcfg.exclusionGuidance")}
         </p>
       </MappableField>
@@ -465,7 +465,7 @@ function ReferenceBoardConfigImpl({
               }}
               placeholder={t("imgcfg.seedRandom")}
             />
-            <p className="text-[10px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5">
               {t("cfgext.refBoardSeedHint")}
             </p>
           </div>

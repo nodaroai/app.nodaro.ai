@@ -50,7 +50,7 @@ export function SavedPostCard({
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-2)]">
       <MetaAdMedia src={savedPostStill(save)} initial={initialOf(post)} className={cn("w-full", portrait ? "aspect-[3/4]" : "aspect-video")}>
-        <span className="absolute start-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10.5px] font-bold text-white">
+        <span className="absolute start-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white">
           {meta.icon("h-3 w-3")}
           {meta.name}
         </span>

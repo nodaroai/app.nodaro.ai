@@ -27,7 +27,7 @@ export function AssetPickerNodeButton({
       <button
         type="button"
         aria-label={currentDbId ? t("assetPicker.replaceAria") : t("assetPicker.chooseAria")}
-        className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium bg-muted/40 border border-border text-muted-foreground rounded hover:bg-muted/60 hover:text-foreground transition-colors"
+        className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-medium bg-muted/40 border border-border text-muted-foreground rounded hover:bg-muted/60 hover:text-foreground transition-colors"
         onClick={(e) => {
           e.stopPropagation()
           openPicker()

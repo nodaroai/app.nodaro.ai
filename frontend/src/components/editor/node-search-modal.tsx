@@ -414,7 +414,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
             aria-label={t("addnode.nodeSearchAria")}
             className="flex-1 bg-transparent border-none outline-none text-base text-[#1E293B] dark:text-white placeholder:text-[#94A3B8]"
           />
-          <span className="text-[10px] text-[#94A3B8] shrink-0 tabular-nums">
+          <span className="text-[11px] text-[#94A3B8] shrink-0 tabular-nums">
             {t(hits.length === 1 ? "addnode.nodeCountOne" : "addnode.nodeCountMany", { n: hits.length })}
           </span>
           <button
@@ -515,7 +515,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                           {hit.pickerVisual}
                         </div>
                       ) : (
-                        <Cpu className="w-5 h-5 text-muted-foreground/60" />
+                        <Cpu className="w-5 h-5 text-muted-foreground" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -523,12 +523,12 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                         <span className="text-sm font-medium text-[#1E293B] dark:text-white truncate">
                           {hit.label}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F1F5F9] dark:bg-[#2D2D2D] text-[#64748B] dark:text-[#94A3B8] shrink-0">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#F1F5F9] dark:bg-[#2D2D2D] text-[#64748B] dark:text-[#94A3B8] shrink-0">
                           {hit.typeLabel}
                         </span>
                         {isCanvasFocused && (
                           <span
-                            className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/15 text-[#ff0073] font-semibold uppercase tracking-wide shrink-0 flex items-center gap-1"
+                            className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/15 text-[#ff0073] font-semibold uppercase tracking-wide shrink-0 flex items-center gap-1"
                             title={t("addnode.focusedOnCanvas")}
                           >
                             <MapPin className="w-2.5 h-2.5" />
@@ -596,7 +596,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#1A1A1A]">
-          <div className="flex items-center gap-4 text-[10px] text-[#94A3B8] flex-wrap">
+          <div className="flex items-center gap-4 text-[11px] text-[#94A3B8] flex-wrap">
             <KbdHint keys={["↑", "↓"]} label={t("addnode.navigate")} />
             <KbdHint keys={["Tab"]} label={t("addnode.connectors")} />
             <KbdHint keys={["Enter"]} label={t("addnode.focusToggle")} />
@@ -642,14 +642,14 @@ function PreviewPane({ hit }: { hit: NodeSearchHit }) {
             {hit.pickerVisual}
           </div>
         ) : (
-          <Cpu className="w-12 h-12 text-muted-foreground/40" />
+          <Cpu className="w-12 h-12 text-muted-foreground" />
         )}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-[#1E293B] dark:text-white truncate">
           {hit.label}
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F1F5F9] dark:bg-[#2D2D2D] text-[#64748B] dark:text-[#94A3B8]">
+        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#F1F5F9] dark:bg-[#2D2D2D] text-[#64748B] dark:text-[#94A3B8]">
           {hit.typeLabel}
         </span>
       </div>
@@ -750,7 +750,7 @@ function ConnectorGroup({
         opts.onClick()
       }}
       className={cn(
-        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] border transition-colors max-w-[140px]",
+        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] border transition-colors max-w-[140px]",
         opts.connected
           ? "bg-[#ff0073]/12 border-[#ff0073]/45 text-[#ff0073]"
           : "border-[#E2E8F0] dark:border-[#3D3D3D] text-[#64748B] dark:text-[#94A3B8] hover:border-[#94A3B8]",
@@ -815,7 +815,7 @@ function ConnectorGroup({
 
   return (
     <span className="flex items-center gap-1 flex-wrap rounded-full bg-black/[0.03] dark:bg-white/[0.04] ps-1.5 pe-0.5 py-0.5">
-      <span className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
         {dirGlyphs}
         {dirLabel}
       </span>

@@ -143,7 +143,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                       onChange={(e) => onUpdate({ originalAudioVolume: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
                       className="w-14 h-6 text-xs text-center px-1"
                     />
-                    <span className="text-[10px] text-muted-foreground">%</span>
+                    <span className="text-[11px] text-muted-foreground">%</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground w-12 shrink-0">{t("audiocfg.mergeRole")}</span>
@@ -178,7 +178,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
           <Volume2 className="w-3.5 h-3.5" />
           {t("audiocfg.mergeAudioTracks")}
           {audioSources.length > 0 && (
-            <span className="bg-[#ff0073]/15 text-[#ff0073] text-[10px] rounded-full px-1.5 py-0.5 font-mono">
+            <span className="bg-[#ff0073]/15 text-[#ff0073] text-[11px] rounded-full px-1.5 py-0.5 font-mono">
               {audioSources.length}
             </span>
           )}
@@ -187,7 +187,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
         {audioSources.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-muted-foreground/20 p-3 text-center">
             <p className="text-xs text-muted-foreground">{t("audiocfg.mergeNoAudioSources")}</p>
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("audiocfg.mergeConnectHint")}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{t("audiocfg.mergeConnectHint")}</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -217,7 +217,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                 <div key={src.id} className="rounded-lg border bg-card overflow-hidden">
                   {/* Track header */}
                   <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b">
-                    <span className="text-[10px] text-muted-foreground font-mono">
+                    <span className="text-[11px] text-muted-foreground font-mono">
                       {idx + 1}
                     </span>
                     <TrackIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -229,7 +229,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                       )}
                       {srcLabel}
                     </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${roleBadge}`}>
+                    <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${roleBadge}`}>
                       {TRACK_ROLE_OPTIONS().find((o) => o.value === role)?.label ?? role}
                     </span>
                     {previewUrl && (
@@ -287,7 +287,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                         onChange={(e) => updateTrackSetting(src.id, "volume", e.target.value === "" ? undefined : parseInt(e.target.value, 10))}
                         className="w-14 h-6 text-xs text-center px-1"
                       />
-                      <span className="text-[10px] text-muted-foreground">%</span>
+                      <span className="text-[11px] text-muted-foreground">%</span>
                     </div>
 
                     {/* Start time */}

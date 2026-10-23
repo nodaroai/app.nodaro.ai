@@ -87,7 +87,7 @@ export function TelegramAccountsCard() {
               <h3 id="telegram-accounts-heading" className="text-[15px] font-bold tracking-[-0.01em]" style={{ color: "var(--integ-fg)" }}>
                 {t("tgacct.title")}
               </h3>
-              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
                 {t("tgacct.preview")}
               </span>
               {accounts.length > 0 && (

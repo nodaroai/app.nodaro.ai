@@ -193,7 +193,7 @@ export function useRunConfirm(
           <AlertDialogCancel autoFocus onClick={() => settle(false)}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => settle(true)}
-            className="bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
+            className="bg-cta text-white hover:bg-cta-hover"
           >
             {action}
           </AlertDialogAction>
@@ -213,7 +213,7 @@ export function useRunConfirm(
           <AlertDialogCancel autoFocus onClick={() => settleAsk(false)}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => settleAsk(true)}
-            className="bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
+            className="bg-cta text-white hover:bg-cta-hover"
           >
             {ask?.confirmLabel}
           </AlertDialogAction>

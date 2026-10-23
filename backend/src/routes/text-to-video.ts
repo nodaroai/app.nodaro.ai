@@ -15,10 +15,11 @@ import { probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem } from "@nodaro/shared/video"
+import { kling4InputProblem } from "../lib/kling4-inputs.js"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts/assembly"
@@ -46,7 +47,7 @@ export const textToVideoBody = z.object({
   sound: z.boolean().optional(),
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21", "adaptive"]).optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21", "adaptive", "auto"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
@@ -67,6 +68,9 @@ export const textToVideoBody = z.object({
   // channel. Model support and the shared input budget are enforced in the
   // handler by `videoCharacterRefProblem`; any other model → 400.
   characterReferences: characterReferencesSchema.optional(),
+  // Kling 4.0: keep the reference videos' own sound (KIE `keep_original_sound`).
+  // Ignored without a reference video and by every other model.
+  keepOriginalSound: z.boolean().optional(),
   // Structured references (parity with generate-video). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired refs to referenceImageUrls, emitting per-ref directives, and
@@ -173,7 +177,7 @@ export const textToVideoPricing: RoutePricing = {
       // (commit_credits only refunds — never up-charges). Core may not
       // statically import ee/, so the helpers are loaded dynamically (the
       // allowed escape hatch — same pattern the credit-guard shim uses).
-      if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
+      if (billsReferenceVideoSeconds(b?.provider as string | undefined) && hasVideoRef) {
         const { seedance2RefVideoBaseCreditsFromDurations } =
           await import("../ee/billing/seedance2-ref-video-credits.js")
         const priceArgs = {
@@ -310,7 +314,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
   if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
 
-  const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite, draft: rawDraft } = parsed.data
+  const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite, draft: rawDraft, keepOriginalSound } = parsed.data
   // Platform default when the request omits provider/duration (shared with
   // generate-video and the DAG payload builder).
   const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
@@ -451,9 +455,25 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     imageCount: referenceImageUrls?.length ?? 0,
     videoCount: referenceVideoUrls?.length ?? 0,
     hasStartFrame: false,
+    audioCount: referenceAudioUrls?.length ?? 0,
   })
   if (characterProblem) {
     return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
+  }
+  // Kling 4.0's frame cap (Keyframes: in-between frames ride referenceImageUrls)
+  // and 15-material budget — before the reservation, not a KIE 422 after it.
+  const kling4Problem = kling4InputProblem({
+    provider,
+    durationSec: typeof normDuration === "number" ? normDuration : undefined,
+    hasStartFrame: false,
+    hasEndFrame: false,
+    referenceImageCount: referenceImageUrls?.length ?? 0,
+    referenceVideoCount: referenceVideoUrls?.length ?? 0,
+    referenceAudioCount: referenceAudioUrls?.length ?? 0,
+    characterCount: parsed.data.characterReferences?.length ?? 0,
+  })
+  if (kling4Problem) {
+    return reply.status(400).send({ error: kling4Problem })
   }
   // The description is subject text the prompt policies never see (it does not
   // join `prompt`): police it here and mirror into parsed.data so the queued
@@ -571,6 +591,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     referenceVideoUrls,
     referenceAudioUrls,
     characterReferences,
+    keepOriginalSound,
     refVideoDurationsSec: req.refVideoDurationsSec,
     webSearch,
     nsfwChecker,

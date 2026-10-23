@@ -85,7 +85,7 @@ export function WelcomeOfferPopup() {
 
           <WelcomeCreditBadge credits={offer.credits} size="lg" />
 
-          <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--welcome-accent)]">
+          <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--welcome-accent)]">
             {t("welcome.eyebrow")}
           </p>
           <DialogTitle className="mt-2 text-[26px] font-extrabold leading-tight text-foreground">

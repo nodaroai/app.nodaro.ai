@@ -284,7 +284,7 @@ export function CopilotComposer({ mentionSources, onSearchChange, fileTotal, has
             onClick={streaming ? onStop : submit}
             disabled={disabled || (!streaming && draft.trim().length === 0)}
             aria-label={t(streaming ? K.stop : K.send)}
-            className="ms-auto w-[30px] h-[30px] rounded-[9px] bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity"
+            className="ms-auto w-[30px] h-[30px] rounded-[9px] bg-cta text-primary-foreground flex items-center justify-center disabled:opacity-40 transition-opacity"
           >
             {streaming ? (
               <span className="w-[9px] h-[9px] rounded-[2px] bg-current" aria-hidden />

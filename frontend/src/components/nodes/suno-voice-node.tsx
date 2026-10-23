@@ -48,19 +48,19 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
                 {nodeData.voiceName?.trim() || (ready ? t("audiocfg.untitledVoice") : t("audiocfg.notConfigured"))}
               </div>
               {nodeData.style && ready && (
-                <div className="text-[10px] text-muted-foreground truncate" title={nodeData.style}>
+                <div className="text-[11px] text-muted-foreground truncate" title={nodeData.style}>
                   {nodeData.style}
                 </div>
               )}
             </div>
             {ready && (
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">
                 <CheckCircle2 className="w-3 h-3" />
                 {t("node.ready")}
               </div>
             )}
             {inProgress && (
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-medium">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-medium">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 {status === "generating" ? t("node.voiceStatusCreating") : t("node.voiceStatusPhrase")}
               </div>
@@ -77,7 +77,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {ready && nodeData.voiceId && (
-            <div className="text-[10px] font-mono text-muted-foreground/80 truncate" title={nodeData.voiceId}>
+            <div className="text-[11px] font-mono text-muted-foreground truncate" title={nodeData.voiceId}>
               ID {nodeData.voiceId.slice(0, 8)}…
             </div>
           )}

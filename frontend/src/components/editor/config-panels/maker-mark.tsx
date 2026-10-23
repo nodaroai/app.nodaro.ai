@@ -28,7 +28,7 @@ export function MakerMark({ modelId, className }: { modelId: string; className?:
       aria-hidden
       className={cn(
         "inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] bg-neutral-900",
-        showImage ? "dark:bg-transparent" : "text-[9px] font-semibold leading-none text-white dark:bg-muted dark:text-muted-foreground",
+        showImage ? "dark:bg-transparent" : "text-[11px] font-semibold leading-none text-white dark:bg-muted dark:text-muted-foreground",
         className,
       )}
     >

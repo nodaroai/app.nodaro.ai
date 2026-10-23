@@ -179,9 +179,9 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !canPreview && !hasResult && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 h-full min-h-[160px] px-3 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/20 text-muted-foreground h-full min-h-[160px] px-3 text-center">
                 <Layers className="w-10 h-10" />
-                <span className="text-[10px] leading-tight">{t("node.videoOverlayConnect")}</span>
+                <span className="text-[11px] leading-tight">{t("node.videoOverlayConnect")}</span>
               </div>
             )}
 
@@ -192,7 +192,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
                 )}
               </div>
             )}
@@ -216,23 +216,23 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {showPreview && status === "failed" && nodeData.errorMessage && (
-              <div className="pointer-events-none absolute top-2 left-2 right-24 z-20 px-2 py-1 rounded-md bg-red-600/80 text-white text-[10px] leading-snug line-clamp-2" title={nodeData.errorMessage}>
+              <div className="pointer-events-none absolute top-2 left-2 right-24 z-20 px-2 py-1 rounded-md bg-red-600/80 text-white text-[11px] leading-snug line-clamp-2" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </div>
             )}
 
             {showPreview && !hasResult && (
-              <div className="pointer-events-none absolute bottom-2 right-2 z-20 max-w-[60%] px-2 py-1 rounded-md bg-black/55 backdrop-blur-sm border border-white/10 text-white/90 text-[10px] leading-snug">
+              <div className="pointer-events-none absolute bottom-2 right-2 z-20 max-w-[60%] px-2 py-1 rounded-md bg-black/55 backdrop-blur-sm border border-white/10 text-white/90 text-[11px] leading-snug">
                 {t("node.videoOverlayRunHint")}
               </div>
             )}
 
             {status !== "running" && canPreview && hasResult && (
-              <div className="nodrag nopan absolute top-2 right-2 z-30 flex rounded-md overflow-hidden border border-white/10 bg-black/50 backdrop-blur-sm text-[10px] font-medium">
-                <button type="button" aria-pressed={showPreview} className={`px-2 py-1 ${showPreview ? "bg-[#ff0073] text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("preview") }}>
+              <div className="nodrag nopan absolute top-2 right-2 z-30 flex rounded-md overflow-hidden border border-white/10 bg-black/50 backdrop-blur-sm text-[11px] font-medium">
+                <button type="button" aria-pressed={showPreview} className={`px-2 py-1 ${showPreview ? "bg-cta text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("preview") }}>
                   {t("node.overlayPreview")}
                 </button>
-                <button type="button" aria-pressed={!showPreview} className={`px-2 py-1 ${!showPreview ? "bg-[#ff0073] text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("result") }}>
+                <button type="button" aria-pressed={!showPreview} className={`px-2 py-1 ${!showPreview ? "bg-cta text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("result") }}>
                   {resultFresh ? t("node.overlayResult") : t("node.overlayResultOld")}
                 </button>
               </div>
@@ -256,7 +256,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
                   <button
                     type="button"
                     className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-20 transition-opacity ${
-                      showThumbnails ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100" : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/overlay:opacity-100"
+                      showThumbnails ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100" : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/overlay:opacity-100"
                     }`}
                     onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
                     title={showThumbnails ? t("node.hideVersions") : t("node.showVersions")}
@@ -292,7 +292,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
       {handleCount < OVERLAY_MAX_LAYERS && (
         <button
           type="button"
-          className="nodrag nopan absolute -left-[29px] w-5 h-5 flex items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground/70 hover:text-[#ff0073] hover:border-[#ff0073] bg-background/80"
+          className="nodrag nopan absolute -left-[29px] w-5 h-5 flex items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground hover:text-[#ff0073] hover:border-[#ff0073] bg-background/80"
           style={{ top: `${overlayAddButtonTop(handleCount)}px`, transform: "translateY(2px)" }}
           title={t("node.overlayAddLayer")}
           aria-label={t("node.overlayAddLayer")}

@@ -275,6 +275,17 @@ export interface ModelCatalogEntry {
    * lane for a model with no text-to-video mode, instead of the text-to-video
    * lane, whose "image required" gate would refuse it. Requires
    * `"reference-image"` (guarded by `video-reference-only.test.ts`).
+   *
+   * `"keyframes"` (video models only) means the model's Image References are
+   * IN-BETWEEN FRAMES, in order, between the start and end frame — not loose
+   * references (Kling 4.0 Keyframes: KIE `keyframe_urls`). The editor names the
+   * tray and the mode after it, and generate-video-pro leaves such a model out
+   * (its segments would send cast references as frames).
+   *
+   * `"character-subjects"` (video models only) means a wired Character node
+   * reaches the model as a NAMED SUBJECT built from several of its images
+   * (`characterReferencesFromWired` → `characterReferences`), not only as a
+   * reference image (Kling 4.0: KIE `elements`, `@Name` in the prompt).
    */
   features?: readonly string[]
   /**
@@ -460,6 +471,10 @@ const VIDEO_RATIOS_WAN_3 = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"] as 
 // default 16:9). The image-to-video endpoint takes NO aspect ratio: its output
 // inherits the start frame's shape, so these apply to reference runs only.
 const VIDEO_RATIOS_VIDU_Q4 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
+// Kling 4.0 — both endpoints share the enum (docs.kie.ai/market/kling/v4-reference-to-video,
+// /v4-keyframe-to-video). `auto` follows the materials; with none it renders 16:9.
+// The keyframe endpoint ignores the ratio once any frame is attached.
+const VIDEO_RATIOS_KLING_4 = ["auto", "16:9", "9:16", "1:1", "21:9"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1772,6 +1787,73 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-3-omni:5s", credits: 250 },
       { identifier: "kling-3-omni:10s", credits: 500 },
       { identifier: "kling-3-omni:15s", credits: 750 },
+    ],
+  },
+  // Kling 4.0 — two KIE endpoints, two ids (one per entry in the model list).
+  // Reference: docs.kie.ai/market/kling/v4-reference-to-video — text plus up to
+  // 10 reference images, 5 reference videos (2-30s each), 7 subjects and 3
+  // voices (15 materials in all); with none it is plain text-to-video. A wired
+  // start frame joins the reference images. Keyframes:
+  // docs.kie.ai/market/kling/v4-keyframe-to-video — start frame, up to 8
+  // in-between frames (the node's Image References, in order) and an end
+  // frame; with no frame it is text-to-video. Both: 3-30s, 720p/1080p, native
+  // audio always on, no seed. Per-second billing; a reference-video run bills
+  // its input seconds too (ee/billing/ref-video-billing.ts).
+  "kling-4": {
+    id: "kling-4",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling 4.0",
+    series: "Kling",
+    description: "Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text.",
+    useCases: ["premium", "narrative", "cinematic", "reference"],
+    // Reference VIDEOS are taken (VIDEO_REF_LIMITS_BY_PROVIDER `videos: 5`) but
+    // `video-reference` is NOT declared: like wan-3, the generate-video-pro
+    // extend chain (a continuation tail sent as a reference video) is unwired
+    // for it, so the pro node offers it in keyframes mode only.
+    features: ["audio", "reference-image", "reference-to-video", "character-subjects"],
+    aspectRatios: VIDEO_RATIOS_KLING_4,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
+    resolutions: ["720p", "1080p"],
+    unlistedResolutionRendersAs: "720p",
+    noSeed: true,  // neither Kling 4.0 schema has a `seed` (additionalProperties: false)
+    pricing: [
+      { identifier: "kling-4", credits: 360, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "kling-4:5s:720p", credits: 360, note: "5s 720p (the default tier)" },
+      { identifier: "kling-4:5s:1080p", credits: 540, note: "5s 1080p" },
+      { identifier: "kling-4:3s:720p", credits: 220, note: "3s 720p (min)" },
+      { identifier: "kling-4:30s:1080p", credits: 3190, note: "30s 1080p (max)" },
+      { identifier: "kling-4:8s:720p-ref", credits: 340, note: "per-second anchor with a reference video: billed × (output + max(output, input seconds)) ÷ 8" },
+    ],
+  },
+  "kling-4-keyframes": {
+    id: "kling-4-keyframes",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling 4.0 Keyframes",
+    series: "Kling",
+    description: "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio.",
+    useCases: ["premium", "narrative", "keyframes"],
+    // `reference-to-video`: in-between frames alone (no start frame) run —
+    // KIE takes `keyframe_urls` without `first_frame_url`.
+    features: ["end-frame", "audio", "reference-image", "reference-to-video", "keyframes"],
+    aspectRatios: VIDEO_RATIOS_KLING_4,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
+    resolutions: ["720p", "1080p"],
+    unlistedResolutionRendersAs: "720p",
+    noSeed: true,
+    pricing: [
+      { identifier: "kling-4-keyframes", credits: 360, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "kling-4-keyframes:5s:720p", credits: 360, note: "5s 720p (the default tier)" },
+      { identifier: "kling-4-keyframes:5s:1080p", credits: 540, note: "5s 1080p" },
+      { identifier: "kling-4-keyframes:3s:720p", credits: 220, note: "3s 720p (min)" },
+      { identifier: "kling-4-keyframes:30s:1080p", credits: 3190, note: "30s 1080p (max)" },
     ],
   },
 

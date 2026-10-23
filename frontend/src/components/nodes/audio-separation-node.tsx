@@ -130,7 +130,7 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
 
         {presentStems.map(({ stem, url }) => (
           <div key={stem.id} className="flex flex-col gap-1 px-1">
-            <span className="text-[10px] text-muted-foreground font-medium">{t(stem.labelKey)}</span>
+            <span className="text-[11px] text-muted-foreground font-medium">{t(stem.labelKey)}</span>
             <AudioResultOverlay
               url={url as string}
               label={stem.label}
@@ -148,7 +148,7 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -156,7 +156,7 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && presentStems.length === 0 && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 150, flex: 1 }}>
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 150, flex: 1 }}>
             <SplitSquareVertical className="w-5 h-5" />
           </div>
         )}

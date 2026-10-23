@@ -129,7 +129,7 @@ export function FlowTemplatesDialog({
             size="sm"
             onClick={handleSave}
             disabled={!hasChanges}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             <Save className="h-3.5 w-3.5 me-1.5" />
             {t("common.save")}
@@ -175,7 +175,7 @@ function FlowTemplateGroupCard({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+              <button aria-label={t("common.details")} type="button" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Info className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
@@ -187,7 +187,7 @@ function FlowTemplateGroupCard({
         </TooltipProvider>
 
         {hasOverride && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
             {t("flowtpl.override")}
           </span>
         )}
@@ -224,7 +224,7 @@ function FlowTemplateGroupCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("common.reset")}
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
@@ -295,7 +295,7 @@ function FlowTemplateCard({
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-semibold">{t(info.labelKey)}</h4>
             {hasOverride && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
                 {t("flowtpl.override")}
               </span>
             )}
@@ -307,7 +307,7 @@ function FlowTemplateCard({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <Button aria-label={t("common.reset")}
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"

@@ -441,9 +441,17 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer" onClick={onClick}>
       <td className="px-4 py-2.5">
-        <span className="text-sm text-gray-700 dark:text-[#E2E8F0]">
+        {/* The row opens with a click anywhere; this is its keyboard control. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClick()
+          }}
+          className="text-sm text-gray-700 dark:text-[#E2E8F0] text-start hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"
+        >
           {label}
-        </span>
+        </button>
       </td>
       <td className="px-4 py-2.5">
         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${JOB_STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
@@ -576,7 +584,7 @@ function ExecutionRow({
               </div>
             )}
             {showFinalizingHint && (
-              <span className="text-[10px] text-gray-500 dark:text-[#94A3B8] italic">
+              <span className="text-[11px] text-gray-500 dark:text-[#94A3B8] italic">
                 {t("exec.finalizing")}
               </span>
             )}
@@ -664,11 +672,11 @@ function ExecutionRow({
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="px-8 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.nodeColumn")}</th>
-                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
-                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
+                    <th className="px-8 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.nodeColumn")}</th>
+                    <th className="px-3 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
+                    <th className="px-3 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
                     {hasCredits() && (
-                      <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
+                      <th className="px-3 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
                     )}
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -688,24 +696,37 @@ function ExecutionRow({
                           <td className="px-8 py-1.5">
                             <div className="flex items-center gap-2">
                               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NODE_STATUS_DOT[state.status] ?? "bg-gray-400"}`} />
-                              <span className="text-xs text-gray-600 dark:text-[#94A3B8]">
-                                {nodeName}
-                              </span>
+                              {fanOut.ownRowOpens ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onNodeClick(nodeId, state)
+                                  }}
+                                  className="text-xs text-gray-600 dark:text-[#94A3B8] text-start hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"
+                                >
+                                  {nodeName}
+                                </button>
+                              ) : (
+                                <span className="text-xs text-gray-600 dark:text-[#94A3B8]">
+                                  {nodeName}
+                                </span>
+                              )}
                               {hasFanOut && (
-                                <span className="inline-flex px-1.5 py-0.5 text-[9px] font-medium rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400">
+                                <span className="inline-flex px-1.5 py-0.5 text-[11px] font-medium rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400">
                                   &times;{fanOut.rows.length}
                                 </span>
                               )}
                             </div>
                           </td>
                           <td className="px-3 py-1.5">
-                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                            <span className={`inline-flex px-1.5 py-0.5 text-[11px] font-medium rounded-full ${
                               STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
                             }`}>
                               {state.status}
                             </span>
                             {state.status === "skipped" && state.skipReason && (
-                              <span className="ms-1 text-[10px] text-slate-400" title={tx("exec.nodeSkippedEmptyInput")}>
+                              <span className="ms-1 text-[11px] text-slate-400" title={tx("exec.nodeSkippedEmptyInput")}>
                                 {skipReasonLabel(state.skipReason)}
                               </span>
                             )}
@@ -751,9 +772,16 @@ function ExecutionRow({
                             onClick={() => onNodeClick(row.key, row.state)}
                           >
                             <td className="px-8 py-1 ps-14">
-                              <span className="text-[11px] text-gray-400 dark:text-[#64748B]">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onNodeClick(row.key, row.state)
+                                }}
+                                className="text-[11px] text-gray-500 dark:text-[#94A3B8] text-start hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"
+                              >
                                 {t(row.label.key, { n: row.label.n })}
-                              </span>
+                              </button>
                             </td>
                             <td className="px-3 py-1" />
                             <td className="px-3 py-1" />

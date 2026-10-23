@@ -204,7 +204,7 @@ export function VideoOverlayPreview(p: VideoOverlayPreviewProps) {
   const selectedDrawn = p.selected !== null && !!p.sources[p.selected] && !!p.layers[p.selected] && hasDrawableVideoOverlayBox(p.layers[p.selected]) && videoOverlayLayerLive(p.layers[p.selected]!, time)
 
   return (
-    <div
+    <div role="group" aria-label={t("common.preview")}
       ref={containerRef}
       tabIndex={-1}
       onKeyDown={(e) => {
@@ -242,7 +242,7 @@ export function VideoOverlayPreview(p: VideoOverlayPreviewProps) {
               onError={() => setFailed(true)}
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted/30 px-3 text-center text-[10px] text-muted-foreground">
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/30 px-3 text-center text-[11px] text-muted-foreground">
               {t("node.videoOverlayPreviewUnavailable")}
             </div>
           )}
@@ -346,7 +346,7 @@ export function VideoOverlayPreview(p: VideoOverlayPreviewProps) {
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <span className="text-[10px] font-medium px-1">{t("overlayEditor.layerN", { n: p.selected! + 1 })}</span>
+          <span className="text-[11px] font-medium px-1">{t("overlayEditor.layerN", { n: p.selected! + 1 })}</span>
           <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/15" title={t("overlayEditor.bringForward")} aria-label={t("overlayEditor.bringForward")} onClick={() => p.onReorder(p.selected!, "up")}>
             <ChevronUp className="w-3.5 h-3.5" />
           </button>

@@ -70,7 +70,7 @@ function UgcScriptNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {d.errorMessage && (
-                <p dir="auto" className="text-[10px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
+                <p dir="auto" className="text-[11px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
                   {ugcNodeMessageText(d.errorMessage)}
                 </p>
               )}
@@ -79,7 +79,7 @@ function UgcScriptNodeComponent({ id, data, selected }: NodeProps) {
           {!running && lines.length > 0 && (
             <div className="flex flex-1 min-h-0 flex-col gap-1.5">
               {d.keepResult && (
-                <span className="self-start rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary" data-testid="ugc-script-kept">
+                <span className="self-start rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary" data-testid="ugc-script-kept">
                   {t("ugc.script.kept")}
                 </span>
               )}
@@ -95,7 +95,7 @@ function UgcScriptNodeComponent({ id, data, selected }: NodeProps) {
           )}
           {!running && lines.length === 0 && status !== "failed" && (
             <div
-              className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"
+              className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"
               style={{ minHeight: 120 }}
             >
               <ScrollText className="w-6 h-6" />

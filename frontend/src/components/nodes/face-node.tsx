@@ -101,17 +101,16 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               )}
-              <CachedImage
+              <button type="button" onClick={(e) => {
+                  e.stopPropagation()
+                  setLightboxSrc(activeUrl)
+                }} aria-label={t("common.preview")} className="block w-full h-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                 src={activeUrl}
                 alt={nodeData.faceName || t("assetlib.typeFace")}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setLightboxSrc(activeUrl)
-                }}
-              />
+              /></button>
             </div>
             {/* Save to library button */}
             <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -194,7 +193,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
               <span className="text-xs font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[9px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -202,7 +201,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <ImageIcon className="w-5 h-5" />
           </div>
         )}
@@ -242,7 +241,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Metadata */}
-        <div className="flex justify-between text-muted-foreground text-[10px]">
+        <div className="flex justify-between text-muted-foreground text-[11px]">
           <span>{nodeData.style in STYLE_LABEL_KEYS ? t(STYLE_LABEL_KEYS[nodeData.style]) : nodeData.style}</span>
         </div>
       </div>

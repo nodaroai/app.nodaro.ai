@@ -195,7 +195,7 @@ export function ScheduleRuleEditor({
                   className={cn(
                     "px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors",
                     on
-                      ? "border-[#ff0073] bg-[#ff0073] text-white"
+                      ? "border-[#ff0073] bg-cta text-white"
                       : "border-border bg-background text-muted-foreground hover:border-[#ff0073]/50",
                     last && "cursor-default",
                   )}

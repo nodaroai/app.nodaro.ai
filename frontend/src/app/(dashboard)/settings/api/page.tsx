@@ -171,7 +171,7 @@ export default function ApiSettingsPage() {
                   onCheckedChange={() => handleToggle(token.id, token.isActive)}
                   disabled={updateMutation.isPending}
                 />
-                <Button
+                <Button aria-label={t("common.delete")}
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500"
@@ -189,7 +189,7 @@ export default function ApiSettingsPage() {
       <Button
         onClick={() => setShowCreate(true)}
         disabled={(tokens ?? []).length >= 10}
-        className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+        className="bg-cta hover:bg-cta-hover text-white"
       >
         <Plus className="h-4 w-4 me-2" />
         {t("apiTok.createToken")}
@@ -291,7 +291,7 @@ export default function ApiSettingsPage() {
                 <code className="block w-full p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-sm font-mono break-all pe-10">
                   {createdToken}
                 </code>
-                <Button
+                <Button aria-label={t("common.copy")}
                   variant="ghost"
                   size="sm"
                   className="absolute end-1 top-1 h-8 w-8 p-0"
@@ -344,7 +344,7 @@ export default function ApiSettingsPage() {
                 <Button
                   onClick={handleCreate}
                   disabled={!newTokenName.trim() || createMutation.isPending}
-                  className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+                  className="bg-cta hover:bg-cta-hover text-white"
                 >
                   {createMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin me-2" />

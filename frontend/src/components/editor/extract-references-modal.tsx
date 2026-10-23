@@ -526,7 +526,7 @@ export function ExtractReferencesModal({
   const objects = references.filter((r) => r.type === "object")
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
@@ -548,8 +548,8 @@ export function ExtractReferencesModal({
             <div className="flex rounded-md border overflow-hidden">
               <button
                 type="button"
-                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium transition-colors ${
-                  selectionMode === "lasso" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors ${
+                  selectionMode === "lasso" ? "bg-cta text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("lasso")}
                 title={t("editor.lassoSelectionTitle")}
@@ -558,8 +558,8 @@ export function ExtractReferencesModal({
               </button>
               <button
                 type="button"
-                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium transition-colors ${
-                  selectionMode === "rectangle" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors ${
+                  selectionMode === "rectangle" ? "bg-cta text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("rectangle")}
                 title={t("editor.rectSelectionTitle")}
@@ -567,7 +567,7 @@ export function ExtractReferencesModal({
                 <Square className="w-3 h-3" /> {t("editor.rect")}
               </button>
             </div>
-            <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+            <button aria-label={t("common.close")} type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -656,7 +656,7 @@ export function ExtractReferencesModal({
                 </div>
                 <button
                   type="button"
-                  className="h-8 px-4 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  className="h-8 px-4 text-xs font-medium rounded-md bg-cta text-primary-foreground hover:bg-cta-hover disabled:opacity-50"
                   disabled={!nameInput.trim() || saving}
                   onClick={handleConfirmExtraction}
                 >
@@ -681,7 +681,7 @@ export function ExtractReferencesModal({
           {/* Extracted references */}
           {characters.length > 0 && (
             <div className="mt-4">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabCharacters")}</span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabCharacters")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {characters.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
@@ -689,12 +689,12 @@ export function ExtractReferencesModal({
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[11px] text-emerald-600 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
                     </div>
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
                       onClick={() => handleDeleteReference(ref.id)}
@@ -709,7 +709,7 @@ export function ExtractReferencesModal({
 
           {locations.length > 0 && (
             <div className="mt-3">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabLocations")}</span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabLocations")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {locations.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
@@ -717,12 +717,12 @@ export function ExtractReferencesModal({
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[11px] text-emerald-600 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
                     </div>
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
                       onClick={() => handleDeleteReference(ref.id)}
@@ -737,7 +737,7 @@ export function ExtractReferencesModal({
 
           {objects.length > 0 && (
             <div className="mt-3">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("explore.tabObjects")}</span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("explore.tabObjects")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {objects.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
@@ -745,12 +745,12 @@ export function ExtractReferencesModal({
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[11px] text-emerald-600 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
                     </div>
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
                       onClick={() => handleDeleteReference(ref.id)}
@@ -781,7 +781,7 @@ export function ExtractReferencesModal({
             </button>
             <button
               type="button"
-              className="h-8 px-4 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-8 px-4 text-xs font-medium rounded-md bg-cta text-primary-foreground hover:bg-cta-hover"
               onClick={handleSave}
             >
               {t("editor.saveReferences")}

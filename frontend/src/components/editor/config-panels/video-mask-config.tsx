@@ -110,7 +110,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) })}
           className="w-full accent-[#ff0073]"
         />
-        <p className="text-[10px] text-muted-foreground">{t("imgcfg.matchHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("imgcfg.matchHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -130,7 +130,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskPricingHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskPricingHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -144,7 +144,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           />
           <label htmlFor="video-mask-hold-last" className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskHoldLastMask")}</label>
         </div>
-        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskHoldLastMaskHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskHoldLastMaskHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -162,7 +162,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           onChange={(e) => onUpdate({ minSubjectHeightPct: parseInt(e.target.value, 10) })}
           className="w-full accent-[#ff0073]"
         />
-        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskMinSubjectHeightHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskMinSubjectHeightHint")}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -180,8 +180,8 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           onChange={(e) => onUpdate({ maxSubjectHeightPct: parseInt(e.target.value, 10) })}
           className="w-full accent-[#ff0073]"
         />
-        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskMaxSubjectHeightHint")}</p>
-        {emptyBand && <p role="alert" className="text-[10px] text-amber-600 dark:text-amber-400">{t("vidcfg.videoMaskSizeBandEmpty")}</p>}
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskMaxSubjectHeightHint")}</p>
+        {emptyBand && <p role="alert" className="text-[11px] text-amber-600 dark:text-amber-400">{t("vidcfg.videoMaskSizeBandEmpty")}</p>}
       </div>
 
       <fieldset className="flex flex-col gap-1.5 min-w-0">
@@ -202,7 +202,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskZoneHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskZoneHint")}</p>
       </fieldset>
 
       <div className="flex flex-col gap-1">
@@ -216,7 +216,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           />
           <span className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskPerShot")}</span>
         </label>
-        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskPerShotHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskPerShotHint")}</p>
       </div>
     </div>
   )

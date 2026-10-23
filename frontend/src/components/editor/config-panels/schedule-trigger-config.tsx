@@ -50,7 +50,7 @@ const PRESET_LABEL: Readonly<Record<SchedulePresetId, MessageKey>> = {
 function SectionTitle({ children }: { readonly children: string }) {
   return (
     <div className="flex items-center gap-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</p>
       <div className="flex-1 h-px bg-border/70" />
     </div>
   )
@@ -124,7 +124,7 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground">{active ? t("sched.switchOnTitle") : t("sched.switchOffTitle")}</p>
           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{isWired ? t("sched.switchHint") : t("sched.switchHintUnwired")}</p>
-          <p className="text-[11px] text-muted-foreground/80 mt-1.5">{isWired ? t("sched.scopeBranch") : t("sched.scopeWhole")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1.5">{isWired ? t("sched.scopeBranch") : t("sched.scopeWhole")}</p>
           {cannotRun && (
             <p className="text-[11px] text-destructive mt-1.5" data-testid="schedule-cannot-run">{cannotRun}</p>
           )}

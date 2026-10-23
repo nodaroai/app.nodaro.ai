@@ -19,7 +19,7 @@ export function PreviousCandidatesStrip({ candidates, onReApprove }: PreviousCan
   if (candidates.length === 0) return null
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-slate-500">
+      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-slate-500">
         <Clock className="w-3 h-3" />
         {t("studio.previousCandidates")}
       </div>

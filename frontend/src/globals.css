@@ -120,6 +120,8 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-cta: var(--cta);
+  --color-cta-hover: var(--cta-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -143,10 +145,13 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: #ff0073;
   --primary-foreground: #ffffff;
+  /* A solid fill under white text (buttons, badges): #ff0073 gives white only 3.8:1, this gives 4.6:1 (WCAG 1.4.3). Pink TEXT and rings stay --primary. */
+  --cta: #e6006a;
+  --cta-hover: #cc005e; /* white on it: 5.6:1 */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.52 0 0); /* 5:1 on --muted and 5.6:1 on white (WCAG 1.4.3); was 0.556, 4.4:1 on --muted */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -250,6 +255,9 @@
   --popover-foreground: #E2E8F0;
   --primary: #ff0073;
   --primary-foreground: #ffffff;
+  /* A solid fill under white text (buttons, badges): #ff0073 gives white only 3.8:1, this gives 4.6:1 (WCAG 1.4.3). Pink TEXT and rings stay --primary. */
+  --cta: #e6006a;
+  --cta-hover: #cc005e; /* white on it: 5.6:1 */
   --secondary: #2D2D2D;
   --secondary-foreground: #E2E8F0;
   --muted: #2D2D2D;
@@ -352,7 +360,7 @@
   --home-line-2: #e7e7ec;
   --home-fg: #17171c;
   --home-fg-2: #3d3d47;
-  --home-muted: #6f6f7c;
+  --home-muted: #5f5f6b; /* 5.5:1 on --home-bg (WCAG 1.4.3); was #6f6f7c, 4.3:1 */
   --home-dim: #9a9aa6;
   --home-strong: #111116;
   --home-stripe-a: #f0f0f3;

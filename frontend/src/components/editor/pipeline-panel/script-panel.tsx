@@ -366,7 +366,7 @@ function SceneNavigator({
               className={cn(
                 "inline-flex h-7 min-w-[2rem] items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors",
                 isActive
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-primary bg-cta text-primary-foreground"
                   : "border-border bg-card text-foreground hover:border-primary/50",
               )}
             >

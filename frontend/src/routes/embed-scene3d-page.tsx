@@ -206,7 +206,7 @@ export default function EmbedScene3DPage() {
       {rejection && <RejectionBanner reason={rejection} />}
       {assetError && <RejectionBanner reason={V2_TEXT.assetFailed(assetError)} />}
       {readOnly && (
-        <span className="self-start rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span className="self-start rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
           {t("embed3d.readOnly")}
         </span>
       )}
@@ -264,10 +264,10 @@ function Notice({ tone, title, detail }: { tone: "error" | "idle"; title: string
       {tone === "error" ? (
         <AlertTriangle className="w-5 h-5 text-amber-500" />
       ) : (
-        <Boxes className="w-5 h-5 text-muted-foreground/60" />
+        <Boxes className="w-5 h-5 text-muted-foreground" />
       )}
       <p className={`text-[11px] ${tone === "error" ? "text-amber-500" : "text-muted-foreground"}`}>{title}</p>
-      {detail && <p className="text-[10px] text-muted-foreground/70">{detail}</p>}
+      {detail && <p className="text-[11px] text-muted-foreground">{detail}</p>}
     </div>
   )
 }

@@ -65,7 +65,7 @@ function NodeRow({
       <td className="py-3 px-4">
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-xs">{nodeType}</span>
-          <span className="text-[10px] text-muted-foreground">field: {fieldLabel}</span>
+          <span className="text-[11px] text-muted-foreground">field: {fieldLabel}</span>
         </div>
       </td>
       <td className="py-3 px-4 min-w-[220px]">

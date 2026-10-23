@@ -157,6 +157,7 @@ export function TemplatePreviewModal({
 
   return createPortal(
     <div
+      role="presentation"
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center"
       onClick={onClose}
     >
@@ -378,7 +379,7 @@ export function TemplatePreviewModal({
           {/* Bottom sticky bar */}
           <div className="border-t border-border p-4 flex items-center gap-3 bg-background">
             {/* Favorite toggle */}
-            <Button
+            <Button aria-label={t("templates.favorite")} aria-pressed={isFavorited}
               variant="outline"
               size="icon"
               className="shrink-0"
@@ -410,7 +411,7 @@ export function TemplatePreviewModal({
 
             {/* Clone button */}
             <Button
-              className="shrink-0 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              className="shrink-0 bg-cta hover:bg-cta-hover text-white"
               disabled={isCloning || !selectedProjectId}
               onClick={handleClone}
             >

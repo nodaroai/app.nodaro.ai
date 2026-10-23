@@ -40,7 +40,7 @@ export function CharacterPickRow({ family, id, shape, setLabel, value, extras, d
       />
       <div className="flex min-w-0 flex-col gap-px">
         {setLabel && (
-          <p className="truncate font-mono text-[9.5px] uppercase tracking-[.08em] text-[#9a9aa4] dark:text-[#7a7a85]">
+          <p className="truncate font-mono text-[11px] uppercase tracking-[.08em] text-[#9a9aa4] dark:text-[#7a7a85]">
             {setLabel}
           </p>
         )}

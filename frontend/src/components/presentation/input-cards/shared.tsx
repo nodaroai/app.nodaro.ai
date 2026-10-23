@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Upload, Link } from "lucide-react"
 import { useFileUpload } from "@/hooks/use-file-upload"
@@ -200,11 +201,11 @@ export function FileDropZone({
         <UploadSpinner size={height === "h-24" ? "sm" : "md"} />
       ) : (
         <>
-          <Upload className={height === "h-24" ? "w-6 h-6 text-muted-foreground/40 mb-1" : "w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground/40 mb-1 sm:mb-2"} />
+          <Upload className={height === "h-24" ? "w-6 h-6 text-muted-foreground mb-1" : "w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground mb-1 sm:mb-2"} />
           <span className="text-xs text-muted-foreground">{label}</span>
           <button
             type="button"
-            className="mt-2 py-1.5 px-2 text-[11px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1 transition-colors touch-manipulation"
+            className="mt-2 py-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors touch-manipulation"
             onClick={(e) => { e.stopPropagation(); onShowUrl() }}
           >
             <Link className="w-3 h-3" /> {t("present.orPasteUrl")}
@@ -222,6 +223,7 @@ export function FileDropZone({
           e.target.value = ""
         }}
       />
+      <CoverButton label={t("common.upload")} onActivate={onClick} />
     </div>
   )
 }
@@ -275,7 +277,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
   const counter = maxLength !== undefined && (
     <p
       data-testid="field-char-count"
-      className={cn("mt-1 text-end font-mono text-[10px]", value.length >= maxLength ? "text-amber-500" : "text-muted-foreground")}
+      className={cn("mt-1 text-end font-mono text-[11px]", value.length >= maxLength ? "text-amber-500" : "text-muted-foreground")}
     >
       {value.length}/{maxLength}
     </p>

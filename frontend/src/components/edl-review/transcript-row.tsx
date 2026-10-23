@@ -68,7 +68,7 @@ function GapChip({ gap, dropped, onOpenDrop }: { readonly gap: WordGap; readonly
       type="button"
       data-drop={gap.drop}
       aria-label={t("edlReview.pause", { length })}
-      className={cn("mx-0.5 inline-flex items-center gap-0.5 rounded px-1 align-middle text-[10px] leading-4", dropReasonStyle(d.reason).chip)}
+      className={cn("mx-0.5 inline-flex items-center gap-0.5 rounded px-1 align-middle text-[11px] leading-4", dropReasonStyle(d.reason).chip)}
       onClick={(e) => onOpenDrop(gap.drop, e.currentTarget)}
     >
       <Pause className="h-2.5 w-2.5" />
@@ -83,7 +83,7 @@ function ReasonChip({ drop, reason, onOpenDrop }: { readonly drop: number; reado
     <button
       type="button"
       data-drop={drop}
-      className={cn("me-1 inline-flex items-center gap-0.5 rounded px-1 align-middle text-[10px] font-medium leading-4", dropReasonStyle(reason).chip)}
+      className={cn("me-1 inline-flex items-center gap-0.5 rounded px-1 align-middle text-[11px] font-medium leading-4", dropReasonStyle(reason).chip)}
       onClick={(e) => onOpenDrop(drop, e.currentTarget)}
     >
       {dropReasonLabel(reason, t)}
@@ -144,7 +144,7 @@ function ParagraphBody(props: TranscriptRowProps & { readonly row: ParagraphRow 
             type="button"
             aria-expanded
             data-run-toggle={row.run}
-            className="inline-flex items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground hover:bg-muted"
+            className="inline-flex items-center gap-0.5 rounded px-1 text-[11px] text-muted-foreground hover:bg-muted"
             onClick={() => onCollapse(row.run!)}
           >
             <ChevronDown className="h-3 w-3" />

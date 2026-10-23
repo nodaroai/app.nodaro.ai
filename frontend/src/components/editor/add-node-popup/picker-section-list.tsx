@@ -52,8 +52,8 @@ function SectionHeader({ label, indent }: { label: string; indent?: boolean }) {
     <div
       className={cn(
         "sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2",
-        "text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]",
-        indent && "ps-[22px] text-[10px] tracking-[1.2px]",
+        "text-[11px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]",
+        indent && "ps-[22px] text-[11px] tracking-[1.2px]",
       )}
     >
       {label}
@@ -121,7 +121,7 @@ export function PickerNodeRow({
       {showNodaroMark(node.type) && <NodaroMark />}
       <HiddenFromUsersMark type={node.type} />
       {badge && (
-        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] tracking-[0.5px] text-[var(--npk-dim)] bg-[var(--npk-chip)]">
+        <span className="shrink-0 rounded px-1.5 py-0.5 text-[11px] tracking-[0.5px] text-[var(--npk-dim)] bg-[var(--npk-chip)]">
           {badge}
         </span>
       )}

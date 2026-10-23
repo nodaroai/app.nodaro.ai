@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useEffect, useState } from "react"
 import { Check, Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
@@ -327,7 +328,7 @@ export function MotionTab({ studio }: MotionTabProps) {
                 controls
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
+              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5 pointer-events-none">
                 {item.name}
               </div>
               {/* Phase 2 #10 — selection checkbox. */}
@@ -366,12 +367,14 @@ export function MotionTab({ studio }: MotionTabProps) {
                       void handleRemove(originalIdx)
                     }}
                     aria-label={t("cfgshared.removeModel", { name: item.name })}
-                    className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
+                    className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80"
                   >
                     {t("common.remove")}
                   </button>
                 </div>
               )}
+              {/* The card only does something in selection mode; then this is its keyboard control. */}
+              {isSelectionMode && <CoverButton label={t("common.select")} onActivate={() => toggleSelected(originalIdx)} />}
             </div>
           )
         })}
@@ -486,7 +489,7 @@ export function MotionTab({ studio }: MotionTabProps) {
           }}
           disabled={customDisabled}
           title={presetTooltip}
-          className="px-4 py-2 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+          className="px-4 py-2 text-[12px] rounded bg-cta hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
         >
           {t("common.generate")}
         </button>

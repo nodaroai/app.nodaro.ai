@@ -142,7 +142,7 @@ function IterationCard({
           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
           : <ChevronRight className={cn("w-3.5 h-3.5 text-gray-400 shrink-0", isRtl && "rotate-180")} />
         }
-        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-[#888] shrink-0">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-[#888] shrink-0">
           #{index + 1}
         </span>
 
@@ -188,7 +188,7 @@ function IterationCard({
           {/* Input */}
           {input && (
             <div className="pt-2">
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#666]">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#666]">
                 {t("exec.input")}
               </span>
               {inputIsUrl ? (
@@ -206,19 +206,18 @@ function IterationCard({
           {/* Result */}
           {hasResult && (
             <div>
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#666]">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#666]">
                 {t("editor.iterResult")}
               </span>
               {resultIsUrl && mediaType === "image" && (
                 <div className="mt-1">
-                  <CachedImage
+                  <button type="button" onClick={() => setLightboxOpen(true)} aria-label={t("common.preview")} className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                     src={result}
                     alt={t("editor.iterResultAlt", { n: index + 1 })}
                     className="w-full max-h-48 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => setLightboxOpen(true)}
                     thumbnail
                     thumbnailWidth={480}
-                  />
+                  /></button>
                   {lightboxOpen && (
                     <ImageLightbox
                       src={result}

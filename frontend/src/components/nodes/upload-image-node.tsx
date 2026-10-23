@@ -51,7 +51,7 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
         className={`w-full flex items-center justify-center gap-2 ${compact ? "h-12" : "h-16"} rounded-md border-2 border-dashed transition-colors cursor-pointer ${
           isDragOver
             ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
-            : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+            : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground hover:text-[#38BDF8]"
         }`}
         onClick={(e) => { e.stopPropagation(); onFileClick() }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true) }}
@@ -62,7 +62,7 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
         <span className="text-xs">{isDragOver ? t("node.dropImage") : t("inputcfg.chooseImage")}</span>
       </button>
       <div className="flex items-center gap-1.5">
-        <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+        <Link className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <input
           type="text"
           value={urlValue}
@@ -84,7 +84,7 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
           window.open("https://www.pinterest.com/search/pins/", "_blank", "noopener,noreferrer")
         }}
         title={t("node.pinterestBrowseTitle")}
-        className="self-center flex items-center gap-1 px-2 py-0.5 text-[10px] text-muted-foreground/50 hover:text-[#E60023] transition-colors"
+        className="self-center flex items-center gap-1 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-[#E60023] transition-colors"
       >
         <span>{t("node.orBrowseOnPinterest")}</span>
         <ExternalLink className="w-2.5 h-2.5" />
@@ -282,8 +282,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             showThumbnails && results.length > 1 ? (
               <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
                 {results.slice(0, 8).map((r, i) => (
-                  <CachedImage
-                    key={`${r.jobId}-${i}`}
+                  <button key={`${r.jobId}-${i}`} type="button" onClick={(e) => { e.stopPropagation(); handleSwitchActive(i) }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                     src={r.url}
                     alt={t("node.resultN", { n: i + 1 })}
                     className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
@@ -291,8 +290,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     }`}
                     thumbnail
                     thumbnailWidth={96}
-                    onClick={(e) => { e.stopPropagation(); handleSwitchActive(i) }}
-                  />
+                  /></button>
                 ))}
               </div>
             ) : undefined

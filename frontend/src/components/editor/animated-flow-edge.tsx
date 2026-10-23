@@ -392,7 +392,7 @@ function AnimatedFlowEdgeComponent({
                   <TooltipPrimitive.Root>
                     <TooltipPrimitive.Trigger asChild>
                       <span
-                        className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none flex items-center"
+                        className="text-[11px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none flex items-center"
                         // The pill sits ON the wire: node-card surface underneath, and the
                         // wire's own color for border + text (globals.css canvas tokens).
                         style={edgeData?.edgeLabelColor ? {
@@ -569,11 +569,11 @@ function AnimatedFlowEdgeComponent({
                             >
                               {t(opt.labelKey)}
                             </span>
-                            <span style={{ color: "#64748b", fontSize: 10 }}>{t(opt.descKey)}</span>
+                            <span style={{ color: "#64748b", fontSize: 11 }}>{t(opt.descKey)}</span>
                           </span>
                           {/* Reserved slot — always present so every row has
                               the same width; only Item's active state fills it. */}
-                          <span
+                          <span role="presentation"
                             onClick={showInlineItemInput ? (e) => e.stopPropagation() : undefined}
                             onMouseDown={showInlineItemInput ? (e) => e.stopPropagation() : undefined}
                             style={{ flexShrink: 0, width: 56, height: 22 }}
@@ -653,7 +653,7 @@ function AnimatedFlowEdgeComponent({
                   <>
                     <div style={{ height: 1, background: "#555" }} />
                     <div style={{ padding: "8px 14px" }}>
-                      <span style={{ color: "#f59e0b", fontSize: 9.5 }}>
+                      <span style={{ color: "#f59e0b", fontSize: 11 }}>
                         {t("canvas.negativeStepHint")}
                       </span>
                     </div>
@@ -688,9 +688,9 @@ function RangeConfig({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <FieldInput label={t("canvas.edgeFieldFrom")} value={rangeFrom ?? ""} placeholder="1" onChange={onFromChange} />
-        <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>&rarr;</span>
+        <span style={{ color: "#64748b", fontSize: 11, marginTop: 14 }}>&rarr;</span>
         <FieldInput label={t("canvas.edgeFieldTo")} value={rangeTo ?? ""} placeholder="last" onChange={onToChange} />
-        <span style={{ color: "#64748b", fontSize: 10, marginTop: 14 }}>+</span>
+        <span style={{ color: "#64748b", fontSize: 11, marginTop: 14 }}>+</span>
         <FieldInput
           label={t("canvas.edgeFieldStep")}
           value={rangeStep != null ? String(rangeStep) : ""}
@@ -738,7 +738,7 @@ function ListConfig({
           outline: "none",
         }}
       />
-      <div style={{ color: "#64748b", fontSize: 9.5, marginTop: 4 }}>
+      <div style={{ color: "#64748b", fontSize: 11, marginTop: 4 }}>
         {t("cfgext.selExamples")}<code>1, 2, last</code> · <code>1..5</code> · <code>1..10:2</code> · <code>1..last-1</code>
       </div>
     </div>
@@ -763,7 +763,7 @@ function FieldInput({
     <div className="flex flex-col gap-0.5">
       <span style={{
         color: "#64748b",
-        fontSize: 8.5,
+        fontSize: 11,
         fontWeight: 600,
         letterSpacing: "0.05em",
         textTransform: "uppercase",

@@ -153,7 +153,7 @@ export function MobileAppHeader({
             <button
               type="button"
               onClick={() => { openMenu(); setShowVersionPicker(true) }}
-              className="shrink-0 flex items-center gap-0.5 text-[10px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px] translate-y-[3px]"
+              className="shrink-0 flex items-center gap-0.5 text-[11px] text-muted-foreground px-0.5 py-0.5 touch-manipulation hover:text-foreground transition-colors min-h-[28px] translate-y-[3px]"
               aria-label={t("runner.selectVersion")}
             >
               v{displayVersion}
@@ -161,7 +161,7 @@ export function MobileAppHeader({
             </button>
           )}
           {!hasMultipleVersions && versions.length === 1 && (
-            <span className="shrink-0 text-[10px] text-muted-foreground px-0.5 py-0.5 translate-y-[3px]">
+            <span className="shrink-0 text-[11px] text-muted-foreground px-0.5 py-0.5 translate-y-[3px]">
               v{displayVersion}
             </span>
           )}
@@ -172,7 +172,7 @@ export function MobileAppHeader({
           <button
             type="button"
             onClick={onNewRun}
-            className="shrink-0 h-8 px-3 rounded-full text-xs font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-1 transition-colors touch-manipulation"
+            className="shrink-0 h-8 px-3 rounded-full text-xs font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-1 transition-colors touch-manipulation"
           >
             <Plus className="h-3.5 w-3.5" />
             {t("common.new")}

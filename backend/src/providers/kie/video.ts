@@ -21,7 +21,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4Provider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
@@ -38,6 +38,7 @@ import { snapAspectRatioToken } from "../video/aspect-ratio.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterError, isInvalidOmniAudioError } from "./omni-character.js"
 import { kling3Generate } from "./kling3-client.js"
+import { buildKling4Request } from "./kling4.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
 import {
@@ -1589,6 +1590,112 @@ async function runViduQ4(
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
+/**
+ * Provider per-second rate (USD) for Kling 4.0 by WIRE resolution, reported as
+ * ProviderResult.cost (audit/provider_cost only — the USER charge is the seeded
+ * composite). Both endpoints share the no-video rate; a reference-video run
+ * bills the `ref` rate × (output + max(output, input seconds)), which the runner
+ * cannot measure, so it reports the floor (input ≤ output → 2 × output).
+ */
+const KLING_4_RATE_USD_PER_SEC: Record<"720p" | "1080p", { plain: number; ref: number }> = {
+  "720p": { plain: 0.1425, ref: 0.085 },
+  "1080p": { plain: 0.2125, ref: 0.1275 },
+}
+
+/**
+ * Kling 4.0 — both ids (`kling-4` reference-to-video, `kling-4-keyframes`
+ * keyframe-to-video). The body is built by the pure `buildKling4Request`
+ * (kling4.ts), which maps the platform's `@image_N` / `@audio_N` numbering and
+ * wired characters onto Kling's names and drops the `@` from any mention the
+ * body does not declare (KIE 422s an undeclared one). Images are normalized
+ * AFTER the build: the builder matches character seats by the raw URLs.
+ */
+async function runKling4(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: "kling-4" | "kling-4-keyframes",
+  prompt: string,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  startFrameUrl: string | undefined,
+  endFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const requested = duration !== undefined && duration > 0 ? duration : 5
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+  const { model, input, notes } = buildKling4Request({
+    provider: modelKey,
+    prompt,
+    durationSec: snapped,
+    resolution: options?.resolution,
+    aspectRatio: aspectRatioValue,
+    startFrameUrl,
+    endFrameUrl,
+    referenceImageUrls: options?.referenceImageUrls,
+    referenceVideoUrls: options?.referenceVideoUrls,
+    referenceAudioUrls: options?.referenceAudioUrls,
+    characterReferences: options?.characterReferences,
+    keepOriginalSound: options?.keepOriginalSound,
+  })
+  for (const note of notes) console.log(`[KIE.ai] ${logLabel}: ${note}`)
+  if (typeof input.prompt !== "string" || !input.prompt.trim()) {
+    throw createSanitizedError(`${logLabel}: a prompt is required`, "Video generation")
+  }
+
+  // Every image the body carries goes through the same normalization as a
+  // frame (KIE: each side 300-65536 px, aspect 0.4-2.5; our 2048 px cap).
+  const constraints: ImageConstraints = {
+    context: "Video generation",
+    maxDimension: 2048,
+    minDimension: 300,
+    minAspectRatio: 0.4,
+    maxAspectRatio: 2.5,
+  }
+  const norm = (u: string): Promise<string> => ensureImageForProvider(u, modelKey, constraints)
+  const normList = (v: unknown): Promise<string[]> | undefined =>
+    Array.isArray(v) ? Promise.all((v as string[]).map(norm)) : undefined
+  const one = (v: unknown): Promise<string> | undefined => (typeof v === "string" ? norm(v) : undefined)
+  const [imageUrls, keyframeUrls, firstFrame, lastFrame] = await Promise.all([
+    normList(input.image_urls),
+    normList(input.keyframe_urls),
+    one(input.first_frame_url),
+    one(input.last_frame_url),
+  ])
+  if (imageUrls) input.image_urls = imageUrls
+  if (keyframeUrls) input.keyframe_urls = keyframeUrls
+  if (firstFrame) input.first_frame_url = firstFrame
+  if (lastFrame) input.last_frame_url = lastFrame
+  if (Array.isArray(input.elements)) {
+    input.elements = await Promise.all(
+      (input.elements as Array<{ image_urls: string[] } & Record<string, unknown>>).map(async (el) => ({
+        ...el,
+        image_urls: await Promise.all(el.image_urls.map(norm)),
+      })),
+    )
+  }
+
+  const resolution = input.resolution as "720p" | "1080p"
+  const rate = KLING_4_RATE_USD_PER_SEC[resolution]
+  const tierCostUsd = Array.isArray(input.video_urls) ? rate.ref * snapped * 2 : rate.plain * snapped
+
+  console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
+  const { resultJson, taskId, providerMs } = await runKieTask(
+    model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -1930,6 +2037,25 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `Wan 3 (${provider})`,
+      )
+    }
+
+    // Kling 4.0 — bespoke builder (kling4.ts): explicit allow-list bodies,
+    // integer duration, Kling's own material names. Frames are passed RAW: the
+    // runner normalizes every image after the build. MUST stay above the
+    // generic createTask path.
+    if (isKling4Provider(provider)) {
+      return runKling4(
+        modelConfig,
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio,
+        imageUrl,
+        endFrameUrl,
+        options,
+        reconcileOpts,
+        `Kling 4.0 (${provider})`,
       )
     }
 
@@ -2340,6 +2466,24 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `Gemini Omni t2v (${provider})`,
+      )
+    }
+
+    // Kling 4.0 — both endpoints run image-less (reference-to-video with no
+    // materials, or with references alone; keyframe-to-video with in-between
+    // frames alone or none). Same bespoke runner as the i2v path.
+    if (isKling4Provider(provider)) {
+      return runKling4(
+        modelConfig,
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        undefined,
+        undefined,
+        options,
+        reconcileOpts,
+        `Kling 4.0 t2v (${provider})`,
       )
     }
 

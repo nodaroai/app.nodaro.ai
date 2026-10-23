@@ -73,6 +73,7 @@ function TagInput({
   readonly onChange: (tags: string[]) => void
   readonly placeholder?: string
 }) {
+  const t = useT()
   const [input, setInput] = useState("")
 
   function addTag() {
@@ -87,9 +88,9 @@ function TagInput({
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1 flex-wrap">
         {value.map((tag) => (
-          <span key={tag} className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-muted border">
+          <span key={tag} className="flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded bg-muted border">
             {tag}
-            <button type="button" onClick={() => onChange(value.filter((t) => t !== tag))} className="hover:text-destructive">
+            <button aria-label={t("common.remove")} type="button" onClick={() => onChange(value.filter((t) => t !== tag))} className="hover:text-destructive">
               <X className="w-2.5 h-2.5" />
             </button>
           </span>
@@ -239,7 +240,7 @@ function QuickAddInput({
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors text-muted-foreground"
+        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-md border border-dashed hover:bg-muted transition-colors text-muted-foreground"
       >
         <Plus className="w-3 h-3" /> {t(QUICK_ADD_KEYS[category].button)}
       </button>
@@ -252,7 +253,7 @@ function QuickAddInput({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder={t(QUICK_ADD_KEYS[category].name)}
-        className="h-6 text-[10px]"
+        className="h-6 text-[11px]"
         autoFocus
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } if (e.key === "Escape") setExpanded(false) }}
       />
@@ -260,12 +261,12 @@ function QuickAddInput({
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
         placeholder={placeholder}
-        className="h-6 text-[10px]"
+        className="h-6 text-[11px]"
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } if (e.key === "Escape") setExpanded(false) }}
       />
       <div className="flex gap-1 justify-end">
-        <button type="button" onClick={() => setExpanded(false)} className="text-[10px] px-2 py-0.5 rounded hover:bg-muted">{t("common.cancel")}</button>
-        <button type="button" onClick={handleAdd} disabled={!name.trim()} className="text-[10px] px-2 py-0.5 rounded bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50">{t("common.add")}</button>
+        <button type="button" onClick={() => setExpanded(false)} className="text-[11px] px-2 py-0.5 rounded hover:bg-muted">{t("common.cancel")}</button>
+        <button type="button" onClick={handleAdd} disabled={!name.trim()} className="text-[11px] px-2 py-0.5 rounded bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50">{t("common.add")}</button>
       </div>
     </div>
   )
@@ -487,7 +488,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="text-xs font-medium">{t("scenecfg.scriptConnection")}</span>
               {data.sourceScriptNodeId && (
-                <button type="button" onClick={handleUnlinkScript} className="ms-auto text-[10px] text-muted-foreground hover:text-destructive">
+                <button type="button" onClick={handleUnlinkScript} className="ms-auto text-[11px] text-muted-foreground hover:text-destructive">
                   {t("scenecfg.unlink")}
                 </button>
               )}
@@ -497,7 +498,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 value={data.sourceScriptNodeId || "__none__"}
                 onValueChange={(v) => onUpdate({ sourceScriptNodeId: v === "__none__" ? "" : v, sourceSceneIndex: -1 })}
               >
-                <SelectTrigger className="h-7 text-[10px] flex-1" aria-label={t("scenecfg.selectScript")}>
+                <SelectTrigger className="h-7 text-[11px] flex-1" aria-label={t("scenecfg.selectScript")}>
                   <SelectValue placeholder={t("scenecfg.selectScriptPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
@@ -517,7 +518,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   value={data.sourceSceneIndex >= 0 ? String(data.sourceSceneIndex) : "__none__"}
                   onValueChange={(v) => handleSceneIndexChange(v === "__none__" ? -1 : Number(v))}
                 >
-                  <SelectTrigger className="h-7 text-[10px] flex-1" aria-label={t("scenecfg.selectScene")}>
+                  <SelectTrigger className="h-7 text-[11px] flex-1" aria-label={t("scenecfg.selectScene")}>
                     <SelectValue placeholder={t("scenecfg.selectScenePlaceholder")} />
                   </SelectTrigger>
                   <SelectContent position="popper" className="z-[9999]">
@@ -533,7 +534,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             </div>
             {/* Scene preview */}
             {data.sourceScriptNodeId && data.sourceSceneIndex >= 0 && linkedScriptScenes[data.sourceSceneIndex] && (
-              <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5 line-clamp-2">
+              <div className="text-[11px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5 line-clamp-2">
                 {linkedScriptScenes[data.sourceSceneIndex].visualDescription || linkedScriptScenes[data.sourceSceneIndex].action || t("scenecfg.noDescription")}
               </div>
             )}
@@ -542,11 +543,11 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <button
                   type="button"
                   onClick={handleImportFromScript}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-cta text-primary-foreground hover:bg-cta-hover"
                 >
                   <Download className="w-3 h-3" /> {t("scenecfg.importNow")}
                 </button>
-                <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
                   <input
                     type="checkbox"
                     checked={data.autoSyncWithScript ?? false}
@@ -559,7 +560,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             )}
             {/* Import feedback */}
             {importFeedback && (
-              <div className="flex items-center gap-1.5 text-[10px] text-green-600 dark:text-green-400 bg-green-500/10 rounded px-2 py-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-green-600 dark:text-green-400 bg-green-500/10 rounded px-2 py-1">
                 <Check className="w-3 h-3 shrink-0" />
                 <span>{importFeedback}</span>
               </div>
@@ -617,7 +618,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   onUpdate({ dialogue: newDialogue })
                 }}
               >
-                <SelectTrigger className="h-6 text-[10px] flex-1" aria-label={t("scenecfg.selectSpeaker")}><SelectValue placeholder={t("scenecfg.speaker")} /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] flex-1" aria-label={t("scenecfg.selectSpeaker")}><SelectValue placeholder={t("scenecfg.speaker")} /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
                   <SelectItem value="__narrator__">{t("scenecfg.narrator")}</SelectItem>
                   {characterAssets.map((a) => (
@@ -637,9 +638,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   onUpdate({ dialogue: newDialogue })
                 }}
                 placeholder={t("scenecfg.emotion")}
-                className="h-6 text-[10px] w-20"
+                className="h-6 text-[11px] w-20"
               />
-              <button
+              <button aria-label={t("common.remove")}
                 type="button"
                 onClick={() => onUpdate({ dialogue: (data.dialogue ?? []).filter((_, di) => di !== i) })}
                 className="p-0.5 hover:text-destructive"
@@ -655,7 +656,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               }}
               placeholder={t("scenecfg.dialogueLinePlaceholder")}
               rows={2}
-              className="text-[10px] resize-none"
+              className="text-[11px] resize-none"
             />
           </div>
         ))}
@@ -669,7 +670,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             setRecentDialogueIndex(newIdx)
             setTimeout(() => setRecentDialogueIndex(null), 2000)
           }}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-md border border-dashed hover:bg-muted transition-colors"
         >
           <Plus className="w-3 h-3" /> {t("scenecfg.addDialogueLine")}
         </button>
@@ -694,7 +695,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   )}
                   <span className="text-xs font-medium">{asset?.name ?? t("common.unknown")}</span>
                 </div>
-                <button type="button" onClick={() => removeCharacter(i)} className="p-0.5 hover:text-destructive">
+                <button aria-label={t("common.remove")} type="button" onClick={() => removeCharacter(i)} className="p-0.5 hover:text-destructive">
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -703,20 +704,20 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   value={entry.mood}
                   onChange={(e) => updateCharacter(i, { mood: e.target.value })}
                   placeholder={t("scriptcfg.sceneMood")}
-                  className="h-6 text-[10px] flex-1"
+                  className="h-6 text-[11px] flex-1"
                 />
                 <Input
                   value={entry.action}
                   onChange={(e) => updateCharacter(i, { action: e.target.value })}
                   placeholder={t("scriptcfg.sceneAction")}
-                  className="h-6 text-[10px] flex-1"
+                  className="h-6 text-[11px] flex-1"
                 />
               </div>
               <Select
                 value={entry.positionInFrame ?? "__none__"}
                 onValueChange={(v) => updateCharacter(i, { positionInFrame: v === "__none__" ? undefined : v as SceneCharacterEntry["positionInFrame"] })}
               >
-                <SelectTrigger className="h-6 text-[10px]" aria-label={t("scenecfg.selectPosition")}><SelectValue placeholder={t("proccfg.position")} /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px]" aria-label={t("scenecfg.selectPosition")}><SelectValue placeholder={t("proccfg.position")} /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
                   <SelectItem value="__none__">{t("scenecfg.noPosition")}</SelectItem>
                   <SelectItem value="left">{t("common.left")}</SelectItem>
@@ -730,7 +731,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           )
         })}
         <Select onValueChange={(v) => { if (v === "__create_new__") { setExpandQuickAdd("character") } else { addCharacter(v) } }}>
-          <SelectTrigger className="h-7 text-[10px]" aria-label={t("scenecfg.addCharacter")}>
+          <SelectTrigger className="h-7 text-[11px]" aria-label={t("scenecfg.addCharacter")}>
             <Plus className="w-3 h-3 me-1" />
             <SelectValue placeholder={t("scenecfg.addCharacterPlaceholder")} />
           </SelectTrigger>
@@ -771,7 +772,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   )}
                   <span className="text-xs font-medium">{loc.name ?? asset?.name ?? t("common.unknown")}</span>
                   {loc.isPrimary && (
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-500">{t("scenecfg.primary")}</span>
+                    <span className="text-[11px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-500">{t("scenecfg.primary")}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -782,13 +783,13 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                         const newLocs = (data.locations ?? []).map((l, li) => ({ ...l, isPrimary: li === i }))
                         onUpdate({ locations: newLocs })
                       }}
-                      className="text-[9px] px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                      className="text-[11px] px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
                       title={t("scenecfg.setAsPrimary")}
                     >
                       {t("scenecfg.primary")}
                     </button>
                   )}
-                  <button type="button" onClick={() => {
+                  <button aria-label={t("common.remove")} type="button" onClick={() => {
                     const newLocs = (data.locations ?? []).filter((_, li) => li !== i)
                     if (loc.isPrimary && newLocs.length > 0) {
                       newLocs[0] = { ...newLocs[0], isPrimary: true }
@@ -801,7 +802,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 <div>
-                  <Label className="text-[10px]">{t("scenecfg.time")}</Label>
+                  <Label className="text-[11px]">{t("scenecfg.time")}</Label>
                   <Select
                     value={loc.timeOfDay ?? data.timeOfDay}
                     onValueChange={(v) => {
@@ -809,7 +810,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                       onUpdate({ locations: newLocs })
                     }}
                   >
-                    <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectTimeOfDay")}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectTimeOfDay")}><SelectValue /></SelectTrigger>
                     <SelectContent position="popper" className="z-[9999]">
                       {optionValues(SCENE_TIME_OF_DAY_LABEL).map((v) => (
                         <SelectItem key={v} value={v}>{t(SCENE_TIME_OF_DAY_LABEL[v])}</SelectItem>
@@ -818,7 +819,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-[10px]">{t("scenecfg.weather")}</Label>
+                  <Label className="text-[11px]">{t("scenecfg.weather")}</Label>
                   <Select
                     value={loc.weather ?? data.weather}
                     onValueChange={(v) => {
@@ -826,7 +827,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                       onUpdate({ locations: newLocs })
                     }}
                   >
-                    <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectWeather")}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectWeather")}><SelectValue /></SelectTrigger>
                     <SelectContent position="popper" className="z-[9999]">
                       {optionValues(SCENE_WEATHER_LABEL).map((v) => (
                         <SelectItem key={v} value={v}>{t(SCENE_WEATHER_LABEL[v])}</SelectItem>
@@ -835,7 +836,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-[10px]">{t("paramcfg.lighting")}</Label>
+                  <Label className="text-[11px]">{t("paramcfg.lighting")}</Label>
                   <Select
                     value={loc.lighting ?? data.lighting}
                     onValueChange={(v) => {
@@ -843,7 +844,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                       onUpdate({ locations: newLocs })
                     }}
                   >
-                    <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectLighting")}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectLighting")}><SelectValue /></SelectTrigger>
                     <SelectContent position="popper" className="z-[9999]">
                       {optionValues(SCENE_LIGHTING_LABEL).map((v) => (
                         <SelectItem key={v} value={v}>{t(SCENE_LIGHTING_LABEL[v])}</SelectItem>
@@ -861,7 +862,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           const entry: SceneLocationEntry = { assetId: v, isPrimary: locs.length === 0 }
           onUpdate({ locations: [...locs, entry] })
         }}>
-          <SelectTrigger className="h-7 text-[10px]" aria-label={t("scenecfg.addLocation")}>
+          <SelectTrigger className="h-7 text-[11px]" aria-label={t("scenecfg.addLocation")}>
             <Plus className="w-3 h-3 me-1" />
             <SelectValue placeholder={t("scenecfg.addLocationPlaceholder")} />
           </SelectTrigger>
@@ -890,12 +891,12 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
 
         {/* Default environment (when no locations or as fallback) */}
         <div className="mt-1">
-          <Label className="text-[10px] text-muted-foreground">{t("scenecfg.defaultEnvironment")}</Label>
+          <Label className="text-[11px] text-muted-foreground">{t("scenecfg.defaultEnvironment")}</Label>
           <div className="grid grid-cols-3 gap-1.5 mt-0.5">
             <div>
-              <Label className="text-[10px]">{t("scenecfg.time")}</Label>
+              <Label className="text-[11px]">{t("scenecfg.time")}</Label>
               <Select value={data.timeOfDay} onValueChange={(v) => onUpdate({ timeOfDay: v })}>
-                <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectDefaultTimeOfDay")}><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectDefaultTimeOfDay")}><SelectValue /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
                   {optionValues(SCENE_TIME_OF_DAY_LABEL).map((v) => (
                     <SelectItem key={v} value={v}>{t(SCENE_TIME_OF_DAY_LABEL[v])}</SelectItem>
@@ -904,9 +905,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               </Select>
             </div>
             <div>
-              <Label className="text-[10px]">{t("scenecfg.weather")}</Label>
+              <Label className="text-[11px]">{t("scenecfg.weather")}</Label>
               <Select value={data.weather} onValueChange={(v) => onUpdate({ weather: v })}>
-                <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectDefaultWeather")}><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectDefaultWeather")}><SelectValue /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
                   {optionValues(SCENE_WEATHER_LABEL).map((v) => (
                     <SelectItem key={v} value={v}>{t(SCENE_WEATHER_LABEL[v])}</SelectItem>
@@ -915,9 +916,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               </Select>
             </div>
             <div>
-              <Label className="text-[10px]">{t("paramcfg.lighting")}</Label>
+              <Label className="text-[11px]">{t("paramcfg.lighting")}</Label>
               <Select value={data.lighting} onValueChange={(v) => onUpdate({ lighting: v })}>
-                <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectDefaultLighting")}><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectDefaultLighting")}><SelectValue /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
                   {optionValues(SCENE_LIGHTING_LABEL).map((v) => (
                     <SelectItem key={v} value={v}>{t(SCENE_LIGHTING_LABEL[v])}</SelectItem>
@@ -944,16 +945,16 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 value={entry.description ?? ""}
                 onChange={(e) => updateObject(i, { description: e.target.value })}
                 placeholder={t("scenecfg.note")}
-                className="h-6 text-[10px] w-24"
+                className="h-6 text-[11px] w-24"
               />
-              <button type="button" onClick={() => removeObject(i)} className="p-0.5 hover:text-destructive">
+              <button aria-label={t("common.remove")} type="button" onClick={() => removeObject(i)} className="p-0.5 hover:text-destructive">
                 <X className="w-3 h-3" />
               </button>
             </div>
           )
         })}
         <Select onValueChange={(v) => { if (v === "__create_new__") { setExpandQuickAdd("object") } else { addObject(v) } }}>
-          <SelectTrigger className="h-7 text-[10px]" aria-label={t("scenecfg.addObject")}>
+          <SelectTrigger className="h-7 text-[11px]" aria-label={t("scenecfg.addObject")}>
             <Plus className="w-3 h-3 me-1" />
             <SelectValue placeholder={t("scenecfg.addObjectPlaceholder")} />
           </SelectTrigger>
@@ -983,14 +984,14 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
       {/* Cinematography */}
       <CollapsibleSection title={t("scenecfg.cinematography")} icon={<Camera className="w-3.5 h-3.5" />}>
         <div>
-          <Label className="text-[10px]">{t("field.aspectRatio")}</Label>
+          <Label className="text-[11px]">{t("field.aspectRatio")}</Label>
           <div className="flex gap-1 mt-0.5">
             {(["16:9", "9:16", "1:1", "4:3", "21:9", "4:5"] as const).map((ratio) => (
               <button
                 key={ratio}
                 type="button"
                 onClick={() => onUpdate({ aspectRatio: ratio })}
-                className={`flex flex-col items-center gap-0.5 px-1.5 py-1 rounded text-[9px] border transition-colors ${
+                className={`flex flex-col items-center gap-0.5 px-1.5 py-1 rounded text-[11px] border transition-colors ${
                   data.aspectRatio === ratio
                     ? "border-violet-500 bg-violet-500/10 text-violet-500"
                     : "border-muted hover:bg-muted/50 text-muted-foreground"
@@ -1010,9 +1011,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
         </div>
         <div className="grid grid-cols-2 gap-1.5">
           <div>
-            <Label className="text-[10px]">{t("scenecfg.shotType")}</Label>
+            <Label className="text-[11px]">{t("scenecfg.shotType")}</Label>
             <Select value={data.shotType} onValueChange={(v) => onUpdate({ shotType: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectShotType")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectShotType")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_SHOT_TYPE_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_SHOT_TYPE_LABEL[v])}</SelectItem>
@@ -1021,9 +1022,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             </Select>
           </div>
           <div>
-            <Label className="text-[10px]">{t("scenecfg.cameraAngle")}</Label>
+            <Label className="text-[11px]">{t("scenecfg.cameraAngle")}</Label>
             <Select value={data.cameraAngle} onValueChange={(v) => onUpdate({ cameraAngle: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectCameraAngle")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectCameraAngle")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_CAMERA_ANGLE_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_CAMERA_ANGLE_LABEL[v])}</SelectItem>
@@ -1032,9 +1033,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             </Select>
           </div>
           <div>
-            <Label className="text-[10px]">{t("scenecfg.movement")}</Label>
+            <Label className="text-[11px]">{t("scenecfg.movement")}</Label>
             <Select value={data.cameraMovement} onValueChange={(v) => onUpdate({ cameraMovement: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectCameraMovement")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectCameraMovement")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_CAMERA_MOVEMENT_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_CAMERA_MOVEMENT_LABEL[v])}</SelectItem>
@@ -1043,9 +1044,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             </Select>
           </div>
           <div>
-            <Label className="text-[10px]">{t("scenecfg.depthOfField")}</Label>
+            <Label className="text-[11px]">{t("scenecfg.depthOfField")}</Label>
             <Select value={data.depthOfField} onValueChange={(v) => onUpdate({ depthOfField: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectDepthOfField")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectDepthOfField")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_DEPTH_OF_FIELD_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_DEPTH_OF_FIELD_LABEL[v])}</SelectItem>
@@ -1054,9 +1055,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             </Select>
           </div>
           <div>
-            <Label className="text-[10px]">{t("paramcfg.lens")}</Label>
+            <Label className="text-[11px]">{t("paramcfg.lens")}</Label>
             <Select value={data.lensType} onValueChange={(v) => onUpdate({ lensType: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectLensType")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectLensType")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_LENS_TYPE_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_LENS_TYPE_LABEL[v])}</SelectItem>
@@ -1070,9 +1071,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
       {/* Mood & Style */}
       <CollapsibleSection title={t("scenecfg.moodStyle")} icon={<Palette className="w-3.5 h-3.5" />}>
         <div>
-          <Label className="text-[10px]">{t("scenecfg.visualStyle")}</Label>
+          <Label className="text-[11px]">{t("scenecfg.visualStyle")}</Label>
           <Select value={data.visualStyle} onValueChange={(v) => onUpdate({ visualStyle: v })}>
-            <SelectTrigger className="h-7 text-[10px] mt-0.5" aria-label={t("scenecfg.selectVisualStyle")}><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-7 text-[11px] mt-0.5" aria-label={t("scenecfg.selectVisualStyle")}><SelectValue /></SelectTrigger>
             <SelectContent position="popper" className="z-[9999]">
               {optionValues(SCENE_VISUAL_STYLE_LABEL).map((v) => (
                 <SelectItem key={v} value={v}>{t(SCENE_VISUAL_STYLE_LABEL[v])}</SelectItem>
@@ -1081,7 +1082,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           </Select>
         </div>
         <div>
-          <Label className="text-[10px]">{t("scenecfg.moodTags")}</Label>
+          <Label className="text-[11px]">{t("scenecfg.moodTags")}</Label>
           <TagInput
             value={data.mood}
             onChange={(tags) => onUpdate({ mood: tags })}
@@ -1089,7 +1090,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           />
         </div>
         <div>
-          <Label className="text-[10px]">{t("scenecfg.colorPalette")}</Label>
+          <Label className="text-[11px]">{t("scenecfg.colorPalette")}</Label>
           <TagInput
             value={data.colorPalette}
             onChange={(tags) => onUpdate({ colorPalette: tags })}
@@ -1108,14 +1109,14 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
       <CollapsibleSection title={t("scenecfg.voiceAudioCount", { n: data.dialogue?.length ?? 0 })} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen>
         {(data.dialogue ?? []).map((entry, i) => (
           <div key={i} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="font-medium text-foreground">{entry.characterName}</span>
               {entry.emotion && <span>({entry.emotion})</span>}
               {(data.audioAssignments ?? []).some((a) => a.dialogueIndex === i) && (
-                <span className="px-1 py-0.5 rounded bg-violet-500/20 text-violet-500 text-[8px] font-medium">{t("integ.connected")}</span>
+                <span className="px-1 py-0.5 rounded bg-violet-500/20 text-violet-500 text-[11px] font-medium">{t("integ.connected")}</span>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground line-clamp-2">{entry.text || t("scenecfg.emptyText")}</p>
+            <p className="text-[11px] text-muted-foreground line-clamp-2">{entry.text || t("scenecfg.emptyText")}</p>
             {/* Voice + Generate */}
             <div className="flex items-center gap-1.5">
               <Select
@@ -1127,7 +1128,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   onUpdate({ dialogue: newDialogue })
                 }}
               >
-                <SelectTrigger className="h-6 text-[10px] flex-1" aria-label={t("scenecfg.selectVoice")}><SelectValue placeholder={t("field.voice")} /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] flex-1" aria-label={t("scenecfg.selectVoice")}><SelectValue placeholder={t("field.voice")} /></SelectTrigger>
                 <SelectContent position="popper" className="z-[9999] max-h-48">
                   <SelectItem value="__auto__">{t("scenecfg.autoVoice")}</SelectItem>
                   {TTS_VOICES.map((v) => (
@@ -1139,7 +1140,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 type="button"
                 disabled={!entry.text.trim() || generatingAudio.has(i)}
                 onClick={() => generateDialogueAudio(i)}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white transition-colors shrink-0"
+                className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white transition-colors shrink-0"
               >
                 {generatingAudio.has(i) ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -1163,13 +1164,13 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                           <button
                             type="button"
                             onClick={() => setActiveAudioVersion(i, vi)}
-                            className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${vi === activeIdx ? "bg-violet-500 text-white" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+                            className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${vi === activeIdx ? "bg-violet-500 text-white" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
                           >
                             {r.voiceId} #{vi + 1}
                           </button>
-                          <button
+                          <button aria-label={t("common.remove")}
                             type="button"
-                            className="absolute -top-1 -end-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/aver:opacity-100 transition-opacity text-[8px]"
+                            className="absolute -top-1 -end-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/aver:opacity-100 transition-opacity text-[11px]"
                             onClick={(e) => { e.stopPropagation(); deleteDialogueAudioVersion(i, vi) }}
                           >
                             <X className="w-2 h-2" />
@@ -1191,7 +1192,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
       {/* Audio */}
       <CollapsibleSection title={t("field.audio")} icon={<Volume2 className="w-3.5 h-3.5" />}>
         <div>
-          <Label className="text-[10px]">{t("audiocfg.mergeRoleNarration")}</Label>
+          <Label className="text-[11px]">{t("audiocfg.mergeRoleNarration")}</Label>
           <Textarea
             value={data.narration}
             onChange={(e) => onUpdate({ narration: e.target.value })}
@@ -1201,16 +1202,16 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           />
         </div>
         <div>
-          <Label className="text-[10px]">{t("scenecfg.musicMood")}</Label>
+          <Label className="text-[11px]">{t("scenecfg.musicMood")}</Label>
           <Input
             value={data.musicMood}
             onChange={(e) => onUpdate({ musicMood: e.target.value })}
             placeholder={t("scenecfg.musicMoodPlaceholder")}
-            className="h-7 text-[10px] mt-0.5"
+            className="h-7 text-[11px] mt-0.5"
           />
         </div>
         <div>
-          <Label className="text-[10px]">{t("cfgext.kling3SoundEffects")}</Label>
+          <Label className="text-[11px]">{t("cfgext.kling3SoundEffects")}</Label>
           <TagInput
             value={data.soundEffects}
             onChange={(tags) => onUpdate({ soundEffects: tags })}
@@ -1250,7 +1251,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               const assignment = assignments.find((a) => a.handleId === ca.handleId)
               return (
                 <div key={ca.handleId} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
-                  <div className="flex items-center gap-1.5 text-[10px]">
+                  <div className="flex items-center gap-1.5 text-[11px]">
                     <span className="px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
                       {t("scenecfg.audioHandle", { n: ca.handleId.replace("audio", "") })}
                     </span>
@@ -1273,7 +1274,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                         onUpdate({ audioAssignments: newAssignments })
                       }}
                     >
-                      <SelectTrigger className="h-6 text-[10px] flex-1" aria-label={t("scenecfg.assignAudioToDialogue")}><SelectValue placeholder={t("scenecfg.assignToPlaceholder")} /></SelectTrigger>
+                      <SelectTrigger className="h-6 text-[11px] flex-1" aria-label={t("scenecfg.assignAudioToDialogue")}><SelectValue placeholder={t("scenecfg.assignToPlaceholder")} /></SelectTrigger>
                       <SelectContent position="popper" className="z-[9999]">
                         <SelectItem value="__none__">{t("scenecfg.unassigned")}</SelectItem>
                         <SelectItem value="__narration__">{t("audiocfg.mergeRoleNarration")}</SelectItem>
@@ -1290,7 +1291,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                     <WaveformAudioPlayer url={ca.url} variant="compact" className="w-full" />
                   )}
                   {!ca.url && (
-                    <p className="text-[9px] text-muted-foreground italic">{t("scenecfg.noAudioYet")}</p>
+                    <p className="text-[11px] text-muted-foreground italic">{t("scenecfg.noAudioYet")}</p>
                   )}
                 </div>
               )
@@ -1311,12 +1312,12 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
         <Select value={data.videoProvider ?? "minimax"} onValueChange={(v) => onUpdate({ videoProvider: v })}>
           <SelectTrigger className="h-8 text-xs mt-1" aria-label={t("scenecfg.selectVideoProvider")}><SelectValue /></SelectTrigger>
           <SelectContent position="popper" className="z-[9999] max-h-72">
-            <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">{t("scenecfg.imageToVideoGroup")}</p>
+            <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">{t("scenecfg.imageToVideoGroup")}</p>
             {VIDEO_I2V_MODELS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
             <SelectSeparator />
-            <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">{t("scenecfg.textToVideoGroup")}</p>
+            <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">{t("scenecfg.textToVideoGroup")}</p>
             {VIDEO_T2V_MODELS.filter((m) => !VIDEO_I2V_MODELS.some((i) => i.value === m.value)).map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
@@ -1339,9 +1340,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
       <CollapsibleSection title={t("scenecfg.transitions")} icon={<ArrowRightLeft className="w-3.5 h-3.5" />}>
         <div className="grid grid-cols-2 gap-1.5">
           <div>
-            <Label className="text-[10px]">{t("scenecfg.transitionIn")}</Label>
+            <Label className="text-[11px]">{t("scenecfg.transitionIn")}</Label>
             <Select value={data.transitionIn} onValueChange={(v) => onUpdate({ transitionIn: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectTransitionIn")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectTransitionIn")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_TRANSITION_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_TRANSITION_LABEL[v])}</SelectItem>
@@ -1350,9 +1351,9 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             </Select>
           </div>
           <div>
-            <Label className="text-[10px]">{t("scenecfg.transitionOut")}</Label>
+            <Label className="text-[11px]">{t("scenecfg.transitionOut")}</Label>
             <Select value={data.transitionOut} onValueChange={(v) => onUpdate({ transitionOut: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5" aria-label={t("scenecfg.selectTransitionOut")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-6 text-[11px] mt-0.5" aria-label={t("scenecfg.selectTransitionOut")}><SelectValue /></SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">
                 {optionValues(SCENE_TRANSITION_LABEL).map((v) => (
                   <SelectItem key={v} value={v}>{t(SCENE_TRANSITION_LABEL[v])}</SelectItem>
@@ -1395,7 +1396,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
               rows={4}
               className="text-xs resize-none bg-muted/30"
             />
-            <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
+            <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${
               generatedPrompt.length > PROMPT_MAX_LENGTH
                 ? "text-red-500 font-medium"
                 : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9

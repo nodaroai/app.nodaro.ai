@@ -58,7 +58,7 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
         align="end"
         sideOffset={4}
       >
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5 select-none">
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground px-2 py-1.5 select-none">
           {t("lang.pickerLabel")}
         </div>
         <div className="flex flex-col gap-0.5">
@@ -79,7 +79,7 @@ function LocalePickerComponent({ className }: { readonly className?: string }) {
                   <span className="flex flex-col min-w-0">
                     <span className="text-foreground font-medium truncate">{lang.nativeName}</span>
                     {lang.nativeName !== lang.englishName && (
-                      <span className="text-muted-foreground text-[10px] truncate">
+                      <span className="text-muted-foreground text-[11px] truncate">
                         {lang.englishName}
                       </span>
                     )}

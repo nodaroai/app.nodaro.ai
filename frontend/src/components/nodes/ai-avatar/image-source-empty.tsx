@@ -62,18 +62,18 @@ export function ImageSourceEmpty({ onUploaded, onOpenSettings, onUseCatalog }: I
         onClick={stop}
       >
         {isUploading ? (
-          <Loader2 className="size-6 text-muted-foreground/60 animate-spin" />
+          <Loader2 className="size-6 text-muted-foreground animate-spin" />
         ) : (
-          <Upload className="size-6 text-muted-foreground/60" />
+          <Upload className="size-6 text-muted-foreground" />
         )}
         <span className="text-[12px] text-foreground/85">
           {isUploading ? t("pipe.uploading") : t("node.uploadAPortrait")}
         </span>
-        <span className="text-[10.5px] text-muted-foreground/70 leading-snug">
+        <span className="text-[11px] text-muted-foreground leading-snug">
           {t("node.orWireImageIntoInput")}
         </span>
         {uploadError && (
-          <span className="text-[10.5px] text-red-500 leading-snug" role="alert">{uploadError}</span>
+          <span className="text-[11px] text-red-500 leading-snug" role="alert">{uploadError}</span>
         )}
         <input
           type="file"

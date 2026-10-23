@@ -157,9 +157,9 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
 
       {isEmpty ? (
         <div className="flex flex-col items-center justify-center px-3 py-10 text-center">
-          <LayoutGrid className="mb-2 size-6 text-muted-foreground/60" />
+          <LayoutGrid className="mb-2 size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">{t("studio.noBoardsYet")}</p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
+          <p className="mt-1 text-xs text-muted-foreground">
             {t("studio.noBoardsHint")}
           </p>
         </div>
@@ -177,7 +177,7 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
                   <img src={optimizedImageUrl(b.url)} alt={b.name} className="w-full object-contain" loading="lazy" />
                 </a>
                 {b.type === "identity" && (
-                  <span className="absolute start-1.5 top-1.5 rounded bg-primary/90 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground">
+                  <span className="absolute start-1.5 top-1.5 rounded bg-cta px-1 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-primary-foreground">
                     {t("studio.identityBoardBadge")}
                   </span>
                 )}
@@ -372,7 +372,7 @@ function BoardCaption({ name, onRename }: { name: string; onRename: (newName: st
         {name ? (
           <span className="truncate">{name}</span>
         ) : (
-          <span className="italic text-muted-foreground/60">{t("studio.addNameEllipsis")}</span>
+          <span className="italic text-muted-foreground">{t("studio.addNameEllipsis")}</span>
         )}
         <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
       </button>

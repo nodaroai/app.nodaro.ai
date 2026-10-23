@@ -54,7 +54,7 @@ function ExposureSettingsNodeComponent({ id, data, selected }: NodeProps) {
             const entry = getExposure(entryId)
             return (
               <div key={category} className="flex flex-col gap-0.5">
-                <span className="text-muted-foreground text-[10px] uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] uppercase tracking-wider">
                   {EXPOSURE_CATEGORY_LABELS[category]}
                 </span>
                 <p className="text-foreground text-sm font-medium">

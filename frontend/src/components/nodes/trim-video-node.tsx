@@ -113,10 +113,10 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
+                  <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
-                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.trimmed")}</div>
+                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[11px] px-1 rounded">{t("node.trimmed")}</div>
                 {results.length > 0 && (
                   <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); if (activeJobId) setDeleteConfirm(activeJobId) }}><X className="w-3 h-3" /></button>
                 )}
@@ -129,14 +129,14 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
               </div>
             )}
             {status !== "running" && !activeUrl && status !== "failed" && (
-              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"><Scissors className="w-5 h-5" /></div>
+              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"><Scissors className="w-5 h-5" /></div>
             )}
             <p className="text-muted-foreground">{nodeData.startTime}s - {nodeData.endTime}s</p>
           </div>
@@ -148,7 +148,7 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-20 transition-opacity ${
             showThumbnails
-              ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+              ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
               : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/node:opacity-100"
           }`}
           onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}

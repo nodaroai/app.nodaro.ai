@@ -67,7 +67,7 @@ function CollectionWriteNodeComponent({ id, data, selected }: NodeProps) {
             <p className="text-xs text-red-500 line-clamp-3">{nodeData.errorMessage}</p>
           ) : record ? (
             <>
-              <p className="text-[10px] font-medium text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 {nodeData.lastOutcome === "duplicate"
                   ? t("node.collectionDuplicateIn", { name: name ?? "" })
                   : t("node.collectionSavedTo", { name: name ?? "" })}

@@ -118,8 +118,14 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
           showThumbnails && results.length > 1 ? (
             <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
               {results.slice(0, 8).map((r, i) => (
-                <CachedImage
-                  key={`${r.maskUrl}-${i}`}
+                <button key={`${r.maskUrl}-${i}`} type="button" onClick={(e) => {
+                    e.stopPropagation()
+                    updateNodeData(id, {
+                      activeResultIndex: i,
+                      generatedImageUrl: r.imageUrl,
+                      generatedMaskUrl: r.maskUrl,
+                    })
+                  }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                   src={r.imageUrl}
                   alt={t("node.resultN", { n: i + 1 })}
                   className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
@@ -127,15 +133,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                   }`}
                   thumbnail
                   thumbnailWidth={96}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, {
-                      activeResultIndex: i,
-                      generatedImageUrl: r.imageUrl,
-                      generatedMaskUrl: r.maskUrl,
-                    })
-                  }}
-                />
+                /></button>
               ))}
             </div>
           ) : undefined
@@ -159,9 +157,9 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Idle / empty */}
             {status !== "running" && !hasResult && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px] px-3 text-center">
                 <Layers className="w-10 h-10" />
-                <span className="text-[10px] leading-tight">
+                <span className="text-[11px] leading-tight">
                   {t("node.connectAnImageAndDescribe")}
                 </span>
               </div>
@@ -175,7 +173,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -281,7 +279,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
 
                 {/* Bottom-right: settings + 3-state preview toggle */}
                 <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover/mask:opacity-100 transition-opacity">
-                  <div className="flex bg-black/50 backdrop-blur-sm border border-white/10 rounded-full overflow-hidden text-white text-[10px] font-medium">
+                  <div className="flex bg-black/50 backdrop-blur-sm border border-white/10 rounded-full overflow-hidden text-white text-[11px] font-medium">
                     {(["overlay", "mask", "source"] as const).map((mode) => (
                       <button
                         key={mode}
@@ -318,11 +316,11 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Bottom config bar — read-only summary; full editing is in the
               config panel (Task 9). Mirrors generate-image's compact bottom row. */}
-          <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[10px]">
+          <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[11px]">
             <span className="flex-1 truncate text-muted-foreground" title={nodeData.prompt || t("pro3d.noPrompt")}>
               {nodeData.prompt ? nodeData.prompt : <span className="italic opacity-60">{t("node.noPrompt")}</span>}
             </span>
-            <span className="font-mono text-muted-foreground/80 shrink-0">
+            <span className="font-mono text-muted-foreground shrink-0">
               t={typeof nodeData.threshold === "number" ? nodeData.threshold.toFixed(2) : "0.30"}
             </span>
           </div>

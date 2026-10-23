@@ -97,7 +97,7 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
                 {d.scene_id ?? scene.entity_key}
               </h3>
               {d.emotional_beat && (
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
                   {d.emotional_beat}
                 </span>
               )}
@@ -107,7 +107,7 @@ export function ShotInspector({ pipelineId }: { pipelineId: string }) {
               <p className="mb-2 text-xs text-muted-foreground">{d.description}</p>
             )}
 
-            <div className="mb-3 flex flex-wrap gap-1.5 text-[10px]">
+            <div className="mb-3 flex flex-wrap gap-1.5 text-[11px]">
               {d.video_model && (
                 <span className="rounded bg-[#ff0073]/10 px-1.5 py-0.5 text-[#ff0073]">
                   {t("pipe.cinemaVideoModelTag", { model: d.video_model })}
@@ -173,7 +173,7 @@ function CameraSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded border bg-card px-1 py-0.5 text-[10px] text-foreground outline-none focus:border-[#ff0073]"
+      className="rounded border bg-card px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
     >
       {options.map((o) => (
         <option key={o} value={o}>
@@ -274,7 +274,7 @@ function ShotCard({
               className="h-16 w-16 rounded object-cover"
             />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded bg-[var(--border-primary)] text-center text-[9px] text-muted-foreground">
+            <div className="flex h-16 w-16 items-center justify-center rounded bg-[var(--border-primary)] text-center text-[11px] text-muted-foreground">
               {t("pipe.cinemaNoKeyframeYet")}
             </div>
           )}
@@ -283,7 +283,7 @@ function ShotCard({
             onClick={() => void reroll()}
             disabled={rerolling || !shot.shot_id}
             title={t("pipe.cinemaRegenKeyframeTitle")}
-            className="rounded border px-1 py-0.5 text-[9px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-40"
+            className="rounded border px-1 py-0.5 text-[11px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-40"
           >
             {rerolling ? t("pipe.cinemaRerolling") : t("pipe.cinemaReroll")}
           </button>
@@ -295,7 +295,7 @@ function ShotCard({
             <CameraSelect value={angle} onChange={setAngle} options={ANGLES} />
             <CameraSelect value={shotMotion} onChange={setShotMotion} options={MOTIONS} />
           </div>
-          <label className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+          <label className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
             {t("field.duration")}
             <input
               type="number"
@@ -304,14 +304,14 @@ function ShotCard({
               step={0.5}
               value={duration || ""}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-14 rounded border bg-card px-1 py-0.5 text-[10px] text-foreground outline-none focus:border-[#ff0073]"
+              className="w-14 rounded border bg-card px-1 py-0.5 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
             />
             s
           </label>
         </div>
       </div>
 
-      <label className="mt-2 block text-[10px] text-muted-foreground">
+      <label className="mt-2 block text-[11px] text-muted-foreground">
         {t("pipe.cinemaKeyframeLabel")}
         <textarea
           value={keyframePrompt}
@@ -333,7 +333,7 @@ function ShotCard({
             )
           }
         }}
-        className="mt-1 w-full rounded border bg-card px-1 py-0.5 text-[10px] text-muted-foreground outline-none focus:border-[#ff0073]"
+        className="mt-1 w-full rounded border bg-card px-1 py-0.5 text-[11px] text-muted-foreground outline-none focus:border-[#ff0073]"
       >
         <option value="">{t("pipe.cinemaApplyLook")}</option>
         {STYLE_PRESETS.map((s) => (
@@ -343,7 +343,7 @@ function ShotCard({
         ))}
       </select>
 
-      <label className="mt-1 block text-[10px] text-muted-foreground">
+      <label className="mt-1 block text-[11px] text-muted-foreground">
         {t("pipe.cinemaMotion")}
         <textarea
           value={motion}
@@ -353,7 +353,7 @@ function ShotCard({
         />
       </label>
 
-      <label className="mt-1 block text-[10px] text-muted-foreground">
+      <label className="mt-1 block text-[11px] text-muted-foreground">
         {t("audiocfg.mergeRoleDialogue")}
         <input
           type="text"
@@ -365,13 +365,13 @@ function ShotCard({
       </label>
 
       <div className="mt-1.5 flex items-center justify-end gap-2">
-        {err && <span className="text-[10px] text-red-400">{err}</span>}
-        {saved && !dirty && <span className="text-[10px] text-green-500">{t("common.saved")}</span>}
+        {err && <span className="text-[11px] text-red-400">{err}</span>}
+        {saved && !dirty && <span className="text-[11px] text-green-500">{t("common.saved")}</span>}
         <button
           type="button"
           onClick={() => void save()}
           disabled={!dirty || saving || !shot.shot_id}
-          className="rounded bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-40"
+          className="rounded bg-cta px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-40"
         >
           {saving ? t("common.saving") : t("common.save")}
         </button>

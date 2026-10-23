@@ -106,7 +106,7 @@ export function ReviewMeta({ planId, renderId, onRenderChange, take, validity }:
       {take && (isPreviewQuality(take) ? (
         <PreviewBadge />
       ) : (
-        <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
           {t("edlReview.finalBadge")}
         </span>
       ))}

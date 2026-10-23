@@ -487,7 +487,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
     <>
       {/* My Library Modal */}
       {open && createPortal(
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
           onClick={onClose}
         >
@@ -496,9 +496,9 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             onClick={(e) => e.stopPropagation()}
           >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-cta rounded-t-xl">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
-            <button
+            <button aria-label={t("common.close")}
               type="button"
               className="p-1 text-white/80 hover:text-white transition-colors"
               onClick={onClose}
@@ -562,7 +562,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors ${
                 typeFilter === "all"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("all")}
@@ -573,73 +573,73 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "character"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("character")}
             >
               <UserCircle className="h-3 w-3" />
               {t("assetlib.tabCharacters")}
-              <span className="text-[10px] opacity-70">({counts.character})</span>
+              <span className="text-[11px] opacity-70">({counts.character})</span>
             </button>
             <button
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "object"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("object")}
             >
               <Package className="h-3 w-3" />
               {t("assetlib.tabObjects")}
-              <span className="text-[10px] opacity-70">({counts.object})</span>
+              <span className="text-[11px] opacity-70">({counts.object})</span>
             </button>
             <button
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "creature"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("creature")}
             >
               <PawPrint className="h-3 w-3" />
               {t("assetlib.tabCreatures")}
-              <span className="text-[10px] opacity-70">({counts.creature})</span>
+              <span className="text-[11px] opacity-70">({counts.creature})</span>
             </button>
             <button
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "location"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("location")}
             >
               <MapPin className="h-3 w-3" />
               {t("assetlib.tabLocations")}
-              <span className="text-[10px] opacity-70">({counts.location})</span>
+              <span className="text-[11px] opacity-70">({counts.location})</span>
             </button>
             <button
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "face"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("face")}
             >
               <SmilePlus className="h-3 w-3" />
               {t("assetlib.tabFaces")}
-              <span className="text-[10px] opacity-70">({counts.face})</span>
+              <span className="text-[11px] opacity-70">({counts.face})</span>
             </button>
             <div className="w-px self-stretch my-1 bg-gray-200 dark:bg-[#2D2D2D]" />
             <button
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "image"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("image")}
@@ -651,7 +651,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "video"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("video")}
@@ -663,7 +663,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "audio"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("audio")}
@@ -736,22 +736,22 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                           </div>
                         )}
                         <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
                           {t(TYPE_KEY[asset.type])}
                         </span>
                         {projectName && (
-                          <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
+                          <span className="text-[11px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
                             {projectName}
                           </span>
                         )}
                         {isOnCanvas && (
-                          <span className="text-[9px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
                         )}
                       </button>
                       {/* Add to canvas button */}
                       <button
                         type="button"
-                        className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
+                        className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-cta text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
                         onClick={(e) => handleAddToCanvas(e, asset)}
                         title={t("assetlib.addToCanvas", { name: asset.name })}
                       >
@@ -1121,14 +1121,14 @@ export function UnifiedAssetLibraryButton() {
         <Grid3X3 className="h-4 w-4" />
         {t("toolbar.myLibrary")}
         {totalCount > 0 && (
-          <span className="ms-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[11px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
             {totalCount}
           </span>
         )}
       </Button>
 
       {open && createPortal(
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
@@ -1137,9 +1137,9 @@ export function UnifiedAssetLibraryButton() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-cta rounded-t-xl">
               <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
-              <button
+              <button aria-label={t("common.close")}
                 type="button"
                 className="p-1 text-white/80 hover:text-white transition-colors"
                 onClick={() => setOpen(false)}
@@ -1203,78 +1203,78 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors ${
                   typeFilter === "all"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("all")}
               >
                 {t("assetlib.tabAll")}
-                <span className="ms-1.5 text-[10px] opacity-70">({counts.all})</span>
+                <span className="ms-1.5 text-[11px] opacity-70">({counts.all})</span>
               </button>
               <button
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "character"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("character")}
               >
                 <UserCircle className="h-3 w-3" />
                 {t("assetlib.tabCharacters")}
-                <span className="text-[10px] opacity-70">({counts.character})</span>
+                <span className="text-[11px] opacity-70">({counts.character})</span>
               </button>
               <button
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "object"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("object")}
               >
                 <Package className="h-3 w-3" />
                 {t("assetlib.tabObjects")}
-                <span className="text-[10px] opacity-70">({counts.object})</span>
+                <span className="text-[11px] opacity-70">({counts.object})</span>
               </button>
               <button
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "creature"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("creature")}
               >
                 <PawPrint className="h-3 w-3" />
                 {t("assetlib.tabCreatures")}
-                <span className="text-[10px] opacity-70">({counts.creature})</span>
+                <span className="text-[11px] opacity-70">({counts.creature})</span>
               </button>
               <button
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "location"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("location")}
               >
                 <MapPin className="h-3 w-3" />
                 {t("assetlib.tabLocations")}
-                <span className="text-[10px] opacity-70">({counts.location})</span>
+                <span className="text-[11px] opacity-70">({counts.location})</span>
               </button>
               <button
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "face"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("face")}
               >
                 <SmilePlus className="h-3 w-3" />
                 {t("assetlib.tabFaces")}
-                <span className="text-[10px] opacity-70">({counts.face})</span>
+                <span className="text-[11px] opacity-70">({counts.face})</span>
               </button>
             </div>
 
@@ -1339,22 +1339,22 @@ export function UnifiedAssetLibraryButton() {
                             </div>
                           )}
                           <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
                             {t(TYPE_KEY[asset.type])}
                           </span>
                           {projectName && (
-                            <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
+                            <span className="text-[11px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
                               {projectName}
                             </span>
                           )}
                           {isOnCanvas && (
-                            <span className="text-[9px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
+                            <span className="text-[11px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
                           )}
                         </button>
                         {/* Add to canvas button */}
                         <button
                           type="button"
-                          className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
+                          className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-cta text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
                           onClick={(e) => handleAddToCanvas(e, asset)}
                           title={t("assetlib.addToCanvas", { name: asset.name })}
                         >

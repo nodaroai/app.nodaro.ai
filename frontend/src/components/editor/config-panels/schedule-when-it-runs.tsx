@@ -50,7 +50,7 @@ export function ScheduleWhenItRuns({
     <div className="rounded-xl border border-border overflow-hidden" data-testid="schedule-when-it-runs">
       <div className="flex items-start gap-3 px-4 pt-3.5 pb-3">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{t("sched.whenItRuns")}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{t("sched.whenItRuns")}</p>
           <p className="text-[15px] font-semibold leading-snug text-foreground text-pretty">{describeSchedule(rules, t, locale)}</p>
         </div>
         {timezoneReadable && (
@@ -83,13 +83,13 @@ export function ScheduleWhenItRuns({
                 <div className="flex-1" />
               </div>
             </div>
-            <div className="mt-1 flex justify-between text-[10px] font-semibold tracking-wider text-muted-foreground/70" dir="ltr">
+            <div className="mt-1 flex justify-between text-[11px] font-semibold tracking-wider text-muted-foreground" dir="ltr">
               {HOUR_TICKS.map((tick) => <span key={tick}>{tick}</span>)}
             </div>
           </div>
 
           <div className="border-t border-border/70 bg-muted/20 px-4 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80 mb-1">{t("sched.upcoming")}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{t("sched.upcoming")}</p>
             {preview.upcoming.length === 0 ? (
               <p className="text-xs text-muted-foreground py-1">{t("sched.noUpcomingRun")}</p>
             ) : (

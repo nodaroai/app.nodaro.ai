@@ -178,7 +178,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
                       <img src={selectedConnection.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
                     )}
                     <span>{selectedConnection.display_name || selectedConnection.platform_username || t("integ.connected")}</span>
-                    {allAccounts && <span className="text-[10px] text-muted-foreground">· {platformLabel(selectedConnection.platform)}</span>}
+                    {allAccounts && <span className="text-[11px] text-muted-foreground">· {platformLabel(selectedConnection.platform)}</span>}
                   </div>
                 )}
               </SelectValue>
@@ -191,7 +191,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
                       <img src={conn.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
                     )}
                     <span>{conn.display_name || conn.platform_username || t("integ.connected")}</span>
-                    {allAccounts && <span className="text-[10px] text-muted-foreground">· {platformLabel(conn.platform)}</span>}
+                    {allAccounts && <span className="text-[11px] text-muted-foreground">· {platformLabel(conn.platform)}</span>}
                   </div>
                 </SelectItem>
               ))}
@@ -231,7 +231,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             className={`mt-1.5${(d.chatId || "").trim() ? "" : " border-red-400 dark:border-red-500 focus-visible:ring-red-400"}`}
           />
           <div className="flex items-center justify-between mt-1 gap-2">
-            <p className={`text-[10px] ${(d.chatId || "").trim() ? "text-muted-foreground" : "text-red-500 dark:text-red-400"}`}>
+            <p className={`text-[11px] ${(d.chatId || "").trim() ? "text-muted-foreground" : "text-red-500 dark:text-red-400"}`}>
               {(d.chatId || "").trim()
                 ? t("cfgext.socialChatIdHint")
                 : t("cfgext.socialChatIdRequired")}
@@ -239,7 +239,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             <button
               type="button"
               onClick={() => setChatIdHelpOpen((v) => !v)}
-              className="text-[10px] text-[#ff0073] hover:text-[#e0005f] underline underline-offset-2 shrink-0"
+              className="text-[11px] text-[#ff0073] hover:text-[#e0005f] underline underline-offset-2 shrink-0"
             >
               {t("cfgext.socialChatIdHelpToggle")}
             </button>
@@ -286,7 +286,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
-        <p className={`text-[10px] mt-1 ${captionLen > charLimit * 0.9 ? "text-amber-500" : "text-muted-foreground"}`}>
+        <p className={`text-[11px] mt-1 ${captionLen > charLimit * 0.9 ? "text-amber-500" : "text-muted-foreground"}`}>
           {captionLen}/{charLimit}
         </p>
       </MappableField>

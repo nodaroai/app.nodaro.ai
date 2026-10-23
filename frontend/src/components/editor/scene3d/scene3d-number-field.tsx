@@ -103,7 +103,7 @@ export function Scene3DVectorRow({
 }) {
   return (
     <div className="grid grid-cols-[52px_1fr_1fr_1fr] items-center gap-1">
-      <span className="text-[10px] text-muted-foreground flex flex-col leading-tight">
+      <span className="text-[11px] text-muted-foreground flex flex-col leading-tight">
         <span>{label}</span>
         {labelSuffix}
       </span>

@@ -120,7 +120,7 @@ export function DefineCharacterModal({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">{editingCharacter ? t("entity.editCharacter") : t("entity.defineNewCharacter")}</h3>
-          <button type="button" onClick={handleClose} className="p-1 rounded-md hover:bg-muted">
+          <button aria-label={t("common.close")} type="button" onClick={handleClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -171,7 +171,7 @@ export function DefineCharacterModal({
               {referenceImageUrl ? (
                 <div className="relative">
                   <CachedImage src={referenceImageUrl} alt={t("imgcfg.referenceAlt")} className="w-full h-32 object-contain rounded-md border" thumbnail thumbnailWidth={480} />
-                  <button
+                  <button aria-label={t("common.close")}
                     type="button"
                     onClick={() => setReferenceImageUrl("")}
                     className="absolute top-1 end-1 p-0.5 rounded-full bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
@@ -220,10 +220,10 @@ export function DefineCharacterModal({
                 rows={3}
                 className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1">
                 {t("entity.descAppendedHint")}
               </p>
-              <p className="text-[10px] text-orange-500/80 mt-1">
+              <p className="text-[11px] text-orange-500/80 mt-1">
                 {t("entity.noReferenceTip")}
               </p>
             </div>
@@ -248,7 +248,7 @@ export function DefineCharacterModal({
             type="button"
             onClick={handleSave}
             disabled={uploading || !name.trim() || (type === "description" && !description.trim()) || (type === "reference" && !referenceImageUrl)}
-            className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-xs rounded-md bg-cta text-primary-foreground hover:bg-cta-hover transition-colors disabled:opacity-50"
           >
             {editingCharacter ? t("common.update") : t("entity.saveCharacter")}
           </button>

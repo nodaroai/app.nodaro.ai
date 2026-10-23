@@ -34,21 +34,24 @@ import {
   isMinimaxH3Provider,
   isWan3Provider,
   isViduQ4Provider,
+  isKling4Provider,
   isGeminiOmniProvider,
 } from "./model-constants.js"
 import { MODEL_CATALOG } from "./model-catalog.js"
 
 /** `adaptive` is the aspect default for Seedance 2, MiniMax H3 and Wan 3.0. */
 export function uiAspectRatioFill(provider: string): string | undefined {
-  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider)
-    ? "adaptive"
-    : undefined
+  if (isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider)) return "adaptive"
+  // Kling 4.0: `auto` follows the materials (frames / references) and renders
+  // 16:9 with none — KIE's own default when the field is omitted.
+  if (isKling4Provider(provider)) return "auto"
+  return undefined
 }
 
 /** See the file docstring — per-family on purpose; never a generic
  *  PRICING_DEFAULT_RESOLUTION read (that would reprice seedance-2-5). */
 export function uiResolutionFill(provider: string): string | undefined {
-  if (isWan3Provider(provider) || isViduQ4Provider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
+  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4Provider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
   if (isSeedance2Provider(provider)) return MODEL_CATALOG[provider]?.resolutions?.[0]
   return undefined
 }
@@ -62,7 +65,7 @@ export function uiResolutionFill(provider: string): string | undefined {
  * undefined and the caller keeps `durations[0]`.
  */
 export function uiDurationFill(provider: string): number | undefined {
-  if (isWan3Provider(provider) || isViduQ4Provider(provider)) return 5
+  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4Provider(provider)) return 5
   if (isGeminiOmniProvider(provider)) return 8
   return undefined
 }

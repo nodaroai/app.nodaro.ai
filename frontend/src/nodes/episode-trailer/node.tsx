@@ -100,7 +100,7 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
                   key={chip.index}
                   type="button"
                   className={cn(
-                    "nodrag rounded px-1.5 py-0.5 text-[10px] font-medium border",
+                    "nodrag rounded px-1.5 py-0.5 text-[11px] font-medium border",
                     chip.key === activeResult?.format ? "border-primary bg-primary/10 text-primary" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted",
                   )}
                   aria-pressed={chip.key === activeResult?.format}
@@ -115,7 +115,7 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
           {failed.length > 0 && (
-            <p className="text-[10px] text-amber-500" title={failed.join(", ")}>{t("node.trailerFormatsFailed", { formats: failed.join(", ") })}</p>
+            <p className="text-[11px] text-amber-500" title={failed.join(", ")}>{t("node.trailerFormatsFailed", { formats: failed.join(", ") })}</p>
           )}
         </>
       }
@@ -125,7 +125,7 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
           <ReviewCutButton renderId={id} />
           {cameraNote.length > 0 && (
             <div data-testid="use-case-camera-note" className="flex flex-col gap-0.5 px-1">
-              {cameraNote.map((line) => <p key={line} className="text-[10px] leading-snug text-muted-foreground">{line}</p>)}
+              {cameraNote.map((line) => <p key={line} className="text-[11px] leading-snug text-muted-foreground">{line}</p>)}
             </div>
           )}
           {/* "pending" is the runtime-only queued state, not in the narrower data type. */}

@@ -172,7 +172,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center gap-2 text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
                 <span>{choiceLine(picked, chosen.length, t)}</span>
                 {nodeData.keepPicks === true && (
-                  <span className="flex items-center gap-1 rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[10.5px] font-bold text-[#FF0073]">
+                  <span className="flex items-center gap-1 rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[11px] font-bold text-[#FF0073]">
                     <Lock className="h-3 w-3" />{t("social.keptBadge")}
                   </span>
                 )}
@@ -180,7 +180,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   onClick={(e) => { stop(e); setPickerOpen(true) }}
                   onMouseDown={stop}
-                  className="nodrag ms-auto rounded-full bg-[#FF0073] px-3 py-1 text-[11.5px] font-bold text-white hover:bg-[#e00066]"
+                  className="nodrag ms-auto rounded-full bg-cta px-3 py-1 text-[11.5px] font-bold text-white hover:bg-cta-hover"
                 >
                   {t("social.pickPosts")}
                 </button>

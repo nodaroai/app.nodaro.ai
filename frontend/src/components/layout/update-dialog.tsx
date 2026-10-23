@@ -81,7 +81,7 @@ function StepCard({
         <span
           className={
             accent && !done
-              ? "flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[#ff0073] text-[13px] font-bold text-white"
+              ? "flex h-6 w-6 flex-none items-center justify-center rounded-full bg-cta text-[13px] font-bold text-white"
               : "flex h-6 w-6 flex-none items-center justify-center rounded-full border text-[13px] font-bold text-muted-foreground"
           }
         >
@@ -241,7 +241,7 @@ export function UpdateDialog({
           <button
             type="button"
             onClick={() => window.open(latest.url, "_blank", "noopener")}
-            className="rounded-full bg-[#ff0073] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#e0005f]"
+            className="rounded-full bg-cta px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-cta-hover"
           >
             {t("nav.fullReleaseNotes")}
           </button>

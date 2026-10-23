@@ -247,6 +247,10 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // Vidu Q4 — 20000 chars on both endpoints
   // (docs.kie.ai/market/vidu-q4/image-to-video and /reference-to-video).
   "vidu-q4": 20000,
+  // Kling 4.0 — 8000 chars on both endpoints
+  // (docs.kie.ai/market/kling/v4-reference-to-video and /v4-keyframe-to-video).
+  "kling-4": 8000,
+  "kling-4-keyframes": 8000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -912,6 +916,11 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   // endpoints. No text-to-video mode: also listed in TEXT_TO_VIDEO_PROVIDERS's
   // image-required section so the t2v route answers with the friendly 400.
   "vidu-q4",
+  // Kling 4.0 — two ids, one per KIE endpoint (reference-to-video and
+  // keyframe-to-video). Each endpoint also runs with no image, so each id is
+  // listed here AND in TEXT_TO_VIDEO_PROVIDERS's main section (like wan-3).
+  "kling-4",
+  "kling-4-keyframes",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
@@ -956,6 +965,10 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   // VIDEO_PROVIDERS_REQUIRING_IMAGE.
   "wan-3",
   "wan-3-prime",
+  // Kling 4.0 — both endpoints take a prompt-only run (reference-to-video with
+  // no materials, keyframe-to-video with no frame).
+  "kling-4",
+  "kling-4-keyframes",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // ── i2v-only providers (image required) ──────────────────────────────────
@@ -1103,11 +1116,13 @@ export function videoProviderReferenceSyntax(provider: string | undefined): Vide
 /**
  * Reference-capable video models whose start/end frames ride a channel of
  * their OWN (separate frame parameters next to the reference list), so a frame
- * never occupies a reference seat. `kling-3-omni` (Replicate `start_image` /
- * `end_image`) is the only one — and it has no dispatch path today.
+ * never occupies a reference seat: `kling-3-omni` (Replicate `start_image` /
+ * `end_image`, no dispatch path today) and Kling 4.0 Keyframes (KIE
+ * `first_frame_url` / `last_frame_url` beside its in-between `keyframe_urls`).
  */
 export const VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL: ReadonlySet<string> = new Set([
   "kling-3-omni",
+  "kling-4-keyframes",
 ])
 
 /**
@@ -1751,6 +1766,10 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // Vidu Q4 — per-second billing at five resolution rates, identical on both
   // endpoints and with audio on or off.
   "vidu-q4",
+  // Kling 4.0 — per-second billing at two resolution rates (plus a reference-
+  // video rate on `kling-4`, see VIDEO_REF_RATE_PROVIDERS).
+  "kling-4",
+  "kling-4-keyframes",
 ])
 
 /**
@@ -1896,6 +1915,52 @@ export function normalizeViduQ4Resolution(resolution: string | undefined): "540p
 }
 
 /**
+ * Kling 4.0 family — two Nodaro ids over KIE's two Kling 4.0 endpoints:
+ * `kling-4` → `kling-4.0/reference-to-video`, `kling-4-keyframes` →
+ * `kling-4.0/keyframe-to-video`. Exact-membership set.
+ */
+export const KLING_4_PROVIDERS = new Set<string>([
+  "kling-4",
+  "kling-4-keyframes",
+])
+
+export function isKling4Provider(provider: string | undefined): provider is "kling-4" | "kling-4-keyframes" {
+  return !!provider && KLING_4_PROVIDERS.has(provider)
+}
+
+/** Kling 4.0 resolution rendered when the param is omitted or unknown — KIE's
+ *  own default and the tier the bare credit identifier prices. */
+export const KLING_4_DEFAULT_RESOLUTION = "720p"
+
+/**
+ * SINGLE normalization for the Kling 4.0 resolution lever. The KIE wire enum is
+ * lowercase ("720p" | "1080p"), the same spelling as the catalog and the credit
+ * identifiers; this folds case and collapses anything else to
+ * {@link KLING_4_DEFAULT_RESOLUTION}. The runner sends what this returns and
+ * the credit identifier bills what this returns.
+ */
+export function normalizeKling4Resolution(resolution: string | undefined): "720p" | "1080p" {
+  return resolution?.trim().toLowerCase() === "1080p" ? "1080p" : KLING_4_DEFAULT_RESOLUTION
+}
+
+/** Most in-between frames Kling 4.0 Keyframes takes (`keyframe_urls`). */
+export const KLING_4_MAX_MIDDLE_FRAMES = 8
+
+/**
+ * How many frames IN ALL (start + in-between + end) Kling 4.0 Keyframes
+ * accepts for a clip of `durationSec` seconds — KIE's own table
+ * (docs.kie.ai/market/kling/v4-keyframe-to-video): 3s → 4, 4s → 5 … 8s → 9,
+ * 9s or longer → 10. Live-verified 2026-10-23: 5 frames at 3s is a 422
+ * "duration 3s allows at most 4 frames (first + keyframes + last), got 5".
+ */
+export function kling4KeyframeFrameCap(durationSec: number | string | undefined): number {
+  // The length the run renders: the catalog's default when unset, else the
+  // nearest legal second — the same funnel the price reads.
+  const d = pricedOutputDurationSec("kling-4-keyframes", Number.isFinite(Number(durationSec)) ? durationSec : undefined)
+  return Math.min(10, d + 1)
+}
+
+/**
  * Google Gemini Omni family — the KIE "gemini-omni-video" market model and its
  * faster/cheaper "google/gemini-omni-flash-1-1" sibling. Both take the SAME
  * request shape (prompt + image_urls references, video-edit through the i2v
@@ -1987,6 +2052,9 @@ function deriveGvpSupportedProviders(): VideoGenProvider[] {
         // Must also be dispatchable by the unified video node — the pro route
         // hands the provider id straight to the app's imageToVideo.
         dispatchable.has(m.id) &&
+        // A keyframes model's Image References are in-between FRAMES, so the
+        // cast references a pro segment sends would land as frames.
+        m.features?.includes("keyframes") !== true &&
         // ...and must actually REACH a provider. Capability alone is not
         // enough: kling-3-omni passes every check above and still fails at the
         // router (see VIDEO_PROVIDERS_WITHOUT_DISPATCH).
@@ -2386,7 +2454,21 @@ export function checkRefAudioRules(provider: string | undefined, probes: readonl
  */
 export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   string,
-  { images?: number; videos?: number; audio?: number; characters?: number; voices?: number } | undefined
+  {
+    images?: number
+    videos?: number
+    audio?: number
+    characters?: number
+    voices?: number
+    /**
+     * Cap on ALL materials together (images + videos + characters + audio),
+     * when the provider counts them as one budget (Kling 4.0: 15). Absent ⇒
+     * no combined cap beyond the per-kind ones — and, for a model declaring
+     * `characters`, the Gemini Omni input-unit budget applies instead
+     * (`videoCharacterRefProblem`).
+     */
+    materials?: number
+  } | undefined
 > = {
   // Seedance 2 — full multimodal caps.
   "seedance-2": { ...SEEDANCE_2_REF_LIMITS },
@@ -2421,6 +2503,16 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // (images + 2×videos + character_ids ≤ 7).
   "gemini-omni-flash": { images: 7, videos: 1, characters: 3, voices: 3 },
   "kling-3-omni": { images: 7 },     // catalog/docs: "end frame + up to 7 reference images"
+  // Kling 4.0 Reference — 10 images, 5 videos, 7 subjects (`characters`,
+  // KIE `elements`) and 3 voices (reference audio, KIE `voices`), 15 in all
+  // (docs.kie.ai/market/kling/v4-reference-to-video). A wired start frame takes
+  // one of the 10 image slots. No `voices` key: that names Gemini Omni's
+  // preset personas, which Kling does not take.
+  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15 },
+  // Kling 4.0 Keyframes — the Image References are the in-between frames
+  // (`keyframe_urls`, max 8; the clip's duration lowers the cap, see
+  // kling4KeyframeFrameCap). No reference videos or audio.
+  "kling-4-keyframes": { images: KLING_4_MAX_MIDDLE_FRAMES },
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9
   // VEO 3.x — REFERENCE_2_VIDEO path caps refs at 3 (kie/video.ts slices to
@@ -2479,6 +2571,10 @@ export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLim
   // audio side already declares in SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER
   // above, whose h3 row cites the same page.
   "minimax-h3": { minSec: 2, maxSec: 15, maxTotalSec: 15 },
+  // Kling 4.0 Reference — "up to 5 clips, each 2–30 seconds", no combined cap
+  // (docs.kie.ai/market/kling/v4-reference-to-video); KIE's own reject reads
+  // "video_1 duration must be between 2 and 30 seconds, got 45".
+  "kling-4": { minSec: 2, maxSec: 30 },
 }
 
 /**
@@ -2568,6 +2664,35 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // PRICING_DEFAULT_RESOLUTION, and normalizeViduQ4Resolution pins the same
   // 720p at the wire.
   "vidu-q4": ["540p", "720p", "1080p", "2k", "4k"],
+  // Kling 4.0 — per-second billing at two resolution rates on both endpoints.
+  // `kling-4` adds a `-ref` rate for a run with a reference video
+  // (VIDEO_REF_RATE_PROVIDERS).
+  "kling-4": ["720p", "1080p"],
+  "kling-4-keyframes": ["720p", "1080p"],
+}
+
+/**
+ * Members of RESOLUTION_DURATION_PRICING that bill a run carrying a reference
+ * VIDEO at a different per-second rate: their identifier gains a `-ref` suffix
+ * after the resolution (`kling-4:8s:720p-ref`). The rate is per second of the
+ * BILLED duration, which the reference-video billing rule
+ * (backend ee/billing/ref-video-billing.ts) computes from the probed clips.
+ */
+export const VIDEO_REF_RATE_PROVIDERS = new Set<string>([
+  "kling-4",
+])
+
+/**
+ * Video models whose reference-VIDEO runs also bill the clips' own seconds:
+ * the Seedance 2 family (`unit × (input + output)`) and the
+ * VIDEO_REF_RATE_PROVIDERS (Kling 4.0: `unit × (output + max(output, input))`).
+ * The reservation holds the worst case from the probed clips and the
+ * settlement meters down to what was delivered (backend
+ * ee/billing/seedance2-ref-video-credits.ts) — this is the one gate every lane
+ * (routes, orchestrator, worker settlement, reconcile) asks.
+ */
+export function billsReferenceVideoSeconds(provider: string | undefined): boolean {
+  return isSeedance2Provider(provider) || (!!provider && VIDEO_REF_RATE_PROVIDERS.has(provider))
 }
 
 /**
@@ -2796,6 +2921,13 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // `audio_driven` would reroute the Story→Video dialogue pipeline. Audio is
   // priced into the uniform per-second rate (no `:audio` composite).
   "vidu-q4": { mode: "ambient", field: "audio", defaultOn: true },
+  // Kling 4.0 — native audio on both endpoints, no lever: neither schema has
+  // an audio switch (the reference endpoint's `keep_original_sound` only picks
+  // between a reference video's own sound and generated sound). Classified
+  // "ambient" on the Wan 3.0 rule until a live probe verifies scripted
+  // dialogue; priced into the per-second rate.
+  "kling-4": { mode: "ambient", alwaysOn: true, defaultOn: true },
+  "kling-4-keyframes": { mode: "ambient", alwaysOn: true, defaultOn: true },
   // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
   // `gemini-omni-flash`; one model at two speeds, so their rows are identical
   // and a test pins that). Settled 2026-09-03 from Google's own documentation
@@ -2964,6 +3096,10 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // Vidu Q4 — per-second billing at five resolution rates; no reference or
   // audio dimension.
   "vidu-q4": "duration+resolution",
+  // Kling 4.0 — per-second at two resolution rates; `kling-4` adds the
+  // reference-video rate.
+  "kling-4": "duration+resolution+ref",
+  "kling-4-keyframes": "duration+resolution",
 }
 
 /**
@@ -3079,6 +3215,10 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // Vidu Q4 — KIE renders 720p when `resolution` is omitted, and
   // normalizeViduQ4Resolution pins the same tier for anything unknown.
   "vidu-q4": "720p",
+  // Kling 4.0 — KIE renders 720p when `resolution` is omitted, and
+  // normalizeKling4Resolution pins the same tier for anything unknown.
+  "kling-4": "720p",
+  "kling-4-keyframes": "720p",
 }
 
 /** HappyHorse 1.1 per-second tiers — one per allowed duration (3–15s), shared
@@ -3125,6 +3265,12 @@ const WAN_3_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Arra
  */
 const VIDU_Q4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
   { length: 14 },
+  (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
+)
+
+/** Kling 4.0 per-second tiers — one per allowed duration (3-30s), both ids. */
+const KLING_4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 28 },
   (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
 )
 
@@ -3211,6 +3357,8 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "wan-3": WAN_3_DURATION_TIERS,
   "wan-3-prime": WAN_3_DURATION_TIERS,
   "vidu-q4": VIDU_Q4_DURATION_TIERS,
+  "kling-4": KLING_4_DURATION_TIERS,
+  "kling-4-keyframes": KLING_4_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier
   // maps 1:1 to the seeded price — no rounding/overcharge for any on-menu

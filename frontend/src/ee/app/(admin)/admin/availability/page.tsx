@@ -138,13 +138,13 @@ function KindSection({ kind, data }: { readonly kind: Kind; readonly data: Avail
                   <span className="ms-auto flex items-center gap-1.5">
                     {!item.factoryEnabled && (
                       <span
-                        className="text-[10px] text-muted-foreground border border-border rounded px-1"
+                        className="text-[11px] text-muted-foreground border border-border rounded px-1"
                         title="Disabled in the deployment's factory (surface profile) set"
                       >
                         factory off
                       </span>
                     )}
-                    <code className="text-[10px] text-muted-foreground">{item.id}</code>
+                    <code className="text-[11px] text-muted-foreground">{item.id}</code>
                   </span>
                 </label>
               ))}

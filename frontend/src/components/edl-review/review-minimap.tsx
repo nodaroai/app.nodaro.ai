@@ -147,7 +147,7 @@ export function ReviewMinimap({ base, edited, kept, onScreen, playback, onScroll
         )}
         <Playhead playback={playback} sourceMs={sourceMs} />
       </div>
-      <span dir="ltr" className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+      <span dir="ltr" className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {positionOf(0)} ── {t("edlReview.minimapSource")} ── {positionOf(sourceMs)}
       </span>
     </div>
@@ -164,7 +164,7 @@ export function FollowToggle({ on, onChange }: { readonly on: boolean; readonly 
       className={cn("ms-auto inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs", on ? "text-foreground" : "text-muted-foreground", "hover:bg-muted")}
       onClick={() => onChange(!on)}
     >
-      <span className={cn("inline-flex h-3 w-3 items-center justify-center rounded-sm border border-border", on && "border-primary bg-primary text-primary-foreground")}>
+      <span className={cn("inline-flex h-3 w-3 items-center justify-center rounded-sm border border-border", on && "border-primary bg-cta text-primary-foreground")}>
         {on && <Check className="h-2.5 w-2.5" />}
       </span>
       {t("edlReview.followPlayback")}

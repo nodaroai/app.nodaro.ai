@@ -615,7 +615,14 @@ function perSecRate(provider: string, resolution: string, ref: boolean): number 
  * `-ref` rows would make the multi-segment arm reserve the plan fee alone.
  */
 function hasPerSecRate(provider: string, resolution: string): boolean {
+  // Only the extend family (the r2v transport) rides this axis. Kling 4.0 also
+  // seeds `:8s:<res>` and `-ref` rows (single-shot reference-video billing),
+  // but it renders keyframes only, so — like Wan 3.0 and Vidu Q4 — each
+  // segment bills the very ladder row a single-shot run of that length does
+  // ({@link segmentCost}). Behaviour-neutral for every model before it: each
+  // one with both rows is an extend provider.
   return (
+    supportsExtendRender(provider) &&
     STATIC_CREDIT_COSTS[perSecIdentifier(provider, resolution, false)] !== undefined &&
     STATIC_CREDIT_COSTS[perSecIdentifier(provider, resolution, true)] !== undefined
   )

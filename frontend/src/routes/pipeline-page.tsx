@@ -445,7 +445,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   <span className="block text-sm font-medium text-foreground">
                     {t(opt.labelKey)}
                   </span>
-                  <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
+                  <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
                     {t(opt.hintKey)}
                   </span>
                 </button>
@@ -466,10 +466,10 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   : "bg-card hover:border-[#ff0073]/50"
               }`}
             >
-              <div className="flex h-8 items-center justify-center rounded bg-[var(--border-primary)] text-[9px] text-muted-foreground">
+              <div className="flex h-8 items-center justify-center rounded bg-[var(--border-primary)] text-[11px] text-muted-foreground">
                 {t("pipe.styleAuto")}
               </div>
-              <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
+              <span className="mt-1 block truncate text-[11px] font-medium text-foreground">
                 {t("pipe.styleAuto")}
               </span>
             </button>
@@ -489,7 +489,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   }`}
                 >
                   <div className="h-8 rounded" style={{ background: s.swatch }} />
-                  <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
+                  <span className="mt-1 block truncate text-[11px] font-medium text-foreground">
                     {s.label}
                   </span>
                 </button>
@@ -562,7 +562,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
           type="button"
           onClick={() => void start()}
           disabled={!prompt.trim() || busy}
-          className="mt-3 rounded-md bg-[#ff0073] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="mt-3 rounded-md bg-cta px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {busy ? t("pipe.starting") : t("pipe.createFilm")}
         </button>
@@ -635,7 +635,7 @@ function StageTracker({
         const done =
           stageStatus[s] === "approved" || (currentIdx >= 0 && i < currentIdx)
         const cls = isSelected
-          ? "border-[#ff0073] bg-[#ff0073] text-white"
+          ? "border-[#ff0073] bg-cta text-white"
           : done
             ? "border-green-500/50 bg-green-500/10 text-green-400 hover:border-[#ff0073]/60"
             : "border-[var(--border-primary)] text-muted-foreground hover:border-[#ff0073]/60"
@@ -761,7 +761,7 @@ function EntityDescGate({
             type="button"
             disabled={busy}
             onClick={() => onGenerate(card.entityId, edited ? desc : undefined)}
-            className="rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-cta px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
           >
             {t("pipe.generate")}
           </button>
@@ -805,7 +805,7 @@ function EntityDescGate({
             <button
               type="button"
               onClick={() => setLibTab("featured")}
-              className={`rounded-md px-2 py-0.5 text-[10px] ${
+              className={`rounded-md px-2 py-0.5 text-[11px] ${
                 libTab === "featured"
                   ? "bg-[#ff0073]/10 text-[#ff0073]"
                   : "text-muted-foreground hover:text-foreground"
@@ -816,7 +816,7 @@ function EntityDescGate({
             <button
               type="button"
               onClick={() => setLibTab("mine")}
-              className={`rounded-md px-2 py-0.5 text-[10px] ${
+              className={`rounded-md px-2 py-0.5 text-[11px] ${
                 libTab === "mine"
                   ? "bg-[#ff0073]/10 text-[#ff0073]"
                   : "text-muted-foreground hover:text-foreground"
@@ -843,12 +843,12 @@ function EntityDescGate({
                       setDesc(f.description)
                       setReuseOpen(false)
                     }}
-                    className="rounded-full border px-2 py-1 text-[10px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-50"
+                    className="rounded-full border px-2 py-1 text-[11px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-50"
                   >
                     {f.label}
                   </button>
                 ))}
-                <p className="mt-1 w-full text-[10px] text-muted-foreground">
+                <p className="mt-1 w-full text-[11px] text-muted-foreground">
                   {t("pipe.starterFillHint")}
                 </p>
               </div>
@@ -878,7 +878,7 @@ function EntityDescGate({
                     alt={item.name}
                     className="h-20 w-20 rounded border object-cover"
                   />
-                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {item.name}
                   </div>
                 </button>
@@ -1000,7 +1000,7 @@ function GatePanel({
                         type="button"
                         disabled={acting}
                         onClick={() => actions.approveEntity(c.entityId)}
-                        className={`${btn} bg-[#ff0073] text-white`}
+                        className={`${btn} bg-cta text-white`}
                       >
                         {t("pipe.approve")}
                       </button>
@@ -1036,7 +1036,7 @@ function GatePanel({
                           setRedoFor(null)
                           setRedoFeedback("")
                         }}
-                        className={`${btn} bg-[#ff0073] text-white`}
+                        className={`${btn} bg-cta text-white`}
                       >
                         {t("pipe.regenerate")}
                       </button>
@@ -1062,7 +1062,7 @@ function GatePanel({
                 type="button"
                 disabled={acting}
                 onClick={() => actions.approveGate(g.stageName, g.subGate)}
-                className={`${btn} bg-[#ff0073] text-white`}
+                className={`${btn} bg-cta text-white`}
               >
                 {t("pipe.approveAndContinue", { stage: STAGE_LABELS[g.stageName] ? t(STAGE_LABELS[g.stageName]) : g.stageName })}
               </button>
@@ -1179,7 +1179,7 @@ function ScriptView({
   const inputCls =
     "flex-1 rounded-md border bg-background px-2 py-1 text-xs text-foreground"
   const pinkBtn =
-    "rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+    "rounded-md bg-cta px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
 
   return (
     <div className="max-w-3xl space-y-4 rounded-md border bg-card p-4 text-sm leading-relaxed text-foreground">
@@ -1366,7 +1366,7 @@ function Lightbox({
   if (!item) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col bg-black/90" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-[9999] flex flex-col bg-black/90" onClick={onClose}>
       <div className="flex items-center gap-4 px-4 py-3 text-sm text-white/80">
         <span className="flex-1 truncate">{item.label}</span>
         <span className="shrink-0 tabular-nums">
@@ -1864,7 +1864,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                 <button
                   type="button"
                   onClick={() => setSelectedClip(null)}
-                  className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                  className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
                 >
                   {t("pipe.closeX")}
                 </button>
@@ -1926,7 +1926,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                   <code className="text-foreground">EDITION=cloud</code>{" "}
                   {t("pipe.stuckDetailPost")}
                 </p>
-                <pre className="mt-1.5 overflow-x-auto rounded bg-background p-1.5 text-[10px] text-foreground">
+                <pre className="mt-1.5 overflow-x-auto rounded bg-background p-1.5 text-[11px] text-foreground">
 npm run pipeline-worker:dev
                 </pre>
               </div>

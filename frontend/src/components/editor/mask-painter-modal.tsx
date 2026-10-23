@@ -43,6 +43,7 @@ export function MaskPainterModal({
   isOpen, onClose, imageUrl, initialMaskUrl, onSave,
   initialBrushSize, initialBrushHardness,
 }: MaskPainterModalProps) {
+  const t = useT()
   const tr = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -490,7 +491,7 @@ export function MaskPainterModal({
       title={label}
     >
       {icon}
-      <span className="text-[9.5px] tracking-wide">{label}</span>
+      <span className="text-[11px] tracking-wide">{label}</span>
     </button>
   )
 
@@ -526,7 +527,7 @@ export function MaskPainterModal({
                 </button>
               ))}
             </div>
-            <button
+            <button aria-label={t("common.close")}
               type="button"
               onClick={onClose}
               className="w-8 h-8 rounded-[9px] border border-[#26262b] bg-[#1c1c20] text-[#a1a1a8] hover:bg-[#26262b] hover:text-[#f4f4f5] flex items-center justify-center transition-colors"
@@ -546,14 +547,14 @@ export function MaskPainterModal({
             <div className="w-9 h-px bg-[#26262b] my-2" />
             <button type="button" onClick={handleUndo} disabled={!canUndo}
               className="w-[52px] h-11 flex flex-col items-center justify-center gap-1 rounded-[11px] text-[#75757c] hover:text-[#c9c9d0] disabled:opacity-30 transition-colors">
-              <Undo2 className="w-4 h-4" /><span className="text-[9.5px]">{tr("ctb.undo")}</span>
+              <Undo2 className="w-4 h-4" /><span className="text-[11px]">{tr("ctb.undo")}</span>
             </button>
             <button type="button" onClick={handleRedo} disabled={!canRedo}
               className="w-[52px] h-11 flex flex-col items-center justify-center gap-1 rounded-[11px] text-[#75757c] hover:text-[#c9c9d0] disabled:opacity-30 transition-colors">
-              <Redo2 className="w-4 h-4" /><span className="text-[9.5px]">{tr("ctb.redo")}</span>
+              <Redo2 className="w-4 h-4" /><span className="text-[11px]">{tr("ctb.redo")}</span>
             </button>
             <div className="flex-1" />
-            <div className="text-[#4d4d54] text-[9px] font-mono text-center leading-relaxed px-2">B / E<br />[ ]</div>
+            <div className="text-[#4d4d54] text-[11px] font-mono text-center leading-relaxed px-2">B / E<br />[ ]</div>
           </div>
 
           {/* Stage */}
@@ -607,7 +608,7 @@ export function MaskPainterModal({
           {/* Right panel */}
           <div className="w-[264px] shrink-0 border-s border-[#232327] bg-[#151518] flex flex-col gap-[22px] px-[18px] pt-[18px] pb-5 overflow-y-auto">
             <div className="flex flex-col gap-3.5">
-              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">{tr("mediaed.toolBrush")}</div>
+              <div className="text-[#75757c] text-[11px] font-medium tracking-[.12em] uppercase">{tr("mediaed.toolBrush")}</div>
               {([
                 { label: tr("cfgext.paintBrushSize"), value: brushSize, suffix: " px", min: 4, max: 200, set: setBrushSize },
                 { label: tr("cfgext.paintBrushHardness"), value: hardness, suffix: "%", min: 0, max: 100, set: setHardness },
@@ -633,7 +634,7 @@ export function MaskPainterModal({
             <div className="h-px bg-[#232327]" />
 
             <div className="flex flex-col gap-3">
-              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">{tr("mediaed.selectionHeader")}</div>
+              <div className="text-[#75757c] text-[11px] font-medium tracking-[.12em] uppercase">{tr("mediaed.selectionHeader")}</div>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => fillAll("#ffffff")} className={panelBtn}>{tr("canvas.selectAll")}</button>
                 <button type="button" onClick={handleInvert} className={panelBtn}>{tr("mediaed.invert")}</button>
@@ -645,7 +646,7 @@ export function MaskPainterModal({
             <div className="h-px bg-[#232327]" />
 
             <div className="flex flex-col gap-3">
-              <div className="text-[#75757c] text-[10px] font-medium tracking-[.12em] uppercase">{tr("mediaed.legend")}</div>
+              <div className="text-[#75757c] text-[11px] font-medium tracking-[.12em] uppercase">{tr("mediaed.legend")}</div>
               <div className="flex items-center gap-2.5">
                 <div className="w-[26px] h-[26px] rounded-md bg-white shrink-0" />
                 <div className="flex flex-col gap-px">

@@ -17,7 +17,7 @@ export function SwitchXAttribution({ className }: { className?: string }) {
       className={`pointer-events-none inline-flex items-center gap-1 rounded-md border border-white/10 bg-black/45 px-1.5 py-0.5 backdrop-blur-sm ${className ?? ""}`}
       title={t("misc.poweredBySwitchx")}
     >
-      <span className="text-[9px] font-medium leading-none text-white/70">{t("misc.poweredBy")}</span>
+      <span className="text-[11px] font-medium leading-none text-white/70">{t("misc.poweredBy")}</span>
       {/* Black wordmark inverted to monotone white for the dark safe-area pill. */}
       <img src="/switchx-wordmark.png" alt="SwitchX" className="h-2.5 w-auto" style={{ filter: "invert(1)" }} />
     </div>

@@ -133,7 +133,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
               ))}
             </div>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             onClick={handleCancel}
             className="text-white/50 hover:text-white transition-colors p-1"
@@ -234,7 +234,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
               type="button"
               onClick={handleUploadCurrent}
               disabled={isProcessing || isConverting}
-              className="px-5 py-2 text-sm text-white bg-[#ff0073] rounded-lg hover:bg-[#ff0073]/80 transition-colors disabled:opacity-40 font-medium"
+              className="px-5 py-2 text-sm text-white bg-cta rounded-lg hover:bg-cta-hover transition-colors disabled:opacity-40 font-medium"
             >
               {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin inline me-1.5" />}
               {isMultiFile && !isLastFile ? `${t("common.upload")} \u2192` : t("common.upload")}

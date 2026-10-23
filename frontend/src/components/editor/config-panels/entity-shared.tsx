@@ -60,7 +60,7 @@ export function CharacterAssetGrid({ items }: { readonly items: readonly { name:
             <div className="w-full aspect-square rounded overflow-hidden bg-muted/30 hover:ring-2 hover:ring-primary/50 transition-shadow">
               <CachedImage src={item.url} alt={item.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
             </div>
-            <span className="text-[9px] text-muted-foreground truncate w-full text-center">{item.name}</span>
+            <span className="text-[11px] text-muted-foreground truncate w-full text-center">{item.name}</span>
           </button>
         ))}
       </div>
@@ -133,7 +133,7 @@ export function ObjectAssetGrid({ items }: { readonly items: Array<{ name: strin
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Maximize2 className="w-4 h-4 text-white" />
             </div>
-            <span className="absolute bottom-0 inset-x-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
+            <span className="absolute bottom-0 inset-x-0 text-[11px] bg-black/60 text-white text-center truncate px-0.5">
               {item.name}
             </span>
           </button>
@@ -208,7 +208,7 @@ export function LocationAssetGrid({ items }: { readonly items: Array<{ name: str
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Maximize2 className="w-4 h-4 text-white" />
             </div>
-            <span className="absolute bottom-0 inset-x-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
+            <span className="absolute bottom-0 inset-x-0 text-[11px] bg-black/60 text-white text-center truncate px-0.5">
               {item.name}
             </span>
           </button>

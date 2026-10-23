@@ -28,7 +28,7 @@ interface SceneData {
   shots?: ShotData[]
 }
 
-const LABEL = "font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground"
+const LABEL = "font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground"
 const FIELD =
   "mt-1 w-full rounded-md border border-[#2a2a2a] bg-[#111] p-1.5 text-[11px] text-foreground outline-none focus:border-[#ff0073]"
 
@@ -113,7 +113,7 @@ export function ClipEditor({
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-foreground">
           ✦ {t("pipe.cinemaEditThisClip")}
         </span>
-        {note && <span className="font-mono text-[10px] text-[#ff0073]">{note}</span>}
+        {note && <span className="font-mono text-[11px] text-[#ff0073]">{note}</span>}
       </div>
 
       <label className="block">
@@ -165,12 +165,12 @@ export function ClipEditor({
         <span className={LABEL}>{t("pipe.cinemaReferenceEntities")}</span>
         <div className="mt-1 flex flex-wrap gap-1.5">
           {refs.length === 0 ? (
-            <span className="font-mono text-[10px] text-muted-foreground">{t("cfgext.injRefModeNone")}</span>
+            <span className="font-mono text-[11px] text-muted-foreground">{t("cfgext.injRefModeNone")}</span>
           ) : (
             refs.map((k) => (
               <span
                 key={k}
-                className="rounded-md border border-sky-500/40 px-1.5 py-0.5 font-mono text-[10px] text-sky-300"
+                className="rounded-md border border-sky-500/40 px-1.5 py-0.5 font-mono text-[11px] text-sky-300"
               >
                 @{k}
               </span>
@@ -184,7 +184,7 @@ export function ClipEditor({
           type="button"
           onClick={() => void regenerate()}
           disabled={busy || !shotId}
-          className="rounded-md bg-[#ff0073] px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
+          className="rounded-md bg-cta px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
         >
           {busy ? t("cfgext.sceneRegenerating") : t("pipe.cinemaSaveRegenerateClip")}
         </button>

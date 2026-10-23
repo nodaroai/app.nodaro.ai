@@ -2,7 +2,7 @@
 // — the same mono kickers, pink accent and violet Avatar-V tag as the AI
 // Avatar node card, on the app's surface tokens so dark/light follow the app.
 
-export const KICKER = "text-[9.5px] font-mono uppercase tracking-[0.12em] text-muted-foreground/70 whitespace-nowrap"
+export const KICKER = "text-[11px] font-mono uppercase tracking-[0.12em] text-muted-foreground whitespace-nowrap"
 
 /** A facet / look chip. Capped and ellipsised: chips carry raw catalog
  *  strings inside fixed-width columns. */

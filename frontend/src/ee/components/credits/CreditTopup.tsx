@@ -62,7 +62,7 @@ export function CreditTopup() {
             )}
           >
             {pkg.popular && (
-              <span className="absolute -top-2 end-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
+              <span className="absolute -top-2 end-2 rounded-full bg-cta px-2 py-0.5 text-[11px] font-medium text-white">
                 {t("pricing.popular")}
               </span>
             )}
@@ -70,7 +70,7 @@ export function CreditTopup() {
             <span className="text-lg font-bold">{creditUnits(pkg.credits)}</span>
             <span className="text-xs text-muted-foreground">{creditUnitLabel(t("credits.unit.other"))}</span>
             <span className="mt-2 text-sm font-semibold">${pkg.price}</span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               ${(pkg.price / creditUnits(pkg.credits)).toFixed(4)} / {creditUnitLabel(t("credits.unit.one"))}
             </span>
           </button>
@@ -106,7 +106,7 @@ export function CreditTopup() {
           onClick={handleCustomLoad}
           disabled={customCredits === null || loadingId === "custom"}
           className={cn(
-            "ms-auto rounded-md bg-[#ff0073] px-4 py-1.5 text-sm font-medium text-white transition-opacity",
+            "ms-auto rounded-md bg-cta px-4 py-1.5 text-sm font-medium text-white transition-opacity",
             (customCredits === null || loadingId === "custom") && "opacity-40 pointer-events-none",
           )}
         >

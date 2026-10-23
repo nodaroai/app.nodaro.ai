@@ -248,7 +248,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           />
           <div className="flex gap-1.5">
             <button
-              className="flex-1 text-[10px] bg-[#3b82f6] text-white rounded px-2 py-1"
+              className="flex-1 text-[11px] bg-[#3b82f6] text-white rounded px-2 py-1"
               onClick={() => {
                 onRefine(prompt, "replace")
                 setRefining(false)
@@ -258,7 +258,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
               {t("common.replace")}{costLabel}
             </button>
             <button
-              className="flex-1 text-[10px] bg-[#1e293b] text-slate-300 rounded px-2 py-1"
+              className="flex-1 text-[11px] bg-[#1e293b] text-slate-300 rounded px-2 py-1"
               onClick={() => {
                 onRefine(prompt, "add")
                 setRefining(false)
@@ -342,7 +342,7 @@ function NameLabel({ name, onRename }: { name: string; onRename?: (newName: stri
       className="min-w-0 flex items-center gap-1 text-start group/name"
     >
       <span className="text-[11px] text-slate-300 truncate">{name}</span>
-      <span className="text-[9px] text-slate-600 opacity-0 group-hover:opacity-100 group-hover/name:text-slate-300 transition shrink-0">✎</span>
+      <span className="text-[11px] text-slate-600 opacity-0 group-hover:opacity-100 group-hover/name:text-slate-300 transition shrink-0">✎</span>
     </button>
   )
 }
@@ -373,7 +373,7 @@ function DescriptionRow({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="text-[10px] text-slate-500 hover:text-slate-300 italic line-clamp-2 w-full text-start"
+        className="text-[11px] text-slate-500 hover:text-slate-300 italic line-clamp-2 w-full text-start"
       >
         {description || t("studio.clickToAddDescription")}
       </button>
@@ -389,7 +389,7 @@ function DescriptionRow({
           onBlur={() => setEditing(false)}
           rows={2}
           maxLength={1000}
-          className="flex-1 text-[10px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
+          className="flex-1 text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
         {onSuggestDescription && (
           <AiHelperButton
@@ -406,7 +406,7 @@ function DescriptionRow({
           placeholder={t("studio.motionDescriptionLowerPh")}
           rows={1}
           maxLength={500}
-          className="block w-full text-[10px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
+          className="block w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
       )}
     </div>

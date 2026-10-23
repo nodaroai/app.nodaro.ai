@@ -1,3 +1,4 @@
+import { pressable } from "@/lib/pressable"
 import { useNavigate } from "react-router-dom"
 import { useT, tx } from "@/lib/i18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -279,14 +280,15 @@ export function SidebarCreditCard({ isCollapsed, isRtl }: SidebarCreditCardProps
         // scrolls instead (see its min-h-0 + overflow-y-auto).
         flexShrink: 0,
       }}
-      onClick={selfServe ? () => navigate("/billing") : undefined}
+      // Self-serve: the whole card opens Billing, by mouse or keyboard.
+      {...(selfServe ? pressable(() => navigate("/billing")) : {})}
     >
       <div style={{ padding: "14px 16px 14px" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--blg-t2-dim)", fontWeight: 600 }}>
+          <span style={{ fontSize: 11, letterSpacing: "0.14em", color: "var(--blg-t2-dim)", fontWeight: 600 }}>
             {creditFigures.allowance ? t("credits.allowanceTitle") : t("nav.totalCredits")}
           </span>
-          <span style={{ fontSize: 10, color: "var(--blg-t3-dim)", fontFamily: MONO_FONT }}>
+          <span style={{ fontSize: 11, color: "var(--blg-t3-dim)", fontFamily: MONO_FONT }}>
             {planLabel}
           </span>
         </div>

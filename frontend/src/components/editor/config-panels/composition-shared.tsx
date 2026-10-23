@@ -41,11 +41,11 @@ export function SortableAssetItem({ id, index, label, typeLabel }: { id: string;
   return (
     <div ref={setNodeRef} style={style} {...attributes} className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 text-xs">
       <span {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none">
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
       </span>
       <span className="text-muted-foreground w-4 text-center shrink-0">{index + 1}</span>
       <span className="truncate flex-1" title={localizeNode(label)}>{localizeNode(label)}</span>
-      <span className="text-muted-foreground/60 text-[10px] shrink-0">{typeLabel}</span>
+      <span className="text-muted-foreground text-[11px] shrink-0">{typeLabel}</span>
     </div>
   )
 }

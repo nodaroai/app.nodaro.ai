@@ -325,11 +325,11 @@ export default function DeveloperAppDetailPage() {
 
         <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-muted-foreground">
           <div>
-            <span className="block text-[10px] uppercase tracking-wide">{t("devApp.createdAt")}</span>
+            <span className="block text-[11px] uppercase tracking-wide">{t("devApp.createdAt")}</span>
             <span>{formatDateTime(appRow.createdAt)}</span>
           </div>
           <div>
-            <span className="block text-[10px] uppercase tracking-wide">{t("devApp.updatedAt")}</span>
+            <span className="block text-[11px] uppercase tracking-wide">{t("devApp.updatedAt")}</span>
             <span>{formatDateTime(appRow.updatedAt)}</span>
           </div>
         </div>
@@ -450,7 +450,7 @@ export default function DeveloperAppDetailPage() {
           <Button
             onClick={handleSave}
             disabled={updateMutation.isPending}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {updateMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin me-2" />

@@ -30,7 +30,7 @@ export function SeedPromptTextarea({ nodeId, value, onChange, suggestContext }: 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <label className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.seedPrompt")}</label>
+        <label className="text-[11px] uppercase tracking-wide text-slate-500">{t("studio.seedPrompt")}</label>
         <AiHelperButton onSuggest={suggest} title={t("studio.suggestSeedPrompt")} />
       </div>
       <textarea
@@ -41,7 +41,7 @@ export function SeedPromptTextarea({ nodeId, value, onChange, suggestContext }: 
         maxLength={4000}
         className="block w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1.5 text-slate-200"
       />
-      <div className="text-end text-[9px] text-slate-500 tabular-nums">{value.length}/4000</div>
+      <div className="text-end text-[11px] text-slate-500 tabular-nums">{value.length}/4000</div>
     </div>
   )
 }

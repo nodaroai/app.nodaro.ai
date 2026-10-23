@@ -30,7 +30,7 @@ type Variant = "card" | "panel"
 /** The card wears the input-node cyan; the panel wears the app's accent. */
 const TONE: Record<Variant, { text: string; accent: string; accentText: string; bar: string; input: string }> = {
   card: {
-    text: "text-[10px]",
+    text: "text-[11px]",
     accent: "bg-[#38BDF8] hover:bg-[#38BDF8]/90",
     accentText: "text-[#38BDF8]",
     bar: "bg-[#38BDF8]",
@@ -216,7 +216,7 @@ function RangeChooser({
       </PrimaryButton>
       {wholeFits && <SecondaryButton onClick={downloadWhole}>{t("videolink.downloadWhole")}</SecondaryButton>}
       {onCancel && <SecondaryButton onClick={onCancel}>{t("videolink.cancel")}</SecondaryButton>}
-      <p className="text-[10px] text-muted-foreground/70">{t("videolink.partNote")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("videolink.partNote")}</p>
     </div>
   )
 }

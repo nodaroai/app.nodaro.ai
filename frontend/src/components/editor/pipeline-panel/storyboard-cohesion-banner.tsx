@@ -166,7 +166,7 @@ export function StoryboardCohesionBanner({
                       {f.affected_scenes.map((scene) => (
                         <span
                           key={scene}
-                          className="font-mono text-[10px] px-1 py-0.5 rounded bg-white/60 dark:bg-zinc-900/40 border border-current/20"
+                          className="font-mono text-[11px] px-1 py-0.5 rounded bg-white/60 dark:bg-zinc-900/40 border border-current/20"
                           data-testid="storyboard-cohesion-affected-scene"
                         >
                           {t("pipe.sceneNumberLower", { n: scene })}

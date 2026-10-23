@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { Heart, Play, Sparkles } from "lucide-react"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { PreviewVideo } from "@/components/ui/preview-video"
@@ -61,7 +62,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* RemX badge */}
         {app.supportsRemix && (
-          <span className="absolute top-2 start-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
+          <span className="absolute top-2 start-2 text-[11px] px-1.5 py-0.5 rounded bg-cta text-white font-medium">
             RemX
           </span>
         )}
@@ -86,14 +87,14 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* Category + output type badges */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
+          <span className={cn("text-[11px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
             {t(categoryLabelKey)}
           </span>
           {app.outputTypes.slice(0, 3).map((outType) => (
             <span
               key={outType}
               className={cn(
-                "text-[10px] px-1.5 py-0.5 rounded-full border font-medium capitalize",
+                "text-[11px] px-1.5 py-0.5 rounded-full border font-medium capitalize",
                 OUTPUT_TYPE_COLORS[outType] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
               )}
             >
@@ -119,14 +120,14 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* Creator */}
         {app.creatorDisplayName && (
-          <p className="text-[10px] text-white/50 truncate">
+          <p className="text-[11px] text-white/50 truncate">
             {t("preview.by", { name: app.creatorDisplayName })}
           </p>
         )}
       </div>
 
       {/* Favorite button — after overlay in DOM so it receives clicks on hover */}
-      <button
+      <button aria-label={t("templates.favorite")} aria-pressed={isFavorited}
         type="button"
         className="absolute top-2 end-2 z-10 p-1 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
         onClick={(e) => {
@@ -142,6 +143,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
           )}
         />
       </button>
+      <CoverButton label={t("common.open")} onActivate={() => onPreview ? onPreview(app) : onSelect ? onSelect(app) : navigate(`/app/${app.slug}`)} />
     </div>
   )
 }

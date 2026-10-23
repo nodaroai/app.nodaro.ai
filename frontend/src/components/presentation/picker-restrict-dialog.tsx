@@ -287,7 +287,7 @@ function RestrictChecklistDialog({
             grouped.map((group) => (
               <div key={group.key ?? "all"}>
                 {group.label && (
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
                     {group.label}
                   </p>
                 )}
@@ -311,7 +311,7 @@ function RestrictChecklistDialog({
                           <p className="text-xs font-medium text-foreground truncate">
                             {resolveLabel(e.id, e.label)}
                           </p>
-                          <p className="text-[10px] text-muted-foreground line-clamp-1">
+                          <p className="text-[11px] text-muted-foreground line-clamp-1">
                             {resolveDescription(e.id, e.description)}
                           </p>
                         </div>

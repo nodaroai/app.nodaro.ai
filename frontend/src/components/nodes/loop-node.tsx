@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
@@ -204,6 +205,7 @@ function SortableNodeRow({
   children: React.ReactNode
   onRemove: () => void
 }) {
+  const t = useT()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
   const style = {
@@ -217,17 +219,17 @@ function SortableNodeRow({
       <div
         {...attributes}
         {...listeners}
-        className="nodrag nopan shrink-0 mt-2 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+        className="nodrag nopan shrink-0 mt-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="w-3.5 h-3.5" />
       </div>
       <div className="flex-1 min-w-0">
         {children}
       </div>
-      <button
+      <button aria-label={t("common.remove")}
         type="button"
         onClick={(e) => { e.stopPropagation(); onRemove() }}
-        className="nodrag nopan shrink-0 mt-2 text-muted-foreground/30 hover:text-red-400 transition-colors"
+        className="nodrag nopan shrink-0 mt-2 text-muted-foreground hover:text-red-400 transition-colors"
       >
         <X className="w-3.5 h-3.5" />
       </button>
@@ -570,7 +572,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     if (!cell) {
       return (
         <div key={`${rowIdx}-${col.id}`} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
-          <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+          <span className="text-[11px] text-muted-foreground">{"\u2014"}</span>
         </div>
       )
     }
@@ -606,7 +608,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}><Link className={actionIconClass} /></button>
           </div>
         </div>
-        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{idx + 1}</span>
+        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[11px] font-medium tabular-nums shadow-sm">{idx + 1}</span>
       </div>
     )
   }
@@ -615,7 +617,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     if (!cell) {
       return (
         <div key={`${rowIdx}-${col.id}`} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
-          <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+          <span className="text-[11px] text-muted-foreground">{"\u2014"}</span>
         </div>
       )
     }
@@ -650,7 +652,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}><Link className={actionIconClass} /></button>
           </div>
         </div>
-        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
+        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[11px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
       </div>
     )
   }
@@ -659,7 +661,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     if (!cell) {
       return (
         <div key={`${rowIdx}-${col.id}`} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
-          <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+          <span className="text-[11px] text-muted-foreground">{"\u2014"}</span>
         </div>
       )
     }
@@ -687,7 +689,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <WaveformAudioPlayer url={cell} variant="mini" isInsideCanvas className="w-full" />
           </div>
         </div>
-        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
+        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[11px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
       </div>
     )
   }
@@ -696,7 +698,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     if (!cell) {
       return (
         <div key={`${rowIdx}-${col.id}`} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
-          <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+          <span className="text-[11px] text-muted-foreground">{"\u2014"}</span>
         </div>
       )
     }
@@ -776,7 +778,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             )
           )}
         </div>
-        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
+        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[11px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
       </div>
     )
   }
@@ -785,7 +787,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     if (!cell) {
       return (
         <div key={`${rowIdx}-${col.id}`} className="w-full h-10 rounded-lg border border-dashed border-muted-foreground/10 flex items-center justify-center">
-          <span className="text-[9px] text-muted-foreground/30">{"\u2014"}</span>
+          <span className="text-[11px] text-muted-foreground">{"\u2014"}</span>
         </div>
       )
     }
@@ -805,16 +807,16 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           return (
             <div key={k} className="flex gap-1 min-w-0">
               <span className="shrink-0" style={{ color: LOOP_COLUMN_TYPE_META.json.color }}>{k}:</span>
-              <span className="text-foreground/60 truncate">{vs}</span>
+              <span className="text-foreground/80 truncate">{vs}</span>
             </div>
           )
         })}
         {allEntries && allEntries.length > 4 && (
-          <span className="text-muted-foreground/40">{t("node.plusNMore", { n: allEntries.length - 4 })}</span>
+          <span className="text-muted-foreground">{t("node.plusNMore", { n: allEntries.length - 4 })}</span>
         )}
       </div>
     ) : (
-      <div className="text-foreground/60 truncate">{cell}</div>
+      <div className="text-foreground/80 truncate">{cell}</div>
     )
 
     const innerClass = "relative rounded-lg border border-border/40 bg-muted/10 overflow-hidden"
@@ -824,7 +826,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       <div key={`${rowIdx}-${col.id}`} className="relative group/cell self-start">
         <div className={innerClass}>
           <div className={containerClass}>
-            <div className="text-[10px] font-mono leading-relaxed" style={{ WebkitLineClamp: 5, display: "-webkit-box", WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            <div className="text-[11px] font-mono leading-relaxed" style={{ WebkitLineClamp: 5, display: "-webkit-box", WebkitBoxOrient: "vertical", overflow: "hidden" }}>
               {content}
             </div>
           </div>
@@ -842,7 +844,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             )
           )}
         </div>
-        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
+        <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[11px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
       </div>
     )
   }
@@ -916,7 +918,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setShowData(!showData) }}
-                className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                 title={showData ? t("node.showInfo") : t("node.showData")}
               >
                 {showData ? <Info className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
@@ -924,14 +926,14 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             )}
             {showingPresentation && !isConnectedData && (
               <>
-                <span className="text-[9px] text-muted-foreground/60">
+                <span className="text-[11px] text-muted-foreground">
                   {t("handle.ofMax", { n: rowCount, max: maxItems })}
                 </span>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleAddRow() }}
                   disabled={rows.length >= maxItems}
-                  className="flex items-center justify-center w-5 h-5 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+                  className="flex items-center justify-center w-5 h-5 rounded-md bg-cta text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
                   title={t("node.addRow")}
                 >
                   <Plus className="w-3 h-3" />
@@ -1035,7 +1037,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                                       className="w-full h-auto rounded-lg"
                                     />
                                   ) : (
-                                    <button
+                                    <button aria-label={t("common.add")}
                                       key={col.id}
                                       type="button"
                                       className="w-full h-14 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 transition-colors"
@@ -1045,30 +1047,30 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                                         hiddenFileRef.current?.click()
                                       }}
                                     >
-                                      <Plus className="w-4 h-4 text-muted-foreground/40" />
+                                      <Plus className="w-4 h-4 text-muted-foreground" />
                                     </button>
                                   )
                                 }
                                 if (colType === "video-url" || colType === "audio-url") {
                                   return (
-                                    <span key={col.id} className="text-[10px] text-muted-foreground/60 italic block py-1">
+                                    <span key={col.id} className="text-[11px] text-muted-foreground italic block py-1">
                                       {cell ? t("node.mediaCell") : "\u2014"}
                                     </span>
                                   )
                                 }
                                 if (colType === "json") {
                                   return (
-                                    <span key={col.id} className="text-[10px] text-muted-foreground/60 font-mono italic block py-1 truncate">
+                                    <span key={col.id} className="text-[11px] text-muted-foreground font-mono italic block py-1 truncate">
                                       {cell ? `{...}` : "\u2014"}
                                     </span>
                                   )
                                 }
                                 return col.connectedSourceId ? (
-                                  <div key={col.id} className="px-1 py-0.5 text-[10px] text-muted-foreground/60 truncate">
+                                  <div key={col.id} className="px-1 py-0.5 text-[11px] text-muted-foreground truncate">
                                     {cell || "..."}
                                   </div>
                                 ) : (
-                                  <span key={col.id} className="text-[10px] text-muted-foreground truncate block py-1" title={cell}>
+                                  <span key={col.id} className="text-[11px] text-muted-foreground truncate block py-1" title={cell}>
                                     {cell || "\u2014"}
                                   </span>
                                 )
@@ -1081,11 +1083,11 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                     {firstImageColIdx >= 0 && rows.length < maxItems && (
                       <div
                         className="flex items-center justify-center py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer border-muted-foreground/15 hover:border-[#ff0073]/40"
-                        onClick={(e) => { e.stopPropagation(); dropZoneFileRef.current?.click() }}
+                        {...pressable((e) => { e.stopPropagation(); dropZoneFileRef.current?.click() })}
                       >
                         <div className="flex items-center gap-1.5">
-                          <Upload className="w-3.5 h-3.5 text-muted-foreground/40" />
-                          <span className="text-[10px] text-muted-foreground/60">{t("node.dropFilesToAddRows")}</span>
+                          <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-[11px] text-muted-foreground">{t("node.dropFilesToAddRows")}</span>
                         </div>
                       </div>
                     )}
@@ -1109,8 +1111,8 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                   <div className="flex flex-col gap-0.5 pt-2 pl-2 pr-4">
                     {displayRows.map((row, i) => (
                       <div key={i} className="flex items-start gap-1.5">
-                        <span className="text-[9px] text-muted-foreground/40 tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
-                        <span className={`${textFontClass} text-foreground/75 flex-1`} style={{
+                        <span className="text-[11px] text-muted-foreground tabular-nums mt-0.5 shrink-0 w-3 text-right">{i + 1}</span>
+                        <span className={`${textFontClass} text-foreground/80 flex-1`} style={{
                           display: "-webkit-box",
                           WebkitBoxOrient: "vertical",
                           WebkitLineClamp: textMaxLines,
@@ -1131,7 +1133,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                       {columns.map((col) => {
                         const colColor = LOOP_COLUMN_TYPE_META[col.type ?? "text"]?.color ?? "#38BDF8"
                         return (
-                          <span key={col.id} className="text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
+                          <span key={col.id} className="text-[11px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
                             style={{
                               background: `${colColor}20`,
                               color: colColor,

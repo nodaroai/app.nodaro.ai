@@ -1,5 +1,6 @@
 "use client"
 
+import { CoverButton } from "@/components/ui/cover-button"
 import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Trash2, Plus, Maximize2, Sparkles, Expand } from "lucide-react"
@@ -60,18 +61,18 @@ function InlineDeleteConfirm({
 }) {
   const t = useT()
   return (
-    <span className="flex items-center gap-1 text-[10px]">
+    <span className="flex items-center gap-1 text-[11px]">
       <span className="text-red-500 font-medium">{t("entity.deleteQuestion")}</span>
       <button
         type="button"
-        className="px-1.5 py-0.5 rounded text-[10px] bg-muted hover:bg-muted/80 text-muted-foreground"
+        className="px-1.5 py-0.5 rounded text-[11px] bg-muted hover:bg-muted/80 text-muted-foreground"
         onClick={(e) => { e.stopPropagation(); onCancel() }}
       >
         {t("common.cancel")}
       </button>
       <button
         type="button"
-        className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/90 hover:bg-red-500 text-white"
+        className="px-1.5 py-0.5 rounded text-[11px] bg-red-500/90 hover:bg-red-500 text-white"
         onClick={(e) => { e.stopPropagation(); onConfirm() }}
       >
         {t("common.delete")}
@@ -109,25 +110,24 @@ function DraggableImage({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="relative group">
-        <CachedImage
+        <button type="button" onClick={() => onEnlarge(src)} aria-label={t("common.select")} className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
           src={src}
           alt={label ?? t("entity.characterImageAlt")}
           draggable
           onDragStart={(e) => startDrag(e, src, onDragStarted)}
           onDragEnd={() => onDragEnded?.()}
-          onClick={() => onEnlarge(src)}
           className={cn(
             "w-full rounded-lg cursor-pointer border border-border hover:border-primary/50 transition-colors",
             isMainImage ? "max-h-[400px] object-contain" : "aspect-square object-cover"
           )}
           thumbnail
           thumbnailWidth={800}
-        />
+        /></button>
         {/* Add to canvas button */}
         {onAddToCanvas && (
           <button
             type="button"
-            className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
+            className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-cta text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
             onClick={(e) => { e.stopPropagation(); onAddToCanvas(src) }}
             aria-label={t("entity.addToCanvas")}
             title={t("entity.addToCanvas")}
@@ -645,7 +645,7 @@ centered composition, high quality, single character`
 
   return createPortal(
     <>
-      <div
+      <div role="presentation"
         className={cn(
           "fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity",
           isDragging && "pointer-events-none opacity-30"
@@ -978,7 +978,7 @@ centered composition, high quality, single character`
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-medium">{data.voice.voiceName}</h3>
                       {data.voice.voiceType && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           {data.voice.voiceType}
                         </span>
                       )}
@@ -1064,7 +1064,7 @@ centered composition, high quality, single character`
 
       {/* Refine Picker Modal */}
       {showRefinePicker && refinedResults.length > 0 && (
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={closeRefinePicker}
         >
@@ -1101,7 +1101,7 @@ centered composition, high quality, single character`
                     thumbnailWidth={320}
                   />
                   {/* Expand button */}
-                  <button
+                  <button aria-label={t("common.expand")}
                     type="button"
                     className="absolute bottom-2 start-2 p-1.5 rounded-md bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
@@ -1116,6 +1116,7 @@ centered composition, high quality, single character`
                       <span className="text-primary-foreground text-xs font-bold">✓</span>
                     </div>
                   )}
+                  <CoverButton label={t("common.select")} onActivate={() => (() => setSelectedRefinedIndex(i))()} />
                 </div>
               ))}
             </div>
@@ -1137,11 +1138,11 @@ centered composition, high quality, single character`
 
       {/* Refine Lightbox */}
       {refineLightboxSrc && (
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90"
           onClick={() => setRefineLightboxSrc(null)}
         >
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="absolute top-4 end-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
             onClick={() => setRefineLightboxSrc(null)}

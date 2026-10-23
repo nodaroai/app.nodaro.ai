@@ -184,8 +184,10 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
               {results.slice(0, 8).map((r, i) => (
                 r.thumbnailUrl ? (
-                  <CachedImage
-                    key={`${r.jobId}-${i}`}
+                  <button key={`${r.jobId}-${i}`} type="button" onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                    }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                     src={r.thumbnailUrl}
                     alt={t("node.resultN", { n: i + 1 })}
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
@@ -193,11 +195,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                     }`}
                     thumbnail
                     thumbnailWidth={128}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                    }}
-                  />
+                  /></button>
                 ) : (
                   <video
                     key={`${r.jobId}-${i}`}
@@ -336,7 +334,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                   className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
                     isDragOver
                       ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
-                      : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+                      : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground hover:text-[#38BDF8]"
                   }`}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -351,7 +349,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                  className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground/70 transition-colors mt-1"
                   onClick={(e) => {
                     e.stopPropagation()
                     setMode("url")
@@ -366,7 +364,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
             {!isUploading && !nodeData.isUploading && mode === "url" && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                  <Link className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <input
                     type="text"
                     value={nodeData.externalUrl || nodeData.url || ""}
@@ -382,7 +380,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 <button
                   type="button"
-                  className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                  className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground/70 transition-colors mt-1"
                   onClick={(e) => {
                     e.stopPropagation()
                     setMode("upload")

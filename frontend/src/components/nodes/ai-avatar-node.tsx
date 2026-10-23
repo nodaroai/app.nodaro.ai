@@ -126,7 +126,10 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               {results.slice(0, 8).map((r, i) => (
                 <div key={`${r.jobId}-${i}`} className="relative shrink-0">
                   {r.thumbnailUrl ? (
-                    <CachedImage
+                    <button type="button" onClick={(e) => {
+                        e.stopPropagation()
+                        updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                      }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                       src={r.thumbnailUrl}
                       alt={t("node.resultN", { n: i + 1 })}
                       className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
@@ -134,11 +137,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
                       }`}
                       thumbnail
                       thumbnailWidth={128}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                      }}
-                    />
+                    /></button>
                   ) : (
                     <video
                       src={r.url}
@@ -202,7 +201,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
                 the strip's Run; earlier versions stay. */}
             {status === "failed" ? (
               <div
-                className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 pl-2 pr-1.5 py-1 bg-red-600/90 backdrop-blur-sm text-white text-[10px] rounded-md shadow-sm"
+                className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 pl-2 pr-1.5 py-1 bg-red-600/90 backdrop-blur-sm text-white text-[11px] rounded-md shadow-sm"
                 role="alert"
                 data-testid="ai-avatar-failed-banner"
               >
@@ -214,7 +213,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
             ) : warningMessage ? (
               /* Non-fatal notice (e.g. audio trimmed to the 600s cap). Amber,
                  distinct from the red failed-state error — the clip is valid. */
-              <div className="absolute inset-x-2 top-2 z-10 flex items-start gap-1.5 px-2 py-1.5 bg-amber-500/90 backdrop-blur-sm text-amber-950 text-[10px] rounded-md shadow-sm">
+              <div className="absolute inset-x-2 top-2 z-10 flex items-start gap-1.5 px-2 py-1.5 bg-amber-500/90 backdrop-blur-sm text-amber-950 text-[11px] rounded-md shadow-sm">
                 <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
                 <span className="leading-snug line-clamp-3">{warningMessage}</span>
               </div>
@@ -299,7 +298,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
 
             {status === "running" && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 <NodeJobProgress progress={nodeData.currentJobProgress} />
               </div>
             )}

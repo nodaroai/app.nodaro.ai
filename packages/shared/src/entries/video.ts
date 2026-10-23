@@ -9,6 +9,8 @@ export {
   VIDEO_CHARACTER_REFS_WIRE_MAX,
   VIDEO_CHARACTER_DESCRIPTION_MAX,
   VIDEO_CHARACTER_NAME_MAX,
+  VIDEO_CHARACTER_EXTRA_IMAGES_MAX,
+  characterReferencesFromWired,
   videoCharacterRefCap,
   videoCharacterRefProviders,
   videoCharacterRefUnits,

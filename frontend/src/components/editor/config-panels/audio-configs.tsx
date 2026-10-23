@@ -158,7 +158,7 @@ function SpeechPriceLine({ price }: { price: SpeechPricing }) {
   const q = price.quote
   if (!q) return null
   return (
-    <p className="text-[10px] text-muted-foreground" data-testid="speech-price-line">
+    <p className="text-[11px] text-muted-foreground" data-testid="speech-price-line">
       {q.exact
         ? t("audiocfg.speechPriceExact", { credits: q.credits, chars: q.chars, units: q.units })
         : t("audiocfg.speechPriceRange", { min: q.range?.min ?? q.credits, max: q.credits })}
@@ -249,7 +249,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
                 refMap={refMap}
               />
               <PromptLengthCounter value={data.directText || ""} max={getMaxTtsChars(shownModel)} modelLabel={shownModel} noun={t("audiocfg.text")} />
-              <p className="text-[10px] text-muted-foreground mt-1">{t("audiocfg.hintTypeTags")}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{t("audiocfg.hintTypeTags")}</p>
             </>
           )}
         </MappableField>
@@ -414,7 +414,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
               onChange={(e) => onUpdate({ promptInfluence: parseFloat(e.target.value) })}
               className="w-full accent-[#ff0073]"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground"><span>{t("audiocfg.moreRandom")}</span><span>{t("audiocfg.moreFaithful")}</span></div>
+            <div className="flex justify-between text-[11px] text-muted-foreground"><span>{t("audiocfg.moreRandom")}</span><span>{t("audiocfg.moreFaithful")}</span></div>
           </div>
         </>
       )}
@@ -445,7 +445,7 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
           <div className="text-[11px] text-muted-foreground mt-0.5">{data.description}</div>
         )}
         {data.voiceId && (
-          <div className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
+          <div className="text-[11px] font-mono text-muted-foreground mt-2 break-all">
             {t("audiocfg.idPrefix")} {data.voiceId}
           </div>
         )}
@@ -554,7 +554,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
             onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
             placeholder={t("audiocfg.phAuto")}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("audiocfg.hintV6Duration")}
             {getEffectiveSunoCustomMode(data) ? t("common.sentenceEnd") : t("audiocfg.hintV6DurationInactive")}
           </p>
@@ -590,7 +590,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
             onChange={(e) => onUpdate({ [s.key]: parseFloat(e.target.value) } as Partial<SunoGenerateData>)}
             className="w-full accent-[#ff0073]"
           />
-          <p className="text-[10px] leading-tight text-muted-foreground/70">{t(SUNO_SLIDER_DESC_KEYS[s.key])}</p>
+          <p className="text-[11px] leading-tight text-muted-foreground">{t(SUNO_SLIDER_DESC_KEYS[s.key])}</p>
         </div>
       ))}
       <div className="flex items-center gap-2">
@@ -602,13 +602,13 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{t("audiocfg.outputIds")}</label>
           {(data.sunoTaskId as string | undefined) && (
             <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] text-muted-foreground">{t("audiocfg.taskId")}</label>
+              <label className="text-[11px] text-muted-foreground">{t("audiocfg.taskId")}</label>
               <div className="text-[11px] font-mono bg-muted/40 px-2 py-1 rounded break-all select-all">{data.sunoTaskId as string}</div>
             </div>
           )}
           {(data.sunoTrackId as string | undefined) && (
             <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] text-muted-foreground">{t("audiocfg.trackId")}</label>
+              <label className="text-[11px] text-muted-foreground">{t("audiocfg.trackId")}</label>
               <div className="text-[11px] font-mono bg-muted/40 px-2 py-1 rounded break-all select-all">{data.sunoTrackId as string}</div>
             </div>
           )}
@@ -920,7 +920,7 @@ function SunoIdFields({ taskId, audioId, inherited, onUpdate }: {
         <SunoInheritedHint what="track" manual={audioId} inherited={inherited?.trackId} sourceLabel={inherited?.sourceLabel} />
       </div>
       {!inherited && (
-        <p className="text-[10px] text-muted-foreground">{t("audiocfg.resolvedFromSunoNode")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("audiocfg.resolvedFromSunoNode")}</p>
       )}
     </>
   )
@@ -948,7 +948,7 @@ export function SunoInheritedHint({ what, manual, inherited, sourceLabel }: {
   if (!inherited) return null
   const from = sourceLabel ? t("audiocfg.fromSource", { source: sourceLabel }) : t("audiocfg.fromConnectedNodeLower")
   return (
-    <p id={sunoInheritedHintId(what)} className="text-[10px] text-muted-foreground" data-testid={`suno-inherited-${what}`}>
+    <p id={sunoInheritedHintId(what)} className="text-[11px] text-muted-foreground" data-testid={`suno-inherited-${what}`}>
       {manual?.trim()
         ? <>{t(what === "task" ? "audiocfg.inheritedPrecedencePreTask" : "audiocfg.inheritedPrecedencePreTrack")} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedPrecedencePost")}</>
         : <>{t("audiocfg.inheritedFromPre", { from })} <span className="font-mono text-foreground/80">{inherited}</span> {t("audiocfg.inheritedFromPost")}</>}
@@ -1015,7 +1015,7 @@ export function SunoSeparateConfig({ data, onUpdate, nodes, edges, nodeId }: Con
             aria-describedby={`${fallbackSwitchId}-hint`}
           />
         </div>
-        <p id={`${fallbackSwitchId}-hint`} className="text-[10px] text-muted-foreground">{t("audiocfg.fallbackToDemucsHint")}</p>
+        <p id={`${fallbackSwitchId}-hint`} className="text-[11px] text-muted-foreground">{t("audiocfg.fallbackToDemucsHint")}</p>
       </div>
       {showSunoIds && <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />}
       {data.vocalUrl && (
@@ -1035,7 +1035,7 @@ export function SunoSeparateConfig({ data, onUpdate, nodes, edges, nodeId }: Con
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.stems")}</label>
           {stems.map(({ field, url }) => (
             <div key={field} className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-muted-foreground">{t(SUNO_SEPARATE_STEM_LABEL_KEYS[field])}</span>
+              <span className="text-[11px] text-muted-foreground">{t(SUNO_SEPARATE_STEM_LABEL_KEYS[field])}</span>
               <WaveformAudioPlayer url={url} label={t(SUNO_SEPARATE_STEM_LABEL_KEYS[field])} variant="compact" className="w-full" />
             </div>
           ))}
@@ -1046,13 +1046,13 @@ export function SunoSeparateConfig({ data, onUpdate, nodes, edges, nodeId }: Con
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.take", { n: take.n })}</label>
           {take.isolated && (
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-muted-foreground">{t("audiocfg.takeIsolated")}</span>
+              <span className="text-[11px] text-muted-foreground">{t("audiocfg.takeIsolated")}</span>
               <WaveformAudioPlayer url={take.isolated} label={t("audiocfg.takeIsolated")} variant="compact" className="w-full" />
             </div>
           )}
           {take.without && (
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-muted-foreground">{t("audiocfg.takeWithout")}</span>
+              <span className="text-[11px] text-muted-foreground">{t("audiocfg.takeWithout")}</span>
               <WaveformAudioPlayer url={take.without} label={t("audiocfg.takeWithout")} variant="compact" className="w-full" />
             </div>
           )}
@@ -1064,7 +1064,7 @@ export function SunoSeparateConfig({ data, onUpdate, nodes, edges, nodeId }: Con
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.stems")}</label>
           {Object.entries(data.stems).map(([name, url]) => (
             <div key={name} className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-muted-foreground capitalize">{name.replace(/_/g, " ")}</span>
+              <span className="text-[11px] text-muted-foreground capitalize">{name.replace(/_/g, " ")}</span>
               <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
             </div>
           ))}
@@ -1093,7 +1093,7 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.wetDryMix")}{t("common.labelColon")}{data.mix ?? t("vidcfg.phAutoLower")}</label>
           <Slider min={0} max={100} step={1} value={[data.mix ?? 30]} onValueChange={(vals) => onUpdate({ mix: vals[0] })} />
-          <p className="text-[10px] text-muted-foreground">{t("audiocfg.hintHigherRoom")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("audiocfg.hintHigherRoom")}</p>
         </div>
       )}
       {(isCustom || data.preset === "echo") && (
@@ -1134,17 +1134,17 @@ export function SilenceDetectConfig({ data, onUpdate }: { readonly data: Silence
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceThreshold")}{t("common.labelColon")}{thresholdDb}</label>
         <Slider min={-60} max={-10} step={1} value={[thresholdDb]} onValueChange={(vals) => onUpdate({ thresholdDb: vals[0] })} />
-        <p className="text-[10px] text-muted-foreground">{t("audiocfg.silenceThresholdHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("audiocfg.silenceThresholdHint")}</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silenceMinSilence")}{t("common.labelColon")}{minSilenceMs}</label>
         <Slider min={100} max={3000} step={50} value={[minSilenceMs]} onValueChange={(vals) => onUpdate({ minSilenceMs: vals[0] })} />
-        <p className="text-[10px] text-muted-foreground">{t("audiocfg.silenceMinSilenceHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("audiocfg.silenceMinSilenceHint")}</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.silencePadding")}{t("common.labelColon")}{padMs}</label>
         <Slider min={0} max={1000} step={10} value={[padMs]} onValueChange={(vals) => onUpdate({ padMs: vals[0] })} />
-        <p className="text-[10px] text-muted-foreground">{t("audiocfg.silencePaddingHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("audiocfg.silencePaddingHint")}</p>
       </div>
     </div>
   )
@@ -1208,7 +1208,7 @@ export function AudioSyncConfig({ data, onUpdate, sources }: ConfigProps<AudioSy
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground">{t("audiocfg.audioSyncReferenceHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("audiocfg.audioSyncReferenceHint")}</p>
       </div>
     </div>
   )
@@ -1621,7 +1621,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
         </Select>
       </MappableField>
       {wordlessWarning && (
-        <div className="flex items-start gap-1.5 text-[10.5px] text-amber-600 dark:text-amber-400 leading-snug" role="status">
+        <div className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 leading-snug" role="status">
           <AlertTriangle className="size-3 shrink-0 mt-0.5" aria-hidden />
           {t("audiocfg.wordlessTranscriptWarning")}
         </div>
@@ -2223,7 +2223,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
           </span>
         </div>
       </div>
-      <p className="text-[10px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
+      <p className="text-[11px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
       <SpeechPriceLine price={price} />
 
       {scriptDialogue.length > 0 && (
@@ -2308,7 +2308,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
             if (Number.isFinite(n)) onUpdate({ seed: n })
           }}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("audiocfg.hintSeedReproducible")}
         </p>
       </div>
@@ -2326,7 +2326,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
             <SelectItem value="off">{t("audiocfg.normalizationOff")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("audiocfg.hintTextNormalization")}
         </p>
       </div>
@@ -2377,25 +2377,25 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {localizeDesc(VOICE_CHANGER_MODELS.find((m) => m.value === (data.model || DEFAULT_VOICE_CHANGER_MODEL))?.desc ?? "")}
         </p>
       </div>
       <div>
         <Label htmlFor="vc-stability">{t("field.stability")} ({data.stability ?? 0.5})</Label>
         <Input id="vc-stability" type="range" min={0} max={1} step={0.05} value={data.stability ?? 0.5} onChange={(e) => onUpdate({ stability: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
+        <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
       </div>
       <div>
         <Label htmlFor="vc-similarity">{t("audiocfg.similarity")} ({data.similarityBoost ?? 0.75})</Label>
         <Input id="vc-similarity" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? 0.75} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
+        <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
       </div>
       <div>
         <Label htmlFor="vc-style">{t("audiocfg.styleExaggeration")} ({data.style ?? 0})</Label>
         <Input id="vc-style" type="range" min={0} max={1} step={0.05} value={data.style ?? 0} onChange={(e) => onUpdate({ style: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("audiocfg.hintSpeakerBoostDesc")}
         </p>
       </div>
@@ -2404,7 +2404,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
           <Label htmlFor="vc-speaker-boost">{t("field.speakerBoost")}</Label>
           <Switch id="vc-speaker-boost" checked={data.useSpeakerBoost ?? true} onCheckedChange={(c: boolean) => onUpdate({ useSpeakerBoost: c })} />
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("audiocfg.hintSimilarityBoostDesc")}
         </p>
       </div>
@@ -2424,7 +2424,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
             if (Number.isFinite(n)) onUpdate({ seed: n })
           }}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("audiocfg.hintSeedReproducible")}
         </p>
       </div>
@@ -2437,7 +2437,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
           />
           <Label htmlFor="vc-remove-bg">{t("audiocfg.removeBackgroundNoise")}</Label>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1 ms-6">
+        <p className="text-[11px] text-muted-foreground mt-1 ms-6">
           {t("audiocfg.hintRevoiceOffOn")}
         </p>
       </div>
@@ -2591,7 +2591,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
         {data.text && data.text.length < 100 && (
-          <p className="text-[10px] text-amber-500 mt-0.5">{t("audiocfg.minChars100", { n: data.text.length })}</p>
+          <p className="text-[11px] text-amber-500 mt-0.5">{t("audiocfg.minChars100", { n: data.text.length })}</p>
         )}
       </MappableField>
       <div>
@@ -2619,7 +2619,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(e) => onUpdate({ loudness: parseFloat(e.target.value) })}
           className="w-full"
         />
-        <div className="flex justify-between text-[10px] text-muted-foreground">
+        <div className="flex justify-between text-[11px] text-muted-foreground">
           <span>{t("audiocfg.quiet")}</span>
           <span>{t("audiocfg.loud")}</span>
         </div>
@@ -2635,7 +2635,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(e) => onUpdate({ guidanceScale: parseInt(e.target.value) })}
           className="w-full"
         />
-        <div className="flex justify-between text-[10px] text-muted-foreground">
+        <div className="flex justify-between text-[11px] text-muted-foreground">
           <span>{t("audiocfg.creative")}</span>
           <span>{t("audiocfg.strict")}</span>
         </div>
@@ -2668,7 +2668,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
       </div>
       {data.generatedVoiceId && (
         <div className="rounded-md bg-muted/50 p-2">
-          <Label className="text-[10px] text-muted-foreground">{t("audiocfg.generatedVoiceId")}</Label>
+          <Label className="text-[11px] text-muted-foreground">{t("audiocfg.generatedVoiceId")}</Label>
           <p className="text-xs font-mono break-all select-all">{data.generatedVoiceId}</p>
         </div>
       )}
@@ -2816,7 +2816,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                   aria-label={t("audiocfg.keepOriginalForSpeaker", { n: i + 1 })}
                   title={t("audiocfg.keepOriginalVoiceTitle")}
                   onClick={() => keepAt(i)}
-                  className="text-[10px] px-1 text-muted-foreground hover:text-foreground"
+                  className="text-[11px] px-1 text-muted-foreground hover:text-foreground"
                 >
                   {t("audiocfg.keepOriginalButton")}
                 </button>
@@ -2850,7 +2850,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                     <div className="mt-2">
                       <Label htmlFor={`volume-${i}`}>{t("field.volume")} ({v.volume ?? 100}%)</Label>
                       <Input id={`volume-${i}`} type="range" min={0} max={200} step={5} value={v.volume ?? 100} onChange={(e) => updateVoice(i, { volume: parseFloat(e.target.value) })} className="h-2" />
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0%</span><span>200%</span></div>
+                      <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>0%</span><span>200%</span></div>
                     </div>
                   )}
                 </div>
@@ -2878,7 +2878,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                     }}
                     className="h-8"
                   />
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("audiocfg.hintBlankRandomSeed")}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{t("audiocfg.hintBlankRandomSeed")}</p>
                 </div>
               </div>
             </details>
@@ -2938,10 +2938,10 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
             <div className="mt-2">
               <Label htmlFor="music-volume">{t("audiocfg.musicLevel")} ({data.musicVolume ?? 100}%)</Label>
               <Input id="music-volume" type="range" min={0} max={200} step={5} value={data.musicVolume ?? 100} onChange={(e) => onUpdate({ musicVolume: parseFloat(e.target.value) })} className="h-2" />
-              <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0%</span><span>200%</span></div>
+              <div className="flex justify-between text-[11px] text-muted-foreground mt-0.5"><span>0%</span><span>200%</span></div>
             </div>
           )}
-          <p className="text-[10px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             {t("audiocfg.hintPreservedMusicLevel")}
           </p>
         </div>

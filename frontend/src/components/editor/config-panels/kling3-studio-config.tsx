@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { ImageIcon, FileText, Plus, Loader2, Trash2, ChevronUp, ChevronDown, Users, X } from "lucide-react"
@@ -246,26 +247,26 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
           <div className="flex flex-col gap-2">
             {connectedImages.map((img) => (
               <div key={img.id} className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-500 dark:text-[#64748B] font-medium w-16 shrink-0 leading-tight truncate" title={img.label}>
+                <span className="text-[11px] text-gray-500 dark:text-[#64748B] font-medium w-16 shrink-0 leading-tight truncate" title={img.label}>
                   {img.label}
                 </span>
                 <div
                   className="flex-1 h-16 rounded-lg border border-border overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-muted/30"
-                  onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
+                  {...pressable(() => img.imageUrl && setLightboxImage(img.imageUrl))}
                   title={t("cfgext.kling3ClickToView", { label: img.label })}
                 >
                   {img.imageUrl ? (
                     <img src={optimizedImageUrl(img.imageUrl)} alt={img.label} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
+                      <ImageIcon className="w-6 h-6 text-muted-foreground" />
                     </div>
                   )}
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">{t("cfgext.kling3ClickFullSize")}</p>
+          <p className="text-[11px] text-muted-foreground mt-2">{t("cfgext.kling3ClickFullSize")}</p>
         </div>
       )}
 
@@ -279,7 +280,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             <div key={`${prompt.id}-${idx}`} className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 mb-1">
                 <FileText className="w-3 h-3 text-[#ff0073]" />
-                <span className="text-[10px] text-[#ff0073] font-medium">{prompt.label}</span>
+                <span className="text-[11px] text-[#ff0073] font-medium">{prompt.label}</span>
               </div>
               <Textarea
                 value={prompt.text}
@@ -321,7 +322,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               className="text-xs bg-muted/30 border-border resize-none"
             />
           )}
-          <p className="text-[10px] text-muted-foreground mt-1.5">
+          <p className="text-[11px] text-muted-foreground mt-1.5">
             {t("cfgext.kling3TipTextPromptNode", { node: localizeNode(nodeTypeDefaultLabel("text-prompt")) })}
           </p>
         </div>
@@ -357,7 +358,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             <div className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] text-muted-foreground mb-1 block">{t("field.mode")}</Label>
+                  <Label className="text-[11px] text-muted-foreground mb-1 block">{t("field.mode")}</Label>
                   <Select
                     value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
                     onValueChange={(v) => onUpdate({ kling3Mode: v })}
@@ -371,7 +372,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-[10px] text-muted-foreground mb-1 block">{t("field.aspectRatio")}</Label>
+                  <Label className="text-[11px] text-muted-foreground mb-1 block">{t("field.aspectRatio")}</Label>
                   <AspectRatioSelector
                     options={VIDEO_RATIOS}
                     value={data.aspectRatio ?? "16:9"}
@@ -391,14 +392,14 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 />
                 <label htmlFor="kling3Sound" className={`text-xs ${data.multiShot ? "text-muted-foreground" : ""}`}>{t("cfgext.kling3SoundEffects")}</label>
                 {data.multiShot ? (
-                  <span className="text-[10px] text-muted-foreground ms-auto italic">{t("cfgext.kling3RequiredForMultiShot")}</span>
+                  <span className="text-[11px] text-muted-foreground ms-auto italic">{t("cfgext.kling3RequiredForMultiShot")}</span>
                 ) : (
-                  <span className="text-[10px] text-muted-foreground ms-auto">{t("cfgext.kling3LipSyncSfx")}</span>
+                  <span className="text-[11px] text-muted-foreground ms-auto">{t("cfgext.kling3LipSyncSfx")}</span>
                 )}
               </div>
 
               <div>
-                <Label className="text-[10px] text-muted-foreground mb-1 block">{t("field.duration")}</Label>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">{t("field.duration")}</Label>
                 {data.multiShot ? (
                   <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-border bg-muted/30 text-xs text-muted-foreground">
                     {t("cfgext.kling3DurationFromShots", { n: totalDuration })}
@@ -421,12 +422,12 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
           </div>
 
           {supportsEndFrame && !data.multiShot && (
-            <p className="text-[10px] text-muted-foreground px-1">
+            <p className="text-[11px] text-muted-foreground px-1">
               {t("cfgext.kling3EndFrameHint", { handle: localizeHandle("End Frame") })}
             </p>
           )}
 
-          <p className="text-[10px] text-muted-foreground/70 px-1 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground px-1 leading-relaxed">
             {t("cfgext.kling3Blurb")}
           </p>
         </div>
@@ -455,12 +456,12 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 <label htmlFor="multiShotToggle" className="text-xs font-medium">{t("cfgext.kling3MultiShotMode")}</label>
               </div>
               {data.multiShot && (
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${totalDuration > 15 ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"}`}>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${totalDuration > 15 ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"}`}>
                   {t("proccfg.s2", { n: totalDuration })} / {t("proccfg.s2", { n: 15 })}
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">
+            <p className="text-[11px] text-muted-foreground mt-1.5">
               {t("cfgext.kling3SplitHint")}
             </p>
           </div>
@@ -468,7 +469,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
           {data.multiShot ? (
             <div className="flex flex-col gap-3">
               {hasEndFrame && (
-                <p className="text-[10px] text-amber-500 px-1">{t("cfgext.kling3EndFrameUnsupported")}</p>
+                <p className="text-[11px] text-amber-500 px-1">{t("cfgext.kling3EndFrameUnsupported")}</p>
               )}
 
               {shots.map((shot, i) => (
@@ -525,18 +526,18 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   />
                   {elements.some((el) => el.name.trim()) && (
                     <div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-[9px] text-muted-foreground">{t("cfgext.kling3ReferenceColon")}</span>
-                      {copiedName && <span className="text-[9px] text-green-400 animate-pulse">{t("cfgext.kling3Copied")}</span>}
+                      <span className="text-[11px] text-muted-foreground">{t("cfgext.kling3ReferenceColon")}</span>
+                      {copiedName && <span className="text-[11px] text-green-400 animate-pulse">{t("cfgext.kling3Copied")}</span>}
                       {elements.filter((el) => el.name.trim()).map((el) => (
                         <span
                           key={el.name}
-                          className="text-[9px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
+                          className="text-[11px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
                           title={t("cfgext.kling3ClickCopyName")}
-                          onClick={() => {
+                          {...pressable(() => {
                             navigator.clipboard.writeText(`@${el.name}`)
                             setCopiedName(el.name)
                             setTimeout(() => setCopiedName(null), 1500)
-                          }}
+                          })}
                         >
                           @{el.name}
                         </span>
@@ -549,10 +550,10 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-purple-500/5 p-3 space-y-1.5">
                 <span className="text-[11px] font-semibold text-foreground">{t("cfgext.kling3DirectorTips")}</span>
                 <div className="grid grid-cols-1 gap-1">
-                  <span className="text-[10px] text-muted-foreground">{t("cfgext.kling3TipDialogue")}</span>
-                  <span className="text-[10px] text-muted-foreground">{t("cfgext.kling3TipVoiceTone")}</span>
-                  <span className="text-[10px] text-muted-foreground">{t("cfgext.kling3TipCamera")}</span>
-                  <span className="text-[10px] text-muted-foreground">{t("cfgext.kling3TipLanguages")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("cfgext.kling3TipDialogue")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("cfgext.kling3TipVoiceTone")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("cfgext.kling3TipCamera")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("cfgext.kling3TipLanguages")}</span>
                 </div>
               </div>
 
@@ -566,7 +567,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               </button>
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground/70 px-1">
+            <p className="text-[11px] text-muted-foreground px-1">
               {t("cfgext.kling3SingleShotHint")}
             </p>
           )}
@@ -578,9 +579,9 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
         <div className="flex flex-col gap-4">
           {elements.length === 0 && (
             <div className="flex flex-col items-center justify-center py-8 gap-2.5">
-              <Users className="w-10 h-10 text-muted-foreground/30" />
+              <Users className="w-10 h-10 text-muted-foreground" />
               <span className="text-xs font-medium text-foreground">{t("cfgext.kling3NoElements")}</span>
-              <p className="text-[10px] text-muted-foreground max-w-[220px] text-center">
+              <p className="text-[11px] text-muted-foreground max-w-[220px] text-center">
                 {t("cfgext.kling3ElementsHint")}
               </p>
             </div>
@@ -601,7 +602,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 <button
                   type="button"
                   onClick={() => handleUpdateElement(i, "type", el.type === "image" ? "video" : "image")}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors shrink-0 ${
                     el.type === "image"
                       ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                       : "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
@@ -621,7 +622,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               </div>
 
               <div>
-                <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 block">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 block">
                   {t("settings.descriptionTab")} <span className="text-red-500">*</span>
                 </span>
                 <input
@@ -633,16 +634,16 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   className={`w-full h-8 px-2.5 text-xs rounded-lg border-2 bg-background outline-none focus:border-[#ff0073] transition-colors ${el.description === "" ? "border-red-500/60" : "border-border"}`}
                 />
                 {el.description === "" ? (
-                  <span className="text-[9px] mt-0.5 block text-red-500">{t("cfgext.kling3DescriptionRequired")}</span>
+                  <span className="text-[11px] mt-0.5 block text-red-500">{t("cfgext.kling3DescriptionRequired")}</span>
                 ) : (
-                  <span className={`text-[9px] mt-0.5 block text-end ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
+                  <span className={`text-[11px] mt-0.5 block text-end ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
                     {el.description.length}/100
                   </span>
                 )}
               </div>
 
               <div>
-                <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 block">{t("cfgext.kling3ReferencesRecommended")}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 block">{t("cfgext.kling3ReferencesRecommended")}</span>
                 {el.urls.length > 0 ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {el.urls.map((url, ui) => (
@@ -660,9 +661,9 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-14 rounded-lg border-2 border-dashed border-border bg-muted/20 text-muted-foreground/50">
+                  <div className="flex flex-col items-center justify-center h-14 rounded-lg border-2 border-dashed border-border bg-muted/20 text-muted-foreground">
                     <ImageIcon className="w-5 h-5 mb-0.5" />
-                    <span className="text-[10px]">{t("cfgext.kling3DropImages")}</span>
+                    <span className="text-[11px]">{t("cfgext.kling3DropImages")}</span>
                   </div>
                 )}
               </div>
@@ -670,14 +671,14 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               <div className="flex items-center gap-1.5 relative">
                 <button
                   type="button"
-                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[10px] text-muted-foreground hover:text-[#ff0073] transition-colors"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors"
                   onClick={() => alert(tx("dash.comingSoon"))}
                 >
                   {t("cfgext.kling3AddLibrary")}
                 </button>
                 <button
                   type="button"
-                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[10px] text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40"
                   disabled={uploadingIndex === i}
                   onClick={() => fileInputRefs.current[i]?.click()}
                 >
@@ -700,7 +701,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 />
                 <button
                   type="button"
-                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[10px] text-muted-foreground hover:text-[#ff0073] transition-colors"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors"
                   onClick={() => setWorkflowDropdownIndex(workflowDropdownIndex === i ? null : i)}
                 >
                   {t("cfgext.kling3AddWorkflow")}
@@ -712,7 +713,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                     className="absolute top-full start-0 mt-1 w-56 max-h-48 overflow-y-auto z-50 rounded-xl border border-border bg-card shadow-lg"
                   >
                     {workflowImageNodes.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground p-3 text-center">{t("cfgext.kling3NoImageNodes")}</p>
+                      <p className="text-[11px] text-muted-foreground p-3 text-center">{t("cfgext.kling3NoImageNodes")}</p>
                     ) : (
                       workflowImageNodes.map((node) => (
                         <button
@@ -726,14 +727,14 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                             <img src={optimizedImageUrl(node.thumbUrl, { width: 64 })} alt={node.label} className="w-7 h-7 rounded-lg object-cover border border-border shrink-0" />
                           ) : (
                             <div className="w-7 h-7 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
-                              <ImageIcon className="w-3 h-3 text-muted-foreground/40" />
+                              <ImageIcon className="w-3 h-3 text-muted-foreground" />
                             </div>
                           )}
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-medium truncate">{node.label}</span>
-                            <span className="text-[9px] text-muted-foreground">{node.type}</span>
+                            <span className="text-[11px] font-medium truncate">{node.label}</span>
+                            <span className="text-[11px] text-muted-foreground">{node.type}</span>
                           </div>
-                          {!node.thumbUrl && <span className="text-[9px] text-muted-foreground/60 ms-auto">{t("cfgext.kling3NoOutput")}</span>}
+                          {!node.thumbUrl && <span className="text-[11px] text-muted-foreground ms-auto">{t("cfgext.kling3NoOutput")}</span>}
                         </button>
                       ))
                     )}
@@ -742,7 +743,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               </div>
 
               {el.type === "image" && (
-                <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                   {t("cfgext.kling3TipVoiceDescription")}
                 </p>
               )}
@@ -759,7 +760,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
           </button>
 
           <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-transparent p-3">
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("cfgext.kling3ExampleLabel")}{t("common.fragmentGap")}<span className="font-mono text-foreground">{t("cfgext.kling3ExamplePrompt")}</span>
             </p>
           </div>

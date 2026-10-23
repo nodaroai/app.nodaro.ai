@@ -1,4 +1,5 @@
 import { VIDEO_REF_LIMITS_BY_PROVIDER } from "./model-constants.js"
+import type { ConnectedReference } from "./types.js"
 import type { GeminiOmniVoicePresetId } from "./gemini-omni-voices.js"
 
 /**
@@ -30,6 +31,13 @@ export interface VideoCharacterReference {
   imageUrl: string
   /** Optional full-body image; costs a second input unit. */
   bodyImageUrl?: string
+  /**
+   * More views of the same person, after the portrait and body image. Read by
+   * models whose subject takes several images (Kling 4.0: 2-4 per subject, the
+   * portrait first); ignored elsewhere. At most
+   * {@link VIDEO_CHARACTER_EXTRA_IMAGES_MAX}.
+   */
+  extraImageUrls?: string[]
   /** Who this is: appearance, identity, style, clothing. Required by the upstream. */
   description: string
   /** Optional display name. */
@@ -47,6 +55,9 @@ export const VIDEO_CHARACTER_REFS_WIRE_MAX = Math.max(
   0,
   ...Object.values(VIDEO_REF_LIMITS_BY_PROVIDER).map((l) => l?.characters ?? 0),
 )
+
+/** Most `extraImageUrls` a character reference may carry (Kling 4.0's subject takes 4 images: the portrait + 3). */
+export const VIDEO_CHARACTER_EXTRA_IMAGES_MAX = 3
 
 /** Longest `description` / `name` a client may send (route Zod reads these). */
 export const VIDEO_CHARACTER_DESCRIPTION_MAX = 2000
@@ -175,6 +186,8 @@ export function videoCharacterRefProblem(args: {
   hasStartFrame: boolean
   /** True when the request carries an end frame (`endFrameUrl`). */
   hasEndFrame?: boolean
+  /** Reference audio clips that will ship (counted by a `materials` budget). */
+  audioCount?: number
 }): VideoCharacterRefProblem | null {
   const { provider, characterReferences } = args
   if (!characterReferences || characterReferences.length === 0) return null
@@ -194,6 +207,24 @@ export function videoCharacterRefProblem(args: {
       code: "character_references_over_limit",
       message: `${provider} accepts at most ${cap} character references; got ${characterReferences.length}.`,
     }
+  }
+  // A provider that counts every material against ONE budget (Kling 4.0: 15
+  // images + videos + subjects + voices) takes characters beside a start frame
+  // (the frame joins the reference images) — the Gemini Omni unit rules below
+  // do not apply to it.
+  const materials = VIDEO_REF_LIMITS_BY_PROVIDER[provider as string]?.materials
+  if (materials !== undefined) {
+    const used =
+      args.imageCount + (args.hasStartFrame ? 1 : 0) + args.videoCount + characterReferences.length + (args.audioCount ?? 0)
+    if (used > materials) {
+      return {
+        code: "character_references_quota",
+        message:
+          `${provider} takes at most ${materials} materials in all — reference images (a start frame counts as one), ` +
+          `reference videos, characters and voices. This request uses ${used}. Remove some.`,
+      }
+    }
+    return videoCharacterVoiceProblem({ provider, characterReferences })
   }
   // A NODARO limit, not an upstream exclusivity: Gemini Omni's start frame is
   // sent as the first entry of `image_urls` (never as `first_frame_url`), so
@@ -230,4 +261,40 @@ export function videoCharacterRefProblem(args: {
     }
   }
   return videoCharacterVoiceProblem({ provider, characterReferences })
+}
+
+/**
+ * One provider-neutral character reference per wired Character node, for a
+ * model that takes wired characters as NAMED SUBJECTS (catalog feature
+ * `character-subjects`, Kling 4.0). Input: the wired-character entries both
+ * engines already expand (`expandWiredCharacterRefs` server-side, the editor's
+ * twin) — the canonical portrait and every variant, grouped here by character.
+ * The portrait leads; up to {@link VIDEO_CHARACTER_EXTRA_IMAGES_MAX} more views
+ * follow in expansion order. The name is the character's own; the description
+ * its canonical description, else its description. A character with a single
+ * image still yields a reference — the provider decides (Kling keeps it a
+ * reference image).
+ */
+export function characterReferencesFromWired(refs: readonly ConnectedReference[]): VideoCharacterReference[] {
+  const bySlug = new Map<string, { name: string; description?: string; urls: string[] }>()
+  for (const r of refs) {
+    if (r.source !== "wired-character" || !r.characterSlug || !r.url) continue
+    let entry = bySlug.get(r.characterSlug)
+    if (!entry) {
+      entry = { name: r.defaultName.split(" / ")[0]!.trim() || r.characterSlug, urls: [] }
+      bySlug.set(r.characterSlug, entry)
+    }
+    const description = (r.characterCanonicalDescription ?? r.description)?.trim()
+    if (!entry.description && description) entry.description = description
+    if (entry.urls.includes(r.url)) continue
+    // The canonical portrait leads whatever order the variants arrived in.
+    if (!r.variantSlug) entry.urls.unshift(r.url)
+    else entry.urls.push(r.url)
+  }
+  return [...bySlug.values()].map((c) => ({
+    imageUrl: c.urls[0]!,
+    ...(c.urls.length > 1 ? { extraImageUrls: c.urls.slice(1, 1 + VIDEO_CHARACTER_EXTRA_IMAGES_MAX) } : {}),
+    description: (c.description ?? c.name).slice(0, VIDEO_CHARACTER_DESCRIPTION_MAX),
+    name: c.name.slice(0, VIDEO_CHARACTER_NAME_MAX),
+  }))
 }

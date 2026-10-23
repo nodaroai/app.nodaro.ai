@@ -389,7 +389,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
 
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-sm" onClick={onClose} />
+        <div aria-hidden="true" className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-sm" onClick={onClose} />
         <div role="dialog" aria-modal="true" className="relative w-full max-w-6xl max-h-[90vh] bg-white dark:bg-[#121212] rounded-xl border border-gray-200 dark:border-[#2D2D2D] shadow-2xl overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#1E1E1E]">
@@ -491,7 +491,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                   <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("exec.input")}</h3>
-                      <button
+                      <button aria-label={t("common.copy")}
                         type="button"
                         onClick={() => handleCopyJson(JSON.stringify(state.inputs, null, 2))}
                         className="p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
@@ -600,7 +600,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                     </div>
                   ) : (
                     <div className="relative">
-                      <button
+                      <button aria-label={t("common.copy")}
                         type="button"
                         onClick={() => handleCopyJson(JSON.stringify(state, null, 2))}
                         className="absolute top-2 end-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
@@ -672,7 +672,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div
+      <div aria-hidden="true"
         className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       />
@@ -793,7 +793,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                   </div>
                 ) : (
                   <div className="relative">
-                    <button
+                    <button aria-label={t("common.copy")}
                       type="button"
                       onClick={() => handleCopyJson(JSON.stringify(job.input_data, null, 2))}
                       className="absolute top-2 end-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
@@ -866,12 +866,11 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                             <WaveformAudioPlayer url={outputUrl} variant="compact" className="w-full" />
                           </div>
                         ) : (
-                          <CachedImage
+                          <button type="button" onClick={() => setLightboxOpen(true)} aria-label={t("common.preview")} className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                             src={outputUrl}
                             alt={t("node.output")}
                             className="w-full max-h-[400px] object-contain cursor-pointer"
-                            onClick={() => setLightboxOpen(true)}
-                          />
+                          /></button>
                         )}
                       </div>
                     ) : job.status === "processing" || job.status === "pending" || job.status === "queued" ? (
@@ -899,7 +898,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                   </div>
                 ) : (
                   <div className="relative">
-                    <button
+                    <button aria-label={t("common.copy")}
                       type="button"
                       onClick={() => handleCopyJson(JSON.stringify(job, null, 2))}
                       className="absolute top-2 end-2 p-1.5 rounded bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] transition-colors"
@@ -979,7 +978,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
 
       {/* Fullscreen lightbox */}
       {lightboxOpen && outputUrl && (
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-sm cursor-pointer"
           onClick={() => setLightboxOpen(false)}
         >

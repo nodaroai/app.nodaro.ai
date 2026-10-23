@@ -23,7 +23,7 @@ export function EmotionVideosPage({ state }: StudioPageProps<CharacterStudioStat
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
         <p className="text-sm text-muted-foreground">{t("studio.noEmotionVideosYet")}</p>
-        <p className="mt-1 text-xs text-muted-foreground/70">
+        <p className="mt-1 text-xs text-muted-foreground">
           {t("studio.emotionVideosHint")}
         </p>
       </div>

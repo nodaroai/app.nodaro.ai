@@ -115,13 +115,13 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
               className="w-full h-full object-cover object-top"
             />
           ) : (
-            <div className="w-full h-full grid place-items-center text-muted-foreground/40">
+            <div className="w-full h-full grid place-items-center text-muted-foreground">
               {isImage ? <ImageIcon className="size-8" /> : <User className="size-8" />}
             </div>
           )}
           <span
             className={cn(
-              "absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[8.5px] tracking-[0.08em] uppercase whitespace-nowrap",
+              "absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[11px] tracking-[0.08em] uppercase whitespace-nowrap",
               isImage ? "bg-sky-700/90 text-sky-50" : "bg-violet-600/90 text-violet-50",
             )}
           >
@@ -132,13 +132,13 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
 
         <div className="flex flex-col gap-0.5 px-3 pt-2.5 pb-2 min-w-0">
           <span className="text-[12px] font-medium text-foreground truncate" title={title}>{title}</span>
-          {subtitle && <span className="text-[10.5px] text-muted-foreground truncate">{subtitle}</span>}
+          {subtitle && <span className="text-[11px] text-muted-foreground truncate">{subtitle}</span>}
         </div>
 
         <div className="px-3 pb-3">
           {isImage ? (
             imageWired ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <Link2 className="size-2.5" /> {t("node.wiredInputTakesPriority")}
               </span>
             ) : (
@@ -172,7 +172,7 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
               </div>
               {scriptWired ? (
                 <div className={cn(FIELD_SURFACE, "flex-1 min-h-0 overflow-y-auto nowheel px-3 py-2 text-[12px] leading-relaxed text-foreground/80 whitespace-pre-wrap")}>
-                  {wiring.upstreamScript ?? <span className="text-muted-foreground/60">{t("node.theScriptArrivesFromThe")}</span>}
+                  {wiring.upstreamScript ?? <span className="text-muted-foreground">{t("node.theScriptArrivesFromThe")}</span>}
                 </div>
               ) : (
                 <textarea
@@ -200,7 +200,7 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
               </span>
               <span className="flex flex-col min-w-0">
                 <span className="text-[12px] text-foreground truncate leading-tight">{t("node.wiredAudio")}</span>
-                <span className="text-[10.5px] text-muted-foreground truncate leading-tight">
+                <span className="text-[11px] text-muted-foreground truncate leading-tight">
                   {wiring.audio ? t("node.fromSource", { source: wiring.audioSourceLabel ?? t("node.theAudioInput") }) : t("node.nothingConnectedYet")}
                 </span>
               </span>
@@ -210,7 +210,7 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
                 <span className={KICKER}>{t("node.audioWired")}</span>
                 <span className={META_MONO}>{t("node.maxTenMin")}</span>
               </div>
-              <div className={cn(FIELD_SURFACE, "flex-1 min-h-0 px-3 py-2 text-[12px] leading-relaxed text-foreground/70")}>
+              <div className={cn(FIELD_SURFACE, "flex-1 min-h-0 px-3 py-2 text-[12px] leading-relaxed text-foreground/80")}>
                 {wiring.audio
                   ? t("node.avatarLipSyncsToAudio")
                   : t("node.connectAudioNodeHint")}

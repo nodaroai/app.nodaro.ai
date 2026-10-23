@@ -64,7 +64,7 @@ export function ComponentPreviewModal({
   const creatorLabel = card.creatorDisplayName || t("preview.community")
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4"
       onClick={onClose}
     >
@@ -94,7 +94,7 @@ export function ComponentPreviewModal({
                 <span>·</span>
                 <CreditCost credits={card.estimatedCredits} approx={card.estimatedCreditsIsEstimate === true} perMinute={card.perMinuteCredits} perItem={card.perItemCredits} upTo={{ credits: card.maxEstimatedCredits, perMinute: card.maxPerMinuteCredits, perItem: card.maxPerItemCredits }} icon="sm" className="gap-0.5" />
                 <span>·</span>
-                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
+                <span className={cn("text-[11px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
                   {t(categoryLabelKey)}
                 </span>
               </div>
@@ -129,7 +129,7 @@ export function ComponentPreviewModal({
               {card.description}
             </p>
           ) : (
-            <p className="text-sm italic text-muted-foreground/70 mt-3">
+            <p className="text-sm italic text-muted-foreground mt-3">
               {t("preview.noDescription")}
             </p>
           )}
@@ -160,7 +160,7 @@ export function ComponentPreviewModal({
                         {h.name}
                       </span>
                       {h.required && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide shrink-0">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide shrink-0">
                           {t("preview.required")}
                         </span>
                       )}
@@ -232,7 +232,7 @@ export function ComponentPreviewModal({
                   />
                 )
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/50">
+                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
                   <Sparkles className="w-8 h-8 mb-2" />
                   <p className="text-xs">{t("preview.noPreview")}</p>
                 </div>

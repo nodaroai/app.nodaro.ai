@@ -1,6 +1,6 @@
 import {
   applyDefaultVideoSelection,
-  isSeedance2Provider,
+  billsReferenceVideoSeconds,
   isSeedanceVideoEditProvider,
 } from "@nodaro/shared/models"
 import {
@@ -101,7 +101,7 @@ function refVideoEstimateRequest(
     resolution = data.v2vResolution as string | undefined
     duration = VIDEO_DURATION_AUTO
   }
-  if (!isSeedance2Provider(provider)) return undefined
+  if (!billsReferenceVideoSeconds(provider)) return undefined
   const byId = new Map(nodes.map((n) => [n.id, n]))
   return { provider, resolution, duration, draft: data.draft === true, clipSources: clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))) }
 }

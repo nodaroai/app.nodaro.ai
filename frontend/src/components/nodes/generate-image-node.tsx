@@ -200,7 +200,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                   showThumbnails
                     // Active: brand pink + always visible so the user
                     // sees it's the toggle and can press to turn off.
-                    ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                    ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
                     // Idle: hover-revealed dark chip, default state.
                     : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
                 }`}
@@ -308,7 +308,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{isSafetyBlock ? t("node.prohibited") : t("node.failed")}</span>
             </div>
             {(isSafetyBlock || nodeData.errorMessage) && (
-              <p className={`text-[10px] text-center line-clamp-2 ${isSafetyBlock ? "text-amber-400" : "text-red-400"}`} title={nodeData.errorMessage}>
+              <p className={`text-[11px] text-center line-clamp-2 ${isSafetyBlock ? "text-amber-400" : "text-red-400"}`} title={nodeData.errorMessage}>
                 {isSafetyBlock
                   ? (hint?.kind === "safety-block" && hint.retried
                       ? t("node.safetyBlockRetried")
@@ -332,7 +332,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                   })
                   runSingleNode?.(id)
                 }}
-                className="mt-0.5 px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/30 transition-colors"
+                className="mt-0.5 px-2 py-0.5 text-[11px] font-medium rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/30 transition-colors"
               >
                 {t("node.tryOnProvider", { label: suggestedProviderLabel })}
               </button>
@@ -342,7 +342,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle/empty state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground/40 h-[160px]`}>
+          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground h-[160px]`}>
             <ImageIcon className="w-10 h-10" />
           </div>
         )}

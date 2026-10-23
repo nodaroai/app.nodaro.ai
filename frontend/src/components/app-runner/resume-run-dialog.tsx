@@ -102,7 +102,7 @@ export function ResumeRunDialog({
             autoFocus
             disabled={!text.canRetry}
             onClick={onConfirm}
-            className="bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
+            className="bg-cta text-white hover:bg-cta-hover"
             data-testid="resume-run-confirm"
           >
             {t("common.retry")}

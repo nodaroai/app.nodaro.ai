@@ -120,7 +120,7 @@ function HintModeButton({
         onClick()
       }}
       className={cn(
-        "flex items-center px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+        "flex items-center px-1.5 py-0.5 text-[11px] font-medium transition-colors",
         active
           ? "bg-[#ff0073]/15 text-[#ff0073]"
           : "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",

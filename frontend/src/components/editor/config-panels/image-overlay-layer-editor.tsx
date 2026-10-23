@@ -73,14 +73,14 @@ export function OverlayLayerEditor({
       <div className="flex items-center justify-between px-0.5">
         <span className="text-xs font-medium">
           {t("proccfg.overlay.layerN", { n: index + 1 })}
-          <span className="ms-1.5 text-[10px] font-normal text-muted-foreground">{t(`overlayKinds.kind.${kind}` as never)}</span>
+          <span className="ms-1.5 text-[11px] font-normal text-muted-foreground">{t(`overlayKinds.kind.${kind}` as never)}</span>
         </span>
         {kind === "image" ? (
-          <span className={`text-[10px] ${connected ? "text-emerald-500" : "text-muted-foreground"}`}>
+          <span className={`text-[11px] ${connected ? "text-emerald-500" : "text-muted-foreground"}`}>
             {connected ? t("proccfg.overlay.connected", { handle: handleId }) : t("proccfg.overlay.notConnected", { handle: handleId })}
           </span>
         ) : (
-          <button type="button" className="text-[10px] text-muted-foreground hover:text-red-500" onClick={() => onChange({ kind: undefined, text: undefined, qr: undefined, shape: undefined })}>
+          <button type="button" className="text-[11px] text-muted-foreground hover:text-red-500" onClick={() => onChange({ kind: undefined, text: undefined, qr: undefined, shape: undefined })}>
             {t("overlayKinds.remove")}
           </button>
         )}
@@ -92,7 +92,7 @@ export function OverlayLayerEditor({
         {kind === "shape" && <ShapeStyleEditor index={index} style={layer.shape} onChange={(shape) => onChange({ shape })} />}
         {kind === "image" && (
           <>
-            {!connected && <p className="text-[10px] text-muted-foreground">{t("overlayEditor.wireHint", { handle: handleId })}</p>}
+            {!connected && <p className="text-[11px] text-muted-foreground">{t("overlayEditor.wireHint", { handle: handleId })}</p>}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">{t("proccfg.overlay.height")}</Label>
@@ -155,7 +155,7 @@ export function OverlayLayerEditor({
               ))}
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-5 flex-1">{t("proccfg.overlay.anchorHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-5 flex-1">{t("proccfg.overlay.anchorHint")}</p>
         </div>
         {sizeByWidth && <PctSlider id={`ov-${index}-w`} label={t("proccfg.overlay.width")} value={layer.width} min={1} max={100} hint={`%${px(layer.width, base?.w)}`} onChange={(v) => onChange({ width: v })} />}
         {kind === "shape" && <PctSlider id={`ov-${index}-h`} label={t("proccfg.overlay.height")} value={layer.height ?? 8} min={1} max={100} hint={`%${px(layer.height ?? 8, base?.h)}`} onChange={(v) => onChange({ height: v })} />}
@@ -170,7 +170,7 @@ export function OverlayLayerEditor({
             value={layer.zIndex ?? ""}
             onChange={(e) => onChange({ zIndex: e.target.value === "" ? undefined : Math.min(100, Math.max(0, Math.round(Number(e.target.value)))) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.overlay.zIndexHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.overlay.zIndexHint")}</p>
         </div>
       </Section>
 

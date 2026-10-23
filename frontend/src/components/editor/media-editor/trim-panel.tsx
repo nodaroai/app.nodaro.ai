@@ -1,3 +1,4 @@
+import { seekSlider } from "@/lib/seek-slider"
 import { useCallback, useRef, useState, useEffect } from "react"
 import { Play, Pause, Repeat } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -235,7 +236,7 @@ export function TrimPanel({
     <div className="flex flex-col gap-2">
       {/* Play + Loop — own row on mobile, inline on desktop */}
       <div className="flex items-center justify-center gap-2 sm:hidden">
-        <button type="button" onClick={togglePlay} className="flex items-center justify-center w-8 h-8 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors">
+        <button type="button" onClick={togglePlay} aria-label={t(isPlaying ? "common.pause" : "common.play")} className="flex items-center justify-center w-8 h-8 rounded-full bg-cta hover:bg-cta-hover text-white transition-colors">
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ms-0.5" />}
         </button>
         <button type="button" onClick={() => setLoopEnabled(!loopEnabled)} title={loopEnabled ? t("mediaed.loopOn") : t("mediaed.loopOff")}
@@ -249,7 +250,7 @@ export function TrimPanel({
         <span>{t("mediaed.trim")}</span>
         {/* Desktop only — centered */}
         <div className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-2">
-          <button type="button" onClick={togglePlay} className="flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors">
+          <button type="button" onClick={togglePlay} aria-label={t(isPlaying ? "common.pause" : "common.play")} className="flex items-center justify-center w-7 h-7 rounded-full bg-cta hover:bg-cta-hover text-white transition-colors">
             {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ms-0.5" />}
           </button>
           <button type="button" onClick={() => setLoopEnabled(!loopEnabled)} title={loopEnabled ? t("mediaed.loopOn") : t("mediaed.loopOff")}
@@ -261,7 +262,7 @@ export function TrimPanel({
           <span className="text-[#ff0073]">{formatTime(trim.startTime)}</span>
           {" — "}
           <span className="text-[#ff0073]">{formatTime(trim.endTime)}</span>
-          <span className="text-muted-foreground/50"> ({formatTime(duration)})</span>
+          <span className="text-muted-foreground"> ({formatTime(duration)})</span>
         </span>
       </div>
 
@@ -270,6 +271,7 @@ export function TrimPanel({
         ref={trackRef}
         className="relative h-12 bg-[#1a1a2a] rounded-lg overflow-hidden select-none cursor-pointer touch-none"
         onClick={handleTrackClick}
+        {...seekSlider({ label: t("common.position"), fraction: trim.endTime > trim.startTime ? (playhead - trim.startTime) / (trim.endTime - trim.startTime) : 0, onSeek: (f) => seekToTime(trim.startTime + f * (trim.endTime - trim.startTime)) })}
       >
         {/* Filmstrip */}
         {mediaType === "video" && (

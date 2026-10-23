@@ -114,9 +114,9 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !hasResult && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px] px-3 text-center">
                 <Images className="w-10 h-10" />
-                <span className="text-[10px] leading-tight">
+                <span className="text-[11px] leading-tight">
                   {t("node.connect2ImagesToArrange")}
                 </span>
               </div>
@@ -129,7 +129,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -144,7 +144,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                     type="button"
                     className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
                       showThumbnails
-                        ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                        ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
                         : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/collage:opacity-100"
                     }`}
                     onClick={(e) => {

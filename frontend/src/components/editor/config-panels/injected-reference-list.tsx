@@ -178,9 +178,9 @@ function SortableInjectedRefItem({
         className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
         aria-label={t("cfgext.injRefDragAria")}
       >
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
       </span>
-      <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[10px]">
+      <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[11px]">
         #{tile.imageIndex}
       </span>
       {tile.url ? (
@@ -199,15 +199,15 @@ function SortableInjectedRefItem({
           {caption}
         </span>
         {isPrimary && primaryLabel ? (
-          <span className="text-[9px] text-pink-500 font-medium">{primaryLabel}</span>
+          <span className="text-[11px] text-pink-500 font-medium">{primaryLabel}</span>
         ) : null}
       </div>
       {usageMode && usageMode !== "identical" ? (
-        <span className="text-[9px] px-1 py-0.5 rounded shrink-0 bg-amber-500/10 text-amber-500">
+        <span className="text-[11px] px-1 py-0.5 rounded shrink-0 bg-amber-500/10 text-amber-500">
           {USAGE_MODE_LABEL()[usageMode]}
         </span>
       ) : null}
-      <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>
+      <span className={`text-[11px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>
         {badge.label}
       </span>
       {onRemove ? (
@@ -308,7 +308,7 @@ export function InjectedReferenceList(props: InjectedReferenceListProps) {
   if (tiles.length === 0) {
     if (emptyMessage) {
       return (
-        <p className="text-[10px] text-muted-foreground/60" data-testid={testId}>
+        <p className="text-[11px] text-muted-foreground" data-testid={testId}>
           {emptyMessage}
         </p>
       )
@@ -358,7 +358,7 @@ export function InjectedReferenceList(props: InjectedReferenceListProps) {
       )}
 
       {tiles.length > 1 ? (
-        <p className="text-[10px] text-muted-foreground mt-1.5">
+        <p className="text-[11px] text-muted-foreground mt-1.5">
           {t("cfgext.injRefReorderHint", { handle: localizeHandle("Image") })}
         </p>
       ) : null}

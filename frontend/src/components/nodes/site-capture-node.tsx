@@ -90,7 +90,7 @@ function SiteCaptureNodeComponent({ id, data, selected }: NodeProps) {
                 <StatusDot color="#38BDF8" />
                 {t("node.capturing")}
               </span>
-              <span className="tabular-nums text-muted-foreground/80">{elapsedLabel(nodeData.lastRunStartedAt, now)}</span>
+              <span className="tabular-nums text-muted-foreground">{elapsedLabel(nodeData.lastRunStartedAt, now)}</span>
             </div>
           )}
 
@@ -100,12 +100,12 @@ function SiteCaptureNodeComponent({ id, data, selected }: NodeProps) {
                 <StatusDot color="var(--muted-foreground)" />
                 {t("node.notRunYet")}
               </div>
-              <p className="text-[10px] text-muted-foreground/70">{t("node.runToCapture")}</p>
+              <p className="text-[11px] text-muted-foreground">{t("node.runToCapture")}</p>
             </>
           )}
 
           {!running && failed && (
-            <p className="text-[10px] text-muted-foreground/80 leading-snug">
+            <p className="text-[11px] text-muted-foreground leading-snug">
               <span className="flex items-center gap-1.5 font-medium text-red-500 text-[11px]">
                 <StatusDot color="#ef4444" />
                 {t("node.failed")}
@@ -122,7 +122,7 @@ function SiteCaptureNodeComponent({ id, data, selected }: NodeProps) {
                   <StatusDot color="#22c55e" />
                   {t("node.stillsCount", { n: stills.length })}
                 </span>
-                {lastAt !== undefined && <span className="text-muted-foreground/60 tabular-nums">{relativeTime(lastAt, now)}</span>}
+                {lastAt !== undefined && <span className="text-muted-foreground tabular-nums">{relativeTime(lastAt, now)}</span>}
               </div>
               <div className={`grid grid-cols-4 gap-1 ${failed ? "opacity-50" : ""}`}>
                 {stills.map((still) => (

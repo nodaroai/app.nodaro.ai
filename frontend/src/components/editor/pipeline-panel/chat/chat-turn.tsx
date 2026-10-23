@@ -34,7 +34,7 @@ export function ChatTurnBubble({
         <div
           className={
             isUser
-              ? "rounded-lg px-3 py-2 text-sm bg-[#ff0073] text-white"
+              ? "rounded-lg px-3 py-2 text-sm bg-cta text-white"
               : "rounded-lg px-3 py-2 text-sm bg-white dark:bg-[#1E1E1E] border border-zinc-200 dark:border-[#2D2D2D] text-zinc-800 dark:text-zinc-100"
           }
         >

@@ -229,7 +229,7 @@ function TutorialCard({
       </span>
       <span className="flex items-center justify-between gap-2.5 px-1 pb-1 pt-2.5">
         <span className="truncate text-[13px] font-medium text-[var(--home-strong)]">{title}</span>
-        <span className="flex-none rounded-full bg-[var(--home-raised)] px-2 py-[3px] text-[10px] text-[var(--home-muted)]">
+        <span className="flex-none rounded-full bg-[var(--home-raised)] px-2 py-[3px] text-[11px] text-[var(--home-muted)]">
           {kindLabel}
         </span>
       </span>

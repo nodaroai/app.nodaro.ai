@@ -211,7 +211,7 @@ function GroupRow({
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
         className="h-7 flex-1 font-medium"
       />
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
         {group.kind === "folder" ? t("cfgext.npMgrKindFolder") : t("cfgext.npMgrKindSection")}
       </span>
       <button type="button" aria-label={t("preset.deleteAria", { name: group.name })} onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive">

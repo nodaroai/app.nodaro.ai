@@ -1,5 +1,6 @@
 "use client"
 
+import { CoverButton } from "@/components/ui/cover-button"
 import { memo, useMemo, useState, useRef, useEffect, Suspense } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -67,7 +68,7 @@ const STRIP_DELETE_BTN =
 const SHOW_OUTPUTS_BTN =
   "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 const SHOW_OUTPUTS_BTN_ACTIVE =
-  "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 transition-colors"
+  "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-cta text-white hover:bg-cta-hover transition-colors"
 
 function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -196,7 +197,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
               actually produced it, which may differ from the current config). */}
           {!activeText && template && template.id !== "custom" && (
             <div className="flex items-center gap-1">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
                 {template.label}
               </span>
             </div>
@@ -291,7 +292,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                       }}
                     >
                       <LayoutGrid className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-semibold tabular-nums">{results.length}</span>
+                      <span className="text-[11px] font-semibold tabular-nums">{results.length}</span>
                     </button>
                   )}
                   {results.length > 0 && (
@@ -315,13 +316,13 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                 {(activeModelLabel || activeTemplateLabel) && (
                   <div className="flex items-center gap-1 flex-wrap px-2 pb-1 shrink-0">
                     {activeModelLabel && (
-                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-muted-foreground font-medium">
+                      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-muted-foreground font-medium">
                         <Sparkles className="w-2.5 h-2.5" />
                         {activeModelLabel}
                       </span>
                     )}
                     {activeTemplateLabel && (
-                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+                      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
                         <LayoutTemplate className="w-2.5 h-2.5" />
                         {activeTemplateLabel}
                       </span>
@@ -374,7 +375,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -382,7 +383,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status !== "running" && !activeText && status !== "failed" && (
-            <div className="flex items-center justify-center py-6 text-muted-foreground/40">
+            <div className="flex items-center justify-center py-6 text-muted-foreground">
               <span className="text-xs">{t("node.noOutputYet")}</span>
             </div>
           )}
@@ -394,7 +395,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color={TEXT_HANDLE_COLOR} icon={<Type />}      side="right" top="24px" />
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color={HANDLE_COLORS.list} icon={<List />}      side="right" top="56px" />
       {showLog && createPortal(
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={() => { setShowLog(false); setExpandedLogIndex(null) }}
         >
@@ -414,7 +415,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   <p className="text-[11px] text-muted-foreground">{nodeData.label} · {results.length === 1 ? t("node.resultCountOne", { n: results.length }) : t("node.resultCountMany", { n: results.length })}</p>
                 </div>
               </div>
-              <button
+              <button aria-label={t("common.close")}
                 type="button"
                 onClick={() => { setShowLog(false); setExpandedLogIndex(null) }}
                 className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
@@ -447,19 +448,19 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   <div key={rid} className="rounded-xl border border-white/8 overflow-hidden">
                     {/* Run header */}
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                         {t("node.runN", { n: groupEntries.length - groupIdx })}
                       </span>
-                      <span className="text-[10px] text-muted-foreground/50">·</span>
-                      <span className="text-[10px] text-muted-foreground/50">{groupResults.length === 1 ? t("node.iterationCountOne", { n: groupResults.length }) : t("node.iterationCountMany", { n: groupResults.length })}</span>
+                      <span className="text-[11px] text-muted-foreground">·</span>
+                      <span className="text-[11px] text-muted-foreground">{groupResults.length === 1 ? t("node.iterationCountOne", { n: groupResults.length }) : t("node.iterationCountMany", { n: groupResults.length })}</span>
                       {runModelLabel && (
-                        <span className="ml-auto inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground font-medium">
+                        <span className="ml-auto inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground font-medium">
                           <Sparkles className="w-2.5 h-2.5" />
                           {runModelLabel}
                         </span>
                       )}
                       {runTemplateLabel && (
-                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">
+                        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">
                           <LayoutTemplate className="w-2.5 h-2.5" />
                           {runTemplateLabel}
                         </span>
@@ -475,18 +476,18 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                         return (
                           <div
                             key={iterIdx}
-                            className="cursor-pointer hover:bg-white/3 transition-colors"
+                            className="relative cursor-pointer hover:bg-white/3 transition-colors"
                             onClick={() => setExpandedLogIndex(isExpanded ? null : globalIdx)}
                           >
                             {/* Collapsed row */}
                             <div className="flex items-center gap-3 px-4 py-3">
-                              <span className="text-[10px] tabular-nums text-muted-foreground/40 w-5 shrink-0">{iterIdx + 1}</span>
+                              <span className="text-[11px] tabular-nums text-muted-foreground w-5 shrink-0">{iterIdx + 1}</span>
                               <div className="flex-1 min-w-0 grid grid-cols-3 gap-3">
                                 <p className="text-[11px] truncate" style={{ color: '#a5b4fc' }}>{sys || '—'}</p>
                                 <p className="text-[11px] truncate" style={{ color: '#6ee7b7' }}>{usr || '—'}</p>
-                                <p className="text-[11px] truncate text-foreground/70">{r.text}</p>
+                                <p className="text-[11px] truncate text-foreground/80">{r.text}</p>
                               </div>
-                              <div className={`w-4 h-4 shrink-0 text-muted-foreground/40 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                              <div className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6l4 4 4-4"/></svg>
                               </div>
                             </div>
@@ -495,27 +496,28 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                               <div className="px-4 pb-4 grid grid-cols-3 gap-4">
                                 <div className="rounded-lg p-3 overflow-y-auto" style={{ background: '#818cf810', maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#818cf8' }}>{t("node.instructions")}</p>
-                                    {sys && <button type="button" onClick={() => copyToClipboard(sys, t("node.copied"))} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
+                                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#818cf8' }}>{t("node.instructions")}</p>
+                                    {sys && <button type="button" onClick={() => copyToClipboard(sys, t("node.copied"))} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed" style={{ color: '#a5b4fc' }}>{sys || '—'}</p>
                                 </div>
                                 <div className="rounded-lg p-3 overflow-y-auto" style={{ background: '#34d39910', maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#34d399' }}>{t("txtcfg.userPromptLabel")}</p>
-                                    {usr && <button type="button" onClick={() => copyToClipboard(usr, t("node.copied"))} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
+                                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#34d399' }}>{t("txtcfg.userPromptLabel")}</p>
+                                    {usr && <button type="button" onClick={() => copyToClipboard(usr, t("node.copied"))} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed" style={{ color: '#6ee7b7' }}>{usr || '—'}</p>
                                 </div>
                                 <div className="rounded-lg p-3 bg-white/5 overflow-y-auto" style={{ maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{t("node.output")}</p>
-                                    {r.text && <button type="button" onClick={() => copyToClipboard(r.text, t("node.copied"))} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t("node.output")}</p>
+                                    {r.text && <button type="button" onClick={() => copyToClipboard(r.text, t("node.copied"))} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed text-foreground/80">{r.text}</p>
                                 </div>
                               </div>
                             )}
+                            <CoverButton label={t("common.expand")} onActivate={() => (() => setExpandedLogIndex(isExpanded ? null : globalIdx))()} />
                           </div>
                         )
                       })}

@@ -18,7 +18,7 @@ export function EditedSincePreviewNote({ renderId }: { readonly renderId: string
   const t = useT()
   if (!useEditedSincePreview(renderId)) return null
   return (
-    <p role="status" className="flex items-center gap-1 text-[10px] leading-snug text-amber-600 dark:text-amber-400">
+    <p role="status" className="flex items-center gap-1 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
       <TriangleAlert className="h-3 w-3 shrink-0" aria-hidden />
       <span>{t("edlReview.editedSincePreview")}</span>
     </p>

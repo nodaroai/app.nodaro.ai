@@ -404,7 +404,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             {nodeData.errorMessage ? (
               <p
-                className="text-[10px] text-center line-clamp-2 text-red-400"
+                className="text-[11px] text-center line-clamp-2 text-red-400"
                 title={nodeData.errorMessage as string}
               >
                 {nodeData.errorMessage as string}
@@ -415,7 +415,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground/40 h-[160px]`}>
+          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground h-[160px]`}>
             <Clapperboard className="w-10 h-10" />
           </div>
         )}
@@ -471,7 +471,10 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
               {results.slice(0, 8).map((r, i) => (
                 <div key={`${r.jobId ?? "r"}-${i}`} className="relative shrink-0">
                   {r.thumbnailUrl ? (
-                    <CachedImage
+                    <button type="button" onClick={(e) => {
+                        e.stopPropagation()
+                        updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                      }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                       src={r.thumbnailUrl}
                       alt={t("node.resultN", { n: i + 1 })}
                       className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
@@ -479,11 +482,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
                       }`}
                       thumbnail
                       thumbnailWidth={128}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                      }}
-                    />
+                    /></button>
                   ) : (
                     <video
                       src={r.url}

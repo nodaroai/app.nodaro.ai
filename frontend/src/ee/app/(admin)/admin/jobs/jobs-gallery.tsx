@@ -35,13 +35,13 @@ function Tile({ item, onOpen }: { item: GItem; onOpen: () => void }) {
           <span className="absolute top-2 left-2 h-2 w-2 rounded-full bg-pink-500 ring-2 ring-pink-500/25" title="completed" />
         ) : (
           <span
-            className={`absolute top-2 left-2 rounded-full px-1.5 py-0.5 font-mono text-[9px] font-semibold ${STATUS_TAG[st] ?? "bg-muted text-muted-foreground"}`}
+            className={`absolute top-2 left-2 rounded-full px-1.5 py-0.5 font-mono text-[11px] font-semibold ${STATUS_TAG[st] ?? "bg-muted text-muted-foreground"}`}
           >
             {st}
           </span>
         )}
         {type && (
-          <span className="absolute bottom-2 left-2 right-2 truncate rounded bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="absolute bottom-2 left-2 right-2 truncate rounded bg-background/70 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
             {type}
           </span>
         )}
@@ -51,7 +51,7 @@ function Tile({ item, onOpen }: { item: GItem; onOpen: () => void }) {
         <span className="truncate text-xs text-muted-foreground" title={job.user_email}>
           {job.user_email}
         </span>
-        <span className="flex justify-between font-mono text-[10px] text-muted-foreground">
+        <span className="flex justify-between font-mono text-[11px] text-muted-foreground">
           <span>{job.credits ?? 0} cr</span>
           <span>{ago(job.created_at)}</span>
         </span>

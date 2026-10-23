@@ -43,7 +43,7 @@ export function LottieSlotControls({ plan, onUpdate }: LottieSlotControlsProps) 
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
         <Label className="text-xs font-medium text-[var(--text-primary)]">{t("cfgext.lottieSlots")}</Label>
-        <span className="text-[10px] text-muted-foreground">{t("cfgext.lottieFreeEdits")}</span>
+        <span className="text-[11px] text-muted-foreground">{t("cfgext.lottieFreeEdits")}</span>
       </div>
 
       {entries.map(({ sid, control }) => {

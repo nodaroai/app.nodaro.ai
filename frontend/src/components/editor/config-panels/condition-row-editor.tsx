@@ -165,7 +165,7 @@ function DateTimeValuePicker({
         )}
       </div>
       {isSinceLastRun && (
-        <p className="text-[10px] text-amber-500/90" role="note">
+        <p className="text-[11px] text-amber-500/90" role="note">
           {t("cfgext.condSinceLastRunNote")}
         </p>
       )}
@@ -192,7 +192,7 @@ export function AndOrToggle({
           type="button"
           onClick={() => onChange(logicMode)}
           className={
-            "px-2.5 py-1 text-[10px] font-medium transition-colors " +
+            "px-2.5 py-1 text-[11px] font-medium transition-colors " +
             (value === logicMode
               ? "bg-foreground text-background"
               : "bg-background text-muted-foreground hover:text-foreground")
@@ -347,7 +347,7 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
                 })
               }
               className={
-                "shrink-0 text-[10px] px-2 py-1 rounded-md border transition-colors " +
+                "shrink-0 text-[11px] px-2 py-1 rounded-md border transition-colors " +
                 (isVariable
                   ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
                   : "border-border text-muted-foreground hover:text-foreground")
