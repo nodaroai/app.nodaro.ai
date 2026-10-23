@@ -123,7 +123,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -131,7 +131,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !activeUrl && status !== "failed" && (
-              <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <ArrowUpFromLine className="w-6 h-6" />
               </div>
             )}

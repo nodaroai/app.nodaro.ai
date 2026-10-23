@@ -32,7 +32,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
     return (
       <>
         <div className="flex flex-col gap-1">
-          <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
           {media.effectiveUrl ? (
             <div className="relative w-fit">
               <button type="button" onClick={handleOpen} aria-label={t("common.preview")} className="block w-full h-full rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]">

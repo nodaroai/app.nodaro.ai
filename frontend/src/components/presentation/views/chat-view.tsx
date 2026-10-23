@@ -58,7 +58,7 @@ function chipClass(s: StepChip["status"]): string {
     case "completed": return "bg-green-500/10 text-green-600 border-green-500/20"
     case "running": return "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/20"
     case "failed": return "bg-red-500/10 text-red-600 border-red-500/20"
-    case "skipped": return "bg-muted text-muted-foreground/50 border-border"
+    case "skipped": return "bg-muted text-muted-foreground border-border"
     default: return "bg-muted/60 text-muted-foreground border-border"
   }
 }
@@ -291,7 +291,7 @@ function ChatMessage({
       <div className="flex flex-col gap-3 md:flex-row md:gap-5">
         {/* INPUT (left) */}
         <div className="flex min-w-0 flex-col gap-2 md:w-2/5 md:border-e md:border-border md:pe-5">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{tr("present.inputLabel")}</span>
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{tr("present.inputLabel")}</span>
           {promptTexts.map((t, i) => (
             <p key={i} className="whitespace-pre-wrap break-words text-sm text-foreground line-clamp-[8]">{t}</p>
           ))}
@@ -333,8 +333,8 @@ function ChatMessage({
         {/* OUTPUT (right) */}
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{tr("present.outputLabel")}</span>
-            {slot.creditsUsed > 0 && <span className="text-[10px] text-muted-foreground">{slot.creditsUsed} cr</span>}
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{tr("present.outputLabel")}</span>
+            {slot.creditsUsed > 0 && <span className="text-[11px] text-muted-foreground">{slot.creditsUsed} cr</span>}
           </div>
           <div className="grid gap-2">
             {outputNodes.map((node) => {

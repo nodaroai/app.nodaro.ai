@@ -100,11 +100,11 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
         handles={handles}
       >
         <div className="flex items-center justify-between px-3 pt-2 pb-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
             {modeLabel}
           </span>
           {routes.length > 0 && routes.every((r) => !isRouteActive(r)) && (
-            <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-medium">
+            <span className="text-[11px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-medium">
               {t("node.noneBadge")}
             </span>
           )}
@@ -150,7 +150,7 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="router" handleId="in"                  type="target" position={Position.Left}  label="In"        color={HANDLE_COLORS.control} icon={<ChevronRight />} side="left"  top="calc(100% - 24px)" />
       <HandleWithPopover nodeId={id} nodeType="router" handleId={VARIABLES_HANDLE_ID} type="target" position={Position.Left}  label="Variables" color={HANDLE_COLORS.variables} icon={<Variable />}     side="left"  top="24px" />
       {routes.map((route, i) => (
-        <HandleWithPopover key={route.id} nodeId={id} nodeType="router" handleId={route.id} type="source" position={Position.Right} label={route.name} color={isRouteActive(route) ? HANDLE_COLORS.approve : HANDLE_COLORS.control} icon={<span className="text-[8px] font-bold">{LETTERS[i] ?? "?"}</span>} side="right" top={`${20 + i * spacing}px`} />
+        <HandleWithPopover key={route.id} nodeId={id} nodeType="router" handleId={route.id} type="source" position={Position.Right} label={route.name} color={isRouteActive(route) ? HANDLE_COLORS.approve : HANDLE_COLORS.control} icon={<span className="text-[11px] font-bold">{LETTERS[i] ?? "?"}</span>} side="right" top={`${20 + i * spacing}px`} />
       ))}
     </div>
   )

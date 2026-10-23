@@ -371,11 +371,11 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
       {/* ── Curated training-image grid ─────────────────────────────────── */}
       <section className="border-t border-[#1e293b] pt-3">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[9px] uppercase tracking-wide text-slate-500">
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">
             {t("studio.trainingImages")}
           </div>
           {candidates.length > 0 && (
-            <div className="flex items-center gap-3 text-[10px]">
+            <div className="flex items-center gap-3 text-[11px]">
               <span className="text-slate-500">
                 {t("studio.nOfMaxSelectedSpaced", { n: selectedCount, max: candidates.length })}
               </span>
@@ -407,7 +407,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
           <div className="space-y-3">
             {groups.map((group) => (
               <div key={group.bucket}>
-                <div className="text-[10px] text-slate-500 mb-1">{group.bucket}</div>
+                <div className="text-[11px] text-slate-500 mb-1">{group.bucket}</div>
                 <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-6">
                   {group.items.map((c) => {
                     const selected = !excludedUrls.has(c.url)
@@ -432,7 +432,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
                           thumbnail
                         />
                         <span
-                          className={`absolute top-0.5 end-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-bold ${
+                          className={`absolute top-0.5 end-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[11px] font-bold ${
                             selected
                               ? "bg-[#3b82f6] text-white"
                               : "bg-[#0d1017]/80 text-slate-500 border border-[#334155]"

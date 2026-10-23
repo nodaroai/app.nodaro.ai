@@ -608,7 +608,7 @@ export function HandlePopover({
         {showCandidates && (
           <>
             {enriched.length > 0 && <div className="border-t border-border my-2" />}
-            <div className="px-1.5 pb-1 text-[12px] uppercase tracking-wide text-muted-foreground/70">
+            <div className="px-1.5 pb-1 text-[12px] uppercase tracking-wide text-muted-foreground">
               {t("handle.optionalCount", { n: candidates.length })}
             </div>
             <ul className="flex flex-col gap-0.5">
@@ -627,7 +627,7 @@ export function HandlePopover({
               ))}
             </ul>
             {hasDynamicOutputCandidates && (
-              <div className="px-1.5 pt-1.5 text-[12px] text-muted-foreground/70 italic">
+              <div className="px-1.5 pt-1.5 text-[12px] text-muted-foreground italic">
                 {t("handle.dragForColumnOutputs")}
               </div>
             )}
@@ -791,7 +791,7 @@ function SortableConnectionRow(
             tabIndex={isTabStop ? 0 : -1}
             onFocus={() => onGripFocus(edgeId)}
             aria-label={t("handle.dragToReorder", { n: position })}
-            className="flex items-center gap-0.5 text-[12px] leading-none text-muted-foreground/60 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
+            className="flex items-center gap-0.5 text-[12px] leading-none text-muted-foreground group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
           >
             <span className="font-medium tabular-nums">{position}</span>
             <span aria-hidden className="opacity-60">⋮⋮</span>
@@ -875,7 +875,7 @@ function OverflowDivider({ providerLabel }: { providerLabel: string }) {
   return (
     <li
       aria-hidden
-      className="pointer-events-none px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground/60 border-t border-dashed border-border/70 mt-1"
+      className="pointer-events-none px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground border-t border-dashed border-border/70 mt-1"
     >
       {t("handle.beyondProviderMax", { provider: providerLabel })}
     </li>
@@ -992,7 +992,7 @@ function ThumbnailButton({
             {pickerVisual}
           </div>
         ) : (
-          <ImageIcon className="w-3.5 h-3.5 text-muted-foreground/60 pointer-events-none" />
+          <ImageIcon className="w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
         )}
       </button>
       {previewAnchor && (thumbnailUrl || videoUrl || pickerVisual) && typeof document !== "undefined" &&

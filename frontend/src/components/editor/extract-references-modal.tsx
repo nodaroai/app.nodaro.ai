@@ -548,7 +548,7 @@ export function ExtractReferencesModal({
             <div className="flex rounded-md border overflow-hidden">
               <button
                 type="button"
-                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium transition-colors ${
+                className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors ${
                   selectionMode === "lasso" ? "bg-cta text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("lasso")}
@@ -558,7 +558,7 @@ export function ExtractReferencesModal({
               </button>
               <button
                 type="button"
-                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium transition-colors ${
+                className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors ${
                   selectionMode === "rectangle" ? "bg-cta text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("rectangle")}
@@ -681,7 +681,7 @@ export function ExtractReferencesModal({
           {/* Extracted references */}
           {characters.length > 0 && (
             <div className="mt-4">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabCharacters")}</span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabCharacters")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {characters.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
@@ -689,7 +689,7 @@ export function ExtractReferencesModal({
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[11px] text-emerald-600 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
@@ -709,7 +709,7 @@ export function ExtractReferencesModal({
 
           {locations.length > 0 && (
             <div className="mt-3">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabLocations")}</span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("assetlib.tabLocations")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {locations.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
@@ -717,7 +717,7 @@ export function ExtractReferencesModal({
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[11px] text-emerald-600 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}
@@ -737,7 +737,7 @@ export function ExtractReferencesModal({
 
           {objects.length > 0 && (
             <div className="mt-3">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("explore.tabObjects")}</span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t("explore.tabObjects")}</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {objects.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pe-2 rounded-lg border bg-muted/30">
@@ -745,7 +745,7 @@ export function ExtractReferencesModal({
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[11px] text-emerald-600 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" /> {t("editor.savedToLibrary")}
                         </span>
                       )}

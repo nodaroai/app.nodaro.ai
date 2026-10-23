@@ -207,7 +207,7 @@ function ComponentListItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">{card.name}</div>
-        <div className="text-[10px] text-[#94A3B8] truncate">{card.description || card.creatorDisplayName || t("preview.community")}</div>
+        <div className="text-[11px] text-[#94A3B8] truncate">{card.description || card.creatorDisplayName || t("preview.community")}</div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         {outputTypes.slice(0, 2).map((ot) => (
@@ -215,7 +215,7 @@ function ComponentListItem({
         ))}
       </div>
       {card.estimatedCredits > 0 && (
-        <span className="text-[10px] text-purple-400 font-medium flex items-center gap-0.5 flex-shrink-0">
+        <span className="text-[11px] text-purple-400 font-medium flex items-center gap-0.5 flex-shrink-0">
           <Coins className="w-2.5 h-2.5" />{card.estimatedCreditsIsEstimate === true ? "~" : ""}{card.estimatedCredits}
           {(card.perMinuteCredits ?? 0) > 0 && ` ${t("credits.plusPerMinute", { n: card.perMinuteCredits ?? 0 })}`}
           {(card.perItemCredits ?? 0) > 0 && ` ${t("credits.plusPerItem", { n: card.perItemCredits ?? 0 })}`}
@@ -571,7 +571,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                     <div className="flex items-center gap-1.5 shrink-0 ms-2">
                       <span
                         className={cn(
-                          "text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
+                          "text-[11px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
                           comp.isListed
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
                             : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
@@ -581,7 +581,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                       >
                         {comp.isListed ? t("marketplace.listed") : t("marketplace.unlisted")}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">v{comp.version}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">v{comp.version}</span>
                     </div>
                   </div>
                   {comp.description && <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{comp.description}</p>}
@@ -803,7 +803,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
 
         {/* Footer */}
         <div className="px-3 py-1.5 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212]">
-          <div className="flex items-center gap-3 text-[10px] text-[#94A3B8]">
+          <div className="flex items-center gap-3 text-[11px] text-[#94A3B8]">
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">↑↓</kbd>
               {t("addnode.navigate")}

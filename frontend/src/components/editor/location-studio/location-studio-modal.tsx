@@ -108,7 +108,7 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
             <h1 id="location-studio-title" className="text-[13px] font-semibold text-slate-200">
               {data.locationName || t("studio.unnamedLocation")}
             </h1>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-[11px] text-slate-500">
               {data.category} · {data.style}
               {data.styleLock && <span className="text-[#22d3ee]"> · {t("studio.styleLocked")}</span>}
             </div>
@@ -171,7 +171,7 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
               onClose()
             }}
             disabled={closeBlocked}
-            className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="text-[11px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label={t("common.close")}
           >
             ✕ {t("common.close")}

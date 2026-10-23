@@ -143,7 +143,7 @@ export function GetCreditsModal({
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">{upTier.name}</span>
                           {isHighlighted && (
-                            <span className="text-[10px] font-medium text-[#ff0073] bg-[#ff0073]/10 px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] font-medium text-[#ff0073] bg-[#ff0073]/10 px-1.5 py-0.5 rounded-full">
                               {t("pricing.popular")}
                             </span>
                           )}
@@ -192,14 +192,14 @@ export function GetCreditsModal({
                     } ${loadingId === pkg.priceId ? "opacity-60 pointer-events-none" : ""}`}
                   >
                     {pkg.popular && (
-                      <span className="absolute -top-2 end-2 rounded-full bg-cta px-2 py-0.5 text-[10px] font-medium text-white">
+                      <span className="absolute -top-2 end-2 rounded-full bg-cta px-2 py-0.5 text-[11px] font-medium text-white">
                         {t("pricing.popular")}
                       </span>
                     )}
                     <span className="text-lg font-bold">{creditUnits(pkg.credits)}</span>
                     <span className="text-xs text-muted-foreground">{creditUnitLabel(t("credits.unit.other"))}</span>
                     <span className="mt-1 text-sm font-semibold">${pkg.price}</span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                       ${(pkg.price / creditUnits(pkg.credits)).toFixed(4)}
                       {t("credits.perCreditSuffix", { u: creditUnitLabel(t("credits.unitShortLower")) })}
                     </span>

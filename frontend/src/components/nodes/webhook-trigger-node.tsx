@@ -80,7 +80,7 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
             {maskedUrl ?? t("node.webhookSaveToCreateUrl")}
           </p>
           {params.length > 0 && (
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-muted-foreground mt-1">
               {params.length === 1 ? t("node.paramCountOne", { n: params.length }) : t("node.paramCountMany", { n: params.length })}
             </p>
           )}

@@ -369,7 +369,7 @@ export function PromptQuickEditModal() {
               {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
               <label
                 htmlFor="prompt-edit-toggle"
-                className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground cursor-pointer select-none"
+                className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground cursor-pointer select-none"
               >
                 {t("common.edit")}
               </label>

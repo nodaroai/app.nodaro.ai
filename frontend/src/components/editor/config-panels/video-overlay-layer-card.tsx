@@ -135,7 +135,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
       <div className="flex items-center justify-between px-0.5">
         <button type="button" className="text-xs font-medium text-start" onClick={p.onSelect}>
           {t("proccfg.overlay.layerN", { n })}
-          <span className={`ms-1.5 text-[10px] font-normal ${p.sourceOk ? "text-emerald-500" : "text-muted-foreground"}`}>{p.sourceTag}</span>
+          <span className={`ms-1.5 text-[11px] font-normal ${p.sourceOk ? "text-emerald-500" : "text-muted-foreground"}`}>{p.sourceTag}</span>
         </button>
         <button type="button" className="text-muted-foreground hover:text-red-500" aria-label={t("proccfg.videoOverlay.removeLayer")} title={t("proccfg.videoOverlay.removeLayer")} onClick={p.onRemove}>
           <X className="w-3.5 h-3.5" />
@@ -153,9 +153,9 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
             <SecondsInput id={`vo-${index}-end`} value={end} placeholder={t("proccfg.videoOverlay.endPlaceholder")} onCommit={(v) => p.onPatch({ end: v })} />
           </div>
         </div>
-        <p className="text-[10px] text-muted-foreground">{readout}</p>
-        {p.issue && <p className="text-[10px] text-red-500" role="alert">{videoOverlayIssueMessage(p.issue, t)}</p>}
-        {!p.issue && amber && <p className="text-[10px] text-amber-500">{amber}</p>}
+        <p className="text-[11px] text-muted-foreground">{readout}</p>
+        {p.issue && <p className="text-[11px] text-red-500" role="alert">{videoOverlayIssueMessage(p.issue, t)}</p>}
+        {!p.issue && amber && <p className="text-[11px] text-amber-500">{amber}</p>}
       </Section>
 
       <Section title={t("proccfg.videoOverlay.placement")} summary={t(placementLabel)} defaultOpen={!p.compact}>
@@ -166,7 +166,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
               type="button"
               role="radio"
               aria-checked={placement === opt.id}
-              className={`h-7 rounded border text-[10px] ${placement === opt.id ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
+              className={`h-7 rounded border text-[11px] ${placement === opt.id ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
               onClick={() => (opt.id === "custom" ? p.onCustom() : p.onPreset(opt.id))}
             >
               {t(opt.label)}
@@ -181,7 +181,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
                 type="button"
                 role="radio"
                 aria-checked={(layer.corner ?? "bottom-right") === c}
-                className={`h-6 rounded border text-[10px] ${(layer.corner ?? "bottom-right") === c ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
+                className={`h-6 rounded border text-[11px] ${(layer.corner ?? "bottom-right") === c ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
                 onClick={() => p.onPreset("corner-badge", c)}
               >
                 {t(CORNER_LABELS[c])}
@@ -196,7 +196,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
                 <Label className="text-xs">{t("proccfg.overlay.anchor")}</Label>
                 <AnchorGrid value={layer.anchor} label={t("proccfg.overlay.anchor")} onChange={(anchor) => p.onPatch({ anchor })} />
               </div>
-              <p className="text-[10px] text-muted-foreground mt-5 flex-1">{t("proccfg.videoOverlay.anchorHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-5 flex-1">{t("proccfg.videoOverlay.anchorHint")}</p>
             </div>
             <PctSlider id={`vo-${index}-w`} label={t("proccfg.overlay.width")} value={width} min={VIDEO_OVERLAY_BOUNDS.width[0]} max={VIDEO_OVERLAY_BOUNDS.width[1]} hint={`%${pctPx(width, p.canvas?.w)}`} onChange={(width) => p.onPatch({ width })} />
             <PctSlider id={`vo-${index}-x`} label={t("proccfg.overlay.offsetX")} value={x} min={VIDEO_OVERLAY_BOUNDS.x[0]} max={VIDEO_OVERLAY_BOUNDS.x[1]} hint={`%${pctPx(x, p.canvas?.w)}`} onChange={(x) => p.onPatch({ x })} />
@@ -234,7 +234,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
                 onChange={(e) => p.onPatch({ zIndex: e.target.value === "" ? undefined : Math.min(VIDEO_OVERLAY_BOUNDS.zIndex[1], Math.max(VIDEO_OVERLAY_BOUNDS.zIndex[0], Math.round(Number(e.target.value)))) })}
                 className="h-8 text-xs"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.overlay.zIndexHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.overlay.zIndexHint")}</p>
             </div>
           </>
         )}
@@ -247,7 +247,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
             <Label htmlFor={`vo-${index}-animate`} className="text-xs">{t("proccfg.videoOverlay.animate")}</Label>
             <Switch id={`vo-${index}-animate`} checked={animate} onCheckedChange={(animate) => p.onPatch({ animate })} />
           </div>
-          <p className="text-[10px] text-muted-foreground">{t("proccfg.videoOverlay.animateHint")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("proccfg.videoOverlay.animateHint")}</p>
         </div>
       </Section>
     </div>

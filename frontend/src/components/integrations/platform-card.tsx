@@ -199,7 +199,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
           </span>
         </div>
         <span
-          className="ms-auto flex-none rounded-full px-2 py-[3px] text-[10.5px] font-bold"
+          className="ms-auto flex-none rounded-full px-2 py-[3px] text-[11px] font-bold"
           style={
             isConnected
               ? { background: "color-mix(in oklab, var(--integ-ok) 16%, transparent)", color: "var(--integ-ok)" }

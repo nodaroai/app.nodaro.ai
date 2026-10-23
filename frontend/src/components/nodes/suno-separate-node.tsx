@@ -144,13 +144,13 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {nodeData.vocalUrl && (
           <div className="flex flex-col gap-1 px-1">
-            <span className="text-[10px] text-muted-foreground font-medium">{t("audiocfg.vocal")}</span>
+            <span className="text-[11px] text-muted-foreground font-medium">{t("audiocfg.vocal")}</span>
             <AudioResultOverlay url={nodeData.vocalUrl} label={t("audiocfg.vocal")} hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
           </div>
         )}
         {nodeData.instrumentalUrl && (
           <div className="flex flex-col gap-1 px-1">
-            <span className="text-[10px] text-muted-foreground font-medium">{t("audiocfg.instrumental")}</span>
+            <span className="text-[11px] text-muted-foreground font-medium">{t("audiocfg.instrumental")}</span>
             <AudioResultOverlay url={nodeData.instrumentalUrl} label={t("audiocfg.instrumental")} hasResults={false} onExpand={() => setPreviewOpen(true)} onDelete={() => {}} />
           </div>
         )}
@@ -162,7 +162,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -170,13 +170,13 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 120, flex: 1 }}>
             <Scissors className="w-5 h-5" />
           </div>
         )}
 
         {nodeData.engineUsed === "demucs" && (
-          <p className="text-[10px] text-amber-500" data-testid="suno-separate-demucs-note">
+          <p className="text-[11px] text-amber-500" data-testid="suno-separate-demucs-note">
             {t(nodeData.fallbackReason === "too_large" ? "node.sunoSeparate.usedDemucsTooLarge" : "node.sunoSeparate.usedDemucs")}
           </p>
         )}
@@ -187,7 +187,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
             : mode === "split_stem" ? t("audiocfg.twelveStems") : t("node.vocalInst")}
         </span>
         {lane && (
-          <span className="text-[10px] text-muted-foreground/70" data-testid="suno-separate-lane">
+          <span className="text-[11px] text-muted-foreground" data-testid="suno-separate-lane">
             {t(lane === "suno" ? "node.sunoSeparate.laneSuno" : "node.sunoSeparate.laneUpload")}
           </span>
         )}

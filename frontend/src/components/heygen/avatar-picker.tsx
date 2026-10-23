@@ -137,13 +137,13 @@ const AvatarTile = memo(function AvatarTile({
       <div className="px-1.5 py-1.5 flex flex-col gap-0.5 min-w-0">
         <span
           className={cn(
-            "text-[10.5px] font-semibold leading-tight truncate",
+            "text-[11px] font-semibold leading-tight truncate",
             selected ? "text-[#ff0073]" : "text-foreground",
           )}
         >
           {avatar.name}
         </span>
-        <span className="text-[9.5px] text-muted-foreground capitalize leading-tight">
+        <span className="text-[11px] text-muted-foreground capitalize leading-tight">
           {avatar.gender}
         </span>
       </div>
@@ -162,7 +162,7 @@ const AvatarTile = memo(function AvatarTile({
           aria-hidden
           data-testid="avatar-status-badge"
           className={cn(
-            "absolute bottom-[38px] start-1.5 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white shadow-sm",
+            "absolute bottom-[38px] start-1.5 px-1 py-0.5 rounded text-[11px] font-bold leading-none text-white shadow-sm",
             status === "failed" ? "bg-red-600/90" : "bg-amber-500/90",
           )}
         >
@@ -177,7 +177,7 @@ const AvatarTile = memo(function AvatarTile({
           title={t("node.supportsAvatarV")}
           className={cn(
             "absolute top-1.5 start-1.5 flex items-center gap-0.5 px-1 py-0.5",
-            "rounded text-[8px] font-bold leading-none",
+            "rounded text-[11px] font-bold leading-none",
             "bg-violet-600/90 text-white shadow-sm",
           )}
         >
@@ -410,7 +410,7 @@ export const AvatarPicker = memo(function AvatarPicker({
           aria-pressed={onlyV}
           onClick={() => setOnlyV((prev) => !prev)}
           className={cn(
-            "h-7 px-2.5 gap-1.5 text-[10.5px] font-medium w-full justify-start",
+            "h-7 px-2.5 gap-1.5 text-[11px] font-medium w-full justify-start",
             onlyV && "bg-violet-600 hover:bg-violet-700 text-white border-violet-600",
           )}
         >
@@ -472,7 +472,7 @@ export const AvatarPicker = memo(function AvatarPicker({
 
       {/* Item count + (multi) selection cap + "still arriving" while the server fills */}
       {filtered.length > 0 && (
-        <p className="text-[10px] text-muted-foreground text-end px-0.5">
+        <p className="text-[11px] text-muted-foreground text-end px-0.5">
           {multiple && (
             <span className={cn("me-1.5", atCap && "text-[#ff0073]")}>
               {t("heygen.selectedOfMax", { selected: selectedSet.size, max })}
@@ -482,7 +482,7 @@ export const AvatarPicker = memo(function AvatarPicker({
             ? t("heygen.avatarCountOne", { n: filtered.length })
             : t("heygen.avatarCount", { n: filtered.length })}
           {!complete && (
-            <span className="ms-1.5 text-muted-foreground/70" data-testid="avatar-picker-loading-more">
+            <span className="ms-1.5 text-muted-foreground" data-testid="avatar-picker-loading-more">
               {t("heygen.loadingMore")}
             </span>
           )}

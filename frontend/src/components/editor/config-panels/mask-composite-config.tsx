@@ -59,7 +59,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositeFillHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.maskCompositeFillHint")}</p>
       </div>
 
       {s.fill === "pixelate" && (
@@ -75,7 +75,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
             onChange={(e) => onUpdate({ pixelSizePct: Math.round(parseFloat(e.target.value) * 100) / 100 })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositePixelSizePctHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.maskCompositePixelSizePctHint")}</p>
         </div>
       )}
 
@@ -92,7 +92,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
             onChange={(e) => onUpdate({ blurStrengthPct: Math.round(parseFloat(e.target.value) * 100) / 100 })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositeBlurStrengthPctHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.maskCompositeBlurStrengthPctHint")}</p>
         </div>
       )}
 
@@ -106,7 +106,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
         />
         <Label htmlFor="mask-composite-invert" className="mb-0">{t("proccfg.maskCompositeInvert")}</Label>
       </div>
-      <p className="text-[10px] text-muted-foreground -mt-2">{t("proccfg.maskCompositeInvertHint")}</p>
+      <p className="text-[11px] text-muted-foreground -mt-2">{t("proccfg.maskCompositeInvertHint")}</p>
 
       <div>
         <Label htmlFor="mask-composite-feather">{t("proccfg.maskCompositeFeather", { n: s.feather })}</Label>
@@ -120,7 +120,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
           onChange={(e) => onUpdate({ feather: parseInt(e.target.value, 10) })}
           className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositeFeatherHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.maskCompositeFeatherHint")}</p>
       </div>
 
       <div>
@@ -135,7 +135,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
           onChange={(e) => onUpdate({ grow: parseInt(e.target.value, 10) })}
           className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositeGrowHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.maskCompositeGrowHint")}</p>
       </div>
 
       <div>
@@ -150,7 +150,7 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
           onChange={(e) => onUpdate({ opacity: parseInt(e.target.value, 10) / 100 })}
           className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositeOpacityHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.maskCompositeOpacityHint")}</p>
       </div>
 
       {/* Pixelate / blur: the background is the frame (nothing to fit) and the only sound — both controls do nothing there. */}

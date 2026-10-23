@@ -117,7 +117,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -126,7 +126,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && ideas.length > 0 && (
             <div className="relative group flex-1 min-h-0 flex flex-col gap-1.5">
-              <div className="text-[10px] text-muted-foreground tabular-nums">
+              <div className="text-[11px] text-muted-foreground tabular-nums">
                 {ideas.length === 1 ? t("node.contentIdeasCountOne") : t("node.contentIdeasCount", { count: ideas.length })}
               </div>
               {/* nowheel/nodrag/nopan: the list scrolls inside the node instead of
@@ -139,7 +139,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     {idea.format && (
                       <div>
-                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px]">{idea.format}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px]">{idea.format}</span>
                       </div>
                     )}
                     {idea.hook?.line && <div dir="auto" className="italic text-muted-foreground">{t("common.quoted", { text: idea.hook.line })}</div>}
@@ -147,7 +147,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                 ))}
               </div>
               {nodeData.brandLessons && (
-                <div className="text-[10px] text-muted-foreground leading-snug" dir="auto">
+                <div className="text-[11px] text-muted-foreground leading-snug" dir="auto">
                   {nodeData.brandLessons.lessons > 0
                     ? t("node.contentIdeasLeanedOn", { brand: nodeData.brandLessons.brand, n: nodeData.brandLessons.lessons })
                     : t("node.contentIdeasLeanedOnRecord", { brand: nodeData.brandLessons.brand })}
@@ -155,7 +155,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
               )}
               {nodeData.runWarnings && nodeData.runWarnings.length > 0 && (
-                <div className="text-[10px] text-amber-500 leading-snug" dir="auto">
+                <div className="text-[11px] text-amber-500 leading-snug" dir="auto">
                   {nodeData.runWarnings.join(" ")}
                 </div>
               )}
@@ -197,11 +197,11 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && status !== "failed" && ideas.length === 0 && (
             <div
-              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 px-2 text-center"
+              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground px-2 text-center"
               style={{ minHeight: 120, flex: 1 }}
             >
               <Lightbulb className="w-6 h-6" />
-              <span className="text-[10px]">{t("node.contentIdeasEmpty")}</span>
+              <span className="text-[11px]">{t("node.contentIdeasEmpty")}</span>
             </div>
           )}
         </div>

@@ -57,7 +57,7 @@ export function ComposerChip({ node, inputValues, renderInputCard, disabled }: C
             : "border-dashed border-border text-muted-foreground hover:text-foreground"
       }`}
     >
-      <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground">{label}</span>
       {filled ? (
         <span className="truncate text-foreground/90">{value}</span>
       ) : (

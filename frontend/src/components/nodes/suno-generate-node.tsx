@@ -35,7 +35,7 @@ function SunoIdRow({ label, value }: { readonly label: string; readonly value: s
   return (
     <button
       type="button"
-      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground font-mono max-w-full"
+      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground font-mono max-w-full"
       title={t("node.sunoIdCopyTitle", { label, value })}
       onClick={(e) => {
         e.stopPropagation()
@@ -44,7 +44,7 @@ function SunoIdRow({ label, value }: { readonly label: string; readonly value: s
         window.setTimeout(() => setCopied(false), 1200)
       }}
     >
-      <span className="uppercase tracking-wide text-[9px] shrink-0">{label}</span>
+      <span className="uppercase tracking-wide text-[11px] shrink-0">{label}</span>
       <span className="truncate">{value}</span>
       {copied ? <Check className="w-3 h-3 shrink-0 text-green-500" /> : <Copy className="w-3 h-3 shrink-0" />}
     </button>
@@ -242,7 +242,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -250,7 +250,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 120, flex: 1 }}>
             <Music className="w-5 h-5" />
           </div>
         )}

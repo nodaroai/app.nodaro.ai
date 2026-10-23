@@ -29,7 +29,7 @@ export function NodaroMark({ className }: { readonly className?: string }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded px-1 py-px text-[8.5px] font-bold tracking-[0.7px]",
+        "shrink-0 rounded px-1 py-px text-[11px] font-bold tracking-[0.7px]",
         "bg-[#ff0073]/12 text-[#ff0073]",
         className,
       )}
@@ -54,7 +54,7 @@ export function NodaroHeaderChip() {
   if (!checked || connected) {
     return (
       <span
-        className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+        className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
         title={t("node.runsOnNodaro")}
       >
         NODARO
@@ -65,7 +65,7 @@ export function NodaroHeaderChip() {
     <a
       href="/integrations"
       onClick={(e) => e.stopPropagation()}
-      className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-cta text-white hover:bg-cta-hover transition-colors"
+      className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-cta text-white hover:bg-cta-hover transition-colors"
       title={t("node.requiresNodaroConnect")}
     >
       {t("node.connectNodaro")}

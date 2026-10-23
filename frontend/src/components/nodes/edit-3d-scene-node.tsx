@@ -72,7 +72,7 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
             )}
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">{t("node.nObjects", { n: objectCount })}</div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground">
                 {revision ? t("node.revShort", { rev: revision.slice(0, 6) }) : t("node.unversioned")}
                 {lockedCount > 0 ? ` · ${t("node.nLocked", { n: lockedCount })}` : ""}
               </div>
@@ -81,14 +81,14 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {nodeData.scenePendingPlan && (
-          <div className="flex items-center gap-1 text-[10px] text-amber-500">
+          <div className="flex items-center gap-1 text-[11px] text-amber-500">
             <History className="w-3 h-3 shrink-0" />
             <span className="line-clamp-1">{t("node.newRevisionWaiting")}</span>
           </div>
         )}
 
         {lockedCount > 0 && !scenePlan && (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Lock className="w-3 h-3 shrink-0" />
             <span>{t("node.nLocked", { n: lockedCount })}</span>
           </div>
@@ -101,7 +101,7 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -109,12 +109,12 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {!isRunning && !scenePlan && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <Boxes className="w-5 h-5" />
           </div>
         )}
 
-        <div className="text-muted-foreground text-[10px] line-clamp-1">
+        <div className="text-muted-foreground text-[11px] line-clamp-1">
           {nodeData.editPrompt?.trim() ? nodeData.editPrompt : t("node.noEditInstructionSet")}
         </div>
       </div>

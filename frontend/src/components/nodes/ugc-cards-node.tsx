@@ -63,7 +63,7 @@ function UgcCardsNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {d.errorMessage && (
-                <p dir="auto" className="text-[10px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
+                <p dir="auto" className="text-[11px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
                   {ugcNodeMessageText(d.errorMessage)}
                 </p>
               )}
@@ -72,16 +72,16 @@ function UgcCardsNodeComponent({ id, data, selected }: NodeProps) {
           {!running && hasResult && (
             <div className="flex flex-1 min-h-0 flex-col gap-1.5 text-[11px]" data-testid="ugc-cards-result">
               <div className="flex flex-wrap gap-1 tabular-nums">
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
                   {counts.cards === 1 ? t("ugc.cards.cardsOne", { n: 1 }) : t("ugc.cards.cardsMany", { n: counts.cards })}
                 </span>
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
                   {counts.captionWords === 1 ? t("ugc.cards.captionWordsOne", { n: 1 }) : t("ugc.cards.captionWordsMany", { n: counts.captionWords })}
                 </span>
               </div>
               {report && (
                 <div className="flex flex-1 min-h-0 flex-col gap-0.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{localizeHandle("Notes")}</span>
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{localizeHandle("Notes")}</span>
                   {/* nowheel/nodrag/nopan: the Notes scroll inside the node instead of panning the canvas. */}
                   <p dir="auto" className="flex-1 min-h-0 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-2 leading-snug nowheel nodrag nopan scrollbar-reveal">
                     {report}
@@ -91,7 +91,7 @@ function UgcCardsNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
           {!running && !hasResult && status !== "failed" && (
-            <div className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 100 }}>
+            <div className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 100 }}>
               <LayoutPanelTop className="w-6 h-6" />
             </div>
           )}

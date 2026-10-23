@@ -117,7 +117,7 @@ export default function InspirationPage() {
         </div>
       ) : saves.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Bookmark className="mb-3 h-10 w-10 text-muted-foreground/40" />
+          <Bookmark className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="max-w-md text-sm text-muted-foreground">{filtered ? t("inspiration.noMatches") : t("inspiration.empty")}</p>
         </div>
       ) : (

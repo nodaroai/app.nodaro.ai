@@ -120,7 +120,7 @@ export default function ProjectPage() {
             )}
             <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
             {readOnly && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
+              <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
                 {t("project.viewOnly")}
               </Badge>
             )}

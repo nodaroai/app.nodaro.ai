@@ -100,10 +100,10 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
+                  <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
-                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.rendered")}</div>
+                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[11px] px-1 rounded">{t("node.rendered")}</div>
                 {results.length > 0 && (
                   <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
                 )}
@@ -117,7 +117,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -125,7 +125,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {!isRunning && !activeUrl && status !== "failed" && (
-              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <Film className="w-5 h-5" />
               </div>
             )}
@@ -182,7 +182,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             )}
 
-            <div className="flex justify-end text-muted-foreground text-[10px]">
+            <div className="flex justify-end text-muted-foreground text-[11px]">
               <span>{nodeData.aspectRatio} @ {nodeData.fps}fps</span>
             </div>
           </div>

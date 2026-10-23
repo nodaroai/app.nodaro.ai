@@ -81,18 +81,18 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage src={nodeData.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail={!useFull} thumbnailWidth={320} />
             </div>
           ) : (
-            <div className="flex items-center justify-center w-full h-12 rounded border border-dashed border-muted-foreground/30 text-muted-foreground/40">
+            <div className="flex items-center justify-center w-full h-12 rounded border border-dashed border-muted-foreground/30 text-muted-foreground">
               <Music className="w-4 h-4" />
             </div>
           )}
           {nodeData.videoTitle && (
-            <p className="text-[9px] text-muted-foreground truncate">{nodeData.videoTitle}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{nodeData.videoTitle}</p>
           )}
           <div className="flex items-center gap-1">
             {status === "ready" && hasAudio && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
             {status === "extracting" && <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-500" />}
             {status === "failed" && <AlertCircle className="w-2.5 h-2.5 text-red-500" />}
-            <span className="text-[9px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               {nodeData.sourceType === "youtube" ? "YT" : t("node.sourceFile")}
             </span>
           </div>

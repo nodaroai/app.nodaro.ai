@@ -65,7 +65,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
               <div className="text-sm font-medium text-[#ff0073]">
                 {t("node.nTracks", { n: trackCount })}
               </div>
-              <div className="text-[10px] text-muted-foreground">{duration}s</div>
+              <div className="text-[11px] text-muted-foreground">{duration}s</div>
             </div>
           </div>
         )}
@@ -77,7 +77,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -85,12 +85,12 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {!isRunning && !sceneGraph && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <Sparkles className="w-5 h-5" />
           </div>
         )}
 
-        <div className="text-muted-foreground text-[10px] line-clamp-1">
+        <div className="text-muted-foreground text-[11px] line-clamp-1">
           {nodeData.compositionPrompt?.trim()
             ? nodeData.compositionPrompt
             : t("pro3d.noPrompt")}

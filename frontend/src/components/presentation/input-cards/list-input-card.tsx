@@ -102,7 +102,7 @@ export function ListInputCard({
           <span dir="auto">{label}</span>
         </label>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground/70">
+          <span className="text-[11px] text-muted-foreground">
             {t("present.ofMax", { n: items.length, max: maxItems })}
           </span>
           {!readOnly && (
@@ -124,7 +124,7 @@ export function ListInputCard({
           <div key={index} className="flex gap-2">
             <div className="flex-1 flex flex-col gap-1">
               <div className="flex items-center justify-between ps-1">
-                <span className="text-[11px] text-muted-foreground/60">
+                <span className="text-[11px] text-muted-foreground">
                   #{index + 1}
                 </span>
                 {promptHelper && (
@@ -156,7 +156,7 @@ export function ListInputCard({
                   className="hidden sm:flex items-start pt-6 shrink-0"
                   title={t("present.removeItem")}
                 >
-                  <span className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </span>
                 </button>
@@ -164,7 +164,7 @@ export function ListInputCard({
                 <button
                   type="button"
                   onClick={() => handleRemove(index)}
-                  className="sm:hidden self-end shrink-0 text-[11px] text-muted-foreground/50 hover:text-red-400 pb-1 transition-colors"
+                  className="sm:hidden self-end shrink-0 text-[11px] text-muted-foreground hover:text-red-400 pb-1 transition-colors"
                 >
                   {t("common.remove")}
                 </button>
@@ -179,7 +179,7 @@ export function ListInputCard({
         <button
           type="button"
           onClick={handleAdd}
-          className="sm:hidden w-full mt-3 py-2 border-2 border-dashed border-muted-foreground/20 rounded-lg text-xs text-muted-foreground/60 hover:border-[#ff0073]/40 hover:text-muted-foreground transition-colors"
+          className="sm:hidden w-full mt-3 py-2 border-2 border-dashed border-muted-foreground/20 rounded-lg text-xs text-muted-foreground hover:border-[#ff0073]/40 hover:text-muted-foreground transition-colors"
         >
           {t("present.addPrompt")}
         </button>

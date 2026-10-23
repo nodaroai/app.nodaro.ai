@@ -151,7 +151,7 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.52 0 0); /* 5:1 on --muted and 5.6:1 on white (WCAG 1.4.3); was 0.556, 4.4:1 on --muted */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -360,7 +360,7 @@
   --home-line-2: #e7e7ec;
   --home-fg: #17171c;
   --home-fg-2: #3d3d47;
-  --home-muted: #6f6f7c;
+  --home-muted: #5f5f6b; /* 5.5:1 on --home-bg (WCAG 1.4.3); was #6f6f7c, 4.3:1 */
   --home-dim: #9a9aa6;
   --home-strong: #111116;
   --home-stripe-a: #f0f0f3;

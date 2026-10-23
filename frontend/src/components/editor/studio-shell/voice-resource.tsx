@@ -175,7 +175,7 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       {v?.voiceId && (
         <div className="border border-[#1e293b] rounded p-3 space-y-2">
           <div className="text-[12px] text-slate-200">
-            {v.voiceName} <span className="text-[10px] text-slate-500">· {t(VOICE_TYPE_KEYS[v.voiceType ?? "premade"])}</span>
+            {v.voiceName} <span className="text-[11px] text-slate-500">· {t(VOICE_TYPE_KEYS[v.voiceType ?? "premade"])}</span>
           </div>
           {v.previewUrl && <audio src={v.previewUrl} controls className="w-full h-8" />}
           <textarea
@@ -186,7 +186,7 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
             className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
           />
           <div className="border-t border-[#1e293b] pt-2 space-y-2">
-            <div className="text-[10px] text-[#9db4ff]">{t("entity.voiceTalk")}</div>
+            <div className="text-[11px] text-[#9db4ff]">{t("entity.voiceTalk")}</div>
             <textarea
               value={line}
               onChange={(e) => setLine(e.target.value)}
@@ -211,11 +211,11 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
               </button>
             </div>
             {!hasPortrait && (
-              <div className="text-[9px] text-slate-500">
+              <div className="text-[11px] text-slate-500">
                 {t("entity.lipSyncNeedsPortrait")}
               </div>
             )}
-            {error && <div className="text-[9px] text-red-400">{error}</div>}
+            {error && <div className="text-[11px] text-red-400">{error}</div>}
             {audioUrl && <audio src={audioUrl} controls className="w-full" />}
             {videoUrl && <video src={videoUrl} controls className="w-full rounded" />}
           </div>
@@ -264,7 +264,7 @@ function DesignAuditionPanel() {
 
   return (
     <div className="border border-[#1e293b] rounded p-3 space-y-2">
-      <div className="text-[10px] text-slate-400">{t("entity.voiceDesignIntro")}</div>
+      <div className="text-[11px] text-slate-400">{t("entity.voiceDesignIntro")}</div>
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -272,14 +272,14 @@ function DesignAuditionPanel() {
         placeholder={t("entity.voiceDesignPlaceholder")}
         className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
       />
-      <div className="text-[10px] text-slate-400">{t("entity.voicePreviewLine", { min: DESIGN_MIN_CHARS })}</div>
+      <div className="text-[11px] text-slate-400">{t("entity.voicePreviewLine", { min: DESIGN_MIN_CHARS })}</div>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
         className="w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
       />
-      <div className={`text-[9px] ${tooShort ? "text-amber-400" : "text-slate-500"}`}>
+      <div className={`text-[11px] ${tooShort ? "text-amber-400" : "text-slate-500"}`}>
         {tooShort
           ? t("entity.voiceCharCountShort", { len: text.trim().length, min: DESIGN_MIN_CHARS })
           : t("entity.voiceCharCount", { len: text.trim().length, min: DESIGN_MIN_CHARS })}
@@ -291,7 +291,7 @@ function DesignAuditionPanel() {
       >
         {busy ? t("entity.voiceAuditioning") : t("entity.voiceAudition")}
       </button>
-      {error && <div className="text-[9px] text-red-400">{error}</div>}
+      {error && <div className="text-[11px] text-red-400">{error}</div>}
       {audioUrl && <audio src={audioUrl} controls className="w-full" />}
     </div>
   )

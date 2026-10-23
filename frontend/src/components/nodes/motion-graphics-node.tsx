@@ -80,7 +80,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
               <div className="text-sm font-medium text-[#ff0073]">
                 {isLottiePlan ? t("node.lottiePlanSummary", { layers: t("node.layerCountMany", { n: lottieLayerCount }) }) : t("node.nElements", { n: elementCount })}
               </div>
-              <div className="text-[10px] text-muted-foreground">{nodeData.durationSeconds}s</div>
+              <div className="text-[11px] text-muted-foreground">{nodeData.durationSeconds}s</div>
             </div>
           </div>
         )}
@@ -92,7 +92,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -100,12 +100,12 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {!isRunning && !motionPlan && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <Shapes className="w-5 h-5" />
           </div>
         )}
 
-        <div className="text-muted-foreground text-[10px] line-clamp-1">
+        <div className="text-muted-foreground text-[11px] line-clamp-1">
           {nodeData.motionPrompt?.trim()
             ? nodeData.motionPrompt
             : t("node.noPromptSet")}

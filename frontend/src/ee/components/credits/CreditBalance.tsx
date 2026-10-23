@@ -59,7 +59,7 @@ export function CreditBalance({ userId, onClick }: CreditBalanceProps) {
       <span className="text-xs text-muted-foreground hidden sm:inline">{creditUnitLabel(t("credits.unit.other"))}</span>
       <Badge
         variant="secondary"
-        className="text-[10px] px-1.5 py-0 h-4 capitalize"
+        className="text-[11px] px-1.5 py-0 h-4 capitalize"
       >
         {balance.effectiveTier}
       </Badge>

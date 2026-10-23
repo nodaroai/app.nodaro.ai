@@ -94,7 +94,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
         </>
       )}
       {base && (
-        <p className="text-[10px] text-muted-foreground px-1">{t("proccfg.overlay.baseSize", { w: base.w, h: base.h })}</p>
+        <p className="text-[11px] text-muted-foreground px-1">{t("proccfg.overlay.baseSize", { w: base.w, h: base.h })}</p>
       )}
 
       <div>
@@ -178,7 +178,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
             <Sparkles className="w-3.5 h-3.5 me-1.5" />
             {t("overlayAi.addFinish")}
           </Button>
-          <p className="text-[10px] text-muted-foreground leading-snug">{t("overlayAi.finishHint")}</p>
+          <p className="text-[11px] text-muted-foreground leading-snug">{t("overlayAi.finishHint")}</p>
         </div>
       )}
 
@@ -199,7 +199,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
             <Input type="number" min={1} max={400} value={data.maskSpread ?? 48} onChange={(e) => onUpdate({ maskSpread: Math.min(400, Math.max(1, Math.round(Number(e.target.value) || 48))) })} />
           </div>
         )}
-        <p className="text-[10px] text-muted-foreground mt-1">{t("overlayAi.maskHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("overlayAi.maskHint")}</p>
       </div>
 
       <div>
@@ -217,9 +217,9 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
           </SelectContent>
         </Select>
         {data.platform && overlayPlatformById(data.platform)?.note && (
-          <p className="text-[10px] text-muted-foreground mt-1">{localizeOption(overlayPlatformById(data.platform)!.note!)}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{localizeOption(overlayPlatformById(data.platform)!.note!)}</p>
         )}
-        <p className="text-[10px] text-muted-foreground mt-1">{t("overlayPlatform.hint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("overlayPlatform.hint")}</p>
       </div>
 
       <div>
@@ -251,7 +251,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
             )
           })}
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">{t("overlayPlatform.exportHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("overlayPlatform.exportHint")}</p>
       </div>
 
       <div className="space-y-1">
@@ -265,7 +265,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
             }
           />
         </div>
-        <p className="text-[10px] text-muted-foreground">{t("proccfg.overlay.customCanvasHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("proccfg.overlay.customCanvasHint")}</p>
         {canvas && (
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -293,7 +293,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
           </div>
         )}
       </div>
-      <p className="text-[10px] text-muted-foreground px-1">{t("proccfg.overlay.anchorsList", { anchors: OVERLAY_ANCHORS.join(", ") })}</p>
+      <p className="text-[11px] text-muted-foreground px-1">{t("proccfg.overlay.anchorsList", { anchors: OVERLAY_ANCHORS.join(", ") })}</p>
     </div>
   )
 }

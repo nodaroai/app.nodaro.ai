@@ -164,7 +164,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-foreground truncate">{nodeData.filename || t("node.audioFile")}</p>
-                      <div className="flex gap-2 text-[10px] text-muted-foreground/60 mt-0.5">
+                      <div className="flex gap-2 text-[11px] text-muted-foreground mt-0.5">
                         {nodeData.fileSize > 0 && <span>{formatBytes(nodeData.fileSize)}</span>}
                         {nodeData.metadata?.durationSeconds && nodeData.metadata.durationSeconds > 0 && (
                           <span>{formatDuration(nodeData.metadata.durationSeconds)}</span>
@@ -174,7 +174,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                     <button
                       type="button"
                       aria-label={t("proccfg.removeAudio")}
-                      className="w-5 h-5 flex items-center justify-center hover:bg-red-600/20 text-muted-foreground/40 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      className="w-5 h-5 flex items-center justify-center hover:bg-red-600/20 text-muted-foreground hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all shrink-0"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleClear()
@@ -208,7 +208,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                     className={`w-full flex items-center justify-center gap-2 h-16 rounded-md border-2 border-dashed transition-colors cursor-pointer ${
                       isDragOver
                         ? "border-[#38BDF8] bg-[#38BDF8]/10 text-[#38BDF8]"
-                        : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground/60 hover:text-[#38BDF8]"
+                        : "border-muted-foreground/20 hover:border-[#38BDF8]/50 hover:bg-[#38BDF8]/5 text-muted-foreground hover:text-[#38BDF8]"
                     }`}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -225,7 +225,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
               )}
               <button
                 type="button"
-                className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground/70 transition-colors mt-1"
                 onClick={(e) => {
                   e.stopPropagation()
                   setMode("url")
@@ -240,7 +240,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
           {!isUploading && !nodeData.isUploading && mode === "url" && (
             <>
               <div className="flex items-center gap-1.5">
-                <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                <Link className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <input
                   type="text"
                   value={nodeData.externalUrl || nodeData.url || ""}
@@ -267,7 +267,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
               )}
               <button
                 type="button"
-                className="w-full text-center text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors mt-1"
+                className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground/70 transition-colors mt-1"
                 onClick={(e) => {
                   e.stopPropagation()
                   setMode("upload")

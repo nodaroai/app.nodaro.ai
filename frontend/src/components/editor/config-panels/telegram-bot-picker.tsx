@@ -12,7 +12,7 @@ import { useT } from "@/lib/i18n"
 import { useSocialConnections } from "./social-configs"
 
 const SECTION_LABEL = "text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]"
-const HINT = "text-[10px] text-muted-foreground mt-1 leading-snug"
+const HINT = "text-[11px] text-muted-foreground mt-1 leading-snug"
 
 /** How a bot is made: a short walk through @BotFather, with the link to open it. */
 function BotHelp() {

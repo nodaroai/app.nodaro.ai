@@ -224,12 +224,12 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute inset-x-0 bottom-0 px-2.5 py-2 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
                   <div className="flex items-baseline justify-between">
                     <span className="text-[11px] text-white">{isFinishing ? t("node.finishing") : t("node.encoding")}</span>
-                    <span className="text-[10px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
+                    <span className="text-[11px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-white/20 overflow-hidden">
                     <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct ?? 0}%`, background: HANDLE_COLORS.video }} />
                   </div>
-                  <div className="flex justify-between text-[9px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-white/60">
                     <span>{encodedFrames !== undefined && totalFrames ? t("node.frameOfTotal", { n: encodedFrames, total: totalFrames }) : isFinishing ? t("node.uploadingStatus") : " "}</span>
                     <span>{etaSeconds !== undefined && !isFinishing ? t("node.secondsLeft", { n: etaSeconds }) : " "}</span>
                   </div>
@@ -248,7 +248,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-500" /></div>
                     <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                     {nodeData.errorMessage && (
-                      <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>
+                      <p className="text-[11px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>
                         {nodeData.errorMessage}
                       </p>
                     )}
@@ -268,8 +268,8 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
+                  <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
                 {results.length > 0 && (
                   <button type="button" aria-label={t("node.removeResult")} className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
@@ -283,8 +283,8 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex-1 min-h-0 flex flex-col gap-1.5">
                   <div className="relative flex-1 min-h-24 rounded-md overflow-hidden bg-black">
                     <CachedImage src={upstreamImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={previewAnimation ? { animation: previewAnimation } : undefined} />
-                    <div className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-mono">{motionLabel}</div>
-                    <div className="absolute right-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-mono">{nodeData.aspectRatio ?? "16:9"}</div>
+                    <div className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[11px] font-mono">{motionLabel}</div>
+                    <div className="absolute right-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[11px] font-mono">{nodeData.aspectRatio ?? "16:9"}</div>
                     <div className="absolute inset-x-0 bottom-0 px-2 py-1.5 flex items-center gap-2 bg-gradient-to-t from-black/85 to-transparent">
                       {upstreamAudioUrl && waveformHeights.length > 0 ? (
                         <>
@@ -293,12 +293,12 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                               <div key={i} className="w-[3px] flex-none rounded-[1px] opacity-70" style={{ height: `${h}%`, background: HANDLE_COLORS.audio }} />
                             ))}
                           </div>
-                          <span className="text-[10px] font-mono text-white">{audioDuration ? formatClipLength(audioDuration) : "…"}</span>
+                          <span className="text-[11px] font-mono text-white">{audioDuration ? formatClipLength(audioDuration) : "…"}</span>
                         </>
                       ) : hasAudioEdge ? (
-                        <span className="text-[9px] font-mono text-white/70">{t("node.audioSetsTheLength")}</span>
+                        <span className="text-[11px] font-mono text-white/70">{t("node.audioSetsTheLength")}</span>
                       ) : (
-                        <span className="text-[9px] text-amber-300">{t("node.wireAudioTrackSetsLength")}</span>
+                        <span className="text-[11px] text-amber-300">{t("node.wireAudioTrackSetsLength")}</span>
                       )}
                     </div>
                   </div>
@@ -308,16 +308,16 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col items-center gap-1">
                       <div className="w-8 h-8 rounded-lg border border-dashed flex items-center justify-center" style={{ borderColor: HANDLE_COLORS.image }}><ImageIcon className="w-3.5 h-3.5" style={{ color: HANDLE_COLORS.image }} /></div>
-                      <span className="text-[8px] text-muted-foreground/60">{t("node.captionImage")}</span>
+                      <span className="text-[11px] text-muted-foreground">{t("node.captionImage")}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/40 -mt-3">+</span>
+                    <span className="text-xs text-muted-foreground -mt-3">+</span>
                     <div className="flex flex-col items-center gap-1">
                       <div className="w-8 h-8 rounded-lg border border-dashed flex items-center justify-center" style={{ borderColor: HANDLE_COLORS.audio }}><Volume2 className="w-3.5 h-3.5" style={{ color: HANDLE_COLORS.audio }} /></div>
-                      <span className="text-[8px] text-muted-foreground/60">{t("node.captionAudio")}</span>
+                      <span className="text-[11px] text-muted-foreground">{t("node.captionAudio")}</span>
                     </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground/70">{t("node.wireAnImageAndAn")}</span>
-                  <span className="text-[9px] font-mono text-muted-foreground/40">{t("node.audioSetsTheLength")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("node.wireAnImageAndAn")}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{t("node.audioSetsTheLength")}</span>
                 </div>
               )
             )}

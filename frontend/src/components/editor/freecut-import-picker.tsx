@@ -198,8 +198,8 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                     ) : (
                       <div className="w-16 h-16 flex items-center justify-center rounded bg-white/5"><Icon className="w-6 h-6 text-white/30" /></div>
                     )}
-                    <span className="text-[10px] text-white/70 truncate w-full text-center">{asset.label ?? asset.nodeId}</span>
-                    <span className="text-[9px] text-white/40 uppercase">{asset.type}</span>
+                    <span className="text-[11px] text-white/70 truncate w-full text-center">{asset.label ?? asset.nodeId}</span>
+                    <span className="text-[11px] text-white/40 uppercase">{asset.type}</span>
                   </button>
                 )
               })}
@@ -224,7 +224,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                       key={ft}
                       type="button"
                       onClick={() => setLibraryType(ft)}
-                      className={`px-2 py-1 text-[10px] rounded ${libraryType === ft ? "bg-cta text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}
+                      className={`px-2 py-1 text-[11px] rounded ${libraryType === ft ? "bg-cta text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}
                     >
                       {ft === "all" ? t("common.all") : ft === "video" ? t("common.video") : ft === "image" ? t("common.image") : t("mediaed.typeAudio")}
                     </button>
@@ -253,7 +253,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                           <Film className="w-5 h-5 text-white/20" />
                         </div>
                       )}
-                      <span className="text-[9px] text-white/60 truncate w-full text-center">{asset.filename}</span>
+                      <span className="text-[11px] text-white/60 truncate w-full text-center">{asset.filename}</span>
                     </button>
                   )
                 })}
@@ -273,7 +273,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
         {/* Footer */}
         {activeTab !== "file" && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-[#2D2D2D]">
-            <span className="text-[10px] text-white/40">{t("mediaed.selectedCount", { n: selected.size })}</span>
+            <span className="text-[11px] text-white/40">{t("mediaed.selectedCount", { n: selected.size })}</span>
             <button
               type="button"
               onClick={handleImportSelected}

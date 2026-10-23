@@ -96,7 +96,7 @@ function EffectEditor({
           )}
           {effect.type === "letterbox" && (
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground">{t("field.aspectRatio")}</span>
+              <span className="text-[11px] text-muted-foreground">{t("field.aspectRatio")}</span>
               <Select
                 value={String(effect.ratio ?? 2.35)}
                 onValueChange={(v) => onChange({ ...effect, ratio: parseFloat(v) })}
@@ -158,8 +158,8 @@ function SliderField({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">{label}</span>
-        <span className="text-[10px] font-mono text-muted-foreground">{value.toFixed(step >= 1 ? 0 : Math.max(2, -Math.floor(Math.log10(step))))}</span>
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-[11px] font-mono text-muted-foreground">{value.toFixed(step >= 1 ? 0 : Math.max(2, -Math.floor(Math.log10(step))))}</span>
       </div>
       <input
         type="range"
@@ -225,7 +225,7 @@ export function AfterEffectsPreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[10px]"
+            className="h-6 px-2 text-[11px]"
             onClick={onRegenerate}
             disabled={isGenerating}
           >
@@ -244,7 +244,7 @@ export function AfterEffectsPreview({
               title={disabledEffects.has(i) ? t("preview.enableEffect") : t("preview.disableEffect")}
             >
               {disabledEffects.has(i) ? (
-                <EyeOff className="w-3 h-3 text-muted-foreground/50" />
+                <EyeOff className="w-3 h-3 text-muted-foreground" />
               ) : (
                 <Eye className="w-3 h-3 text-[#ff0073]" />
               )}
@@ -261,7 +261,7 @@ export function AfterEffectsPreview({
 
       {textOverlays.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-2">
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
             {t("preview.textOverlays")}
           </span>
           {textOverlays.map((overlay, i) => (
@@ -270,7 +270,7 @@ export function AfterEffectsPreview({
               className="px-2 py-1.5 rounded border border-[var(--border-primary)] text-xs"
             >
               <div className="font-medium truncate">{overlay.text}</div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground">
                 {overlay.position} &middot; {overlay.fontSize}px &middot;{" "}
                 {(overlay.startFrame / fps).toFixed(1)}s–
                 {((overlay.startFrame + overlay.durationInFrames) / fps).toFixed(1)}s

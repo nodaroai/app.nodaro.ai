@@ -133,7 +133,7 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
           </Button>
         </div>
       </div>
-      <div className="text-[10px] text-muted-foreground flex items-center justify-between">
+      <div className="text-[11px] text-muted-foreground flex items-center justify-between">
         <span>
           {peek.countNoun === "pages"
             ? t("cfgext.scrapeCountPages", { count: items.length })
@@ -156,7 +156,7 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
             return (
               <div key={i} className="flex flex-col border-b border-border/40 pb-1.5 min-w-0">
                 <div className="flex items-baseline gap-1.5 min-w-0">
-                  <span className="w-[16px] shrink-0 text-[10px] text-muted-foreground/70 text-end">{peek.glyph(item, i)}</span>
+                  <span className="w-[16px] shrink-0 text-[11px] text-muted-foreground text-end">{peek.glyph(item, i)}</span>
                   {href ? (
                     <a href={href} target="_blank" rel="noopener noreferrer" className="truncate text-xs hover:underline" title={href}>{title}</a>
                   ) : (
@@ -167,9 +167,9 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
                   href && sub.trim() === href ? (
                     // Same destination as the title link — out of the tab order so
                     // keyboard users are not handed the same link twice per row.
-                    <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1} className="ps-[22px] truncate text-[10px] text-muted-foreground/70 hover:underline hover:text-muted-foreground">{sub}</a>
+                    <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1} className="ps-[22px] truncate text-[11px] text-muted-foreground hover:underline hover:text-muted-foreground">{sub}</a>
                   ) : (
-                    <span className="ps-[22px] truncate text-[10px] text-muted-foreground/70">{sub}</span>
+                    <span className="ps-[22px] truncate text-[11px] text-muted-foreground">{sub}</span>
                   )
                 )}
               </div>
@@ -177,7 +177,7 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
           })}
         </div>
       ) : (
-        <pre className="text-[10px] bg-muted/40 rounded-md p-2 max-h-[50vh] overflow-auto whitespace-pre-wrap break-all">{json}</pre>
+        <pre className="text-[11px] bg-muted/40 rounded-md p-2 max-h-[50vh] overflow-auto whitespace-pre-wrap break-all">{json}</pre>
       )}
     </div>
   )
@@ -322,7 +322,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
               }
               className="text-sm"
             />
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("cfgext.scrapeRssHint", { fields: "{ title, url, description, pubDate, guid }" })}
             </p>
           </div>

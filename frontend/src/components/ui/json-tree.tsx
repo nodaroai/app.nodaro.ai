@@ -38,7 +38,7 @@ function Leaf({ value }: { readonly value: JsonValue }) {
   }
   if (typeof value === "number") return <span className="text-sky-500 tabular-nums">{value}</span>
   if (typeof value === "boolean") return <span className="text-violet-400">{String(value)}</span>
-  return <span className="text-muted-foreground/50 italic">null</span>
+  return <span className="text-muted-foreground italic">null</span>
 }
 
 function Row({
@@ -78,12 +78,12 @@ function Row({
         onClick={(e) => { e.stopPropagation(); onToggle(path, !open) }}
       >
         <ChevronRight
-          className={cn("w-3 h-3 shrink-0 mt-[3px] text-muted-foreground/60 transition-transform", open && "rotate-90")}
+          className={cn("w-3 h-3 shrink-0 mt-[3px] text-muted-foreground transition-transform", open && "rotate-90")}
         />
         <span className={cn("min-w-0 break-words", label ? "text-foreground/90" : "font-medium text-muted-foreground")}>
           {keyText}
         </span>
-        {count !== undefined && <span className="text-muted-foreground/50 tabular-nums shrink-0">({count})</span>}
+        {count !== undefined && <span className="text-muted-foreground tabular-nums shrink-0">({count})</span>}
       </button>
       {open && entries.map(([childKey, child]) => (
         <Row
@@ -132,7 +132,7 @@ function JsonTreeComponent({
   if (!isContainer(value)) return <div className={className}><Leaf value={value} /></div>
 
   return (
-    <div className={cn("font-mono text-[10px] leading-relaxed", className)}>
+    <div className={cn("font-mono text-[11px] leading-relaxed", className)}>
       {entries.map(([key, child]) => (
         <Row
           key={key}

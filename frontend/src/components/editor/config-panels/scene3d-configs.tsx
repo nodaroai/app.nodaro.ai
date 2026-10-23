@@ -249,7 +249,7 @@ function AuthoringControls({
           ))}
         </SelectContent>
       </Select>
-      <p className="mt-1 text-[10px] text-muted-foreground">
+      <p className="mt-1 text-[11px] text-muted-foreground">
         {!choice.ok ? choice.message : basicLocked ? t("scene3dcfg.engineBasicLocked") : t("scene3dcfg.engineHint")}
       </p>
     </div>}
@@ -423,7 +423,7 @@ export function Pro3DRenderConfig({
             <SelectItem value="scene">{t("pro3dcfg.sourceScene")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="mt-1 text-[10px] text-muted-foreground">
+        <p className="mt-1 text-[11px] text-muted-foreground">
           {isSceneSource ? t("pro3dcfg.sourceSceneHint") : t("pro3dcfg.sourcePromptHint")}
         </p>
       </div>
@@ -492,7 +492,7 @@ export function Pro3DRenderConfig({
         </Select>
         {/* Said out loud because each pass is paid work — a budget the user
             cannot see is a budget they cannot choose. */}
-        <p className="mt-1 text-[10px] text-muted-foreground">{t("pro3dcfg.budgetHint")}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{t("pro3dcfg.budgetHint")}</p>
       </div>
 
       <Accordion type="single" collapsible>
@@ -625,7 +625,7 @@ export function Edit3DSceneConfig({
         )}
       </MappableField>
 
-      <p className="text-[10px] text-muted-foreground -mt-1">
+      <p className="text-[11px] text-muted-foreground -mt-1">
         {lockedCount > 0
           ? t("cfgext.scene3dLockedCount", { count: lockedCount })
           : t("cfgext.scene3dLockHint")}
@@ -640,7 +640,7 @@ export function Edit3DSceneConfig({
       <SceneBlock data={data} onUpdate={onUpdate} promptField="editPrompt" nodeId={nodeId} />
 
       {history && history.length > 0 && (
-        <p className="text-[10px] text-muted-foreground">{t("cfgext.scene3dFreeEdits")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.scene3dFreeEdits")}</p>
       )}
     </div>
   )

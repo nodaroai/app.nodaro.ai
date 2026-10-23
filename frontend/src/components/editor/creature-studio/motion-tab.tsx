@@ -209,7 +209,7 @@ export function MotionTab({ studio }: MotionTabProps) {
               )}
               className="w-full rounded"
             />
-            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
+            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5 pointer-events-none">
               {item.name}
             </div>
             <div className="absolute top-1 end-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
@@ -232,7 +232,7 @@ export function MotionTab({ studio }: MotionTabProps) {
                   void handleRemove(idx)
                 }}
                 aria-label={t("creature.removeNameAria", { name: item.name })}
-                className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
+                className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80"
               >
                 {t("common.remove")}
               </button>

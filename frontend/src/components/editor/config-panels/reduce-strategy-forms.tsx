@@ -80,7 +80,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
               placeholder={t("cfgext.reduceFormCriteriaPlaceholder")}
               rows={3}
             />
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("cfgext.reduceFormCriteriaHint")}
             </p>
           </div>
@@ -98,13 +98,13 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
                   <SelectItem key={o.value} value={o.value}>
                     <span className="flex flex-col gap-0.5">
                       <span>{o.label}</span>
-                      <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
+                      <span className="text-[11px] leading-tight text-muted-foreground">{o.description}</span>
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("cfgext.reduceFormKindHint")}
             </p>
           </div>
@@ -120,7 +120,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
             onChange={(e) => onChange({ ...config, separator: e.target.value })}
             placeholder={t("cfgext.reduceFormSeparatorPlaceholder")}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.reduceFormSeparatorHint")}
           </p>
         </div>
@@ -153,7 +153,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
               <SelectItem value="shallow">{t("cfgext.reduceFormShallow")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.reduceFormMergeHint")}
           </p>
         </div>

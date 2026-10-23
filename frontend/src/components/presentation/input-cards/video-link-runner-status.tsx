@@ -112,7 +112,7 @@ function RangeChooser({
         {t("videolink.downloadPart")}
       </Button>
       {wholeFits && <Button onClick={() => onChoose({ mode: "whole" })}>{t("videolink.downloadWhole")}</Button>}
-      <p className="text-[10px] text-muted-foreground/70">{t("videolink.partNote")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("videolink.partNote")}</p>
     </div>
   )
 }

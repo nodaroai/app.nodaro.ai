@@ -213,7 +213,7 @@ export function CinematicAvatarInputCard({
               aria-label={t("present.cinematicAvatarPrompt")}
             />
             {prompt.length > 0 && (
-              <p className="mt-1 text-end text-[10px] text-muted-foreground">
+              <p className="mt-1 text-end text-[11px] text-muted-foreground">
                 {prompt.length}/10000
               </p>
             )}
@@ -225,7 +225,7 @@ export function CinematicAvatarInputCard({
           <div>
             <SectionLabel>
               {t("present.avatarLooks")}
-              <span className="ms-1.5 normal-case tracking-normal text-muted-foreground/60 font-normal">
+              <span className="ms-1.5 normal-case tracking-normal text-muted-foreground font-normal">
                 {t("present.pickRange", { max: MAX_LOOKS })}
               </span>
             </SectionLabel>
@@ -235,7 +235,7 @@ export function CinematicAvatarInputCard({
                 {avatarLooks.map((id, i) => (
                   <span
                     key={id}
-                    className="flex items-center gap-1 rounded-full bg-[#ff0073]/10 border border-[#ff0073]/40 px-2 py-0.5 text-[10.5px] text-[#ff0073]"
+                    className="flex items-center gap-1 rounded-full bg-[#ff0073]/10 border border-[#ff0073]/40 px-2 py-0.5 text-[11px] text-[#ff0073]"
                   >
                     {avatarLookNames[i] ?? id}
                     {!readOnly && (
@@ -299,7 +299,7 @@ export function CinematicAvatarInputCard({
                   className="w-full"
                   aria-label={t("field.duration")}
                 />
-                <div className="flex justify-between text-[9px] text-muted-foreground/60">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
                   <span>4s</span>
                   <span>15s</span>
                 </div>

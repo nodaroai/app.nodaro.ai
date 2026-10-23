@@ -92,7 +92,7 @@ export function ResultSettingsInfo({
         }}
       >
         <Sparkles className="w-3 h-3 shrink-0 opacity-80" />
-        <span className="text-[10px] font-medium leading-none truncate">{summary}</span>
+        <span className="text-[11px] font-medium leading-none truncate">{summary}</span>
         {summaryTrailing}
       </button>
 

@@ -287,7 +287,7 @@ export default function PricingPage() {
                 <span
                   style={{
                     fontFamily: MONO,
-                    fontSize: 10.5,
+                    fontSize: 11,
                     letterSpacing: "0.12em",
                     color: "var(--prc-pink-strong)",
                     border: "1px solid var(--prc-pink-border)",
@@ -352,7 +352,7 @@ export default function PricingPage() {
                     <span
                       style={{
                         fontFamily: MONO,
-                        fontSize: 10.5,
+                        fontSize: 11,
                         letterSpacing: "0.16em",
                         color: PINK,
                         marginBottom: 14,

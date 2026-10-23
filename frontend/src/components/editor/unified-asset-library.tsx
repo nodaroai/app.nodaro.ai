@@ -580,7 +580,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             >
               <UserCircle className="h-3 w-3" />
               {t("assetlib.tabCharacters")}
-              <span className="text-[10px] opacity-70">({counts.character})</span>
+              <span className="text-[11px] opacity-70">({counts.character})</span>
             </button>
             <button
               type="button"
@@ -593,7 +593,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             >
               <Package className="h-3 w-3" />
               {t("assetlib.tabObjects")}
-              <span className="text-[10px] opacity-70">({counts.object})</span>
+              <span className="text-[11px] opacity-70">({counts.object})</span>
             </button>
             <button
               type="button"
@@ -606,7 +606,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             >
               <PawPrint className="h-3 w-3" />
               {t("assetlib.tabCreatures")}
-              <span className="text-[10px] opacity-70">({counts.creature})</span>
+              <span className="text-[11px] opacity-70">({counts.creature})</span>
             </button>
             <button
               type="button"
@@ -619,7 +619,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             >
               <MapPin className="h-3 w-3" />
               {t("assetlib.tabLocations")}
-              <span className="text-[10px] opacity-70">({counts.location})</span>
+              <span className="text-[11px] opacity-70">({counts.location})</span>
             </button>
             <button
               type="button"
@@ -632,7 +632,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             >
               <SmilePlus className="h-3 w-3" />
               {t("assetlib.tabFaces")}
-              <span className="text-[10px] opacity-70">({counts.face})</span>
+              <span className="text-[11px] opacity-70">({counts.face})</span>
             </button>
             <div className="w-px self-stretch my-1 bg-gray-200 dark:bg-[#2D2D2D]" />
             <button
@@ -736,16 +736,16 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                           </div>
                         )}
                         <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
                           {t(TYPE_KEY[asset.type])}
                         </span>
                         {projectName && (
-                          <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
+                          <span className="text-[11px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
                             {projectName}
                           </span>
                         )}
                         {isOnCanvas && (
-                          <span className="text-[9px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
                         )}
                       </button>
                       {/* Add to canvas button */}
@@ -1121,7 +1121,7 @@ export function UnifiedAssetLibraryButton() {
         <Grid3X3 className="h-4 w-4" />
         {t("toolbar.myLibrary")}
         {totalCount > 0 && (
-          <span className="ms-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[11px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
             {totalCount}
           </span>
         )}
@@ -1209,7 +1209,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("all")}
               >
                 {t("assetlib.tabAll")}
-                <span className="ms-1.5 text-[10px] opacity-70">({counts.all})</span>
+                <span className="ms-1.5 text-[11px] opacity-70">({counts.all})</span>
               </button>
               <button
                 type="button"
@@ -1222,7 +1222,7 @@ export function UnifiedAssetLibraryButton() {
               >
                 <UserCircle className="h-3 w-3" />
                 {t("assetlib.tabCharacters")}
-                <span className="text-[10px] opacity-70">({counts.character})</span>
+                <span className="text-[11px] opacity-70">({counts.character})</span>
               </button>
               <button
                 type="button"
@@ -1235,7 +1235,7 @@ export function UnifiedAssetLibraryButton() {
               >
                 <Package className="h-3 w-3" />
                 {t("assetlib.tabObjects")}
-                <span className="text-[10px] opacity-70">({counts.object})</span>
+                <span className="text-[11px] opacity-70">({counts.object})</span>
               </button>
               <button
                 type="button"
@@ -1248,7 +1248,7 @@ export function UnifiedAssetLibraryButton() {
               >
                 <PawPrint className="h-3 w-3" />
                 {t("assetlib.tabCreatures")}
-                <span className="text-[10px] opacity-70">({counts.creature})</span>
+                <span className="text-[11px] opacity-70">({counts.creature})</span>
               </button>
               <button
                 type="button"
@@ -1261,7 +1261,7 @@ export function UnifiedAssetLibraryButton() {
               >
                 <MapPin className="h-3 w-3" />
                 {t("assetlib.tabLocations")}
-                <span className="text-[10px] opacity-70">({counts.location})</span>
+                <span className="text-[11px] opacity-70">({counts.location})</span>
               </button>
               <button
                 type="button"
@@ -1274,7 +1274,7 @@ export function UnifiedAssetLibraryButton() {
               >
                 <SmilePlus className="h-3 w-3" />
                 {t("assetlib.tabFaces")}
-                <span className="text-[10px] opacity-70">({counts.face})</span>
+                <span className="text-[11px] opacity-70">({counts.face})</span>
               </button>
             </div>
 
@@ -1339,16 +1339,16 @@ export function UnifiedAssetLibraryButton() {
                             </div>
                           )}
                           <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
                             {t(TYPE_KEY[asset.type])}
                           </span>
                           {projectName && (
-                            <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
+                            <span className="text-[11px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
                               {projectName}
                             </span>
                           )}
                           {isOnCanvas && (
-                            <span className="text-[9px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
+                            <span className="text-[11px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
                           )}
                         </button>
                         {/* Add to canvas button */}

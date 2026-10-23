@@ -906,7 +906,7 @@ function TemplateGroupCard({
         </TooltipProvider>
 
         {hasOverride && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
             {t("settings.custom")}
           </span>
         )}
@@ -1055,7 +1055,7 @@ function TemplateCard({
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-semibold">{t(info.labelKey)}</h4>
             {hasOverride && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
                 {t("settings.custom")}
               </span>
             )}

@@ -490,7 +490,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
               </div>
               {errorMessage ? (
                 <p
-                  className="text-[10px] text-center line-clamp-2 text-amber-400"
+                  className="text-[11px] text-center line-clamp-2 text-amber-400"
                   title={errorMessage}
                 >
                   {errorMessage}
@@ -508,7 +508,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
               </div>
               {errorMessage ? (
                 <p
-                  className="text-[10px] text-center line-clamp-2 text-red-400"
+                  className="text-[11px] text-center line-clamp-2 text-red-400"
                   title={errorMessage}
                 >
                   {errorMessage}
@@ -519,7 +519,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Empty state — no result, no upstream video */}
           {status !== "running" && !activeUrl && status !== "failed" && !upstreamVideoUrl && (
-            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
               <Scissors className="w-10 h-10" />
             </div>
           )}

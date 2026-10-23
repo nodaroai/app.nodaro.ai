@@ -255,7 +255,7 @@ export function VideoSfxConfig({
               value={[cfgStrength]}
               onValueChange={(vals) => onUpdate({ cfgStrength: vals[0] })}
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
               <span>{t("cfgext.sfxCfgLoose")}</span>
               <span>{t("cfgext.sfxCfgDefault")}</span>
               <span>{t("cfgext.sfxCfgStrict")}</span>
@@ -273,7 +273,7 @@ export function VideoSfxConfig({
               value={[numSteps]}
               onValueChange={(vals) => onUpdate({ numSteps: vals[0] })}
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
               <span>{t("cfgext.sfxStepsFast")}</span>
               <span>{t("cfgext.sfxStepsDefault")}</span>
               <span>{t("cfgext.sfxStepsClean")}</span>

@@ -68,13 +68,13 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
             <div className="rounded-md border bg-muted/30 p-2 text-xs max-h-24 overflow-y-auto">
               <div className="flex flex-wrap gap-1">
                 {alignment.slice(0, 20).map((w: AlignmentWord, i: number) => (
-                  <span key={i} className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-primary/10 text-[10px]">
+                  <span key={i} className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-primary/10 text-[11px]">
                     <span className="font-medium">{w.word}</span>
                     <span className="text-muted-foreground">{w.start.toFixed(2)}s</span>
                   </span>
                 ))}
                 {alignment.length > 20 && (
-                  <span className="text-muted-foreground text-[10px]">{t("node.plusNMore", { n: alignment.length - 20 })}</span>
+                  <span className="text-muted-foreground text-[11px]">{t("node.plusNMore", { n: alignment.length - 20 })}</span>
                 )}
               </div>
             </div>
@@ -112,7 +112,7 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -120,7 +120,7 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && status !== "failed" && alignment.length === 0 && (
-          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 120, flex: 1 }}>
             <AlignLeft className="w-5 h-5" />
           </div>
         )}

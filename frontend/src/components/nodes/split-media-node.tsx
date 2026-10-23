@@ -80,13 +80,13 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
                   {audioChunks.map((url, i) => (
                     <div key={`a-${i}`} className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[10px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
+                      <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
                       <WaveformAudioPlayer url={url} variant="mini" isInsideCanvas className="w-full" />
                     </div>
                   ))}
                   {videoChunks.map((url, i) => (
                     <div key={`v-${i}`} className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[10px] text-muted-foreground">{t("node.videoChunk")} {i + 1}</span>
+                      <span className="text-[11px] text-muted-foreground">{t("node.videoChunk")} {i + 1}</span>
                       <video controls src={url} className="w-full rounded" style={{ maxHeight: '60px' }} />
                     </div>
                   ))}
@@ -102,7 +102,7 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -110,7 +110,7 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status !== "running" && status !== "completed" && status !== "failed" && (
-            <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 80, flex: 1 }}>
+            <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 80, flex: 1 }}>
               <Scissors className="w-5 h-5" />
             </div>
           )}

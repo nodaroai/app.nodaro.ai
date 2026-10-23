@@ -246,16 +246,16 @@ export function ImageOverlayPreview(p: ImageOverlayPreviewProps) {
               style={{ left: `${p.safeArea.x * 100}%`, top: `${p.safeArea.y * 100}%`, width: `${p.safeArea.w * 100}%`, height: `${p.safeArea.h * 100}%`, boxShadow: "0 0 0 200vmax rgba(0,0,0,0.55)" }}
               title={t("overlayPreview.safeAreaHint")}
             >
-              <span className="absolute bottom-1 left-1 rounded bg-cyan-300 px-1.5 py-0.5 text-[9px] font-semibold text-black whitespace-nowrap">{t("overlayPreview.safeAreaHint")}</span>
+              <span className="absolute bottom-1 left-1 rounded bg-cyan-300 px-1.5 py-0.5 text-[11px] font-semibold text-black whitespace-nowrap">{t("overlayPreview.safeAreaHint")}</span>
             </div>
           )}
           {p.zones?.filter((z) => !(p.safeArea && z.x === p.safeArea.x && z.y === p.safeArea.y && z.w === p.safeArea.w && z.h === p.safeArea.h)).map((z) => (
             <div key={z.id} className="absolute border border-dashed border-cyan-200/80" style={{ left: `${z.x * 100}%`, top: `${z.y * 100}%`, width: `${z.w * 100}%`, height: `${z.h * 100}%` }}>
-              <span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-cyan-100 whitespace-nowrap">{t(`overlayPreview.zone.${z.id}` as never)}</span>
+              <span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] text-cyan-100 whitespace-nowrap">{t(`overlayPreview.zone.${z.id}` as never)}</span>
             </div>
           ))}
           {p.zones?.filter((z) => p.safeArea && z.x === p.safeArea.x && z.y === p.safeArea.y && z.w === p.safeArea.w && z.h === p.safeArea.h).map((z) => (
-            <span key={z.id} className="absolute rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-cyan-100 whitespace-nowrap" style={{ left: `calc(${z.x * 100}% + 4px)`, top: `calc(${z.y * 100}% + 4px)` }}>{t(`overlayPreview.zone.${z.id}` as never)}</span>
+            <span key={z.id} className="absolute rounded bg-black/70 px-1.5 py-0.5 text-[11px] text-cyan-100 whitespace-nowrap" style={{ left: `calc(${z.x * 100}% + 4px)`, top: `calc(${z.y * 100}% + 4px)` }}>{t(`overlayPreview.zone.${z.id}` as never)}</span>
           ))}
           {guides.v.map((f, i) => <div key={`v${i}`} className="absolute top-0 bottom-0 w-px bg-[#ff0073]" style={{ left: `${f * 100}%` }} />)}
           {guides.h.map((f, i) => <div key={`h${i}`} className="absolute left-0 right-0 h-px bg-[#ff0073]" style={{ top: `${f * 100}%` }} />)}
@@ -319,7 +319,7 @@ export function ImageOverlayPreview(p: ImageOverlayPreviewProps) {
                 {kind === "qr" && isSel && (
                   <button
                     type="button"
-                    className="nodrag nopan absolute left-1/2 -translate-x-1/2 top-full mt-1 max-w-[220px] whitespace-nowrap rounded-full bg-black/80 text-white text-[10px] leading-none px-2 py-1 flex items-center gap-1 hover:bg-cta"
+                    className="nodrag nopan absolute left-1/2 -translate-x-1/2 top-full mt-1 max-w-[220px] whitespace-nowrap rounded-full bg-black/80 text-white text-[11px] leading-none px-2 py-1 flex items-center gap-1 hover:bg-cta"
                     style={{ transform: `translateX(-50%) rotate(${-layer.rotation}deg)` }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); p.onEditContent?.(i) }}
@@ -390,7 +390,7 @@ export function ImageOverlayPreview(p: ImageOverlayPreviewProps) {
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <span className="text-[10px] font-medium px-1">{t("overlayEditor.layerN", { n: p.selected + 1 })}</span>
+          <span className="text-[11px] font-medium px-1">{t("overlayEditor.layerN", { n: p.selected + 1 })}</span>
           <button type="button" className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/15" title={t("overlayEditor.bringForward")} aria-label={t("overlayEditor.bringForward")} onClick={() => p.onReorder(p.selected!, "up")}>
             <ChevronUp className="w-3.5 h-3.5" />
           </button>

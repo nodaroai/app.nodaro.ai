@@ -67,7 +67,7 @@ export function ComingSoonCard({ provider }: ComingSoonCardProps) {
             {t("integ.requiresSetup")}
           </span>
           {missing.length > 0 && (
-            <p className="text-[10.5px] leading-[1.4]" style={{ color: "var(--integ-muted)" }}>
+            <p className="text-[11px] leading-[1.4]" style={{ color: "var(--integ-muted)" }}>
               {t("integ.setToEnablePre")}
               <code className="font-mono break-all">{missing.join(", ")}</code>
               {t("integ.setToEnablePost")}

@@ -70,7 +70,7 @@ export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
               className="aspect-video bg-zinc-100 rounded relative overflow-hidden"
               title={`${shot.shot_id}: ${shot.duration_seconds.toFixed(1)}s ${shot.camera.shot_type}`}
             >
-              <div className="absolute inset-0 flex items-center justify-center text-[10px] text-zinc-500">
+              <div className="absolute inset-0 flex items-center justify-center text-[11px] text-zinc-500">
                 {shot.shot_id}
               </div>
             </div>

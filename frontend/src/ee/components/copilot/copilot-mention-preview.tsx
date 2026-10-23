@@ -84,7 +84,7 @@ export function MentionPreview({
         />
         <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[var(--copilot-card)] border border-[var(--copilot-strong)] shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
           <span className="text-[12.5px] font-medium text-foreground truncate max-w-[40vw]">{content.label}</span>
-          {content.sub && <span className="text-[10.5px] text-[var(--copilot-dim)] capitalize whitespace-nowrap">{content.sub}</span>}
+          {content.sub && <span className="text-[11px] text-[var(--copilot-dim)] capitalize whitespace-nowrap">{content.sub}</span>}
           {onInsert && (
             <button
               type="button"

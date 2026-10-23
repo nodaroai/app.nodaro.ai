@@ -111,7 +111,7 @@ export function WebhookTriggerConfig({ data, onUpdate, nodeId }: ConfigProps<Web
           <Button
             variant="ghost"
             size="sm"
-            className="h-5 text-[10px] ms-2 px-1.5"
+            className="h-5 text-[11px] ms-2 px-1.5"
             onClick={() => navigator.clipboard.writeText(webhookToken)}
           >
             {t("apiTok.copy")}
@@ -129,7 +129,7 @@ export function WebhookTriggerConfig({ data, onUpdate, nodeId }: ConfigProps<Web
         </div>
 
         {params.length === 0 && (
-          <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+          <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
             {t("cfgext.trigNoParams")}
           </p>
         )}
@@ -269,7 +269,7 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
           placeholder={t("cfgext.trigChatIdFilterPh")}
           className="mt-1.5"
         />
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("cfgext.trigChatIdFilterHint")}
         </p>
       </div>
@@ -305,7 +305,7 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
         </Button>
         {/* The switch is intent; the server registers the bot with Telegram
             when the graph is saved, so never let the button imply otherwise. */}
-        <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+        <p className="text-[11px] text-muted-foreground mt-1.5 text-center">
           {t("cfgext.trigAppliesOnSave")}
         </p>
       </div>
@@ -358,7 +358,7 @@ export function TelegramChannelFeedConfig({ data, onUpdate, nodeId }: ConfigProp
           placeholder={t("cfgext.trigChannelPh")}
           className="mt-1.5"
         />
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("cfgext.trigChannelHint")}
         </p>
       </div>
@@ -376,10 +376,10 @@ export function TelegramChannelFeedConfig({ data, onUpdate, nodeId }: ConfigProp
           }}
           className="mt-1.5"
         />
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("cfgext.feedMaxPostsHint")}
         </p>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("cfgext.trigPairWithSchedule", { node: localizeNode("Schedule Trigger") })}
         </p>
       </div>
@@ -425,12 +425,12 @@ export function TelegramChannelFeedConfig({ data, onUpdate, nodeId }: ConfigProp
             {t("cfgext.feedPeek", { n: peekCount })}
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">{t("cfgext.feedPeekHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("cfgext.feedPeekHint")}</p>
       </div>
 
       <div className="space-y-1">
-        <p className="text-[10px] text-muted-foreground">{t("cfgext.feedOutputsHint")}</p>
-        <p className="text-[10px] text-muted-foreground">{t("cfgext.feedMediaExpiry")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.feedOutputsHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.feedMediaExpiry")}</p>
       </div>
 
       {d.executionStatus === "failed" && d.errorMessage && (

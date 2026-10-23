@@ -1116,7 +1116,7 @@ export function AddNodePopup({
                 if (block === "models") {
                   return (
                     <div key={block} className="mb-2.5">
-                      <div className="sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
+                      <div className="sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
                         {t(SEARCH_BLOCK_HEADER[block])}
                       </div>
                       {rows.map((r, i) =>
@@ -1208,7 +1208,7 @@ export function AddNodePopup({
             )}
             {compatibilityNodes.compatible.length > 0 && (
               <>
-                <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                <div className="text-[12px] uppercase tracking-wider text-muted-foreground font-medium px-4 pt-2 pb-1">
                   {t("addnode.compatible")}
                 </div>
                 {compatibilityNodes.compatible.map((node, rawIndex) => {
@@ -1260,7 +1260,7 @@ export function AddNodePopup({
                     {index > 0 && (
                       <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
                     )}
-                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground font-medium px-4 pt-2 pb-1">
                       {(() => {
                         const label = familyLabel(node.group)
                         return label ? localizeGroup(label) : label

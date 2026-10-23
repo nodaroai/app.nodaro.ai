@@ -10,7 +10,7 @@ const STYLES: Readonly<Record<TrendStatus, string>> = {
 
 export function StatusBadge({ status }: { readonly status: TrendStatus }) {
   return (
-    <Badge variant="outline" className={cn("text-[10px] font-medium", STYLES[status])}>
+    <Badge variant="outline" className={cn("text-[11px] font-medium", STYLES[status])}>
       {status}
     </Badge>
   )

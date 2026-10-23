@@ -148,9 +148,9 @@ function ClipPackNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
           {failedClips > 0 && (
-            <p className="text-[10px] text-amber-500">{failedClips === 1 ? t("node.clipPackFailedOne") : t("node.clipPackFailedMany", { count: failedClips })}</p>
+            <p className="text-[11px] text-amber-500">{failedClips === 1 ? t("node.clipPackFailedOne") : t("node.clipPackFailedMany", { count: failedClips })}</p>
           )}
-          {uncaptioned && <p className="text-[10px] text-amber-500">{t("node.clipPackCaptionsFailed")}</p>}
+          {uncaptioned && <p className="text-[11px] text-amber-500">{t("node.clipPackCaptionsFailed")}</p>}
         </>
       }
       afterResult={
@@ -159,7 +159,7 @@ function ClipPackNodeComponent({ id, data, selected }: NodeProps) {
           <ReviewCutButton renderId={id} />
           {cameraNote.length > 0 && (
             <div data-testid="use-case-camera-note" className="flex flex-col gap-0.5 px-1">
-              {cameraNote.map((line) => <p key={line} className="text-[10px] leading-snug text-muted-foreground">{line}</p>)}
+              {cameraNote.map((line) => <p key={line} className="text-[11px] leading-snug text-muted-foreground">{line}</p>)}
             </div>
           )}
           {/* "pending" is the runtime-only queued state, not in the narrower data type. */}

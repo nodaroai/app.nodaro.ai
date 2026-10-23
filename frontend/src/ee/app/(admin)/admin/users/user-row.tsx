@@ -274,7 +274,7 @@ export function UserRow({
           {linkage && (
             <>
               {" "}
-              <span className="text-muted-foreground/70">
+              <span className="text-muted-foreground">
                 {new Date(user.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
             </>

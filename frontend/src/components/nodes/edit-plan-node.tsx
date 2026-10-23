@@ -104,7 +104,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -118,13 +118,13 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
                 {edited && (
                   <span
                     title={t("edlReview.editedChipTitle")}
-                    className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                    className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
                   >
                     {t("edlReview.editedChip")}
                   </span>
                 )}
                 {clipCount !== undefined && (
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
                     {t("node.editPlanClips", { count: clipCount })}
                   </span>
                 )}
@@ -160,11 +160,11 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && status !== "failed" && (plan === undefined || plan === null) && (
             <div
-              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"
+              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"
               style={{ minHeight: 120, flex: 1 }}
             >
               <ListTree className="w-6 h-6" />
-              <span className="text-[10px]">{t("node.editPlanConnectTranscript")}</span>
+              <span className="text-[11px]">{t("node.editPlanConnectTranscript")}</span>
             </div>
           )}
         </div>

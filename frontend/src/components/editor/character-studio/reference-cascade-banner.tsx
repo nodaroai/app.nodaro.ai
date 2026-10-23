@@ -20,7 +20,7 @@ export function ReferenceCascadeBanner({ visible, onDismiss, onRegenerateAll }: 
         <button
           type="button"
           onClick={onRegenerateAll}
-          className="text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 rounded px-2 py-1"
+          className="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 rounded px-2 py-1"
         >
           {t("studio.regenerateAll")}
         </button>

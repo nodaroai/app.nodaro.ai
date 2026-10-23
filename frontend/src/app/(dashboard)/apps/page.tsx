@@ -466,7 +466,7 @@ export default function AppsPage() {
         /* Browse / Favorites grid */
         browseItems.length === 0 ? (
           <div className="text-center py-16">
-            <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+            <Rocket className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-foreground mb-2">
               {viewMode === "favorites" ? t("apps.emptyFavoritesTitle") : t("apps.emptyBrowseTitle")}
             </h2>
@@ -577,7 +577,7 @@ function MyAppsGrid({
   if (!apps || visibleApps.length === 0) {
     return (
       <div className="text-center py-16">
-        <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+        <Rocket className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-lg font-semibold text-foreground mb-2">{t("apps.emptyMyTitle")}</h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           {t("apps.emptyMyDesc")}
@@ -694,7 +694,7 @@ function MyAppCard({
             aria-pressed={app.isListed}
             aria-label={t("apps.listed")}
             className={cn(
-              "text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
+              "text-[11px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
               app.isListed
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
                 : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
@@ -704,7 +704,7 @@ function MyAppCard({
           >
             {app.isListed ? t("apps.listed") : t("apps.unlisted")}
           </button>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
             v{app.version}
           </span>
         </div>
@@ -718,12 +718,12 @@ function MyAppCard({
       {(app.category !== "other" || (app.tags && app.tags.length > 0)) && (
         <div className="flex items-center gap-1 flex-wrap mb-3">
           {app.category !== "other" && categoryLabel && (
-            <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", CATEGORY_COLORS[app.category] ?? "bg-zinc-500/10 text-zinc-500")}>
+            <span className={cn("text-[11px] px-1.5 py-0.5 rounded-full font-medium", CATEGORY_COLORS[app.category] ?? "bg-zinc-500/10 text-zinc-500")}>
               {t(categoryLabelKey)}
             </span>
           )}
           {app.tags?.slice(0, 2).map((tag) => (
-            <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted-foreground">
+            <span key={tag} className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-muted-foreground">
               {tag}
             </span>
           ))}

@@ -96,7 +96,7 @@ export function ConnectProviderDialog({
       <DialogContent className="sm:max-w-[460px]">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+            <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
               {t("connect.providerRunStopped", { nodeLabel })}
             </span>
             <DialogTitle className="text-lg font-semibold">{t("connect.providerTitle")}</DialogTitle>

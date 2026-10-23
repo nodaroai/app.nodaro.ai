@@ -140,7 +140,7 @@ export function ObjectGalleryButton() {
         <Package className="h-4 w-4" />
         {t("entity.btnObjects")}
         {objCount > 0 && (
-          <span className="ms-auto text-[10px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[11px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">
             {objCount}
           </span>
         )}
@@ -203,12 +203,12 @@ export function ObjectGalleryButton() {
                             </div>
                           ) : (
                             <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-                              <Package className="w-8 h-8 text-muted-foreground/30" />
+                              <Package className="w-8 h-8 text-muted-foreground" />
                             </div>
                           )}
                           <span className="text-xs truncate w-full text-center">{o.name}</span>
                           {isOnCanvas && (
-                            <span className="text-[9px] text-muted-foreground">{t("assetlib.onCanvas")}</span>
+                            <span className="text-[11px] text-muted-foreground">{t("assetlib.onCanvas")}</span>
                           )}
                         </button>
                         {/* Add to canvas button - always visible */}

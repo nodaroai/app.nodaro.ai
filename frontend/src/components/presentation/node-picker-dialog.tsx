@@ -93,22 +93,22 @@ function PickerInputConfig({
 
   return (
     <div className="ms-7 mt-1 flex flex-wrap items-center gap-2">
-      <span className="text-[10px] text-muted-foreground">{t("present.displayLabel")}</span>
+      <span className="text-[11px] text-muted-foreground">{t("present.displayLabel")}</span>
       <div className="flex gap-1">
         <button
-          className={`text-[10px] px-2 py-0.5 rounded border ${mode === "inline" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "inline" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "inline" })}
         >
           {t("present.modeInline")}
         </button>
         <button
-          className={`text-[10px] px-2 py-0.5 rounded border ${mode === "modal" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "modal" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "modal" })}
         >
           {t("present.modeModal")}
         </button>
         <button
-          className={`text-[10px] px-2 py-0.5 rounded border ${mode === "compact" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "compact" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "compact" })}
         >
           {t("present.modeCompact")}
@@ -120,7 +120,7 @@ function PickerInputConfig({
             variant="ghost"
             size="sm"
             onClick={() => setRestrictOpen(true)}
-            className="h-6 px-2 gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="h-6 px-2 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
           >
             <Filter className="size-3" />
             {restrictLabel}
@@ -140,7 +140,7 @@ function PickerInputConfig({
             variant="ghost"
             size="sm"
             onClick={() => setRestrictOpen(true)}
-            className="h-6 px-2 gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="h-6 px-2 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
           >
             <Filter className="size-3" />
             {fieldRestrictLabel}
@@ -207,15 +207,15 @@ function OutputDisplayModeToggle({
 
   return (
     <div className="ms-7 mt-1 flex gap-1">
-      <span className="text-[10px] text-muted-foreground me-1">{t("present.multipleResults")}</span>
+      <span className="text-[11px] text-muted-foreground me-1">{t("present.multipleResults")}</span>
       <button
-        className={`text-[10px] px-2 py-0.5 rounded border ${mode === "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+        className={`text-[11px] px-2 py-0.5 rounded border ${mode === "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
         onClick={() => updateDisplayMode("gallery")}
       >
         {t("present.galleryMode")}
       </button>
       <button
-        className={`text-[10px] px-2 py-0.5 rounded border ${mode !== "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+        className={`text-[11px] px-2 py-0.5 rounded border ${mode !== "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
         onClick={() => updateDisplayMode("individual")}
       >
         {t("present.individualMode")}
@@ -487,7 +487,7 @@ function NodeRow({
                   min={1}
                   step={1}
                   inputMode="numeric"
-                  className="h-6 w-24 px-1.5 text-[10px] shrink-0"
+                  className="h-6 w-24 px-1.5 text-[11px] shrink-0"
                   aria-label={t("present.maxChars")}
                   title={t("present.maxChars")}
                   placeholder={t("present.maxCharsNoLimit")}
@@ -509,7 +509,7 @@ function NodeRow({
                   updateNodeData(node.id, { presentationPromptHelper: !promptHelperEnabled })
                 }}
               >
-                <Sparkles className={`h-3.5 w-3.5 ${promptHelperEnabled ? "text-[#ff0073]" : "text-muted-foreground/40"}`} />
+                <Sparkles className={`h-3.5 w-3.5 ${promptHelperEnabled ? "text-[#ff0073]" : "text-muted-foreground"}`} />
               </Button>
               <Button
                 variant="ghost"
@@ -555,7 +555,7 @@ function NodeRow({
           {/* Exposable outputs */}
           {exposableOutputs && exposableOutputs.length > 0 && (
             <>
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider pt-1">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pt-1">
                 {t("preview.outputs")}
               </p>
               {exposableOutputs.map((output) => (
@@ -570,7 +570,7 @@ function NodeRow({
                     }
                   />
                   <span className="text-xs flex-1 truncate">{output.label}</span>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
+                  <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 shrink-0">
                     {output.outputType}
                   </Badge>
                 </label>
@@ -581,7 +581,7 @@ function NodeRow({
           {/* Exposable fields */}
           {exposableFields && exposableFields.length > 0 && (
             <>
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider pt-1">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pt-1">
                 {t("present.fields")}
               </p>
               {exposableFields.map((field) => {
@@ -597,7 +597,7 @@ function NodeRow({
                         }
                       />
                       <span className="text-xs truncate">{field.label}</span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
+                      <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 shrink-0">
                         {t(FIELD_TYPE_LABELS[field.type])}
                       </Badge>
                     </label>
@@ -615,7 +615,7 @@ function NodeRow({
                         min={1}
                         step={1}
                         inputMode="numeric"
-                        className="h-6 w-24 px-1.5 text-[10px] shrink-0"
+                        className="h-6 w-24 px-1.5 text-[11px] shrink-0"
                         aria-label={t("present.maxChars")}
                         title={t("present.maxChars")}
                         placeholder={t("present.maxCharsNoLimit")}
@@ -748,7 +748,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                       {t("present.arrayInputs")}
                     </p>
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073]">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073]">
                       {t("dash.new")}
                     </span>
                   </div>
@@ -782,7 +782,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                           allVisibleNodeIds={visibleNodeIds}
                         />
                         {meta && (
-                          <p className="text-[10px] text-muted-foreground/60 ps-10 -mt-1 pb-1">
+                          <p className="text-[11px] text-muted-foreground ps-10 -mt-1 pb-1">
                             {meta}
                           </p>
                         )}

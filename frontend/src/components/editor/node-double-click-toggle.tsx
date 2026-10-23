@@ -96,7 +96,7 @@ export function NodeDoubleClickToggle() {
           confirming && "hidden",
         )}
       >
-        <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+        <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
           {t("editor.dblClickOnANode")}
         </div>
         <div className="mt-0.5 text-sm">

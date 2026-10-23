@@ -157,14 +157,14 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-center">
                 <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center text-red-500 text-sm">!</div>
                 <span className="text-[11px] text-red-400 font-medium">{t("node.only1Image")}</span>
-                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.slideshowNeedsAtLeast2")}{t("common.fragmentGap")}<span className="text-foreground">{t("node.stillToVideo")}</span>{t("common.fragmentGap")}{t("node.sameOutputNoListNeeded")}</span>
+                <span className="text-[11px] text-muted-foreground leading-snug">{t("node.slideshowNeedsAtLeast2")}{t("common.fragmentGap")}<span className="text-foreground">{t("node.stillToVideo")}</span>{t("common.fragmentGap")}{t("node.sameOutputNoListNeeded")}</span>
               </div>
             )}
             {tooMany && !isEncoding && !isQueued && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-center">
                 <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center text-red-500 text-sm">!</div>
                 <span className="text-[11px] text-red-400 font-medium">{t("node.nImages", { n })}</span>
-                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.capIsMax", { max: MAX_IMAGES })}{t("common.fragmentGap")}{t("node.trimTheSetUpstream")}</span>
+                <span className="text-[11px] text-muted-foreground leading-snug">{t("node.capIsMax", { max: MAX_IMAGES })}{t("common.fragmentGap")}{t("node.trimTheSetUpstream")}</span>
               </div>
             )}
 
@@ -191,12 +191,12 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                     <span className="text-[11px] text-white">
                       {encodingPhase === "segments" && segmentOfN !== undefined ? t("node.renderingSegmentOf", { n: segmentOfN, total: n }) : encodingPhase === "concat" ? t("node.joiningSlides") : t("node.muxingAudio")}
                     </span>
-                    <span className="text-[10px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
+                    <span className="text-[11px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-white/20 overflow-hidden">
                     <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct ?? 0}%`, background: HANDLE_COLORS.video }} />
                   </div>
-                  <span className="text-[9px] font-mono text-white/60">{t("node.buildingSegmentsThen", { step: nodeData.lastAppliedTransition === "cut" ? "concat" : "xfade" })}</span>
+                  <span className="text-[11px] font-mono text-white/60">{t("node.buildingSegmentsThen", { step: nodeData.lastAppliedTransition === "cut" ? "concat" : "xfade" })}</span>
                 </div>
               </div>
             )}
@@ -212,7 +212,7 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                     <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-500" /></div>
                     <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                     {nodeData.errorMessage && (
-                      <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
                     )}
                   </div>
                 </div>
@@ -227,19 +227,19 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
               n >= 2 ? (
                 <div className="flex-1 min-h-0 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between px-0.5">
-                    <span className="text-[9px] font-mono text-muted-foreground">{t("node.nImages", { n })}{n > 5 ? ` · ${t("node.showingAll")}` : ""}</span>
-                    <span className="text-[9px] font-mono text-muted-foreground">{motion === "none" ? t("node.noMotion") : `${motion} · ${nodeData.intensity ?? 3}`} · {nodeData.aspectRatio ?? "16:9"}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{t("node.nImages", { n })}{n > 5 ? ` · ${t("node.showingAll")}` : ""}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{motion === "none" ? t("node.noMotion") : `${motion} · ${nodeData.intensity ?? 3}`} · {nodeData.aspectRatio ?? "16:9"}</span>
                   </div>
                   {/* The strip: equal split today (canvas has no per-row overrides), so equal widths tell the truth */}
                   <div className="flex-1 min-h-16 flex gap-[3px] rounded-md overflow-hidden">
                     {slideUrls.slice(0, 24).map((url, i) => (
                       <div key={`${url}-${i}`} className="relative flex-1 min-w-0 bg-muted/40">
                         <CachedImage src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                        <span className="absolute bottom-0.5 left-1 text-[8px] font-mono text-white/90 drop-shadow">{perSlideSeconds >= 0.1 ? `${perSlideSeconds.toFixed(1)}s` : ""}</span>
+                        <span className="absolute bottom-0.5 left-1 text-[11px] font-mono text-white/90 drop-shadow">{perSlideSeconds >= 0.1 ? `${perSlideSeconds.toFixed(1)}s` : ""}</span>
                       </div>
                     ))}
                     {n > 24 && (
-                      <div className="flex-1 min-w-0 flex items-center justify-center bg-muted/40 text-[9px] font-mono text-muted-foreground">+{n - 24}</div>
+                      <div className="flex-1 min-w-0 flex items-center justify-center bg-muted/40 text-[11px] font-mono text-muted-foreground">+{n - 24}</div>
                     )}
                   </div>
                   {/* The ruler: the audio underneath is what everything is measured against */}
@@ -247,19 +247,19 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                     {upstreamAudioUrl ? (
                       <>
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: HANDLE_COLORS.audio }} />
-                        <span className="text-[9px] font-mono text-muted-foreground flex-1 truncate">{t("node.audioDrivenEqualSplit")}</span>
-                        <span className="text-[10px] font-mono text-foreground">{audioDuration ? formatClipLength(audioDuration) : "…"}</span>
+                        <span className="text-[11px] font-mono text-muted-foreground flex-1 truncate">{t("node.audioDrivenEqualSplit")}</span>
+                        <span className="text-[11px] font-mono text-foreground">{audioDuration ? formatClipLength(audioDuration) : "…"}</span>
                       </>
                     ) : hasAudioEdge ? (
-                      <span className="text-[9px] font-mono text-muted-foreground">{t("node.audioSetsTheLength")}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">{t("node.audioSetsTheLength")}</span>
                     ) : (
-                      <span className="text-[9px] font-mono text-muted-foreground flex-1">{t("node.noAudioTrackSilentTotal", { total: totalSeconds.toFixed(1) })}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground flex-1">{t("node.noAudioTrackSilentTotal", { total: totalSeconds.toFixed(1) })}</span>
                     )}
                   </div>
                   {nodeData.lastScaleFactor !== undefined && nodeData.lastScaleFactor !== null && (
                     <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/30">
-                      <span className="text-amber-500 text-[10px] leading-none mt-0.5">⚠</span>
-                      <span className="text-[9px] text-amber-600 dark:text-amber-300 leading-snug">{t("node.durationsScaledToFill", { factor: nodeData.lastScaleFactor.toFixed(2) })}</span>
+                      <span className="text-amber-500 text-[11px] leading-none mt-0.5">⚠</span>
+                      <span className="text-[11px] text-amber-600 dark:text-amber-300 leading-snug">{t("node.durationsScaledToFill", { factor: nodeData.lastScaleFactor.toFixed(2) })}</span>
                     </div>
                   )}
                 </div>
@@ -268,16 +268,16 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col items-center gap-1">
                       <div className="w-8 h-8 rounded-lg border border-dashed flex items-center justify-center" style={{ borderColor: HANDLE_COLORS.control }}><ImagesIcon className="w-3.5 h-3.5" style={{ color: HANDLE_COLORS.control }} /></div>
-                      <span className="text-[8px] text-muted-foreground/60">{t("node.captionImages")}</span>
+                      <span className="text-[11px] text-muted-foreground">{t("node.captionImages")}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/40 -mt-3">+</span>
+                    <span className="text-xs text-muted-foreground -mt-3">+</span>
                     <div className="flex flex-col items-center gap-1">
                       <div className="w-8 h-8 rounded-lg border border-dashed flex items-center justify-center" style={{ borderColor: HANDLE_COLORS.audio }}><Volume2 className="w-3.5 h-3.5" style={{ color: HANDLE_COLORS.audio }} /></div>
-                      <span className="text-[8px] text-muted-foreground/60">{t("node.captionAudio")}</span>
+                      <span className="text-[11px] text-muted-foreground">{t("node.captionAudio")}</span>
                     </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground/70">{t("node.wire2To100Images")}</span>
-                  <span className="text-[9px] font-mono text-muted-foreground/40">{t("node.audioOptionalSetsLength")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("node.wire2To100Images")}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{t("node.audioOptionalSetsLength")}</span>
                 </div>
               )
             )}

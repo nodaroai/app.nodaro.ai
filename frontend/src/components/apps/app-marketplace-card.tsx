@@ -62,7 +62,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* RemX badge */}
         {app.supportsRemix && (
-          <span className="absolute top-2 start-2 text-[10px] px-1.5 py-0.5 rounded bg-cta text-white font-medium">
+          <span className="absolute top-2 start-2 text-[11px] px-1.5 py-0.5 rounded bg-cta text-white font-medium">
             RemX
           </span>
         )}
@@ -87,14 +87,14 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* Category + output type badges */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
+          <span className={cn("text-[11px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
             {t(categoryLabelKey)}
           </span>
           {app.outputTypes.slice(0, 3).map((outType) => (
             <span
               key={outType}
               className={cn(
-                "text-[10px] px-1.5 py-0.5 rounded-full border font-medium capitalize",
+                "text-[11px] px-1.5 py-0.5 rounded-full border font-medium capitalize",
                 OUTPUT_TYPE_COLORS[outType] ?? "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
               )}
             >
@@ -120,7 +120,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* Creator */}
         {app.creatorDisplayName && (
-          <p className="text-[10px] text-white/50 truncate">
+          <p className="text-[11px] text-white/50 truncate">
             {t("preview.by", { name: app.creatorDisplayName })}
           </p>
         )}

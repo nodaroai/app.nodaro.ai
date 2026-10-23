@@ -323,7 +323,7 @@ export function AppSidebar({
 
               return (
                 <div key={section.label} className="mb-4">
-                  <p className="px-3 mb-1 text-[10px] font-semibold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
+                  <p className="px-3 mb-1 text-[11px] font-semibold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
                     {t(section.label)}
                   </p>
                   {visibleItems.map((item) => {

@@ -129,14 +129,14 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded border border-[#1e293b]"
                 />
-                <span className="absolute top-1 start-1 bg-black/70 text-[9px] text-white px-1 rounded">
+                <span className="absolute top-1 start-1 bg-black/70 text-[11px] text-white px-1 rounded">
                   {kindLabel}
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(originalIdx)}
                   aria-label={t("cfgshared.removeModel", { name: kindLabel })}
-                  className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 end-1 bg-black/70 hover:bg-red-500 text-white text-[11px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕
                 </button>

@@ -176,7 +176,7 @@ export function Scene3DV2Preview({
           onChange={(e) => seek(Number.parseInt(e.target.value, 10))}
           className="w-full accent-[#ff0073]"
         />
-        <span className="text-[10px] font-mono text-muted-foreground shrink-0 tabular-nums">
+        <span className="text-[11px] font-mono text-muted-foreground shrink-0 tabular-nums">
           {(frame / plan.fps).toFixed(2)}s
         </span>
       </div>
@@ -184,7 +184,7 @@ export function Scene3DV2Preview({
       {/* Shots — hard cuts over one global track, so jumping to one is a seek
           to its first frame and nothing else changes. */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Film className="w-3 h-3" />
           <span>{V2_TEXT.shots}</span>
           <span className="ms-auto">{V2_TEXT.bakedCamera}</span>
@@ -197,14 +197,14 @@ export function Scene3DV2Preview({
               aria-label={`${V2_TEXT.shot(shot.index + 1)} — ${shot.label}`}
               aria-pressed={shot.index === activeShot}
               onClick={() => seek(shot.startFrame)}
-              className={`rounded px-1.5 py-0.5 text-[10px] border ${
+              className={`rounded px-1.5 py-0.5 text-[11px] border ${
                 shot.index === activeShot
                   ? "border-[#ff0073]/50 bg-[#ff0073]/10 text-foreground"
                   : "border-[var(--border-primary)] text-muted-foreground hover:bg-muted/40"
               }`}
             >
               {shot.label}
-              <span className="ms-1 text-muted-foreground/60 tabular-nums">{shot.startFrame}</span>
+              <span className="ms-1 text-muted-foreground tabular-nums">{shot.startFrame}</span>
             </button>
           ))}
         </div>
@@ -213,7 +213,7 @@ export function Scene3DV2Preview({
       {pendingPlan && <Scene3DPendingRevisionNotice readOnly={readOnly} onResolve={onResolvePending} />}
 
       {!editingEnabled && !readOnly && (
-        <p className="text-[10px] text-muted-foreground" role="note">
+        <p className="text-[11px] text-muted-foreground" role="note">
           {V2_TEXT.editNeedsApi}
         </p>
       )}
@@ -221,7 +221,7 @@ export function Scene3DV2Preview({
       {warnings.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 flex flex-col gap-0.5">
           {warnings.map((warning, index) => (
-            <p key={`${warning.code}-${index}`} className="text-[10px] text-amber-500 flex items-start gap-1">
+            <p key={`${warning.code}-${index}`} className="text-[11px] text-amber-500 flex items-start gap-1">
               <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
               <span>
                 {warning.message}
@@ -234,7 +234,7 @@ export function Scene3DV2Preview({
 
       {/* Entities */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Boxes className="w-3 h-3" />
           <span>{V2_TEXT.entityCount(entities.length)}</span>
           <span className="ms-auto font-mono">{t("scene3dcfg.revShort", { id: plan.revisionId.slice(0, 8) })}</span>
@@ -264,13 +264,13 @@ export function Scene3DV2Preview({
                   <span className={`truncate ${entity.visible ? "" : "text-muted-foreground line-through"}`}>
                     {entity.name}
                   </span>
-                  <span className="text-[9px] text-muted-foreground shrink-0">{entity.role ?? entity.kind}</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0">{entity.role ?? entity.kind}</span>
                 </button>
                 {editingEnabled && entity.can.visibility && (
                   <button
                     type="button"
                     aria-label={`${entity.visible ? V2_TEXT.hidden : V2_TEXT.visible} ${entity.name}`}
-                    className="text-muted-foreground/50 hover:text-muted-foreground"
+                    className="text-muted-foreground hover:text-foreground"
                     onClick={() => emit(buildEntityVisibilityOperation(entity, !entity.visible))}
                   >
                     {entity.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
@@ -283,7 +283,7 @@ export function Scene3DV2Preview({
                     type="button"
                     aria-label={isLocked ? t("scene3dcfg.unlockObject", { name: entity.name }) : t("scene3dcfg.lockObject", { name: entity.name })}
                     aria-pressed={isLocked}
-                    className={isLocked ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"}
+                    className={isLocked ? "text-amber-500" : "text-muted-foreground hover:text-foreground"}
                     onClick={() => toggleLocked(entity.id)}
                   >
                     {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
@@ -308,7 +308,7 @@ export function Scene3DV2Preview({
       />
 
       {isGenerating && (
-        <p className="text-[10px] text-muted-foreground">{t("cfgext.scene3dLiveWhileRunning")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.scene3dLiveWhileRunning")}</p>
       )}
     </div>
   )
@@ -344,7 +344,7 @@ function EntityInspector({
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-medium truncate">{entity.name}</span>
           {entity.placementFromAsset && (
-            <span className="text-[9px] text-muted-foreground/70">{V2_TEXT.glbPlacement}</span>
+            <span className="text-[11px] text-muted-foreground">{V2_TEXT.glbPlacement}</span>
           )}
         </div>
 
@@ -359,7 +359,7 @@ function EntityInspector({
               disabled={!enabled || !entity.can.transform}
               labelSuffix={
                 entity.transformOverridden ? (
-                  <span className="text-[9px] text-[#ff0073] shrink-0">{V2_TEXT.overridden}</span>
+                  <span className="text-[11px] text-[#ff0073] shrink-0">{V2_TEXT.overridden}</span>
                 ) : undefined
               }
               onCommitAxis={(axis: VectorAxis, next: number) =>
@@ -368,7 +368,7 @@ function EntityInspector({
             />
           ))
         ) : (
-          <p className="text-[10px] text-muted-foreground">{V2_TEXT.glbPlacement}</p>
+          <p className="text-[11px] text-muted-foreground">{V2_TEXT.glbPlacement}</p>
         )}
 
         {entity.materials.map((material) => {
@@ -377,7 +377,7 @@ function EntityInspector({
           const roleLabel = material.role === SCENE3D_PRIMITIVE_MATERIAL_ROLE ? t("scene3dcfg.primitiveSurface") : material.role
           return (
           <div key={material.role} className="grid grid-cols-[52px_1fr] items-center gap-1">
-            <span className="text-[10px] text-muted-foreground truncate" title={roleLabel}>
+            <span className="text-[11px] text-muted-foreground truncate" title={roleLabel}>
               {roleLabel}
             </span>
             <input

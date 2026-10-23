@@ -766,7 +766,7 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
                 onCheckedChange={(v) => onUpdate({ animate: v ? undefined : false })}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("proccfg.animateHint")}
             </p>
           </div>
@@ -784,7 +784,7 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
                 onCheckedChange={(v) => onUpdate({ wordLevel: v ? undefined : false })}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("proccfg.wordLevelCaptionsHint")}
             </p>
           </div>
@@ -936,7 +936,7 @@ export function ApplyEdlConfig({ data, onUpdate, nodeId, nodes, edges }: ConfigP
           value={data.crossfadeMs ?? 0}
           onChange={(e) => onUpdate({ crossfadeMs: Math.max(0, Math.min(5000, parseInt(e.target.value) || 0)) })}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.applyEdlCrossfadeHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.applyEdlCrossfadeHint")}</p>
       </div>
     </div>
   )
@@ -1220,7 +1220,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
           value={minSec}
           onChange={(e) => onUpdate({ minPartDuration: Math.min(maxSec, Math.max(0, parseInt(e.target.value) || 0)) })}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.chunkLengthHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.chunkLengthHint")}</p>
       </div>
       <div>
         <Label>{t("proccfg.audioFormat")}</Label>
@@ -1251,7 +1251,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
               <option key={i} value={i}>{t("proccfg.chunk", { n: i + 1 })}</option>
             ))}
           </select>
-          <p className="text-[10px] text-muted-foreground">{t("proccfg.selectWhichChunkToOutputWhen")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("proccfg.selectWhichChunkToOutputWhen")}</p>
         </div>
       )}
       {(data.generatedAudioUrls?.length ?? 0) > 0 && (
@@ -1262,7 +1262,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             </label>
             <button
               type="button"
-              className="text-[10px] text-primary hover:underline"
+              className="text-[11px] text-primary hover:underline"
               onClick={() => {
                 const allSelected = !data.selectedAudioChunks || data.selectedAudioChunks.length === data.generatedAudioUrls!.length
                 onUpdate({ selectedAudioChunks: allSelected ? [] : data.generatedAudioUrls!.map((_, idx) => idx) })
@@ -1286,7 +1286,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     className="w-3.5 h-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
-                  <a href={url} download className="text-[10px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
+                  <a href={url} download className="text-[11px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
               </div>
@@ -1302,7 +1302,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             </label>
             <button
               type="button"
-              className="text-[10px] text-primary hover:underline"
+              className="text-[11px] text-primary hover:underline"
               onClick={() => {
                 const allSelected = !data.selectedVideoChunks || data.selectedVideoChunks.length === data.generatedVideoUrls!.length
                 onUpdate({ selectedVideoChunks: allSelected ? [] : data.generatedVideoUrls!.map((_, idx) => idx) })
@@ -1326,7 +1326,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     className="w-3.5 h-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
-                  <a href={url} download className="text-[10px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
+                  <a href={url} download className="text-[11px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <video controls src={url} className="w-full rounded" style={{ maxHeight: '80px' }} />
               </div>
@@ -1696,7 +1696,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
               onChange={(e) => onUpdate({ trimEndSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
             />
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("proccfg.secondsMirrorOfTheFramesMode")}
           </p>
         </>
@@ -1716,7 +1716,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
               onChange={(e) => onUpdate({ keepFirstSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
             />
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("proccfg.outputIsTheFirstNSeconds")}
           </p>
         </>
@@ -1736,7 +1736,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
               onChange={(e) => onUpdate({ keepLastSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
             />
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("proccfg.outputIsTheLastNSeconds")}
           </p>
         </>
@@ -1768,7 +1768,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
               onChange={(e) => onUpdate({ trimEndFrames: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("proccfg.theWorkerProbesTheSourceS")}
           </p>
         </>
@@ -1789,7 +1789,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
               onChange={(e) => onUpdate({ smartLoopCutLookback: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("proccfg.picksTheTrailingFrameClosestTo")}
           </p>
         </>
@@ -1842,7 +1842,7 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
             onChange={(e) => onUpdate({ timestamp: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
           />
           {mode === "keyframe" && (
-            <p className="text-[10px] text-muted-foreground leading-snug mt-1">
+            <p className="text-[11px] text-muted-foreground leading-snug mt-1">
               {t("proccfg.snapsToTheNearestKeyframeAt")}
             </p>
           )}
@@ -1860,7 +1860,7 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
             value={data.frameIndex ?? ""}
             onChange={(e) => onUpdate({ frameIndex: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
-          <p className="text-[10px] text-muted-foreground leading-snug mt-1">
+          <p className="text-[11px] text-muted-foreground leading-snug mt-1">
             {t("proccfg.0FirstFrameWorkerProbesSource")}
           </p>
         </div>
@@ -1877,7 +1877,7 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
             value={data.framesFromEnd ?? ""}
             onChange={(e) => onUpdate({ framesFromEnd: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
-          <p className="text-[10px] text-muted-foreground leading-snug mt-1">
+          <p className="text-[11px] text-muted-foreground leading-snug mt-1">
             {t("proccfg.0LastFrame1SecondTo")}
           </p>
         </div>
@@ -1928,7 +1928,7 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
             onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>{t("proccfg.x", { n: 0.1 })}</span>
             <span>{t("proccfg.x", { n: 1 })}</span>
             <span>{t("proccfg.x", { n: 10 })}</span>
@@ -1974,7 +1974,7 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
             <SelectItem value="smooth">{hasCredits() ? t("proccfg.smoothMotionInterpolationCr", { n: smoothCredits }) : t("proccfg.smoothMotionInterpolation")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("proccfg.smoothSynthesizesInBetweenFramesFor")}
         </p>
       </div>
@@ -1991,13 +1991,13 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
           </button>
         </div>
         {ramps.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("proccfg.addSegmentsForVariableSpeedE")}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
             {ramps.map((r, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-[10px]">
+              <div key={i} className="flex items-center gap-1.5 text-[11px]">
                 <span className="text-muted-foreground w-4">{i + 1}</span>
                 <input
                   type="number" min={0} step={0.1} value={r.start}
@@ -2027,7 +2027,7 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
                 >×</button>
               </div>
             ))}
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {t("proccfg.audioIsDroppedWhileRampsAre")}
             </p>
           </div>
@@ -2066,7 +2066,7 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
             onChange={(e) => onUpdate({ repeatCount: parseInt(e.target.value, 10) })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>{t("proccfg.x", { n: 2 })}</span>
             <span>{t("proccfg.x", { n: 10 })}</span>
             <span>{t("proccfg.x", { n: 20 })}</span>
@@ -2087,7 +2087,7 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
             onChange={(e) => onUpdate({ targetDuration: parseInt(e.target.value, 10) })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>{t("proccfg.s2", { n: 1 })}</span>
             <span>{t("proccfg.s2", { n: 150 })}</span>
             <span>{t("proccfg.s2", { n: 300 })}</span>
@@ -2095,7 +2095,7 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
         </div>
       )}
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {mode === "repeat"
           ? t("proccfg.theInputVideoWillBeRepeated")
           : t("proccfg.theInputVideoWillLoopUntil")}
@@ -2112,7 +2112,7 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
           />
           <label htmlFor="loop-video-smart-cut-pre" className="text-xs">{t("proccfg.smartCutBeforeLooping")}</label>
         </div>
-        <p className="text-[10px] text-muted-foreground px-1 leading-snug">
+        <p className="text-[11px] text-muted-foreground px-1 leading-snug">
           {t("proccfg.trimsTheInputClipToIts")}
         </p>
         {data.smartLoopCutBeforeRepeat && (
@@ -2173,7 +2173,7 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
             onChange={(e) => onUpdate({ fadeInDuration: parseFloat(e.target.value) })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>{t("proccfg.s2", { n: 0.1 })}</span>
             <span>{t("proccfg.s2", { n: 1.5 })}</span>
             <span>{t("proccfg.s2", { n: 3 })}</span>
@@ -2204,7 +2204,7 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
             onChange={(e) => onUpdate({ fadeOutDuration: parseFloat(e.target.value) })}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
             <span>{t("proccfg.s2", { n: 0.1 })}</span>
             <span>{t("proccfg.s2", { n: 1.5 })}</span>
             <span>{t("proccfg.s2", { n: 3 })}</span>
@@ -2212,7 +2212,7 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
         </div>
       )}
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("proccfg.applyFadeInOutTransitionsTo")}
       </p>
     </div>
@@ -2268,7 +2268,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
               onChange={(e) => onUpdate({ crf: parseInt(e.target.value, 10) })}
               className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
               <span>{t("proccfg.0Best")}</span>
               <span>{t("proccfg.23Default")}</span>
               <span>{t("proccfg.51Worst")}</span>
@@ -2355,7 +2355,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
             onCheckedChange={(v) => onUpdate({ numbered: v ? true : undefined })}
           />
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("proccfg.123AtEachImage")}
         </p>
       </div>
@@ -2373,7 +2373,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
             <SelectItem value="top-right">{t("proccfg.topRight")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("proccfg.whereTheNumberAndLabelSit")}
         </p>
       </div>
@@ -2419,7 +2419,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
                         type="button"
                         role="radio"
                         aria-checked={current === opt.value}
-                        className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                        className={`px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
                           current === opt.value
                             ? "bg-cta text-white"
                             : "bg-transparent text-muted-foreground hover:bg-muted"
@@ -2455,12 +2455,12 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
               )
             }}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1">
             {(data.layout ?? "smart") === "grid"
               ? t("proccfg.dragToReorderReadingOrderSize")
               : t("proccfg.dragToReorderReadingOrderSizes")}
           </p>
-          <p className="text-[10px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1">
             {t("proccfg.labelsShowAfterTheNumberE")}
           </p>
         </div>
@@ -2621,7 +2621,7 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
         onMapField={onMapField}
       >
         <div className="flex items-center justify-end mb-1">
-          <span className={`text-[10px] font-mono ${isOverLimit ? "text-red-500 font-bold" : "text-muted-foreground"}`}>
+          <span className={`text-[11px] font-mono ${isOverLimit ? "text-red-500 font-bold" : "text-muted-foreground"}`}>
             {textLen}/{textLimit}
           </span>
         </div>
@@ -2632,13 +2632,13 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
           className="min-h-[60px] text-xs"
         />
         {isOverLimit && (
-          <p className="text-[10px] text-red-500 mt-1">
+          <p className="text-[11px] text-red-500 mt-1">
             {t("proccfg.textExceedsSCharacterLimitBy", { platform: PLATFORM_LABELS[platform], limit: textLimit, over: textLen - textLimit })}
           </p>
         )}
       </MappableField>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("proccfg.ffmpegProcessingReformatsMediaToSpecs", { platform: PLATFORM_LABELS[platform] })}
       </p>
     </div>
@@ -2688,7 +2688,7 @@ export function ManualEditConfig({ data, onUpdate }: ConfigProps<ManualEditData>
         </div>
       )}
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("proccfg.0CreditsConnectVideosImagesAnd")}
       </p>
     </div>

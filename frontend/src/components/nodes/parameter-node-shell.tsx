@@ -545,7 +545,7 @@ function ModeButton({
         onClick()
       }}
       className={cn(
-        "flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+        "flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium transition-colors",
         active
           ? "bg-[#ff0073]/15 text-[#ff0073]"
           : "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
@@ -562,7 +562,7 @@ function PromptPreview({ text }: { readonly text: string }) {
   const t = useT()
   if (!text || !text.trim()) {
     return (
-      <p className="text-muted-foreground text-[10.5px] italic leading-snug">
+      <p className="text-muted-foreground text-[11px] italic leading-snug">
         {t("node.promptPreviewEmpty")}
       </p>
     )
@@ -570,7 +570,7 @@ function PromptPreview({ text }: { readonly text: string }) {
   return (
     <div className="rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#101010] px-2 py-1.5 max-w-full overflow-hidden">
       <p
-        className="text-foreground text-[10.5px] leading-snug font-mono whitespace-pre-wrap"
+        className="text-foreground text-[11px] leading-snug font-mono whitespace-pre-wrap"
         style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
       >
         {text}

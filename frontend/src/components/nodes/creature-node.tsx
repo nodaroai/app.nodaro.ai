@@ -222,7 +222,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
               <span className="text-xs font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[9px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
@@ -230,7 +230,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
             <ImageIcon className="w-5 h-5" />
           </div>
         )}
@@ -273,7 +273,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
             motion clips). referencePhotos has no async status (manual upload
             only) so renders with the same neutral idle state as a 0-count
             badge. */}
-        <div className="grid grid-cols-5 gap-1 text-[9px]">
+        <div className="grid grid-cols-5 gap-1 text-[11px]">
           <AssetBadge icon="📐" label={t("node.assetBadgeAngles")} count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
           <AssetBadge icon="🧍" label={t("node.assetBadgePoses")} count={counts.poses} status={nodeData.posesStatus ?? "idle"} />
           <AssetBadge icon="✨" label={t("node.assetBadgeVariations")} count={counts.variations} status={nodeData.variationsStatus ?? "idle"} />
@@ -288,7 +288,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
         <button
           type="button"
           aria-label={t("cfgext.entOpenCreatureStudio")}
-          className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium bg-[#2e1e4a] border border-[#A78BFA44] text-[#c4b5fd] rounded hover:bg-[#3a2960] transition-colors"
+          className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-medium bg-[#2e1e4a] border border-[#A78BFA44] text-[#c4b5fd] rounded hover:bg-[#3a2960] transition-colors"
           onClick={(e) => {
             e.stopPropagation()
             setCreatureStudioNodeId(id)
@@ -299,7 +299,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
         </button>
 
         {/* Metadata */}
-        <div className="flex justify-between text-muted-foreground text-[10px]">
+        <div className="flex justify-between text-muted-foreground text-[11px]">
           <span>{nodeData.style in STYLE_LABEL_KEYS ? t(STYLE_LABEL_KEYS[nodeData.style]) : nodeData.style}</span>
           <span>{nodeData.species || nodeData.category || ""}</span>
         </div>
@@ -349,7 +349,7 @@ function AssetBadge({
         className="flex flex-col items-center gap-0 px-0.5 py-0.5 rounded bg-muted/40"
       >
         <Loader2 className="w-2.5 h-2.5 animate-spin" />
-        <span className="text-[8px] text-muted-foreground">{label}</span>
+        <span className="text-[11px] text-muted-foreground">{label}</span>
       </span>
     )
   }
@@ -364,11 +364,11 @@ function AssetBadge({
     <span
       title={`${label}${hasItems ? ` — ${count}` : ""}`}
       className={`flex flex-col items-center gap-0 px-0.5 py-0.5 rounded ${
-        hasItems ? filledClass : "bg-muted/30 text-muted-foreground/40"
+        hasItems ? filledClass : "bg-muted/30 text-muted-foreground"
       }`}
     >
       <span className="leading-none">{icon}</span>
-      <span className="text-[8px] leading-tight">{hasItems ? `${label} ${display}` : label}</span>
+      <span className="text-[11px] leading-tight">{hasItems ? `${label} ${display}` : label}</span>
     </span>
   )
 }

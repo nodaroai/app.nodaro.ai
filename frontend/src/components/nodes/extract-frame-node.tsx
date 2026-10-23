@@ -102,7 +102,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
               )}
               <CachedImage src={activeUrl!} alt={t("node.extractedFrame")} className="w-full h-full object-cover rounded-md" thumbnail thumbnailWidth={320} onLoadDimensions={handleLoadDimensions} onError={() => setImgError(true)} />
-              <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{modeLabel}</div>
+              <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[11px] px-1 rounded">{modeLabel}</div>
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button type="button" aria-label={t("node.expand")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}><Expand className="w-3 h-3" /></button>
                 <button type="button" aria-label={t("common.download")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'frame'}.png`; a.click() }}><Download className="w-3 h-3" /></button>
@@ -117,7 +117,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
           {status !== "running" && activeUrl && imgError && (
             <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
               <AlertCircle className="w-5 h-5 text-amber-500" />
-              <span className="text-[10px] text-amber-500">{t("node.imageLoadFailed")}</span>
+              <span className="text-[11px] text-amber-500">{t("node.imageLoadFailed")}</span>
             </div>
           )}
 
@@ -127,12 +127,12 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
-              {nodeData.errorMessage && <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>}
+              {nodeData.errorMessage && <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>}
             </div>
           )}
 
           {status !== "running" && !activeUrl && status !== "failed" && (
-            <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+            <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <Frame className="w-5 h-5" />
             </div>
           )}

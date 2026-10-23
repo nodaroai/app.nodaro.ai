@@ -111,7 +111,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
             two of each. */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2 py-1.5">
-            <span className="shrink-0 text-[9.5px] font-bold tracking-[0.06em] text-emerald-700 dark:text-emerald-400">
+            <span className="shrink-0 text-[11px] font-bold tracking-[0.06em] text-emerald-700 dark:text-emerald-400">
               POST
             </span>
             <span className="truncate font-mono text-[11.5px]" title={nodeData.url || undefined}>
@@ -133,7 +133,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
               {params.map((p) => (
                 <span
                   key={p.id}
-                  className="flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-[10.5px]"
+                  className="flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-[11px]"
                   title={p.type}
                 >
                   {p.name || "…"}
@@ -144,7 +144,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {statusCode !== null && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               {t("utilcfg.webhookLastRun")}{" "}
               <span
                 className={`font-mono font-bold ${

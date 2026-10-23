@@ -131,7 +131,7 @@ export function RunProposalCard({
       <div className="text-[11.5px] text-[var(--copilot-dim)]">{detail}</div>
       {wiredAssets.length > 0 && (
         <div className="flex flex-col gap-1">
-          <div className="text-[10.5px] tracking-[0.1em] uppercase text-[var(--copilot-dim)] font-semibold">
+          <div className="text-[11px] tracking-[0.1em] uppercase text-[var(--copilot-dim)] font-semibold">
             {t(K.proposeUsingFiles)}
           </div>
           <ul className="flex flex-col gap-0.5">

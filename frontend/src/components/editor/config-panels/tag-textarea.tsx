@@ -1154,7 +1154,7 @@ export function TagTextarea(props: TagTextareaProps) {
     >
       {Array.from(groupedFiltered.entries()).map(([category, items]) => (
         <div key={category}>
-          <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-2.5 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+          <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-2.5 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
             {category}
           </div>
           {items.map((item) => {
@@ -1221,7 +1221,7 @@ export function TagTextarea(props: TagTextareaProps) {
                 >
                   <span className="truncate flex-1 min-w-0">{item.label}</span>
                   <span
-                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[11px] font-mono font-medium leading-4 shrink-0 ${
                       isSelected
                         ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
                         : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
@@ -1273,7 +1273,7 @@ export function TagTextarea(props: TagTextareaProps) {
                     ) : (
                       <>
                         <span
-                          className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                          className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[11px] font-mono font-medium leading-4 shrink-0 ${
                             isSelected
                               ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
                               : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
@@ -1286,7 +1286,7 @@ export function TagTextarea(props: TagTextareaProps) {
                             role="button"
                             aria-label={t("cfgext.tagTaPickUsageMode")}
                             title={t("cfgext.tagTaPickUsageModeTitle")}
-                            className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
+                            className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[11px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
                               isSelected
                                 ? "border-sky-400/60 bg-sky-500/10 text-sky-700 dark:text-sky-200 hover:bg-sky-500/25"
                                 : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -1312,12 +1312,12 @@ export function TagTextarea(props: TagTextareaProps) {
                   // (secondary), mirroring the PromptEditor's SnippetSuggestionList.
                   <span className="flex-1 min-w-0">
                     <span className="block text-[11px] font-medium truncate">{item.label}</span>
-                    <span className="block text-[10px] text-muted-foreground truncate">{item.tag}</span>
+                    <span className="block text-[11px] text-muted-foreground truncate">{item.tag}</span>
                   </span>
                 )}
                 {isNodeRef && (
                   <span
-                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 ${
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[11px] font-mono font-medium leading-4 ${
                       isSelected
                         ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
                         : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
@@ -1382,7 +1382,7 @@ export function TagTextarea(props: TagTextareaProps) {
         </>
       )}
       {warning && (
-        <p className="text-[10px] text-amber-500 mt-1">{warning}</p>
+        <p className="text-[11px] text-amber-500 mt-1">{warning}</p>
       )}
       {imagePreview && createPortal(
         (() => {

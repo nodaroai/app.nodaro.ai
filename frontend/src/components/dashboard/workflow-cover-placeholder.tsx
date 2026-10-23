@@ -132,7 +132,7 @@ export function WorkflowCoverPlaceholder({ nodeTypes, variant }: WorkflowCoverPl
         </svg>
         <div className="flex flex-col items-center gap-1">
           <div className="text-[15px] font-bold tracking-[-0.01em] text-white/[0.94]">{t("dash.noCoverYet")}</div>
-          <div className="text-[10.5px] font-medium text-white/40">{t("dash.openFlowToAddCover")}</div>
+          <div className="text-[11px] font-medium text-white/40">{t("dash.openFlowToAddCover")}</div>
         </div>
       </div>
     </div>

@@ -21,8 +21,8 @@ export const PLATFORM_COLORS: Record<SocialMediaPlatform, string> = {
 }
 
 const SIZE_CONFIG = {
-  sm: { outerW: 180, iconSize: "w-2.5 h-2.5", avatarSize: "w-4 h-4", textSize: "text-[8px]", labelSize: "text-[7px]" },
-  lg: { outerW: 280, iconSize: "w-3.5 h-3.5", avatarSize: "w-5 h-5", textSize: "text-[10px]", labelSize: "text-[9px]" },
+  sm: { outerW: 180, iconSize: "w-2.5 h-2.5", avatarSize: "w-4 h-4", textSize: "text-[11px]", labelSize: "text-[11px]" },
+  lg: { outerW: 280, iconSize: "w-3.5 h-3.5", avatarSize: "w-5 h-5", textSize: "text-[11px]", labelSize: "text-[11px]" },
 } as const
 
 const CAPTION_MAX = 60
@@ -188,7 +188,7 @@ function MediaSlot({
   if (!mediaUrl) {
     return (
       <div className={`${className} flex items-center justify-center bg-muted/20`}>
-        <Share2 className="w-6 h-6 text-muted-foreground/30" />
+        <Share2 className="w-6 h-6 text-muted-foreground" />
       </div>
     )
   }

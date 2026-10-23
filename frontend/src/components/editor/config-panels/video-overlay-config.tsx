@@ -107,14 +107,14 @@ export function VideoOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground px-1">{t("proccfg.videoOverlay.intro")}</p>
-      <p className="text-[10px] text-muted-foreground px-1">{baseLine}</p>
+      <p className="text-[11px] text-muted-foreground px-1">{baseLine}</p>
 
       {durationSec !== undefined && bars.length > 0 && (
         <VideoOverlayTimeline bars={bars} durationSec={durationSec} selected={selected} onSelect={setSelected} />
       )}
 
       {warnings.length > 0 && (
-        <p className="text-[10px] text-amber-500 px-1">
+        <p className="text-[11px] text-amber-500 px-1">
           {t("proccfg.videoOverlay.lastRun", { items: warnings.map((w) => videoOverlayWarningText(w, t)).join(" · ") })}
         </p>
       )}
@@ -225,7 +225,7 @@ export function VideoOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
             </div>
           </div>
         )}
-        <p className="text-[10px] text-muted-foreground">{t("proccfg.videoOverlay.outputHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("proccfg.videoOverlay.outputHint")}</p>
       </Section>
     </div>
   )

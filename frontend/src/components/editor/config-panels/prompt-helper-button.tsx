@@ -106,7 +106,7 @@ export function PromptHelperButton({
           "inline-flex items-center gap-1 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors font-medium whitespace-nowrap " +
           (size === "md"
             ? "px-2.5 py-1.5 text-xs"
-            : "px-2 py-0.5 min-h-[32px] sm:min-h-0 text-[10px]")
+            : "px-2 py-0.5 min-h-[32px] sm:min-h-0 text-[11px]")
         }
       >
         <Sparkles className={size === "md" ? "w-3.5 h-3.5" : "w-3 h-3"} />

@@ -291,7 +291,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   // amber, AlertTriangle, always visible (not hover-gated). Layered above
   // VideoResultOverlay's own z-10 wrapper so it's never hidden behind it.
   const policyNotice = hasVideoResult && contentPolicyNotice ? (
-    <div className="absolute inset-x-2 top-2 z-20 flex items-start gap-1.5 rounded-md bg-amber-500/90 backdrop-blur-sm px-2 py-1.5 text-[10px] text-amber-950 shadow-sm">
+    <div className="absolute inset-x-2 top-2 z-20 flex items-start gap-1.5 rounded-md bg-amber-500/90 backdrop-blur-sm px-2 py-1.5 text-[11px] text-amber-950 shadow-sm">
       <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
       <span className="leading-snug line-clamp-3">{contentPolicyNotice}</span>
     </div>
@@ -363,7 +363,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 {nodeData.errorMessage ? (
                   <p
-                    className="text-[10px] text-center line-clamp-2 text-red-400"
+                    className="text-[11px] text-center line-clamp-2 text-red-400"
                     title={nodeData.errorMessage as string}
                   >
                     {nodeData.errorMessage as string}
@@ -375,26 +375,26 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                 video-analysis scene-table pattern; copy button → full JSON). */}
             {status !== "running" && status !== "failed" && !activeUrl && plan && (
               <div className="relative group p-1.5">
-                <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] font-medium text-muted-foreground">
+                <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium text-muted-foreground">
                   <ListChecks className="w-3 h-3 shrink-0" />
                   <span>
                     {t((planSegments.length || plan.segmentCount) === 1 ? "node.planSegmentsOne" : "node.planSegmentsMany", { n: planSegments.length || plan.segmentCount || 0 })}
                     {plan.totalDurationSec ? ` · ${plan.totalDurationSec}s` : ""}
                   </span>
                 </div>
-                <div className="rounded-md border bg-muted/30 text-[10px] max-h-40 overflow-y-auto divide-y divide-border/60">
+                <div className="rounded-md border bg-muted/30 text-[11px] max-h-40 overflow-y-auto divide-y divide-border/60">
                   {planSegments.map((s) => (
                     <div key={s.index} className="flex flex-col gap-0.5 px-2 py-1">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-muted-foreground tabular-nums">#{s.index + 1}</span>
-                        {s.duration != null && <span className="text-muted-foreground/70 tabular-nums">{s.duration}s</span>}
-                        {s.transition && <span className="text-muted-foreground/60 uppercase text-[9px] tracking-wide">{s.transition}</span>}
+                        {s.duration != null && <span className="text-muted-foreground tabular-nums">{s.duration}s</span>}
+                        {s.transition && <span className="text-muted-foreground uppercase text-[11px] tracking-wide">{s.transition}</span>}
                       </div>
-                      {s.prompt && <span className="text-muted-foreground/70 line-clamp-2">{s.prompt}</span>}
+                      {s.prompt && <span className="text-muted-foreground line-clamp-2">{s.prompt}</span>}
                     </div>
                   ))}
                   {planSegments.length === 0 && (
-                    <div className="px-2 py-1 text-muted-foreground/60">{t("node.planReadyCopyJson")}</div>
+                    <div className="px-2 py-1 text-muted-foreground">{t("node.planReadyCopyJson")}</div>
                   )}
                 </div>
                 <button
@@ -411,7 +411,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             )}
             {status !== "running" && !activeUrl && status !== "failed" && !plan && (
-              <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+              <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
                 <Clapperboard className="w-10 h-10" />
               </div>
             )}

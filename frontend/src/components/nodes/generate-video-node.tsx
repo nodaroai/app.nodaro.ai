@@ -404,7 +404,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             {nodeData.errorMessage ? (
               <p
-                className="text-[10px] text-center line-clamp-2 text-red-400"
+                className="text-[11px] text-center line-clamp-2 text-red-400"
                 title={nodeData.errorMessage as string}
               >
                 {nodeData.errorMessage as string}
@@ -415,7 +415,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground/40 h-[160px]`}>
+          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground h-[160px]`}>
             <Clapperboard className="w-10 h-10" />
           </div>
         )}

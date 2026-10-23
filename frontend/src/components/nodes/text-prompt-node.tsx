@@ -666,7 +666,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             <DialogTitle>{localizeNode(nodeData.label ?? "Text")}</DialogTitle>
           </VisuallyHidden>
           {/* Header: icon + editable title, top-left. */}
-          <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70">
+          <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/80 dark:text-white/70">
             <Type className="w-3.5 h-3.5" />
             {titleEditing ? (
               <input

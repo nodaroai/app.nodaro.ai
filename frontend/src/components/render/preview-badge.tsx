@@ -35,7 +35,7 @@ export function PreviewBadge({ className }: { readonly className?: string }) {
     <span
       title={t("node.renderPreviewBadgeHint")}
       className={cn(
-        "inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400",
+        "inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400",
         className,
       )}
     >

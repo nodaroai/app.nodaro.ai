@@ -302,7 +302,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -311,9 +311,9 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Idle/empty state */}
             {!isRunning && !activeUrl && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px] px-3 text-center">
                 <LayoutGrid className="w-10 h-10" />
-                <span className="text-[10px] leading-tight">
+                <span className="text-[11px] leading-tight">
                   {t("node.connectReferenceImagesOrEntities")}
                 </span>
               </div>
@@ -356,7 +356,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   disabled={!canRefine}
                   aria-pressed={maskMode}
                   title={maskMode ? t("node.maskOnEditBrushedArea") : t("node.maskOffEditWholeBoard")}
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border transition-colors disabled:opacity-40 ${
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] border transition-colors disabled:opacity-40 ${
                     maskMode
                       ? "bg-cta border-[#ff0073] text-white"
                       : "bg-white/5 border-white/10 text-white/70 hover:text-white"
@@ -369,7 +369,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   onClick={handleAddRef}
                   disabled={!canRefine}
                   title={t("node.attachAReferenceImageFor")}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border bg-white/5 border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] border bg-white/5 border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
                 >
                   <Plus className="w-3 h-3" />
                   <ImageIcon className="w-3 h-3" />
@@ -380,7 +380,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   onClick={handleReroll}
                   disabled={isRunning}
                   title={t("node.rerollFreshBoard")}
-                  className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border bg-white/5 border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                  className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] border bg-white/5 border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
                 >
                   <RefreshCw className="w-3 h-3" /> {t("node.reroll")}
                 </button>

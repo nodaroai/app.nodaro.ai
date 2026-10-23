@@ -1331,7 +1331,7 @@ const NO_NODES: ReadonlyArray<WorkflowNode> = []
 const NO_EDGES: ReadonlyArray<WorkflowEdge> = []
 
 const ghostTriggerClass =
-  "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[10px] " +
+  "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[11px] " +
   "text-neutral-900/85 hover:!bg-black/10 dark:text-white/85 dark:hover:!bg-white/10 " +
   "rounded-md min-w-0 w-auto whitespace-nowrap [&_svg]:!size-3 [&_svg]:opacity-70 " +
   "[&[data-state=open]]:bg-black/10 dark:[&[data-state=open]]:bg-white/10"
@@ -1476,7 +1476,7 @@ export function QuickConfigSelect({
               {options.map((o) => {
                 const price = llmPriceOf(o.value)
                 const priceTag =
-                  price ? <span className="ms-2 text-[10px] text-muted-foreground" data-testid={`quick-llm-price-${o.value}`}>{price}</span> : null
+                  price ? <span className="ms-2 text-[11px] text-muted-foreground" data-testid={`quick-llm-price-${o.value}`}>{price}</span> : null
                 // A greyed row explains itself in place of its description.
                 const note = o.disabled ? o.reason : o.description
                 return (
@@ -1489,7 +1489,7 @@ export function QuickConfigSelect({
                     {note ? (
                       <span className="flex flex-col gap-0.5">
                         <span>{localizeOption(o.label)}{priceTag}</span>
-                        <span className="text-[10px] leading-tight text-muted-foreground/70">{note}</span>
+                        <span className="text-[11px] leading-tight text-muted-foreground">{note}</span>
                       </span>
                     ) : (
                       <>{localizeOption(o.label)}{priceTag}</>
@@ -1526,7 +1526,7 @@ export function QuickConfigSelect({
           }}
         >
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
               {control.ariaLabel} — {range.min}–{range.max}
               {range.unit ?? ""}
             </span>

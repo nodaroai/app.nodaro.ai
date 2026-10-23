@@ -275,7 +275,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
               )}
               <span
                 aria-hidden
-                className={`absolute top-0.5 left-0.5 text-[9px] leading-none font-semibold px-1 py-0.5 rounded-sm tabular-nums shadow-sm pointer-events-none ${
+                className={`absolute top-0.5 left-0.5 text-[11px] leading-none font-semibold px-1 py-0.5 rounded-sm tabular-nums shadow-sm pointer-events-none ${
                   isActive
                     ? "bg-cta text-white"
                     : "bg-black/70 text-white/85"

@@ -140,7 +140,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute inset-x-0 bottom-0 px-2.5 py-2 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
                   <div className="flex items-baseline justify-between">
                     <span className="text-[11px] text-white">{t("node.converting")}</span>
-                    <span className="text-[10px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
+                    <span className="text-[11px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-white/20 overflow-hidden">
                     <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct ?? 0}%`, background: HANDLE_COLORS.video }} />
@@ -158,7 +158,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-500" /></div>
                     <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                     {nodeData.errorMessage && (
-                      <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
                     )}
                   </div>
                 </div>
@@ -173,8 +173,8 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
+                  <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
               </div>
             )}
@@ -185,7 +185,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex-1 min-h-0 flex flex-col gap-1.5">
                   <div className="relative flex-1 min-h-24 rounded-md overflow-hidden bg-black">
                     <img src={sourceGifUrl} alt="" className="absolute inset-0 w-full h-full object-contain" />
-                    <div className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-mono">GIF → MP4</div>
+                    <div className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[11px] font-mono">GIF → MP4</div>
                     {!upstreamGifUrl && (
                       <button type="button" aria-label={t("node.replaceGif")}
                         className="absolute right-1.5 top-1.5 w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full opacity-0 group-hover/node:opacity-100 transition-opacity"
@@ -206,11 +206,11 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   onDragLeave={() => setIsDragOver(false)}
                   onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); handleFile(e.dataTransfer.files[0]) }}
                 >
-                  <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
                     <ImageIcon className="w-4 h-4" />
                     <span className="text-xs">{isDragOver ? t("node.dropGif") : t("node.chooseOrWireGif")}</span>
                   </div>
-                  <span className="text-[9px] text-muted-foreground/50">{t("node.gifToMp4MotionReference")}</span>
+                  <span className="text-[11px] text-muted-foreground">{t("node.gifToMp4MotionReference")}</span>
                 </button>
               )
             )}
@@ -230,12 +230,12 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             )}
             {uploadError && !hasSource && (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-500/10 text-red-400 text-[10px]">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-red-500/10 text-red-400 text-[11px]">
                 <AlertCircle className="w-3 h-3 shrink-0" />
                 <span className="truncate">{uploadError}</span>
               </div>
             )}
-            <p className="text-muted-foreground text-[10px]">{summaryLabel}</p>
+            <p className="text-muted-foreground text-[11px]">{summaryLabel}</p>
           </div>
         )}
       </BaseNode>

@@ -74,18 +74,18 @@ function JsonProcessNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400">
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400">
               {modeBadge}
             </span>
           </div>
           {resultLabel !== undefined ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs font-medium text-emerald-400">{resultLabel}</p>
-              <span className="text-[10px] text-muted-foreground mt-0.5 block truncate">{summaryLine}</span>
+              <span className="text-[11px] text-muted-foreground mt-0.5 block truncate">{summaryLine}</span>
             </div>
           ) : (
             <div className="flex flex-col items-start justify-center min-h-10 rounded-md border-2 border-dashed border-muted-foreground/20 px-2 py-1.5">
-              <span className="text-[10px] text-muted-foreground/60 truncate w-full">{summaryLine}</span>
+              <span className="text-[11px] text-muted-foreground truncate w-full">{summaryLine}</span>
             </div>
           )}
         </div>

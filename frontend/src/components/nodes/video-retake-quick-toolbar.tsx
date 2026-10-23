@@ -156,7 +156,7 @@ export function VideoRetakeQuickToolbar({
   // Ghost-style classes copied verbatim from the canonical implementation
   // so the visual hierarchy of every quick toolbar in the editor matches.
   const ghostTriggerClass =
-    "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[10px] " +
+    "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[11px] " +
     "text-neutral-900/85 hover:!bg-black/10 dark:text-white/85 dark:hover:!bg-white/10 " +
     "rounded-md min-w-0 w-auto whitespace-nowrap [&_svg]:!size-3 [&_svg]:opacity-70 " +
     "[&[data-state=open]]:bg-black/10 dark:[&[data-state=open]]:bg-white/10"
@@ -186,7 +186,7 @@ export function VideoRetakeQuickToolbar({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
+              className="flex items-center gap-1 h-6 px-2 text-[11px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
               title={t("nav.settings")}
             >
               <Settings2 className="w-3 h-3 opacity-70" />
@@ -375,7 +375,7 @@ function ToolbarSetting({
 }) {
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
         {icon}
         <span>{label}</span>
       </div>

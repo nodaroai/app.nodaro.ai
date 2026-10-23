@@ -121,9 +121,9 @@ function SortableRefImageItem({
       }`}
     >
       <span {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none">
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
       </span>
-      <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[10px]">#{index + 1}</span>
+      <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[11px]">#{index + 1}</span>
       <CachedImage
         src={entry.url}
         alt={rowLabel}
@@ -132,7 +132,7 @@ function SortableRefImageItem({
         thumbnailWidth={80}
       />
       <span className="truncate flex-1 min-w-0" title={rowLabel}>{rowLabel}</span>
-      <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>{badge.label}</span>
+      <span className={`text-[11px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>{badge.label}</span>
       {onRemove && (
         <button aria-label={t("common.remove")}
           type="button"
@@ -200,7 +200,7 @@ export function ReferenceImageList({
         <Button
           variant="outline"
           size="sm"
-          className="h-6 text-[10px] px-2"
+          className="h-6 text-[11px] px-2"
           onClick={onUpload}
           disabled={uploadingRef || !canUpload}
         >
@@ -226,13 +226,13 @@ export function ReferenceImageList({
           </SortableContext>
         </DndContext>
       ) : (
-        <p className="text-[10px] text-muted-foreground/60">
+        <p className="text-[11px] text-muted-foreground">
           {t("cfgshared.noRefImages")}
         </p>
       )}
 
       {totalCount > 0 && (
-        <p className="text-[10px] text-muted-foreground mt-1.5">
+        <p className="text-[11px] text-muted-foreground mt-1.5">
           {t("cfgshared.refImgPositionTip")}
         </p>
       )}

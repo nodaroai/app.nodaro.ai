@@ -90,7 +90,7 @@ export default function ArchivedRunsPage() {
         </div>
       ) : runs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Archive className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <Archive className="h-10 w-10 text-muted-foreground mb-3" />
           <p className="text-sm text-muted-foreground">{t("archive.empty")}</p>
         </div>
       ) : (
@@ -104,7 +104,7 @@ export default function ArchivedRunsPage() {
                 {run.thumbnailUrl ? (
                   <img src={optimizedImageUrl(run.thumbnailUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
                 )}
               </div>
               <div className="flex-1 min-w-0">

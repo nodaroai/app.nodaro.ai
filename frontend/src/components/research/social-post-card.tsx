@@ -137,7 +137,7 @@ export function SocialPostCard({
           </button>
         )}
         {post.media.kind === "video" && (
-          <span className="absolute bottom-1.5 start-1.5 flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10.5px] font-bold text-white">
+          <span className="absolute bottom-1.5 start-1.5 flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[11px] font-bold text-white">
             <Play className="h-3 w-3" />
             {typeof post.media.durationSec === "number" ? `${Math.round(post.media.durationSec)}s` : ""}
           </span>

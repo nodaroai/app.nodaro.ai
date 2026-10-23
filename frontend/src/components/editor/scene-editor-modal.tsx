@@ -268,10 +268,10 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
             </h2>
             {linkedActiveScript && data.sourceSceneIndex >= 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground dark:text-[#64748B] bg-muted dark:bg-[#2D2D2D] px-2 py-0.5 rounded-full">
+                <span className="text-[11px] text-muted-foreground dark:text-[#64748B] bg-muted dark:bg-[#2D2D2D] px-2 py-0.5 rounded-full">
                   {t("scene.linkedTo", { script: linkedActiveScript?.title ?? linkedScriptData?.label ?? t("scene.scriptFallback"), scene: linkedSceneName ? `${data.sourceSceneIndex + 1}. ${linkedSceneName}` : t("cfgext.sceneNumbered", { index: data.sourceSceneIndex + 1 }) })}
                 </span>
-                <button type="button" onClick={handleSyncFromScript} className="text-[10px] text-[#ff0073] hover:text-[#ff0073]/80 transition-colors">{t("scene.sync")}</button>
+                <button type="button" onClick={handleSyncFromScript} className="text-[11px] text-[#ff0073] hover:text-[#ff0073]/80 transition-colors">{t("scene.sync")}</button>
               </div>
             )}
           </div>
@@ -451,7 +451,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                             {...pressable(() => updateNodeData(nodeId, { activeVideoResultIndex: i, generatedVideoUrl: r.url }))}
                           >
                             <Video className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-[9px] text-muted-foreground ms-0.5">{i + 1}</span>
+                            <span className="text-[11px] text-muted-foreground ms-0.5">{i + 1}</span>
                           </div>
                           <button
                             type="button"
@@ -475,7 +475,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   <AccordionTrigger className="px-4 py-3 text-xs hover:no-underline hover:bg-gray-100 dark:hover:bg-[#1E1E1E] transition-colors">
                     <span className="flex items-center gap-2">
                       <span className="font-semibold text-[11px] uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.phdGeneratedPrompt")}</span>
-                      <span className={`text-[10px] font-mono ${
+                      <span className={`text-[11px] font-mono ${
                         generatedPrompt.length > PROMPT_MAX_LENGTH
                           ? "text-red-500 font-medium"
                           : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9

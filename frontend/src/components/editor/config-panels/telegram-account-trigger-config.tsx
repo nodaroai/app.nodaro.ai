@@ -189,7 +189,7 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
       {(d.accountId || chatIds.length > 0) && (
         <div>
           <Label className={SECTION_LABEL}>{t("tgtrig.chats")}</Label>
-          <p className="text-[10px] text-muted-foreground mt-1">{t("tgtrig.chatsHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("tgtrig.chatsHint")}</p>
           {chatIds.length > 0 && (
             <ul className="mt-1.5 flex flex-col gap-1" aria-label={t("tgtrig.selectedChats")}>
               {chatIds.map((id) => {
@@ -239,7 +239,7 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
                       <span className={`flex-1 truncate text-xs ${chat.dormant ? "text-muted-foreground" : ""}`} dir="auto">
                         {titleOf(chat)}
                       </span>
-                      {chat.dormant && <span className="text-[10px] text-muted-foreground">{t("tgtrig.dormant")}</span>}
+                      {chat.dormant && <span className="text-[11px] text-muted-foreground">{t("tgtrig.dormant")}</span>}
                     </label>
                   ))
                 )}
@@ -260,13 +260,13 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
               {t("tgtrig.clearSenders")}
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-1">{t("tgtrig.sendersHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("tgtrig.sendersHint")}</p>
         </div>
       )}
 
       <div>
         <Label className={SECTION_LABEL}>{t("tgtrig.messageTypes")}</Label>
-        <p className="text-[10px] text-muted-foreground mt-1">{t("tgtrig.messageTypesHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("tgtrig.messageTypesHint")}</p>
         <div className="mt-1.5 grid grid-cols-2 gap-1.5">
           {MESSAGE_TYPES.map((type) => (
             <label key={type.value} className="flex cursor-pointer items-center gap-2 text-xs">
@@ -296,13 +296,13 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
         {keywords.length > 0 && (
           <ul className="mt-1.5 flex flex-wrap gap-1" aria-label={t("tgtrig.keywords")}>
             {keywords.map((keyword) => (
-              <li key={keyword} className="rounded border px-1.5 py-0.5 text-[10px]" dir="auto">
+              <li key={keyword} className="rounded border px-1.5 py-0.5 text-[11px]" dir="auto">
                 {visibleText(keyword)}
               </li>
             ))}
           </ul>
         )}
-        <p className="text-[10px] text-muted-foreground mt-1">{t("tgtrig.keywordsHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("tgtrig.keywordsHint")}</p>
       </div>
 
       <div>
@@ -314,7 +314,7 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
           />
           {t("tgtrig.inboxMode")}
         </label>
-        <p className="text-[10px] text-muted-foreground mt-1">{t("tgtrig.inboxModeHint")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("tgtrig.inboxModeHint")}</p>
       </div>
 
       {/* Inbox mode listens to the owner's own shares, so it always includes them. */}
@@ -333,7 +333,7 @@ export function TelegramAccountTriggerConfig({ data, onUpdate }: ConfigProps<Tel
         >
           {d.isActive ? t("tgtrig.stop") : t("tgtrig.start")}
         </Button>
-        <p className="text-[10px] text-muted-foreground">{startHint}</p>
+        <p className="text-[11px] text-muted-foreground">{startHint}</p>
       </div>
     </div>
   )

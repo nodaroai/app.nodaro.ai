@@ -328,7 +328,7 @@ export function MotionTab({ studio }: MotionTabProps) {
                 controls
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
+              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5 pointer-events-none">
                 {item.name}
               </div>
               {/* Phase 2 #10 — selection checkbox. */}
@@ -367,7 +367,7 @@ export function MotionTab({ studio }: MotionTabProps) {
                       void handleRemove(originalIdx)
                     }}
                     aria-label={t("cfgshared.removeModel", { name: item.name })}
-                    className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
+                    className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80"
                   >
                     {t("common.remove")}
                   </button>

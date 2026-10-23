@@ -309,7 +309,7 @@ function DetailedModelTable({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/20">
-                  <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="text-left px-3 py-2 font-medium">Model</th>
                     <th className="text-right px-3 py-2 font-medium">Credits</th>
                     <th className="px-3 py-2 w-12" />
@@ -333,7 +333,7 @@ function DetailedModelTable({
                             <div className="flex flex-col">
                               <span className="font-mono text-xs">{m.model_identifier}</span>
                               {m.display_name && m.display_name !== m.model_identifier && (
-                                <span className="text-[10px] text-muted-foreground leading-tight">{m.display_name}</span>
+                                <span className="text-[11px] text-muted-foreground leading-tight">{m.display_name}</span>
                               )}
                             </div>
                           </div>
@@ -434,7 +434,7 @@ function AIModelsSection({
         <DollarSign className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">AI Model Pricing</h2>
         {pendingCount > 0 && (
-          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 text-[10px]">
+          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 text-[11px]">
             {pendingCount} unsaved
           </Badge>
         )}

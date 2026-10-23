@@ -105,7 +105,7 @@ export function StudioWorkflowsView({ showAll, search: controlledSearch }: Studi
               <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} />
               <div className="px-3 py-2.5">
                 <p className="text-[13px] font-semibold truncate">{wf.name}</p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground truncate flex items-center gap-1">
+                <p className="mt-0.5 text-[11px] text-muted-foreground truncate flex items-center gap-1">
                   {showAll && wf.ownerEmail && (
                     <>
                       <span className="truncate">{wf.ownerEmail}</span>

@@ -73,7 +73,7 @@ export default function DeletedAppsPage() {
         </div>
       ) : apps.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Archive className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <Archive className="h-10 w-10 text-muted-foreground mb-3" />
           <p className="text-sm text-muted-foreground">
             {t("apps.deleted.empty")}
           </p>
@@ -89,7 +89,7 @@ export default function DeletedAppsPage() {
                 {app.previewMediaUrl ? (
                   <img src={optimizedImageUrl(app.previewMediaUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <Archive className="h-5 w-5 text-muted-foreground/40" />
+                  <Archive className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
               <div className="flex-1 min-w-0">

@@ -140,9 +140,9 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Idle / empty */}
             {status !== "running" && !hasResult && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px] px-3 text-center">
                 <LayoutGrid className="w-10 h-10" />
-                <span className="text-[10px] leading-tight">
+                <span className="text-[11px] leading-tight">
                   {t("node.connectACharacterObjectOr")}
                 </span>
               </div>
@@ -156,7 +156,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-3" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-3" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -209,7 +209,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                     clean reference images downstream. */}
                 {panelCount > 0 && (
                   <div
-                    className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm border border-white/10 text-white/90 rounded-md text-[10px] font-medium"
+                    className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm border border-white/10 text-white/90 rounded-md text-[11px] font-medium"
                     title={t("node.nCleanPanelsAvailable", { n: panelCount })}
                   >
                     <LayoutGrid className="w-3 h-3" />
@@ -265,11 +265,11 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
           </div>
 
           {/* Bottom config summary — read-only; full editing in the config panel. */}
-          <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[10px]">
+          <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[11px]">
             <span className="flex-1 truncate text-muted-foreground capitalize" title={`${nodeData.type} · ${nodeData.skin}`}>
               {t(SHEET_TYPE_LABEL_KEYS[nodeData.type ?? "full-reference"] ?? "cfgext.refSheetTypeFullReference")}
             </span>
-            <span className="font-mono text-muted-foreground/80 shrink-0 capitalize">{t(SHEET_SKIN_LABEL_KEYS[nodeData.skin ?? "studio"] ?? "cfgext.refSheetSkinStudio")}</span>
+            <span className="font-mono text-muted-foreground shrink-0 capitalize">{t(SHEET_SKIN_LABEL_KEYS[nodeData.skin ?? "studio"] ?? "cfgext.refSheetSkinStudio")}</span>
           </div>
         </div>
       </BaseNode>

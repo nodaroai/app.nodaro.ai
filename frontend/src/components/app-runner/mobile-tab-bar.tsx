@@ -42,7 +42,7 @@ export function MobileTabBar({
       icon: Clock,
       badge:
         runCount > 0 ? (
-          <span className="absolute -top-1 -end-2 text-[9px] font-medium text-muted-foreground bg-muted rounded-full px-1 min-w-[16px] text-center">
+          <span className="absolute -top-1 -end-2 text-[11px] font-medium text-muted-foreground bg-muted rounded-full px-1 min-w-[16px] text-center">
             {runCount > 99 ? "99+" : runCount}
           </span>
         ) : null,
@@ -72,7 +72,7 @@ export function MobileTabBar({
               <Icon className="h-5 w-5" />
               {badge}
             </span>
-            <span className="text-[10px] font-medium">{t(label)}</span>
+            <span className="text-[11px] font-medium">{t(label)}</span>
           </button>
         )
       })}

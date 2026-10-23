@@ -54,7 +54,7 @@ export function PresentationDisplayConfig({
   const t = useT()
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
         {t("cfgext.presPresentation")}
       </p>
 

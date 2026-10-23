@@ -2,9 +2,9 @@
 // other design-series nodes use (see reduce-node), so the cards read as one
 // family: mono uppercase kickers, muted panel surfaces, brand-pink accents.
 
-export const KICKER = "text-[9px] font-mono uppercase tracking-[0.12em] text-muted-foreground/70 whitespace-nowrap"
+export const KICKER = "text-[11px] font-mono uppercase tracking-[0.12em] text-muted-foreground whitespace-nowrap"
 
-export const META_MONO = "text-[10px] font-mono text-muted-foreground/70 whitespace-nowrap"
+export const META_MONO = "text-[11px] font-mono text-muted-foreground whitespace-nowrap"
 
 /** A quiet outlined action ("Change avatar", "Use an image instead"). */
 export const GHOST_BUTTON =

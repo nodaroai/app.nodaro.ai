@@ -41,7 +41,7 @@ export interface ClipCardProps {
   readonly fixedHeight?: boolean
 }
 
-const CHIP = "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+const CHIP = "inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
 
 function StateLine({ card, progress, t }: { readonly card: ClipCardModel; readonly progress: ClipCardProps["progress"]; readonly t: TFunction }) {
   const line = (icon: React.ReactNode, text: string, tone = "text-muted-foreground") => (
@@ -134,9 +134,9 @@ function ClipCardView({ card, progress, canEdit, playing, onPlay, onKeep, onHook
         {take && <Poster take={take} playing={playing} label={t("clipReview.play", { n: number })} onPlay={() => onPlay(card.clipKey)} />}
         <div className="pointer-events-none absolute inset-x-1.5 top-1.5 flex items-center gap-1.5">
           {badge}
-          <span className="rounded bg-black/60 px-1 text-[10px] font-medium tabular-nums text-white">#{number}</span>
+          <span className="rounded bg-black/60 px-1 text-[11px] font-medium tabular-nums text-white">#{number}</span>
         </div>
-        <span className="pointer-events-none absolute bottom-1.5 end-1.5 rounded bg-black/60 px-1 text-[10px] tabular-nums text-white" dir="ltr">
+        <span className="pointer-events-none absolute bottom-1.5 end-1.5 rounded bg-black/60 px-1 text-[11px] tabular-nums text-white" dir="ltr">
           {positionOf(card.durationMs)}
         </span>
       </div>

@@ -27,7 +27,7 @@ import type { CollectionReadData, CollectionWriteData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
 const LABEL_CLASS = "text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]"
-const HINT_CLASS = "text-[10px] text-muted-foreground mt-1"
+const HINT_CLASS = "text-[11px] text-muted-foreground mt-1"
 const DAYS_MAX = COLLECTION_READ_WINDOW_HOURS_MAX / 24
 
 const clampWindow = (n: number, unit: CollectionReadWindowUnit): number =>
@@ -231,7 +231,7 @@ export function CollectionWriteConfig({ data, onUpdate, sources, fieldMappings, 
   return (
     <div className="space-y-4">
       <CollectionPicker collectionId={data.collectionId ?? ""} onPick={(c) => onUpdate({ collectionId: c.id, collectionName: c.name })} />
-      <p className="text-[10px] text-muted-foreground">{t("collcfg.autoIngestHint")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("collcfg.autoIngestHint")}</p>
 
       <MappableField field="title" label={t("collcfg.title")} {...mappable}>
         <Input value={data.title ?? ""} dir="auto" placeholder={t("collcfg.fromItemPh")} onChange={(e) => onUpdate({ title: e.target.value })} />
@@ -260,9 +260,9 @@ export function CollectionWriteConfig({ data, onUpdate, sources, fieldMappings, 
       </div>
 
       <div className="space-y-1">
-        <p className="text-[10px] text-muted-foreground">{t("collcfg.dedupeKeyHint")}</p>
-        <p className="text-[10px] text-muted-foreground">{t("collcfg.mediaHint")}</p>
-        <p className="text-[10px] text-muted-foreground">{t("collcfg.writeOutputHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("collcfg.dedupeKeyHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("collcfg.mediaHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("collcfg.writeOutputHint")}</p>
       </div>
 
       <RunError data={data} />

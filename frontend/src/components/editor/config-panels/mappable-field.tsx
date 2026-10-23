@@ -80,7 +80,7 @@ export const MappableField = memo(function MappableField({
           {field === "provider" && <CompareModelsLink />}
           {labelAction}
           {wiredLabel !== undefined && (
-            <span className="inline-flex h-5 max-w-[160px] items-center gap-1 rounded-md bg-[#ff0073]/10 px-1.5 text-[10px] font-medium text-[#ff0073] dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]">
+            <span className="inline-flex h-5 max-w-[160px] items-center gap-1 rounded-md bg-[#ff0073]/10 px-1.5 text-[11px] font-medium text-[#ff0073] dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]">
               <Link2 className="size-2.5 shrink-0" />
               <span className="truncate">{localizeNode(wiredLabel)}</span>
             </span>
@@ -92,7 +92,7 @@ export const MappableField = memo(function MappableField({
             >
               <SelectTrigger
                 aria-label={t("cfgshared.fieldSourceAria", { label })}
-                className={`h-5 text-[10px] leading-none w-auto max-w-[160px] px-1.5 py-0 gap-1 shrink-0 rounded-md border-0 font-medium transition-colors ${
+                className={`h-5 text-[11px] leading-none w-auto max-w-[160px] px-1.5 py-0 gap-1 shrink-0 rounded-md border-0 font-medium transition-colors ${
                   isMapped
                     ? "bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/15 dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-[#2D2D2D] dark:text-[#94A3B8] dark:hover:bg-[#3a3a3a]"

@@ -209,7 +209,7 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
         className={`absolute left-0 flex items-center max-w-full ${
           tint
             ? "bottom-full font-semibold"
-            : "-top-6 gap-1.5 text-[12px] font-medium text-foreground/70 dark:text-white/70"
+            : "-top-6 gap-1.5 text-[12px] font-medium text-foreground/80 dark:text-white/70"
         } ${editing ? "nopan nodrag nowheel" : "select-none"}`}
         style={bannerStyle}
       >

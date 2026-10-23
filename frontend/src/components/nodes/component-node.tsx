@@ -177,7 +177,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div className="relative w-full h-full group">
           {!nodeData.appSlug ? (
-            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
               <Puzzle className="w-10 h-10" />
             </div>
           ) : (
@@ -257,7 +257,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[160px]">
                   <span className="font-medium text-sm">{t("node.failed")}</span>
                   {nodeData.errorMessage && (
-                    <p className="text-[10px] text-red-400 text-center line-clamp-2" title={nodeData.errorMessage}>
+                    <p className="text-[11px] text-red-400 text-center line-clamp-2" title={nodeData.errorMessage}>
                       {nodeData.errorMessage}
                     </p>
                   )}
@@ -266,7 +266,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
 
               {/* Idle/empty state */}
               {status !== "running" && !previewValue && status !== "failed" && (
-                <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+                <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
                   <Puzzle className="w-10 h-10" />
                 </div>
               )}
@@ -296,7 +296,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
           />
           {h.handleName && (
             <span
-              className="absolute text-[8px] font-medium text-muted-foreground/70 pointer-events-none select-none whitespace-nowrap"
+              className="absolute text-[11px] font-medium text-muted-foreground pointer-events-none select-none whitespace-nowrap"
               style={{ top: h.top ?? "calc(100% - 24px)", left: "6px", transform: "translateY(-50%)" }}
             >
               {h.handleName}
@@ -313,7 +313,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
           />
           {h.handleName && (
             <span
-              className="absolute text-[8px] font-medium text-muted-foreground/70 pointer-events-none select-none whitespace-nowrap"
+              className="absolute text-[11px] font-medium text-muted-foreground pointer-events-none select-none whitespace-nowrap"
               style={{ top: h.top ?? "20px", right: "6px", transform: "translateY(-50%)" }}
             >
               {h.handleName}

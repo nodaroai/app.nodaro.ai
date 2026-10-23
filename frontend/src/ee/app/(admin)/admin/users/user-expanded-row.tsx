@@ -205,7 +205,7 @@ export function UserExpandedRow({
                   <span className="text-muted-foreground">Spent</span>
                   <span className="font-mono font-medium">{unitsOrDash(user.sai_spent)}</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Read-only. Allowances are granted by the deployment&apos;s billing account.
                 </p>
               </div>
@@ -230,7 +230,7 @@ export function UserExpandedRow({
                   style={{ width: `${Math.min(subPercent, 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground">
+              <div className="flex justify-between text-[11px] text-muted-foreground">
                 <span>Subscription ({Math.round(subPercent)}%)</span>
                 <span>Top-up ({Math.round(100 - subPercent)}%)</span>
               </div>
@@ -371,7 +371,7 @@ export function UserExpandedRow({
                         style={{ width: `${usagePercent}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <div className="flex justify-between text-[11px] text-muted-foreground">
                       <span>{Math.round(usagePercent)}% used</span>
                       <span>{formatBytes(Math.max(0, user.storage_limit_bytes - user.storage_used_bytes))} remaining</span>
                     </div>
@@ -471,7 +471,7 @@ export function UserExpandedRow({
                             <span className="capitalize">{tx.credit_type}</span>
                           </td>
                           <td className="px-3 py-1.5">
-                            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_COLORS[tx.source] ?? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"}`}>
+                            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium ${SOURCE_COLORS[tx.source] ?? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"}`}>
                               {tx.source.replace(/_/g, " ")}
                             </span>
                           </td>

@@ -292,7 +292,7 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={[data.preText, composed, data.postText]} />
-      <p className="text-[10px] text-muted-foreground italic px-0.5">
+      <p className="text-[11px] text-muted-foreground italic px-0.5">
         {t("paramcfg.connectParameterNodesToStartstateEndstat")}
       </p>
       <CustomTextRows
@@ -641,7 +641,7 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
         localizeLabel={localizeOption}
         copy={pickerCopy}
       />
-      <p className="text-[10px] text-muted-foreground leading-snug">
+      <p className="text-[11px] text-muted-foreground leading-snug">
         {t("paramcfg.wireThisNodeSOutputInto")}
       </p>
     </div>
@@ -1441,7 +1441,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       <div className={`grid ${TIMING_GRID_COLS[timingSelects.length]} gap-2`}>
         {timingSelects.map(({ lever, label: labelText, labelKeys, descKeys }) => (
           <div key={lever.field} className="flex flex-col gap-1">
-            <Label className="text-[10px] uppercase">{labelText}</Label>
+            <Label className="text-[11px] uppercase">{labelText}</Label>
             <Select
               value={transitionLeverValue(kind, lever, data[lever.field])}
               onValueChange={(v) => onUpdate({ [lever.field]: v })}
@@ -1494,7 +1494,7 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
       <div className="grid grid-cols-3 gap-2">
         {CHARACTER_FX_TIMING_SELECTS().map(({ key, label: labelText, options, descKeys }) => (
           <div key={key} className="flex flex-col gap-1">
-            <Label className="text-[10px] uppercase">{labelText}</Label>
+            <Label className="text-[11px] uppercase">{labelText}</Label>
             <Select
               value={(data[key] as string) ?? "auto"}
               onValueChange={(v) => onUpdate({ [key]: v })}
@@ -1546,7 +1546,7 @@ export function CharacterMotionConfig({ data, onUpdate }: ConfigProps<CharacterM
       <div className="grid grid-cols-2 gap-2">
         {CHARACTER_MOTION_TIMING_SELECTS().map(({ key, label: labelText, options, descKeys }) => (
           <div key={key} className="flex flex-col gap-1">
-            <Label className="text-[10px] uppercase">{labelText}</Label>
+            <Label className="text-[11px] uppercase">{labelText}</Label>
             <Select value={(data[key] as string) ?? "auto"} onValueChange={(v) => onUpdate({ [key]: v })}>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>

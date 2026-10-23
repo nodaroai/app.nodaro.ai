@@ -149,12 +149,12 @@ export function ReelPipeline({
           <span className="font-mono text-[11px] font-bold uppercase tracking-[0.15em] text-[#ff0073]">
             {t("pipe.cinemaReelPipeline")}
           </span>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="font-mono text-[11px] text-muted-foreground">
             {t("pipe.cinemaScenesTotalize", { scenes: reel.length, seconds: totalSeconds })}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
             {t("pipe.cinemaViewLabel")}
           </span>
           {(["feed", "timeline"] as const).map((v) => (
@@ -162,7 +162,7 @@ export function ReelPipeline({
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={`rounded-md px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${
+              className={`rounded-md px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-wider ${
                 view === v
                   ? "bg-cta text-white"
                   : "text-muted-foreground hover:text-foreground"
@@ -194,7 +194,7 @@ export function ReelPipeline({
                 {r.thumb ? (
                   <img src={r.thumb} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center font-mono text-[9px] text-muted-foreground">
+                  <span className="flex h-full w-full items-center justify-center font-mono text-[11px] text-muted-foreground">
                     {t("pipe.cinemaShotAbbrev", { n: String(r.n).padStart(2, "0") })}
                   </span>
                 )}
@@ -205,10 +205,10 @@ export function ReelPipeline({
                     </span>
                   </span>
                 )}
-                <span className="absolute left-1 top-1 rounded bg-black/70 px-1 font-mono text-[8px] text-foreground">
+                <span className="absolute left-1 top-1 rounded bg-black/70 px-1 font-mono text-[11px] text-foreground">
                   {t("pipe.cinemaShotAbbrev", { n: String(r.n).padStart(2, "0") })}
                 </span>
-                <span className="absolute right-1 top-1 rounded bg-black/70 px-1 font-mono text-[8px] text-foreground">
+                <span className="absolute right-1 top-1 rounded bg-black/70 px-1 font-mono text-[11px] text-foreground">
                   {r.video ? "▶ " : ""}
                   {r.seconds}s
                 </span>
@@ -218,11 +218,11 @@ export function ReelPipeline({
                   <span className="truncate text-[11px] font-semibold text-foreground">
                     {r.title}
                   </span>
-                  <span className={`font-mono text-[8px] font-bold ${STATUS_COLOR[r.statusKind]}`}>
+                  <span className={`font-mono text-[11px] font-bold ${STATUS_COLOR[r.statusKind]}`}>
                     {r.statusLabel}
                   </span>
                 </div>
-                <div className="mt-0.5 truncate font-mono text-[9px] text-muted-foreground">
+                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
                   {t("pipe.cinemaLookLabel", { look: r.look })}
                 </div>
               </div>
@@ -233,8 +233,8 @@ export function ReelPipeline({
             className="flex w-44 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[#2a2a2a] py-6 text-muted-foreground hover:border-[#ff0073]/50"
           >
             <span className="text-lg">+</span>
-            <span className="font-mono text-[10px] uppercase tracking-wider">{t("pipe.cinemaAddSceneSlot")}</span>
-            <span className="font-mono text-[8px]">{t("pipe.cinemaPinStoryboardSpecs")}</span>
+            <span className="font-mono text-[11px] uppercase tracking-wider">{t("pipe.cinemaAddSceneSlot")}</span>
+            <span className="font-mono text-[11px]">{t("pipe.cinemaPinStoryboardSpecs")}</span>
           </button>
         </div>
       ) : (
@@ -286,16 +286,16 @@ function TimelineLanes({
   return (
     <div className="rounded-md border border-[#2a2a2a] bg-[#0d0d0d] p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
           {t("pipe.cinemaLaneControls")} <span className="text-foreground">23.976 fps</span>
         </span>
-        <span className="font-mono text-[10px] text-[#ff0073]">
+        <span className="font-mono text-[11px] text-[#ff0073]">
           {t("pipe.cinemaRuntime", { s: total })}
         </span>
       </div>
       {(["VIDEO", "SOUND", "FOLEY/FX"] as const).map((lane) => (
         <div key={lane} className="mb-1.5 flex items-stretch gap-2">
-          <div className="flex w-16 shrink-0 items-center font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+          <div className="flex w-16 shrink-0 items-center font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
             {t(LANE_KEYS[lane])}
           </div>
           <div className="relative h-9 flex-1 rounded bg-[#161616]">
@@ -303,7 +303,7 @@ function TimelineLanes({
               blocks.map((b) => (
                 <div
                   key={b.id}
-                  className="absolute top-0.5 bottom-0.5 overflow-hidden rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-1 font-mono text-[8px] leading-8 text-foreground"
+                  className="absolute top-0.5 bottom-0.5 overflow-hidden rounded border border-[#ff0073]/40 bg-[#ff0073]/10 px-1 font-mono text-[11px] leading-8 text-foreground"
                   style={{ left: `${b.left}%`, width: `calc(${b.width}% - 2px)` }}
                   title={b.title}
                 >
@@ -315,10 +315,10 @@ function TimelineLanes({
             )}
             {lane === "FOLEY/FX" && (
               <>
-                <span className="absolute left-[8%] top-1.5 rounded border border-amber-500/40 px-1 font-mono text-[8px] text-amber-300">
+                <span className="absolute left-[8%] top-1.5 rounded border border-amber-500/40 px-1 font-mono text-[11px] text-amber-300">
                   {t("pipe.cinemaFoleyGlass")}
                 </span>
-                <span className="absolute left-[45%] top-1.5 rounded border border-amber-500/40 px-1 font-mono text-[8px] text-amber-300">
+                <span className="absolute left-[45%] top-1.5 rounded border border-amber-500/40 px-1 font-mono text-[11px] text-amber-300">
                   {t("pipe.cinemaFoleyRain")}
                 </span>
               </>
@@ -326,7 +326,7 @@ function TimelineLanes({
           </div>
         </div>
       ))}
-      <div className="mt-2 flex items-center justify-between font-mono text-[9px] text-muted-foreground">
+      <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
         <span>
           {t("pipe.cinemaStemsSync")}{" "}
           <span className="text-foreground">{t("pipe.cinemaComponentsSynced", { n: reel.length })}</span>

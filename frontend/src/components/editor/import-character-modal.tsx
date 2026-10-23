@@ -165,7 +165,7 @@ export function ImportCharacterModal({
                             </div>
                           )}
                           <span className="text-xs font-medium truncate w-full text-center">{char.name}</span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${
                             char.type === "reference" ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
                           }`}>
                             {char.type === "reference" ? t("entity.badgeRef") : t("entity.badgeDesc")}
@@ -175,7 +175,7 @@ export function ImportCharacterModal({
                     })}
                   </div>
                   {duplicateChars.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-2">
+                    <p className="text-[11px] text-muted-foreground mt-2">
                       {duplicateChars.length === 1
                         ? t("entity.skippedCharactersOne", { names: duplicateChars.map((c) => c.name).join(", ") })
                         : t("entity.skippedCharactersMany", { n: duplicateChars.length, names: duplicateChars.map((c) => c.name).join(", ") })}

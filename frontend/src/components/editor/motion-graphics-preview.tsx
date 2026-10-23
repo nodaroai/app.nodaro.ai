@@ -59,7 +59,7 @@ function ElementEditor({
         <div className="flex items-center gap-2">
           <Shapes className="w-3 h-3 text-[#ff0073]" />
           <span className="font-medium truncate">{displayName}</span>
-          <span className="text-[10px] text-muted-foreground">({label})</span>
+          <span className="text-[11px] text-muted-foreground">({label})</span>
         </div>
         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
       </button>
@@ -84,7 +84,7 @@ function ElementEditor({
           {element.type === "text" && (
             <>
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-muted-foreground">{t("overlayKinds.text")}</span>
+                <span className="text-[11px] text-muted-foreground">{t("overlayKinds.text")}</span>
                 <input
                   type="text"
                   value={element.text as string ?? ""}
@@ -104,15 +104,15 @@ function ElementEditor({
           )}
           {/* Animation timing */}
           <div className="mt-1 pt-1 border-t border-[var(--border-primary)]">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("preview.animation")}</span>
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("preview.animation")}</span>
             <div className="grid grid-cols-2 gap-2 mt-1">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground">{t("cost.col.type")}</span>
-                <span className="text-[10px] font-medium">{(element.animation as Record<string, unknown>)?.type as string ?? t("cfgext.injRefModeNone")}</span>
+                <span className="text-[11px] text-muted-foreground">{t("cost.col.type")}</span>
+                <span className="text-[11px] font-medium">{(element.animation as Record<string, unknown>)?.type as string ?? t("cfgext.injRefModeNone")}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground">{t("paramcfg.timingStart")}</span>
-                <span className="text-[10px] font-medium">{(element.animation as Record<string, unknown>)?.startFrame as number ?? 0}f</span>
+                <span className="text-[11px] text-muted-foreground">{t("paramcfg.timingStart")}</span>
+                <span className="text-[11px] font-medium">{(element.animation as Record<string, unknown>)?.startFrame as number ?? 0}f</span>
               </div>
             </div>
           </div>
@@ -140,8 +140,8 @@ function SliderField({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">{label}</span>
-        <span className="text-[10px] font-mono text-muted-foreground">{value.toFixed(step >= 1 ? 0 : Math.max(1, -Math.floor(Math.log10(step))))}</span>
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-[11px] font-mono text-muted-foreground">{value.toFixed(step >= 1 ? 0 : Math.max(1, -Math.floor(Math.log10(step))))}</span>
       </div>
       <input
         type="range"
@@ -167,7 +167,7 @@ function ColorField({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground w-10">{label}</span>
+      <span className="text-[11px] text-muted-foreground w-10">{label}</span>
       <input
         type="color"
         value={value}
@@ -178,7 +178,7 @@ function ColorField({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-6 px-1.5 text-[10px] font-mono rounded border border-[var(--border-primary)] bg-transparent flex-1"
+        className="h-6 px-1.5 text-[11px] font-mono rounded border border-[var(--border-primary)] bg-transparent flex-1"
       />
     </div>
   )
@@ -233,7 +233,7 @@ export function MotionGraphicsPreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[10px]"
+            className="h-6 px-2 text-[11px]"
             onClick={onRegenerate}
             disabled={isGenerating}
           >
@@ -252,7 +252,7 @@ export function MotionGraphicsPreview({
               title={disabledElements.has(i) ? t("preview.enableElement") : t("preview.disableElement")}
             >
               {disabledElements.has(i) ? (
-                <EyeOff className="w-3 h-3 text-muted-foreground/50" />
+                <EyeOff className="w-3 h-3 text-muted-foreground" />
               ) : (
                 <Eye className="w-3 h-3 text-[#ff0073]" />
               )}
@@ -269,8 +269,8 @@ export function MotionGraphicsPreview({
 
       {motionPlan.exitAnimation != null && (
         <div className="mt-1 px-2 py-1.5 rounded border border-[var(--border-primary)] text-xs">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("preview.exitAnimation")}</span>
-          <div className="text-[10px] mt-0.5">
+          <span className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("preview.exitAnimation")}</span>
+          <div className="text-[11px] mt-0.5">
             {t("preview.exitAtFrame", {
               type: labelOf(EXIT_TYPE_LABEL, String((motionPlan.exitAnimation as Record<string, unknown>).type ?? "none"), t),
               frame: String((motionPlan.exitAnimation as Record<string, unknown>).startFrame ?? 0),

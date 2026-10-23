@@ -172,34 +172,34 @@ export function LlmAuditTable({ result }: { result: LlmAuditResult }) {
                       {m.unsettledHolds > 0 && (
                         <Badge
                           variant="outline"
-                          className="ml-1.5 text-[10px] bg-orange-500/10 text-orange-400 border-orange-500/20"
+                          className="ml-1.5 text-[11px] bg-orange-500/10 text-orange-400 border-orange-500/20"
                           title="A scrape's unconfirmed settles only (metered_settle_unconfirmed); a single-call settle left unconfirmed goes to the reconcile sweep"
                         >
                           {m.unsettledHolds} unsettled
                         </Badge>
                       )}
                       {(m.refundedBilledTasks ?? 0) > 0 && (
-                        <Badge variant="outline" className="ml-1.5 text-[10px] bg-red-500/10 text-red-400 border-red-500/20" title={`Refunded, yet the ledger billed a call (${usd(m.refundedBilledCostUsd ?? 0)} provider cost${(m.refundedBilledUncomputableTasks ?? 0) > 0 ? `, plus ${m.refundedBilledUncomputableTasks} of uncomputable cost` : ""}) — kept out of diff and status`}>
+                        <Badge variant="outline" className="ml-1.5 text-[11px] bg-red-500/10 text-red-400 border-red-500/20" title={`Refunded, yet the ledger billed a call (${usd(m.refundedBilledCostUsd ?? 0)} provider cost${(m.refundedBilledUncomputableTasks ?? 0) > 0 ? `, plus ${m.refundedBilledUncomputableTasks} of uncomputable cost` : ""}) — kept out of diff and status`}>
                           {m.refundedBilledTasks} refunded billed{(m.refundedBilledUncomputableTasks ?? 0) > 0 ? ` (${m.refundedBilledUncomputableTasks} cost unknown)` : ""}
                         </Badge>
                       )}
                       {(m.missingLedgers ?? 0) > 0 && (
-                        <Badge variant="outline" className="ml-1.5 text-[10px] bg-red-500/10 text-red-400 border-red-500/20" title="Committed, but the job carries no billing ledger — out of the comparison">
+                        <Badge variant="outline" className="ml-1.5 text-[11px] bg-red-500/10 text-red-400 border-red-500/20" title="Committed, but the job carries no billing ledger — out of the comparison">
                           {m.missingLedgers} no ledger
                         </Badge>
                       )}
                       {(m.negativeRemainderTasks ?? 0) > 0 && (
-                        <Badge variant="outline" className="ml-1.5 text-[10px] bg-zinc-500/10 text-zinc-400 border-zinc-500/20" title="Charged less than today's fixed scrape price (repriced in the window) — left out of the comparison">
+                        <Badge variant="outline" className="ml-1.5 text-[11px] bg-zinc-500/10 text-zinc-400 border-zinc-500/20" title="Charged less than today's fixed scrape price (repriced in the window) — left out of the comparison">
                           {m.negativeRemainderTasks} repriced
                         </Badge>
                       )}
                       {m.uncomputableTasks > 0 && (
-                        <Badge variant="outline" className="ml-1.5 text-[10px] bg-zinc-500/10 text-zinc-400 border-zinc-500/20" title="Billed, but the cost could not be computed — left out of the comparison">
+                        <Badge variant="outline" className="ml-1.5 text-[11px] bg-zinc-500/10 text-zinc-400 border-zinc-500/20" title="Billed, but the cost could not be computed — left out of the comparison">
                           {m.uncomputableTasks} uncomputable
                         </Badge>
                       )}
                       {m.fixedCreditsExcluded > 0 && (
-                        <Badge variant="outline" className="ml-1.5 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20" title="The scrape's fixed price, taken out of the charge">
+                        <Badge variant="outline" className="ml-1.5 text-[11px] bg-blue-500/10 text-blue-400 border-blue-500/20" title="The scrape's fixed price, taken out of the charge">
                           −{m.fixedCreditsExcluded} fixed
                         </Badge>
                       )}

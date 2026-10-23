@@ -210,7 +210,7 @@ export function CopilotCollapsedTab() {
       className="flex-none bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
-      <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold">{t("editor.copilotTabLabel")}</span>
+      <span className="[writing-mode:vertical-rl] text-[11px] tracking-[0.18em] font-semibold">{t("editor.copilotTabLabel")}</span>
     </button>
   )
 }

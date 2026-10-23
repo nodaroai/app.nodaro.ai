@@ -81,7 +81,7 @@ export function SelectorConfig({ data, onUpdate }: ConfigProps<SelectorNodeData>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("cfgext.selModeHint")}
         </p>
       </div>
@@ -95,7 +95,7 @@ export function SelectorConfig({ data, onUpdate }: ConfigProps<SelectorNodeData>
             value={config.itemIndex ?? ""}
             onChange={(e) => updateConfig({ itemIndex: e.target.value || undefined })}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.selItemHintA")}<code>last</code>{t("cfgext.selItemHintB")}<code>last-N</code>{t("cfgext.selItemHintC")}
           </p>
         </div>
@@ -154,7 +154,7 @@ export function SelectorConfig({ data, onUpdate }: ConfigProps<SelectorNodeData>
       {errorMessage ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
           <p className="text-[11px] font-medium text-destructive">{t("cfgext.selError")}</p>
-          <p className="text-[10px] text-destructive/90 break-all mt-0.5">{errorMessage}</p>
+          <p className="text-[11px] text-destructive/90 break-all mt-0.5">{errorMessage}</p>
         </div>
       ) : hasRun ? (
         <div className="rounded-md bg-muted/30 px-3 py-2 border border-border">
@@ -164,7 +164,7 @@ export function SelectorConfig({ data, onUpdate }: ConfigProps<SelectorNodeData>
           </p>
         </div>
       ) : (
-        <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+        <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
           {t("cfgext.selRunHint")}
         </p>
       )}
@@ -206,7 +206,7 @@ function RangeFields({
       <Label>{t("cfgext.selRange")}</Label>
       <div className="grid grid-cols-3 gap-2">
         <div className="flex flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("cfgext.selFrom")}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("cfgext.selFrom")}</span>
           <Input
             placeholder="1"
             value={from}
@@ -214,7 +214,7 @@ function RangeFields({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("cfgext.selTo")}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("cfgext.selTo")}</span>
           <Input
             placeholder="last"
             value={to}
@@ -222,7 +222,7 @@ function RangeFields({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{t("cfgext.selStep")}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("cfgext.selStep")}</span>
           <Input
             inputMode="numeric"
             placeholder="1"
@@ -231,7 +231,7 @@ function RangeFields({
           />
         </div>
       </div>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("cfgext.selRangeHintA")}<code>{"<"} 0</code>{t("cfgext.selRangeHintB")}{">"}{t("cfgext.selRangeHintC")}
       </p>
     </div>
@@ -261,9 +261,9 @@ function ListExpressionField({
         className={isInvalid ? "border-destructive focus-visible:ring-destructive/40" : undefined}
       />
       {isInvalid && error ? (
-        <p className="text-[10px] text-destructive">{error}</p>
+        <p className="text-[11px] text-destructive">{error}</p>
       ) : (
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("cfgext.selExamples")}<code>1, 2, last</code> · <code>1..5</code> · <code>1..10:2</code> · <code>1..last-1</code>
         </p>
       )}
@@ -301,7 +301,7 @@ function RandomFields({
           value={seed}
           onChange={(e) => onChange({ seed: e.target.value || undefined })}
         />
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("cfgext.selSupportsPrefix")}<code>{"{NodeLabel}"}</code>{t("cfgext.selSeedHintSuffix")}
         </p>
       </div>
@@ -314,7 +314,7 @@ function RandomFields({
           value={count != null ? String(count) : ""}
           onChange={(e) => handleCount(e.target.value)}
         />
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("cfgext.selCountHint")}
         </p>
       </div>
@@ -339,7 +339,7 @@ function ModuloFields({
         value={divisor}
         onChange={(e) => onChange({ moduloDivisor: e.target.value || undefined })}
       />
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("cfgext.selModuloHintA")}<code>{"{NodeLabel}"}</code>{t("cfgext.selModuloHintB")}
       </p>
     </div>
@@ -367,7 +367,7 @@ function PredicateFields({
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-[1fr_140px] gap-2">
         <div className="flex flex-col gap-1">
-          <Label htmlFor="selector-pred-field" className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Label htmlFor="selector-pred-field" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t("utilcfg.field")}
           </Label>
           <Input
@@ -378,7 +378,7 @@ function PredicateFields({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="selector-pred-op" className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Label htmlFor="selector-pred-op" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t("cfgext.selOperator")}
           </Label>
           <Select
@@ -412,14 +412,14 @@ function PredicateFields({
             value={value}
             onChange={(e) => onChange({ predicateValue: e.target.value || undefined })}
           />
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.selSupportsPrefix")}<code>{"{NodeLabel}"}</code>{t("cfgext.selPredValueHintSuffix")}
           </p>
         </div>
       )}
       <div className="flex items-center gap-4">
         <div className="flex flex-col gap-1">
-          <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t("cfgext.selMatch")}
           </Label>
           <RadioGroup
@@ -486,7 +486,7 @@ function NamedKeyFields({
           value={value}
           onChange={(e) => onChange({ namedKeyValue: e.target.value || undefined })}
         />
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {t("cfgext.selKeyHintA")}<code>(op=&quot;=&quot;, match=&quot;first&quot;)</code>{t("cfgext.selKeyHintB")}<code>{"{NodeLabel}"}</code>{t("cfgext.selKeyHintC")}
         </p>
       </div>

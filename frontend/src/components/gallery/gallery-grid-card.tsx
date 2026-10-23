@@ -57,7 +57,7 @@ export const GalleryGridCard = memo(function GalleryGridCard({
         className="absolute inset-0 z-[2] cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ff0073]"
       />
       {/* A render made at proxy quality (the owner's own view only): always visible, not on hover. */}
-      {item.preview && <PreviewBadge className={cn("pointer-events-none absolute top-2 z-[3] text-[10px]", selecting ? "start-9" : "start-2")} />}
+      {item.preview && <PreviewBadge className={cn("pointer-events-none absolute top-2 z-[3] text-[11px]", selecting ? "start-9" : "start-2")} />}
 
       {/* Overlay */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-[3] pointer-events-none">

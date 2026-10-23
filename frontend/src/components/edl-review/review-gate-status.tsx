@@ -85,7 +85,7 @@ export function GateIssues({ gate, open }: { readonly gate: ReviewGate; readonly
   return (
     <ul dir="ltr" data-testid="footer-issues" className="flex max-h-32 flex-col gap-0.5 overflow-auto">
       {issues.map((issue, i) => (
-        <li key={i} className="break-words rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] leading-snug">{issue}</li>
+        <li key={i} className="break-words rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-snug">{issue}</li>
       ))}
     </ul>
   )

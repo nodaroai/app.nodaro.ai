@@ -107,7 +107,7 @@ function UgcCreatorNodeComponent({ id, data, selected }: NodeProps) {
         topToolbarContent={
           <NodeQuickStrip nodeId={id} isRunning={running}>
             {pickPending && (
-              <span className="inline-flex h-6 items-center px-1.5 text-[10px] font-medium whitespace-nowrap text-neutral-900/85 dark:text-white/85">
+              <span className="inline-flex h-6 items-center px-1.5 text-[11px] font-medium whitespace-nowrap text-neutral-900/85 dark:text-white/85">
                 {t("ugc.creator.awaitingPick")}
               </span>
             )}
@@ -129,7 +129,7 @@ function UgcCreatorNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {d.errorMessage && (
-                <p dir="auto" className="text-[10px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
+                <p dir="auto" className="text-[11px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
                   {ugcNodeMessageText(d.errorMessage)}
                 </p>
               )}
@@ -153,7 +153,7 @@ function UgcCreatorNodeComponent({ id, data, selected }: NodeProps) {
               )}
               {!running && !imageUrl && status !== "failed" && (
                 <div
-                  className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 min-h-[96px]"
+                  className="flex flex-1 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground min-h-[96px]"
                   data-testid="ugc-creator-empty"
                 >
                   <UserRound className="w-6 h-6" />
@@ -162,7 +162,7 @@ function UgcCreatorNodeComponent({ id, data, selected }: NodeProps) {
             </>
           )}
           {d.optionFailed && (
-            <p dir={textDir} className="text-[10px] text-muted-foreground">
+            <p dir={textDir} className="text-[11px] text-muted-foreground">
               {t("ugc.creator.optionFailed")}
             </p>
           )}
@@ -173,15 +173,15 @@ function UgcCreatorNodeComponent({ id, data, selected }: NodeProps) {
           </div>
           {lookSources.length > 0 && (
             <div className="flex flex-wrap items-center gap-1" data-testid="ugc-creator-look">
-              <span className="text-[10px] text-muted-foreground">{localizeHandle("Creator look")}</span>
+              <span className="text-[11px] text-muted-foreground">{localizeHandle("Creator look")}</span>
               {lookSources.map((s) => (
-                <span key={s.id} className="max-w-[120px] truncate rounded-md border bg-muted/40 px-1.5 py-0.5 text-[10px]">
+                <span key={s.id} className="max-w-[120px] truncate rounded-md border bg-muted/40 px-1.5 py-0.5 text-[11px]">
                   {localizeNode(s.label)}
                 </span>
               ))}
             </div>
           )}
-          {hasCredits() && <p className="text-[10px] text-muted-foreground leading-snug">{t("ugc.creator.priceLine")}</p>}
+          {hasCredits() && <p className="text-[11px] text-muted-foreground leading-snug">{t("ugc.creator.priceLine")}</p>}
         </div>
       </BaseNode>
       <UgcInputPips nodeId={id} nodeType="ugc-creator" />

@@ -73,7 +73,7 @@ export function ConnectedAudioSources({ consumerNodeId, nodes, edges, className 
   if (sources.length === 0) return null
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+      <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
         {t("cfgext.connAudConnectedSound")}
       </div>
       {sources.map((s) => {

@@ -100,7 +100,7 @@ export function PipelineStateOverlay({ state, isStale = false }: Props) {
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              className="absolute -bottom-1 -right-1 px-1.5 h-4 rounded-full bg-orange-500 text-white text-[10px] leading-none flex items-center pointer-events-auto z-10"
+              className="absolute -bottom-1 -right-1 px-1.5 h-4 rounded-full bg-orange-500 text-white text-[11px] leading-none flex items-center pointer-events-auto z-10"
               data-testid="pipeline-state-stale-pill"
             >
               {t("node.stale")}

@@ -409,7 +409,7 @@ export function EnvironmentalAssetTab({
                 loading="lazy"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5">
+              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5">
                 {item.name}
               </div>
               {/* Phase 2 #10 — selection checkbox. Always visible when at
@@ -438,7 +438,7 @@ export function EnvironmentalAssetTab({
                     void handleRemove(originalIdx)
                   }}
                   aria-label={t("cfgshared.removeModel", { name: item.name })}
-                  className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+                  className="absolute top-1 end-1 px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
                 >
                   {t("common.remove")}
                 </button>

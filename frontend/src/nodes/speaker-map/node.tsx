@@ -83,7 +83,7 @@ function SpeakerMapNode({ id, data, selected }: NodeProps) {
                 </span>
               ))}
               {shown.notes.length > 0 && (
-                <div className="flex items-start gap-1 pt-1 text-[10px] text-amber-500" title={shown.notes.join("\n")}>
+                <div className="flex items-start gap-1 pt-1 text-[11px] text-amber-500" title={shown.notes.join("\n")}>
                   <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
                   <span className="line-clamp-2">{t("node.speakerMapNotes", { count: shown.notes.length })}</span>
                 </div>
@@ -98,15 +98,15 @@ function SpeakerMapNode({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
+                <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
               )}
             </div>
           )}
 
           {status !== "running" && status !== "failed" && !shown && (
-            <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 80, flex: 1 }}>
+            <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground" style={{ minHeight: 80, flex: 1 }}>
               <Users className="w-5 h-5" />
-              <span className="text-[10px] text-center px-2">{t("node.speakerMapConnect")}</span>
+              <span className="text-[11px] text-center px-2">{t("node.speakerMapConnect")}</span>
             </div>
           )}
         </div>

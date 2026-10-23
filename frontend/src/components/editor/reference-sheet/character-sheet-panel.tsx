@@ -184,7 +184,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
     <div className="space-y-5 max-w-4xl">
       {/* Preset cards */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("txtcfg.preset")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-slate-600">{t("txtcfg.preset")}</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SHEET_PRESETS.map((p) => {
             const active = p.id === presetId
@@ -201,7 +201,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
                 <div className="text-[12px] font-medium text-slate-200">{localizeOption(p.label)}</div>
                 <div className="text-[11px] text-slate-400 mt-0.5">{localizeOption(p.description)}</div>
                 {bc && (
-                  <div className="text-[10px] text-slate-500 mt-1.5">
+                  <div className="text-[11px] text-slate-500 mt-1.5">
                     {bc.present > 0
                       ? t("entity.sheetCostWithReuse", { present: bc.present, missing: bc.missing.length, total: creditUnits(bc.total) })
                       : t("entity.sheetCost", { missing: bc.missing.length, total: creditUnits(bc.total) })}
@@ -215,7 +215,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
 
       {/* À-la-carte boards */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("entity.addBoards")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-slate-600">{t("entity.addBoards")}</div>
         <div className="flex flex-wrap gap-2">
           {ALA_CARTE_BOARDS.map((b) => {
             const active = boards.has(b.id)
@@ -241,7 +241,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
       {/* Style row */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("cfgext.refSheetSkinLabel")}</div>
+          <div className="text-[11px] uppercase tracking-widest text-slate-600">{t("cfgext.refSheetSkinLabel")}</div>
           <div className="flex flex-wrap gap-2">
             {SHEET_SKINS.map((s) => (
               <button key={s} type="button" onClick={() => setSkin(s)} disabled={busy} className={chip(skin === s)} style={chipStyle(skin === s)}>{s}</button>
@@ -249,7 +249,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
           </div>
         </div>
         <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("cfgext.refSheetAspectLabel")}</div>
+          <div className="text-[11px] uppercase tracking-widest text-slate-600">{t("cfgext.refSheetAspectLabel")}</div>
           <div className="flex gap-2">
             {SHEET_ASPECTS.map((a) => (
               <button key={a} type="button" onClick={() => setAspect(a)} disabled={busy} className={chip(aspect === a)} style={chipStyle(aspect === a)}>{a}</button>

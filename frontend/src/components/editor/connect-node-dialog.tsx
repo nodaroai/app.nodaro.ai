@@ -154,7 +154,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
 
       <div className="py-1 max-h-[50vh] overflow-y-auto">
         {options.handles.length > 0 && (
-          <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">{t("connect.handles")}</div>
+          <div className="px-4 pt-2 pb-1 text-[11px] font-bold tracking-wider uppercase text-[#94A3B8]">{t("connect.handles")}</div>
         )}
         {rows.map((row, i) => {
           if (row.kind !== "handle") return null
@@ -178,7 +178,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
               <span className="flex flex-1 items-center gap-1.5 min-w-0">
                 <span
                   className={cn(
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    "shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
                     isAfter
                       // green-800 (not -600) so the small uppercase text clears WCAG AA on the pale tint
                       ? "bg-[#22C55E]/15 text-[#166534] dark:text-[#4ADE80]"
@@ -207,7 +207,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
         })}
 
         {options.variables.length > 0 && (
-          <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">{t("connect.missingVariables")}</div>
+          <div className="px-4 pt-2 pb-1 text-[11px] font-bold tracking-wider uppercase text-[#94A3B8]">{t("connect.missingVariables")}</div>
         )}
         {rows.map((row, i) => {
           if (row.kind === "variable") {

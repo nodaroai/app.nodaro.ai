@@ -189,7 +189,7 @@ function TextField({
       {maxLength !== undefined && (
         <p
           data-testid="field-char-count"
-          className={cn("mt-1 text-end font-mono text-[10px]", strValue.length >= maxLength ? "text-amber-500" : "text-muted-foreground")}
+          className={cn("mt-1 text-end font-mono text-[11px]", strValue.length >= maxLength ? "text-amber-500" : "text-muted-foreground")}
         >
           {strValue.length}/{maxLength}
         </p>

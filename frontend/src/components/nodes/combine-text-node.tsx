@@ -126,7 +126,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
                 <p className="text-xs text-foreground/80 line-clamp-3 break-words">
                   {lineCount === 1 ? t("node.linesCombinedOne", { n: lineCount }) : t("node.linesCombinedMany", { n: lineCount })}
                 </p>
-                <span className="text-[10px] text-muted-foreground mt-1 block">
+                <span className="text-[11px] text-muted-foreground mt-1 block">
                   {t("node.clickToExpand")}
                 </span>
               </div>
@@ -145,7 +145,7 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+            <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <FileText className="w-5 h-5" />
             </div>
           )}

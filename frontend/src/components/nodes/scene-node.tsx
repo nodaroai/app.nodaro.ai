@@ -82,7 +82,7 @@ function SceneNodeImpl(props: NodeProps) {
             <HandleIcon icon={icon} color={color} side="left" top={`${top}px`} />
             <span
               data-testid={`handle-label-${id}`}
-              className="absolute left-3 text-[10px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none -translate-y-1/2"
+              className="absolute left-3 text-[11px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none -translate-y-1/2"
               style={{ top }}
             >
               {id}
@@ -103,7 +103,7 @@ function SceneNodeImpl(props: NodeProps) {
             <HandleIcon icon={icon} color={color} side="right" top={`${top}px`} />
             <span
               data-testid={`handle-label-${id}`}
-              className="absolute right-3 text-[10px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none -translate-y-1/2 text-right"
+              className="absolute right-3 text-[11px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none -translate-y-1/2 text-right"
               style={{ top }}
             >
               {id}

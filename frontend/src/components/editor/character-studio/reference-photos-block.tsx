@@ -80,7 +80,7 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
 
   return (
     <div className="space-y-2">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.referencePhotosUpper")}</div>
+      <div className="text-[11px] uppercase tracking-wide text-slate-500">{t("studio.referencePhotosUpper")}</div>
       <div className="flex flex-wrap gap-1.5">
         {SLOTS.map((slot) => (
           <Slot
@@ -95,7 +95,7 @@ export function ReferencePhotosBlock({ photos, onChange }: ReferencePhotosBlockP
           />
         ))}
       </div>
-      <div className="text-[9px] text-slate-500">
+      <div className="text-[11px] text-slate-500">
         {t("studio.slotUploadHint")}
       </div>
     </div>
@@ -142,7 +142,7 @@ function Slot({
       <button
         type="button"
         aria-label={t("studio.slotAria", { slot: name })}
-        className="w-16 h-16 rounded-md border border-dashed border-[#334155] bg-[#13161f] flex items-center justify-center text-[10px] text-slate-500 overflow-hidden hover:border-[#3b82f6]/60"
+        className="w-16 h-16 rounded-md border border-dashed border-[#334155] bg-[#13161f] flex items-center justify-center text-[11px] text-slate-500 overflow-hidden hover:border-[#3b82f6]/60"
       >
         {photo ? (
           <img src={optimizedImageUrl(photo.url)} alt={name} className="w-full h-full object-cover" />
@@ -159,7 +159,7 @@ function Slot({
         <button
           type="button"
           aria-label={t("cfgshared.removeModel", { name })}
-          className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center opacity-0 group-hover:opacity-100 z-20"
+          className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-black/80 text-white text-[11px] flex items-center justify-center opacity-0 group-hover:opacity-100 z-20"
           onClick={() => onRemove(photo)}
         >
           <X className="w-2 h-2" />

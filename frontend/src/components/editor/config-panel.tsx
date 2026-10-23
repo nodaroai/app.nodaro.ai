@@ -1044,7 +1044,7 @@ export function ConfigPanel() {
             </div>
             <div className="flex items-center justify-between px-4 pb-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#64748B]">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#64748B]">
                   {localizeNodeLabel(nodeTypeDefaultLabel(nodeType))}
                 </span>
                 <span className="text-sm font-medium text-gray-900 dark:text-white truncate">

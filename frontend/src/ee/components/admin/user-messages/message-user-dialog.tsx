@@ -409,7 +409,7 @@ export function MessageUserDialog({
                 <span className="text-muted-foreground">Subject: </span>
                 <span className="font-medium">{previewSubject}</span>
                 {template && !template.subjectIsAuthored && (
-                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                     from template
                   </span>
                 )}

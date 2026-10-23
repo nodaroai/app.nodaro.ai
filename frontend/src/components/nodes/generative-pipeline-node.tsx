@@ -48,7 +48,7 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
         ]}
       >
         <div className="flex h-full flex-col gap-2 p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             {t("node.storyToVideo")}
           </div>
           <div className="text-xs text-zinc-600 dark:text-zinc-300">

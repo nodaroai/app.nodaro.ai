@@ -397,10 +397,11 @@ export function HandleWithPopover({
                 // overlapping the pip (offset -10 from the pip's outer edge).
                 // Hidden by default; revealed on node hover or when the node
                 // is selected via the `.handle-typed-pip-badge` CSS rules.
-                className="handle-typed-pip-badge absolute text-[9px] font-bold leading-none tabular-nums rounded-full flex items-center justify-center pointer-events-none bg-white text-neutral-900 border border-background shadow-sm"
+                className="handle-typed-pip-badge absolute text-[11px] font-bold leading-none tabular-nums rounded-full flex items-center justify-center pointer-events-none bg-white text-neutral-900 border border-background shadow-sm"
                 style={{
-                  width: 14,
+                  minWidth: 14,
                   height: 14,
+                  paddingInline: 2,
                   top: "50%",
                   [side]: -10,
                   transform: "translateY(-50%)",
@@ -460,7 +461,7 @@ export function HandleWithPopover({
                 role="status"
                 className="min-w-[280px] flex items-center justify-center py-4"
               >
-                <span className="text-[10px] text-muted-foreground/60">{t("common.loading")}</span>
+                <span className="text-[11px] text-muted-foreground">{t("common.loading")}</span>
               </div>
             }
           >

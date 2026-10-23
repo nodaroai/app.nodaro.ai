@@ -152,7 +152,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
         ]}
       >
         <div className="flex flex-col gap-1.5">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
             {t("node.modeValue", { mode: nodeData.mode ?? "realism" })}
           </div>
           {hasResult ? (
@@ -169,7 +169,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold">{score!.toFixed(2)}</span>
                 <span
-                  className={`text-[10px] font-medium uppercase ${
+                  className={`text-[11px] font-medium uppercase ${
                     approved ? "text-green-500" : "text-red-500"
                   }`}
                 >
@@ -181,7 +181,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
               )}
             </button>
           ) : (
-            <div className="rounded-md bg-muted/20 p-2 text-xs italic text-muted-foreground/60">
+            <div className="rounded-md bg-muted/20 p-2 text-xs italic text-muted-foreground">
               {t("node.notYetEvaluated")}
             </div>
           )}

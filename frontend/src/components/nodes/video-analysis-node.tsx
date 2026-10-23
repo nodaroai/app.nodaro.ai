@@ -111,7 +111,7 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -164,11 +164,11 @@ function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && status !== "failed" && scenes.length === 0 && (
             <div
-              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"
+              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"
               style={{ minHeight: 120, flex: 1 }}
             >
               <ScanSearch className="w-6 h-6" />
-              <span className="text-[10px]">{hasSource ? t("node.vaReadyToRun") : t("node.connectAVideoOrSet")}</span>
+              <span className="text-[11px]">{hasSource ? t("node.vaReadyToRun") : t("node.connectAVideoOrSet")}</span>
             </div>
           )}
         </div>

@@ -201,7 +201,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
                 the strip's Run; earlier versions stay. */}
             {status === "failed" ? (
               <div
-                className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 pl-2 pr-1.5 py-1 bg-red-600/90 backdrop-blur-sm text-white text-[10px] rounded-md shadow-sm"
+                className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 pl-2 pr-1.5 py-1 bg-red-600/90 backdrop-blur-sm text-white text-[11px] rounded-md shadow-sm"
                 role="alert"
                 data-testid="ai-avatar-failed-banner"
               >
@@ -213,7 +213,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
             ) : warningMessage ? (
               /* Non-fatal notice (e.g. audio trimmed to the 600s cap). Amber,
                  distinct from the red failed-state error — the clip is valid. */
-              <div className="absolute inset-x-2 top-2 z-10 flex items-start gap-1.5 px-2 py-1.5 bg-amber-500/90 backdrop-blur-sm text-amber-950 text-[10px] rounded-md shadow-sm">
+              <div className="absolute inset-x-2 top-2 z-10 flex items-start gap-1.5 px-2 py-1.5 bg-amber-500/90 backdrop-blur-sm text-amber-950 text-[11px] rounded-md shadow-sm">
                 <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
                 <span className="leading-snug line-clamp-3">{warningMessage}</span>
               </div>
@@ -298,7 +298,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
 
             {status === "running" && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 <NodeJobProgress progress={nodeData.currentJobProgress} />
               </div>
             )}

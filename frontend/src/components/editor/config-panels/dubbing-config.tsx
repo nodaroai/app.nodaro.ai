@@ -63,7 +63,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           onChange={(e) => onUpdate({ sourceUrl: e.target.value || undefined })}
           placeholder="https://youtube.com/watch?v=..."
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("audiocfg.hintDubSourceUrl")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("audiocfg.hintDubSourceUrl")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -90,7 +90,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           />
         </div>
       </div>
-      <p className="text-[10px] text-muted-foreground -mt-1">{t("audiocfg.hintDubWindow")}</p>
+      <p className="text-[11px] text-muted-foreground -mt-1">{t("audiocfg.hintDubWindow")}</p>
 
       <div>
         <Label>{t("audiocfg.numSpeakersOptional")}</Label>
@@ -102,7 +102,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           onChange={(e) => onUpdate({ numSpeakers: e.target.value ? parseInt(e.target.value) : undefined })}
           placeholder={t("audiocfg.phAutoDetect")}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("audiocfg.hintNumSpeakersAuto")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("audiocfg.hintNumSpeakersAuto")}</p>
       </div>
 
       <div className="flex items-center gap-2">
@@ -133,13 +133,13 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           onChange={(e) => onUpdate({ targetAccent: e.target.value || undefined })}
           placeholder={t("audiocfg.phDubAccent")}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">{t("audiocfg.hintDubAccent")}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("audiocfg.hintDubAccent")}</p>
       </div>
 
       <p className="text-xs text-muted-foreground">
         {t("audiocfg.hintDubTranslate")}
       </p>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {t("audiocfg.hintDubPricing")}
       </p>
     </div>

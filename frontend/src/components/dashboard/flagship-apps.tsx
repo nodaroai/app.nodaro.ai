@@ -126,7 +126,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
       {/* Top row: media-type chip (only with real media) + status badge */}
       <div className="absolute inset-x-3 top-3 flex items-start justify-between">
         {app.media ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/50 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white backdrop-blur-sm">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/50 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-white backdrop-blur-sm">
             {isVideo ? <Film className="h-3 w-3" aria-hidden /> : <ImageIcon className="h-3 w-3" aria-hidden />}
             {isVideo ? t("common.video") : t("common.image")}
           </span>
@@ -134,13 +134,13 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
           <span />
         )}
         {app.status === "live" ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-white backdrop-blur-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-white backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             {t("dash.live")}
           </span>
         ) : app.status === "new" ? (
           <span
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide backdrop-blur-sm"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide backdrop-blur-sm"
             style={{ color: app.sig }}
           >
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: app.sig }} />
@@ -148,7 +148,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
           </span>
         ) : (
           <span
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-white"
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-wide text-white"
             style={{ backgroundColor: app.sig }}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-white/90" />

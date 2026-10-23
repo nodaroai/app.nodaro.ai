@@ -176,7 +176,7 @@ export function RegionCanvas(p: RegionCanvasProps) {
               onPointerCancel={end}
             >
               <span
-                className="absolute top-0 start-0 px-1 text-[10px] font-medium text-white pointer-events-none"
+                className="absolute top-0 start-0 px-1 text-[11px] font-medium text-white pointer-events-none"
                 style={{ backgroundColor: box.color }}
               >
                 {box.label}
@@ -226,7 +226,7 @@ export function RegionCanvas(p: RegionCanvasProps) {
               <button
                 type="button"
                 data-chip-placement={below ? "below" : "inside"}
-                className={cn("absolute bottom-0 start-0 px-1 text-[10px] font-medium text-white pointer-events-auto", below ? "translate-y-full rounded-b-sm" : "rounded-t-sm")}
+                className={cn("absolute bottom-0 start-0 px-1 text-[11px] font-medium text-white pointer-events-auto", below ? "translate-y-full rounded-b-sm" : "rounded-t-sm")}
                 style={{ backgroundColor: face.color }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => p.onFacePick?.(face.key)}

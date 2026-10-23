@@ -115,7 +115,7 @@ export function FrameFitFields({ provider, resolution, aspectRatio, frameFit, fr
           </SelectContent>
         </Select>
         {canvas && (
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.frameFitCanvasHint", { width: canvas[0], height: canvas[1] })}
           </p>
         )}

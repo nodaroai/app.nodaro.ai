@@ -162,7 +162,7 @@ export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = f
           mid-click. `min-h` reserves the row at the affordances' height so the
           floating buttons sit clear of the prompt text below. */}
       <div className="nodrag relative flex items-center mb-1 px-0.5 min-h-[1.5rem]">
-        <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[10px] leading-none">
+        <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[11px] leading-none">
           {/* The segment TEXT is copy, not the mode id — the id only keys state. */}
           {(["edit", "final", "both"] as const).map((m) => (
             <button

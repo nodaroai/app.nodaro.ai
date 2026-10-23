@@ -188,7 +188,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
     <div className="space-y-5 max-w-4xl">
       {/* Type picker */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetSheetType")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetSheetType")}</div>
         <div className="flex flex-wrap gap-2">
           {SHEET_TYPES.map((t) => (
             <button
@@ -207,7 +207,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
 
       {/* Skin picker */}
       <div className="space-y-1.5">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetSkinLabel")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetSkinLabel")}</div>
         <div className="flex flex-wrap gap-2">
           {SHEET_SKINS.map((s) => (
             <button
@@ -227,7 +227,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
       {/* Aspect + text toggles */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetAspectLabel")}</div>
+          <div className="text-[11px] uppercase tracking-widest text-slate-600">{tr("cfgext.refSheetAspectLabel")}</div>
           <div className="flex gap-2">
             {SHEET_ASPECTS.map((a) => (
               <button

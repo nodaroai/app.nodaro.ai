@@ -115,7 +115,7 @@ export function ProjectsGridView({ showAll, search, adminUsers }: ProjectsGridVi
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={cn("p-1 rounded transition-colors", viewMode === "grid" ? "text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground")}
+            className={cn("p-1 rounded transition-colors", viewMode === "grid" ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
             aria-label={t("dash.gridView")}
           >
             <LayoutGrid className="h-5 w-5" />
@@ -123,7 +123,7 @@ export function ProjectsGridView({ showAll, search, adminUsers }: ProjectsGridVi
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={cn("p-1 rounded transition-colors", viewMode === "list" ? "text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground")}
+            className={cn("p-1 rounded transition-colors", viewMode === "list" ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
             aria-label={t("dash.listView")}
           >
             <List className="h-5 w-5" />
@@ -151,7 +151,7 @@ export function ProjectsGridView({ showAll, search, adminUsers }: ProjectsGridVi
                 <WorkflowThumbnail thumbnailUrl={wf.thumbnailUrl} nodeTypes={wf.nodeTypes} />
                 <div className="px-3 py-2.5">
                   <p className="text-[13px] font-semibold truncate">{wf.name}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground truncate">
+                  <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
                     {wf.projectName} &middot; {formatDate(wf.updatedAt)}
                   </p>
                 </div>

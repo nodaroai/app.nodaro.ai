@@ -341,7 +341,7 @@ export function ImageAssetTab({
         <button
           type="button"
           onClick={onSwitchToAppearance}
-          className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
+          className="text-[11px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
         >
           {t("studio.openProfile")}
         </button>
@@ -354,25 +354,25 @@ export function ImageAssetTab({
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-200">{title}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">{description}</div>
+          <div className="text-[11px] text-slate-500 mt-0.5">{description}</div>
         </div>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setGenPanelOpen(true)}
-            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+            className="text-[11px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
             {t("studio.customPrompt")}
           </button>
           <button
             type="button"
             onClick={() => setRefsDrawerOpen(true)}
-            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+            className="text-[11px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
             {t("studio.realLifeRefs")}
           </button>
           {onImport && (
-            <button onClick={onImport} className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400">
+            <button onClick={onImport} className="text-[11px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400">
               ↑ {t("common.import")}
             </button>
           )}

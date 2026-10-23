@@ -60,7 +60,7 @@ export function AccountRow({
           <img src={connection.platform_avatar_url} alt="" className="h-[22px] w-[22px] shrink-0 rounded-full" />
         ) : (
           <div
-            className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold"
+            className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
             style={{ background: "var(--integ-raised)", color: "var(--integ-muted)" }}
             aria-hidden
           >
@@ -83,7 +83,7 @@ export function AccountRow({
         />
 
         {showsDefault && isDefault && (
-          <span className="shrink-0 text-[10.5px] font-semibold" style={{ color: "var(--integ-muted)" }}>
+          <span className="shrink-0 text-[11px] font-semibold" style={{ color: "var(--integ-muted)" }}>
             {t("integ.defaultAccount")}
           </span>
         )}

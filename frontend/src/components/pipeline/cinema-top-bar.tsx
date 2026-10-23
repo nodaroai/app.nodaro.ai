@@ -33,7 +33,7 @@ export function CinemaTopBar({
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold tracking-tight text-foreground">
           NODARO{" "}
-          <span className="rounded-sm bg-cta px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+          <span className="rounded-sm bg-cta px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white">
             Cinema
           </span>
         </span>
@@ -48,7 +48,7 @@ export function CinemaTopBar({
         <button
           type="button"
           onClick={() => onToggleAutopilot(false)}
-          className={`rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
+          className={`rounded-full px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors ${
             !autopilot ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
@@ -57,7 +57,7 @@ export function CinemaTopBar({
         <button
           type="button"
           onClick={() => onToggleAutopilot(true)}
-          className={`rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
+          className={`rounded-full px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors ${
             autopilot ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
@@ -81,7 +81,7 @@ export function CinemaTopBar({
           <button
             type="button"
             onClick={onStop}
-            className="rounded-md border border-[#2a2a2a] px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground hover:border-red-500 hover:text-red-400"
+            className="rounded-md border border-[#2a2a2a] px-2 py-1 font-mono text-[11px] uppercase text-muted-foreground hover:border-red-500 hover:text-red-400"
           >
             {t("common.stop")}
           </button>
@@ -120,18 +120,18 @@ export function FlowGraphModal({
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff0073]" />
             <span className="text-sm font-bold text-foreground">{t("pipe.cinemaFlowGraphVisualizer")}</span>
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <span className="font-mono text-[11px] text-muted-foreground">
               {t("pipe.cinemaFlowGraphSub")}
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
               {t("pipe.cinemaReadOnlySchema")}
             </span>
             <button
               type="button"
               onClick={onClose}
-              className="rounded bg-cta px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-white"
+              className="rounded bg-cta px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-white"
             >
               {t("pipe.cinemaCloseGraph")}
             </button>
@@ -140,11 +140,11 @@ export function FlowGraphModal({
 
         <div className="grid flex-1 grid-cols-3 items-center gap-4">
           <div className="space-y-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
               {t("pipe.cinemaInputs")}
             </div>
             {inputs.length === 0 && (
-              <div className="rounded-lg border border-[#2a2a2a] p-3 font-mono text-[10px] text-muted-foreground">
+              <div className="rounded-lg border border-[#2a2a2a] p-3 font-mono text-[11px] text-muted-foreground">
                 {t("pipe.cinemaNoEntitiesInjected")}
               </div>
             )}
@@ -159,21 +159,21 @@ export function FlowGraphModal({
                       : "border-emerald-500/40"
                 }`}
               >
-                <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                   {t("pipe.cinemaAsset")}
                 </div>
                 <div className="font-mono text-[12px] font-bold text-foreground">@{s.name}</div>
-                <div className="text-[10px] text-muted-foreground">{s.desc}</div>
+                <div className="text-[11px] text-muted-foreground">{s.desc}</div>
               </div>
             ))}
           </div>
 
           <div className="space-y-2">
-            <div className="text-center font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            <div className="text-center font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
               {t("pipe.cinemaLlmLogicEngine")}
             </div>
             <div className="rounded-lg border border-amber-500/50 bg-amber-500/5 p-3">
-              <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-amber-300">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-amber-300">
                 ≡ {t("pipe.cinemaSystemPromptNode")}
               </div>
               <div className="mt-1 text-[12px] font-bold text-foreground">
@@ -182,38 +182,38 @@ export function FlowGraphModal({
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {t("pipe.cinemaSystemPromptQuote")}
               </p>
-              <span className="mt-2 inline-block rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[9px] text-amber-300">
+              <span className="mt-2 inline-block rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[11px] text-amber-300">
                 {t("pipe.cinemaRoleCopilot")}
               </span>
             </div>
           </div>
 
           <div className="space-y-3">
-            <div className="text-end font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            <div className="text-end font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
               {t("pipe.cinemaOutputs")}
             </div>
             <div className="rounded-lg border border-[#ff0073]/50 p-3">
-              <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#ff0073]">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#ff0073]">
                 ◉ {t("pipe.cinemaCameraCore")}
               </div>
               <div className="text-[12px] font-bold text-foreground">{t("pipe.cinemaCamRig")}</div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground">
                 {t("pipe.cinemaAnamorphicLenses")}
               </div>
             </div>
             <div className="rounded-lg border border-emerald-500/50 p-3">
-              <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-emerald-400">
                 ⚙ {t("pipe.cinemaRenderFarm")}
               </div>
               <div className="text-[12px] font-bold text-foreground">{t("pipe.cinemaRaytracer")}</div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground">
                 {t("pipe.cinemaDynamicReflections")}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between border-t border-[#1d1d1d] pt-3 font-mono text-[10px] text-muted-foreground">
+        <div className="mt-4 flex items-center justify-between border-t border-[#1d1d1d] pt-3 font-mono text-[11px] text-muted-foreground">
           <span>{t("pipe.cinemaActiveEngine")}</span>
           <span>
             {t("pipe.cinemaLatency")} <span className="text-emerald-400">42ms ●</span>

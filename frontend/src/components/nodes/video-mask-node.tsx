@@ -101,8 +101,8 @@ function VideoMaskNodeComponent({ id, data, selected }: NodeProps) {
             {status !== "running" && activeUrl && videoError && (
               <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                 <AlertCircle className="w-5 h-5 text-amber-500" />
-                <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
+                <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
               </div>
             )}
             {status === "failed" && !activeUrl && (
@@ -112,16 +112,16 @@ function VideoMaskNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
               </div>
             )}
             {status !== "running" && !activeUrl && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+              <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
                 <ScanEye className="w-10 h-10" />
-                <span className="text-[10px] text-muted-foreground/60 px-2 text-center">{t("node.videoMaskIdleHint")}</span>
+                <span className="text-[11px] text-muted-foreground px-2 text-center">{t("node.videoMaskIdleHint")}</span>
               </div>
             )}
           </div>

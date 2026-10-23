@@ -68,7 +68,7 @@ export function SortableCardWrapper({
           <div
             {...attributes}
             {...listeners}
-            className="shrink-0 mt-4 w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+            className="shrink-0 mt-4 w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
           >
             <GripVertical className="w-4 h-4" />
           </div>
@@ -89,7 +89,7 @@ export function SortableCardWrapper({
             dir={editableTextDir(cardTitle)}
             onChange={(e) => onTitleChange(e.target.value)}
             placeholder={t("present.customTitlePlaceholder")}
-            className="w-full bg-transparent border-none text-[11px] font-medium text-muted-foreground/60 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
+            className="w-full bg-transparent border-none text-[11px] font-medium text-muted-foreground placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
           />
         </div>
       )}
@@ -103,7 +103,7 @@ export function SortableCardWrapper({
             dir={editableTextDir(cardDescription)}
             onChange={(e) => onDescriptionChange(e.target.value)}
             placeholder={t("present.addDescriptionPlaceholder")}
-            className="w-full bg-transparent border-none text-[11px] text-muted-foreground/50 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
+            className="w-full bg-transparent border-none text-[11px] text-muted-foreground placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
           />
         </div>
       )}
@@ -122,7 +122,7 @@ export function SortableCardWrapper({
 
       {/* Show description in view mode if set */}
       {!isEditMode && cardDescription && (
-        <p dir="auto" className="mt-1 px-1 text-[11px] text-muted-foreground/60">{cardDescription}</p>
+        <p dir="auto" className="mt-1 px-1 text-[11px] text-muted-foreground">{cardDescription}</p>
       )}
     </div>
   )

@@ -113,7 +113,7 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Empty state */}
         {!activeUrl && status !== "running" && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
             <Eraser className="w-10 h-10" />
           </div>
         )}
@@ -121,7 +121,7 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
         {/* Running state */}
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
@@ -130,7 +130,7 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
         {status === "failed" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
             <AlertCircle className="w-6 h-6" />
-            {nodeData.errorMessage && <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>}
+            {nodeData.errorMessage && <p className="text-[11px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>}
           </div>
         )}
 

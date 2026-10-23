@@ -637,7 +637,7 @@ function FlowTutorialsTab() {
                     <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                     {cat?.name ?? "Unknown category"}
                     {cat && !cat.isEnabled && (
-                      <Badge variant="outline" className="text-[10px]">disabled</Badge>
+                      <Badge variant="outline" className="text-[11px]">disabled</Badge>
                     )}
                   </h3>
                   <div className="border rounded-lg overflow-hidden">
@@ -682,9 +682,9 @@ function FlowTutorialsTab() {
                             </td>
                             <td className="px-4 py-2 text-center hidden lg:table-cell">
                               {f.isListed ? (
-                                <Badge variant="outline" className="text-[10px]">Listed</Badge>
+                                <Badge variant="outline" className="text-[11px]">Listed</Badge>
                               ) : (
-                                <span className="text-[10px] text-muted-foreground">private</span>
+                                <span className="text-[11px] text-muted-foreground">private</span>
                               )}
                             </td>
                             <td className="px-4 py-2 text-right">
@@ -898,18 +898,18 @@ function PickerStep({
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{t.name}</p>
                       {t.isTutorial && (
-                        <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">
+                        <Badge variant="outline" className="text-[11px] border-amber-500 text-amber-600">
                           already tutorial
                         </Badge>
                       )}
                       {t.isListed && (
-                        <Badge variant="outline" className="text-[10px]">Listed</Badge>
+                        <Badge variant="outline" className="text-[11px]">Listed</Badge>
                       )}
                     </div>
                     {t.description && (
                       <p className="text-xs text-muted-foreground truncate">{t.description}</p>
                     )}
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
                       by {t.creatorDisplayName ?? t.creatorId.slice(0, 8)}
                       {" · "}
                       <span className="capitalize">{t.complexity}</span>
@@ -1015,7 +1015,7 @@ function ComplexityBadge({ complexity }: { complexity: string }) {
   const c = COMPLEXITY_CONFIG[complexity as Complexity]
   if (!c) return <span className="text-muted-foreground">—</span>
   return (
-    <span className={cn("text-[10px] px-1.5 py-0.5 rounded border font-medium", c.color)}>
+    <span className={cn("text-[11px] px-1.5 py-0.5 rounded border font-medium", c.color)}>
       {c.label}
     </span>
   )

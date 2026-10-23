@@ -277,7 +277,7 @@ export default function DeveloperAppsPage() {
                 )}
                 <div className="flex flex-wrap gap-1 mt-2">
                   {appRow.scopesRequested.map((s) => (
-                    <Badge key={s} variant="outline" className="font-mono text-[10px]">
+                    <Badge key={s} variant="outline" className="font-mono text-[11px]">
                       {s}
                     </Badge>
                   ))}

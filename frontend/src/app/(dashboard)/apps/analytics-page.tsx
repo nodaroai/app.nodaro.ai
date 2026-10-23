@@ -222,7 +222,7 @@ function StatCard({
     <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center gap-2 mb-2">
         <Icon className={`h-4 w-4 ${color ?? "text-muted-foreground"}`} />
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
       </div>
       <span className="text-2xl font-bold text-foreground">{formatNumber(value)}</span>
     </div>
@@ -262,7 +262,7 @@ function RunStatusBadge({ status }: { status: string }) {
     pending: "bg-yellow-500/10 text-yellow-500",
   }
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors[status] ?? "text-muted-foreground"}`}>
+    <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${colors[status] ?? "text-muted-foreground"}`}>
       {status}
     </span>
   )

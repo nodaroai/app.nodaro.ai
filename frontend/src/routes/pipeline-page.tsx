@@ -445,7 +445,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   <span className="block text-sm font-medium text-foreground">
                     {t(opt.labelKey)}
                   </span>
-                  <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
+                  <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
                     {t(opt.hintKey)}
                   </span>
                 </button>
@@ -466,10 +466,10 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   : "bg-card hover:border-[#ff0073]/50"
               }`}
             >
-              <div className="flex h-8 items-center justify-center rounded bg-[var(--border-primary)] text-[9px] text-muted-foreground">
+              <div className="flex h-8 items-center justify-center rounded bg-[var(--border-primary)] text-[11px] text-muted-foreground">
                 {t("pipe.styleAuto")}
               </div>
-              <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
+              <span className="mt-1 block truncate text-[11px] font-medium text-foreground">
                 {t("pipe.styleAuto")}
               </span>
             </button>
@@ -489,7 +489,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
                   }`}
                 >
                   <div className="h-8 rounded" style={{ background: s.swatch }} />
-                  <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
+                  <span className="mt-1 block truncate text-[11px] font-medium text-foreground">
                     {s.label}
                   </span>
                 </button>
@@ -805,7 +805,7 @@ function EntityDescGate({
             <button
               type="button"
               onClick={() => setLibTab("featured")}
-              className={`rounded-md px-2 py-0.5 text-[10px] ${
+              className={`rounded-md px-2 py-0.5 text-[11px] ${
                 libTab === "featured"
                   ? "bg-[#ff0073]/10 text-[#ff0073]"
                   : "text-muted-foreground hover:text-foreground"
@@ -816,7 +816,7 @@ function EntityDescGate({
             <button
               type="button"
               onClick={() => setLibTab("mine")}
-              className={`rounded-md px-2 py-0.5 text-[10px] ${
+              className={`rounded-md px-2 py-0.5 text-[11px] ${
                 libTab === "mine"
                   ? "bg-[#ff0073]/10 text-[#ff0073]"
                   : "text-muted-foreground hover:text-foreground"
@@ -843,12 +843,12 @@ function EntityDescGate({
                       setDesc(f.description)
                       setReuseOpen(false)
                     }}
-                    className="rounded-full border px-2 py-1 text-[10px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-50"
+                    className="rounded-full border px-2 py-1 text-[11px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-50"
                   >
                     {f.label}
                   </button>
                 ))}
-                <p className="mt-1 w-full text-[10px] text-muted-foreground">
+                <p className="mt-1 w-full text-[11px] text-muted-foreground">
                   {t("pipe.starterFillHint")}
                 </p>
               </div>
@@ -878,7 +878,7 @@ function EntityDescGate({
                     alt={item.name}
                     className="h-20 w-20 rounded border object-cover"
                   />
-                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {item.name}
                   </div>
                 </button>
@@ -1864,7 +1864,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                 <button
                   type="button"
                   onClick={() => setSelectedClip(null)}
-                  className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                  className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
                 >
                   {t("pipe.closeX")}
                 </button>
@@ -1926,7 +1926,7 @@ function PipelineSession({ pipelineId }: { pipelineId: string }) {
                   <code className="text-foreground">EDITION=cloud</code>{" "}
                   {t("pipe.stuckDetailPost")}
                 </p>
-                <pre className="mt-1.5 overflow-x-auto rounded bg-background p-1.5 text-[10px] text-foreground">
+                <pre className="mt-1.5 overflow-x-auto rounded bg-background p-1.5 text-[11px] text-foreground">
 npm run pipeline-worker:dev
                 </pre>
               </div>

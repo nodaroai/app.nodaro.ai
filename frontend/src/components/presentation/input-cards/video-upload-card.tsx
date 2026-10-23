@@ -31,7 +31,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
     return (
       <>
         <div className="flex flex-col gap-1">
-          <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
           {media.effectiveUrl ? (
             // eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions
             <div className="relative w-fit cursor-pointer" onClick={() => setPreviewOpen(true)}>

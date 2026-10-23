@@ -59,13 +59,13 @@ export function CommunityCard({ item, onClick }: CommunityCardProps) {
             {item.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-medium"
+                className="text-[11px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-medium"
               >
                 {tag}
               </span>
             ))}
             {item.tags.length > 3 && (
-              <span className="text-[10px] text-white/50">{t("node.plusNMore", { n: item.tags.length - 3 })}</span>
+              <span className="text-[11px] text-white/50">{t("node.plusNMore", { n: item.tags.length - 3 })}</span>
             )}
           </div>
         )}
@@ -85,7 +85,7 @@ export function CommunityCard({ item, onClick }: CommunityCardProps) {
         </div>
 
         {item.creator_display_name && (
-          <p className="text-[10px] text-white/50 truncate">{t("preview.by", { name: item.creator_display_name })}</p>
+          <p className="text-[11px] text-white/50 truncate">{t("preview.by", { name: item.creator_display_name })}</p>
         )}
       </div>
     </div>

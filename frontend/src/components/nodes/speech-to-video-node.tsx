@@ -321,9 +321,9 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       <div className="flex flex-col gap-2 h-full">
         {/* Connection indicators */}
         {!hasConnections && status !== "running" && (
-          <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
+          <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground">
             <MessageSquare className="w-8 h-8" />
-            <span className="text-[10px] text-center">{t("node.connectImageAudioPrompt")}</span>
+            <span className="text-[11px] text-center">{t("node.connectImageAudioPrompt")}</span>
           </div>
         )}
 
@@ -331,22 +331,22 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col gap-1 px-3 pt-2">
             <div className="flex items-center gap-1.5">
               <ImageIcon className={`w-3 h-3 ${hasImageConnection ? "text-green-400" : "text-white/30"}`} />
-              <span className="text-[10px] text-muted-foreground/60">{hasImageConnection ? t("node.imageConnected") : t("node.needImage")}</span>
+              <span className="text-[11px] text-muted-foreground">{hasImageConnection ? t("node.imageConnected") : t("node.needImage")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Volume2 className={`w-3 h-3 ${hasAudioConnection ? "text-green-400" : "text-white/30"}`} />
-              <span className="text-[10px] text-muted-foreground/60">{hasAudioConnection ? t("node.audioConnected") : t("node.needAudio")}</span>
+              <span className="text-[11px] text-muted-foreground">{hasAudioConnection ? t("node.audioConnected") : t("node.needAudio")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Type className={`w-3 h-3 ${textNodes.length > 0 ? "text-green-400" : "text-white/30"}`} />
-              <span className="text-[10px] text-muted-foreground/60">{textNodes.length > 0 ? t("node.promptConnected") : t("node.usingDefaultPrompt")}</span>
+              <span className="text-[11px] text-muted-foreground">{textNodes.length > 0 ? t("node.promptConnected") : t("node.usingDefaultPrompt")}</span>
             </div>
           </div>
         )}
 
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
@@ -355,13 +355,13 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
+              <p className="text-[11px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
             )}
           </div>
         )}
 
         {status !== "running" && status !== "failed" && hasRequiredInputs && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
             <MessageSquare className="w-10 h-10" />
           </div>
         )}

@@ -92,7 +92,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
           <Label>{t("field.motion")}</Label>
-          <span className="text-[10px] text-muted-foreground">{t("cfgext.s2vAppliedToStill")}</span>
+          <span className="text-[11px] text-muted-foreground">{t("cfgext.s2vAppliedToStill")}</span>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
           {MOTION_OPTIONS().map((opt) => (
@@ -102,7 +102,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
               aria-pressed={motion === opt.value}
               onClick={() => onUpdate({ motion: opt.value })}
               className={cn(
-                "flex flex-col items-center gap-1 px-1.5 py-2 rounded-lg border text-[10.5px] transition-colors",
+                "flex flex-col items-center gap-1 px-1.5 py-2 rounded-lg border text-[11px] transition-colors",
                 motion === opt.value
                   ? "border-primary bg-primary/10 text-primary font-medium"
                   : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
@@ -136,7 +136,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
             />
           ))}
         </div>
-        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{t("cfgext.slideSubtle")}</span><span>{t("cfgext.slideStrong")}</span></div>
+        <div className="flex justify-between text-[11px] text-muted-foreground"><span>{t("cfgext.slideSubtle")}</span><span>{t("cfgext.slideStrong")}</span></div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -167,7 +167,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
                 )}
               >
                 <span className="rounded-[2px] border border-current" style={{ width: opt.w, height: opt.h }} />
-                <span className="text-[9px] font-mono">{opt.value}</span>
+                <span className="text-[11px] font-mono">{opt.value}</span>
               </button>
             ))}
           </div>
@@ -207,7 +207,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
               </span>
               <span className="flex flex-col">
                 <span className={cn("text-xs", fit === opt.value ? "text-foreground" : "text-muted-foreground")}>{opt.label}</span>
-                <span className="text-[9px] text-muted-foreground">{opt.hint}</span>
+                <span className="text-[11px] text-muted-foreground">{opt.hint}</span>
               </span>
             </button>
           ))}
@@ -218,7 +218,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
       <div className={cn("flex flex-col gap-2", fit !== "contain" && "opacity-40 pointer-events-none")}>
         <div className="flex items-center gap-2">
           <Label htmlFor="still-pad-color">{t("proccfg.padColor")}</Label>
-          <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">{t("cfgext.fitContainBadge")}</span>
+          <span className="px-1.5 py-0.5 rounded bg-muted text-[11px] font-mono text-muted-foreground">{t("cfgext.fitContainBadge")}</span>
         </div>
         <div className="flex items-center gap-2">
           <Input
@@ -235,14 +235,14 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
 
       <div className="flex items-center justify-between pt-3 border-t border-border">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] tracking-wider text-muted-foreground">{t("cfgext.s2vOutputLength")}</span>
+          <span className="text-[11px] tracking-wider text-muted-foreground">{t("cfgext.s2vOutputLength")}</span>
           <span className="text-xs font-mono text-foreground">
             {audioDuration
               ? <>{formatClipLength(audioDuration)} <span className="text-muted-foreground">· {t("cfgext.s2vFramesCount", { n: Math.ceil(audioDuration * fps) })}</span></>
               : t("cfgext.s2vSetByAudio")}
           </span>
         </div>
-        <span className="text-[10px] text-muted-foreground text-end max-w-[140px] leading-snug">{t("cfgext.s2vFromAudioNoDuration")}</span>
+        <span className="text-[11px] text-muted-foreground text-end max-w-[140px] leading-snug">{t("cfgext.s2vFromAudioNoDuration")}</span>
       </div>
     </div>
   )

@@ -23,7 +23,7 @@ export function TriggerPreviewWarning({ nodeId, armed }: { readonly nodeId: stri
   )
   if (!kind) return null
   return (
-    <p role="alert" className="mx-3.5 mb-2.5 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[10px] leading-snug text-amber-700 dark:text-amber-300">
+    <p role="alert" className="mx-3.5 mb-2.5 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
       <AlertTriangle className="mt-px h-3 w-3 shrink-0" aria-hidden />
       <span>{t(previewRefusalKey("trigger", kind))}</span>
     </p>

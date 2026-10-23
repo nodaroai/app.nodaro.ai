@@ -498,7 +498,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             autoFocus
           />
         )}
-        <p className="text-[10px] text-muted-foreground mt-0.5">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {styleNodeConnected
             ? t("imgcfg.styleBypassed")
             : t("imgcfg.styleGuidance")}
@@ -529,7 +529,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               snippets={negativeSnippets}
             />
             <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun={t("imgcfg.negativePrompt")} />
-            <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
           </>
         )}
       </MappableField>
@@ -559,7 +559,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-medium truncate">{char.name}</span>
-                  <span className={`text-[9px] px-1 py-0.5 rounded ${
+                  <span className={`text-[11px] px-1 py-0.5 rounded ${
                     char.category === "location" ? "bg-cyan-500/10 text-cyan-500"
                     : char.category === "object" ? "bg-emerald-500/10 text-emerald-500"
                     : char.referenceImageUrl ? "bg-blue-500/10 text-blue-500"
@@ -568,11 +568,11 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                     {char.category === "location" ? t("cfgext.assetTypeLocation") : char.category === "object" ? t("cfgext.assetTypeObject") : char.referenceImageUrl ? t("entity.badgeRef") : t("entity.badgeDesc")}
                   </span>
                   {char.type === "description" && !char.referenceImageUrl && (
-                    <span className="text-[8px] text-orange-500" title={t("imgcfg.needsRefTitle")}>{t("imgcfg.needsRef")}</span>
+                    <span className="text-[11px] text-orange-500" title={t("imgcfg.needsRefTitle")}>{t("imgcfg.needsRef")}</span>
                   )}
                 </div>
                 {char.type === "description" && char.description && (
-                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">{char.description}</p>
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">{char.description}</p>
                 )}
               </div>
               <button aria-label={t("common.remove")}
@@ -585,7 +585,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             </div>
           ))}
           {attachedChars.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60">{t("imgcfg.noAssetsAttached")}</p>
+            <p className="text-[11px] text-muted-foreground">{t("imgcfg.noAssetsAttached")}</p>
           )}
         </div>
 
@@ -594,7 +594,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <button
             type="button"
             onClick={() => setShowAssetLibrary(true)}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-muted transition-colors"
           >
             <Plus className="w-3 h-3" /> {t("imgcfg.addFromLibrary")}
           </button>
@@ -602,7 +602,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             <button
               type="button"
               onClick={() => setShowDefineNewMenu(!showDefineNewMenu)}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-muted transition-colors"
             >
               <UserPlus className="w-3 h-3" /> {t("imgcfg.createNew")}
             </button>
@@ -740,7 +740,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   <SelectItem value="QUALITY">{t("imgcfg.speedQuality")}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.speedCostHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.speedCostHint")}</p>
             </div>
           )}
           {currentProvider === "ideogram-v3" && (
@@ -769,7 +769,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   className="rounded border-border"
                 />
                 <Label htmlFor="expandPrompt" className="text-xs cursor-pointer">{t("field.expandPrompt")}</Label>
-                <p className="text-[10px] text-muted-foreground">{t("imgcfg.autoEnhance")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("imgcfg.autoEnhance")}</p>
               </div>
             </>
           )}
@@ -790,7 +790,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   {(data.strength ?? strengthConfig.default).toFixed(2)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.strengthHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.strengthHint")}</p>
             </div>
           )}
           {guidanceScaleConfig && (
@@ -810,7 +810,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.guidanceHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.guidanceHint")}</p>
             </div>
           )}
           {supportsSeed && (
@@ -827,7 +827,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 }}
                 placeholder={t("imgcfg.seedRandom")}
               />
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.seedHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.seedHint")}</p>
             </div>
           )}
         </div>
@@ -850,14 +850,14 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   <button
                     type="button"
                     onClick={() => setShowMaskPainter(true)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-muted transition-colors"
                   >
                     <Paintbrush className="w-3 h-3" /> {t("imgcfg.editMask")}
                   </button>
                   <button
                     type="button"
                     onClick={() => onUpdate({ maskUrl: undefined })}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
                   >
                     <X className="w-3 h-3" /> {t("imgcfg.clearMask")}
                   </button>
@@ -873,7 +873,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 {t("imgcfg.paintMask")}
               </button>
             )}
-            <p className="text-[10px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
+            <p className="text-[11px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
           </div>
           <Suspense fallback={null}>
             <MaskPainterModal
@@ -1432,7 +1432,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             autoFocus
           />
         )}
-        <p className="text-[10px] text-muted-foreground mt-0.5">
+        <p className="text-[11px] text-muted-foreground mt-0.5">
           {styleNodeConnected
             ? t("imgcfg.styleBypassed")
             : t("imgcfg.styleGuidance")}
@@ -1463,7 +1463,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               snippets={negativeSnippets}
             />
             <PromptLengthCounter value={data.negativePrompt ?? ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun={t("imgcfg.negativePrompt")} />
-            <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
           </>
         )}
       </MappableField>
@@ -1536,7 +1536,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-medium truncate">{char.name}</span>
-                  <span className={`text-[9px] px-1 py-0.5 rounded ${
+                  <span className={`text-[11px] px-1 py-0.5 rounded ${
                     char.category === "location" ? "bg-cyan-500/10 text-cyan-500"
                     : char.category === "object" ? "bg-emerald-500/10 text-emerald-500"
                     : char.referenceImageUrl ? "bg-blue-500/10 text-blue-500"
@@ -1546,7 +1546,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   </span>
                 </div>
                 {char.type === "description" && char.description && (
-                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">{char.description}</p>
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">{char.description}</p>
                 )}
               </div>
               <button aria-label={t("common.remove")}
@@ -1559,14 +1559,14 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             </div>
           ))}
           {attachedChars.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60">{t("imgcfg.noAssetsAttached")}</p>
+            <p className="text-[11px] text-muted-foreground">{t("imgcfg.noAssetsAttached")}</p>
           )}
         </div>
         <div className="flex gap-1.5 mt-2">
           <button
             type="button"
             onClick={() => setShowAssetLibrary(true)}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-muted transition-colors"
           >
             <Plus className="w-3 h-3" /> {t("imgcfg.addFromLibrary")}
           </button>
@@ -1574,7 +1574,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             <button
               type="button"
               onClick={() => setShowDefineNewMenu(!showDefineNewMenu)}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-muted transition-colors"
             >
               <UserPlus className="w-3 h-3" /> {t("imgcfg.createNew")}
             </button>
@@ -1624,14 +1624,14 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                     type="button"
                     onClick={() => sourceImageUrl && setShowMaskPainter(true)}
                     disabled={!sourceImageUrl}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-muted transition-colors disabled:opacity-50"
                   >
                     <Paintbrush className="w-3 h-3" /> {t("imgcfg.editMask")}
                   </button>
                   <button
                     type="button"
                     onClick={() => onUpdate({ maskUrl: undefined })}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
                   >
                     <X className="w-3 h-3" /> {t("imgcfg.clearMask")}
                   </button>
@@ -1648,7 +1648,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 {sourceImageUrl ? t("imgcfg.paintMask") : t("imgcfg.connectImageFirst")}
               </button>
             )}
-            <p className="text-[10px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
+            <p className="text-[11px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
           </div>
           {sourceImageUrl && (
             <Suspense fallback={null}>
@@ -1723,7 +1723,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   {(data.strength ?? strengthConfig.default).toFixed(2)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.strengthHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.strengthHint")}</p>
             </div>
           )}
           {guidanceScaleConfig && (
@@ -1743,7 +1743,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.guidanceHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.guidanceHint")}</p>
             </div>
           )}
           {supportsRenderingSpeed && (
@@ -1760,7 +1760,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectItem value="QUALITY">{t("imgcfg.speedQuality")}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.speedCostHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.speedCostHint")}</p>
             </div>
           )}
           {supportsSeed && (
@@ -1777,7 +1777,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 }}
                 placeholder={t("imgcfg.seedRandom")}
               />
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.seedHint")}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.seedHint")}</p>
             </div>
           )}
           {!isNanoBananaEdit && supportsRefImage && (
@@ -1797,7 +1797,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                     {uploadingRefImage ? <Loader2 className="w-3 h-3 me-1 animate-spin" /> : <Upload className="w-3 h-3 me-1" />}
                     {t("imgcfg.uploadReference")}
                   </Button>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.refImageHint")}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{t("imgcfg.refImageHint")}</p>
                 </div>
               )}
             </div>
@@ -1963,7 +1963,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
           onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) })}
           className="w-full accent-[#ff0073]"
         />
-        <p className="text-[10px] text-muted-foreground">{t("imgcfg.matchHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("imgcfg.matchHint")}</p>
       </div>
     </div>
   )

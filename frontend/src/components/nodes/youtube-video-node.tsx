@@ -168,7 +168,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className="p-3 flex flex-col gap-1.5">
             {/* URL input — every download belongs to the controller (lib/video-link-ingest) */}
             <div className="flex items-center gap-1.5">
-              <Link className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+              <Link className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <input
                 type="text"
                 value={link}
@@ -205,7 +205,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                   />
                   {/* Platform badge (non-YouTube) */}
                   {!canEmbed && platform !== "unknown" && (
-                    <div className="absolute top-1.5 left-1.5 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <div className="absolute top-1.5 left-1.5 bg-black/70 text-white text-[11px] px-1.5 py-0.5 rounded flex items-center gap-1">
                       <PlatformIcon platform={platform} className="w-3 h-3" />
                       <span>{VIDEO_PLATFORM_LABELS[platform]}</span>
                     </div>
@@ -221,7 +221,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 {clearButton}
                 {nodeData.title && (
-                  <p className="mt-1 text-[10px] text-muted-foreground truncate" title={nodeData.title}>
+                  <p className="mt-1 text-[11px] text-muted-foreground truncate" title={nodeData.title}>
                     {nodeData.title}
                   </p>
                 )}
@@ -248,25 +248,25 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             {nodeData.videoId && nodeData.audioDownloadStatus === "downloading" && (
               <div className="flex items-center gap-1.5 px-1 py-0.5">
                 <Loader2 className="w-3 h-3 text-[#38BDF8] animate-spin" />
-                <span className="text-[10px] text-muted-foreground">{t("cfgext.musicDownloadingAudio")}</span>
+                <span className="text-[11px] text-muted-foreground">{t("cfgext.musicDownloadingAudio")}</span>
               </div>
             )}
             {nodeData.videoId && nodeData.audioDownloadStatus === "completed" && (
               <div className="flex items-center gap-1.5 px-1 py-0.5">
                 <CheckCircle2 className="w-3 h-3 text-green-500" />
-                <span className="text-[10px] text-green-600 dark:text-green-400">{t("inputcfg.audioReady")}</span>
+                <span className="text-[11px] text-green-600 dark:text-green-400">{t("inputcfg.audioReady")}</span>
               </div>
             )}
             {nodeData.videoId && nodeData.audioDownloadStatus === "failed" && (
               <div className="flex items-center gap-1.5 px-1 py-0.5">
                 <AlertCircle className="w-3 h-3 text-orange-500" />
-                <span className="text-[10px] text-orange-500" title={nodeData.audioDownloadError}>{t("node.audioFailed")}</span>
+                <span className="text-[11px] text-orange-500" title={nodeData.audioDownloadError}>{t("node.audioFailed")}</span>
               </div>
             )}
 
             {/* Empty state */}
             {!nodeData.videoId && (
-              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <Video className="w-5 h-5" />
               </div>
             )}

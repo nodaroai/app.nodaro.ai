@@ -157,15 +157,15 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {!activeUrl && status !== "running" && status !== "failed" && (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
             <ScanFace className="w-10 h-10" />
-            <span className="text-[10px]">{t("node.faceSwap")}</span>
+            <span className="text-[11px]">{t("node.faceSwap")}</span>
           </div>
         )}
 
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
@@ -174,7 +174,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
+              <p className="text-[11px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
             )}
           </div>
         )}

@@ -69,21 +69,21 @@ export function Scene3DRevisionHistory({
     <>
       <Separator />
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <History className="w-3 h-3" />
           <span>{t("cfgext.scene3dRevisionCount", { count: history.length })}</span>
         </div>
         <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
           {[...history].reverse().map((entry) => (
             <div key={entry.revisionId} className="flex items-center gap-1.5 text-[11px] px-1.5 py-0.5">
-              <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+              <span className="font-mono text-[11px] text-muted-foreground shrink-0">
                 {entry.revisionId.slice(0, 6)}
               </span>
               <span className="truncate flex-1 text-muted-foreground">
                 {entry.changeSummary ?? t(SOURCE_LABEL_KEYS[entry.source])}
               </span>
               {entry.revisionId === activeRevisionId ? (
-                <span className="text-[9px] text-[#ff0073] shrink-0">{t("cfgext.scene3dActiveRevision")}</span>
+                <span className="text-[11px] text-[#ff0073] shrink-0">{t("cfgext.scene3dActiveRevision")}</span>
               ) : (
                 // The history stays READABLE read-only — only the restore
                 // control, which would rewrite the parent's state, is gone.
@@ -92,7 +92,7 @@ export function Scene3DRevisionHistory({
                     type="button"
                     aria-label={t("scene3dcfg.restoreRevision", { id: entry.revisionId.slice(0, 6) })}
                     title={entry.context?.prompt}
-                    className="text-muted-foreground/60 hover:text-foreground shrink-0"
+                    className="text-muted-foreground hover:text-foreground shrink-0"
                     onClick={() => onRestore(entry.revisionId)}
                   >
                     <RotateCcw className="w-3 h-3" />

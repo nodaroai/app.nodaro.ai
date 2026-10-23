@@ -82,7 +82,7 @@ function SubWorkflowInputNodeComponent({ id, data, selected }: NodeProps) {
                 <div key={port.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: PORT_COLOR[port.mediaType] ?? PORT_COLOR.any }} />
                   <span>{port.name}</span>
-                  <span className="text-[10px] opacity-60">({port.mediaType})</span>
+                  <span className="text-[11px] opacity-60">({port.mediaType})</span>
                 </div>
               ))}
             </div>

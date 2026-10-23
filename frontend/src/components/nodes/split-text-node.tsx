@@ -72,12 +72,12 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
               <p className="text-xs text-foreground/80">
                 {partCount === 1 ? t("inputcfg.itemOne", { n: partCount }) : t("inputcfg.items2", { n: partCount })}
               </p>
-              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              <span className="text-[11px] text-muted-foreground mt-0.5 block">
                 {t("node.splitBySeparator", { separator: separatorLabel })}
               </span>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+            <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <FileText className="w-5 h-5" />
             </div>
           )}

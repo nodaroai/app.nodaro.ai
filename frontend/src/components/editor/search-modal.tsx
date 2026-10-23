@@ -267,7 +267,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               {/* Projects Section */}
               {projects.length > 0 && (
                 <div className="py-2">
-                  <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+                  <div className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
                     {t("nav.projects")}
                   </div>
                   {projects.map((project, idx) => {
@@ -306,7 +306,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               {/* Workflows Section */}
               {workflows.length > 0 && (
                 <div className="py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D]">
-                  <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+                  <div className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
                     {t("dash.workflows")}
                   </div>
                   {workflows.map((workflow, idx) => {
@@ -347,7 +347,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#1A1A1A]">
-          <div className="flex items-center gap-4 text-[10px] text-[#94A3B8]">
+          <div className="flex items-center gap-4 text-[11px] text-[#94A3B8]">
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 bg-white dark:bg-[#252525] rounded border border-[#E2E8F0] dark:border-[#3D3D3D] font-mono">
                 ↑↓

@@ -89,7 +89,7 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
 
       {props.isMulti ? (
         <span
-          className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] cursor-default whitespace-nowrap text-neutral-900/70 dark:text-white/70"
+          className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] cursor-default whitespace-nowrap text-neutral-900/70 dark:text-white/70"
           title={t("node.multiProvider")}
         >
           <Sparkles className="w-3 h-3 opacity-70" />

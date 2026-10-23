@@ -283,7 +283,7 @@ export default function ExplorePage() {
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-16">
-          <Compass className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+          <Compass className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-foreground mb-2">
             {view === "favorites" ? t("explore.emptyFavoritesTitle") : t("explore.emptyBrowseTitle")}
           </h2>

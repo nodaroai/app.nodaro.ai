@@ -268,7 +268,7 @@ export function LibraryMediaBrowser({
       {!hideChrome && (
       <div className="px-5 py-3 border-b border-border space-y-3">
         <div className="relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             ref={searchRef}
             type="text"
@@ -308,9 +308,9 @@ export function LibraryMediaBrowser({
           </div>
         ) : assets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <FileQuestion className="w-10 h-10 text-muted-foreground/30" />
+            <FileQuestion className="w-10 h-10 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">{t("lib.noFiles")}</p>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               {t("assetlib.uploadHint")}
             </p>
           </div>
@@ -378,7 +378,7 @@ export function LibraryMediaBrowser({
       {/* Footer — only with internal chrome */}
       {!hideChrome && (
       <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-        <p className="text-xs text-muted-foreground/60">
+        <p className="text-xs text-muted-foreground">
           {assets.length === 1 ? t("assetlib.fileCountOne", { n: assets.length }) : t("assetlib.fileCount", { n: assets.length })}
         </p>
         {footerHint}
@@ -499,7 +499,7 @@ const AssetCard = memo(function AssetCard({
 
         {/* Type badge, and the Preview label of a render made at proxy quality (F1) */}
         <span className="absolute top-1.5 start-1.5 flex items-center gap-1">
-          <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${typeBadgeColor(asset.type)}`}>
+          <span className={`px-1.5 py-0.5 text-[11px] font-medium rounded ${typeBadgeColor(asset.type)}`}>
             {asset.type}
           </span>
           {isPreviewQuality(asset.metadata) && <PreviewBadge />}
@@ -507,7 +507,7 @@ const AssetCard = memo(function AssetCard({
 
         {/* Shared library badge */}
         {asset.isLibraryItem && (
-          <span className="absolute top-1.5 end-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[#ff0073]/20 text-[#ff0073] flex items-center gap-0.5">
+          <span className="absolute top-1.5 end-1.5 px-1.5 py-0.5 text-[11px] font-medium rounded-full bg-[#ff0073]/20 text-[#ff0073] flex items-center gap-0.5">
             <Globe className="w-3 h-3" />
             {t("assetlib.sharedBadge")}
           </span>
@@ -548,7 +548,7 @@ const AssetCard = memo(function AssetCard({
                   onDelete(asset)
                 }}
                 disabled={isDeleting}
-                className="px-2 py-1 text-[10px] font-medium rounded bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                className="px-2 py-1 text-[11px] font-medium rounded bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
               >
                 {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : t("common.remove")}
               </button>
@@ -558,7 +558,7 @@ const AssetCard = memo(function AssetCard({
                   e.stopPropagation()
                   onCancelDelete()
                 }}
-                className="px-2 py-1 text-[10px] font-medium rounded bg-white/20 text-white hover:bg-white/30 transition-colors"
+                className="px-2 py-1 text-[11px] font-medium rounded bg-white/20 text-white hover:bg-white/30 transition-colors"
               >
                 {t("common.cancel")}
               </button>
@@ -588,10 +588,10 @@ const AssetCard = memo(function AssetCard({
           {asset.filename}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className="text-[11px] text-muted-foreground">
             {formatBytes(asset.sizeBytes)}
           </span>
-          <span className="text-[10px] text-muted-foreground/40">
+          <span className="text-[11px] text-muted-foreground">
             {formatDate(asset.createdAt)}
           </span>
         </div>
@@ -606,7 +606,7 @@ const AssetCard = memo(function AssetCard({
                   e.stopPropagation()
                   onDemote(asset)
                 }}
-                className="w-full px-2 py-1 text-[10px] font-medium rounded bg-muted/50 hover:bg-muted text-muted-foreground flex items-center justify-center gap-1 transition-colors"
+                className="w-full px-2 py-1 text-[11px] font-medium rounded bg-muted/50 hover:bg-muted text-muted-foreground flex items-center justify-center gap-1 transition-colors"
               >
                 <Globe className="w-3 h-3" />
                 {t("assetlib.removeFromShared")}
@@ -618,7 +618,7 @@ const AssetCard = memo(function AssetCard({
                   e.stopPropagation()
                   onPromote(asset)
                 }}
-                className="w-full px-2 py-1 text-[10px] font-medium rounded bg-[#ff0073]/10 hover:bg-[#ff0073]/20 text-[#ff0073] flex items-center justify-center gap-1 transition-colors"
+                className="w-full px-2 py-1 text-[11px] font-medium rounded bg-[#ff0073]/10 hover:bg-[#ff0073]/20 text-[#ff0073] flex items-center justify-center gap-1 transition-colors"
               >
                 <Globe className="w-3 h-3" />
                 {t("assetlib.addToSharedLibrary")}

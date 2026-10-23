@@ -104,10 +104,10 @@ function DayTile({
         quiet && !selected && !compared && "opacity-60",
       )}
     >
-      <span className="text-[10px] uppercase text-muted-foreground">{weekdayLabel(summary.day)}</span>
+      <span className="text-[11px] uppercase text-muted-foreground">{weekdayLabel(summary.day)}</span>
       <span className="text-sm font-medium">{dayLabel(summary.day)}</span>
-      <span className="text-[10px] text-muted-foreground">{summary.messages} msg</span>
-      <div className="flex items-center gap-1.5 text-[10px] font-mono">
+      <span className="text-[11px] text-muted-foreground">{summary.messages} msg</span>
+      <div className="flex items-center gap-1.5 text-[11px] font-mono">
         <span className={summary.rejections > 0 ? "text-destructive" : "text-muted-foreground"}>
           {summary.rejections}
         </span>

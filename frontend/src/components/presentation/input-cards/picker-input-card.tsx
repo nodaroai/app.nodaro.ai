@@ -174,7 +174,7 @@ function SinglePickerCard({
         return icon !== null ? (
           <div className="size-full">{icon}</div>
         ) : (
-          <div className="flex size-full items-center justify-center text-[10px] font-medium text-muted-foreground/80 px-1 text-center leading-tight">
+          <div className="flex size-full items-center justify-center text-[11px] font-medium text-muted-foreground px-1 text-center leading-tight">
             {resolveLabel(entry.id, entry.label)}
           </div>
         )
@@ -275,7 +275,7 @@ function SinglePickerCard({
             aria-label={t("present.changeLabel", { label: pickerLabel })}
           >
             {iconFor(currentValue) ?? (
-              <span className="text-[10px] font-medium text-muted-foreground/80 text-center px-1 leading-tight">
+              <span className="text-[11px] font-medium text-muted-foreground text-center px-1 leading-tight">
                 {selectedLabel}
               </span>
             )}

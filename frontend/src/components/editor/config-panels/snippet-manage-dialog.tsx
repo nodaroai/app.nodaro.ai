@@ -61,12 +61,12 @@ function SnippetForm({
       </div>
       <Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder={t("cfgext.snipMgrPhDescription")} maxLength={300} className="h-8 text-xs" />
       <Textarea value={f.text} onChange={(e) => setF({ ...f, text: e.target.value.replace(/\n/g, " ") })} placeholder={t("cfgext.snipMgrPhText")} rows={3} maxLength={2000} className="text-xs" />
-      {textInvalid && <p className="text-[10px] text-destructive">{t("cfgext.snipMgrTextInvalid")}</p>}
+      {textInvalid && <p className="text-[11px] text-destructive">{t("cfgext.snipMgrTextInvalid")}</p>}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1">
           {(["prompt", "negative"] as const).map((tgt) => (
             <button key={tgt} type="button" onClick={() => setF({ ...f, target: tgt })}
-              className={`rounded px-2 py-0.5 text-[10px] border transition-colors ${f.target === tgt ? "border-amber-400 bg-amber-500/15 text-amber-700 dark:text-amber-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
+              className={`rounded px-2 py-0.5 text-[11px] border transition-colors ${f.target === tgt ? "border-amber-400 bg-amber-500/15 text-amber-700 dark:text-amber-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
               {tgt === "prompt" ? t("node.prompt") : t("cfgshared.legendNegative")}
             </button>
           ))}
@@ -75,13 +75,13 @@ function SnippetForm({
           {SNIPPET_MEDIA_VALUES.map((m) => (
             <button key={m} type="button" onClick={() => toggleMedia(m)}
               title={t("cfgext.snipMgrMediaTitle")}
-              className={`rounded px-2 py-0.5 text-[10px] border transition-colors ${f.media.includes(m) ? "border-sky-400 bg-sky-500/15 text-sky-700 dark:text-sky-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
+              className={`rounded px-2 py-0.5 text-[11px] border transition-colors ${f.media.includes(m) ? "border-sky-400 bg-sky-500/15 text-sky-700 dark:text-sky-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
               {m}
             </button>
           ))}
         </div>
       </div>
-      {error && <p className="text-[10px] text-destructive">{error}</p>}
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
       <div className="flex justify-end gap-1.5">
         <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={onCancel}><X className="w-3 h-3 me-1" />{t("common.cancel")}</Button>
         <Button size="sm" className="h-7 text-[11px]" disabled={!valid || saving} onClick={() => onSave(f)}>
@@ -162,11 +162,11 @@ export function SnippetManageDialog({
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-medium truncate">
                     {s.name}
-                    <span className="ms-2 text-[9px] uppercase tracking-wider text-muted-foreground">
+                    <span className="ms-2 text-[11px] uppercase tracking-wider text-muted-foreground">
                       {s.target}{s.media.length > 0 ? ` · ${s.media.join("/")}` : ` · ${t("lib.filterAll")}`}
                     </span>
                   </p>
-                  <p className="text-[10px] text-muted-foreground truncate">{s.text}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{s.text}</p>
                 </div>
                 <button type="button" aria-label={t("cfgext.snipMgrEditAria")} className="p-1 text-muted-foreground hover:text-foreground" onClick={() => { setEditingId(s.id); setError(null) }}>
                   <Pencil className="w-3 h-3" />

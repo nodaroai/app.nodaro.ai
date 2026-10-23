@@ -1190,7 +1190,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <span className="text-xs font-medium text-foreground">{getCardTitle(node)}</span>
             <div className="flex items-center gap-2">
               <span
-                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                className="text-[11px] px-1.5 py-0.5 rounded-full font-medium"
                 style={{ backgroundColor: (PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888") + "20", color: PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] ?? "#888" }}
               >
                 {PLATFORM_LABELS[platform as keyof typeof PLATFORM_LABELS] ?? platform}

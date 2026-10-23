@@ -65,7 +65,7 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="text-xs font-medium">{t("cfgext.phdAnalysisFailed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -75,7 +75,7 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
           ) : (
             <p className="text-xs text-muted-foreground">{t("node.connectAnImageThenRun")}</p>
           )}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("node.arrowPerson")}</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{t("node.arrowPerson")}</p>
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="describe-to-picker" handleId="image" type="target" position={Position.Left} label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />

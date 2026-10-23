@@ -584,7 +584,7 @@ function ExecutionRow({
               </div>
             )}
             {showFinalizingHint && (
-              <span className="text-[10px] text-gray-500 dark:text-[#94A3B8] italic">
+              <span className="text-[11px] text-gray-500 dark:text-[#94A3B8] italic">
                 {t("exec.finalizing")}
               </span>
             )}
@@ -672,11 +672,11 @@ function ExecutionRow({
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="px-8 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.nodeColumn")}</th>
-                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
-                    <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
+                    <th className="px-8 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.nodeColumn")}</th>
+                    <th className="px-3 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colStatus")}</th>
+                    <th className="px-3 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colDuration")}</th>
                     {hasCredits() && (
-                      <th className="px-3 py-2 text-start text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
+                      <th className="px-3 py-2 text-start text-[11px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">{t("exec.colCredits")}</th>
                     )}
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -713,20 +713,20 @@ function ExecutionRow({
                                 </span>
                               )}
                               {hasFanOut && (
-                                <span className="inline-flex px-1.5 py-0.5 text-[9px] font-medium rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400">
+                                <span className="inline-flex px-1.5 py-0.5 text-[11px] font-medium rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400">
                                   &times;{fanOut.rows.length}
                                 </span>
                               )}
                             </div>
                           </td>
                           <td className="px-3 py-1.5">
-                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                            <span className={`inline-flex px-1.5 py-0.5 text-[11px] font-medium rounded-full ${
                               STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
                             }`}>
                               {state.status}
                             </span>
                             {state.status === "skipped" && state.skipReason && (
-                              <span className="ms-1 text-[10px] text-slate-400" title={tx("exec.nodeSkippedEmptyInput")}>
+                              <span className="ms-1 text-[11px] text-slate-400" title={tx("exec.nodeSkippedEmptyInput")}>
                                 {skipReasonLabel(state.skipReason)}
                               </span>
                             )}

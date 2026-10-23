@@ -126,7 +126,7 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
-                <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}
                 </p>
               )}
@@ -141,22 +141,22 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
                 {recipe.topic && <div dir="auto" className="font-medium leading-snug">{recipe.topic}</div>}
                 <div className="flex flex-wrap gap-1">
                   {recipe.format?.label && (
-                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px]">
                       {recipe.format.label}
                       {confidence !== undefined && <span className="tabular-nums opacity-70"> · {confidence}%</span>}
                     </span>
                   )}
                   {typeof recipe.durationSec === "number" && recipe.durationSec > 0 && (
-                    <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] tabular-nums">{t("node.contentRecipeSeconds", { seconds: fmtSec(recipe.durationSec) })}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[11px] tabular-nums">{t("node.contentRecipeSeconds", { seconds: fmtSec(recipe.durationSec) })}</span>
                   )}
-                  {recipe.pace && <span className="px-1.5 py-0.5 rounded bg-muted text-[10px]">{recipe.pace}</span>}
+                  {recipe.pace && <span className="px-1.5 py-0.5 rounded bg-muted text-[11px]">{recipe.pace}</span>}
                   {recipe.cta?.kind && recipe.cta.kind !== "none" && (
-                    <span className="px-1.5 py-0.5 rounded bg-muted text-[10px]">{t("node.contentRecipeCta", { kind: recipe.cta.kind })}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[11px]">{t("node.contentRecipeCta", { kind: recipe.cta.kind })}</span>
                   )}
                 </div>
                 {recipe.hook && (
                   <div className="flex flex-col gap-0.5">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       {t("node.contentRecipeHook")}
                       {recipe.hook.types && recipe.hook.types.length > 0 && <span className="normal-case"> · {recipe.hook.types.join(", ")}</span>}
                     </div>
@@ -167,7 +167,7 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 {recipe.beats && recipe.beats.length > 0 && (
                   <div className="flex flex-col gap-0.5">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("node.contentRecipeBeats")}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("node.contentRecipeBeats")}</div>
                     {recipe.beats.map((b, i) => (
                       <div key={i} dir="auto" className="leading-snug">
                         <span className="tabular-nums text-muted-foreground">{t("node.contentRecipeSpan", { start: fmtSec(b.start), end: fmtSec(b.end) })}</span>{" "}
@@ -179,7 +179,7 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 {recipe.whyItWorks && recipe.whyItWorks.length > 0 && (
                   <div className="flex flex-col gap-0.5">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("node.contentRecipeWhy")}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("node.contentRecipeWhy")}</div>
                     {recipe.whyItWorks.map((w, i) => (
                       <div key={i} dir="auto" className="leading-snug">
                         <span className="font-medium">{w.reason}</span>
@@ -189,13 +189,13 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
                   </div>
                 )}
                 {recipe.source?.url && (
-                  <div className="text-[10px] text-muted-foreground truncate" dir="ltr" title={recipe.source.url}>
+                  <div className="text-[11px] text-muted-foreground truncate" dir="ltr" title={recipe.source.url}>
                     {recipe.source.url}
                   </div>
                 )}
               </div>
               {nodeData.runWarnings && nodeData.runWarnings.length > 0 && (
-                <div className="text-[10px] text-amber-500 leading-snug" dir="auto">
+                <div className="text-[11px] text-amber-500 leading-snug" dir="auto">
                   {nodeData.runWarnings.join(" ")}
                 </div>
               )}
@@ -237,11 +237,11 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && status !== "failed" && !hasResult && (
             <div
-              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 px-2 text-center"
+              className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground px-2 text-center"
               style={{ minHeight: 120, flex: 1 }}
             >
               <ChefHat className="w-6 h-6" />
-              <span className="text-[10px]">{t("node.contentRecipeEmpty")}</span>
+              <span className="text-[11px]">{t("node.contentRecipeEmpty")}</span>
             </div>
           )}
         </div>

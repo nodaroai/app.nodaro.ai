@@ -15,7 +15,7 @@ export function ProviderAudioTagWarning({ provider, fieldValues }: Props) {
   const anyHasBrackets = fieldValues.some((v) => v !== undefined && BRACKET_RE.test(v))
   if (!anyHasBrackets) return null
   return (
-    <p className="text-[10px] text-amber-500 mt-1">
+    <p className="text-[11px] text-amber-500 mt-1">
       {t("cfgext.provWarnAudioTags")}
     </p>
   )

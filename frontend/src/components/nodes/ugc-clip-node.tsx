@@ -106,8 +106,8 @@ function UgcClipNodeComponent({ id, data, selected }: NodeProps) {
             {!running && activeUrl && videoError && (
               <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                 <AlertCircle className="w-5 h-5 text-amber-500" />
-                <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
-                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
+                <span className="text-[11px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
               </div>
             )}
             {status === "failed" && !activeUrl && (
@@ -117,14 +117,14 @@ function UgcClipNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {d.errorMessage && (
-                  <p dir="auto" className="text-[10px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
+                  <p dir="auto" className="text-[11px] text-center text-red-400 line-clamp-3" title={ugcNodeMessageText(d.errorMessage)}>
                     {ugcNodeMessageText(d.errorMessage)}
                   </p>
                 )}
               </div>
             )}
             {!running && !activeUrl && status !== "failed" && (
-              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+              <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
                 <Clapperboard className="w-5 h-5" />
               </div>
             )}
@@ -164,7 +164,7 @@ function UgcClipNodeComponent({ id, data, selected }: NodeProps) {
       )}
       {!running && warnings > 0 && (
         <div
-          className="absolute bottom-2 left-2 z-20 flex items-center gap-1 rounded-md border border-amber-500/40 bg-black/60 px-1.5 py-0.5 text-[10px] text-amber-300 backdrop-blur-sm"
+          className="absolute bottom-2 left-2 z-20 flex items-center gap-1 rounded-md border border-amber-500/40 bg-black/60 px-1.5 py-0.5 text-[11px] text-amber-300 backdrop-blur-sm"
           data-testid="ugc-clip-warnings"
         >
           <AlertTriangle className="w-3 h-3" />

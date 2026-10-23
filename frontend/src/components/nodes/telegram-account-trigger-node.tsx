@@ -74,10 +74,10 @@ function TelegramAccountTriggerNodeComponent({ id, data, selected }: NodeProps) 
                 ? t(chatCount === 1 ? "tgtrig.cardListeningOne" : "tgtrig.cardListening", { n: chatCount })
                 : t("tgtrig.cardOff")}
           </p>
-          <p className={`text-[10px] mt-1 ${listening ? "text-green-500" : "text-muted-foreground"}`}>
+          <p className={`text-[11px] mt-1 ${listening ? "text-green-500" : "text-muted-foreground"}`}>
             {listening ? t("sched.active") : t("sched.inactive")}
           </p>
-          {nodeData.inboxMode === true && <p className="text-[10px] mt-1 text-muted-foreground">{t("tgtrig.cardInbox")}</p>}
+          {nodeData.inboxMode === true && <p className="text-[11px] mt-1 text-muted-foreground">{t("tgtrig.cardInbox")}</p>}
           {working && (
             <p className="flex items-center gap-1.5 text-[11px] mt-2 text-foreground" role="status">
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden />

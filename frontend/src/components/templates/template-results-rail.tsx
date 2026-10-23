@@ -51,7 +51,7 @@ export function TemplateResultsRail({ snapshotNodes, className }: TemplateResult
       className={cn("rounded-[14px] border border-[var(--home-line)] bg-[var(--home-panel)] p-3", className)}
     >
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-[9px] font-bold uppercase tracking-[1.4px] text-[var(--primary)]">{t("templates.results")}</span>
+        <span className="text-[11px] font-bold uppercase tracking-[1.4px] text-[var(--primary)]">{t("templates.results")}</span>
         <span className="text-[11px] text-[var(--home-muted)]">{t("templates.resultsHint")}</span>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-1">

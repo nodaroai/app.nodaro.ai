@@ -270,7 +270,7 @@ export function MotionsTab({
         <button
           type="button"
           onClick={onSwitchToAppearance}
-          className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
+          className="text-[11px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
         >
           {t("studio.openProfile")}
         </button>
@@ -283,7 +283,7 @@ export function MotionsTab({
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-200">{t("node.assetBadgeMotions")}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">
+          <div className="text-[11px] text-slate-500 mt-0.5">
             {t("studio.motionsDescription")}
           </div>
         </div>
@@ -291,14 +291,14 @@ export function MotionsTab({
           <button
             type="button"
             onClick={() => setGenPanelOpen(true)}
-            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+            className="text-[11px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
             {t("studio.customPrompt")}
           </button>
           <button
             type="button"
             onClick={() => setRefsDrawerOpen(true)}
-            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+            className="text-[11px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
           >
             {t("studio.realLifeRefs")}
           </button>
@@ -307,7 +307,7 @@ export function MotionsTab({
               const url = window.prompt(tx("studio.pasteVideoUrlMotion"))?.trim()
               if (url) state.patch({ motions: [...state.staged.motions, { name: "imported", url }] })
             }}
-            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400"
+            className="text-[11px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400"
           >
             ↑ {t("common.import")}
           </button>

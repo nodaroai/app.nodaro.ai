@@ -107,7 +107,7 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
             aria-hidden
             data-testid="avatar-status-badge"
             className={cn(
-              "absolute bottom-1 left-1 px-1 py-0.5 rounded text-[8px] font-bold leading-none text-white",
+              "absolute bottom-1 left-1 px-1 py-0.5 rounded text-[11px] font-bold leading-none text-white",
               avatarStatus(avatar) === "failed" ? "bg-red-600/90" : "bg-amber-500/90",
             )}
           >
@@ -118,7 +118,7 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
       <span className={cn("mt-1 px-0.5 text-[11px] leading-tight truncate", selected ? "text-[#ff0073]" : "text-foreground")}>
         {person}
       </span>
-      <span className="px-0.5 text-[10px] leading-tight text-muted-foreground truncate">
+      <span className="px-0.5 text-[11px] leading-tight text-muted-foreground truncate">
         {scene || <span className="capitalize">{avatar.gender}</span>}
       </span>
     </button>
@@ -223,7 +223,7 @@ export function AvatarQuickPick({
       {/* Featured looks, or the search results */}
       <div className="flex-1 min-h-0 flex flex-col gap-1.5">
         {countLabel && (
-          <span className="shrink-0 text-[10px] font-mono text-muted-foreground/70" data-testid="ai-avatar-search-count">
+          <span className="shrink-0 text-[11px] font-mono text-muted-foreground" data-testid="ai-avatar-search-count">
             {countLabel}
           </span>
         )}

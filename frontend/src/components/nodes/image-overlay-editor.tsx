@@ -171,7 +171,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
                 )
               })}
             </div>
-            {platform?.note && <span className="hidden 2xl:inline text-[10px] text-muted-foreground max-w-[22rem] truncate ms-1" title={localizeOption(platform.note)}>{localizeOption(platform.note)}</span>}
+            {platform?.note && <span className="hidden 2xl:inline text-[11px] text-muted-foreground max-w-[22rem] truncate ms-1" title={localizeOption(platform.note)}>{localizeOption(platform.note)}</span>}
           </div>
           <span className="text-[11px] text-muted-foreground ms-auto me-10">
             {platform
@@ -208,7 +208,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
             <div>
               <div id="overlay-layer-list-label" className="flex items-center px-1 py-1 text-[11px] font-medium text-muted-foreground">
                 <span>{t("overlayEditor.layers")}</span>
-                <span className="ms-auto rounded-full bg-muted px-1.5 text-[10px] tabular-nums">{filled.filter((_, i) => hasContent(i)).length}</span>
+                <span className="ms-auto rounded-full bg-muted px-1.5 text-[11px] tabular-nums">{filled.filter((_, i) => hasContent(i)).length}</span>
               </div>
               <ul aria-labelledby="overlay-layer-list-label" className="space-y-0.5">
                 {[...order].reverse().map((i) => (
@@ -227,7 +227,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
                 <li className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground rounded-md" aria-disabled>
                   <span className="w-9 h-7 rounded bg-muted/60 flex items-center justify-center shrink-0"><ImageIcon className="w-3.5 h-3.5" aria-hidden /></span>
                   <span className="flex-1 min-w-0">
-                    <span className="block text-[9px] font-semibold uppercase tracking-wide">{t("overlayEditor.tag.base")}</span>
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide">{t("overlayEditor.tag.base")}</span>
                     <span className="block truncate">{upstream.baseSize ? `${upstream.baseSize.w} × ${upstream.baseSize.h}` : t("overlayEditor.background")}</span>
                   </span>
                   <Lock className="w-3 h-3 opacity-60" aria-hidden />
@@ -304,7 +304,7 @@ function AddCard({ icon, title, desc, disabled, onClick }: { icon: React.ReactNo
       <span className="w-7 h-7 rounded-md bg-muted/70 flex items-center justify-center shrink-0 text-foreground/80">{icon}</span>
       <span className="min-w-0">
         <span className="block text-xs font-medium">{title}</span>
-        <span className="block text-[10px] text-muted-foreground truncate">{desc}</span>
+        <span className="block text-[11px] text-muted-foreground truncate">{desc}</span>
       </span>
     </button>
   )
@@ -333,7 +333,7 @@ function QrAddCard({ disabled, onAdd }: { disabled?: boolean; onAdd: (text: stri
   return (
     <div className="rounded-md border border-[#ff0073]/60 bg-[#ff0073]/5 p-2 space-y-2">
       <div className="flex items-center gap-1.5 text-xs font-medium"><QrCode className="w-3.5 h-3.5" aria-hidden />{t("overlayEditor.qrNewTitle")}</div>
-      <p className="text-[10px] text-muted-foreground">{t("overlayEditor.qrNewHint")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("overlayEditor.qrNewHint")}</p>
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0 space-y-1">
           <div className="relative">
@@ -349,7 +349,7 @@ function QrAddCard({ disabled, onAdd }: { disabled?: boolean; onAdd: (text: stri
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit() } if (e.key === "Escape") { e.preventDefault(); setDraft(null) } }}
             />
           </div>
-          <div className="text-[10px] text-muted-foreground truncate">{qrLinkLabel(draft) || " "}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{qrLinkLabel(draft) || " "}</div>
         </div>
         <div className="w-14 h-14 shrink-0 rounded bg-white p-0.5"><QrLayerPreview style={{ ...DEFAULT_OVERLAY_QR, text: text || " " }} /></div>
       </div>
@@ -388,7 +388,7 @@ function LayerRow({ index, layer, url, qrText, selected, onSelect, onReorder, on
       className={`flex items-center gap-1 rounded-md text-xs ${selected ? "bg-[#ff0073]/15 text-foreground" : "hover:bg-muted/60 text-foreground/80"} ${wired ? "" : "opacity-60"}`}
     >
       <button type="button" aria-pressed={selected} className="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 text-start" onClick={onSelect}>
-        <span className="w-9 h-7 rounded bg-muted/60 overflow-hidden flex items-center justify-center shrink-0 text-foreground/70">
+        <span className="w-9 h-7 rounded bg-muted/60 overflow-hidden flex items-center justify-center shrink-0 text-foreground/80">
           {kind === "image" && url && <img src={url} alt="" draggable={false} className="w-full h-full object-contain" />}
           {kind === "image" && !url && <ImageIcon className="w-3.5 h-3.5" aria-hidden />}
           {kind === "qr" && <span className="w-6 h-6 bg-white p-px"><QrLayerPreview style={{ ...DEFAULT_OVERLAY_QR, ...(layer.qr ?? {}), text: (layer.qr?.fromInput ? qrText : layer.qr?.text) || " " }} /></span>}
@@ -396,9 +396,9 @@ function LayerRow({ index, layer, url, qrText, selected, onSelect, onReorder, on
           {kind === "shape" && <ShapeGlyph shape={layer.shape?.shape ?? "rect"} className="w-7 h-4" />}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">{tag}</span>
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground truncate">{tag}</span>
           <span className="block truncate" title={content}>{content}</span>
-          {kind === "qr" && <span className="block text-[9px] text-[#ff0073]">{layer.qr?.fromInput ? t("overlayEditor.linkFromWorkflow") : t("overlayEditor.editableLink")}</span>}
+          {kind === "qr" && <span className="block text-[11px] text-[#ff0073]">{layer.qr?.fromInput ? t("overlayEditor.linkFromWorkflow") : t("overlayEditor.editableLink")}</span>}
         </span>
       </button>
       <span className="flex flex-col">

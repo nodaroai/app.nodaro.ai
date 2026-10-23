@@ -59,7 +59,7 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
     <>
       {result && (
         <div className="space-y-2 pt-1">
-          <div className="text-[9px] uppercase tracking-widest text-slate-600">{t("entity.sheetResult")}</div>
+          <div className="text-[11px] uppercase tracking-widest text-slate-600">{t("entity.sheetResult")}</div>
           <button
             type="button"
             onClick={() => setLightboxIndex(0)}
@@ -77,7 +77,7 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
       )}
 
       <div className="space-y-2 pt-2 border-t border-[#1e293b]">
-        <div className="text-[9px] uppercase tracking-widest text-slate-600">
+        <div className="text-[11px] uppercase tracking-widest text-slate-600">
           {t("entity.existingSheets")} {sheets.length > 0 && `(${sheets.length})`}
         </div>
         {sheets.length === 0 ? (
@@ -100,11 +100,11 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
                   >
                     <img src={sheet.url} alt={shownLabel} loading="lazy" className="w-full h-full object-cover aspect-video" />
                   </button>
-                  <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">{shownLabel}</div>
+                  <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5 pointer-events-none">{shownLabel}</div>
                   <div className="absolute inset-x-0 top-0 flex justify-end gap-1 p-1 opacity-0 group-hover:opacity-100">
-                    <a href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title={t("common.download")}>↓</a>
-                    <button type="button" onClick={() => void copyUrl(sheet.url)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title={t("cfgshared.copyUrl")}>⧉</button>
-                    <button type="button" onClick={() => onSetThumbnail(sheet.url, label)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80">{t("entity.setThumb")}</button>
+                    <a href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80" title={t("common.download")}>↓</a>
+                    <button type="button" onClick={() => void copyUrl(sheet.url)} className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80" title={t("cfgshared.copyUrl")}>⧉</button>
+                    <button type="button" onClick={() => onSetThumbnail(sheet.url, label)} className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80">{t("entity.setThumb")}</button>
                   </div>
                 </div>
               )

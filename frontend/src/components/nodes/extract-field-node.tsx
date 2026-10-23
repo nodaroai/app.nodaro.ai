@@ -61,14 +61,14 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
               <p className="text-xs text-foreground/80">
                 {itemCount === 1 ? t("inputcfg.itemOne", { n: itemCount }) : t("inputcfg.items2", { n: itemCount })}
               </p>
-              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              <span className="text-[11px] text-muted-foreground mt-0.5 block">
                 {t("node.fieldLabel", { field: fieldLabel })}
               </span>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+            <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5">{t("node.fieldLabel", { field: fieldLabel })}</span>
+              <span className="text-[11px] mt-0.5">{t("node.fieldLabel", { field: fieldLabel })}</span>
             </div>
           )}
         </div>

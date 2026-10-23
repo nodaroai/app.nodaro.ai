@@ -201,14 +201,14 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {!activeUrl && status !== "running" && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
             <Wand2 className="w-10 h-10" />
           </div>
         )}
 
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
         )}
@@ -217,7 +217,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
           <div className={`flex flex-col items-center justify-center gap-2 rounded-xl h-[180px] ${isInputWarning ? "bg-orange-500/5 text-orange-500" : "bg-red-500/5 text-red-500"}`}>
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
-              <p className={`text-[10px] text-center px-2 line-clamp-2 ${isInputWarning ? "text-orange-400" : "text-red-400"}`}>{nodeData.errorMessage}</p>
+              <p className={`text-[11px] text-center px-2 line-clamp-2 ${isInputWarning ? "text-orange-400" : "text-red-400"}`}>{nodeData.errorMessage}</p>
             )}
           </div>
         )}

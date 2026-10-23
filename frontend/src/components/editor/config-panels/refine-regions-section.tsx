@@ -267,7 +267,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
       </label>
 
       {!taskId ? (
-        <p className="text-[10px] text-muted-foreground mt-2">
+        <p className="text-[11px] text-muted-foreground mt-2">
           {t("cfgext.refineNoTaskId")}
         </p>
       ) : (
@@ -314,7 +314,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     onMouseLeave={() => setHoveredIndex((h) => (h === seg.index ? undefined : h))}
                     title={seg.bbox ? undefined : t("cfgext.refineNoOutlineTitle")}
                     className={cn(
-                      "flex items-center gap-1.5 ps-1 pe-2 py-1 text-[10px] rounded-full border transition-colors",
+                      "flex items-center gap-1.5 ps-1 pe-2 py-1 text-[11px] rounded-full border transition-colors",
                       isSelected
                         ? "border-[#ff0073] bg-[#ff0073]/10 text-foreground"
                         : "hover:bg-muted text-muted-foreground",
@@ -360,7 +360,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
               type="button"
               onClick={handleDetect}
               disabled={detecting}
-              className="self-start text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+              className="self-start text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-60"
             >
               {detecting
                 ? t("cfgext.refineRedetecting")
@@ -369,7 +369,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                   : t("cfgext.refineRedetectRegions")}
             </button>
           )}
-          {detectError && <p className="text-[10px] text-destructive">{detectError}</p>}
+          {detectError && <p className="text-[11px] text-destructive">{detectError}</p>}
 
           {/* Edit prompt + apply */}
           <Textarea
@@ -403,7 +403,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
               </>
             )}
           </button>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             {t("cfgext.refineFooter")}
           </p>
         </div>

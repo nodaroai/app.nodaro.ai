@@ -30,7 +30,7 @@ function Row({ id, label, value, min, max, step = 1, hint, onChange }: { id: str
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <Label htmlFor={id} className="text-xs">{label}</Label>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{value}{hint ?? ""}</span>
+        <span className="text-[11px] tabular-nums text-muted-foreground">{value}{hint ?? ""}</span>
       </div>
       <Slider id={id} value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v)} />
     </div>
@@ -68,7 +68,7 @@ export function TextStyleEditor({ index, style: raw, onChange }: { index: number
               {OVERLAY_FONTS.map((f) => (
                 <SelectItem key={f.id} value={f.id}>
                   <span style={{ fontFamily: overlayFontFamily(f.id) }}>{f.family}</span>
-                  {(f.scripts as readonly string[]).includes("hebrew") && <span className="ms-1 text-[10px] text-muted-foreground">אב</span>}
+                  {(f.scripts as readonly string[]).includes("hebrew") && <span className="ms-1 text-[11px] text-muted-foreground">אב</span>}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -160,7 +160,7 @@ export function QrStyleEditor({ index, style: raw, wiredText, onChange }: { inde
           <Label htmlFor={`ov-${index}-qrwf`} className="text-[11px]">{t("overlayKinds.qrFromWorkflow")}</Label>
           <Switch id={`ov-${index}-qrwf`} checked={fromInput} onCheckedChange={(on) => set({ fromInput: on || undefined })} />
         </div>
-        <p className="text-[10px] text-muted-foreground">{fromInput ? t("overlayKinds.qrFromWorkflowHint") : t("overlayKinds.qrLinkHint")}</p>
+        <p className="text-[11px] text-muted-foreground">{fromInput ? t("overlayKinds.qrFromWorkflowHint") : t("overlayKinds.qrLinkHint")}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 items-end">
         <Color label={t("overlayKinds.qrColor")} value={style.color} onChange={(v) => set({ color: v })} />
@@ -198,7 +198,7 @@ export function ShapeStyleEditor({ index, style: raw, onChange }: { index: numbe
                 aria-checked={on}
                 aria-label={name}
                 title={name}
-                className={`h-9 rounded-md border flex items-center justify-center transition-colors ${on ? "border-[#ff0073] text-[#ff0073] bg-[#ff0073]/10" : "border-border/70 text-foreground/70 hover:border-[#ff0073]/60 hover:text-foreground"}`}
+                className={`h-9 rounded-md border flex items-center justify-center transition-colors ${on ? "border-[#ff0073] text-[#ff0073] bg-[#ff0073]/10" : "border-border/70 text-foreground/80 hover:border-[#ff0073]/60 hover:text-foreground"}`}
                 onClick={() => set({ shape: s })}
               >
                 <ShapeGlyph shape={s} />

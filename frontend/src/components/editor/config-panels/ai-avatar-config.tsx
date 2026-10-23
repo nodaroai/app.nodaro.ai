@@ -202,7 +202,7 @@ export function AiAvatarConfig({
           </div>
         </RadioGroup>
         {avatarSource === "image" && (
-          <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("cfgext.aiAvAnimateRawImage")}
           </p>
         )}
@@ -226,7 +226,7 @@ export function AiAvatarConfig({
           </div>
         </RadioGroup>
         {speechMode === "audio" && (
-          <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("cfgext.aiAvAudioCapHint")}
           </p>
         )}
@@ -252,7 +252,7 @@ export function AiAvatarConfig({
       {avatarSource === "image" && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvSourceImage")}</Label>
-          <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {t("cfgext.aiAvWireImageHint", { handle: localizeHandle("Image") })}
           </p>
           {data.imageUrl ? (
@@ -325,7 +325,7 @@ export function AiAvatarConfig({
               maxLength={5000}
             />
             {(data.script?.length ?? 0) > 0 && (
-              <p className="text-[10px] text-muted-foreground text-end">
+              <p className="text-[11px] text-muted-foreground text-end">
                 {data.script?.length ?? 0} / 5000
               </p>
             )}
@@ -346,7 +346,7 @@ export function AiAvatarConfig({
               onValueChange={([v]) => onUpdate({ voiceSpeed: v })}
               className="w-full"
             />
-            <div className="flex justify-between text-[9px] text-muted-foreground/60">
+            <div className="flex justify-between text-[11px] text-muted-foreground">
               <span>0.5×</span>
               <span>1.5×</span>
             </div>
@@ -374,7 +374,7 @@ export function AiAvatarConfig({
 
           {/* FIX 4 — warn when the selected avatar doesn't support Avatar V */}
           {showAvatarVWarning && (
-            <div className="flex items-start gap-1.5 text-[10.5px] text-amber-600 dark:text-amber-400 leading-snug" role="status">
+            <div className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 leading-snug" role="status">
               <AlertTriangle className="size-3 shrink-0 mt-0.5" aria-hidden />
               {t("cfgext.aiAvVWarning")}
             </div>
@@ -440,7 +440,7 @@ export function AiAvatarConfig({
           {/* ── Voice tuning (text mode only) ──────────────────────────────── */}
           {speechMode === "text" && (
             <>
-              <p className="text-[11px] font-medium text-muted-foreground/80">{t("cfgext.aiAvVoiceTuning")}</p>
+              <p className="text-[11px] font-medium text-muted-foreground">{t("cfgext.aiAvVoiceTuning")}</p>
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
@@ -457,7 +457,7 @@ export function AiAvatarConfig({
                   onValueChange={([v]) => onUpdate({ pitch: v })}
                   className="w-full"
                 />
-                <div className="flex justify-between text-[9px] text-muted-foreground/60">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
                   <span>-50</span>
                   <span>+50</span>
                 </div>
@@ -625,7 +625,7 @@ export function AiAvatarConfig({
           )}
 
           {/* ── Video ──────────────────────────────────────────────────────── */}
-          <p className="text-[11px] font-medium text-muted-foreground/80">{t("common.video")}</p>
+          <p className="text-[11px] font-medium text-muted-foreground">{t("common.video")}</p>
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">{t("audiocfg.mergeRoleBackground")}</Label>

@@ -262,7 +262,7 @@ export function TrimPanel({
           <span className="text-[#ff0073]">{formatTime(trim.startTime)}</span>
           {" — "}
           <span className="text-[#ff0073]">{formatTime(trim.endTime)}</span>
-          <span className="text-muted-foreground/50"> ({formatTime(duration)})</span>
+          <span className="text-muted-foreground"> ({formatTime(duration)})</span>
         </span>
       </div>
 

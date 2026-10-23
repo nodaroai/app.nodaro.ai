@@ -76,7 +76,7 @@ function useNowTick(mode: "off" | "slow" | "fast"): number {
 
 function Chip({ children }: { readonly children: ReactNode }) {
   return (
-    <span className="rounded-md bg-[var(--meta-ads-chip)] px-[7px] py-[3px] text-[10.5px] font-bold tracking-[.04em] text-[var(--meta-ads-text-2)]">
+    <span className="rounded-md bg-[var(--meta-ads-chip)] px-[7px] py-[3px] text-[11px] font-bold tracking-[.04em] text-[var(--meta-ads-text-2)]">
       {children}
     </span>
   )
@@ -299,7 +299,7 @@ function FeaturedAd({ ad }: { readonly ad: Record<string, unknown> }) {
           {(platforms.length > 0 || formatKey) && (
             <div className="flex flex-wrap gap-1.5">
               {formatKey && (
-                <span className="rounded-md bg-[var(--meta-ads-info-tint)] px-[7px] py-[3px] text-[10.5px] font-bold tracking-[.04em] text-[var(--meta-ads-info)]">
+                <span className="rounded-md bg-[var(--meta-ads-info-tint)] px-[7px] py-[3px] text-[11px] font-bold tracking-[.04em] text-[var(--meta-ads-info)]">
                   {t(formatKey)}
                 </span>
               )}

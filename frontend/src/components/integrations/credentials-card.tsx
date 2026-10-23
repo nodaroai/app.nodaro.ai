@@ -181,12 +181,12 @@ export function CredentialsCard({ addOpen, onAddOpenChange }: CredentialsCardPro
                     {cred.headerName}
                   </span>
                   {cred.boundUrl ? (
-                    <span className="inline-flex flex-none items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                    <span className="inline-flex flex-none items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
                       <Lock className="h-3 w-3" />
                       {cred.boundMatch === "prefix" ? t("creds.prefixBadge") : t("creds.lockedBadge")}
                     </span>
                   ) : (
-                    <span className="inline-flex flex-none items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                    <span className="inline-flex flex-none items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
                       <LockOpen className="h-3 w-3" />
                       {t("creds.unlockedBadge")}
                     </span>

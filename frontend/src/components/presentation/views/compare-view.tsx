@@ -225,7 +225,7 @@ export function CompareView({
         ) : bothText ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <GlassCard>
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
                 {leftItem.title}
               </span>
               <div className="text-sm text-foreground whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed">
@@ -233,7 +233,7 @@ export function CompareView({
               </div>
             </GlassCard>
             <GlassCard>
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
                 {rightItem.title}
               </span>
               <div className="text-sm text-foreground whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed">
@@ -244,7 +244,7 @@ export function CompareView({
         ) : bothAudio ? (
           <div className="space-y-4 max-w-2xl mx-auto">
             <GlassCard>
-              <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {leftItem.title}
                 {leftItem.preview && <PreviewBadge />}
               </span>
@@ -253,7 +253,7 @@ export function CompareView({
               )}
             </GlassCard>
             <GlassCard>
-              <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {rightItem.title}
                 {rightItem.preview && <PreviewBadge />}
               </span>
@@ -302,7 +302,7 @@ function ItemSelect({
   const t = useT()
   return (
     <div>
-      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1 block">
+      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1 block">
         {label}
       </label>
       <Select value={value} onValueChange={onChange}>
@@ -465,12 +465,12 @@ function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareIt
 
       {/* Labels */}
       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
-        <span className="bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full">{leftItem.title}</span>
+        <span className="bg-black/50 text-white text-[11px] px-2 py-0.5 rounded-full">{leftItem.title}</span>
         {leftItem.preview && <PreviewBadge />}
       </div>
       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
         {rightItem.preview && <PreviewBadge />}
-        <span className="bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full">{rightItem.title}</span>
+        <span className="bg-black/50 text-white text-[11px] px-2 py-0.5 rounded-full">{rightItem.title}</span>
       </div>
     </div>
   )
@@ -480,7 +480,7 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
   const t = useT()
   return (
     <GlassCard>
-      <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+      <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {item.title}
         {item.preview && <PreviewBadge />}
       </span>
@@ -495,7 +495,7 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
           {item.text}
         </div>
       ) : (
-        <div className="h-32 flex items-center justify-center text-muted-foreground/40 text-xs">{t("present.noContent")}</div>
+        <div className="h-32 flex items-center justify-center text-muted-foreground text-xs">{t("present.noContent")}</div>
       )}
     </GlassCard>
   )

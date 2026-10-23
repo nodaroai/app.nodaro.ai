@@ -55,7 +55,7 @@ export function StatusBadge({ status }: { status: OutputStatus }) {
   const t = useT()
   if (status === "idle") return null
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${STATUS_COLORS[status] ?? ""}`}>
+    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${STATUS_COLORS[status] ?? ""}`}>
       {t(STATUS_LABELS[status])}
     </span>
   )

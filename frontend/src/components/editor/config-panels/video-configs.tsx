@@ -616,12 +616,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
             <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label })}</span>
             {promptSuffix && (
-              <span className="text-[10px] leading-snug text-muted-foreground">
+              <span className="text-[11px] leading-snug text-muted-foreground">
                 {t("vidcfg.appendedToPrompt", { suffix: promptSuffix })}
               </span>
             )}
             {s2.droppedRefImages > 0 && (
-              <span className="text-[10px] leading-snug text-amber-500">
+              <span className="text-[11px] leading-snug text-amber-500">
                 {s2.droppedRefImages === 1
                   ? t("vidcfg.droppedRefImage", { limit: modeLimits.images })
                   : t("vidcfg.droppedRefImages", { count: s2.droppedRefImages, limit: modeLimits.images })}
@@ -642,7 +642,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectItem value="reference">{t("vidcfg.referenceMode")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {isVeoRefMode
               ? t("vidcfg.veoReferenceModeNote")
               : t("vidcfg.veoFrameToFrameNote")}
@@ -663,7 +663,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             onUpdateOrder={(order) => onUpdate({ connectedRefImageOrder: order })}
             mediaType="image"
           />
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.connectRefImagesNote", { max: maxRefImages })}
           </p>
         </div>
@@ -794,7 +794,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   {t("vidcfg.veo4kUpscaleNote")}
                 </p>
               </div>
@@ -810,7 +810,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -913,7 +913,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         {data.loopTrim?.enabled && (
           <>
             <div className="px-1">
-              <label htmlFor="loopTrim-frames" className="text-[10px] text-muted-foreground">
+              <label htmlFor="loopTrim-frames" className="text-[11px] text-muted-foreground">
                 {t("vidcfg.framesToTest", { n: data.loopTrim.framesToTest ?? 16 })}
               </label>
               <input
@@ -930,7 +930,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               />
             </div>
             <div className="px-1">
-              <label htmlFor="loopTrim-quality" className="text-[10px] text-muted-foreground">{t("field.quality")}</label>
+              <label htmlFor="loopTrim-quality" className="text-[11px] text-muted-foreground">{t("field.quality")}</label>
               <Select
                 value={data.loopTrim.quality ?? "precise"}
                 onValueChange={(v) => onUpdate({
@@ -945,7 +945,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </Select>
             </div>
             {!connectedImages.some((img) => img.targetHandle === "endFrame") && (
-              <p className="px-1 text-[10px] text-amber-500/80 leading-snug">
+              <p className="px-1 text-[11px] text-amber-500/80 leading-snug">
                 {t("vidcfg.worksBestSameFrames")}
               </p>
             )}
@@ -1004,7 +1004,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
         </div>
       )}
 
@@ -1217,7 +1217,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
           </MappableField>
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.minimaxH3ResNote")}
           </p>
         </>
@@ -1267,7 +1267,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
             <label htmlFor="i2v-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
-          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
         </>
       )}
 
@@ -1310,7 +1310,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
             <label htmlFor="i2v-viduQ4Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
-          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
         </>
       )}
 
@@ -1911,7 +1911,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-[11px] text-muted-foreground/70 -mb-1">{t("vidcfg.poweredBySwitchx")}</div>
+      <div className="text-[11px] text-muted-foreground -mb-1">{t("vidcfg.poweredBySwitchx")}</div>
 
       <MappableField field="alphaMode" label={t("field.mode")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={mode} onValueChange={(v) => onUpdate({ alphaMode: v as SwitchXData["alphaMode"] })}>
@@ -1924,7 +1924,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
           </SelectContent>
         </Select>
       </MappableField>
-      <p className="text-[11px] text-muted-foreground/70 -mt-1">{SWITCHX_MODE_HELP()[mode]}</p>
+      <p className="text-[11px] text-muted-foreground -mt-1">{SWITCHX_MODE_HELP()[mode]}</p>
 
       <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
@@ -2614,7 +2614,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   {t("vidcfg.veo4kUpscaleNote")}
                 </p>
               </div>
@@ -2630,7 +2630,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -2673,7 +2673,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
         </div>
       )}
 
@@ -2697,7 +2697,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <Label className="text-xs">{t("vidcfg.referenceVideos")} ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
               <div className="flex flex-col gap-1">
                 {connectedRefVideos.map((s) => (
-                  <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+                  <div key={s.id} className="text-[11px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
                     {localizeNode(s.label)}
                   </div>
                 ))}
@@ -2709,7 +2709,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
               <div className="flex flex-col gap-1">
                 {connectedRefAudio.map((s) => (
-                  <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+                  <div key={s.id} className="text-[11px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
                     {localizeNode(s.label)}
                   </div>
                 ))}
@@ -2761,7 +2761,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             />
             <label htmlFor="t2v-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
-          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
         </>
       )}
 
@@ -2788,7 +2788,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               </div>
             ) : null
           })()}
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.minimaxH3ResNoteT2v")}
           </p>
         </>
@@ -3174,12 +3174,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
             <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label })}</span>
             {promptSuffix && (
-              <span className="text-[10px] leading-snug text-muted-foreground">
+              <span className="text-[11px] leading-snug text-muted-foreground">
                 {t("vidcfg.appendedToPrompt", { suffix: promptSuffix })}
               </span>
             )}
             {s2.droppedRefImages > 0 && (
-              <span className="text-[10px] leading-snug text-amber-500">
+              <span className="text-[11px] leading-snug text-amber-500">
                 {s2.droppedRefImages === 1
                   ? t("vidcfg.droppedRefImage", { limit: modeLimits.images })
                   : t("vidcfg.droppedRefImages", { count: s2.droppedRefImages, limit: modeLimits.images })}
@@ -3200,7 +3200,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <SelectItem value="reference">{t("vidcfg.referenceMode")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {isVeoRefMode
               ? t("vidcfg.veoReferenceModeNote")
               : t("vidcfg.veoFrameToFrameNote")}
@@ -3218,7 +3218,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             onUpdateOrder={(order) => onUpdate({ referenceImageOrder: order })}
             mediaType="image"
           />
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.connectRefImagesNote", { max: maxRefImages })}
           </p>
         </div>
@@ -3233,13 +3233,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <Label className="text-xs">{t("vidcfg.referenceVideos")} ({connectedRefVideos.length}/{refCaps?.videos})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefVideos.map((s) => (
-              <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+              <div key={s.id} className="text-[11px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
                 {localizeNode(s.label)}
               </div>
             ))}
           </div>
           {isWan3 && (
-            <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3VideoRefLimits")}</p>
+            <p className="text-[11px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3VideoRefLimits")}</p>
           )}
         </div>
       )}
@@ -3250,16 +3250,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{refCaps?.audio})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefAudio.map((s) => (
-              <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+              <div key={s.id} className="text-[11px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
                 {localizeNode(s.label)}
               </div>
             ))}
           </div>
           {isWan3 && (
-            <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3AudioRefLimits")}</p>
+            <p className="text-[11px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3AudioRefLimits")}</p>
           )}
           {isViduQ4 && (
-            <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.viduQ4AudioRefLimits")}</p>
+            <p className="text-[11px] leading-snug text-muted-foreground px-1">{t("vidcfg.viduQ4AudioRefLimits")}</p>
           )}
         </div>
       )}
@@ -3389,7 +3389,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   {t("vidcfg.veo4kUpscaleNote")}
                 </p>
               </div>
@@ -3405,7 +3405,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               value={data.seed ?? ""}
               onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
@@ -3510,7 +3510,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         {data.loopTrim?.enabled && (
           <>
             <div className="px-1">
-              <label htmlFor="gv-loopTrim-frames" className="text-[10px] text-muted-foreground">
+              <label htmlFor="gv-loopTrim-frames" className="text-[11px] text-muted-foreground">
                 {t("vidcfg.framesToTest", { n: data.loopTrim.framesToTest ?? 16 })}
               </label>
               <input
@@ -3527,7 +3527,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               />
             </div>
             <div className="px-1">
-              <label htmlFor="gv-loopTrim-quality" className="text-[10px] text-muted-foreground">{t("field.quality")}</label>
+              <label htmlFor="gv-loopTrim-quality" className="text-[11px] text-muted-foreground">{t("field.quality")}</label>
               <Select
                 value={data.loopTrim.quality ?? "precise"}
                 onValueChange={(v) => onUpdate({
@@ -3542,7 +3542,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </Select>
             </div>
             {!connectedImages.some((img) => img.targetHandle === "endFrame") && (
-              <p className="px-1 text-[10px] text-amber-500/80 leading-snug">
+              <p className="px-1 text-[11px] text-amber-500/80 leading-snug">
                 {t("vidcfg.worksBestSameFrames")}
               </p>
             )}
@@ -3601,7 +3601,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
         </div>
       )}
 
@@ -3814,7 +3814,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
           </MappableField>
-          <p className="text-[10px] text-muted-foreground px-1">
+          <p className="text-[11px] text-muted-foreground px-1">
             {t("vidcfg.minimaxH3ResNote")}
           </p>
         </>
@@ -3872,7 +3872,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             />
             <label htmlFor="gv-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
-          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
         </>
       )}
 
@@ -3919,7 +3919,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             />
             <label htmlFor="gv-viduQ4Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
-          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
         </>
       )}
 
@@ -4361,7 +4361,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             className="w-16 h-7 text-xs shrink-0"
           />
         </div>
-        <p className="text-[10px] text-muted-foreground px-1">
+        <p className="text-[11px] text-muted-foreground px-1">
           {maxSegmentSecFor(currentProvider) > 0
             ? t("vidcfg.aboveNSecondsSplit", { n: maxSegmentSecFor(currentProvider) })
             : t("vidcfg.longerRequestsSplit")}
@@ -4937,7 +4937,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
           </MappableField>
         </div>
-        <p className="text-[10px] text-muted-foreground px-1">
+        <p className="text-[11px] text-muted-foreground px-1">
           {t("vidcfg.replaceSpanHint", { max: EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK })}
         </p>
       </div>
@@ -5082,7 +5082,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             value={(data.seeds as number | undefined) ?? ""}
             onChange={(e) => onUpdate({ seeds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.sameSeedSimilar")}</p>
         </div>
       )}
 
@@ -5171,7 +5171,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
                 })}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.matchResSeam")}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.matchResSeam")}</p>
           </div>
 
           <div className="flex items-center gap-2 px-1">

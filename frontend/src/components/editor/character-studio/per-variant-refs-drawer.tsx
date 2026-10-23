@@ -87,7 +87,7 @@ export function PerVariantRealLifeRefsDrawer({
                   {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
                   {variant}
                 </span>
-                <span className="text-[10px] text-slate-500 tabular-nums">{urls.length}/{MAX_PHOTOS_PER_VARIANT}</span>
+                <span className="text-[11px] text-slate-500 tabular-nums">{urls.length}/{MAX_PHOTOS_PER_VARIANT}</span>
               </button>
               {isExpanded && (
                 <div className="p-2 space-y-2">

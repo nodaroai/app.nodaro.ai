@@ -462,7 +462,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                 Hidden while searching and when empty. */}
             {!searching && favoriteRows.length > 0 && (
               <>
-                <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <Star className="h-3 w-3 shrink-0" /> {t("preset.favorites")}
                 </div>
                 {favoriteRows.map((p) => (
@@ -772,7 +772,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
 
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </div>
   )

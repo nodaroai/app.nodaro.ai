@@ -68,7 +68,7 @@ function AudioPlayerControlsComponent({
           type="button"
           aria-label={t("common.stop")}
           onClick={(e) => { e.stopPropagation(); onStop() }}
-          className={`${BTN} w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-foreground/70 hover:text-foreground hover:bg-black/20 dark:hover:bg-white/20`}
+          className={`${BTN} w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-foreground/80 hover:text-foreground hover:bg-black/20 dark:hover:bg-white/20`}
         >
           <Square className="w-3 h-3" />
         </button>

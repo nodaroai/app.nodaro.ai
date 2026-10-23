@@ -73,7 +73,7 @@ export function TtsContinuitySection({ provider, data, onUpdate, sources, fieldM
           {setCount > 0 && (
             <span
               data-testid="tts-continuity-badge"
-              className="ms-auto rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-300"
+              className="ms-auto rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[11px] font-medium text-teal-700 dark:text-teal-300"
             >
               {t("audiocfg.continuitySetCount", { count: setCount })}
             </span>
@@ -103,7 +103,7 @@ export function TtsContinuitySection({ provider, data, onUpdate, sources, fieldM
                 dir="auto"
               />
             </MappableField>
-            <p className="text-[10px] text-muted-foreground">{t("audiocfg.continuityHint")}</p>
+            <p className="text-[11px] text-muted-foreground">{t("audiocfg.continuityHint")}</p>
           </div>
         )}
       </div>

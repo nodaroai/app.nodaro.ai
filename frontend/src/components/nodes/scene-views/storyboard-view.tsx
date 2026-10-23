@@ -21,12 +21,12 @@ function StoryboardView({ data }: SceneViewProps) {
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{t("node.sceneN", { n: data.scene_index })}</div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
           {shots.length === 1 ? t("node.shotCountOne", { n: shots.length }) : t("node.shotCountMany", { n: shots.length })} · {data.duration_seconds}s
         </div>
       </div>
       {shots.length === 0 ? (
-        <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500">
+        <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[11px] text-zinc-400 dark:text-zinc-500">
           {t("node.noShotsYet")}
         </div>
       ) : (
@@ -50,12 +50,12 @@ function StoryboardView({ data }: SceneViewProps) {
                       loading="lazy"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-[8px] text-zinc-400 dark:text-zinc-500">
+                    <div className="absolute inset-0 flex items-center justify-center text-[11px] text-zinc-400 dark:text-zinc-500">
                       {idx + 1}
                     </div>
                   )}
                 </div>
-                <div className="flex items-center justify-between text-[8px] text-zinc-500 dark:text-zinc-400">
+                <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
                   <span className="font-mono truncate">{shot.shot_id.replace(/^shot_/, "#")}</span>
                   <span>{shot.duration_seconds}s</span>
                 </div>
@@ -64,7 +64,7 @@ function StoryboardView({ data }: SceneViewProps) {
           })}
         </div>
       )}
-      <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
         {data.video_model} · {data.shot_input_mode}
       </div>
     </div>

@@ -114,9 +114,9 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !hasResult && status !== "failed" && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px] px-3 text-center">
                 <Images className="w-10 h-10" />
-                <span className="text-[10px] leading-tight">
+                <span className="text-[11px] leading-tight">
                   {t("node.connect2ImagesToArrange")}
                 </span>
               </div>
@@ -129,7 +129,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}

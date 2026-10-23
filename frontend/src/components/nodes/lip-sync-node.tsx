@@ -482,7 +482,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
             {/* Portrait Image - shown for image-input and flexible providers */}
             {(needsImageInput || needsBothInputs) && (
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-muted-foreground/60 text-center">{t("node.portraitImage")}</span>
+                <span className="text-[11px] text-muted-foreground text-center">{t("node.portraitImage")}</span>
                 {hasImageConnection ? (
                   <Select
                     value={nodeData.selectedImageNodeId ?? ""}
@@ -528,7 +528,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
             {/* Video Input - shown for video-input and flexible providers */}
             {(needsVideoInput || needsBothInputs) && (
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-muted-foreground/60 text-center">{t("node.sourceVideo")}</span>
+                <span className="text-[11px] text-muted-foreground text-center">{t("node.sourceVideo")}</span>
                 {hasVideoConnection ? (
                   <Select
                     value={nodeData.selectedVideoNodeId ?? ""}
@@ -565,7 +565,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Audio Track - Required for all providers */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground/60 text-center">{t("node.audioTrack")}</span>
+              <span className="text-[11px] text-muted-foreground text-center">{t("node.audioTrack")}</span>
               {hasAudioConnection ? (
                 <Select
                   value={nodeData.selectedAudioNodeId ?? ""}
@@ -603,9 +603,9 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Empty state when nothing connected */}
         {!hasConnections && status !== "running" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
+          <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground">
             <Users className="w-8 h-8" />
-            <span className="text-[10px] text-center">
+            <span className="text-[11px] text-center">
               {needsVideoInput ? t("node.connectVideoPlusAudio") : needsBothInputs ? t("node.connectImageOrVideoPlusAudio") : t("node.connectPortraitPlusAudio")}
             </span>
           </div>
@@ -614,7 +614,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         {/* Running state */}
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} recovering={(nodeData as unknown as Record<string, unknown>).jobRecovering === true} />
           </div>
         )}
@@ -624,14 +624,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
+              <p className="text-[11px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
             )}
           </div>
         )}
 
         {/* Ready state (has inputs, no result yet) */}
         {status !== "running" && !activeUrl && status !== "failed" && hasRequiredInputs && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
             <Users className="w-10 h-10" />
           </div>
         )}

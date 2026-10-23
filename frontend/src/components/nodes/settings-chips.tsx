@@ -56,7 +56,7 @@ export const SettingsChips = memo(function SettingsChips({
             key={w.sourceId}
             data-testid={`settings-chip-${w.sourceType}`}
             title={refused ? t("node.settingsProviderRefused", { model: text, source }) : t("node.fromSource", { source })}
-            className={`flex max-w-[140px] items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
+            className={`flex max-w-[140px] items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium backdrop-blur-sm ${
               refused ? "border-red-400/60 bg-red-600/85 text-white" : "border-white/10 bg-black/55 text-white/90"
             }`}
           >
@@ -72,5 +72,5 @@ export const SettingsChips = memo(function SettingsChips({
 /** The note under the Run button of a node whose Settings input is wired. */
 export function SettingsPriceNote() {
   const t = useT()
-  return <p className="mt-1 text-center text-[10px] text-neutral-600 dark:text-white/60">{t("node.settingsPriceNote")}</p>
+  return <p className="mt-1 text-center text-[11px] text-neutral-600 dark:text-white/60">{t("node.settingsPriceNote")}</p>
 }

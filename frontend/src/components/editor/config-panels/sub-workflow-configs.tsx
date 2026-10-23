@@ -138,7 +138,7 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
           onChange={(e) => handleLabelChange(e.target.value)}
           placeholder={t("cfgext.subwfRouteLabel")}
         />
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("cfgext.subwfLabelHint")}
         </p>
       </div>
@@ -158,7 +158,7 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
             </Button>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-[11px] text-muted-foreground mt-1">
           {t("cfgext.subwfPairHint", { node: localizeNode("Sub-Workflow Output") })}
         </p>
       </div>
@@ -240,7 +240,7 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
       {(nodeData.ports ?? []).length > 0 && (
         <div>
           <Label className="text-xs font-medium">{t("cfgext.subwfVisibleOutput")}</Label>
-          <p className="text-[10px] text-muted-foreground mb-1">
+          <p className="text-[11px] text-muted-foreground mb-1">
             {t("cfgext.subwfVisibleOutputHint")}
           </p>
           <div className="flex flex-col gap-1">
@@ -393,7 +393,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           <Plus className="w-3.5 h-3.5 me-1.5" />
           {creating ? t("cfgext.subwfCreating") : t("cfgext.subwfCreateEmpty")}
         </Button>
-        <p className="mt-1 text-[10px] text-muted-foreground">
+        <p className="mt-1 text-[11px] text-muted-foreground">
           {t("cfgext.subwfSeedsHint")}
         </p>
       </div>
@@ -401,7 +401,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
       <div>
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">{t("apps.workflow")}</Label>
-          <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer">
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
               checked={showAllProjects}
@@ -463,17 +463,17 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               size="sm"
               onClick={handleRefreshInterface}
               disabled={isLoadingInterface}
-              className="h-6 px-2 text-[10px]"
+              className="h-6 px-2 text-[11px]"
             >
               <RefreshCw className="w-3 h-3 me-1" /> {t("exec.refresh")}
             </Button>
           </div>
           <div className="flex flex-col gap-1">
-            <div className="text-[10px] text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground">
               <span className="font-medium">{t("cfgext.subwfInputs")}</span>{" "}
               {snapshot.inputPorts.map((p) => `${p.name} (${p.mediaType})`).join(", ")}
             </div>
-            <div className="text-[10px] text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground">
               <span className="font-medium">{t("cfgext.subwfOutputs")}</span>{" "}
               {snapshot.outputPorts.map((p) => `${p.name} (${p.mediaType})`).join(", ")}
             </div>
@@ -538,7 +538,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
             ))}
           </SelectContent>
         </Select>
-        <p className="mt-1 text-[10px] text-muted-foreground">
+        <p className="mt-1 text-[11px] text-muted-foreground">
           {t("cfgext.subwfViewModeHint")}
         </p>
       </div>

@@ -14,7 +14,7 @@ export function TemplateBadgePill({ badge, className }: { readonly badge: Templa
   return (
     <span
       className={cn(
-        "flex-none rounded-full border border-[var(--home-line-2)] bg-[var(--home-raised)] px-2 py-[3px] text-[10px] font-semibold text-[var(--primary)]",
+        "flex-none rounded-full border border-[var(--home-line-2)] bg-[var(--home-raised)] px-2 py-[3px] text-[11px] font-semibold text-[var(--primary)]",
         className,
       )}
     >
@@ -33,7 +33,7 @@ export function TemplateMeta({
 }) {
   const t = useT()
   return (
-    <span className={cn("flex items-center gap-1 text-[10px] text-[var(--home-muted)]", className)}>
+    <span className={cn("flex items-center gap-1 text-[11px] text-[var(--home-muted)]", className)}>
       <CreditGate>
         <CreditCost credits={template.estimatedCredits} perMinute={template.estimatedPerMinuteCredits} upTo={{ credits: template.maxEstimatedCredits, perMinute: template.maxEstimatedPerMinuteCredits }} prefix="~" suffix={creditUnitLabel(t("credits.unit.other"))} />
         <span aria-hidden>·</span>
@@ -104,7 +104,7 @@ export function TemplateMarketplaceCard({ template, isFavorited, onToggleFavorit
             {chips.map((chip) => (
               <span
                 key={chip}
-                className="rounded-full border border-[var(--home-line-2)] bg-[var(--home-panel)] px-[7px] py-0.5 text-[9px] font-semibold text-[var(--home-fg-2)]"
+                className="rounded-full border border-[var(--home-line-2)] bg-[var(--home-panel)] px-[7px] py-0.5 text-[11px] font-semibold text-[var(--home-fg-2)]"
               >
                 {chip}
               </span>

@@ -220,10 +220,10 @@ export function DefineCharacterModal({
                 rows={3}
                 className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1">
                 {t("entity.descAppendedHint")}
               </p>
-              <p className="text-[10px] text-orange-500/80 mt-1">
+              <p className="text-[11px] text-orange-500/80 mt-1">
                 {t("entity.noReferenceTip")}
               </p>
             </div>

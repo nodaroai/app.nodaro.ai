@@ -38,7 +38,7 @@ function MessageList({ title, messages }: { readonly title: string; readonly mes
       <div className="px-1 text-[11px] font-medium text-muted-foreground">{title}</div>
       <ul dir="ltr" className="flex flex-col gap-0.5 max-h-48 overflow-auto">
         {messages.map((m, i) => (
-          <li key={i} className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] leading-snug break-words">{m}</li>
+          <li key={i} className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-snug break-words">{m}</li>
         ))}
       </ul>
     </div>
@@ -56,7 +56,7 @@ function RenderIssueList({ failing }: { readonly failing: readonly EdlRenderVerd
           <div className="px-1 text-[11px] font-medium text-muted-foreground">{t("node.edlRenderN", { n: r.row + 1 })}</div>
           <ul dir="ltr" className="flex flex-col gap-0.5">
             {r.issues.map((m, i) => (
-              <li key={i} className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] leading-snug break-words">{m}</li>
+              <li key={i} className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] leading-snug break-words">{m}</li>
             ))}
           </ul>
         </div>
@@ -127,7 +127,7 @@ export function EdlValidityBadge({ value, renders, settings, verdict, action, cl
     </span>
   )
   const pillClass = cn(
-    "inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-medium tabular-nums",
+    "inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums",
     tone,
     className,
   )

@@ -67,8 +67,8 @@ function SliderField({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">{label}</span>
-        <span className="text-[10px] font-mono text-muted-foreground">{value.toFixed(precision)}{suffix ?? ""}</span>
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-[11px] font-mono text-muted-foreground">{value.toFixed(precision)}{suffix ?? ""}</span>
       </div>
       <input
         type="range"
@@ -92,12 +92,12 @@ function TextObjectCard({ object, fps, onChange }: { object: TextObject; fps: nu
     <div className="border border-[var(--border-primary)] rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium truncate">{object.text}</span>
-        <span className="text-[10px] text-muted-foreground shrink-0 ms-2">
+        <span className="text-[11px] text-muted-foreground shrink-0 ms-2">
           {startSec}s – {endSec}s
         </span>
       </div>
 
-      <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+      <div className="text-[11px] text-muted-foreground flex items-center gap-2">
         <span className="capitalize">{object.material.type}</span>
         <span className="inline-block w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: object.material.color }} />
         <span>{object.font}</span>
@@ -118,10 +118,10 @@ function ParticleObjectCard({ object, onChange }: { object: ParticleObject; onCh
     <div className="border border-[var(--border-primary)] rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">{t("preview.particles")}</span>
-        <span className="text-[10px] text-muted-foreground">{t("preview.particleCount", { n: object.count })}</span>
+        <span className="text-[11px] text-muted-foreground">{t("preview.particleCount", { n: object.count })}</span>
       </div>
 
-      <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+      <div className="text-[11px] text-muted-foreground flex items-center gap-2">
         <span className="inline-block w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: object.color }} />
         <span>{t("preview.speedLine", { n: object.speed.toFixed(1) })}</span>
       </div>
@@ -189,7 +189,7 @@ export function ThreeDTitlePreview({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[10px]"
+            className="h-6 px-2 text-[11px]"
             onClick={onRegenerate}
             disabled={isGenerating}
           >
@@ -200,7 +200,7 @@ export function ThreeDTitlePreview({
 
       {/* Camera info */}
       {camera && (
-        <div className="text-[10px] text-muted-foreground border border-[var(--border-primary)] rounded-md p-2 flex flex-col gap-0.5">
+        <div className="text-[11px] text-muted-foreground border border-[var(--border-primary)] rounded-md p-2 flex flex-col gap-0.5">
           <span>{t("preview.cameraFov", { n: camera.fov as number })}</span>
           {cameraAnim && <span>{t("preview.animationLine", { type: labelOf(CAMERA_ANIMATION_LABEL, String(cameraAnim.type), t) })}</span>}
         </div>
@@ -216,7 +216,7 @@ export function ThreeDTitlePreview({
               title={disabledObjects.has(i) ? t("preview.enableObject") : t("preview.disableObject")}
             >
               {disabledObjects.has(i) ? (
-                <EyeOff className="w-3 h-3 text-muted-foreground/50" />
+                <EyeOff className="w-3 h-3 text-muted-foreground" />
               ) : (
                 <Eye className="w-3 h-3 text-[#ff0073]" />
               )}

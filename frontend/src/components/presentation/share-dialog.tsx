@@ -231,7 +231,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
                             className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
                               isActive
                                 ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
-                                : "text-muted-foreground/40 border-border hover:text-muted-foreground hover:border-border"
+                                : "text-muted-foreground border-border hover:text-muted-foreground hover:border-border"
                             }`}
                           >
                             <Icon className="h-4 w-4" />

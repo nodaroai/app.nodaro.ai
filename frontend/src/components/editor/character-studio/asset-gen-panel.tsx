@@ -77,7 +77,7 @@ export function AssetGenPanel({
         />
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[9px] uppercase tracking-wide text-slate-500">{t("common.description")}</span>
+            <span className="text-[11px] uppercase tracking-wide text-slate-500">{t("common.description")}</span>
             <AiHelperButton onSuggest={suggest} onReplace={setDescription} title={t("studio.suggestDescription")} />
           </div>
           <textarea
@@ -100,8 +100,8 @@ export function AssetGenPanel({
           />
         )}
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="text-[10px] text-slate-400 px-3 py-1.5">{t("common.cancel")}</button>
-          <button onClick={submit} className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5">{t("common.generate")}</button>
+          <button onClick={onClose} className="text-[11px] text-slate-400 px-3 py-1.5">{t("common.cancel")}</button>
+          <button onClick={submit} className="text-[11px] bg-[#3b82f6] text-white rounded px-3 py-1.5">{t("common.generate")}</button>
         </div>
       </div>
     </div>

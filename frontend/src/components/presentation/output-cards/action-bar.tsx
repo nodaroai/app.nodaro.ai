@@ -34,7 +34,7 @@ function ActionBarButton({
       <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center">
         <Icon className="w-4 h-4" />
       </div>
-      <span className="text-[10px]">{label}</span>
+      <span className="text-[11px]">{label}</span>
     </button>
   )
 }

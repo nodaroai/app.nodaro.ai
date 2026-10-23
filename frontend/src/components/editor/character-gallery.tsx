@@ -188,7 +188,7 @@ export function CharacterGalleryButton() {
         <Users className="h-4 w-4" />
         {t("entity.btnCharacters")}
         {charCount > 0 && (
-          <span className="ms-auto text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
+          <span className="ms-auto text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
         )}
       </Button>
 
@@ -335,7 +335,7 @@ function ActivePane({
                   </div>
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-                    <UserCircle className="w-8 h-8 text-muted-foreground/30" />
+                    <UserCircle className="w-8 h-8 text-muted-foreground" />
                   </div>
                 )}
                 {c.loraTrainingStatus === "succeeded" && (
@@ -345,7 +345,7 @@ function ActivePane({
                 )}
               </div>
               <span className="text-xs truncate w-full text-center">{c.name}</span>
-              {isOnCanvas && <span className="text-[9px] text-muted-foreground">{t("assetlib.onCanvas")}</span>}
+              {isOnCanvas && <span className="text-[11px] text-muted-foreground">{t("assetlib.onCanvas")}</span>}
             </button>
             {/* Top-right hover archive button. */}
             <button
@@ -422,7 +422,7 @@ function ArchivedPane({
             </div>
           ) : (
             <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-              <UserCircle className="w-8 h-8 text-muted-foreground/30" />
+              <UserCircle className="w-8 h-8 text-muted-foreground" />
             </div>
           )}
           <span className="text-xs truncate w-full text-center opacity-70">{c.name}</span>

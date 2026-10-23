@@ -87,10 +87,10 @@ export function AiAvatarScriptModal({
             aria-label={t("node.avatarScript")}
           />
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground tabular-nums">
+            <span className="text-[11px] text-muted-foreground tabular-nums">
               {charCount} / 5000
             </span>
-            <span className="text-[10px] text-muted-foreground">{t("node.cmdEnterToSave")}</span>
+            <span className="text-[11px] text-muted-foreground">{t("node.cmdEnterToSave")}</span>
           </div>
         </div>
 

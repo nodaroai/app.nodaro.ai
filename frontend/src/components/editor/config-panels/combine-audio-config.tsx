@@ -95,7 +95,7 @@ export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<Combin
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-[10px] text-muted-foreground">{t("cfgext.combAudStartSeconds")}</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("cfgext.combAudStartSeconds")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -106,7 +106,7 @@ export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<Combin
                 />
               </div>
               <div>
-                <Label className="text-[10px] text-muted-foreground">{t("cfgext.combAudEndSeconds")}</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("cfgext.combAudEndSeconds")}</Label>
                 <Input
                   type="number"
                   min={0}

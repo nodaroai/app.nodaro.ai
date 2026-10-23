@@ -44,7 +44,7 @@ export function NodePolicyOverlay({ nodeId }: { readonly nodeId: string }) {
         <Clock className="w-6 h-6 text-amber-300" />
         <span className="text-xs font-semibold text-amber-100">{t("node.review.awaiting")}</span>
         <span className="text-[11px] leading-snug text-amber-200/80">{t("node.review.desc")}</span>
-        <span className="text-[10px] text-amber-200/60">{t("node.review.creditsHeld")}</span>
+        <span className="text-[11px] text-amber-200/60">{t("node.review.creditsHeld")}</span>
       </div>
     )
   }

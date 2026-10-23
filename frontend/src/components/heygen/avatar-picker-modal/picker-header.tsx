@@ -45,7 +45,7 @@ export const PickerHeader = forwardRef<HTMLInputElement, PickerHeaderProps>(func
       </div>
       <div className="flex flex-1 justify-center">
         <label className="flex w-full max-w-[420px] items-center gap-2.5 rounded-[9px] border border-border/70 bg-muted/40 px-3.5 py-2.5 focus-within:border-[#ff0073]/60">
-          <Search className="size-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+          <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <input
             ref={searchRef}
             type="search"
@@ -56,7 +56,7 @@ export const PickerHeader = forwardRef<HTMLInputElement, PickerHeaderProps>(func
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground placeholder:text-muted-foreground/70 outline-none [&::-webkit-search-cancel-button]:hidden"
           />
-          <kbd className="rounded border border-border/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap">{searchShortcutLabel()}</kbd>
+          <kbd className="rounded border border-border/70 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground whitespace-nowrap">{searchShortcutLabel()}</kbd>
         </label>
       </div>
       <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/40 p-[3px]" role="radiogroup" aria-label={t("common.view")}>

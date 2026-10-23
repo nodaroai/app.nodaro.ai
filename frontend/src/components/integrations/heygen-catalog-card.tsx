@@ -95,7 +95,7 @@ export function HeygenCatalogCard() {
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
           <Users className="h-3.5 w-3.5" style={{ color: "var(--integ-muted)" }} aria-hidden />
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--integ-muted)" }}>
+          <span className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--integ-muted)" }}>
             {t("integ.cacheEyebrow")}
           </span>
         </div>

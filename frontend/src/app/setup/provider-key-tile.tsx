@@ -71,7 +71,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
       </div>
 
       {!tile.cloudCovered && tile.id !== "nodaro" && !tile.present && (
-        <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: MUTED }}>
           {t("setup.ownKeyNeeded")}
         </span>
       )}
@@ -100,7 +100,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
               </button>
             )}
             {tile.whereToGet && !tile.present && (
-              <span style={{ fontFamily: MONO, fontSize: 10.5, color: FAINT }}>{t("integ.getOneAt", { url: tile.whereToGet })}</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: FAINT }}>{t("integ.getOneAt", { url: tile.whereToGet })}</span>
             )}
           </div>
         ) : (
@@ -163,7 +163,7 @@ export function ProviderKeyTile({ tile, onChanged }: Props) {
           </form>
         )
       ) : tile.source === "env" ? (
-        <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: MUTED }}>
           {t("setup.setByEnv", { env: tile.env })}
         </span>
       ) : null}

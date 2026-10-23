@@ -74,7 +74,7 @@ function ItemCard({
             {t("galleryModeration.hideItem")}
           </Button>
           {item.creator && <GalleryBlockCreatorButton item={item} onBlocked={() => undefined} />}
-          <span className="ms-auto text-[10px] text-muted-foreground">{formatGalleryDate(item.createdAt)}</span>
+          <span className="ms-auto text-[11px] text-muted-foreground">{formatGalleryDate(item.createdAt)}</span>
         </div>
       </div>
     </li>

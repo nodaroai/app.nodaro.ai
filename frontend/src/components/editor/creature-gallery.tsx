@@ -148,7 +148,7 @@ export function CreatureGalleryButton() {
         <PawPrint className="h-4 w-4" />
         {t("entity.btnCreature")}
         {creCount > 0 && (
-          <span className="ms-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[11px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
             {creCount}
           </span>
         )}
@@ -211,12 +211,12 @@ export function CreatureGalleryButton() {
                             </div>
                           ) : (
                             <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-                              <PawPrint className="w-8 h-8 text-muted-foreground/30" />
+                              <PawPrint className="w-8 h-8 text-muted-foreground" />
                             </div>
                           )}
                           <span className="text-xs truncate w-full text-center">{c.name}</span>
                           {isOnCanvas && (
-                            <span className="text-[9px] text-muted-foreground">{t("assetlib.onCanvas")}</span>
+                            <span className="text-[11px] text-muted-foreground">{t("assetlib.onCanvas")}</span>
                           )}
                         </button>
                         {/* Add to canvas button - always visible */}

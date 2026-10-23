@@ -61,14 +61,14 @@ function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
               <p className="text-xs text-foreground/80">
                 {itemCount === 1 ? t("node.uniqueItemsOne", { n: itemCount }) : t("node.uniqueItemsMany", { n: itemCount })}
               </p>
-              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              <span className="text-[11px] text-muted-foreground mt-0.5 block">
                 {t("node.byField", { field: fieldLabel })}
               </span>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+            <div className="flex flex-col items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
               <FileText className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5">{t("node.byField", { field: fieldLabel })}</span>
+              <span className="text-[11px] mt-0.5">{t("node.byField", { field: fieldLabel })}</span>
             </div>
           )}
         </div>

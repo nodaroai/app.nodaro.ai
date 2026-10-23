@@ -28,16 +28,16 @@ export function CanonicalDescriptionExpander({ characterId, value, onChange }: C
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-200 w-full text-start"
+        className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-200 w-full text-start"
       >
         {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
-        <span className="text-[9px] uppercase tracking-wide text-slate-500">{t("studio.canonicalDescription")}</span>
-        {!open && <span className="text-slate-500 text-[10px] truncate flex-1">{preview}</span>}
+        <span className="text-[11px] uppercase tracking-wide text-slate-500">{t("studio.canonicalDescription")}</span>
+        {!open && <span className="text-slate-500 text-[11px] truncate flex-1">{preview}</span>}
       </button>
       {open && (
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[9px] text-slate-500">{t("studio.usedInEveryAssetGen")}</span>
+            <span className="text-[11px] text-slate-500">{t("studio.usedInEveryAssetGen")}</span>
             <AiHelperButton
               onSuggest={refresh}
               onReplace={onChange}
@@ -51,7 +51,7 @@ export function CanonicalDescriptionExpander({ characterId, value, onChange }: C
             maxLength={4000}
             className="block w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1.5 text-slate-200"
           />
-          <div className="text-end text-[9px] text-slate-500 tabular-nums">{value.length}/4000</div>
+          <div className="text-end text-[11px] text-slate-500 tabular-nums">{value.length}/4000</div>
         </div>
       )}
     </div>

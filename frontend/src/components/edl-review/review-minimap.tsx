@@ -147,7 +147,7 @@ export function ReviewMinimap({ base, edited, kept, onScreen, playback, onScroll
         )}
         <Playhead playback={playback} sourceMs={sourceMs} />
       </div>
-      <span dir="ltr" className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+      <span dir="ltr" className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {positionOf(0)} ── {t("edlReview.minimapSource")} ── {positionOf(sourceMs)}
       </span>
     </div>

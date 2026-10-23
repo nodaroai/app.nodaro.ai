@@ -35,7 +35,7 @@ export function SocialPostTile({ post, onRead }: { readonly post: SocialPost; re
           <span className="line-clamp-6 text-[11px] font-semibold leading-snug text-[var(--meta-ads-text)]" dir="auto">
             {words}
           </span>
-          <span className="truncate text-[10px] font-bold text-[var(--meta-ads-muted)]" dir="auto">
+          <span className="truncate text-[11px] font-bold text-[var(--meta-ads-muted)]" dir="auto">
             {whoOf(post)}
           </span>
         </span>

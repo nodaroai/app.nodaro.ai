@@ -229,7 +229,7 @@ export function CreatureAssetTab({
               fallbackAspect={fallbackAspect}
               className="w-full rounded"
             />
-            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5">
+            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5">
               {item.name}
             </div>
             <button
@@ -239,7 +239,7 @@ export function CreatureAssetTab({
                 void handleRemove(idx)
               }}
               aria-label={t("creature.removeNameAria", { name: item.name })}
-              className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+              className="absolute top-1 end-1 px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
             >
               {t("common.remove")}
             </button>
@@ -350,7 +350,7 @@ export function PoseCatalogBrowser({ disabled, onPick }: PoseCatalogBrowserProps
       <h3 className="text-[11px] font-medium text-slate-300">
         {t("creature.browsePoseCatalog")}
       </h3>
-      <p className="text-[10px] text-slate-500">
+      <p className="text-[11px] text-slate-500">
         {t("creature.poseCatalogHint")}
       </p>
       {POSE_CATEGORY_ORDER.map((category) => {
@@ -358,7 +358,7 @@ export function PoseCatalogBrowser({ disabled, onPick }: PoseCatalogBrowserProps
         if (entries.length === 0) return null
         return (
           <div key={category}>
-            <div className="text-[9px] uppercase tracking-widest text-slate-600 mb-1.5">
+            <div className="text-[11px] uppercase tracking-widest text-slate-600 mb-1.5">
               {POSE_CATEGORY_LABELS[category]}
             </div>
             <div className="flex flex-wrap gap-2">

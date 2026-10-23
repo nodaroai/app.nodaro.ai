@@ -269,7 +269,7 @@ export function CopilotMentionPicker({
     >
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
         <span className="font-mono text-[11.5px] text-[var(--copilot-mention)]">@{query}</span>
-        <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)]">{t(K.pickerHintInsert)}</span>
+        <span className="ms-auto text-[11px] text-[var(--copilot-dim)]">{t(K.pickerHintInsert)}</span>
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -316,7 +316,7 @@ export function CopilotMentionPicker({
         <div className="px-3 py-1.5 flex items-center gap-2 text-[12px] text-foreground">
           <ChevronLeft className={cn("w-3 h-3 text-[var(--copilot-dim)]", isRtl && "rotate-180")} strokeWidth={2.2} aria-hidden />
           <span className="font-medium truncate">{drill.name}</span>
-          <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)]">{t(K.pickerVariantsHint)}</span>
+          <span className="ms-auto text-[11px] text-[var(--copilot-dim)]">{t(K.pickerVariantsHint)}</span>
         </div>
       )}
 
@@ -381,7 +381,7 @@ export function CopilotMentionPicker({
                   <VariantThumb variant={variant} size={26} />
                 </PreviewableThumb>
                 <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{variant.name}</span>
-                <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap capitalize">{variant.bucketNoun}</span>
+                <span className="ms-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap capitalize">{variant.bucketNoun}</span>
               </button>
             )
           })
@@ -414,7 +414,7 @@ export function CopilotMentionPicker({
                     <MentionThumb mention={item} size={22} />
                   </PreviewableThumb>
                   <span className="text-[12.5px] text-foreground truncate flex-1 min-w-0">{item.name}</span>
-                  <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap">{t(KIND_UI[item.kind].chipKey)}</span>
+                  <span className="ms-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap">{t(KIND_UI[item.kind].chipKey)}</span>
                   {hasVariants && (
                     <span
                       role="button"
@@ -434,7 +434,7 @@ export function CopilotMentionPicker({
               )
             })}
             {otherTabMatches.length > 0 && (
-              <div className="px-[11px] pt-1.5 pb-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-[var(--copilot-dim)]">
+              <div className="px-[11px] pt-1.5 pb-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--copilot-dim)]">
                 <span>{t(K.pickerOtherTabs)}</span>
                 {otherTabMatches.map(({ tab: otherTab, count }) => (
                   <button

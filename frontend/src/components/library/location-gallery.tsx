@@ -277,7 +277,7 @@ function ActivePane({
             </div>
           ) : (
             <div className="w-full aspect-square rounded-lg bg-muted/30 flex items-center justify-center">
-              <MapPin className="w-10 h-10 text-muted-foreground/30" />
+              <MapPin className="w-10 h-10 text-muted-foreground" />
             </div>
           )}
           <span className="text-sm font-medium truncate w-full text-center" title={loc.name}>
@@ -357,7 +357,7 @@ function ArchivedPane({
             </div>
           ) : (
             <div className="w-full aspect-square rounded-lg bg-muted/30 flex items-center justify-center opacity-60">
-              <MapPin className="w-10 h-10 text-muted-foreground/30" />
+              <MapPin className="w-10 h-10 text-muted-foreground" />
             </div>
           )}
           <span className="text-sm font-medium truncate w-full text-center opacity-70" title={loc.name}>

@@ -213,7 +213,7 @@ function SelectItemWithMeta({
         )}
       </span>
       {description && (
-        <span className={cn("text-[11px] leading-tight text-muted-foreground/70", descriptionClassName)}>
+        <span className={cn("text-[11px] leading-tight text-muted-foreground", descriptionClassName)}>
           {description}
         </span>
       )}

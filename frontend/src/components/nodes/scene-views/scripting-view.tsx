@@ -20,13 +20,13 @@ function ScriptingView({ data }: SceneViewProps) {
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">{t("node.sceneN", { n: data.scene_index })}</div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{storyMomentLabel(data.emotional_beat, t)}</div>
+        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{storyMomentLabel(data.emotional_beat, t)}</div>
       </div>
       {data.description && (
         <p className="text-[11px] text-zinc-600 dark:text-zinc-300 line-clamp-2">{data.description}</p>
       )}
       {shots.length === 0 ? (
-        <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500">
+        <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[11px] text-zinc-400 dark:text-zinc-500">
           {t("node.noShotsYet")}
         </div>
       ) : (
@@ -36,7 +36,7 @@ function ScriptingView({ data }: SceneViewProps) {
               key={shot.shot_id}
               className="flex flex-col gap-0.5 rounded border border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50/60 dark:bg-[#2D2D2D]/40 p-1.5"
             >
-              <div className="flex items-center justify-between text-[9px] text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
                 <span className="font-mono">{shot.shot_id}</span>
                 <span>{shot.duration_seconds}s · {shot.camera.shot_type}</span>
               </div>
@@ -50,7 +50,7 @@ function ScriptingView({ data }: SceneViewProps) {
           ))}
         </div>
       )}
-      <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
         {shots.length === 1 ? t("node.shotCountOne", { n: shots.length }) : t("node.shotCountMany", { n: shots.length })} · {t("node.secondsTotal", { n: data.duration_seconds })}
       </div>
     </div>

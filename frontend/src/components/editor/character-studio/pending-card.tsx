@@ -48,7 +48,7 @@ export function PendingCard({ jobId, name, progress, theme = "image", onCancel, 
       <div className={`flex flex-col items-center justify-center bg-gradient-to-br ${t.bg}`} style={{ aspectRatio: aspect ?? 0.75 }}>
         <div className={`w-5 h-5 border-2 ${t.spinner} border-t-transparent rounded-full animate-spin`} />
         {pct > 0 && (
-          <div className={`mt-2 text-[10px] ${t.text} opacity-70 tabular-nums`}>{Math.round(pct)}%</div>
+          <div className={`mt-2 text-[11px] ${t.text} opacity-70 tabular-nums`}>{Math.round(pct)}%</div>
         )}
       </div>
       {/* Top-edge progress bar — width animates as the worker reports progress. */}
@@ -67,7 +67,7 @@ export function PendingCard({ jobId, name, progress, theme = "image", onCancel, 
       >
         <X className="w-3 h-3" />
       </button>
-      <div className={`px-2 py-1.5 text-[10px] ${t.text} truncate`}>{name}…</div>
+      <div className={`px-2 py-1.5 text-[11px] ${t.text} truncate`}>{name}…</div>
     </div>
   )
 }
@@ -98,14 +98,14 @@ export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps
         style={{ aspectRatio: aspect ?? 0.75 }}
       >
         <AlertTriangle className="w-5 h-5 text-[#ef4444]" />
-        <div className="text-[10px] text-[#ef4444]">{t("cfgext.phdGenerationFailed")}</div>
+        <div className="text-[11px] text-[#ef4444]">{t("cfgext.phdGenerationFailed")}</div>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             onRetry()
           }}
-          className="mt-0.5 flex items-center gap-1 text-[10px] bg-[#1e293b] hover:bg-[#27364a] text-slate-200 rounded px-2 py-1"
+          className="mt-0.5 flex items-center gap-1 text-[11px] bg-[#1e293b] hover:bg-[#27364a] text-slate-200 rounded px-2 py-1"
         >
           <RotateCw className="w-3 h-3" /> {t("common.retry")}
         </button>
@@ -122,7 +122,7 @@ export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps
       >
         <X className="w-3 h-3" />
       </button>
-      <div className="px-2 py-1.5 text-[10px] text-slate-400 truncate">{name}</div>
+      <div className="px-2 py-1.5 text-[11px] text-slate-400 truncate">{name}</div>
     </div>
   )
 }

@@ -62,18 +62,18 @@ function InlineDeleteConfirm({
 }) {
   const t = useT()
   return (
-    <span className="flex items-center gap-1 text-[10px]">
+    <span className="flex items-center gap-1 text-[11px]">
       <span className="text-red-500 font-medium">{t("entity.deleteQuestion")}</span>
       <button
         type="button"
-        className="px-1.5 py-0.5 rounded text-[10px] bg-muted hover:bg-muted/80 text-muted-foreground"
+        className="px-1.5 py-0.5 rounded text-[11px] bg-muted hover:bg-muted/80 text-muted-foreground"
         onClick={(e) => { e.stopPropagation(); onCancel() }}
       >
         {t("common.cancel")}
       </button>
       <button
         type="button"
-        className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/90 hover:bg-red-500 text-white"
+        className="px-1.5 py-0.5 rounded text-[11px] bg-red-500/90 hover:bg-red-500 text-white"
         onClick={(e) => { e.stopPropagation(); onConfirm() }}
       >
         {t("common.delete")}

@@ -17,7 +17,7 @@ import type { ConfigProps } from "./types"
  */
 
 const SECTION_LABEL = "text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]"
-const HINT = "text-[10px] text-muted-foreground mt-1 leading-snug"
+const HINT = "text-[11px] text-muted-foreground mt-1 leading-snug"
 
 export function TelegramAccountSendConfig({ data, onUpdate }: ConfigProps<TelegramAccountSendData>) {
   const t = useT()

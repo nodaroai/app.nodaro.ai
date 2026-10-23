@@ -91,7 +91,7 @@ export default function AdminAppsPage() {
                     className="p-0.5 hover:text-amber-400 transition-colors"
                     title={featuredIds.has(app.id) ? "Remove from featured" : "Add to featured"}
                   >
-                    <Star className={`w-4 h-4 ${featuredIds.has(app.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`} />
+                    <Star className={`w-4 h-4 ${featuredIds.has(app.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
                   </button>
                 </td>
                 <td className="px-4 py-2">

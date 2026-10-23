@@ -210,7 +210,7 @@ export function CopilotSettingsControls({ onChange }: { readonly onChange: (patc
             </button>
           ))}
         </div>
-        <span className="ms-auto text-[10.5px] text-[var(--copilot-dim)] whitespace-nowrap truncate max-w-[45%]">
+        <span className="ms-auto text-[11px] text-[var(--copilot-dim)] whitespace-nowrap truncate max-w-[45%]">
           {activeTier ? t(activeTier.hintKey) : null}
         </span>
       </div>
@@ -250,7 +250,7 @@ function SettingSwitch({
     <div className="flex items-center gap-3">
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
         <span className="text-[11.5px] text-foreground leading-tight">{label}</span>
-        <span className="text-[10.5px] text-[var(--copilot-dim)] leading-tight">{hint}</span>
+        <span className="text-[11px] text-[var(--copilot-dim)] leading-tight">{hint}</span>
       </div>
       <Switch checked={checked} onCheckedChange={(v: boolean) => onChange(v)} aria-label={label} className="flex-none" />
     </div>

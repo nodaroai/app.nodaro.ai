@@ -173,7 +173,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
               <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+              <p className="text-[11px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}

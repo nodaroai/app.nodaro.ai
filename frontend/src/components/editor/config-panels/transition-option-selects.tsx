@@ -102,7 +102,7 @@ export function TransitionOptionSelects({ data, onUpdate }: Pick<ConfigProps<Tra
         const stored = data[option.field]
         return (
           <div key={option.field} className="flex flex-col gap-1">
-            <Label className="text-[10px] uppercase">{label}</Label>
+            <Label className="text-[11px] uppercase">{label}</Label>
             <Select
               value={typeof stored === "string" && stored ? stored : "auto"}
               onValueChange={(v) => onUpdate({ [option.field]: v === "auto" ? undefined : v })}

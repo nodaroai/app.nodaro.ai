@@ -45,7 +45,7 @@ export function SlotStatusBadge({ status, outcome }: { status: RunSlot["executio
   }
   const c = config[status] ?? config.idle
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${c.className}`}>
+    <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${c.className}`}>
       {c.label}
     </span>
   )
@@ -89,7 +89,7 @@ export function CompactSlotItem({
               <StatusDot status={slot.executionStatus} />
             </div>
           )}
-          <span className="text-[9px] text-muted-foreground truncate max-w-full px-0.5 text-center leading-tight">
+          <span className="text-[11px] text-muted-foreground truncate max-w-full px-0.5 text-center leading-tight">
             {slot.name ?? formatTime(slot.createdAt, { hour: "2-digit", minute: "2-digit" })}
           </span>
         </div>
@@ -224,7 +224,7 @@ export function RunSlotItem({
                 </span>
               )}
               {hasMultipleVersions && slot.version != null && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                <span className="text-[11px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
                   v{slot.version}
                 </span>
               )}

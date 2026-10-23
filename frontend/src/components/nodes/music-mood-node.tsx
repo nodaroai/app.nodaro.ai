@@ -21,7 +21,7 @@ function MusicMoodNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Activity />} handleId="out" selected={selected} fluidWidth>
       <p className="text-foreground text-sm font-medium">{summary}</p>
-      {composed && <p className="text-muted-foreground text-[10px] italic leading-snug">{composed}</p>}
+      {composed && <p className="text-muted-foreground text-[11px] italic leading-snug">{composed}</p>}
     </ParameterNodeShell>
   )
 }

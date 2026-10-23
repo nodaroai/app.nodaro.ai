@@ -339,7 +339,7 @@ export default function AdminCreditAudit() {
               <p className="text-xs text-muted-foreground">
                 Last run: {result.timestamp ? new Date(result.timestamp).toLocaleString() : "unknown"}
               </p>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-[11px]">
                 {MODE_LABELS[result.mode]}
               </Badge>
             </div>
@@ -463,7 +463,7 @@ function TheoreticalTable({ models }: { models: AuditModel[] }) {
               <td className="p-3">
                 <span className="text-xs">{m.ourKey ?? <span className="text-muted-foreground">—</span>}</span>
                 {m.variable && (
-                  <Badge variant="outline" className="ml-1.5 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">
+                  <Badge variant="outline" className="ml-1.5 text-[11px] bg-blue-500/10 text-blue-400 border-blue-500/20">
                     variable
                   </Badge>
                 )}
@@ -541,7 +541,7 @@ function ActualTable({ models }: { models: ActualAuditModel[] }) {
               <td className="p-3">
                 <span className="text-xs">{m.ourKey ?? <span className="text-muted-foreground">—</span>}</span>
                 {m.variable && (
-                  <Badge variant="outline" className="ml-1.5 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">
+                  <Badge variant="outline" className="ml-1.5 text-[11px] bg-blue-500/10 text-blue-400 border-blue-500/20">
                     variable
                   </Badge>
                 )}
@@ -561,7 +561,7 @@ function ActualTable({ models }: { models: ActualAuditModel[] }) {
                   <>
                     {m.actualAvgCredits}
                     {m.actualMin != null && m.actualMax != null && m.actualMin !== m.actualMax && (
-                      <span className="text-muted-foreground text-[10px] ml-1">
+                      <span className="text-muted-foreground text-[11px] ml-1">
                         ({m.actualMin}–{m.actualMax})
                       </span>
                     )}
@@ -639,7 +639,7 @@ function PerTaskTable({ tasks }: { tasks: PerTaskDiff[] }) {
               <td className="px-4 py-2.5 text-right text-xs tabular-nums">
                 {t.ourCredits != null ? t.ourCredits : <span className="text-muted-foreground">—</span>}
                 {t.ourCredits != null && t.ourCreditsReserved != null && t.ourCreditsReserved !== t.ourCredits && (
-                  <span className="block text-[10px] text-muted-foreground">held {t.ourCreditsReserved}</span>
+                  <span className="block text-[11px] text-muted-foreground">held {t.ourCreditsReserved}</span>
                 )}
               </td>
               <td className={`px-4 py-2.5 text-right text-xs tabular-nums ${
@@ -648,7 +648,7 @@ function PerTaskTable({ tasks }: { tasks: PerTaskDiff[] }) {
                 {t.diff != null ? (t.diff > 0 ? `+${t.diff}` : t.diff) : "—"}
               </td>
               <td className="px-4 py-2.5">
-                <Badge className={`text-[10px] font-normal ${cfg.color}`} variant="outline">
+                <Badge className={`text-[11px] font-normal ${cfg.color}`} variant="outline">
                   <Icon className="h-2.5 w-2.5 mr-1" />
                   {cfg.label}
                 </Badge>

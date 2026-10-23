@@ -271,7 +271,7 @@ function ModalTile({
       </PreviewableThumb>
       <span className="min-w-0 flex-1">
         <span className="block text-[12.5px] text-foreground truncate">{label}</span>
-        <span className="block text-[10.5px] text-[var(--copilot-dim)] capitalize">{sub}</span>
+        <span className="block text-[11px] text-[var(--copilot-dim)] capitalize">{sub}</span>
       </span>
       {cornerAction && (
         <span

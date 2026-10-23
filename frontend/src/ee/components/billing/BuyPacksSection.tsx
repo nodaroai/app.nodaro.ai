@@ -113,7 +113,7 @@ export function BuyPacksSection() {
                   transform: "translateX(-50%)",
                   background: PINK,
                   color: "#fff",
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 700,
                   padding: "3px 11px",
                   borderRadius: 99,

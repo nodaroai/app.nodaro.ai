@@ -211,7 +211,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                   <AccordionContent>
                     <div className="flex flex-col gap-2 pt-1">
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.visualDescription")}</Label>
+                        <Label className="text-[11px] text-muted-foreground">{t("scriptcfg.visualDescription")}</Label>
                         <Textarea
                           rows={3}
                           className="text-xs"
@@ -220,7 +220,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                         />
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.sceneAction")}</Label>
+                        <Label className="text-[11px] text-muted-foreground">{t("scriptcfg.sceneAction")}</Label>
                         <Textarea
                           rows={2}
                           className="text-xs"
@@ -230,7 +230,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.sceneMood")}</Label>
+                          <Label className="text-[11px] text-muted-foreground">{t("scriptcfg.sceneMood")}</Label>
                           <Input
                             className="text-xs h-7"
                             value={Array.isArray(scene.mood) ? scene.mood.join(", ") : scene.mood}
@@ -238,7 +238,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                           />
                         </div>
                         <div>
-                          <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.durationS")}</Label>
+                          <Label className="text-[11px] text-muted-foreground">{t("scriptcfg.durationS")}</Label>
                           <Input
                             type="number"
                             className="text-xs h-7"
@@ -250,7 +250,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                         </div>
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.imagePromptForGenerate")}</Label>
+                        <Label className="text-[11px] text-muted-foreground">{t("scriptcfg.imagePromptForGenerate")}</Label>
                         <Textarea
                           rows={3}
                           className="text-xs"
@@ -573,7 +573,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[10px] gap-1"
+              className="h-6 text-[11px] gap-1"
               onClick={() => {
                 if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
                 navigator.clipboard.writeText(imageToTextData.generatedText ?? "")

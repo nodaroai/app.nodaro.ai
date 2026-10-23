@@ -34,7 +34,7 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
     <div className="flex items-start gap-1.5 px-1.5 py-1 rounded bg-muted/30">
       {TYPE_ICON[item.type]}
       <div className="flex-1 min-w-0">
-        <span className="text-[10px] text-muted-foreground block truncate">{item.sourceNodeLabel}</span>
+        <span className="text-[11px] text-muted-foreground block truncate">{item.sourceNodeLabel}</span>
         {item.type === "image" && isMediaUrl(item.value) ? (
           <CachedImage
             src={item.value}
@@ -54,9 +54,9 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
             preload="none"
           />
         ) : item.type === "audio" && isMediaUrl(item.value) ? (
-          <span className="text-[10px] text-foreground/60 truncate block">{item.value.split("/").pop()}</span>
+          <span className="text-[11px] text-foreground/80 truncate block">{item.value.split("/").pop()}</span>
         ) : (
-          <p className="text-[10px] text-foreground/80 line-clamp-2 break-words">{item.value}</p>
+          <p className="text-[11px] text-foreground/80 line-clamp-2 break-words">{item.value}</p>
         )}
       </div>
     </div>
@@ -141,20 +141,20 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
               <PreviewItemRow key={getPreviewItemKey(item)} item={item} />
             ))}
             {hiddenCount > 0 && (
-              <span className="text-[10px] text-muted-foreground/60 text-center py-0.5">
+              <span className="text-[11px] text-muted-foreground text-center py-0.5">
                 {t("node.plusNHidden", { n: hiddenCount })}
               </span>
             )}
           </div>
         ) : allItems.length > 0 ? (
-          <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 gap-1">
+          <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground gap-1">
             <Eye className="w-5 h-5" />
-            <span className="text-[10px]">{t("node.nItemsAllHidden", { n: allItems.length })}</span>
+            <span className="text-[11px]">{t("node.nItemsAllHidden", { n: allItems.length })}</span>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 gap-1">
+          <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground gap-1">
             <Eye className="w-5 h-5" />
-            <span className="text-[10px]">{t("node.connectNodesToPreview")}</span>
+            <span className="text-[11px]">{t("node.connectNodesToPreview")}</span>
           </div>
         )}
       </BaseNode>

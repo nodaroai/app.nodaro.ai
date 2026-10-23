@@ -336,7 +336,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
               </div>
               {nodeData.errorMessage ? (
                 <p
-                  className="text-[10px] text-center line-clamp-2 text-red-400"
+                  className="text-[11px] text-center line-clamp-2 text-red-400"
                   title={nodeData.errorMessage as string}
                 >
                   {nodeData.errorMessage as string}
@@ -347,9 +347,9 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Idle state */}
           {status !== "running" && !activeUrl && status !== "failed" && (
-            <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+            <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
               <Music2 className="w-10 h-10" />
-              <span className="text-[10px] text-muted-foreground/60 px-2 text-center">
+              <span className="text-[11px] text-muted-foreground px-2 text-center">
                 {t("node.wireAVideoAndRun")}
               </span>
             </div>

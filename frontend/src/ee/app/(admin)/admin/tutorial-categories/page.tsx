@@ -276,7 +276,7 @@ export default function AdminTutorialCategoriesPage() {
                       <div className="flex flex-col">
                         <span>{c.name}</span>
                         {c.description && (
-                          <span className="text-[10px] text-muted-foreground line-clamp-1">
+                          <span className="text-[11px] text-muted-foreground line-clamp-1">
                             {c.description}
                           </span>
                         )}

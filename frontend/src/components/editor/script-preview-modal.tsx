@@ -295,18 +295,18 @@ export function ScriptPreviewModal({
                       />
                       {script.scenes.length > 1 && (
                         confirmingDeleteScene === i ? (
-                          <span className="flex items-center gap-1 text-[10px]">
+                          <span className="flex items-center gap-1 text-[11px]">
                             <span className="text-red-500 font-medium">{t("scriptprev.deleteQuestion")}</span>
                             <button
                               type="button"
-                              className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] text-gray-600 dark:text-[#94A3B8]"
+                              className="px-1.5 py-0.5 rounded text-[11px] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] text-gray-600 dark:text-[#94A3B8]"
                               onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(null) }}
                             >
                               {t("common.cancel")}
                             </button>
                             <button
                               type="button"
-                              className="px-1.5 py-0.5 rounded text-[10px] bg-red-500 hover:bg-red-600 text-white"
+                              className="px-1.5 py-0.5 rounded text-[11px] bg-red-500 hover:bg-red-600 text-white"
                               onClick={(e) => { e.stopPropagation(); handleDeleteScene(i) }}
                             >
                               {t("common.delete")}
@@ -416,13 +416,13 @@ export function ScriptPreviewModal({
                   {activeImage && (
                     <button
                       type="button"
-                      className="flex items-center gap-1 w-full h-6 px-2 text-[10px] font-medium rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                      className="flex items-center gap-1 w-full h-6 px-2 text-[11px] font-medium rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
                       onClick={(e) => { e.stopPropagation(); setExtractModalScene(i) }}
                     >
                       <Scissors className="w-3 h-3" />
                       {t("scriptprev.extractReferences")}
                       {extractedReferences.filter((r) => r.sourceSceneIndex === i).length > 0 && (
-                        <span className="ms-auto text-[9px] bg-purple-600 text-white rounded-full px-1.5">
+                        <span className="ms-auto text-[11px] bg-purple-600 text-white rounded-full px-1.5">
                           {extractedReferences.filter((r) => r.sourceSceneIndex === i).length}
                         </span>
                       )}
@@ -432,7 +432,7 @@ export function ScriptPreviewModal({
                   {/* Create Scene Node button */}
                   <button
                     type="button"
-                    className="flex items-center gap-1 w-full h-6 px-2 text-[10px] font-medium rounded border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                    className="flex items-center gap-1 w-full h-6 px-2 text-[11px] font-medium rounded border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
                     onClick={(e) => { e.stopPropagation(); onCreateSceneNode(i) }}
                   >
                     <Clapperboard className="w-3 h-3" />
@@ -447,13 +447,13 @@ export function ScriptPreviewModal({
                       const val = e.target.value
                       onUpdateSceneField(i, "mood", val.includes(",") ? val.split(",").map((s) => s.trim()).filter(Boolean) : val)
                     }}
-                    className="w-full text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-0.5"
+                    className="w-full text-[11px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-0.5"
                     placeholder={t("scriptprev.moodPlaceholder")}
                   />
 
                   {/* Section: Action */}
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Pen className="w-3 h-3" />{t("scriptcfg.sceneAction")}
                     </div>
                     <textarea
@@ -467,25 +467,25 @@ export function ScriptPreviewModal({
 
                   {/* Section: Visual Description */}
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Eye className="w-3 h-3" />{t("scriptcfg.visualDescription")}
                     </div>
                     <textarea
                       value={scene.visualDescription}
                       onChange={(e) => onUpdateSceneField(i, "visualDescription", e.target.value)}
                       rows={3}
-                      className="w-full text-[10px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-1 resize-y"
+                      className="w-full text-[11px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-1 resize-y"
                       placeholder={t("scriptprev.visualDescPlaceholder")}
                     />
                   </div>
 
                   {/* Section: Dialogue */}
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <MessageSquare className="w-3 h-3" />
                       {t("audiocfg.mergeRoleDialogue")}
                       {(scene.dialogue ?? []).length > 0 && (
-                        <span className="text-[9px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
+                        <span className="text-[11px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
                           ({(scene.dialogue ?? []).length})
                         </span>
                       )}
@@ -502,7 +502,7 @@ export function ScriptPreviewModal({
                                 newDialogue[di] = { ...newDialogue[di], speaker: e.target.value }
                                 onUpdateSceneField(i, "dialogue", newDialogue)
                               }}
-                              className="flex-1 text-[10px] font-medium text-gray-900 dark:text-[#E2E8F0] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
+                              className="flex-1 text-[11px] font-medium text-gray-900 dark:text-[#E2E8F0] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                               placeholder={t("scenecfg.speaker")}
                             />
                             <input
@@ -513,7 +513,7 @@ export function ScriptPreviewModal({
                                 newDialogue[di] = { ...newDialogue[di], emotion: e.target.value || undefined }
                                 onUpdateSceneField(i, "dialogue", newDialogue)
                               }}
-                              className="w-16 text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
+                              className="w-16 text-[11px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                               placeholder={t("scriptprev.emotionPlaceholder")}
                             />
                             <button aria-label={t("common.delete")}
@@ -535,7 +535,7 @@ export function ScriptPreviewModal({
                               newDialogue[di] = { ...newDialogue[di], text: e.target.value }
                               onUpdateSceneField(i, "dialogue", newDialogue)
                             }}
-                            className="w-full text-[10px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
+                            className="w-full text-[11px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                             placeholder={t("scriptprev.linePlaceholder")}
                           />
                         </div>
@@ -546,7 +546,7 @@ export function ScriptPreviewModal({
                           const newDialogue = [...(scene.dialogue ?? []), { speaker: "", text: "", emotion: "" }]
                           onUpdateSceneField(i, "dialogue", newDialogue)
                         }}
-                        className="flex items-center gap-0.5 text-[9px] text-gray-500 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white transition-colors self-start px-1"
+                        className="flex items-center gap-0.5 text-[11px] text-gray-500 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white transition-colors self-start px-1"
                       >
                         <Plus className="w-2.5 h-2.5" /> {t("scriptprev.addLine")}
                       </button>
@@ -555,11 +555,11 @@ export function ScriptPreviewModal({
 
                   {/* Section: Characters */}
                   <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Users className="w-3 h-3" />
                       {t("assetlib.tabCharacters")}
                       {charNames.length > 0 && (
-                        <span className="text-[9px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
+                        <span className="text-[11px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
                           ({charNames.length})
                         </span>
                       )}
@@ -584,7 +584,7 @@ export function ScriptPreviewModal({
                             {otherScenes.length > 0 && (
                               <span className="inline-flex items-center gap-0.5 text-purple-200" title={t(otherScenes.length > 1 ? "scriptprev.alsoInScenes" : "scriptprev.alsoInScene", { list: otherScenes.join(", ") })}>
                                 <Link className="w-2.5 h-2.5" />
-                                <span className="text-[9px]">{otherScenes.length}</span>
+                                <span className="text-[11px]">{otherScenes.length}</span>
                               </span>
                             )}
                             <button aria-label={t("common.remove")}
@@ -666,7 +666,7 @@ export function ScriptPreviewModal({
                                     })()}
                                     {char}
                                   </span>
-                                  <span className="text-[9px] text-gray-400 dark:text-[#64748B]">
+                                  <span className="text-[11px] text-gray-400 dark:text-[#64748B]">
                                     {t((charSceneMap[char] ?? []).length === 1 ? "scriptprev.sceneCountOne" : "scriptprev.scenesCount", { n: (charSceneMap[char] ?? []).length })}
                                   </span>
                                 </button>
@@ -694,21 +694,21 @@ export function ScriptPreviewModal({
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       {i === 0 && (
-                        <p className="text-[9px] text-gray-400 dark:text-[#64748B]">
+                        <p className="text-[11px] text-gray-400 dark:text-[#64748B]">
                           {t("scriptprev.sameNameTip")}
                         </p>
                       )}
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setShowDefineCharModal(true) }}
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed border-gray-200 dark:border-[#2D2D2D] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors text-gray-500 dark:text-[#94A3B8] whitespace-nowrap"
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] rounded border border-dashed border-gray-200 dark:border-[#2D2D2D] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors text-gray-500 dark:text-[#94A3B8] whitespace-nowrap"
                       >
                         <UserPlus className="w-2.5 h-2.5" /> {t("scriptprev.defineCharacter")}
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-[#64748B] mt-auto pt-1 border-t border-gray-100 dark:border-[#2D2D2D]/50">
+                  <div className="flex items-center gap-2 text-[11px] text-gray-400 dark:text-[#64748B] mt-auto pt-1 border-t border-gray-100 dark:border-[#2D2D2D]/50">
                     <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />5cr</span>
                     <span className="flex items-center gap-0.5"><Film className="w-2.5 h-2.5" />20cr</span>
                     <span className="flex items-center gap-0.5">3cr</span>
@@ -830,7 +830,7 @@ function DragHandle() {
   const { listeners, activatorRef } = useContext(SortableDragContext)
   return (
     <span ref={activatorRef} {...listeners} className="cursor-grab active:cursor-grabbing">
-      <GripVertical className="w-3 h-3 text-muted-foreground/30" />
+      <GripVertical className="w-3 h-3 text-muted-foreground" />
     </span>
   )
 }

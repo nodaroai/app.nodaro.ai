@@ -194,7 +194,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
-                  <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                  <p className="text-[11px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
                     {nodeData.errorMessage}
                   </p>
                 )}
@@ -202,7 +202,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {status !== "running" && !activeText && status !== "failed" && (
-              <div className="flex items-center justify-center py-6 text-muted-foreground/40">
+              <div className="flex items-center justify-center py-6 text-muted-foreground">
                 <span className="text-xs">{t("node.noOutputYet")}</span>
               </div>
             )}

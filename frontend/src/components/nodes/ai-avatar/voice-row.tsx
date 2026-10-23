@@ -73,18 +73,18 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
               {voiceId ? (
                 <>
                   <span className="text-[12px] text-foreground truncate leading-tight">{name}</span>
-                  {meta && <span className="text-[10.5px] text-muted-foreground truncate leading-tight">{meta}</span>}
+                  {meta && <span className="text-[11px] text-muted-foreground truncate leading-tight">{meta}</span>}
                 </>
               ) : (
                 <>
                   <span className="text-[12px] text-[#ff0073] leading-tight">{t("node.chooseAVoice")}</span>
-                  <span className="text-[10.5px] text-muted-foreground leading-tight">{t("node.neededForTextTts")}</span>
+                  <span className="text-[11px] text-muted-foreground leading-tight">{t("node.neededForTextTts")}</span>
                 </>
               )}
             </span>
             <ChevronDown
               className={cn(
-                "size-3 shrink-0 text-muted-foreground/60 transition-transform ml-0.5",
+                "size-3 shrink-0 text-muted-foreground transition-transform ml-0.5",
                 open ? "rotate-180 opacity-100" : "opacity-0 group-hover/voice:opacity-100",
               )}
               aria-hidden
@@ -131,7 +131,7 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
           "nodrag nopan grid place-items-center w-6 h-6 rounded-full border transition-colors shrink-0",
           isPlaying
             ? "border-[#ff0073] text-[#ff0073] bg-[#ff0073]/10"
-            : "border-border/70 text-foreground/70 bg-background/60 hover:border-[#ff0073] hover:text-[#ff0073]",
+            : "border-border/70 text-foreground/80 bg-background/60 hover:border-[#ff0073] hover:text-[#ff0073]",
           !canPlay && "opacity-30 cursor-not-allowed hover:border-border/70 hover:text-foreground/70",
         )}
         onClick={handlePlay}
