@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useEffect, useCallback, useState, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
 import {
@@ -345,7 +346,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
     }`
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm dark:bg-black/70 dark:backdrop-blur-md"
       onClick={onClose}
     >
@@ -375,7 +376,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
               )}
             </div>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="p-1.5 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-[#2D2D2D] transition-colors"
             onClick={onClose}
@@ -486,7 +487,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                               ? "opacity-100 ring-2 ring-primary"
                               : "opacity-50 hover:opacity-80"
                           }`}
-                          onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedVideoUrl: r.url })}
+                          {...pressable(() => updateNodeData(nodeId, { activeResultIndex: i, generatedVideoUrl: r.url }))}
                         >
                           <Film className="w-4 h-4 text-muted-foreground" />
                           <span className="text-[9px] text-muted-foreground ms-0.5">{i + 1}</span>
@@ -785,11 +786,11 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                                   key={el.name}
                                   className="text-[9px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
                                   title={t("cfgext.kling3ClickCopyName")}
-                                  onClick={() => {
+                                  {...pressable(() => {
                                     navigator.clipboard.writeText(`@${el.name}`)
                                     setCopiedName(el.name)
                                     setTimeout(() => setCopiedName(null), 1500)
-                                  }}
+                                  })}
                                 >
                                   @{el.name}
                                 </span>

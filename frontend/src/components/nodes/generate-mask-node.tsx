@@ -118,8 +118,14 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
           showThumbnails && results.length > 1 ? (
             <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
               {results.slice(0, 8).map((r, i) => (
-                <CachedImage
-                  key={`${r.maskUrl}-${i}`}
+                <button key={`${r.maskUrl}-${i}`} type="button" onClick={(e) => {
+                    e.stopPropagation()
+                    updateNodeData(id, {
+                      activeResultIndex: i,
+                      generatedImageUrl: r.imageUrl,
+                      generatedMaskUrl: r.maskUrl,
+                    })
+                  }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                   src={r.imageUrl}
                   alt={t("node.resultN", { n: i + 1 })}
                   className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
@@ -127,15 +133,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                   }`}
                   thumbnail
                   thumbnailWidth={96}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, {
-                      activeResultIndex: i,
-                      generatedImageUrl: r.imageUrl,
-                      generatedMaskUrl: r.maskUrl,
-                    })
-                  }}
-                />
+                /></button>
               ))}
             </div>
           ) : undefined

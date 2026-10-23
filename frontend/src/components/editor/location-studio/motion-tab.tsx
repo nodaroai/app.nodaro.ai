@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useEffect, useState } from "react"
 import { Check, Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
@@ -372,6 +373,8 @@ export function MotionTab({ studio }: MotionTabProps) {
                   </button>
                 </div>
               )}
+              {/* The card only does something in selection mode; then this is its keyboard control. */}
+              {isSelectionMode && <CoverButton label={t("common.select")} onActivate={() => toggleSelected(originalIdx)} />}
             </div>
           )
         })}

@@ -93,7 +93,10 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
             {results.slice(0, 8).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <CachedImage
+                <button type="button" onClick={(e) => {
+                    e.stopPropagation()
+                    updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
+                  }} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                   src={r.url}
                   alt={t("node.resultN", { n: i + 1 })}
                   className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
@@ -101,11 +104,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
                   }`}
                   thumbnail
                   thumbnailWidth={128}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                  }}
-                />
+                /></button>
               </div>
             ))}
           </div>

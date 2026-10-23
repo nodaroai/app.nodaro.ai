@@ -43,6 +43,7 @@ export function MaskPainterModal({
   isOpen, onClose, imageUrl, initialMaskUrl, onSave,
   initialBrushSize, initialBrushHardness,
 }: MaskPainterModalProps) {
+  const t = useT()
   const tr = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -526,7 +527,7 @@ export function MaskPainterModal({
                 </button>
               ))}
             </div>
-            <button
+            <button aria-label={t("common.close")}
               type="button"
               onClick={onClose}
               className="w-8 h-8 rounded-[9px] border border-[#26262b] bg-[#1c1c20] text-[#a1a1a8] hover:bg-[#26262b] hover:text-[#f4f4f5] flex items-center justify-center transition-colors"

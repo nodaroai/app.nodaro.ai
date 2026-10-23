@@ -31,6 +31,7 @@ import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts"
 import { FOCUS_NODES_EVENT, focusNodesChanges, parseFocusNodesDetail, type FocusNodesDetail } from "@/lib/canvas-focus-event"
 import { copilotSurfaced, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useCopilotCenterAllowed, useCopilotPlacement } from "./workflow-editor/copilot-placement"
+import { tabOpensAddNode, trackCanvasPointer } from "./canvas-tab-intent"
 import { CopilotCenterSlot } from "./workflow-editor/copilot-panel-slot"
 import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
@@ -616,6 +617,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const askCopilot = useCopilotUiStore((s) => s.askCopilot)
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
+  // Whether the last pointer press was on the canvas: decides who a Tab press belongs to.
+  const canvasPointerRef = useRef<ReturnType<typeof trackCanvasPointer> | null>(null)
+  useEffect(() => {
+    const tracker = trackCanvasPointer(document)
+    canvasPointerRef.current = tracker
+    return () => {
+      tracker.dispose()
+      canvasPointerRef.current = null
+    }
+  }, [])
   // Radix Popover (1.1.23+) defers its outside-click dismissal to the follow-up
   // `click` and treats a `mousedown` that never bubbled back to the document
   // as an interaction something else intercepted, so it does NOT dismiss.
@@ -2307,6 +2318,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           // Already open: Tab cycles the popup's tabs (its own document listener).
           return
         }
+        // Tab is Add Node only for someone working on the canvas; from the
+        // toolbar, the sidebar or a page never clicked, it moves focus like on
+        // any page (canvas-tab-intent.ts). Returning without preventDefault
+        // lets the browser do exactly that.
+        if (!tabOpensAddNode(e.target, canvasPointerRef.current?.onCanvas() ?? false)) return
         // Resolve the current node from live selection state (matches the
         // `selectedNodeId ?? nodes.find(selected)` pattern other shortcuts use).
         // Require a SINGLE selected node; a box-select (length ≠ 1) or no
@@ -3193,6 +3209,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           {/* Backdrop to close menu on click outside */}
           <div
             className="fixed inset-0 z-40"
+            aria-hidden="true"
             onClick={() => setEdgeContextMenu(null)}
           />
           <div

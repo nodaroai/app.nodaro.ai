@@ -1,5 +1,6 @@
 "use client"
 
+import { CoverButton } from "@/components/ui/cover-button"
 import { useT, tx } from "@/lib/i18n"
 import { useEffect, useMemo, useState } from "react"
 import { AdvancedModeToggle } from "./advanced-mode-toggle"
@@ -541,7 +542,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             {data.generatedItems.map((item, idx) => (
               <div key={idx} className="group">
                 <div
-                  className="flex items-start gap-2 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] hover:bg-gray-100 dark:hover:bg-[#1a1a1a] cursor-pointer transition-colors"
+                  className="relative flex items-start gap-2 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] hover:bg-gray-100 dark:hover:bg-[#1a1a1a] cursor-pointer transition-colors"
                   onClick={() => setExpandedItemIndex(expandedItemIndex === idx ? null : idx)}
                 >
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-500/10 text-violet-500 text-[10px] font-bold flex items-center justify-center mt-0.5">
@@ -562,7 +563,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                   ) : (
                     <p className="flex-1 text-xs text-muted-foreground line-clamp-2">{item}</p>
                   )}
-                  <button
+                  <button aria-label={t("common.remove")}
                     onClick={(e) => {
                       e.stopPropagation()
                       const updated = data.generatedItems!.filter((_, i) => i !== idx)
@@ -573,6 +574,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                   >
                     <X className="w-3 h-3 text-red-500" />
                   </button>
+                  <CoverButton label={t("common.expand")} onActivate={() => (() => setExpandedItemIndex(expandedItemIndex === idx ? null : idx))()} />
                 </div>
               </div>
             ))}

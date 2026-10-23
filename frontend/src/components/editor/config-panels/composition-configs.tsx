@@ -752,7 +752,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
           <div key={layer.id} className="p-2.5 rounded-md border border-[var(--border-primary)] bg-muted/10 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">{layer.inputHandle}</span>
-              <button type="button" onClick={() => removeLayer(layer.id)} className="text-muted-foreground hover:text-red-500 transition-colors">
+              <button aria-label={t("common.delete")} type="button" onClick={() => removeLayer(layer.id)} className="text-muted-foreground hover:text-red-500 transition-colors">
                 <Trash2 className="w-3 h-3" />
               </button>
             </div>

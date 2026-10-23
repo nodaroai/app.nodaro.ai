@@ -35,7 +35,7 @@ function TranscriptPreviewModal({
   if (!isOpen) return null
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8"
       onClick={onClose}
     >
@@ -53,7 +53,7 @@ function TranscriptPreviewModal({
               </span>
             )}
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="text-muted-foreground hover:text-foreground transition-colors"
             onClick={onClose}

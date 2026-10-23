@@ -68,9 +68,9 @@ describe("DashboardLayout accessibility foundations", () => {
     expect(document.activeElement).toBe(screen.getByRole("main"))
   })
 
-  it("leaves the skip link out of the editor, whose canvas takes the first Tab", () => {
+  it("is in the editor too: the canvas takes Tab only once it was clicked", () => {
     at("/projects/p1/workflows/w1")
-    expect(screen.queryByRole("link", { name: "Skip to content" })).toBeNull()
+    expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main")
   })
 
   it("names the page in the title", () => {

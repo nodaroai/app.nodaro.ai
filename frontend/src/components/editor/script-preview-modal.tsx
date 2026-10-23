@@ -195,7 +195,7 @@ export function ScriptPreviewModal({
   }
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9999] bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
@@ -203,7 +203,7 @@ export function ScriptPreviewModal({
         className="relative bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[95vw] max-w-[1400px] max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
+        <button aria-label={t("common.close")}
           type="button"
           className="absolute top-3 end-3 z-10 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white transition-colors"
           onClick={onClose}
@@ -397,7 +397,7 @@ export function ScriptPreviewModal({
                           >
                             <CachedImage src={img.url} alt={`v${vi + 1}`} className="w-full h-full object-cover" thumbnail thumbnailWidth={80} />
                           </button>
-                          <button
+                          <button aria-label={t("common.remove")}
                             type="button"
                             className="absolute -top-1 -end-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/ver:opacity-100 transition-opacity"
                             onClick={(e) => {
@@ -516,7 +516,7 @@ export function ScriptPreviewModal({
                               className="w-16 text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                               placeholder={t("scriptprev.emotionPlaceholder")}
                             />
-                            <button
+                            <button aria-label={t("common.delete")}
                               type="button"
                               className="text-gray-300 dark:text-[#64748B] hover:text-red-500 transition-colors"
                               onClick={() => {
@@ -587,7 +587,7 @@ export function ScriptPreviewModal({
                                 <span className="text-[9px]">{otherScenes.length}</span>
                               </span>
                             )}
-                            <button
+                            <button aria-label={t("common.remove")}
                               type="button"
                               className="hover:text-red-300 transition-colors"
                               onClick={(e) => {

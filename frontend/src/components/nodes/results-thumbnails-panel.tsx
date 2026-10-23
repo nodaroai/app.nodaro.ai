@@ -213,7 +213,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
           const tileClass = `w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
             isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
           }`
-          const handleClick = (e: React.MouseEvent) => {
+          const handleClick = (e: React.SyntheticEvent) => {
             e.stopPropagation()
             onSelect(absoluteIndex)
           }
@@ -265,14 +265,13 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
                   />
                 </>
               ) : (
-                <CachedImage
+                <button type="button" onClick={handleClick} aria-label={t("node.switchToResultN", { n: absoluteIndex + 1 })} aria-pressed={isActive} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                   src={r.url ?? ""}
                   alt={t("node.resultN", { n: absoluteIndex + 1 })}
                   className={tileClass}
                   thumbnail
                   thumbnailWidth={96}
-                  onClick={handleClick}
-                />
+                /></button>
               )}
               <span
                 aria-hidden

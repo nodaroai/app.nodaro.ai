@@ -1366,7 +1366,7 @@ function Lightbox({
   if (!item) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col bg-black/90" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-[9999] flex flex-col bg-black/90" onClick={onClose}>
       <div className="flex items-center gap-4 px-4 py-3 text-sm text-white/80">
         <span className="flex-1 truncate">{item.label}</span>
         <span className="shrink-0 tabular-nums">

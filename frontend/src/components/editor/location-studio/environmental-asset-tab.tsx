@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useEffect, useState } from "react"
 import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
@@ -442,6 +443,10 @@ export function EnvironmentalAssetTab({
                   {t("common.remove")}
                 </button>
               )}
+              <CoverButton
+                label={t(isSelectionMode ? "common.select" : "common.preview")}
+                onActivate={() => (isSelectionMode ? toggleSelected(originalIdx) : setLightboxIndex(visibleItems.indexOf(item)))}
+              />
             </div>
           )
         })}

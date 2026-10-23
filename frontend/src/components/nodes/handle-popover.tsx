@@ -514,7 +514,7 @@ export function HandlePopover({
   // (which uses pointerdown/move/up under the hood) still works correctly.
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
   return (
-    <div
+    <div role="presentation"
       className="min-w-[280px] max-w-[340px] max-h-[420px] overflow-y-auto"
       onClick={stop}
       onMouseDown={stop}

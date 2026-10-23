@@ -526,7 +526,7 @@ export function ExtractReferencesModal({
   const objects = references.filter((r) => r.type === "object")
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
@@ -567,7 +567,7 @@ export function ExtractReferencesModal({
                 <Square className="w-3 h-3" /> {t("editor.rect")}
               </button>
             </div>
-            <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+            <button aria-label={t("common.close")} type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -694,7 +694,7 @@ export function ExtractReferencesModal({
                         </span>
                       )}
                     </div>
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
                       onClick={() => handleDeleteReference(ref.id)}
@@ -722,7 +722,7 @@ export function ExtractReferencesModal({
                         </span>
                       )}
                     </div>
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
                       onClick={() => handleDeleteReference(ref.id)}
@@ -750,7 +750,7 @@ export function ExtractReferencesModal({
                         </span>
                       )}
                     </div>
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
                       onClick={() => handleDeleteReference(ref.id)}

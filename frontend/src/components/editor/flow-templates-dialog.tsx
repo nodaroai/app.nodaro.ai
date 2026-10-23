@@ -175,7 +175,7 @@ function FlowTemplateGroupCard({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+              <button aria-label={t("common.details")} type="button" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Info className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
@@ -224,7 +224,7 @@ function FlowTemplateGroupCard({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
+                  <Button aria-label={t("common.reset")}
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
@@ -307,7 +307,7 @@ function FlowTemplateCard({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <Button aria-label={t("common.reset")}
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"

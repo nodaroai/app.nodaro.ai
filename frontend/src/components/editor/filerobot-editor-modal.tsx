@@ -353,7 +353,7 @@ export function FilerobotEditorModal({
       </div>
 
       {showCloseConfirm && (
-        <div
+        <div role="presentation"
           className="absolute inset-0 z-[10000] bg-black/60 flex items-center justify-center"
           onClick={() => setShowCloseConfirm(false)}
         >

@@ -219,7 +219,7 @@ export function CostTab({ className = "" }: CostTabProps) {
               </Tooltip>
             </TooltipProvider>
           )}
-          <Button
+          <Button aria-label={t("common.refresh")}
             variant="outline"
             size="sm"
             onClick={() => refetch()}

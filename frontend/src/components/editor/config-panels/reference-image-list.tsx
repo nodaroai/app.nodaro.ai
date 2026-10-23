@@ -98,6 +98,7 @@ function SortableRefImageItem({
   isMajor: boolean
   onRemove?: () => void
 }) {
+  const t = useT()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -133,7 +134,7 @@ function SortableRefImageItem({
       <span className="truncate flex-1 min-w-0" title={rowLabel}>{rowLabel}</span>
       <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>{badge.label}</span>
       {onRemove && (
-        <button
+        <button aria-label={t("common.remove")}
           type="button"
           onClick={onRemove}
           className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive shrink-0"

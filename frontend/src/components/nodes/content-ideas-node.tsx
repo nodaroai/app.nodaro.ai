@@ -30,7 +30,7 @@ function IdeasTextModal({
   const t = useT()
   if (!isOpen) return null
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8" onClick={onClose}>
       <div
         className="relative w-full max-w-3xl max-h-[85vh] bg-background rounded-lg border border-border shadow-xl flex flex-col"
         onClick={(e) => e.stopPropagation()}

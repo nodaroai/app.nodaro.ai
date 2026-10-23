@@ -228,23 +228,23 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                   {/* Action buttons overlay */}
                   <div className="absolute bottom-2 left-2 opacity-0 group-hover/component:opacity-100 transition-opacity flex gap-1">
                     {(isImage || isVideo) && (
-                      <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
+                      <button aria-label={t("common.expand")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
                         <Expand className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); handleDownload() }}>
+                    <button aria-label={t("common.download")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); handleDownload() }}>
                       <Download className="w-3.5 h-3.5" />
                     </button>
-                    <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("apps.urlCopied")) }}>
+                    <button aria-label={t("cfgshared.copyUrl")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("apps.urlCopied")) }}>
                       <Link className="w-3.5 h-3.5" />
                     </button>
                     {isVideo && (
-                      <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); openFreeCut(id, previewValue as string) }}>
+                      <button aria-label={t("common.editVideo")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); openFreeCut(id, previewValue as string) }}>
                         <Scissors className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {!isImage && !isVideo && !isAudio && (
-                      <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("node.textCopied")) }}>
+                      <button aria-label={t("common.copy")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("node.textCopied")) }}>
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     )}

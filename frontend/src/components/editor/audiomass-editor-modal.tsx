@@ -110,7 +110,7 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 bg-[#1a1a2e] border-b border-white/10 shrink-0">
         <span className="text-sm font-medium text-white/80">{t("mediaed.audioEditorTitle")}</span>
-        <button
+        <button aria-label={t("common.close")}
           type="button"
           onClick={() => setShowCloseConfirm(true)}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"

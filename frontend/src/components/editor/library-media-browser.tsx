@@ -1,5 +1,6 @@
 "use client"
 
+import { CoverButton } from "@/components/ui/cover-button"
 import { useState, useEffect, useRef, useCallback, memo } from "react"
 import {
   Search,
@@ -576,6 +577,9 @@ const AssetCard = memo(function AssetCard({
             </button>
           )}
         </div>
+        {(asset.type === "image" || asset.type === "video") && asset.url && (
+          <CoverButton label={t("common.preview")} onActivate={() => onPreview(asset)} />
+        )}
       </div>
 
       {/* Info */}

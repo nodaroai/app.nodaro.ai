@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Play, Loader2, AlertCircle, Eye, Scissors, BookOpen, Palette, Mic, Clapperboard, Check, ChevronLeft, ChevronRight, Video } from "lucide-react"
@@ -251,7 +252,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
   }
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm dark:bg-black/70 dark:backdrop-blur-md"
       onClick={onClose}
     >
@@ -274,7 +275,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
               </div>
             )}
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             className="p-1.5 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-[#2D2D2D] transition-colors"
             onClick={onClose}
@@ -329,14 +330,13 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
                   {status !== "running" && activeUrl && (
                     <div className="relative group">
-                      <CachedImage
+                      <button type="button" onClick={() => setPreviewOpen(true)} aria-label={t("common.preview")} className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                         src={activeUrl}
                         alt={t("cfgshared.badgeScene")}
                         className="w-full rounded-xl object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]"
-                        onClick={() => setPreviewOpen(true)}
                         thumbnail
                         thumbnailWidth={800}
-                      />
+                      /></button>
                       <div className="absolute top-3 end-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
@@ -384,7 +384,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     <div className="flex gap-1.5 overflow-x-auto pb-1">
                       {results.map((r, i) => (
                         <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                          <CachedImage
+                          <button type="button" onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedImageUrl: r.url })} aria-label={t("node.switchToResultN", { n: i + 1 })} className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                             src={r.url}
                             alt={t("node.resultN", { n: i + 1 })}
                             className={`w-14 h-14 object-cover rounded-md cursor-pointer transition-opacity ${
@@ -392,10 +392,9 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                                 ? "opacity-100 ring-2 ring-primary"
                                 : "opacity-50 hover:opacity-80"
                             }`}
-                            onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedImageUrl: r.url })}
                             thumbnail
                             thumbnailWidth={120}
-                          />
+                          /></button>
                           <button
                             type="button"
                             aria-label={t("common.remove")} className="absolute -top-1 -end-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
@@ -449,7 +448,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                                 ? "opacity-100 ring-2 ring-primary"
                                 : "opacity-50 hover:opacity-80"
                             }`}
-                            onClick={() => updateNodeData(nodeId, { activeVideoResultIndex: i, generatedVideoUrl: r.url })}
+                            {...pressable(() => updateNodeData(nodeId, { activeVideoResultIndex: i, generatedVideoUrl: r.url }))}
                           >
                             <Video className="w-4 h-4 text-muted-foreground" />
                             <span className="text-[9px] text-muted-foreground ms-0.5">{i + 1}</span>

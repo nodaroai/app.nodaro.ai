@@ -243,7 +243,7 @@ export function WebhookOutputConfig({ data, onUpdate, nodes }: ConfigProps<Webho
                   <SelectItem value="audioUrl">{t("utilcfg.audioUrl")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
+              <Button aria-label={t("common.delete")}
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"

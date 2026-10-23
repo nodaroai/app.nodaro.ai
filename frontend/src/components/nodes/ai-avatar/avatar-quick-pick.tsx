@@ -172,7 +172,7 @@ export function AvatarQuickPick({
           // A div, not a <label>: the box also holds the Clear button, and a
           // label may wrap only one labelable control. The input carries its
           // own aria-label; clicking the frame focuses it.
-          <div
+          <div role="presentation"
             className={cn(
               "nodrag nopan flex items-center gap-1.5 h-6 pl-2 pr-1 rounded-md border border-border/60 bg-background/60 text-muted-foreground cursor-text",
               "focus-within:border-[#ff0073]/60 transition-colors w-[170px] shrink-0",

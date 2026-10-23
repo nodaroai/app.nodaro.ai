@@ -133,7 +133,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
               ))}
             </div>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             onClick={handleCancel}
             className="text-white/50 hover:text-white transition-colors p-1"

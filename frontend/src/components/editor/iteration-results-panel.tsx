@@ -211,14 +211,13 @@ function IterationCard({
               </span>
               {resultIsUrl && mediaType === "image" && (
                 <div className="mt-1">
-                  <CachedImage
+                  <button type="button" onClick={() => setLightboxOpen(true)} aria-label={t("common.preview")} className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                     src={result}
                     alt={t("editor.iterResultAlt", { n: index + 1 })}
                     className="w-full max-h-48 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => setLightboxOpen(true)}
                     thumbnail
                     thumbnailWidth={480}
-                  />
+                  /></button>
                   {lightboxOpen && (
                     <ImageLightbox
                       src={result}

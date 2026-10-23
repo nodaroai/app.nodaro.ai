@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useT } from "@/lib/i18n"
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
@@ -68,7 +69,7 @@ export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
               <WaveformAudioPlayer url={previewUrl} variant="compact" isInsideCanvas className="w-full" />
             </div>
           ) : (
-            <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
+            <div className="mt-2 cursor-pointer" {...pressable(() => setLightboxOpen(true))}>
               {isImage ? (
                 <CachedImage src={previewUrl} alt={t("node.output")}
                   className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity"

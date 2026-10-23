@@ -242,7 +242,7 @@ export function ReelPipeline({
       )}
 
       {playing && (
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-8"
           onClick={() => setPlaying(null)}
         >

@@ -204,7 +204,7 @@ export function VideoOverlayPreview(p: VideoOverlayPreviewProps) {
   const selectedDrawn = p.selected !== null && !!p.sources[p.selected] && !!p.layers[p.selected] && hasDrawableVideoOverlayBox(p.layers[p.selected]) && videoOverlayLayerLive(p.layers[p.selected]!, time)
 
   return (
-    <div
+    <div role="group" aria-label={t("common.preview")}
       ref={containerRef}
       tabIndex={-1}
       onKeyDown={(e) => {

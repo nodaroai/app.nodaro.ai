@@ -54,6 +54,20 @@ const SCOPE = [
   "app/mcp",
   "ee/app/explore",
   "components/tutorials",
+  // The editor (phase 3).
+  "components/editor",
+  "components/nodes",
+  "nodes",
+  "components/pipeline",
+  "components/edl-review",
+  "components/render",
+  "ee/components/copilot",
+  "components/heygen",
+  "components/audio-player",
+  "components/inspector",
+  "routes/workflow-editor-page.tsx",
+  "routes/pipeline-page.tsx",
+  "routes/video-director-page.tsx",
 ]
 
 /** Elements that are controls by themselves: a click on them needs nothing more. */
@@ -61,7 +75,8 @@ const INTERACTIVE_TAGS = new Set(["button", "a", "input", "select", "textarea", 
 /** Components that render a plain, non-control element (an image, a card). */
 const STATIC_COMPONENTS = new Set(["CachedImage", "GlassCard", "PreviewVideo"])
 const isStatic = (tag: string) => (/^[a-z]/.test(tag) && !INTERACTIVE_TAGS.has(tag)) || STATIC_COMPONENTS.has(tag)
-const NOT_ICONS = /^(Badge|Avatar|AvatarImage|Image|Img|CachedImage|Spinner|Kbd)$/
+/** Components that render content of their own (a media preview, a text row), not a bare icon. */
+const NOT_ICONS = /^(Badge|Avatar|AvatarImage|Image|Img|CachedImage|Spinner|Kbd|MetaAdMedia|SnippetRowContent)$/
 
 function files(rel: string): string[] {
   const abs = path.join(SRC, rel)
@@ -83,7 +98,7 @@ function files(rel: string): string[] {
 function attrNames(el: ts.JsxOpeningLikeElement, sf: ts.SourceFile): Map<string, ts.JsxAttribute | null> {
   const map = new Map<string, ts.JsxAttribute | null>()
   for (const a of el.attributes.properties) {
-    if (ts.isJsxSpreadAttribute(a)) map.set(a.getText(sf).includes("pressable(") ? "...pressable" : "...", null)
+    if (ts.isJsxSpreadAttribute(a)) map.set(["pressable(", "seekSlider("].some((k) => a.getText(sf).includes(k)) ? "...pressable" : "...", null)
     else map.set(a.name.getText(sf), a)
   }
   return map
@@ -150,7 +165,10 @@ function scan(): Finding[] {
             // A dialog that closes when its backdrop is clicked must also close on Escape
             // (axe and the dialog tests check that); a video's own click is a play/open
             // shortcut beside its controls, which are buttons of their own.
-            const shortcut = role === "dialog" || tag === "video" || tag === "audio"
+            // An element with a role kept out of the Tab order on purpose (tabIndex
+            // -1: the Copilot's chips, whose keyboard path is the composer's own keys).
+            const notATabStop = attrs.has("role") && attrs.get("tabIndex")?.getText(sf) === "tabIndex={-1}"
+            const shortcut = role === "dialog" || tag === "video" || tag === "audio" || notATabStop
             const keyboard =
               attrs.has("...pressable") ||
               (attrs.has("role") && attrs.has("tabIndex") && (attrs.has("onKeyDown") || attrs.has("onKeyUp") || attrs.has("onKeyPress")))

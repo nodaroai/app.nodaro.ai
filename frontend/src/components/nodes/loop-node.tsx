@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
@@ -204,6 +205,7 @@ function SortableNodeRow({
   children: React.ReactNode
   onRemove: () => void
 }) {
+  const t = useT()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
   const style = {
@@ -224,7 +226,7 @@ function SortableNodeRow({
       <div className="flex-1 min-w-0">
         {children}
       </div>
-      <button
+      <button aria-label={t("common.remove")}
         type="button"
         onClick={(e) => { e.stopPropagation(); onRemove() }}
         className="nodrag nopan shrink-0 mt-2 text-muted-foreground/30 hover:text-red-400 transition-colors"
@@ -1035,7 +1037,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                                       className="w-full h-auto rounded-lg"
                                     />
                                   ) : (
-                                    <button
+                                    <button aria-label={t("common.add")}
                                       key={col.id}
                                       type="button"
                                       className="w-full h-14 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 transition-colors"
@@ -1081,7 +1083,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                     {firstImageColIdx >= 0 && rows.length < maxItems && (
                       <div
                         className="flex items-center justify-center py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer border-muted-foreground/15 hover:border-[#ff0073]/40"
-                        onClick={(e) => { e.stopPropagation(); dropZoneFileRef.current?.click() }}
+                        {...pressable((e) => { e.stopPropagation(); dropZoneFileRef.current?.click() })}
                       >
                         <div className="flex items-center gap-1.5">
                           <Upload className="w-3.5 h-3.5 text-muted-foreground/40" />

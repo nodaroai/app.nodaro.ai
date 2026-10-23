@@ -157,7 +157,7 @@ export function WebhookTriggerConfig({ data, onUpdate, nodeId }: ConfigProps<Web
                   <SelectItem value="audioUrl">{t("inputcfg.audioUrl")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
+              <Button aria-label={t("common.delete")}
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"

@@ -5,6 +5,7 @@
 // the wavesurfer instance. This is the only place the transport UI is defined,
 // so a fix or restyle here applies to every audio surface in the app.
 
+import { seekSlider } from "@/lib/seek-slider"
 import { memo } from "react"
 import { Play, Pause, Square, Download } from "lucide-react"
 import { useT } from "@/lib/i18n"
@@ -76,6 +77,7 @@ function AudioPlayerControlsComponent({
       {showProgressBar && (
         <div
           className="flex-1 min-w-[40px] h-1.5 rounded-full bg-foreground/15 cursor-pointer"
+          {...seekSlider({ label: t("common.position"), fraction: progress, onSeek })}
           onClick={(e) => {
             e.stopPropagation()
             const rect = e.currentTarget.getBoundingClientRect()

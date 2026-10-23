@@ -130,17 +130,16 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               )}
-              <CachedImage
+              <button type="button" onClick={(e) => {
+                  e.stopPropagation()
+                  setLightboxSrc(activeUrl)
+                }} aria-label={t("common.preview")} className="block w-full h-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><CachedImage
                 src={activeUrl}
                 alt={nodeData.creatureName || t("node.animalCreature")}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setLightboxSrc(activeUrl)
-                }}
-              />
+              /></button>
             </div>
             {/* Save to library button */}
             <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">

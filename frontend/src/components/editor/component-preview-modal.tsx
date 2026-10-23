@@ -64,7 +64,7 @@ export function ComponentPreviewModal({
   const creatorLabel = card.creatorDisplayName || t("preview.community")
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4"
       onClick={onClose}
     >

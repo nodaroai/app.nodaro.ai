@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react"
+import type { KeyboardEvent, SyntheticEvent } from "react"
 
 /**
  * Props that make a non-button element (a card, a drop zone) work like a
@@ -6,8 +6,11 @@ import type { KeyboardEvent } from "react"
  * the Tab order, announced as a button, and Enter or Space activate it.
  * Only for an element with NO controls inside it; a card with buttons of its
  * own takes a <CoverButton> instead, so no control sits inside another.
+ *
+ * The handler receives the event that activated it: the click, or the key
+ * press (so a handler that stops propagation works either way).
  */
-export function pressable(onActivate: () => void) {
+export function pressable(onActivate: (event: SyntheticEvent<HTMLElement>) => void) {
   return {
     role: "button" as const,
     tabIndex: 0,
@@ -16,7 +19,7 @@ export function pressable(onActivate: () => void) {
       if (event.target !== event.currentTarget) return
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault()
-        onActivate()
+        onActivate(event)
       }
     },
   }

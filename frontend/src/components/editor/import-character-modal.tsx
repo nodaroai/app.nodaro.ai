@@ -93,7 +93,7 @@ export function ImportCharacterModal({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">{t("entity.importCharactersTitle")}</h3>
-          <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
+          <button aria-label={t("common.close")} type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
         </div>

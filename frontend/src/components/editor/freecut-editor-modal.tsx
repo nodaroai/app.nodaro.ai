@@ -313,7 +313,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
       {/* New project confirmation */}
       {showNewProjectConfirm && (
-        <div
+        <div role="presentation"
           className="absolute inset-0 z-[10000] bg-black/60 flex items-center justify-center"
           onClick={() => setShowNewProjectConfirm(false)}
         >
@@ -347,7 +347,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
       {/* Close confirmation */}
       {showCloseConfirm && (
-        <div
+        <div role="presentation"
           className="absolute inset-0 z-[10000] bg-black/60 flex items-center justify-center"
           onClick={() => setShowCloseConfirm(false)}
         >

@@ -247,7 +247,7 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
               value={item}
               onChange={(e) => updateItem(i, e.target.value)}
             />
-            <button
+            <button aria-label={t("common.remove")}
               type="button"
               className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
               onClick={() => removeItem(i)}
@@ -798,7 +798,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                             />
                           )}
                           {!singleColumn && (
-                            <button
+                            <button aria-label={t("common.remove")}
                               type="button"
                               className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
                               onClick={() => removeColumn(ci)}
@@ -853,7 +853,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                   >
                                     <GripVertical className="w-3 h-3" />
                                   </button>
-                                  <button
+                                  <button aria-label={t("common.remove")}
                                     type="button"
                                     className="shrink-0 text-muted-foreground/40 hover:text-red-500 transition-colors"
                                     onClick={() => removeRow(ri)}

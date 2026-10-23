@@ -63,7 +63,7 @@ export function AssetGenPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={onClose}>
       <div className="w-96 bg-[#0d1017] border border-[#1e293b] rounded-lg p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <span className="text-[12px] text-slate-200">{t("studio.customType", { type: typeLabel })}</span>

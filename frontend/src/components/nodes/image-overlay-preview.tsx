@@ -195,7 +195,7 @@ export function ImageOverlayPreview(p: ImageOverlayPreviewProps) {
   const order = overlayRenderOrder(layers)
 
   return (
-    <div
+    <div role="group" aria-label={t("common.preview")}
       ref={containerRef}
       tabIndex={-1}
       onKeyDown={(e) => {

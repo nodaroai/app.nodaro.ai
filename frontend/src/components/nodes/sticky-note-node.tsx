@@ -209,7 +209,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
           <div className="w-px h-4 bg-[var(--pill-border)] mx-1" />
 
           {/* Bold */}
-          <button
+          <button aria-label={t("common.bold")}
             type="button"
             className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${bold ? "bg-black/10 text-[var(--pill-fg)] dark:bg-white/20" : "text-[var(--pill-fg-muted)] hover:text-[var(--pill-fg)] hover:bg-black/5 dark:hover:bg-white/10"}`}
             onClick={(e) => {
@@ -221,7 +221,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
           </button>
 
           {/* Italic */}
-          <button
+          <button aria-label={t("common.italic")}
             type="button"
             className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${italic ? "bg-black/10 text-[var(--pill-fg)] dark:bg-white/20" : "text-[var(--pill-fg-muted)] hover:text-[var(--pill-fg)] hover:bg-black/5 dark:hover:bg-white/10"}`}
             onClick={(e) => {

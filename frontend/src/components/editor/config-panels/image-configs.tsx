@@ -575,7 +575,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   <p className="text-[10px] text-muted-foreground truncate mt-0.5">{char.description}</p>
                 )}
               </div>
-              <button
+              <button aria-label={t("common.remove")}
                 type="button"
                 onClick={() => detachCharacter(char.id)}
                 className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
@@ -1549,7 +1549,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <p className="text-[10px] text-muted-foreground truncate mt-0.5">{char.description}</p>
                 )}
               </div>
-              <button
+              <button aria-label={t("common.remove")}
                 type="button"
                 onClick={() => detachCharacter(char.id)}
                 className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive flex-shrink-0"

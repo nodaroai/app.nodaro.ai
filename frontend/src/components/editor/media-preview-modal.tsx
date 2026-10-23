@@ -1,5 +1,6 @@
 "use client"
 
+import { seekSlider } from "@/lib/seek-slider"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Repeat, Square, Volume2, VolumeX } from "lucide-react"
@@ -199,6 +200,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, quality, results
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") { e.stopImmediatePropagation(); handleClose() }
+    // The seek bar is a slider: its own arrow keys seek, they do not change the item.
+    if ((e.target as Element | null)?.closest?.('[role="slider"]')) return
     if (e.key === "ArrowLeft" && effectivePrev) { e.stopImmediatePropagation(); effectivePrev() }
     if (e.key === "ArrowRight" && effectiveNext) { e.stopImmediatePropagation(); effectiveNext() }
     if (e.key === " " && effectiveType === "video") { e.preventDefault(); e.stopImmediatePropagation(); togglePlay() }
@@ -231,7 +234,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, quality, results
   const shouldAutoPlay = (initialVideoPlayState ?? "loop") === "loop" && effectiveType === "video"
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
       onClick={handleClose}
       onTouchStart={hasNav ? handleTouchStart : undefined}
@@ -325,6 +328,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, quality, results
                 ref={progressBarRef}
                 className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer mb-3 group/progress"
                 onClick={handleSeek}
+                {...seekSlider({ label: t("common.position"), fraction: duration > 0 ? currentTime / duration : 0, onSeek: (f) => { const v = videoRef.current; if (v && Number.isFinite(v.duration) && v.duration > 0) v.currentTime = f * v.duration } })}
               >
                 <div
                   className="h-full bg-[#ff0073] rounded-full relative"

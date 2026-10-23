@@ -1,3 +1,4 @@
+import { CoverButton } from "@/components/ui/cover-button"
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
@@ -242,6 +243,7 @@ export function CreatureAssetTab({
             >
               {t("common.remove")}
             </button>
+            <CoverButton label={t("common.preview")} onActivate={() => (() => setLightboxIndex(idx))()} />
           </div>
         ))}
         {trackedForBucket.map((j) => (

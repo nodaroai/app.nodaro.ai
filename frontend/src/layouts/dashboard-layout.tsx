@@ -151,21 +151,21 @@ export default function DashboardLayout() {
 
   return (
     <SidebarProvider defaultCollapsed={isEditor}>
-      {/* First Tab stop on every signed-in page: past the sidebar and header (WCAG 2.4.1).
-          Not in the editor, whose canvas takes the first Tab for Add Node. Focus moves
-          by script, so the address gains no #main and Back is unchanged. */}
-      {!isEditor && (
-        <a
-          href="#main"
-          onClick={(event) => {
-            event.preventDefault()
-            document.getElementById("main")?.focus()
-          }}
-          className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline focus:outline-2 focus:outline-[#ff0073]"
-        >
-          {t("a11y.skipToContent")}
-        </a>
-      )}
+      {/* First Tab stop on every signed-in page, the editor included: past the
+          sidebar and header (WCAG 2.4.1). The editor's canvas takes Tab for
+          Add Node only once the canvas was clicked (canvas-tab-intent.ts), so
+          a keyboard user reaches this first. Focus moves by script, so the
+          address gains no #main and Back is unchanged. */}
+      <a
+        href="#main"
+        onClick={(event) => {
+          event.preventDefault()
+          document.getElementById("main")?.focus()
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline focus:outline-2 focus:outline-[#ff0073]"
+      >
+        {t("a11y.skipToContent")}
+      </a>
       {sharedHeader ? (
         // The shared site header (Cloud, lib/shared-header.ts) above the
         // sidebar row; the row takes the rest of the screen.

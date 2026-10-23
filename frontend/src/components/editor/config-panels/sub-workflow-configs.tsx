@@ -86,7 +86,7 @@ function PortsEditor({
               <SelectItem value="any">{t("cfgext.subwfAny")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button
+          <Button aria-label={t("common.delete")}
             variant="ghost"
             size="sm"
             onClick={() => removePort(port.id)}

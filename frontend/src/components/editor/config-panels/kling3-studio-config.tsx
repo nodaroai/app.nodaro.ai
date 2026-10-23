@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { ImageIcon, FileText, Plus, Loader2, Trash2, ChevronUp, ChevronDown, Users, X } from "lucide-react"
@@ -251,7 +252,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 </span>
                 <div
                   className="flex-1 h-16 rounded-lg border border-border overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-muted/30"
-                  onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
+                  {...pressable(() => img.imageUrl && setLightboxImage(img.imageUrl))}
                   title={t("cfgext.kling3ClickToView", { label: img.label })}
                 >
                   {img.imageUrl ? (
@@ -532,11 +533,11 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                           key={el.name}
                           className="text-[9px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
                           title={t("cfgext.kling3ClickCopyName")}
-                          onClick={() => {
+                          {...pressable(() => {
                             navigator.clipboard.writeText(`@${el.name}`)
                             setCopiedName(el.name)
                             setTimeout(() => setCopiedName(null), 1500)
-                          }}
+                          })}
                         >
                           @{el.name}
                         </span>

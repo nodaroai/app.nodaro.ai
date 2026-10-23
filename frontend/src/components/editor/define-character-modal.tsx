@@ -120,7 +120,7 @@ export function DefineCharacterModal({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">{editingCharacter ? t("entity.editCharacter") : t("entity.defineNewCharacter")}</h3>
-          <button type="button" onClick={handleClose} className="p-1 rounded-md hover:bg-muted">
+          <button aria-label={t("common.close")} type="button" onClick={handleClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -171,7 +171,7 @@ export function DefineCharacterModal({
               {referenceImageUrl ? (
                 <div className="relative">
                   <CachedImage src={referenceImageUrl} alt={t("imgcfg.referenceAlt")} className="w-full h-32 object-contain rounded-md border" thumbnail thumbnailWidth={480} />
-                  <button
+                  <button aria-label={t("common.close")}
                     type="button"
                     onClick={() => setReferenceImageUrl("")}
                     className="absolute top-1 end-1 p-0.5 rounded-full bg-background/80 hover:bg-destructive hover:text-destructive-foreground"

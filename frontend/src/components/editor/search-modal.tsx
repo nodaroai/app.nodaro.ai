@@ -243,7 +243,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               "text-base"
             )}
           />
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             onClick={onClose}
             className="p-1 rounded hover:bg-[#F1F5F9] dark:hover:bg-[#2D2D2D] transition-colors"

@@ -155,12 +155,12 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
   ]
 
   return createPortal(
-    <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center" onClick={onClose}>
       <div className="bg-[#1E1E1E] border border-[#2D2D2D] rounded-lg w-[600px] max-h-[500px] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D2D2D]">
           <span className="text-sm font-medium text-white">{t("mediaed.importAssets")}</span>
-          <button type="button" onClick={onClose} className="text-white/50 hover:text-white"><X className="w-4 h-4" /></button>
+          <button aria-label={t("common.close")} type="button" onClick={onClose} className="text-white/50 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
 
         {/* Tabs */}

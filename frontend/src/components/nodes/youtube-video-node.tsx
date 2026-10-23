@@ -1,5 +1,6 @@
 "use client"
 
+import { pressable } from "@/lib/pressable"
 import { useT } from "@/lib/i18n"
 import { memo, useState, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -68,7 +69,7 @@ function VideoPlayerModal({
   if (!showDownloadedPlayer && !showYouTubeEmbed) return null
 
   return createPortal(
-    <div
+    <div role="presentation"
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center"
       onClick={onClose}
     >
@@ -76,7 +77,7 @@ function VideoPlayerModal({
         className="relative w-[70vw] max-w-[960px] aspect-video"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
+        <button aria-label={t("common.close")}
           type="button"
           className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
           onClick={onClose}
@@ -188,11 +189,11 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div
                   className={`w-full rounded-md overflow-hidden bg-muted/30 relative ${canPlay ? "cursor-pointer hover:opacity-90" : ""} transition-opacity`}
                   style={{ aspectRatio: thumbAspect ?? 16 / 9 }}
-                  onClick={(e) => {
+                  {...pressable((e) => {
                     if (!canPlay) return
                     e.stopPropagation()
                     setPlayerOpen(true)
-                  }}
+                  })}
                 >
                   <CachedImage
                     src={displayThumbnail}

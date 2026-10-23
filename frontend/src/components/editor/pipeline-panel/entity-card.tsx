@@ -219,12 +219,11 @@ export function EntityCard({
     <div className="rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 flex flex-col gap-2">
       <div className="aspect-square bg-zinc-100 dark:bg-[#2D2D2D] overflow-hidden rounded relative">
         {displayUrl ? (
-          <img
+          <button type="button" onClick={() => setLightboxIndex(0)} aria-label={t("common.preview")} className="block w-full h-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><img
             src={displayUrl}
             alt={name}
             className="w-full h-full object-cover cursor-zoom-in"
-            onClick={() => setLightboxIndex(0)}
-          />
+          /></button>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
             {status === "generating" ? t("cfgext.entGenerating") : "—"}
@@ -249,17 +248,16 @@ export function EntityCard({
               title={v.variant_key}
             >
               {v.asset_url ? (
-                <img
-                  src={v.asset_url}
-                  alt={v.variant_key}
-                  className="w-full h-full object-cover cursor-zoom-in"
-                  onClick={() => {
+                <button type="button" onClick={() => {
                     const i = lightboxItems.findIndex(
                       (it) => it.url === v.asset_url,
                     )
                     if (i >= 0) setLightboxIndex(i)
-                  }}
-                />
+                  }} aria-label={t("common.preview")} className="block w-full h-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0073]"><img
+                  src={v.asset_url}
+                  alt={v.variant_key}
+                  className="w-full h-full object-cover cursor-zoom-in"
+                /></button>
               ) : null}
             </div>
           ))}

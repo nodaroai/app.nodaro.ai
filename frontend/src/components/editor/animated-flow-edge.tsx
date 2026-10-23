@@ -573,7 +573,7 @@ function AnimatedFlowEdgeComponent({
                           </span>
                           {/* Reserved slot — always present so every row has
                               the same width; only Item's active state fills it. */}
-                          <span
+                          <span role="presentation"
                             onClick={showInlineItemInput ? (e) => e.stopPropagation() : undefined}
                             onMouseDown={showInlineItemInput ? (e) => e.stopPropagation() : undefined}
                             style={{ flexShrink: 0, width: 56, height: 22 }}

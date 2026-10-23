@@ -73,6 +73,7 @@ function TagInput({
   readonly onChange: (tags: string[]) => void
   readonly placeholder?: string
 }) {
+  const t = useT()
   const [input, setInput] = useState("")
 
   function addTag() {
@@ -89,7 +90,7 @@ function TagInput({
         {value.map((tag) => (
           <span key={tag} className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-muted border">
             {tag}
-            <button type="button" onClick={() => onChange(value.filter((t) => t !== tag))} className="hover:text-destructive">
+            <button aria-label={t("common.remove")} type="button" onClick={() => onChange(value.filter((t) => t !== tag))} className="hover:text-destructive">
               <X className="w-2.5 h-2.5" />
             </button>
           </span>
@@ -639,7 +640,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 placeholder={t("scenecfg.emotion")}
                 className="h-6 text-[10px] w-20"
               />
-              <button
+              <button aria-label={t("common.remove")}
                 type="button"
                 onClick={() => onUpdate({ dialogue: (data.dialogue ?? []).filter((_, di) => di !== i) })}
                 className="p-0.5 hover:text-destructive"
@@ -694,7 +695,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   )}
                   <span className="text-xs font-medium">{asset?.name ?? t("common.unknown")}</span>
                 </div>
-                <button type="button" onClick={() => removeCharacter(i)} className="p-0.5 hover:text-destructive">
+                <button aria-label={t("common.remove")} type="button" onClick={() => removeCharacter(i)} className="p-0.5 hover:text-destructive">
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -788,7 +789,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                       {t("scenecfg.primary")}
                     </button>
                   )}
-                  <button type="button" onClick={() => {
+                  <button aria-label={t("common.remove")} type="button" onClick={() => {
                     const newLocs = (data.locations ?? []).filter((_, li) => li !== i)
                     if (loc.isPrimary && newLocs.length > 0) {
                       newLocs[0] = { ...newLocs[0], isPrimary: true }
@@ -946,7 +947,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 placeholder={t("scenecfg.note")}
                 className="h-6 text-[10px] w-24"
               />
-              <button type="button" onClick={() => removeObject(i)} className="p-0.5 hover:text-destructive">
+              <button aria-label={t("common.remove")} type="button" onClick={() => removeObject(i)} className="p-0.5 hover:text-destructive">
                 <X className="w-3 h-3" />
               </button>
             </div>
@@ -1167,7 +1168,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                           >
                             {r.voiceId} #{vi + 1}
                           </button>
-                          <button
+                          <button aria-label={t("common.remove")}
                             type="button"
                             className="absolute -top-1 -end-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/aver:opacity-100 transition-opacity text-[8px]"
                             onClick={(e) => { e.stopPropagation(); deleteDialogueAudioVersion(i, vi) }}

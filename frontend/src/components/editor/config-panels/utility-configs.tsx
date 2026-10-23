@@ -688,7 +688,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                   {item.sourceNodeLabel}
                 </span>
                 <span className="text-[9px] text-muted-foreground uppercase shrink-0">{item.type}</span>
-                <button
+                <button aria-label={t("common.moveUp")}
                   type="button"
                   className="p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0"
                   onClick={() => { if (i > 0) moveItem(i, i - 1) }}
@@ -696,7 +696,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                 >
                   <ChevronUp className={"w-3 h-3 " + (i === 0 ? "text-muted-foreground/20" : "text-muted-foreground")} />
                 </button>
-                <button
+                <button aria-label={t("common.moveDown")}
                   type="button"
                   className="p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0"
                   onClick={() => { if (i < items.length - 1) moveItem(i, i + 1) }}
@@ -1029,7 +1029,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                 className="h-8 text-sm flex-1"
               />
               {routes.length > (isConditional ? 1 : 2) && (
-                <button type="button" onClick={() => removeRoute(i)} className="text-muted-foreground hover:text-destructive">
+                <button aria-label={t("common.remove")} type="button" onClick={() => removeRoute(i)} className="text-muted-foreground hover:text-destructive">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}

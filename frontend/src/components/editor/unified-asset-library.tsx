@@ -487,7 +487,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
     <>
       {/* My Library Modal */}
       {open && createPortal(
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
           onClick={onClose}
         >
@@ -498,7 +498,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-cta rounded-t-xl">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
-            <button
+            <button aria-label={t("common.close")}
               type="button"
               className="p-1 text-white/80 hover:text-white transition-colors"
               onClick={onClose}
@@ -1128,7 +1128,7 @@ export function UnifiedAssetLibraryButton() {
       </Button>
 
       {open && createPortal(
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
@@ -1139,7 +1139,7 @@ export function UnifiedAssetLibraryButton() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-cta rounded-t-xl">
               <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
-              <button
+              <button aria-label={t("common.close")}
                 type="button"
                 className="p-1 text-white/80 hover:text-white transition-colors"
                 onClick={() => setOpen(false)}

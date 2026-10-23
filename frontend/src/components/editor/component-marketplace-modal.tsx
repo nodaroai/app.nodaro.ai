@@ -1,3 +1,4 @@
+import { pressable } from "@/lib/pressable"
 import { useAppDir } from "@/lib/locale-store"
 import { listingCeilingCredits } from "@/lib/listing-price"
 import { clampPopupLeft, popupDefaultStyle } from "./marketplace-popup-geometry"
@@ -447,7 +448,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               <p className="text-xs text-muted-foreground">{t("marketplace.subtitle")}</p>
             </div>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             onClick={() => onOpenChange(false)}
             className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -575,7 +576,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
                             : "bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700",
                         )}
-                        onClick={() => toggleListMutation.mutate({ appId: comp.id, isListed: !comp.isListed })}
+                        {...pressable(() => toggleListMutation.mutate({ appId: comp.id, isListed: !comp.isListed }))}
                         title={comp.isListed ? t("marketplace.clickUnlist") : t("marketplace.clickList")}
                       >
                         {comp.isListed ? t("marketplace.listed") : t("marketplace.unlisted")}
@@ -706,7 +707,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
             <Puzzle className="w-4 h-4 text-purple-400" />
             <span className="text-sm font-semibold text-[#1E293B] dark:text-white">{t("marketplace.title")}</span>
           </div>
-          <button
+          <button aria-label={t("common.close")}
             type="button"
             onClick={() => onOpenChange(false)}
             className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -938,7 +939,7 @@ function ComponentEditDialog({
                 {tags.map((tag) => (
                   <span key={tag} className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
                     {tag}
-                    <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))} className="hover:text-destructive">
+                    <button aria-label={t("common.remove")} type="button" onClick={() => setTags(tags.filter((t) => t !== tag))} className="hover:text-destructive">
                       <X className="h-3 w-3" />
                     </button>
                   </span>

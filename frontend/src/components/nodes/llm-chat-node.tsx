@@ -1,5 +1,6 @@
 "use client"
 
+import { CoverButton } from "@/components/ui/cover-button"
 import { memo, useMemo, useState, useRef, useEffect, Suspense } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -394,7 +395,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color={TEXT_HANDLE_COLOR} icon={<Type />}      side="right" top="24px" />
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color={HANDLE_COLORS.list} icon={<List />}      side="right" top="56px" />
       {showLog && createPortal(
-        <div
+        <div role="presentation"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={() => { setShowLog(false); setExpandedLogIndex(null) }}
         >
@@ -414,7 +415,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   <p className="text-[11px] text-muted-foreground">{nodeData.label} · {results.length === 1 ? t("node.resultCountOne", { n: results.length }) : t("node.resultCountMany", { n: results.length })}</p>
                 </div>
               </div>
-              <button
+              <button aria-label={t("common.close")}
                 type="button"
                 onClick={() => { setShowLog(false); setExpandedLogIndex(null) }}
                 className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
@@ -475,7 +476,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                         return (
                           <div
                             key={iterIdx}
-                            className="cursor-pointer hover:bg-white/3 transition-colors"
+                            className="relative cursor-pointer hover:bg-white/3 transition-colors"
                             onClick={() => setExpandedLogIndex(isExpanded ? null : globalIdx)}
                           >
                             {/* Collapsed row */}
@@ -516,6 +517,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                                 </div>
                               </div>
                             )}
+                            <CoverButton label={t("common.expand")} onActivate={() => (() => setExpandedLogIndex(isExpanded ? null : globalIdx))()} />
                           </div>
                         )
                       })}
