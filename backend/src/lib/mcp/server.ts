@@ -63,6 +63,8 @@ interface BuildOpts {
    * `userId` from the request body.
    */
   fastify: FastifyInstance
+  /** Runs on the new server before any tool is registered (the session probe uses it). */
+  beforeRegister?: (server: McpServer) => void
   /**
    * Pin the session to one project (in-app Workflow Copilot sessions): the
    * workflow tools then read and write inside `projectId` instead of the
@@ -178,6 +180,8 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
 
   // Register UI resource templates BEFORE tools, so tool _meta.ui.resourceUri
   // references resolve cleanly when the host calls resources/read.
+  opts.beforeRegister?.(server)
+
   registerWidgetResources(server)
 
   registerPing(server, session)

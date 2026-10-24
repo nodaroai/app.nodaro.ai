@@ -68,6 +68,7 @@ import {
   ChatView,
 } from "@/components/presentation/views"
 import { formatDate } from "@/lib/i18n/format"
+import { SkipToContent } from "@/components/layout/skip-to-content"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -250,7 +251,7 @@ export function MobileAppShell({
 
   // Scroll position preservation per tab
   const scrollPositions = useRef<Record<string, number>>({ inputs: 0, outputs: 0, runs: 0 })
-  const contentRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLElement>(null)
 
   // ---- Swipe between runs on outputs tab ----
   const touchStartY = useRef<number | null>(null)
@@ -934,6 +935,7 @@ export function MobileAppShell({
 
   return (
     <div className="h-[100dvh] flex flex-col bg-background text-foreground">
+      <SkipToContent />
       {/* Header */}
       <MobileAppHeader
         appName={app.name}
@@ -976,9 +978,11 @@ export function MobileAppShell({
       />
 
       {/* Content area */}
-      <div
+      <main
+        id="main"
+        tabIndex={-1}
         ref={contentRef}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto focus:outline-none"
         style={{
           paddingTop: "calc(48px + var(--safe-area-top, 0px))",
           paddingBottom: isViewOverride ? "0px" : bottomPadding,
@@ -1142,7 +1146,7 @@ export function MobileAppShell({
             </div>
           </div>
         ) : null}
-      </div>
+      </main>
 
       {/* Sticky action bar (inputs tab only) */}
       {!isViewOverride && (
