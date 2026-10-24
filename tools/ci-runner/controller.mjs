@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
-import { chooseSlots, runnerPrefix } from './pool.mjs'
+import { chooseSlots, DEPLOYMENT_IN_PROGRESS, runnerPrefix } from './pool.mjs'
 
 // One Railway status query per slot every 30 s cycle: 32 slots is ~3,840
 // requests an hour, well inside the Pro plan's 10,000 an hour
@@ -99,6 +99,10 @@ export function createController({ env = process.env, request = fetch, log = con
     for (const runner of runners) {
       const slot = state.find(s => runner.name.startsWith(runnerPrefix(s.id)))
       if (!slot || runner.busy || runner.status !== 'offline' || selected.includes(slot.id)) continue
+      // A slot still deploying has not had its chance to connect yet: retiring
+      // its identity now makes the runner exit on arrival ("registration has
+      // been deleted") and the slot loops while Railway is slow.
+      if (DEPLOYMENT_IN_PROGRESS.includes(slot.deployment?.status)) continue
       if (Date.now() - Date.parse(slot.deployment?.createdAt) < 300_000) continue
       if (jobs.some(j => j.status === 'in_progress' && j.runner_name === runner.name)) continue
       await gh(`actions/runners/${runner.id}`, 'DELETE')

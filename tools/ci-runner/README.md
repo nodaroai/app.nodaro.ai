@@ -64,7 +64,7 @@ a fresh deployment, typically 40-80 seconds) before its first step, and a PR
 run asks the pool for about fourteen runners. Several concurrent PR runs can
 still exceed the slot count and queue.
 
-Busy slots are protected by both runner state and in-progress job state. An API
+Busy slots are protected by both runner state and in-progress job state. An offline identity is retired only once its slot's deployment has finished and is five minutes old: a slot still building or deploying keeps its identity however long Railway takes, so a slow deploy cannot lose its runner before it connects. An API
 failure stops that scheduling cycle. Capacity is bounded by the configured slot
 list. Keep exactly one controller replica to prevent competing schedulers.
 
