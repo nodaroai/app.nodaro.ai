@@ -1,4 +1,5 @@
 import type { NodaroClientCore } from "../core.js"
+import type { CastSwapEngine } from "./cast-swap.js"
 
 /**
  * Trends — ready-made Cast Swap recipes. A trend is a short clip with slots
@@ -28,7 +29,11 @@ import type { NodaroClientCore } from "../core.js"
  *   `example_out_of_range` (`example` names none, or an optional slot is left
  *   empty and the trend has no example to fill it), `preview_unavailable` (the trend offers no
  *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
- *   slot), `prompt_too_long` (shorten `details`). The slot errors carry the
+ *   slot), `prompt_too_long` (shorten `details`), `draft_unsupported`
+ *   (`draft: true` on a trend whose `engine` has no draft: Kling 4),
+ *   `resolution_unsupported` (a `resolution` not in the trend's
+ *   `resolutions`), `too_many_images` (a Kling 4 trend's run would send more
+ *   than 10 pictures: send fewer per slot). The slot errors carry the
  *   slot's key as `slot` (in `NodaroError.details`), and `chip_not_offered`
  *   the chip as `chip` too.
  * - 401 `unauthorized`.
@@ -89,6 +94,12 @@ export type TrendChipKey = keyof TrendChips
 
 export type TrendResolution = "480p" | "720p" | "1080p"
 
+/**
+ * The video engine a trend runs on ({@link CastSwapEngine}): the trend
+ * chooses it, never the person running it.
+ */
+export type TrendEngine = CastSwapEngine
+
 /** A trend in the catalog (`list()`). Text is in the resolved locale. */
 export interface TrendCard {
   id: string
@@ -142,6 +153,13 @@ export interface TrendDetail extends TrendCard {
   version: number
   /** `4` when the trend offers a 4-second preview run, else `null`. */
   previewSec: 4 | null
+  /** The video engine every run of this trend uses. Absent (an older server) = `"seedance-2-5"`. */
+  engine?: TrendEngine
+  /**
+   * The resolutions a run may ask for, the default first. Seedance 2.5:
+   * `["480p", "720p", "1080p"]`, where 480p is a draft (show it as one);
+   * Kling 4: `["720p", "1080p"]`, no draft. Offer exactly these.
+   */
   resolutions: TrendResolution[]
   slots: TrendDetailSlot[]
   examples: TrendExample[]
@@ -165,9 +183,16 @@ export interface TrendRunRequest {
   details?: string
   /** `true` runs a 4-second preview (only when the trend's `previewSec` is `4`). */
   preview?: boolean
-  /** Default `"480p"`. */
+  /**
+   * One of the trend's {@link TrendDetail.resolutions}; default its first
+   * (`"480p"` on Seedance 2.5, `"720p"` on Kling 4). Another answers 400
+   * `resolution_unsupported`.
+   */
   resolution?: TrendResolution
-  /** A draft run, only at 480p. Default `true` at 480p. */
+  /**
+   * A draft run, only at 480p on a Seedance 2.5 trend. Default `true` at
+   * 480p. `true` on a Kling 4 trend answers 400 `draft_unsupported`.
+   */
   draft?: boolean
   /**
    * A generation session of yours. Accepted (and checked: one you may not use
@@ -265,14 +290,16 @@ export interface TrendRun {
   preview: boolean
   resolution: string
   draft: boolean
+  /** The video engine the run was made on. Absent (an older server) = `"seedance-2-5"`. */
+  engine?: TrendEngine
   /** The result, once completed. */
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
-  /** A Full Quality version: the job id of the draft run it was made from. `null` for any other run. */
+  /** A Full Quality version: the job id of the run (a draft, or a Kling 4 720p run) it was made from. `null` for any other run. */
   fullQualityOf: string | null
   /**
-   * A draft's newest Full Quality try, if one was started: a pointer only,
+   * A draft's (or Kling 4 720p run's) newest Full Quality try, if one was started: a pointer only,
    * to know an upgrade exists and how it is going. Its video and charge are on
    * that run, listed on its own (its `fullQualityOf` is this run's `jobId`) —
    * read it there (`getRun(fullQuality.jobId)`). Older tries of the draft (a
@@ -280,7 +307,11 @@ export interface TrendRun {
    * `getRun()` still reads one by its id.
    */
   fullQuality: { jobId: string; status: string } | null
-  /** Until when a completed draft can be redone in Full Quality; `null` otherwise. */
+  /**
+   * Until when a completed run can be redone in Full Quality — a Seedance 2.5
+   * draft (the same take at 1080p) or a Kling 4 run at 720p (a new take at
+   * 1080p); `null` otherwise.
+   */
   fullQualityUntil: string | null
 }
 

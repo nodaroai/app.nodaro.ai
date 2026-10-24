@@ -17,7 +17,8 @@
  * and every result here is rebuilt field by field from those (never spread),
  * so a field a route might add later does not reach the agent by accident.
  * The route is the authority on every rule (required slots, chips per kind,
- * image caps, draft only at 480p); this file maps snake_case to its body.
+ * image caps, the resolutions the trend's engine offers, draft only at 480p
+ * on Seedance 2.5); this file maps snake_case to its body.
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — off-cloud the
  * routes are not served and a call answers `not_available`.
@@ -82,8 +83,8 @@ export const trendRunShape = {
   example: z.number().int().min(1).optional().describe("The example (1-based, default 1) whose pictures fill optional slots left out."),
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
-  resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p".'),
-  draft: z.boolean().optional().describe("Default true; only at 480p."),
+  resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
+  draft: z.boolean().optional().describe("Default true; only at 480p (a kling-4 trend has none)."),
   preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
@@ -152,6 +153,7 @@ function detailView(d: Rec): Rec {
     ...cardView(d),
     version: num(d.version),
     previewSec: d.previewSec === 4 ? 4 : null,
+    engine: d.engine === "kling-4" ? "kling-4" : "seedance-2-5",
     resolutions: strings(d.resolutions),
     slots: (Array.isArray(d.slots) ? d.slots.filter(isRec) : []).map((s) => {
       const hint = str(s.hint)
@@ -294,7 +296,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
         title: "Get Trend",
         description:
           "One trend: its slots (key, label, kind, required, hint, chips the user may set, their defaults), its examples (the result video and the pictures each slot used), " +
-          "previewSec and resolutions. Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "previewSec, engine and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

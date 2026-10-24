@@ -951,12 +951,18 @@ export async function probeVideoOverlayBase(path: string): Promise<VideoOverlayB
  * missing one throws), but a container that reports no usable frame rate — or a
  * VARIABLE one, which is no single rate at all (see `constantFrameRate`) — is
  * still a perfectly probeable video, and the caller falls back rather than fails.
+ *
+ * `durationSeconds` is the CONTAINER's (`format=duration`). `videoDurationSeconds`
+ * is the first video stream's own (`stream=duration`), which is shorter when
+ * the audio runs past the last frame; OPTIONAL, absent when the stream reports
+ * none usable (some containers, e.g. a WebM, leave it out).
  */
 export async function probeVideoSource(srcUrlOrPath: string): Promise<{
   width: number
   height: number
   durationSeconds: number
   fps?: number
+  videoDurationSeconds?: number
 }> {
   await assertSafeProbeSource(srcUrlOrPath)
   const output = await runFfprobe([
@@ -965,14 +971,14 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
     // can't pivot to other protocols. Keep `file` so local-path probes work.
     "-protocol_whitelist", "file,http,https,tcp,tls",
     "-select_streams", "v:0",
-    "-show_entries", "stream=width,height,avg_frame_rate,r_frame_rate:format=duration",
+    "-show_entries", "stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration",
     "-of", "json",
     srcUrlOrPath,
   ])
   // CSV inserts extra fields for stream side data (including an empty field
   // on Remotion MP4s). Read named fields so metadata cannot shift dimensions.
   let metadata: {
-    streams?: Array<{ width?: unknown; height?: unknown; avg_frame_rate?: unknown; r_frame_rate?: unknown }>
+    streams?: Array<{ width?: unknown; height?: unknown; avg_frame_rate?: unknown; r_frame_rate?: unknown; duration?: unknown }>
     format?: { duration?: unknown }
   }
   try {
@@ -991,7 +997,15 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
     parseFrameRate(metadata?.streams?.[0]?.avg_frame_rate),
     parseFrameRate(metadata?.streams?.[0]?.r_frame_rate),
   )
-  return { width, height, durationSeconds, ...(fps !== undefined ? { fps } : {}) }
+  const streamDuration = metadata?.streams?.[0]?.duration
+  const videoDurationSeconds = streamDuration === undefined || streamDuration === null ? Number.NaN : Number(streamDuration)
+  return {
+    width,
+    height,
+    durationSeconds,
+    ...(fps !== undefined ? { fps } : {}),
+    ...(Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0 ? { videoDurationSeconds } : {}),
+  }
 }
 
 /**

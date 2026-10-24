@@ -10,7 +10,8 @@
  * followed with `get_job` / `wait_for_job` like any other.
  *
  * The route is the authority on every rule (role counts, the 30-image total,
- * draft only at 480p, the clip's length, the pre / post prompt's `{role:N}`
+ * draft only at 480p, each engine's resolutions and Kling 4's lack of a
+ * draft, the clip's length, the pre / post prompt's `{role:N}`
  * mentions, the preview-only role settings, face masking's ranges and its
  * min ≤ max rule); this tool maps snake_case to the route's body and leaves the rest
  * to it. The user travels in `mcpInject`'s
@@ -32,6 +33,7 @@ import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
+import { loadedEngineRuns } from "../../cast-swap-engines.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -47,9 +49,11 @@ export interface RegisterCastSwapToolsOpts {
 interface CastSwapQuote {
   /** Held when the run starts. */
   totalCredits: number
-  /** The charge the run is expected to come to (`seedanceExpected` in place of `seedance`); absent from an older engine. */
+  /** The charge the run is expected to come to (`seedanceExpected` in place of `seedance`; on kling-4 the hold itself); absent from an older engine. */
   expectedCredits?: number
-  breakdown: { castSwap: number; seedance: number; references: number; seedanceExpected?: number; masking?: number }
+  /** On kling-4, `kling` in place of `seedance` / `seedanceExpected`. */
+  breakdown: { castSwap: number; seedance?: number; references: number; seedanceExpected?: number; kling?: number; masking?: number }
+  engine?: "seedance-2-5" | "kling-4"
   /** Face masking "auto" only: charged only if the masked retry runs; in neither total. */
   maskingCredits?: number
   settlesLower: boolean
@@ -125,6 +129,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
+        'engine picks the video model: "seedance-2-5" (default; 480p draft, 720p, 1080p) or "kling-4" (720p default or 1080p, no draft). ' +
         "Image and video URLs must be http(s): upload local files with the upload tools first.",
       inputSchema: {
         video_url: z.string().url().describe("The source clip, 4–30 s."),
@@ -182,8 +187,16 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           .describe("Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count)."),
         preview: z.boolean().optional().describe("true = render 4 s from preview_start."),
         preview_start: z.number().min(0).optional().describe("Seconds, default 0; preview_start + 4 must fit the clip."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p".'),
-        draft: z.boolean().optional().describe("Render as a draft, 480p only. Default true at 480p, false above."),
+        engine: z
+          .enum(["seedance-2-5", "kling-4"])
+          .optional()
+          .describe('The video model. Default "seedance-2-5". "kling-4": 720p or 1080p only, no draft; its Full Quality is a new take.'),
+        kling_length: z
+          .enum(["cut-end", "cut-start"])
+          .optional()
+          .describe('kling-4 only: cut the clip to whole seconds at its end (default) or start.'),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (kling-4: "720p"; no 480p).'),
+        draft: z.boolean().optional().describe("Render as a draft, 480p seedance-2-5 only. Default true at 480p, false above."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         face_masking: z
           .object({
@@ -218,6 +231,14 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
+      // An engine that predates the choice drops an `engine` it does not know and runs Seedance:
+      // never send it a body that names another engine (quote or run).
+      if (args.engine !== undefined && !loadedEngineRuns(args.engine)) {
+        return errorResult(
+          503,
+          JSON.stringify({ error: { code: "engine_unavailable", message: `This deployment's Cast Swap cannot run on ${args.engine} yet.` } }),
+        )
+      }
       const payload = {
         videoUrl: args.video_url,
         roles: args.roles.map(({ preview_name, in_preview, ...role }) => ({
@@ -231,6 +252,8 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
         ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
+        ...(args.engine !== undefined ? { engine: args.engine } : {}),
+        ...(args.kling_length !== undefined ? { klingLength: args.kling_length } : {}),
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
         ...(args.draft !== undefined ? { draft: args.draft } : {}),
         ...(args.prepare_references !== undefined ? { prepareReferences: args.prepare_references } : {}),

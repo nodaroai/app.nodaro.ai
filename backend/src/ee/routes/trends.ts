@@ -31,6 +31,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -48,7 +49,7 @@ import {
   listPublished,
   setFavorite,
 } from "../lib/trends/store.js"
-import { shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
+import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
@@ -68,6 +69,7 @@ import {
   type RunJobRow,
 } from "../lib/trends/run-helpers.js"
 import type {
+  CastSwapEngine,
   Choice,
   TrendResolution,
   TrendRow,
@@ -105,6 +107,13 @@ export interface TrendTag {
 export interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null
+  /** The video engine every run of this trend uses (the person never chooses it). */
+  engine: CastSwapEngine
+  /**
+   * The resolutions a run of this trend may ask for, its default first:
+   * Seedance 2.5 `["480p", "720p", "1080p"]` (480p is the draft), Kling 4
+   * `["720p", "1080p"]` (no draft).
+   */
   resolutions: TrendResolution[]
   /**
    * `chips`: the chips the person may set on this slot (its kind's order; `[]`
@@ -119,7 +128,6 @@ export interface TrendDetail extends TrendCard {
 
 // ── constants ───────────────────────────────────────────────────────────────
 
-const RESOLUTIONS: TrendResolution[] = ["480p", "720p", "1080p"]
 /** Same shape as migration 549's CHECK on `trends.slug`. */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -246,7 +254,8 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     ...card,
     version,
     previewSec: data.previewStart === null ? null : PREVIEW_SEC,
-    resolutions: [...RESOLUTIONS],
+    engine: engineOf(data),
+    resolutions: [...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engineOf(data)]],
     slots: data.slots.map((s) => {
       const hint = pickText(s.hint, locale)
       const defaults = slotDefaults(s)

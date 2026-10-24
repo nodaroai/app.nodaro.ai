@@ -1,5 +1,5 @@
 // Admin → Trends → one trend: build its draft (source clip and preview window,
-// slots, fixed references, pre and trend prompts, face masking, texts), test
+// slots, fixed references, pre and trend prompts, model, face masking, texts), test
 // it, promote admin runs to examples, and publish it.
 //
 // Like the rest of the admin trend screens, its text is English only.
@@ -38,12 +38,12 @@ import {
 } from "@/ee/hooks/queries/use-admin-queries"
 import {
   MAX_PRE_PROMPT,
-  MAX_TREND_IMAGES,
   TREND_DETAILS_MAX,
   formIssues,
   promptBudget,
   fromForm,
-  imageCount,
+  imagesSentAtMost,
+  maxImagesFor,
   toForm,
   type TrendForm,
 } from "../model"
@@ -52,6 +52,7 @@ import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
 import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
+import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
 import { PublishBar } from "../components/PublishBar"
@@ -113,8 +114,9 @@ export default function AdminTrendEditorPage() {
   const dirty = snapshot(form) !== baseline
   latest.current = { baseline, dirty }
   const issues = formIssues(form)
-  const images = imageCount(form)
-  const over = images > MAX_TREND_IMAGES
+  const images = imagesSentAtMost(form)
+  const maxImages = maxImagesFor(form)
+  const over = images > maxImages
   // Also while the trend is refetching: the examples on screen may not be the ones the held revision names.
   const exampleBusy = promote.isPending || reorder.isPending || removeExample.isPending || query.isFetching
 
@@ -190,10 +192,15 @@ export default function AdminTrendEditorPage() {
           <span
             data-state={over ? "over" : "ok"}
             className={cn("rounded px-2 py-1 text-sm font-medium tabular-nums", over ? "bg-destructive/10 text-destructive" : "bg-muted")}
-            title="3 per slot plus every reference picture; at most 30"
+            title={
+              form.engine === "kling-4"
+                ? `Prepared pictures count as one: 1 per person, pet or product slot, 3 per location, plus every reference picture; at most ${maxImages}`
+                : `3 per slot plus every reference picture; at most ${maxImages}`
+            }
           >
-            {`${images} / ${MAX_TREND_IMAGES}`}
+            {`${images} / ${maxImages}`}
           </span>
+          {form.engine === "kling-4" && <span className="text-xs text-muted-foreground">prepared pictures count as one</span>}
           <Button className="min-h-9" disabled={!dirty || issues.length > 0 || save.isPending} onClick={onSave}>
             {save.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
             Save draft
@@ -251,10 +258,18 @@ export default function AdminTrendEditorPage() {
             />
             <PromptRoom id={promptRoomId} room={promptBudget(form).room} />
           </Section>
-          <Section title="5. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
+          <Section title="5. Model" description="The video model every run uses. People running the trend never choose it.">
+            <EngineEditor
+              value={form.engine}
+              klingLength={form.klingLength}
+              onChange={(engine) => set({ engine })}
+              onKlingLengthChange={(klingLength) => set({ klingLength })}
+            />
+          </Section>
+          <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
             <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
           </Section>
-          <Section title="6. Name, description, tags">
+          <Section title="7. Name, description, tags">
             <TextsEditor trend={server.trend} name={form.name} description={form.description} onChange={(p) => set(p)} />
           </Section>
         </div>
@@ -303,6 +318,7 @@ export default function AdminTrendEditorPage() {
               trendId={id}
               slots={server.draft.slots}
               hasPreview={server.draft.previewStart !== null}
+              engine={server.draft.engine ?? "seedance-2-5"}
               dirty={dirty}
               promotingId={promote.isPending ? (promote.variables ?? null) : null}
               onPromote={onPromote}

@@ -1277,6 +1277,14 @@ const KLING_4_MODELS_BYTES = 317
 // the 73 B of headroom carry across.
 const LIST_JOBS_SOURCES_BYTES = 188
 
+// RAISED 2026-10-25 by Cast Swap's second engine and nothing else: `cast_swap` takes `engine`
+// ("seedance-2-5" | "kling-4") with its resolutions named in `resolution` / `draft` and the
+// description, and `kling_length` (how a kling-4 run fits the clip to whole seconds); `estimate_full_quality` / `full_quality` say a kling-4 720p run's Full Quality is
+// a new take; `get_trend` / `estimate_trend` / `run_trend` name the trend's engine and its
+// resolutions. No tool was added, so the fixture does NOT move. Measured by this suite: 497_597
+// total − 496_638 = 959 B; the 73 B of headroom carry across.
+const CAST_SWAP_ENGINE_BYTES = 959
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1432,7 +1440,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_FULL_QUALITY_TOOLS_BYTES +
     CAST_SWAP_DEFAULT_ZONE_BYTES +
     KLING_4_MODELS_BYTES +
-    LIST_JOBS_SOURCES_BYTES,
+    LIST_JOBS_SOURCES_BYTES +
+    CAST_SWAP_ENGINE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

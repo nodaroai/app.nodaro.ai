@@ -18,13 +18,25 @@
  * faceMasking) goes only into the engine's own fields, never into `display`.
  *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
- * the body is exactly what it was before trends had masking.
+ * the body is exactly what it was before trends had masking. Likewise the
+ * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
+ * trend sends `engine: "kling-4"` (and its `klingLength` when it sets one), renders 720p unless 1080p is asked, and
+ * refuses a draft (`draft_unsupported`) and 480p (`resolution_unsupported`).
  */
-import { CAST_SWAP_POST_PROMPT_MAX } from "@nodaro/shared/models"
+import {
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  CAST_SWAP_KLING_MAX_IMAGES,
+  CAST_SWAP_POST_PROMPT_MAX,
+  CAST_SWAP_RESOLUTIONS_BY_ENGINE,
+  castSwapEngineHasDraft,
+} from "@nodaro/shared/models"
+import { castSwapImagesSent } from "@nodaro/render-rules"
 import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
-import { CHIPS_BY_KIND, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
+import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
 import type {
+  CastSwapEngine,
+  CastSwapKlingLength,
   Choice,
   TrendReference,
   TrendResolution,
@@ -45,6 +57,10 @@ export type TrendRunErrorCode =
   | "invalid_slot_mention"
   | "source_missing"
   | "prompt_too_long"
+  | "draft_unsupported"
+  | "resolution_unsupported"
+  | "too_many_images"
+  | "validation_error"
 
 export class TrendRunError extends Error {
   constructor(
@@ -87,6 +103,10 @@ export interface TrendRunBody {
   prePrompt?: string
   postPrompt?: string
   faceMasking?: FaceMasking
+  /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
+  engine?: CastSwapEngine
+  /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
+  klingLength?: CastSwapKlingLength
   preview: boolean
   previewStart: number
   resolution: TrendResolution
@@ -97,7 +117,14 @@ export interface TrendRunBody {
 export interface ComposedTrendRun {
   body: TrendRunBody
   display: TrendRunDisplay
-  needs: { roleKinds: Set<TrendSlotKind>; fixedReferences: boolean; faceMasking: boolean; trendPrePrompt: boolean }
+  needs: {
+    roleKinds: Set<TrendSlotKind>
+    fixedReferences: boolean
+    faceMasking: boolean
+    trendPrePrompt: boolean
+    /** The trend's video engine (Seedance 2.5 when it names none). */
+    engine: CastSwapEngine
+  }
   /**
    * The trend's masking leaves `zone` out, so `body.faceMasking.zone` is the
    * default margins. A full run that follows a masked preview then takes the
@@ -238,8 +265,35 @@ export function composeTrendRun(
   }
 
   const masking = faceMaskingOn(data.faceMasking) ? data.faceMasking : undefined
-  const resolution: TrendResolution = req.resolution ?? "480p"
-  const draft = resolution === "480p" && (req.draft ?? true)
+  const engine = engineOf(data)
+  const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
+  if (req.draft === true && !castSwapEngineHasDraft(engine)) {
+    throw new TrendRunError("draft_unsupported", "This trend has no draft: run it at 720p or 1080p.")
+  }
+  if (req.draft === true && req.resolution !== undefined && req.resolution !== "480p") {
+    throw new TrendRunError("validation_error", "Draft is only available at 480p.")
+  }
+  if (req.resolution !== undefined && !offered.includes(req.resolution)) {
+    throw new TrendRunError("resolution_unsupported", `This trend runs at ${offered.join(" or ")}, not ${req.resolution}.`)
+  }
+  if (engine === "kling-4") {
+    // What the run sends, as the route counts it: a trend run prepares its references (the
+    // default), so a person, pet or product counts one picture; a location its own; the references theirs.
+    const images = castSwapImagesSent(
+      slots.map((s) => ({ kind: s.kind, images: s.images.length })),
+      data.references.reduce((n, r) => n + r.images.length, 0),
+    )
+    if (images > CAST_SWAP_KLING_MAX_IMAGES) {
+      throw new TrendRunError(
+        "too_many_images",
+        // No count: it would tell how many hidden reference pictures the trend has.
+        `This trend's model takes at most ${CAST_SWAP_KLING_MAX_IMAGES} pictures in one run: use fewer pictures per slot.`,
+      )
+    }
+  }
+  // The engine's default resolution comes first: Seedance's 480p draft, Kling's 720p.
+  const resolution: TrendResolution = req.resolution ?? offered[0]!
+  const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && (req.draft ?? true)
 
   const display: TrendRunDisplay = {
     trend: { id: trend.id, slug: trend.slug, version: trend.version, name: pickText(data.name, "en")! },
@@ -258,6 +312,9 @@ export function composeTrendRun(
     // the margins the trend means. A run that follows its masked preview takes the preview's
     // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
     ...(masking ? { faceMasking: withResolvedZone(structuredClone(masking)) } : {}),
+    ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
+    // Kling 4's length fit, as the trend sets it (Seedance never gets it).
+    ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     preview: req.preview ?? false,
     previewStart: data.previewStart ?? 0,
     resolution,
@@ -273,6 +330,7 @@ export function composeTrendRun(
       fixedReferences: data.references.length > 0,
       faceMasking: masking !== undefined,
       trendPrePrompt: !!data.prePrompt,
+      engine,
     },
     maskingZoneLeftOut: masking !== undefined && masking.zone === undefined,
   }

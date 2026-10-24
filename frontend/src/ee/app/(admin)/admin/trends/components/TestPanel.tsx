@@ -28,7 +28,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import type { AdminTrendRun, AdminTrendSlot, TrendChipKey, TrendChoice, TrendResolution, TrendTestRunRequest } from "@/lib/api"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineHasDraft } from "@nodaro/shared/models"
+import type { AdminTrendEngine, AdminTrendRun, AdminTrendSlot, TrendChipKey, TrendChoice, TrendResolution, TrendTestRunRequest } from "@/lib/api"
 import {
   isTrendRunInFlight,
   useStartTrendTestRun,
@@ -38,8 +39,6 @@ import {
 import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips } from "../model"
 import { MediaPicker } from "./MediaPicker"
 import { uploadLocalFile } from "./uploads"
-
-const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
 
 type ChipChoices = Partial<Record<TrendChipKey, TrendChoice>>
 
@@ -53,21 +52,28 @@ interface Props {
   /** The SAVED draft's slots: a test run runs what is saved. */
   readonly slots: AdminTrendSlot[]
   readonly hasPreview: boolean
+  /** The SAVED draft's engine: its resolutions are offered, and a draft only where it has one. */
+  readonly engine: AdminTrendEngine
   /** Unsaved edits: a run would not test them, so it waits for a save. */
   readonly dirty: boolean
   readonly promotingId: string | null
   readonly onPromote: (jobId: string) => void
 }
 
-export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPromote }: Props) {
+export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promotingId, onPromote }: Props) {
+  const resolutions: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
+  const hasDraft = castSwapEngineHasDraft(engine)
   const start = useStartTrendTestRun(trendId)
   const runs = useTrendTestRuns(trendId)
   const [images, setImages] = useState<Record<string, string[]>>({})
   const [chips, setChips] = useState<Record<string, ChipChoices>>({})
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [preview, setPreview] = useState(true)
-  const [resolution, setResolution] = useState<TrendResolution>("480p")
+  const [picked, setResolution] = useState<TrendResolution>(resolutions[0]!)
+  // A resolution the saved engine does not render (it changed since) falls back to its default.
+  const resolution = resolutions.includes(picked) ? picked : resolutions[0]!
   const [draft, setDraft] = useState(true)
+  const draftable = hasDraft && resolution === "480p"
   const [details, setDetails] = useState("")
   const [promptOf, setPromptOf] = useState<string | null>(null)
 
@@ -113,7 +119,7 @@ export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPr
       ),
       preview: hasPreview && preview,
       resolution,
-      ...(resolution === "480p" ? { draft } : {}),
+      ...(draftable ? { draft } : {}),
       ...(details.trim() ? { details: details.trim() } : {}),
     }
     start.mutate(body, {
@@ -203,7 +209,7 @@ export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPr
               4 s preview
             </label>
             <div className="flex items-center gap-1" role="group" aria-label="Resolution">
-              {RESOLUTIONS.map((r) => (
+              {resolutions.map((r) => (
                 <Button
                   key={r}
                   type="button"
@@ -217,10 +223,12 @@ export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPr
                 </Button>
               ))}
             </div>
-            <label className={cn("flex min-h-9 items-center gap-2", resolution !== "480p" && "opacity-50")}>
-              <Switch aria-label="Draft" checked={resolution === "480p" && draft} disabled={resolution !== "480p"} onCheckedChange={setDraft} />
-              Draft
-            </label>
+            {hasDraft && (
+              <label className={cn("flex min-h-9 items-center gap-2", !draftable && "opacity-50")}>
+                <Switch aria-label="Draft" checked={draftable && draft} disabled={!draftable} onCheckedChange={setDraft} />
+                Draft
+              </label>
+            )}
           </div>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">
@@ -315,6 +323,7 @@ function RunCard({
             {run.resolution}
             {run.draft ? " draft" : ""}
           </span>
+          {run.engine === "kling-4" && <span>Kling 4</span>}
           {run.fullQualityOf && (
             <Badge variant="secondary" title={`Full Quality version of run ${run.fullQualityOf}`}>
               Full Quality

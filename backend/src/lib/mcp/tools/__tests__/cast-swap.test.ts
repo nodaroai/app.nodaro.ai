@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { newSession } from "../../session.js"
+import { _resetPluginSupportsForTests, setPluginSupports } from "../../../private-plugins/supports-registry.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 
@@ -268,6 +269,61 @@ describe("cast_swap", () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     await callTool(serverWith(fastify), "cast_swap", ARGS)
     expect("faceMasking" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
+  })
+
+  it("refuses a kling-4 run, sending nothing, where the loaded engine does not declare it (an older engine would run Seedance)", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    for (const castSwap of [undefined, { engines: ["seedance-2-5" as const] }]) {
+      _resetPluginSupportsForTests()
+      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+      for (const confirm of [undefined, true]) {
+        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", ...(confirm ? { confirm } : {}) })
+        expect(res.isError).toBe(true)
+        expect(res.content[0]!.text).toContain("engine_unavailable")
+      }
+    }
+    expect(calls).toEqual([])
+    // Seedance named outright still runs anywhere.
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "seedance-2-5" })
+    expect(calls).toHaveLength(1)
+  })
+
+  describe("on an engine that declares kling-4", () => {
+    beforeEach(() => setPluginSupports({ castSwap: { engines: ["seedance-2-5", "kling-4"] } as never }))
+    afterEach(() => _resetPluginSupportsForTests())
+
+    it("quotes a kling-4 run (breakdown.kling, expected = hold) as one price, with nothing held beside it", async () => {
+      const kling = { engine: "kling-4", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
+      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: kling } })
+      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4" })
+      expect(res.structuredContent).toEqual({ ...kling, confirmed: false })
+      expect(res.content[0]!.text).toContain("about 420 credits.")
+      expect(res.content[0]!.text).not.toMatch(/held|lower/)
+    })
+
+    it("sends engine to the route as given (quote and run alike), and no engine key without it", async () => {
+      const { fastify, calls } = stubFastify({
+        "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-k" } },
+      })
+      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", resolution: "1080p", kling_length: "cut-start" })
+      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", resolution: "1080p", kling_length: "cut-start", confirm: true })
+      for (const c of calls) expect(c.payload).toEqual({ ...BODY, engine: "kling-4", resolution: "1080p", klingLength: "cut-start" })
+      calls.length = 0
+      await callTool(serverWith(fastify), "cast_swap", ARGS)
+      expect("engine" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
+    })
+
+    it("refuses an engine it does not know before calling the route; leaves draft on kling-4 to the route", async () => {
+      const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Kling 4 has no draft." } } } })
+      expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-3" })).isError).toBe(true)
+      expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", kling_length: "pad" })).isError).toBe(true)
+      expect(calls).toEqual([])
+      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", draft: true })
+      expect(res.isError).toBe(true)
+      expect(res.content[0]!.text).toContain("draft_unsupported")
+      expect(calls[0]!.payload).toMatchObject({ engine: "kling-4", draft: true })
+    })
   })
 
   it("refuses a face_masking value outside its range before calling the route", async () => {

@@ -26,7 +26,7 @@ function composed(preview: boolean): ComposedTrendRun {
       trendRun: { display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] } },
     },
     display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] },
-    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, trendPrePrompt: false },
+    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, trendPrePrompt: false, engine: "seedance-2-5" },
     maskingZoneLeftOut: true,
   } as ComposedTrendRun
 }

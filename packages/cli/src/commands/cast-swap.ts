@@ -12,12 +12,12 @@ interface GlobalOpts extends OutputOpts {
  */
 function fullQualityCommand(): Command {
   const cmd = new Command("full-quality").description(
-    "finish a draft run (Cast Swap or trend) at Full Quality: the same take at 1080p, as a new job — `estimate` quotes it (free), `run` SPENDS CREDITS",
+    "finish a run (Cast Swap or trend) at Full Quality at 1080p, as a new job: a draft's same take, or a new take of a Kling 4 720p run — `estimate` quotes it (free), `run` SPENDS CREDITS",
   )
 
   cmd
     .command("estimate <jobId>")
-    .description("quote finishing the draft at Full Quality (free): the credits, and until when the draft can be finished")
+    .description("quote finishing the run at Full Quality (free): same or new take, the credits, and until when it can be finished")
     .option("--profile <name>")
     .option("--json")
     .action(async (jobId: string, opts: GlobalOpts) => {
@@ -28,9 +28,13 @@ function fullQualityCommand(): Command {
           return
         }
         info(`about ${quote.totalCredits} credits`)
-        dim(`  castSwap: ${quote.breakdown.castSwap}`)
-        dim(`  seedanceHd: ${quote.breakdown.seedanceHd}`)
-        if (quote.breakdown.seedanceHd === 0) dim("  an earlier try's 1080p render is reused")
+        // An older engine sends no kind: its Full Quality is the same take.
+        if (quote.kind === "new-take") dim("a NEW take at 1080p from the same inputs (the 720p run stays)")
+        else dim("the same take at 1080p")
+        for (const [part, credits] of Object.entries(quote.breakdown)) {
+          if (typeof credits === "number") dim(`  ${terminalSafe(part)}: ${credits}`)
+        }
+        if (quote.kind !== "new-take" && quote.breakdown.seedanceHd === 0) dim("  an earlier try's 1080p render is reused")
         dim(`available until ${terminalSafe(quote.availableUntil)}`)
       } catch (err) {
         handleError(err)
@@ -54,7 +58,7 @@ function fullQualityCommand(): Command {
           return
         }
         const id = terminalSafe(result.jobId)
-        if (result.existing) info(`this draft's Full Quality already exists — job ${id} (nothing new was charged)`)
+        if (result.existing) info(`this run's Full Quality already exists — job ${id} (nothing new was charged)`)
         else success(`started Full Quality — job ${id}`)
         dim(`follow it: nodaro jobs get ${id}`)
       } catch (err) {

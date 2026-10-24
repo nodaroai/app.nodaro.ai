@@ -31,8 +31,10 @@ import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError } from "./store.js"
+import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
-import type { Choice, TrendSlotKind } from "./types.js"
+import { CAST_SWAP_ENGINES, CAST_SWAP_ENGINE_WHEN_OMITTED } from "@nodaro/shared/models"
+import type { CastSwapEngine, Choice, TrendSlotKind } from "./types.js"
 
 // ── the public run shape (mirrored by the SDK) ──────────────────────────────
 
@@ -50,6 +52,8 @@ export interface TrendRun {
   preview: boolean
   resolution: string
   draft: boolean
+  /** The video engine the run was made on (Seedance 2.5 for every run before the choice). */
+  engine: CastSwapEngine
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
@@ -72,8 +76,25 @@ type Chips = Partial<Record<"body" | "outfit" | "hair" | "coat" | "shape" | "fin
 
 export const SLOT_KINDS: readonly TrendSlotKind[] = ["person", "location", "product", "pet"]
 const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
-/** A completed draft run can be redone in Full Quality for this long. */
+/** A completed draft run (or Kling 4 run at 720p) can be redone in Full Quality for this long. */
 const FULL_QUALITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+/** A run's engine, from its stored input: Seedance 2.5 when it names none (every run before the choice). */
+export function runEngineOf(input: Rec): CastSwapEngine {
+  return CAST_SWAP_ENGINES.find((e) => e === input.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
+}
+
+/**
+ * Whether a run can be redone in Full Quality (once completed, within the
+ * window): a Seedance 2.5 draft (the same take at 1080p), or a Kling 4 run at
+ * 720p (a new take at 1080p from the same inputs). A Full Quality version
+ * itself never is.
+ */
+export function fullQualityEligible(input: Rec): boolean {
+  if (input.fullQualityOf != null) return false
+  if (input.draft === true) return true
+  return runEngineOf(input) === "kling-4" && input.resolution === "720p"
+}
 
 export const RUN_JOB_COLS =
   "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, usage_log_id"
@@ -179,13 +200,14 @@ export function toTrendRun(
   if (!trend) return null
   const { videoUrl, posterUrl } = outputVideo(row.output_data)
   const draft = input.draft === true
+  const eligible = fullQualityEligible(input)
   const completedAt = row.completed_at ?? null
   const fullQualityUntil =
-    draft && row.status === "completed" && completedAt && !Number.isNaN(Date.parse(completedAt))
+    eligible && row.status === "completed" && completedAt && !Number.isNaN(Date.parse(completedAt))
       ? new Date(Date.parse(completedAt) + FULL_QUALITY_WINDOW_MS).toISOString()
       : null
   const details = str(input.details)
-  const fqRow = fq && draft ? redactPrivateJobData(fq) : null
+  const fqRow = fq && eligible ? redactPrivateJobData(fq) : null
   return {
     jobId: row.id,
     status: row.status,
@@ -200,6 +222,7 @@ export function toTrendRun(
     preview: input.preview === true,
     resolution: str(input.resolution) ?? "480p",
     draft,
+    engine: runEngineOf(input),
     videoUrl: row.status === "completed" ? videoUrl : null,
     posterUrl: row.status === "completed" ? posterUrl : null,
     creditsCharged: creditsChargedOf(row.usage_log_id, credits, row.id, sideCharges),
@@ -300,7 +323,7 @@ export async function toTrendRuns(
   audience: RunAudience = "public",
 ): Promise<TrendRun[]> {
   if (page.length === 0) return []
-  const drafts = page.filter((r) => isRec(r.input_data) && r.input_data.draft === true).map((r) => r.id)
+  const drafts = page.filter((r) => isRec(r.input_data) && fullQualityEligible(r.input_data)).map((r) => r.id)
   const [fqByDraft, credits, sideCharges] = await Promise.all([
     fullQualityByDraft(drafts, owners),
     creditStatusMapFor(page.map((r) => r.usage_log_id)),
@@ -317,12 +340,13 @@ export async function toTrendRuns(
 /**
  * Whether the loaded Cast Swap engine can run this: it declares trend runs,
  * every slot kind the trend uses, fixed references when the trend has some,
- * face masking when the trend masks, a trend pre prompt when it has one, and
- * the requested resolution.
+ * face masking when the trend masks, a trend pre prompt when it has one, the
+ * trend's video engine, and the requested resolution.
  */
 export function engineSupports(composed: ComposedTrendRun): boolean {
   const cs = getPluginSupports().castSwap
   if (!cs || cs.trendRun !== true) return false
+  if (!castSwapEnginesOf(cs).includes(composed.needs.engine)) return false
   for (const kind of composed.needs.roleKinds) if (!cs.roleKinds.includes(kind)) return false
   if (composed.needs.fixedReferences && cs.fixedReferences !== true) return false
   if (composed.needs.faceMasking && cs.faceMasking !== true) return false
@@ -506,6 +530,10 @@ const PUBLIC_400: Readonly<Record<string, string>> = {
   video_unreadable: "This trend's clip could not be read.",
   unsafe_url: "A picture's address is not a public http(s) address.",
   raw_reference_token: "Your details contain a reserved token ({image:, {video: or {audio:).",
+  // A Kling 4 trend's own limits (the trend routes refuse a draft and 480p before the engine is asked).
+  draft_unsupported: "This trend has no draft: run it at 720p or 1080p.",
+  resolution_unsupported: "This trend does not run at that resolution.",
+  too_many_images: "This trend's model takes fewer pictures in one run: use fewer pictures per slot.",
 }
 
 export const TREND_RUN_REJECTED = { code: "trend_run_rejected", message: "This trend couldn't run with these inputs." } as const

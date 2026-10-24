@@ -762,3 +762,5 @@ export {
 } from "./camera-switch-speaker-map"
 // The LLM features still billed at their tier row while metered pricing is on (server price resolvers + editor pickers).
 export { TIER_BILLED_LLM_FEATURES, isTierBilledLlmFeature, type TierBilledLlmFeature } from "./llm-tier-billed"
+// What a Kling 4 trend run sends Cast Swap (its engine text and pictures), for the trend checks and the trend builder.
+export { KLING_ENGINE_TEXT, klingEngineText, castSwapImagesSent } from "./cast-swap-kling-trend"

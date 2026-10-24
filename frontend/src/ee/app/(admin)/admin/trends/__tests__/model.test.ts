@@ -14,12 +14,16 @@ import {
   getMaxVideoPromptChars,
   TREND_PROMPT_LIMITS,
 } from "@nodaro/shared/models"
+import { klingEngineText } from "@nodaro/render-rules"
 import {
   describeBlocker,
+  engineOfForm,
   FACE_MASKING_BOUNDS,
   FACE_MASKING_DEFAULTS,
   formIssues,
   fromForm,
+  imagesSentAtMost,
+  maxImagesFor,
   MAX_PRE_PROMPT,
   MAX_TREND_PROMPT,
   promptBudget,
@@ -149,6 +153,10 @@ describe("face masking and the pre prompt in the form", () => {
     expect(FACE_MASKING_DEFAULTS.zone).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
   })
 
+  it("describes an engine without Kling 4", () => {
+    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "kling-4" })).toBe("production: Kling 4 not supported yet")
+  })
+
   it("describes an engine without face masking", () => {
     expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "faceMasking" })).toBe(
       "production: face masking not supported yet",
@@ -218,5 +226,45 @@ describe("the chips a slot shows to people", () => {
     expect(withKind(form!, "pet")).not.toHaveProperty("chips")
     const place = withKind(form!, "location")
     expect(fromForm({ ...toForm(draft()), slots: [place] }).slots[0]).not.toHaveProperty("chips")
+  })
+})
+
+describe("the model (engine) in the form", () => {
+  it("round-trips a draft with no engine as none (Seedance 2.5), so loading it is no change", () => {
+    const form = toForm(draft())
+    expect(form.engine).toBeUndefined()
+    expect(engineOfForm(form)).toBe("seedance-2-5")
+    expect(fromForm(form)).not.toHaveProperty("engine")
+  })
+
+  it("holds a Kling 4 form to Kling 4's cap less its own engine text, as the server does", () => {
+    const form = toForm(draft({ engine: "kling-4" }))
+    const want = getMaxVideoPromptChars("kling-4") - klingEngineText({ slots: form.slots, references: form.references }) - 2 - TREND_DETAILS_MAX
+    expect(promptBudget(form).promptsMax).toBe(want)
+    expect(promptBudget(toForm(draft())).promptsMax).toBe(getMaxVideoPromptChars("seedance-2-5") - TREND_PROMPT_LIMITS.engineTextReserve - 2 - TREND_DETAILS_MAX)
+  })
+
+  it("caps a Kling 4 form at 10 images, Seedance at 30", () => {
+    expect(maxImagesFor(toForm(draft({ engine: "kling-4" })))).toBe(10)
+    expect(maxImagesFor(toForm(draft()))).toBe(30)
+    const five = Array.from({ length: 5 }, (_, i) => ({ key: `s${i}`, label: { en: "S" }, kind: "person" as const, required: true, roleName: "r" }))
+    expect(imagesSentAtMost(toForm(draft({ engine: "kling-4", slots: five })))).toBe(5)
+    expect(imagesSentAtMost(toForm(draft({ slots: five })))).toBe(15)
+    const references = [{ images: ["https://x/1.png", "https://x/2.png", "https://x/3.png"], line: "l" }, { images: ["https://x/4.png", "https://x/5.png", "https://x/6.png"], line: "l" }]
+    expect(formIssues(toForm(draft({ engine: "kling-4", slots: five, references })))).toContain(
+      "11 images: at most 10 on Kling 4 (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).",
+    )
+  })
+
+  it("keeps klingLength on a Kling 4 draft, and out of a Seedance one", () => {
+    expect(fromForm(toForm(draft({ engine: "kling-4", klingLength: "cut-start" })))).toMatchObject({ engine: "kling-4", klingLength: "cut-start" })
+    expect(fromForm({ ...toForm(draft({ engine: "kling-4", klingLength: "cut-start" })), engine: "seedance-2-5" })).not.toHaveProperty("klingLength")
+  })
+
+  it("round-trips a chosen engine exactly", () => {
+    for (const engine of ["seedance-2-5", "kling-4"] as const) {
+      expect(fromForm(toForm(draft({ engine })))).toEqual(savedOf(draft({ engine })))
+      expect(engineOfForm(toForm(draft({ engine })))).toBe(engine)
+    }
   })
 })

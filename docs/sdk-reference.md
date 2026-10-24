@@ -1979,8 +1979,11 @@ interface CastSwapParams {
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
-  resolution?: "480p" | "720p" | "1080p" // default "480p"
-  draft?: boolean                  // default true at 480p, false above; true above 480p is a 400
+  engine?: CastSwapEngine          // "seedance-2-5" (default) | "kling-4" (see below)
+  klingLength?: "cut-end" | "cut-start" // CastSwapKlingLength, kling-4 only; default "cut-end"
+  resolution?: "480p" | "720p" | "1080p" // default "480p"; kling-4: "720p" (default) or "1080p"
+  draft?: boolean                  // default true at 480p, false above; true above 480p is a 400;
+                                   // kling-4 has no draft (true = 400 draft_unsupported)
   prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
   faceMasking?: CastSwapFaceMasking // default off: mask the faces in the clip first (see below)
   quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
@@ -2014,12 +2017,13 @@ interface CastSwapEstimate {
 }
 
 interface CastSwapFullQualityEstimate {
+  kind?: "same-take" | "new-take" // CastSwapFullQualityKind; absent from an older engine = "same-take"
   totalCredits: number // castSwap + seedanceHd
   breakdown: {
     castSwap: number     // the Full Quality job's own steps
     seedanceHd: number   // the 1080p render; 0 when an earlier try's render is reused
   }
-  availableUntil: string // ISO time: 7 days after the draft completed
+  availableUntil: string // ISO time: 7 days after the run completed
 }
 
 interface CastSwapFullQualityResult {
@@ -2112,10 +2116,28 @@ const quote = await client.castSwap.estimate(params)
 const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
 ```
 
+**Engines** (`engine`, `CastSwapEngine`). Left out, a run is made on
+Seedance 2.5, as before. `"kling-4"` makes a new take guided by the clip and
+the pictures: 720p (its default) or 1080p, no draft (`draft: true` is a
+`400 draft_unsupported`, 480p is refused), a 4 s preview as on Seedance, and a
+Full Quality that is a new take (below). `klingLength` (`CastSwapKlingLength`)
+says where a Kling run cuts the clip to whole seconds: `"cut-end"` (default)
+or `"cut-start"` drops the fraction of a second at that end. A Kling quote names `engine`, prices the take as
+`breakdown.kling` (no `seedance` / `seedanceExpected`; its Full Quality quote
+has `kling` in place of `seedanceHd`), with `expectedCredits` = `totalCredits`
+and `settlesLower: false`. Its own refusals: `draft_unsupported`,
+`resolution_unsupported`, `output_format_unsupported`, `too_many_images` (over
+10 images) and, past its 8,000-character prompt cap, `prompt_too_long`. The job records it in
+`input_data.engine`, and a completed job's output in its `engine`.
+
 **Full Quality.** A finished draft run (a Cast Swap run made as a draft, or a
 trend run, whose default is a draft) can be finished at Full Quality within 7
 days: `fullQuality(jobId)` re-renders the same take at 1080p, with the clip's
-audio, as a new job linked to the draft. It spends credits; quote it first with
+audio, as a new job linked to the draft. A finished Kling 4 run at 720p can be
+too: Full Quality then makes a NEW take at 1080p from the same inputs (it will
+not match the 720p run frame for frame; the 720p run stays). The quote's
+`kind` (`CastSwapFullQualityKind`: `"same-take"` or `"new-take"`) says which,
+so a client can word it. It spends credits; quote it first with
 `fullQualityEstimate(jobId)` (free), whose `totalCredits` is
 `breakdown.castSwap + breakdown.seedanceHd` (`seedanceHd` is 0 when an earlier
 failed try of this draft already finished the 1080p render, which is then
@@ -2194,7 +2216,8 @@ interface TrendCard {
 interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
-  resolutions: ("480p" | "720p" | "1080p")[]
+  engine?: "seedance-2-5" | "kling-4"  // TrendEngine: the video model every run uses (the trend's choice); absent = seedance-2-5
+  resolutions: ("480p" | "720p" | "1080p")[] // default first: seedance-2-5 ["480p" (draft), "720p", "1080p"], kling-4 ["720p", "1080p"]
   slots: TrendDetailSlot[]
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
 }
@@ -2210,8 +2233,8 @@ interface TrendRunRequest {
   example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
-  resolution?: "480p" | "720p" | "1080p" // default "480p"
-  draft?: boolean       // only at 480p; default true there
+  resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
+  draft?: boolean       // only at 480p on seedance-2-5; default true there; kling-4: true = 400 draft_unsupported
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
@@ -2234,11 +2257,12 @@ interface TrendRun {
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean
+  engine?: "seedance-2-5" | "kling-4" // the video model it was made on; absent = seedance-2-5
   videoUrl: string | null; posterUrl: string | null  // once completed
   creditsCharged: number | null
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
   fullQuality: { jobId: string; status: string } | null // a draft's newest Full Quality try: a pointer only
-  fullQualityUntil: string | null    // until when a completed draft can be redone in Full Quality
+  fullQualityUntil: string | null    // until when a completed draft (or kling-4 720p run) can be redone in Full Quality
 }
 
 interface TrendTag {

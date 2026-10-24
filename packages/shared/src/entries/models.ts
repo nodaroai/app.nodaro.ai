@@ -210,7 +210,15 @@ export {
   TREND_PROMPT_LIMITS,
   CAST_SWAP_FACE_MASKING_BOUNDS,
   CAST_SWAP_FACE_MASKING_DEFAULTS,
+  CAST_SWAP_ENGINES,
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  CAST_SWAP_RESOLUTIONS_BY_ENGINE,
+  castSwapEngineHasDraft,
+  CAST_SWAP_KLING_LENGTHS,
+  CAST_SWAP_KLING_LENGTH_WHEN_OMITTED,
+  CAST_SWAP_KLING_MAX_IMAGES,
 } from "../cast-swap-limits.js"
+export type { CastSwapEngine, CastSwapKlingLength } from "../cast-swap-limits.js"
 export type {
   ImageAspectRatio,
   ImageResolution,

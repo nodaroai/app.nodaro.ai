@@ -7,6 +7,8 @@
  */
 export {
   CastSwapResource,
+  type CastSwapEngine,
+  type CastSwapKlingLength,
   type CastSwapTraitSource,
   type CastSwapRolePreviewSettings,
   type CastSwapPersonRole,
@@ -21,6 +23,7 @@ export {
   type CastSwapRunOptions,
   type CastSwapReference,
   type CastSwapFullQualityEstimate,
+  type CastSwapFullQualityKind,
   type CastSwapFullQualityParams,
   type CastSwapFullQualityResult,
   type CastSwapFullQualityRefusalCode,

@@ -578,16 +578,20 @@ async function trimVideoToUrl(
 
 /** `tk.ffmpeg.probeVideoMeta` — mirrors `probeVideoSource`, field rename only.
  *  `fps` rides along only when the probe reports a usable (positive, finite)
- *  constant rate; otherwise it is absent, which a plugin reads as "unknown". */
+ *  constant rate, and `videoDurationSec` (the video stream's own duration)
+ *  only when it reports a usable one; otherwise each is absent, which a
+ *  plugin reads as "unknown". */
 async function probeVideoMeta(
   url: string,
-): Promise<{ durationSec: number; width: number; height: number; fps?: number }> {
-  const { width, height, durationSeconds, fps } = await probeVideoSource(url)
+): Promise<{ durationSec: number; width: number; height: number; fps?: number; videoDurationSec?: number }> {
+  const { width, height, durationSeconds, fps, videoDurationSeconds } = await probeVideoSource(url)
+  const usable = (v: number | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0
   return {
     width,
     height,
     durationSec: durationSeconds,
-    ...(typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? { fps } : {}),
+    ...(usable(fps) ? { fps } : {}),
+    ...(usable(videoDurationSeconds) ? { videoDurationSec: videoDurationSeconds } : {}),
   }
 }
 

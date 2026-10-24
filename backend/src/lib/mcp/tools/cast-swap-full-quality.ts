@@ -1,7 +1,10 @@
 /**
- * MCP Full Quality verbs — a finished Cast Swap (or trend) DRAFT re-rendered
- * as the same take at 1080p, with the clip's audio, as a new job linked to
- * the draft. The MCP face of the Cloud plugin's routes:
+ * MCP Full Quality verbs — a finished Cast Swap (or trend) run made again at
+ * 1080p, with the clip's audio, as a new job linked to it: a Seedance 2.5
+ * DRAFT's own take re-rendered (`kind: "same-take"`), or a new Kling 4 take
+ * from a 720p run's inputs (`kind: "new-take"`). The quote's `kind` words it;
+ * an older engine answers none (a same take). The MCP face of the Cloud
+ * plugin's routes:
  *
  *   estimate_full_quality  POST /v1/cast-swap/:jobId/full-quality/estimate  workflows:execute
  *   full_quality           POST /v1/cast-swap/:jobId/full-quality           workflows:execute
@@ -14,7 +17,8 @@
  * keys the job by the draft, so no client idempotency key is sent.
  *
  * Results are rebuilt field by field from the route's answer (never spread).
- * The route is the authority on every rule (a draft, finished, within 7 days).
+ * The route is the authority on every rule (a draft or a Kling 4 720p run,
+ * finished, within 7 days).
  * Its one refusal that ends on its own, 409 `full_quality_pending` (an earlier
  * try's 1080p render is being reviewed or has not started), says to try again
  * later; every other refusal is passed back as the route words it.
@@ -48,9 +52,14 @@ export interface RegisterCastSwapFullQualityToolsOpts {
   fastify: FastifyInstance
 }
 
+type FullQualityKind = "same-take" | "new-take"
+
 interface FullQualityQuote {
+  /** Absent from an older engine (then a same take). */
+  kind?: FullQualityKind
   totalCredits: number
-  breakdown: { castSwap: number; seedanceHd: number }
+  /** `castSwap`, and the engine's other parts (`seedanceHd`: the 1080p render, 0 when reused). */
+  breakdown: { castSwap: number; seedanceHd?: number } & Record<string, number>
   availableUntil: string
 }
 
@@ -71,14 +80,24 @@ function dataOf(body: string): unknown {
 function quoteOf(body: string): FullQualityQuote | null {
   const q = dataOf(body)
   if (!isRec(q) || !finite(q.totalCredits) || !isRec(q.breakdown) || typeof q.availableUntil !== "string") return null
-  const { castSwap, seedanceHd } = q.breakdown
-  if (!finite(castSwap) || !finite(seedanceHd)) return null
-  return { totalCredits: q.totalCredits, breakdown: { castSwap, seedanceHd }, availableUntil: q.availableUntil }
+  if (!finite(q.breakdown.castSwap)) return null
+  // Only the breakdown's own numeric parts, so a new engine's part names pass through.
+  const breakdown = Object.fromEntries(
+    Object.entries(q.breakdown).filter((e): e is [string, number] => finite(e[1])),
+  ) as FullQualityQuote["breakdown"]
+  const kind = q.kind === "same-take" || q.kind === "new-take" ? q.kind : undefined
+  return { ...(kind ? { kind } : {}), totalCredits: q.totalCredits, breakdown, availableUntil: q.availableUntil }
 }
 
 function quoteSentence(q: FullQualityQuote): string {
+  if (q.kind === "new-take") {
+    return (
+      `Full Quality makes a NEW take of this run at 1080p from the same inputs (it will not match the 720p run frame for frame; the 720p run stays), ` +
+      `for about ${q.totalCredits} credits. Available until ${q.availableUntil}.`
+    )
+  }
   const reused = q.breakdown.seedanceHd === 0 ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
-  return `Finishing this draft at Full Quality costs about ${q.totalCredits} credits.${reused} Available until ${q.availableUntil}.`
+  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${q.totalCredits} credits.${reused} Available until ${q.availableUntil}.`
 }
 
 const failure = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true as const })
@@ -112,7 +131,7 @@ function refusal(statusCode: number, body: string) {
 
 /** A job id: anything else (a slash, a dot segment) is refused before a request is made. */
 const JOB_ID_RE = /^[A-Za-z0-9-]{1,64}$/
-const JOB_ID_HINT = "The finished draft run's job id (a Cast Swap or trend run made as a draft)."
+const JOB_ID_HINT = "The finished run's job id: a Cast Swap or trend run made as a draft, or one made on kling-4 at 720p."
 const fullQualityUrl = (id: string) => `/v1/cast-swap/${encodeURIComponent(id)}/full-quality`
 
 export function registerCastSwapFullQualityTools({ server, session, fastify }: RegisterCastSwapFullQualityToolsOpts): void {
@@ -130,8 +149,9 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Estimate Full Quality",
       description:
-        "Quote finishing a Cast Swap or trend DRAFT at Full Quality (free; nothing starts): the same take re-rendered at 1080p. " +
-        "Within 7 days of the draft finishing. If the draft's Full Quality already exists, full_quality returns it free.",
+        "Quote finishing a Cast Swap or trend run at Full Quality (free; nothing starts): a DRAFT's same take re-rendered at 1080p, " +
+        'or, for a kling-4 run at 720p, a new take at 1080p (the quote\'s kind: "same-take" or "new-take"). ' +
+        "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free.",
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
       },
@@ -152,9 +172,10 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Full Quality",
       description:
-        "Finish a Cast Swap or trend DRAFT at Full Quality: the same take re-rendered at 1080p with the clip's audio, as a new job. " +
+        "Finish a Cast Swap or trend run at Full Quality, at 1080p with the clip's audio, as a new job: a DRAFT's same take re-rendered, " +
+        "or a new take of a kling-4 720p run (the quote says which). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
-        "That returns a job id (the existing one, free, if this draft's Full Quality already exists): poll it with wait_for_job.",
+        "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job.",
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
@@ -171,7 +192,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
             {
               type: "text" as const,
               text:
-                `${quoteSentence(q.quote)} If this draft already has a Full Quality job running or done, confirming returns it at no charge. ` +
+                `${quoteSentence(q.quote)} If this run already has a Full Quality job running or done, confirming returns it at no charge. ` +
                 "Present this to the user; call full_quality again with confirm: true once they accept.",
             },
           ],
@@ -194,7 +215,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       const existing = isRec(data) && data.existing === true
       registerTask({ taskId: id, userId: session.userId, kind: "video" })
       const lead = existing
-        ? `This draft's Full Quality already exists (job ${id}); nothing new was started or charged.`
+        ? `This run's Full Quality already exists (job ${id}); nothing new was started or charged.`
         : `Full Quality started (job ${id}).`
       return {
         content: [{ type: "text" as const, text: `${lead} To follow it, ${GET_JOB_POLL_HINT}.` }],

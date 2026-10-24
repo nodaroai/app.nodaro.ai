@@ -7,7 +7,13 @@
  */
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
-import { TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
+import {
+  CAST_SWAP_ENGINES,
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  CAST_SWAP_KLING_LENGTHS,
+  TREND_PROMPT_LIMITS,
+  type CastSwapEngine,
+} from "@nodaro/shared/models"
 import { faceMaskingSchema } from "../../../lib/cast-swap-face-masking.js"
 import type {
   Choice,
@@ -149,6 +155,16 @@ const trendExampleSchema = z.strictObject({
   sourceJobId: z.string().min(1),
 })
 
+/**
+ * A trend version's engine: its own, else `"seedance-2-5"` (the engine of
+ * every version saved before the choice, and of a version that names none).
+ * Read through here, never `data.engine` directly, so an old version reads
+ * as what it always ran on.
+ */
+export function engineOf(data: Pick<TrendVersionData, "engine">): CastSwapEngine {
+  return data.engine ?? CAST_SWAP_ENGINE_WHEN_OMITTED
+}
+
 /** The most images a run of this version can send: 3 per slot plus every fixed reference image. */
 export function maxImagesOf(data: Pick<TrendVersionData, "slots" | "references">): number {
   return MAX_IMAGES_PER_SLOT * data.slots.length + data.references.reduce((n, r) => n + r.images.length, 0)
@@ -172,6 +188,11 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     trendPrompt: z.string().max(TREND_PROMPT_LIMITS.trendPromptMax).optional(),
     prePrompt: z.string().max(TREND_PROMPT_LIMITS.prePromptMax).optional(),
     faceMasking: faceMaskingSchema.optional(),
+    // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
+    // names none is kept without the key, so re-saving an old draft is no change.
+    engine: z.enum(CAST_SWAP_ENGINES).optional(),
+    // Absent = "cut-end". Read only on a Kling 4 trend.
+    klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     examples: z.array(trendExampleSchema),
   })
   .superRefine((d, ctx) => {
@@ -225,10 +246,9 @@ export const trendRunRequestSchema: z.ZodType<TrendRunRequest> = z
     projectId: z.string().min(1).max(200).optional(),
     previewJobId: z.string().regex(UUID_RE, "previewJobId must be a job id (uuid).").optional(),
   })
-  .refine((r) => !(r.draft === true && r.resolution !== undefined && r.resolution !== "480p"), {
-    path: ["draft"],
-    message: "Draft is only available at 480p.",
-  })
+// `draft: true` above 480p is refused by the composition, which knows the trend's
+// engine: Seedance 2.5 answers `validation_error` (draft is 480p only), Kling 4
+// `draft_unsupported` (it has no draft at all).
 
 /**
  * The first chip in a run request that the slot's kind does not take (a

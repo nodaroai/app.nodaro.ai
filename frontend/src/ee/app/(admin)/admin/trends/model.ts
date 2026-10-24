@@ -11,12 +11,17 @@ import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
   CAST_SWAP_FACE_MASKING_BOUNDS,
   CAST_SWAP_FACE_MASKING_DEFAULTS,
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  CAST_SWAP_KLING_MAX_IMAGES,
   CAST_SWAP_POST_PROMPT_MAX,
   getMaxVideoPromptChars,
   TREND_PROMPT_LIMITS,
 } from "@nodaro/shared/models"
+import { castSwapImagesSent, klingEngineText } from "@nodaro/render-rules"
 import type {
   AdminTrendData,
+  AdminTrendEngine,
+  AdminTrendKlingLength,
   AdminTrendFaceMasking,
   AdminTrendFaceMaskingZone,
   AdminTrendReference,
@@ -55,9 +60,21 @@ export interface PromptBudget {
   readonly room: number
 }
 
-export function promptBudget(form: Pick<TrendForm, "prePrompt" | "trendPrompt">): PromptBudget {
+/**
+ * A Kling 4 trend is held to Kling 4's cap, less the engine text of its own
+ * slots and references (`klingEngineText`), as the server counts it.
+ */
+export function promptBudget(
+  form: Pick<TrendForm, "prePrompt" | "trendPrompt"> & Partial<Pick<TrendForm, "engine" | "slots" | "references">>,
+): PromptBudget {
   const trendPromptMax = CAST_SWAP_POST_PROMPT_MAX - SEP - TREND_DETAILS_MAX
-  const promptsMax = getMaxVideoPromptChars("seedance-2-5") - TREND_PROMPT_LIMITS.engineTextReserve - SEP - TREND_DETAILS_MAX
+  const promptsMax =
+    form.engine === "kling-4"
+      ? getMaxVideoPromptChars("kling-4") -
+        klingEngineText({ slots: form.slots ?? [], references: form.references ?? [] }) -
+        SEP -
+        TREND_DETAILS_MAX
+      : getMaxVideoPromptChars("seedance-2-5") - TREND_PROMPT_LIMITS.engineTextReserve - SEP - TREND_DETAILS_MAX
   const pre = form.prePrompt.length
   const trend = form.trendPrompt.length
   return { trendPromptMax, promptsMax, room: Math.min(trendPromptMax - trend, promptsMax - pre - trend) }
@@ -118,6 +135,10 @@ export interface TrendForm {
   prePrompt: string
   /** As stored: undefined = the draft has none (masking off). */
   faceMasking: AdminTrendFaceMasking | undefined
+  /** As stored: undefined = the draft names none (Seedance 2.5), so loading an old draft is no change. */
+  engine: AdminTrendEngine | undefined
+  /** As stored: undefined = none set ("cut-end"). Saved only while the engine is Kling 4. */
+  klingLength: AdminTrendKlingLength | undefined
 }
 
 let uidSeq = 0
@@ -134,7 +155,14 @@ export function toForm(draft: AdminTrendData): TrendForm {
     trendPrompt: draft.trendPrompt ?? "",
     prePrompt: draft.prePrompt ?? "",
     faceMasking: draft.faceMasking ? structuredClone(draft.faceMasking) : undefined,
+    engine: draft.engine,
+    klingLength: draft.klingLength,
   }
+}
+
+/** The engine a run of this form uses: its own, else Seedance 2.5 (the server's `engineOf`). */
+export function engineOfForm(form: Pick<TrendForm, "engine">): AdminTrendEngine {
+  return form.engine ?? CAST_SWAP_ENGINE_WHEN_OMITTED
 }
 
 /** Only the keys that hold a number; undefined (the default margins) when none do; null (no margins) as it is. */
@@ -238,7 +266,29 @@ export function fromForm(form: TrendForm): Omit<AdminTrendData, "examples"> {
     ...(form.trendPrompt.trim() ? { trendPrompt: form.trendPrompt } : {}),
     ...(form.prePrompt.trim() ? { prePrompt: form.prePrompt } : {}),
     ...(form.faceMasking ? { faceMasking: cleanMasking(form.faceMasking) } : {}),
+    ...(form.engine ? { engine: form.engine } : {}),
+    // Read only on Kling 4: kept out of a Seedance draft.
+    ...(form.engine === "kling-4" && form.klingLength ? { klingLength: form.klingLength } : {}),
   }
+}
+
+/** The most images a run of this form may send: 10 on Kling 4, else 30. */
+export function maxImagesFor(form: Pick<TrendForm, "engine">): number {
+  return form.engine === "kling-4" ? CAST_SWAP_KLING_MAX_IMAGES : MAX_TREND_IMAGES
+}
+
+/**
+ * What a run of this form can send at most, as the engine's route counts it.
+ * Kling 4: a person, pet or product slot sends its ONE prepared picture (a
+ * trend run prepares them), a location its 3, plus the reference pictures.
+ * Seedance 2.5: 3 per slot plus every reference picture (`imageCount`).
+ */
+export function imagesSentAtMost(form: Pick<TrendForm, "engine" | "slots" | "references">): number {
+  if (form.engine !== "kling-4") return imageCount(form)
+  return castSwapImagesSent(
+    form.slots.map((s) => ({ kind: s.kind, images: MAX_IMAGES_PER_SLOT })),
+    form.references.reduce((n, r) => n + r.images.length, 0),
+  )
 }
 
 /** What a run of this form can send at most: 3 per slot plus every reference picture. */
@@ -313,14 +363,22 @@ export function formIssues(form: TrendForm): string[] {
   }
   if (form.prePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
   else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
-    out.push(`Pre and trend prompts: at most ${budget.promptsMax} characters together, to leave room for the engine's text and the user's details.`)
+    const on = form.engine === "kling-4" ? " on Kling 4" : ""
+    out.push(`Pre and trend prompts: at most ${Math.max(0, budget.promptsMax)} characters together${on}, to leave room for the engine's text and the user's details.`)
   }
   if (form.faceMasking) out.push(...maskingIssues(form.faceMasking))
   if (form.source && form.previewStart !== null && form.previewStart + PREVIEW_SECONDS > form.source.durationSec) {
     out.push(`The ${PREVIEW_SECONDS} s preview must fit inside the ${form.source.durationSec.toFixed(1)} s clip.`)
   }
-  const images = imageCount(form)
-  if (images > MAX_TREND_IMAGES) out.push(`${images} images: at most ${MAX_TREND_IMAGES} (3 per slot plus the reference pictures).`)
+  const images = imagesSentAtMost(form)
+  const most = maxImagesFor(form)
+  if (images > most) {
+    out.push(
+      form.engine === "kling-4"
+        ? `${images} images: at most ${most} on Kling 4 (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
+        : `${images} images: at most ${most} (3 per slot plus the reference pictures).`,
+    )
+  }
   return out
 }
 
@@ -352,6 +410,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   fixedReferences: "fixed references",
   faceMasking: "face masking",
   trendPrePrompt: "pre prompts",
+  "kling-4": "Kling 4",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
   castSwap: "Cast Swap",

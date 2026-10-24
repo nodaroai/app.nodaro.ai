@@ -4084,7 +4084,7 @@ installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, expectedCredits, breakdown: { castSwap, seedance, seedanceExpected, references, masking? }, maskingCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, expectedCredits, breakdown: { castSwap, seedance, seedanceExpected, references, masking? }, maskingCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. On Kling 4 it also names `engine: "kling-4"`, the take is `breakdown.kling` (in place of `seedance` and `seedanceExpected`), `expectedCredits` equals `totalCredits` and `settlesLower` is `false`: Kling renders exactly the length asked for. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4100,13 +4100,30 @@ it out of a preview — not sent, prepared or charged; a full run ignores both),
 and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
-`previewStart`, `resolution` (`"480p"` — the default — `"720p"` or `"1080p"`),
-`draft` (on by default at 480p, off above it; `true` above 480p is refused),
-`prepareReferences` (default `true`, see below), `faceMasking` (off by
+`previewStart`, `engine` (see below), `resolution` (`"480p"` — the default —
+`"720p"` or `"1080p"`; on Kling 4 `"720p"` — its default — or `"1080p"`),
+`draft` (on by default at 480p, off above it; `true` above 480p is refused,
+and Kling 4 has no draft), `prepareReferences` (default `true`, see below), `faceMasking` (off by
 default, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
+
+**Engines.** `engine` chooses the video model: `"seedance-2-5"` (the default,
+when `engine` is left out, so callers that predate it keep what they had) or
+`"kling-4"`. Seedance 2.5 renders 480p (a draft by default), 720p or 1080p,
+and its Full Quality re-renders a draft's own take at 1080p. Kling 4 makes a
+new take guided by the clip and your images: it renders 720p (the default) or
+1080p, with no draft (`draft: true` answers `400 draft_unsupported`, and 480p
+is refused). Kling renders whole seconds, so the clip is cut to whole
+seconds: `klingLength` says where — `"cut-end"` (the default: the fraction
+of a second at its end is dropped) or `"cut-start"` (at its start); Seedance
+2.5 ignores it. A preview is still 4 s from `previewStart`, and its Full Quality
+makes a new take at 1080p from a completed 720p run's inputs (see
+[Full Quality](#full-quality)). The job records its engine in
+`input_data.engine`, and a completed job's output in its `engine`. The engine's
+own limits apply (Kling 4 takes fewer images per run than the 30 Cast Swap
+allows), and the route refuses what it cannot run.
 
 **Fixed references.** `references` (at most 5) are things the video should
 show that no role replaces, each `{ images, line }`: 1–3 images of ONE thing
@@ -4191,13 +4208,17 @@ Refusals, all before anything is charged (bodies are
 | Status | `code` | When |
 |---|---|---|
 | `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, or a `faceMasking` setting out of range (including a `maxFaceHeightPct` above 0 and below `minFaceHeightPct`). Also an invalid `origin`. |
+| `400` | `draft_unsupported` | `draft: true` with `engine: "kling-4"`, which has no draft. |
+| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "kling-4"`. |
+| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "kling-4"` (only a Seedance edit can be one). |
+| `400` | `too_many_images` | More than 10 images in a `engine: "kling-4"` run, across every role and fixed reference. |
 | `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
-| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the model's limit. |
+| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the model's limit (Kling 4's is 8,000 characters). |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
 | `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with face masking `"auto"`, the quote plus `maskingCredits`). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
@@ -4208,20 +4229,28 @@ Refusals, all before anything is charged (bodies are
 
 ### Full Quality
 
-A finished DRAFT run (a Cast Swap run made as a draft, or a trend run, whose
-default is a draft) can be finished at Full Quality: the same take re-rendered
-at 1080p, fitted to the clip and given its original audio back, as a new job
-linked to the draft. It is available for 7 days after the draft completed
+A finished run can be finished at Full Quality, at 1080p, fitted to the clip
+and given its original audio back, as a new job linked to it:
+
+- a Seedance 2.5 DRAFT run (a Cast Swap run made as a draft, or a trend run
+  whose default is a draft): the same take re-rendered at 1080p;
+- a Kling 4 run at 720p: a NEW take at 1080p from the run's own inputs (for a
+  trend run, recomposed from the trend version it ran on). Kling cannot redo a
+  take sharper, so it will not match the 720p run frame for frame.
+
+The run itself stays either way. The quote's `kind` says which it is
+(`"same-take"` or `"new-take"`; an older Cast Swap engine leaves it out: a
+same take). It is available for 7 days after the run completed
 (SDK: [`client.castSwap.fullQuality`](./sdk-reference.md#clientcastswap),
 MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 `nodaro cast-swap full-quality estimate|run`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedanceHd }, availableUntil }`. |
-| `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this draft's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
+| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown: { castSwap, seedanceHd } (a new take: { castSwap, kling }), availableUntil }`. |
+| `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
-`:jobId` is the draft run's job id. The quote is `totalCredits` =
+`:jobId` is the draft's (or Kling 4 720p run's) job id. The quote is `totalCredits` =
 `breakdown.castSwap` (the Full Quality job's own steps) +
 `breakdown.seedanceHd` (the 1080p render). `seedanceHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only
@@ -4245,7 +4274,7 @@ Refusals, all before anything is charged (bodies are
 | `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
 | `404` | `not_found` | Not your job, or not a Cast Swap run; also a `sessionId` you may not use (start only). |
 | `409` | `not_completed` | The run has not finished. |
-| `409` | `not_a_draft` | The run was not made as a draft. |
+| `409` | `not_a_draft` | The run is neither a Seedance 2.5 draft nor a Kling 4 run at 720p. |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
@@ -4269,7 +4298,7 @@ slug is a `404` on every route.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length and resolutions). Each slot is `{ key, label, kind, required, hint?, chips, defaults? }`: `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length, `engine` and `resolutions`). `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, chips, defaults? }`: `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
@@ -4295,8 +4324,11 @@ The estimate and run body is
 - `details`: your own words, at most 1,000 characters; mention a slot as
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
-- `resolution`: `"480p"` (default), `"720p"` or `"1080p"`. `draft` (default
-  `true`) is only available at 480p.
+- `resolution`: one of the trend's `resolutions`, default its first
+  (`"480p"`, or `"720p"` on a Kling 4 trend); another is a `400`
+  `resolution_unsupported`. `draft` (default `true`) is only available at 480p
+  on a Seedance 2.5 trend; `draft: true` on a Kling 4 trend is a `400`
+  `draft_unsupported`.
 - `sessionId`: one of your generation sessions. Accepted (one you may not
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
@@ -4326,6 +4358,9 @@ anything is charged:
 | `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
+| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Kling 4). |
+| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Kling 4 trend). |
+| `400` | `too_many_images` | A Kling 4 trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend does not have, or an optional slot is left empty and the trend has no example (1, by default) to fill it. |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
@@ -4366,7 +4401,11 @@ else `cancelled` or `failed`. The message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
 
-A Full Quality version of a draft run is a run of its own in
+Each run carries its `engine`. A completed Seedance 2.5 draft, or a completed
+Kling 4 run at 720p, has `fullQualityUntil` (the end of its 7 days) and can be
+finished at [Full Quality](#full-quality); on Kling 4 that is a new take.
+
+A Full Quality version of a draft run (or of a Kling 4 720p run) is a run of its own in
 `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
 `status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
 `draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any

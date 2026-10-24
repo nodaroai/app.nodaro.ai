@@ -56,6 +56,7 @@ const detail: TrendDetail = {
   ...card,
   version: 3,
   previewSec: 4,
+  engine: "seedance-2-5",
   resolutions: ["480p", "720p", "1080p"],
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
@@ -96,6 +97,7 @@ const run: TrendRun = {
   preview: false,
   resolution: "480p",
   draft: true,
+  engine: "seedance-2-5",
   videoUrl: "https://cdn.example.com/out.mp4",
   posterUrl: null,
   creditsCharged: 7,
@@ -163,6 +165,12 @@ describe("trends resource", () => {
     expect(first.url.pathname).toBe("/v1/trends/dance-off")
     expect([...first.url.searchParams.keys()]).toEqual([])
     expect(Object.fromEntries(call(fetchMock, 1).url.searchParams)).toEqual({ locale: "he" })
+  })
+
+  it("get returns a Kling 4 trend's engine and its resolutions (no draft)", async () => {
+    const kling: TrendDetail = { ...detail, engine: "kling-4", resolutions: ["720p", "1080p"] }
+    const fetchMock = vi.fn().mockReturnValue(mockOk({ data: kling }))
+    await expect(make(fetchMock).trends.get("dance-off")).resolves.toMatchObject({ engine: "kling-4", resolutions: ["720p", "1080p"] })
   })
 
   it("encodes the slug into the path", async () => {
