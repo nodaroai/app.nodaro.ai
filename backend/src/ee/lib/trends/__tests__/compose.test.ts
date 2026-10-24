@@ -291,6 +291,73 @@ describe("composeTrendRun — preview, resolution, source", () => {
   })
 })
 
+describe("composeTrendRun — engine", () => {
+  const kling = () => trend(version({ engine: "kling-4" }))
+
+  it("sends no engine for a version that names none, so the body is as it always was", () => {
+    const { body, needs } = composeTrendRun(trend(), req())
+    expect(body).not.toHaveProperty("engine")
+    expect(needs.engine).toBe("seedance-2-5")
+  })
+
+  it("sends no engine for a Seedance 2.5 version either", () => {
+    const { body } = composeTrendRun(trend(version({ engine: "seedance-2-5" })), req())
+    expect(body).not.toHaveProperty("engine")
+    expect(body).toMatchObject({ resolution: "480p", draft: true })
+  })
+
+  it("sends Kling 4 at 720p, with no draft, by default", () => {
+    const { body, needs } = composeTrendRun(kling(), req())
+    expect(body).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false })
+    expect(needs.engine).toBe("kling-4")
+  })
+
+  it("sends Kling 4 at 1080p when asked, and a 4 s preview from the trend's start", () => {
+    expect(composeTrendRun(kling(), req({ resolution: "1080p" })).body).toMatchObject({ engine: "kling-4", resolution: "1080p", draft: false })
+    expect(composeTrendRun(kling(), req({ preview: true })).body).toMatchObject({ preview: true, previewStart: 2, resolution: "720p", draft: false })
+  })
+
+  it("takes draft: false on Kling 4 (there is no draft to turn off)", () => {
+    expect(composeTrendRun(kling(), req({ draft: false })).body).toMatchObject({ resolution: "720p", draft: false })
+  })
+
+  it("sends the trend's klingLength on Kling 4 only, and none when the trend sets none (cut-end)", () => {
+    expect(composeTrendRun(kling(), req()).body).not.toHaveProperty("klingLength")
+    expect(composeTrendRun(trend(version({ engine: "kling-4", klingLength: "cut-start" })), req()).body).toMatchObject({ klingLength: "cut-start" })
+    expect(composeTrendRun(trend(version({ engine: "kling-4", klingLength: "cut-start" })), req({ preview: true })).body).toMatchObject({ klingLength: "cut-start" })
+    expect(composeTrendRun(trend(version({ klingLength: "cut-start" })), req()).body).not.toHaveProperty("klingLength")
+  })
+
+  it("refuses a Kling 4 run that would send more than 10 pictures, as the route counts them", () => {
+    // version(): lead and friend (people: one prepared picture each), place (a location: its own), and a reference of 2.
+    const three = [img("a"), img("b"), img("c")]
+    const slots = { lead: { images: three }, friend: { images: three }, place: { images: three } }
+    const refs = (n: number) => [{ images: Array.from({ length: n }, (_, i) => img(`r${i}`)), line: "the sign" }]
+    // 1 + 1 + 3 + 5 = 10: the most.
+    expect(composeTrendRun(trend(version({ engine: "kling-4", references: refs(5) })), { slots }).body).toMatchObject({ engine: "kling-4" })
+    // 1 + 1 + 3 + 6 = 11.
+    expect(codeOf(() => composeTrendRun(trend(version({ engine: "kling-4", references: refs(6) })), { slots })).code).toBe("too_many_images")
+    // Seedance 2.5 keeps its own 30.
+    expect(composeTrendRun(trend(version({ references: refs(6) })), { slots }).body).not.toHaveProperty("engine")
+  })
+
+  it("refuses a draft on Kling 4, at any resolution", () => {
+    expect(codeOf(() => composeTrendRun(kling(), req({ draft: true }))).code).toBe("draft_unsupported")
+    expect(codeOf(() => composeTrendRun(kling(), req({ draft: true, resolution: "480p" }))).code).toBe("draft_unsupported")
+  })
+
+  it("refuses 480p on Kling 4", () => {
+    expect(codeOf(() => composeTrendRun(kling(), req({ resolution: "480p" }))).code).toBe("resolution_unsupported")
+    expect(codeOf(() => composeTrendRun(kling(), req({ resolution: "480p", draft: false }))).code).toBe("resolution_unsupported")
+  })
+
+  it("refuses draft above 480p by the trend's engine: Kling 4 draft_unsupported, Seedance 2.5 validation_error", () => {
+    expect(trendRunRequestSchema.safeParse({ slots: {}, draft: true, resolution: "720p" }).success).toBe(true)
+    expect(codeOf(() => composeTrendRun(kling(), req({ draft: true, resolution: "720p" }))).code).toBe("draft_unsupported")
+    expect(codeOf(() => composeTrendRun(trend(), req({ draft: true, resolution: "1080p" }))).code).toBe("validation_error")
+  })
+})
+
 describe("composeTrendRun — display and needs", () => {
   it("stamps the trend in English and hands the same display to the engine", () => {
     const { body, display } = composeTrendRun(trend(), req())
@@ -317,7 +384,13 @@ describe("composeTrendRun — display and needs", () => {
   })
 
   it("reports the kinds used and whether there are fixed references", () => {
-    expect(composeTrendRun(trend(), req()).needs).toEqual({ roleKinds: new Set(["person", "location"]), fixedReferences: true, faceMasking: false, trendPrePrompt: false })
+    expect(composeTrendRun(trend(), req()).needs).toEqual({
+      roleKinds: new Set(["person", "location"]),
+      fixedReferences: true,
+      faceMasking: false,
+      trendPrePrompt: false,
+      engine: "seedance-2-5",
+    })
     expect(composeTrendRun(trend(version({ references: [] })), req()).needs.fixedReferences).toBe(false)
   })
 

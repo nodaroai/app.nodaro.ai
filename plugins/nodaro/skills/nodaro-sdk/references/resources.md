@@ -41,7 +41,7 @@
 | `models` | Model catalog: capabilities + credit prices, each model's maker + the maker's `logoUrl` (`GET /v1/models`) |
 | `shots` | Saved shots: prompt, references, results; private or public |
 | `recast` | Recast runs: quote, buy, follow, answer picks, import a script |
-| `castSwap` | Cast Swap: replace the people and/or location in a short video — `run`, `estimate` (Cloud) |
+| `castSwap` | Cast Swap: replace the people, pets, products and/or location in a short video on Seedance 2.5 or Kling 4 (`engine`) — `run`, `estimate`, `fullQualityEstimate`, `fullQuality` (Cloud) |
 | `trends` | Trends: ready-made Cast Swap recipes — browse (`list`, `get`), `estimate`, `run` with your own pictures, your `runs`, `favorite` / `unfavorite` (Cloud) |
 | `studio` | Studio productions: plan, edit, stills and clips, share, copy |
 | `copilot` | Copilot threads and streamed turns (signed-in session only) |

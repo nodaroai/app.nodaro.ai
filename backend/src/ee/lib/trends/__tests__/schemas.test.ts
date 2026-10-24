@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from "vitest"
 import {
+  engineOf,
   hiddenChip,
   maxImagesOf,
   misplacedChip,
@@ -256,8 +257,8 @@ describe("trendRunRequestSchema", () => {
     expect(trendRunRequestSchema.safeParse({ slots: {}, example: 0 }).success).toBe(false)
   })
 
-  it("allows draft only at 480p", () => {
-    expect(trendRunRequestSchema.safeParse({ slots: {}, resolution: "1080p", draft: true }).success).toBe(false)
+  it("leaves draft above 480p to the composition (it knows the trend's engine)", () => {
+    expect(trendRunRequestSchema.safeParse({ slots: {}, resolution: "1080p", draft: true }).success).toBe(true)
     expect(trendRunRequestSchema.safeParse({ slots: {}, resolution: "480p", draft: true }).success).toBe(true)
     expect(trendRunRequestSchema.safeParse({ slots: {}, draft: true }).success).toBe(true)
   })
@@ -357,6 +358,37 @@ describe("trendVersionDataSchema — faceMasking and prePrompt", () => {
   it("takes a pre prompt of at most 3000 characters", () => {
     expect(trendVersionDataSchema.safeParse(data({ prePrompt: "a".repeat(3000) })).success).toBe(true)
     expect(trendVersionDataSchema.safeParse(data({ prePrompt: "a".repeat(3001) })).success).toBe(false)
+  })
+})
+
+describe("trendVersionDataSchema — engine", () => {
+  it("takes Seedance 2.5 or Kling 4, and keeps it", () => {
+    for (const engine of ["seedance-2-5", "kling-4"] as const) {
+      const r = trendVersionDataSchema.safeParse(data({ engine }))
+      expect(r.success, engine).toBe(true)
+      expect(r.data?.engine).toBe(engine)
+    }
+  })
+
+  it("leaves a version with no engine without the key, read as Seedance 2.5", () => {
+    const r = trendVersionDataSchema.safeParse(data())
+    expect(r.success).toBe(true)
+    expect(r.data).not.toHaveProperty("engine")
+    expect(engineOf(r.data!)).toBe("seedance-2-5")
+    expect(engineOf({ engine: "kling-4" })).toBe("kling-4")
+  })
+
+  it("takes a klingLength of cut-end, cut-start or pad, and keeps none when none is set", () => {
+    for (const klingLength of ["cut-end", "cut-start"]) {
+      expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4", klingLength })).data?.klingLength, klingLength).toBe(klingLength)
+    }
+    expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4" })).data).not.toHaveProperty("klingLength")
+    expect(trendVersionDataSchema.safeParse(data({ klingLength: "pad" })).success).toBe(false)
+  })
+
+  it("refuses any other engine", () => {
+    expect(trendVersionDataSchema.safeParse(data({ engine: "kling-3" })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ engine: "" })).success).toBe(false)
   })
 })
 

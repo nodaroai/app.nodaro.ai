@@ -42,8 +42,10 @@ function addRunFlags(cmd: Command): Command {
     .option("--example <n>", "1-based example whose pictures fill the optional slots you leave empty (default 1)")
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")
-    .addOption(new Option("--resolution <r>", "default 480p").choices([...RESOLUTIONS]))
-    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there)")
+    .addOption(
+      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Kling 4 trend").choices([...RESOLUTIONS]),
+    )
+    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there; a Kling 4 trend has none)")
 }
 
 function checkSlotKey(flag: string, spec: string, key: string): void {
@@ -176,7 +178,7 @@ export function trendsCommand(): Command {
 
   cmd
     .command("get <slug>")
-    .description("a trend's page: its slots, examples, preview and resolutions")
+    .description("a trend's page: its slots, examples, preview, engine and resolutions")
     .option("--locale <locale>", "language of names and descriptions")
     .option("--profile <name>")
     .option("--json")

@@ -626,8 +626,14 @@ export interface PluginFfmpegToolkit {
    * reports one (absent for a variable rate or none usable). ADDITIVE-OPTIONAL
    * (no CONTRACT_VERSION bump): a host predating it never sets it, so a caller
    * treats absent as "unknown" and keeps its old behaviour.
+   *
+   * `videoDurationSec` — the first VIDEO stream's own duration
+   * (`stream=duration`), shorter than `durationSec` when the audio runs past
+   * the last frame; absent when the stream reports none usable.
+   * ADDITIVE-OPTIONAL like `fps`: a host predating it never sets it, so a
+   * caller falls back to `durationSec`.
    */
-  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number; fps?: number }>
+  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number; fps?: number; videoDurationSec?: number }>
   /**
    * Mirrors `runFfprobe` (`providers/video/ffmpeg-utils.ts`) — runs ffprobe with
    * the given args and resolves its stdout (the video-analysis segmenter reads
@@ -3346,6 +3352,10 @@ export interface PluginSupports {
    * - `trendPrePrompt`: a trend run accepts a trend's own `prePrompt` (kept
    *   hidden). Additive-optional: absent ⇒ an engine that predates it, read
    *   as `false`.
+   * - `engines`: the video engines a run accepts as `engine`. Additive-optional:
+   *   absent ⇒ an engine that predates the choice, read as `["seedance-2-5"]`
+   *   (such an engine drops an `engine` it does not know and runs Seedance,
+   *   so a run on any other engine is held back until it is declared here).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3358,6 +3368,7 @@ export interface PluginSupports {
     readonly trendRun: boolean
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
+    readonly engines?: readonly ("seedance-2-5" | "kling-4")[]
   }
 }
 

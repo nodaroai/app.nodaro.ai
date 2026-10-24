@@ -855,6 +855,23 @@ describe("probeVideoSource", () => {
     expect(execArgs()).toEqual(expect.arrayContaining(["-of", "json"]))
   })
 
+  it("reads the video stream's own duration beside the container's: a clip whose audio runs past its video", async () => {
+    execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080, duration: "11.958333" }], format: { duration: "12.480000" } }))
+
+    const result = await probeVideoSource("/tmp/v.mp4")
+
+    // The container's stays as it was; the stream's is its own field.
+    expect(result).toEqual({ width: 1920, height: 1080, durationSeconds: 12.48, videoDurationSeconds: 11.958333 })
+  })
+
+  it("leaves videoDurationSeconds out when the stream reports no usable duration", async () => {
+    for (const duration of [undefined, "N/A", "0", "-1"]) {
+      execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080, ...(duration !== undefined ? { duration } : {}) }], format: { duration: "8.5" } }))
+      const result = await probeVideoSource("/tmp/v.mp4")
+      expect(result, String(duration)).toEqual({ width: 1920, height: 1080, durationSeconds: 8.5 })
+    }
+  })
+
   it("ignores JSON field order", async () => {
     execFileOnce(JSON.stringify({ format: { duration: "8.5" }, streams: [{ width: 1920, height: 1080 }] }))
 
@@ -952,7 +969,7 @@ describe("probeVideoSource", () => {
   it("asks ffprobe for both rates", async () => {
     execFileOnce(withRate({ avg_frame_rate: "30/1" }))
     await probeVideoSource("/tmp/v.mp4")
-    expect(execArgs()).toContain("stream=width,height,avg_frame_rate,r_frame_rate:format=duration")
+    expect(execArgs()).toContain("stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration")
   })
 
   it("falls back to r_frame_rate when the average is the unusable 0/0", async () => {

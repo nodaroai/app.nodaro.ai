@@ -78,6 +78,7 @@ const DETAIL = {
   ...CARD,
   version: 3,
   previewSec: 4,
+  engine: "seedance-2-5",
   resolutions: ["480p", "720p", "1080p"],
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
@@ -158,6 +159,15 @@ describe("get_trend", () => {
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["GET /v1/trends/dance-off"])
     expect(res.structuredContent).toEqual(DETAIL)
     expect(JSON.parse(res.content[0]!.text!)).toEqual(DETAIL)
+  })
+
+  it("hands back a Kling 4 trend's engine and its resolutions; an unknown or missing engine reads as Seedance 2.5", async () => {
+    const kling = { ...DETAIL, engine: "kling-4", resolutions: ["720p", "1080p"] }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: kling } } })
+    expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(kling)
+    const { engine: _e, ...older } = DETAIL
+    const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: older } } })
+    expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "seedance-2-5" })
   })
 
   it("hands back only the public fields, whatever else the body carries", async () => {

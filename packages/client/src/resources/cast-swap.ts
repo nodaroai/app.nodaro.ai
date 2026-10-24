@@ -12,6 +12,12 @@ import type { NodaroClientCore } from "../core.js"
  * photos if it fails, and is turned off with `prepareReferences: false`.
  * Locations are not prepared.
  *
+ * Engines: a run is made on Seedance 2.5 (`engine` left out, or
+ * `"seedance-2-5"`) or Kling 4 (`"kling-4"`). Kling 4 renders 720p (its
+ * default) or 1080p and has no draft; it makes a new take guided by the clip
+ * and pictures, so its Full Quality is a new take at 1080p rather than the
+ * same take re-rendered (`CastSwapFullQualityEstimate.kind`).
+ *
  * Cloud edition only: `/v1/cast-swap` is served by the cloud plugin and 404s
  * on self-hosted installs. `run()` answers 202 with a job id; follow it with
  * `client.jobs.get(jobId)` / `client.jobs.getStatus(jobId)` like any other job.
@@ -27,18 +33,41 @@ import type { NodaroClientCore } from "../core.js"
  * no reference and no `prePrompt` or `postPrompt`, more roles of a kind
  * than allowed, more than 30 images in all, `draft: true` above 480p, a
  * `prePrompt` or `postPrompt` over 4,000 characters, a `faceMasking` setting
- * out of range), `raw_reference_token` (also in a reference's `line`),
+ * out of range); on Kling 4, `draft_unsupported` (`draft: true`),
+ * `resolution_unsupported` (480p), `output_format_unsupported` (a MOV edit
+ * output) and `too_many_images` (more than 10 images in the run, across every
+ * role and fixed reference); `raw_reference_token` (also in a reference's `line`),
  * `invalid_role_mention` (also any `{role:N}` in a reference's `line`),
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
  * `preview_out_of_range`, `no_roles_in_preview` (a preview with every role
  * `inPreview: false`, always refused even with a prompt, or with no role kept
  * in it that has images and no `prePrompt` or `postPrompt`), `prompt_too_long`
  * (the prompt would build too long: a `{role:N}` reads as the role's name when
- * it sends no images); 401; 402 `insufficient_credits` (`run()` only); 404
+ * it sends no images; Kling 4's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
  * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
  * only).
  */
+
+/**
+ * The video engine a Cast Swap run is made on. Left out = `"seedance-2-5"`.
+ *
+ * - `"seedance-2-5"`: 480p (the default, a draft unless `draft: false`), 720p
+ *   or 1080p; Full Quality re-renders a draft's own take at 1080p.
+ * - `"kling-4"`: 720p (the default) or 1080p, never a draft (`draft: true`
+ *   answers 400 `draft_unsupported`); Full Quality makes a new take at 1080p
+ *   from a completed 720p run's inputs. A preview is still 4 s from
+ *   `previewStart`.
+ */
+export type CastSwapEngine = "seedance-2-5" | "kling-4"
+
+/**
+ * Where a Kling 4 run cuts the clip to whole seconds (Kling renders whole
+ * seconds; asked for more than the clip, it would stretch the motion):
+ * - `"cut-end"` (the default): drop the fraction of a second at its end;
+ * - `"cut-start"`: drop it at its start.
+ */
+export type CastSwapKlingLength = "cut-end" | "cut-start"
 
 /** Whether a swapped subject takes this trait from the references (`"new"`) or keeps the video's (`"original"`). */
 export type CastSwapTraitSource = "new" | "original"
@@ -229,11 +258,28 @@ export interface CastSwapParams {
   preview?: boolean
   /** Where the preview starts, in seconds. Default 0. */
   previewStart?: number
-  /** The output resolution. Default `"480p"`. */
+  /**
+   * The video engine (see {@link CastSwapEngine}). Default `"seedance-2-5"`.
+   * The job records it in `input_data.engine`, and a completed job's output
+   * in its `engine`. A Cast Swap engine older than Kling 4 support ignores
+   * the field and runs Seedance 2.5: a Kling 4 quote names `engine:
+   * "kling-4"`, so check the estimate's `engine` before running.
+   */
+  engine?: CastSwapEngine
+  /**
+   * Kling 4 only (Seedance 2.5 ignores it): which end of the clip is cut to
+   * whole seconds (see {@link CastSwapKlingLength}). Default `"cut-end"`.
+   */
+  klingLength?: CastSwapKlingLength
+  /**
+   * The output resolution. Seedance 2.5: `"480p"` (default), `"720p"` or
+   * `"1080p"`. Kling 4: `"720p"` (default) or `"1080p"`; `"480p"` answers 400.
+   */
   resolution?: "480p" | "720p" | "1080p"
   /**
-   * Render as a draft. Defaults to `true` at 480p and `false` above it; `true`
-   * with `"720p"` or `"1080p"` answers 400 (draft is 480p only).
+   * Render as a draft (Seedance 2.5 only). Defaults to `true` at 480p and
+   * `false` above it; `true` with `"720p"` or `"1080p"` answers 400 (draft is
+   * 480p only). Kling 4 has no draft: `true` answers 400 `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -259,9 +305,15 @@ export interface CastSwapParams {
 /** What a run would cost, in credits. */
 export interface CastSwapEstimate {
   /**
+   * The engine the run would use. Sent by an engine that knows Kling 4 on a
+   * Kling 4 quote (`"kling-4"`); absent = Seedance 2.5.
+   */
+  engine?: CastSwapEngine
+  /**
    * What is held when the run starts: `breakdown.castSwap +
-   * breakdown.seedance + breakdown.references`, plus `breakdown.masking` with
-   * face masking `"always"`. The run is charged what it actually costs, which
+   * breakdown.seedance + breakdown.references` (on Kling 4,
+   * `breakdown.kling` in place of `breakdown.seedance`), plus
+   * `breakdown.masking` with face masking `"always"`. The run is charged what it actually costs, which
    * is expected to be `expectedCredits`.
    */
   totalCredits: number
@@ -274,7 +326,9 @@ export interface CastSwapEstimate {
    * `totalCredits` is what is held when the run starts; the run is charged
    * what it actually costs.
    *
-   * Absent from an older Cast Swap engine: read `totalCredits` then.
+   * Absent from an older Cast Swap engine: read `totalCredits` then. On
+   * Kling 4 it equals `totalCredits` (Kling renders exactly the length asked
+   * for, so the hold is what it settles at).
    */
   expectedCredits?: number
   /**
@@ -286,6 +340,8 @@ export interface CastSwapEstimate {
    *   clip in and about as much out), never above `seedance`. It takes
    *   `seedance`'s place in `expectedCredits`; it is not added to it. Absent
    *   from an older Cast Swap engine, like `expectedCredits`;
+   * - `kling`: Kling 4 only, in place of `seedance` and `seedanceExpected`:
+   *   what the Kling take costs (held and charged alike);
    * - `references`: preparing the reference pictures (0 when
    *   `prepareReferences` is off or there is nothing to prepare);
    * - `masking`: masking the faces, present only when `faceMasking` is on.
@@ -295,7 +351,7 @@ export interface CastSwapEstimate {
    * So the parts sum to more than either total: `seedance` and
    * `seedanceExpected` are alternatives, and `"auto"` masking is outside both.
    */
-  breakdown: { castSwap: number; seedance: number; references: number; seedanceExpected?: number; masking?: number }
+  breakdown: { castSwap: number; seedance?: number; references: number; seedanceExpected?: number; kling?: number; masking?: number }
   /**
    * Face masking `"auto"` only: the extra credits charged if the source clip
    * is refused and the run is retried with the faces masked. Not in
@@ -304,9 +360,9 @@ export interface CastSwapEstimate {
    */
   maskingCredits?: number
   /**
-   * `true` when the video is made at Auto length (every run today): the final
-   * charge is expected to come out lower than `totalCredits`, at about
-   * `expectedCredits`.
+   * `true` when the video is made at Auto length (every Seedance 2.5 run): the
+   * final charge is expected to come out lower than `totalCredits`, at about
+   * `expectedCredits`. `false` on Kling 4.
    */
   settlesLower: boolean
 }
@@ -325,19 +381,34 @@ export interface CastSwapRunOptions {
 }
 
 /**
- * What finishing a draft at Full Quality would cost
- * (`POST /v1/cast-swap/:jobId/full-quality/estimate`).
+ * What a Full Quality version would be: `"same-take"` re-renders a Seedance
+ * 2.5 draft's own take at 1080p; `"new-take"` makes a new Kling 4 take at
+ * 1080p from a 720p run's inputs (it will not match the 720p run frame for
+ * frame). The 720p run or draft stays either way.
+ */
+export type CastSwapFullQualityKind = "same-take" | "new-take"
+
+/**
+ * What a Full Quality version of a run would cost
+ * (`POST /v1/cast-swap/:jobId/full-quality/estimate`): a Seedance 2.5 draft,
+ * or a completed Kling 4 run at 720p.
  */
 export interface CastSwapFullQualityEstimate {
-  /** The quote in credits: `breakdown.castSwap + breakdown.seedanceHd`. */
+  /**
+   * Which Full Quality this is ({@link CastSwapFullQualityKind}), so it can
+   * be worded right. Absent from an older Cast Swap engine: `"same-take"`.
+   */
+  kind?: CastSwapFullQualityKind
+  /** The quote in credits: `breakdown.castSwap` + `breakdown.seedanceHd` (same take) or `breakdown.kling` (new take). */
   totalCredits: number
   /**
-   * `castSwap`: the Full Quality job's own steps; `seedanceHd`: the 1080p
-   * render of the draft's take (0 when an earlier try of this draft already
-   * finished that render, which is then reused).
+   * `castSwap`: the Full Quality job's own steps; `seedanceHd` (a same take):
+   * the 1080p render of the draft's take (0 when an earlier try of this draft
+   * already finished that render, which is then reused); `kling` (a new take,
+   * in place of `seedanceHd`): the new Kling 4 take at 1080p.
    */
-  breakdown: { castSwap: number; seedanceHd: number }
-  /** ISO time until which the draft can be finished at Full Quality (7 days after it completed). */
+  breakdown: { castSwap: number; seedanceHd?: number; kling?: number }
+  /** ISO time until which the run can be finished at Full Quality (7 days after it completed). */
   availableUntil: string
 }
 
@@ -350,7 +421,7 @@ export interface CastSwapFullQualityParams {
 /** The Full Quality job (`POST /v1/cast-swap/:jobId/full-quality`). */
 export interface CastSwapFullQualityResult {
   jobId: string
-  /** `true` when this draft's Full Quality was already running or done: that job is answered, nothing new is started or charged. */
+  /** `true` when this run's Full Quality was already running or done: that job is answered, nothing new is started or charged. */
   existing?: boolean
 }
 
@@ -361,7 +432,8 @@ export interface CastSwapFullQualityResult {
  * - `not_found` (404): not your job, or not a Cast Swap run; also a
  *   `sessionId` you may not use;
  * - `not_completed` (409): the run has not finished;
- * - `not_a_draft` (409): the run was not made as a draft;
+ * - `not_a_draft` (409): the run is neither a Seedance 2.5 draft nor a
+ *   Kling 4 run at 720p (a Kling 4 run at 1080p is already Full Quality);
  * - `draft_expired` (410): more than 7 days after the draft completed, or
  *   the draft can no longer be finished at Full Quality;
  * - `full_quality_pending` (409, `details.retryable: true`): not final — an
@@ -421,9 +493,11 @@ export class CastSwapResource {
   }
 
   /**
-   * Quote finishing a draft at Full Quality (`POST
+   * Quote finishing a run at Full Quality (`POST
    * /v1/cast-swap/:jobId/full-quality/estimate`); spends nothing. `jobId` is a
-   * finished DRAFT run (a Cast Swap or trend run made as a draft). The quote
+   * finished Seedance 2.5 DRAFT run, or a finished Kling 4 run at 720p (a Cast
+   * Swap or trend run); the quote's `kind` says whether it is the same take
+   * re-rendered or a new take. The quote
    * does not look for a Full Quality already running: when one is,
    * {@link fullQuality} answers it (`existing: true`) and charges nothing.
    * Refusals: {@link CastSwapFullQualityRefusalCode}.
@@ -433,12 +507,13 @@ export class CastSwapResource {
   }
 
   /**
-   * Finish a draft at Full Quality (`POST /v1/cast-swap/:jobId/full-quality`):
-   * the same take re-rendered at 1080p, with the clip's audio, as a new job
-   * linked to the draft. SPENDS CREDITS: quote it first with
+   * Finish a run at Full Quality (`POST /v1/cast-swap/:jobId/full-quality`):
+   * at 1080p, with the clip's audio, as a new job linked to the run — a
+   * Seedance 2.5 draft's own take re-rendered, or a new Kling 4 take from a
+   * 720p run's inputs (the quote's `kind`). SPENDS CREDITS: quote it first with
    * {@link fullQualityEstimate}. Answers 202 `{ jobId }`, or 200
-   * `{ jobId, existing: true }` when this draft's Full Quality is already
-   * running or done (one per draft; a failed one may be asked again). Follow
+   * `{ jobId, existing: true }` when this run's Full Quality is already
+   * running or done (one per run; a failed one may be asked again). Follow
    * the job with `client.jobs.get(jobId)`. No `Idempotency-Key` is taken: the
    * server keys the job by the draft. The new job keeps the draft's origin.
    * Refusals: {@link CastSwapFullQualityRefusalCode}.

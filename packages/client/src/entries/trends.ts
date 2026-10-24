@@ -12,6 +12,7 @@ export {
   type TrendChips,
   type TrendChipKey,
   type TrendResolution,
+  type TrendEngine,
   type TrendCard,
   type TrendDetailSlot,
   type TrendExample,

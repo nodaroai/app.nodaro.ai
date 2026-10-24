@@ -13,6 +13,12 @@
  *   engine reads). Around the pre and trend prompts it adds its own text, kept
  *   as `ENGINE_TEXT_RESERVE`, and the details.
  *
+ * A Kling 4 trend is held to Kling 4's far shorter cap
+ * (`getMaxVideoPromptChars("kling-4")`), less the engine text of ITS OWN roles
+ * and references (`klingEngineText`, measured from the engine's builder, at
+ * the worst case it checks: every slot's 3 pictures numbered unprepared)
+ * rather than the fixed worst case kept for Seedance.
+ *
  * The numbers are `@nodaro/shared`'s (`CAST_SWAP_POST_PROMPT_MAX`,
  * `TREND_PROMPT_LIMITS`), which the admin screen (admin/trends/model.ts) reads
  * too, to show the room left and hold Save; publishing refuses a trend over either limit
@@ -21,7 +27,10 @@
  * engine's own `prompt_too_long`.
  */
 import { getMaxVideoPromptChars, TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
+import { klingEngineText } from "@nodaro/render-rules"
 import { CAST_SWAP_POST_PROMPT_MAX } from "./compose.js"
+import { engineOf } from "./schemas.js"
+import type { TrendVersionData } from "./types.js"
 
 /** The run schema's `details` limit (`trendRunRequestSchema` reads it too). */
 export const TREND_DETAILS_MAX = TREND_PROMPT_LIMITS.detailsMax
@@ -51,10 +60,18 @@ export interface PromptBudget {
   readonly room: number
 }
 
-export function promptBudget(d: { readonly prePrompt?: string; readonly trendPrompt?: string }): PromptBudget {
+/** Kling 4's cap on the whole prompt Cast Swap builds. */
+export const KLING_ENGINE_PROMPT_MAX = getMaxVideoPromptChars("kling-4")
+
+export function promptBudget(
+  d: { readonly prePrompt?: string; readonly trendPrompt?: string } & Partial<Pick<TrendVersionData, "engine" | "slots" | "references">>,
+): PromptBudget {
   const pre = d.prePrompt?.length ?? 0
   const trend = d.trendPrompt?.length ?? 0
   const trendPromptMax = CAST_SWAP_POST_PROMPT_MAX - SEP - TREND_DETAILS_MAX
-  const promptsMax = ENGINE_PROMPT_MAX - ENGINE_TEXT_RESERVE - SEP - TREND_DETAILS_MAX
+  const promptsMax =
+    engineOf(d) === "kling-4"
+      ? KLING_ENGINE_PROMPT_MAX - klingEngineText({ slots: d.slots ?? [], references: d.references ?? [] }) - SEP - TREND_DETAILS_MAX
+      : ENGINE_PROMPT_MAX - ENGINE_TEXT_RESERVE - SEP - TREND_DETAILS_MAX
   return { trendPromptMax, promptsMax, room: Math.min(trendPromptMax - trend, promptsMax - pre - trend) }
 }

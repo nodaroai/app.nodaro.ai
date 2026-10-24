@@ -3,8 +3,10 @@ import {
   createClient,
   NodaroError,
   StaticTokenAuth,
+  type CastSwapEngine,
   type CastSwapEstimate,
   type CastSwapFullQualityEstimate,
+  type CastSwapFullQualityKind,
   type CastSwapFullQualityRefusalCode,
   type CastSwapFullQualityResult,
   type CastSwapFaceMasking,
@@ -152,6 +154,38 @@ describe("castSwap resource", () => {
     expect([minimal, zoneOnly, noMargins, noMode, badMode, badFill]).toHaveLength(6)
   })
 
+  it("run and estimate post engine unchanged, Kling 4 at 720p with no draft", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-k" }, 202)).mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: { castSwap: 1, seedance: 0, references: 0 }, settlesLower: false }))
+    const client = make(fetchMock)
+    const kling: CastSwapParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "kling-4", resolution: "720p", draft: false, klingLength: "cut-start" }
+    await client.castSwap.run(kling)
+    await client.castSwap.estimate(kling)
+    for (const call of fetchMock.mock.calls) {
+      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false, klingLength: "cut-start" })
+    }
+  })
+
+  it("leaves engine out of the body when it is not given (the route runs Seedance 2.5)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-s" }, 202))
+    const client = make(fetchMock)
+    await client.castSwap.run(params)
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).not.toHaveProperty("engine")
+  })
+
+  it("types engine and the Full Quality kind: only the documented values", () => {
+    const engines: CastSwapEngine[] = ["seedance-2-5", "kling-4"]
+    // @ts-expect-error — not an engine
+    const badEngine: CastSwapEngine = "kling-3"
+    // @ts-expect-error — not a length fit ("pad" would stretch the motion)
+    const badLength: CastSwapParams["klingLength"] = "pad"
+    const kinds: CastSwapFullQualityKind[] = ["same-take", "new-take"]
+    // @ts-expect-error — not a kind
+    const badKind: CastSwapFullQualityKind = "remaster"
+    // kind is optional: an older engine answers none (a same take).
+    const older: CastSwapFullQualityEstimate = { totalCredits: 1, breakdown: { castSwap: 1, seedanceHd: 0 }, availableUntil: "x" }
+    expect([engines, badEngine, badLength, kinds, badKind, older]).toHaveLength(6)
+  })
+
   it("estimate passes the masking credits through", async () => {
     const estimate: CastSwapEstimate = {
       totalCredits: 15,
@@ -182,7 +216,7 @@ describe("castSwap resource", () => {
     expect(out.expectedCredits).toBe(31)
     expect(out.breakdown.seedanceExpected).toBe(23)
     // The expected charge is the hold with the video model's expected charge in place of its hold.
-    expect(out.totalCredits - out.breakdown.seedance + out.breakdown.seedanceExpected!).toBe(out.expectedCredits)
+    expect(out.totalCredits - out.breakdown.seedance! + out.breakdown.seedanceExpected!).toBe(out.expectedCredits)
   })
 
   it("estimate posts to /v1/cast-swap/estimate", async () => {
@@ -233,6 +267,17 @@ describe("castSwap resource", () => {
     expect(init.method).toBe("POST")
     // An empty JSON object, never an empty body: a JSON content type with no body is refused.
     expect(JSON.parse(init.body)).toEqual({})
+  })
+
+  it("fullQualityEstimate passes the kind through (a Kling 4 new take)", async () => {
+    const quote: CastSwapFullQualityEstimate = {
+      kind: "new-take",
+      totalCredits: 400,
+      breakdown: { castSwap: 40, kling: 360 },
+      availableUntil: "2026-10-28T10:00:00.000Z",
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote))
+    await expect(make(fetchMock).castSwap.fullQualityEstimate("run-720")).resolves.toEqual(quote)
   })
 
   it("fullQuality posts the session to the draft's /full-quality and returns the job", async () => {

@@ -8,13 +8,15 @@
  * see a trend's published version.
  *
  * HIDDEN: `source`, `TrendSlot.roleName`, `references`, `trendPrompt`,
- * `prePrompt` and `faceMasking` never leave the server — public responses are
- * built from the other fields.
+ * `prePrompt`, `faceMasking` and `klingLength` never leave the server — public responses are
+ * built from the other fields. `engine` is public: the trend's page names it
+ * and offers its resolutions.
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
+import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking } from "../../../lib/cast-swap-face-masking.js"
 
-export type { FaceMasking }
+export type { CastSwapEngine, CastSwapKlingLength, FaceMasking }
 
 /** The platform's interface languages (the same set `/v1/user/settings` accepts). */
 export type Locale = LocaleId
@@ -87,6 +89,18 @@ export interface TrendVersionData {
    * masked (`TrendRunRequest.previewJobId`) is sent as `"always"`.
    */
   faceMasking?: FaceMasking
+  /**
+   * The video engine every run of this trend uses; the person running it
+   * never chooses. Absent = `"seedance-2-5"` (every version saved before the
+   * choice): read it with `engineOf`. Kling 4 renders 720p (its default) and
+   * 1080p, with no draft.
+   */
+  engine?: CastSwapEngine
+  /**
+   * HIDDEN. How a Kling 4 run fits the clip's length (`"cut-end"`, the default
+   * when absent, or `"cut-start"`). Read only on a Kling 4 trend.
+   */
+  klingLength?: CastSwapKlingLength
   examples: TrendExample[]
 }
 

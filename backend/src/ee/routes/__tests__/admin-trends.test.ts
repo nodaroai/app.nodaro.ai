@@ -478,6 +478,14 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     })
     expect(badMask.statusCode).toBe(400)
 
+    // The engine is saved as chosen; a draft that names none keeps no key (Seedance 2.5).
+    expect(maskedRead.draft).not.toHaveProperty("engine")
+    const kling = await call("PUT", `/v1/admin/trends/${id}/draft`, { data: { ...draftData(), engine: "kling-4" }, revision: await revisionOf(id) })
+    expect(kling.statusCode).toBe(200)
+    expect(((await call("GET", `/v1/admin/trends/${id}`)).json().data as { draft: TrendVersionData }).draft.engine).toBe("kling-4")
+    const badEngine = await call("PUT", `/v1/admin/trends/${id}/draft`, { data: { ...draftData(), engine: "veo" }, revision: await revisionOf(id) })
+    expect(badEngine.statusCode).toBe(400)
+
     // The chips each slot shows to people are saved as written; only the kind's own.
     const [lead, dog] = draftData().slots
     const shown = await call("PUT", `/v1/admin/trends/${id}/draft`, {
@@ -884,6 +892,71 @@ describe("POST /:id/publish — engine check", () => {
     expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
   })
 
+  it("needs Kling 4 where the trend runs on it, and only its 720p and 1080p", async () => {
+    seed({}, draftData({ examples: [EXAMPLE], engine: "kling-4" }))
+    world.envs = [
+      envRow("production", { ...CAST_SWAP_ALL, engines: ["seedance-2-5"] }),
+      envRow("staging"), // predates the choice: Seedance 2.5 only
+    ]
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    expect(reasonsOf(res)).toEqual([
+      { code: "engine_unsupported", env: "staging", need: "kling-4" },
+      { code: "engine_unsupported", env: "production", need: "kling-4" },
+    ])
+    expect(mem.trends[0]!.status).toBe("draft")
+
+    // Engines that run Kling 4 publish it, with no 480p needed.
+    const kling = { ...CAST_SWAP_ALL, resolutions: ["720p", "1080p"], engines: ["seedance-2-5", "kling-4"] }
+    world.envs = [envRow("production", kling), envRow("staging", kling)]
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+  })
+
+  it("blocks a Kling 4 trend whose prompts do not fit Kling 4's cap, naming its most", async () => {
+    const kling = { ...CAST_SWAP_ALL, engines: ["seedance-2-5", "kling-4"] }
+    world.envs = [envRow("production", kling), envRow("staging", kling)]
+    // Two long reference lines add to the engine's own text, which Kling 4's 8,000 cannot also hold.
+    const references = [1, 2].map((i) => ({ images: [`https://cdn.test/r${i}.png`], line: "l".repeat(500) }))
+    seed({}, draftData({ examples: [EXAMPLE], engine: "kling-4", references, prePrompt: "p".repeat(3000), trendPrompt: "t".repeat(2998) }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    const reasons = reasonsOf(res) as Array<{ code: string; message?: string }>
+    expect(reasons.map((r) => r.code)).toEqual(["prompt_budget"])
+    expect(reasons[0]!.message).toContain("on Kling 4")
+    expect(mem.trends[0]!.status).toBe("draft")
+
+    // The same prompts publish on Seedance 2.5.
+    mem.trends = []
+    seed({}, draftData({ examples: [EXAMPLE], references, prePrompt: "p".repeat(3000), trendPrompt: "t".repeat(2998) }))
+    const seedance = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(seedance.statusCode, JSON.stringify(seedance.json())).toBe(200)
+  })
+
+  it("publishes a 5-person Kling 4 trend (each prepared picture counts as one), and blocks one that can send more than 10", async () => {
+    const kling = { ...CAST_SWAP_ALL, resolutions: ["720p", "1080p"], engines: ["seedance-2-5", "kling-4"] }
+    world.envs = [envRow("production", kling), envRow("staging", kling)]
+    const slots = Array.from({ length: 5 }, (_, i) => ({ key: `p${i}`, label: { en: `P${i}` }, kind: "person" as const, required: i === 0, roleName: `person ${i}` }))
+    const example = { ...EXAMPLE, slots: Object.fromEntries(slots.map((s) => [s.key, [`https://cdn.test/trends/${T1}/ex1-${s.key}.png`]])) }
+    const refs = (n: number) => [1, 2].map((r) => ({ images: Array.from({ length: n }, (_, i) => `https://cdn.test/r${r}-${i}.png`), line: "the sign" }))
+    // 5 prepared + 2 × 2 references = 9.
+    seed({}, draftData({ examples: [example], engine: "kling-4", slots, references: refs(2) }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+
+    // 5 prepared + 2 × 3 references = 11.
+    mem.trends = []
+    seed({}, draftData({ examples: [example], engine: "kling-4", slots, references: refs(3) }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    const reasons = reasonsOf(res) as Array<{ code: string; message?: string }>
+    expect(reasons.map((r) => r.code)).toEqual(["too_many_images"])
+    expect(reasons[0]!.message).toContain("11 images")
+  })
+
+  it("a Seedance 2.5 trend needs nothing new of an engine that predates the choice", async () => {
+    seed({}, draftData({ examples: [EXAMPLE], engine: "seedance-2-5" }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+  })
+
   it("blocks a trend prompt that leaves no room for the user's details, and names the limit", async () => {
     const { TREND_DETAILS_MAX } = await import("../../lib/trends/prompt-budget.js")
     const most = 4000 - 2 - TREND_DETAILS_MAX
@@ -949,6 +1022,26 @@ describe("POST /:id/publish — engine check", () => {
 // ── test runs ──────────────────────────────────────────────────────────────
 
 describe("test runs", () => {
+  it("a Kling 4 draft runs with engine kling-4 at 720p, only on an engine that declares it", async () => {
+    seed({}, draftData({ engine: "kling-4", examples: [EXAMPLE] }))
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+
+    // The loaded engine predates the choice (no `engines`): held back, nothing sent.
+    const held = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })
+    expect(held.statusCode).toBe(503)
+    expect(held.json().error.code).toBe("engine_unsupported")
+    expect(engine.calls).toHaveLength(0)
+
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, engines: ["seedance-2-5", "kling-4"] } })
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+    expect(engine.calls[0]!.body).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false })
+
+    const draft = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, draft: true })
+    expect(draft.statusCode).toBe(400)
+    expect(draft.json().error.code).toBe("draft_unsupported")
+    expect(engine.calls).toHaveLength(1)
+  })
+
   it("compose from the DRAFT version and run as the admin", async () => {
     const published = draftData({ trendPrompt: "PUBLISHED-PROMPT", examples: [EXAMPLE] })
     const draft = draftData({ trendPrompt: "DRAFT-PROMPT v2", name: { en: "Neon Dance II" }, examples: [EXAMPLE] })

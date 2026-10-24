@@ -50,6 +50,7 @@ const fullQualityRun: TrendRun = {
   preview: false,
   resolution: "1080p",
   draft: false,
+  engine: "seedance-2-5",
   videoUrl: "https://cdn.example.com/fq.mp4",
   posterUrl: null,
   creditsCharged: 60,

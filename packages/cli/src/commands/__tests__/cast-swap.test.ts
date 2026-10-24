@@ -59,6 +59,21 @@ describe("cast-swap full-quality", () => {
     expect(emit).toHaveBeenCalledWith(QUOTE, expect.objectContaining({ json: true }))
   })
 
+  it("estimate says a Kling 4 run's Full Quality is a new take, and lists every part", async () => {
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380 }, availableUntil: "2026-10-28T10:00:00.000Z" })
+    await runCmd("cast-swap", "full-quality", "estimate", "run-720")
+    const out = vi.mocked(dim).mock.calls.flat().join("\n")
+    expect(out).toMatch(/new take/i)
+    expect(out).toContain("kling: 380")
+    expect(out).not.toMatch(/reuse/i)
+  })
+
+  it("estimate says a quote with no kind (an older engine) is the same take", async () => {
+    mocks.fullQualityEstimate.mockResolvedValueOnce(QUOTE)
+    await runCmd("cast-swap", "full-quality", "estimate", "draft-1")
+    expect(vi.mocked(dim).mock.calls.flat().join("\n")).toContain("the same take at 1080p")
+  })
+
   it("estimate says when an earlier render is reused", async () => {
     mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 5, breakdown: { castSwap: 5, seedanceHd: 0 } })
     await runCmd("cast-swap", "full-quality", "estimate", "draft-1")

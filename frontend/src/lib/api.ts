@@ -11125,8 +11125,18 @@ export interface AdminTrendData {
   /** Placed at the start of every run's prompt (hidden from users). */
   prePrompt?: string
   faceMasking?: AdminTrendFaceMasking
+  /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
+  engine?: AdminTrendEngine
+  /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
+  klingLength?: AdminTrendKlingLength
   examples: AdminTrendExample[]
 }
+
+/** Which end of the clip a Kling 4 run cuts to whole seconds: the end (default) or the start. */
+export type AdminTrendKlingLength = "cut-end" | "cut-start"
+
+/** Cast Swap's video engines: Seedance 2.5 (480p draft, 720p, 1080p) or Kling 4 (720p, 1080p; no draft). */
+export type AdminTrendEngine = "seedance-2-5" | "kling-4"
 
 export type TrendStatus = "draft" | "published" | "unpublished"
 export type TrendBadge = "trending" | "new"
@@ -11201,6 +11211,8 @@ export interface AdminTrendRun {
   preview: boolean
   resolution: string
   draft: boolean
+  /** The engine it was made on (Seedance 2.5 for every run before the choice). */
+  engine?: AdminTrendEngine
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null

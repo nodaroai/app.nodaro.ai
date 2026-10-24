@@ -2,21 +2,36 @@
  * Whether a trend's draft may be published, and if not, every reason why
  * (pure; the admin route reads the engine environments and calls this).
  *
+ * A Kling 4 trend is also held to Kling 4's prompt cap (`promptBudget`) and to
+ * its 10 images a run, counted at the worst case as the route counts them
+ * (every slot filled, a prepared person, pet or product as one picture, a
+ * location's 3, plus the fixed references).
+ *
  * The draft needs a source clip, at least one required slot, at least one
  * example, pictures for every slot in every example, valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
  * the user's details (`promptBudget`). And the Cast Swap engine of EVERY
  * environment in `TREND_PUBLISH_ENVIRONMENTS` must support it: the slot kinds
  * it uses, fixed references when it has some, face masking when it masks
- * (mode not "off"), a trend pre prompt when it has one, all three
- * resolutions, Full Quality and trend runs. An environment with no recorded
- * row is unknown, which blocks like an unsupported one.
+ * (mode not "off"), a trend pre prompt when it has one, the trend's video
+ * engine when it is not Seedance 2.5 (the engine's `engines`), every
+ * resolution that engine offers (Seedance 2.5: 480p, 720p and 1080p; Kling 4:
+ * 720p and 1080p), Full Quality and trend runs. An environment with no
+ * recorded row is unknown, which blocks like an unsupported one.
  */
 import type { EngineEnvironment } from "../engine-environments.js"
 import { faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
-import { trendVersionDataSchema } from "./schemas.js"
+import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
+import {
+  CAST_SWAP_ENGINES,
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  CAST_SWAP_KLING_MAX_IMAGES,
+  CAST_SWAP_RESOLUTIONS_BY_ENGINE,
+} from "@nodaro/shared/models"
+import { castSwapImagesSent } from "@nodaro/render-rules"
+import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
 import { promptBudget, TREND_DETAILS_MAX } from "./prompt-budget.js"
-import type { TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
+import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
 export interface PublishBlocker {
   code:
@@ -28,21 +43,29 @@ export interface PublishBlocker {
     | "prompt_budget"
     | "engine_unknown"
     | "engine_unsupported"
+    | "too_many_images"
   env?: string
-  /** What the engine lacks: a slot kind, "fixedReferences", "faceMasking", "trendPrePrompt", a resolution, "fullQuality", "trendRun" or "castSwap". */
+  /**
+   * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
+   * "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "trendRun" or "castSwap".
+   */
   need?: string
   /** 1-based example, for `example_slots_incomplete`. */
   example?: number
   /** The slot keys an example has no pictures for, for `example_slots_incomplete`. */
   slots?: string[]
-  /** What is wrong, for `invalid_data` and `prompt_budget`. */
+  /** What is wrong, for `invalid_data`, `prompt_budget` and `too_many_images`. */
   message?: string
 }
 
 const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
 
+export { castSwapEnginesOf }
+
 /** What every environment's engine must support for this draft, in report order. */
 function needsOf(data: TrendVersionData): string[] {
+  const engine = engineOf(data)
   const kinds: TrendSlotKind[] = []
   for (const s of data.slots) if (!kinds.includes(s.kind)) kinds.push(s.kind)
   return [
@@ -51,7 +74,9 @@ function needsOf(data: TrendVersionData): string[] {
     ...(data.references.length > 0 ? ["fixedReferences"] : []),
     ...(faceMaskingOn(data.faceMasking) ? ["faceMasking"] : []),
     ...(data.prePrompt ? ["trendPrePrompt"] : []),
-    ...RESOLUTIONS,
+    // Seedance 2.5 is every engine's: only another engine is a need of its own.
+    ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? [engine] : []),
+    ...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine],
     "fullQuality",
   ]
 }
@@ -65,9 +90,18 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === "fixedReferences") return cs.fixedReferences !== true
     if (need === "faceMasking") return cs.faceMasking !== true
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
+    if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)
     return !(cs.roleKinds ?? []).includes(need as TrendSlotKind)
   })
+}
+
+/** The most images a run of this version sends, as the route counts them (a trend run prepares its references). */
+export function klingWorstImages(data: Pick<TrendVersionData, "slots" | "references">): number {
+  return castSwapImagesSent(
+    data.slots.map((s) => ({ kind: s.kind, images: MAX_IMAGES_PER_SLOT })),
+    data.references.reduce((n, r) => n + r.images.length, 0),
+  )
 }
 
 export function publishBlockers(
@@ -98,9 +132,19 @@ export function publishBlockers(
       message: `The trend prompt is ${trendLen} characters; with the user's details (up to ${TREND_DETAILS_MAX}) the most is ${budget.trendPromptMax}.`,
     })
   } else if (budget.room < 0) {
+    const kling = engineOf(data) === "kling-4" ? " on Kling 4" : ""
     out.push({
       code: "prompt_budget",
-      message: `The pre and trend prompts are ${(data.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most is ${budget.promptsMax}.`,
+      message: `The pre and trend prompts are ${(data.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most${kling} is ${Math.max(0, budget.promptsMax)}.`,
+    })
+  }
+  // Kling 4 takes at most 10 images a run, as the route counts them: every slot filled to its 3,
+  // a prepared one (person, pet, product: a trend run prepares) as one, plus the fixed references.
+  const images = klingWorstImages(data)
+  if (engineOf(data) === "kling-4" && images > CAST_SWAP_KLING_MAX_IMAGES) {
+    out.push({
+      code: "too_many_images",
+      message: `A run can send ${images} images (1 per person, pet or product slot, prepared; 3 per location slot; plus the fixed references); Kling 4 takes at most ${CAST_SWAP_KLING_MAX_IMAGES}.`,
     })
   }
 

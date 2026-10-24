@@ -153,6 +153,62 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     })
   })
 
+  it("shows Seedance 2.5 for a draft that names no model, unchanged until a model is chosen", async () => {
+    renderEditor()
+    const model = await screen.findByRole("combobox", { name: "Model" })
+    expect(model).toHaveTextContent("Seedance 2.5")
+    expect(screen.getByText("Model", { selector: "label" })).toHaveAttribute("for", model.id)
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+  })
+
+  it("saves Kling 4 as the model when chosen", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Model" }))
+    await user.click(screen.getByRole("option", { name: "Kling 4" }))
+    expect(screen.getByText(/720p or 1080p, with no draft/)).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.engine).toBe("kling-4")
+  })
+
+  it("shows Length only for Kling 4, and saves the one chosen", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    await screen.findByRole("combobox", { name: "Model" })
+    expect(screen.queryByRole("combobox", { name: "Length" })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("combobox", { name: "Model" }))
+    await user.click(screen.getByRole("option", { name: "Kling 4" }))
+    const length = screen.getByRole("combobox", { name: "Length" })
+    expect(length).toHaveTextContent("Cut the end to whole seconds")
+    await user.click(length)
+    await user.click(screen.getByRole("option", { name: "Cut the start to whole seconds" }))
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).toMatchObject({ engine: "kling-4", klingLength: "cut-start" })
+  })
+
+  it("a saved Kling 4 draft tests at 720p or 1080p with no draft switch, and sends no draft", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { engine: "kling-4" }) } })
+    routes[`POST ${BASE}/test-runs`] = () => ({ status: 202, body: { data: { jobId: RUN_ID } } })
+    renderEditor()
+    const group = await screen.findByRole("group", { name: "Resolution" })
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["720p", "1080p"])
+    expect(within(group).getByRole("button", { name: "720p" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.queryByRole("switch", { name: "Draft" })).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText("Pictures for dancer (0 / 3): URL"), "https://u.example/me.png{Enter}")
+    await user.click(screen.getByRole("button", { name: /run test/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/test-runs`)).toHaveLength(1))
+    const [body] = sentTo(`POST ${BASE}/test-runs`) as Array<Record<string, unknown>>
+    expect(body.resolution).toBe("720p")
+    expect(body).not.toHaveProperty("draft")
+  })
+
   it("holds Save while a face masking value is out of range", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
@@ -424,6 +480,35 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     renderEditor()
     await user.click(await screen.findByRole("button", { name: /show prompt/i }))
     expect(await screen.findByText("Replace {role:1} with…")).toBeInTheDocument()
+  })
+
+  it("counts a Kling 4 trend's images as sent, a prepared picture as one, against its 10", async () => {
+    const slots = ["a", "b", "c", "d", "e"].map((k) => slot({ key: k }))
+    const references = [1, 2].map((r) => ({ images: [1, 2, 3].map((i) => `https://cdn.test/r${r}-${i}.png`), line: "the sign" }))
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots, references, engine: "kling-4" }) } })
+    renderEditor()
+    // 5 people prepared + 6 reference pictures.
+    expect(await screen.findByText("11 / 10")).toHaveAttribute("data-state", "over")
+    expect(screen.getByText("prepared pictures count as one")).toBeInTheDocument()
+  })
+
+  it("a 5-person Kling 4 trend is within its 10", async () => {
+    const slots = ["a", "b", "c", "d", "e"].map((k) => slot({ key: k }))
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots, engine: "kling-4" }) } })
+    renderEditor()
+    expect(await screen.findByText("5 / 10")).toHaveAttribute("data-state", "ok")
+  })
+
+  it("shows the Kling 4 prompt room when the model is Kling 4", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { prePrompt: "p".repeat(3000), trendPrompt: "t".repeat(2998), references: [1, 2].map((i) => ({ images: [`https://cdn.test/r${i}.png`], line: "l".repeat(500) })) }) } })
+    renderEditor()
+    await screen.findByRole("combobox", { name: "Model" })
+    expect(screen.queryByText(/on Kling 4, to leave room/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole("combobox", { name: "Model" }))
+    await user.click(screen.getByRole("option", { name: "Kling 4" }))
+    expect(await screen.findByText(/at most \d+ characters together on Kling 4/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
   })
 
   it("counts images against the cap: 33 / 30 is an error and Save is off", async () => {

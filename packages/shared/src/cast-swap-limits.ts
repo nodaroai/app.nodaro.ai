@@ -59,3 +59,49 @@ export const CAST_SWAP_FACE_MASKING_DEFAULTS = {
   blurStrengthPct: 2,
   threshold: 0.5,
 } as const
+
+/**
+ * The video engines Cast Swap runs on. A run or estimate that leaves `engine`
+ * out runs on `CAST_SWAP_ENGINE_WHEN_OMITTED`, so callers that predate the
+ * choice keep what they had.
+ */
+export const CAST_SWAP_ENGINES = ["seedance-2-5", "kling-4"] as const
+
+export type CastSwapEngine = (typeof CAST_SWAP_ENGINES)[number]
+
+/** The engine of a run, estimate or trend that names none. */
+export const CAST_SWAP_ENGINE_WHEN_OMITTED: CastSwapEngine = "seedance-2-5"
+
+/**
+ * The resolutions each engine renders, the default first. Seedance 2.5's 480p
+ * is its draft (`draft` is 480p only); Kling 4 has no draft and no 480p.
+ */
+export const CAST_SWAP_RESOLUTIONS_BY_ENGINE = {
+  "seedance-2-5": ["480p", "720p", "1080p"],
+  "kling-4": ["720p", "1080p"],
+} as const satisfies Record<CastSwapEngine, readonly ("480p" | "720p" | "1080p")[]>
+
+/** Whether an engine renders drafts (Seedance 2.5's 480p draft; Kling 4 has none). */
+export function castSwapEngineHasDraft(engine: CastSwapEngine): boolean {
+  return engine === "seedance-2-5"
+}
+
+/**
+ * Where a Kling 4 run cuts the clip to whole seconds (Kling renders whole
+ * seconds, and asked for more than the clip it stretches the motion; Seedance
+ * 2.5 ignores it): `"cut-end"` (the default) drops the fraction of a second at
+ * the clip's end, `"cut-start"` at its start.
+ */
+export const CAST_SWAP_KLING_LENGTHS = ["cut-end", "cut-start"] as const
+
+export type CastSwapKlingLength = (typeof CAST_SWAP_KLING_LENGTHS)[number]
+
+/** The `klingLength` of a run or trend that names none. */
+export const CAST_SWAP_KLING_LENGTH_WHEN_OMITTED: CastSwapKlingLength = "cut-end"
+
+/**
+ * The most images one Kling 4 Cast Swap run sends, across every role and fixed
+ * reference (a role with prepared references counts its one prepared
+ * picture). Over it the route answers `too_many_images`.
+ */
+export const CAST_SWAP_KLING_MAX_IMAGES = 10

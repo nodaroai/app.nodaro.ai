@@ -99,6 +99,26 @@ describe("estimate_full_quality", () => {
     expect(res.content[0]!.text).toMatch(/nothing was charged/i)
   })
 
+  it("words a Kling 4 new take as one, and passes its kind and every numeric part through", async () => {
+    const newTake = { kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380, note: "x" }, availableUntil: "2026-10-28T10:00:00.000Z" }
+    const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: newTake } })
+    const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
+    expect(res.isError).toBeFalsy()
+    expect(res.structuredContent).toEqual({ ...newTake, breakdown: { castSwap: 40, kling: 380 } })
+    expect(res.content[0]!.text).toMatch(/new take/i)
+    expect(res.content[0]!.text).toContain("420 credits")
+    expect(res.content[0]!.text).not.toMatch(/reuse/i)
+  })
+
+  it("words a same take (or a quote with no kind, from an older engine) as the same take", async () => {
+    for (const body of [QUOTE, { ...QUOTE, kind: "same-take" }]) {
+      const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body } })
+      const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
+      expect(res.content[0]!.text).toContain("the same take at 1080p")
+      expect(res.structuredContent).toEqual(body)
+    }
+  })
+
   it("says when an earlier 1080p render is reused", async () => {
     const reused = { ...QUOTE, totalCredits: 5, breakdown: { castSwap: 5, seedanceHd: 0 } }
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: reused } })
@@ -173,7 +193,7 @@ describe("full_quality", () => {
     expect(res.content[0]!.text).toContain("confirm: true")
     // The quote does not look for an existing Full Quality: the agent is told one is returned free.
     expect(res.content[0]!.text).toContain(
-      "If this draft already has a Full Quality job running or done, confirming returns it at no charge.",
+      "If this run already has a Full Quality job running or done, confirming returns it at no charge.",
     )
   })
 

@@ -183,6 +183,26 @@ describe("toolkit.ts — edit-video-pro members", () => {
       })
     })
 
+    it("passes the video stream's own duration as videoDurationSec, durationSec unchanged (audio longer than the video)", async () => {
+      mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 12.48, fps: 24, videoDurationSeconds: 11.958 })
+
+      await expect(tk.ffmpeg.probeVideoMeta("https://src.example.com/long-audio.mp4")).resolves.toEqual({
+        width: 1920,
+        height: 1080,
+        durationSec: 12.48,
+        fps: 24,
+        videoDurationSec: 11.958,
+      })
+    })
+
+    it.each([undefined, 0, Number.NaN])("leaves videoDurationSec absent when the stream's is unknown (%s)", async (videoDurationSeconds) => {
+      mockProbeVideoSource.mockResolvedValue({ width: 640, height: 360, durationSeconds: 4, videoDurationSeconds })
+
+      const meta = await tk.ffmpeg.probeVideoMeta("https://src.example.com/c.webm")
+      expect(meta).toEqual({ width: 640, height: 360, durationSec: 4 })
+      expect(meta).not.toHaveProperty("videoDurationSec")
+    })
+
     it("leaves fps absent when the rate is unknown", async () => {
       mockProbeVideoSource.mockResolvedValue({ width: 640, height: 360, durationSeconds: 4 })
 

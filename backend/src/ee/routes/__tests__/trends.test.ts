@@ -333,7 +333,7 @@ describe("GET /v1/trends/:slug", () => {
     const d = res.json().data
     expect(d).toMatchObject({
       id: T_PUB, slug: "neon-dance", version: 2, previewSec: 4,
-      resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
+      engine: "seedance-2-5", resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
     })
     expect(d.slots).toEqual([
       { key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: ["body", "outfit", "hair"], defaults: { hair: "original" } },
@@ -751,6 +751,73 @@ describe("POST /v1/trends/:slug/estimate", () => {
   })
 })
 
+// ── the trend's engine ─────────────────────────────────────────────────────
+
+describe("a Kling 4 trend", () => {
+  const T_KLING = "00000000-0000-4000-8000-0000000000a5"
+  const KLING_ENGINE = { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], engines: ["seedance-2-5", "kling-4"] as Array<"seedance-2-5" | "kling-4"> }
+  beforeEach(() => {
+    mem.trends.push(trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4" })))
+    setPluginSupports({ castSwap: KLING_ENGINE })
+  })
+
+  it("its page names the engine and offers 720p and 1080p only, and never shows its length fit", async () => {
+    mem.trends[mem.trends.length - 1] = trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4", klingLength: "cut-start" }))
+    const res = await app.inject({ method: "GET", url: "/v1/trends/kling-dance", headers: as() })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ engine: "kling-4", resolutions: ["720p", "1080p"] })
+    expect(res.body).not.toContain("klingLength")
+    expectNoHidden(res.body)
+  })
+
+  it("estimates and runs on Kling 4 at 720p by default, with no draft", async () => {
+    expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
+    expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
+    for (const c of engine.calls) expect(c.body).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false })
+  })
+
+  it("refuses a draft (draft_unsupported) and 480p (resolution_unsupported), before the engine is asked", async () => {
+    for (const url of ["/v1/trends/kling-dance/estimate", "/v1/trends/kling-dance/runs"]) {
+      const draft = await app.inject({ method: "POST", url, headers: as(), payload: { ...RUN_BODY, draft: true } })
+      expect(draft.statusCode).toBe(400)
+      expect(draft.json().error.code).toBe("draft_unsupported")
+      const low = await app.inject({ method: "POST", url, headers: as(), payload: { ...RUN_BODY, resolution: "480p" } })
+      expect(low.statusCode).toBe(400)
+      expect(low.json().error.code).toBe("resolution_unsupported")
+    }
+    expect(engine.calls).toHaveLength(0)
+  })
+
+  it("refuses a run that would send more than 10 pictures (too_many_images), without telling the count", async () => {
+    const three = ["https://u.example/1.png", "https://u.example/2.png", "https://u.example/3.png"]
+    // lead 3 + place 3 + the trend's reference 1 = 7: fine. The trend here has two slots, so add a third via the version.
+    mem.trends[mem.trends.length - 1] = trend(T_KLING, "kling-dance", "published", 1, versionData({
+      engine: "kling-4",
+      // lead 1 (prepared) + place 3 + 3 × 3 references = 13.
+      references: [1, 2, 3].map(() => ({ images: [REF_IMAGE, REF_IMAGE, REF_IMAGE], line: REF_LINE })),
+    }))
+    const res = await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: { slots: { lead: { images: three }, place: { images: three } } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("too_many_images")
+    expect(res.json().error.message).not.toMatch(/\b13\b/)
+    expect(engine.calls).toHaveLength(0)
+    expectNoHidden(res.body)
+  })
+
+  it("is held back (503 engine_unsupported) on an engine that does not declare Kling 4", async () => {
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+    const res = await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("engine_unsupported")
+    expect(engine.calls).toHaveLength(0)
+  })
+
+  it("a Seedance 2.5 trend sends no engine key", async () => {
+    await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(engine.calls[0]!.body).not.toHaveProperty("engine")
+  })
+})
+
 // ── face masking, pre prompt and the preview a full run follows ────────────
 
 describe("trend face masking and pre prompt", () => {
@@ -1030,6 +1097,17 @@ describe("an engine refusal on estimate and run", () => {
       expectNoHidden(res.body)
     })
 
+    it(`${route.name}: a Kling 4 refusal (too_many_images, …) keeps its code with the platform's own text`, async () => {
+      for (const code of ["too_many_images", "draft_unsupported", "resolution_unsupported"]) {
+        route.set(400, { error: { code, message: `${PROMPT} ${SOURCE}`, issues: [{ path: ["roles"], message: ROLE }] } })
+        const res = await app.inject({ method: "POST", url: route.url, headers: as(), payload: RUN_BODY })
+        expect(res.statusCode, code).toBe(400)
+        expect(res.json().error.code).toBe(code)
+        expect(Object.keys(res.json().error).sort()).toEqual(["code", "message"])
+        expectNoHidden(res.body)
+      }
+    })
+
     it(`${route.name}: 503 host_too_old is engine_unsupported`, async () => {
       route.set(503, { error: { code: "host_too_old", message: `host build 12 cannot run ${SOURCE}` } })
       const res = await app.inject({ method: "POST", url: route.url, headers: as(), payload: RUN_BODY })
@@ -1186,6 +1264,7 @@ describe("GET /v1/trends/runs", () => {
       preview: false,
       resolution: "1080p",
       draft: false,
+      engine: "seedance-2-5",
       videoUrl: null,
       posterUrl: null,
       creditsCharged: null,
@@ -1208,6 +1287,7 @@ describe("GET /v1/trends/runs", () => {
       preview: false,
       resolution: "480p",
       draft: true,
+      engine: "seedance-2-5",
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
@@ -1236,6 +1316,40 @@ describe("GET /v1/trends/runs", () => {
     expect(lookups.map((q) => argOf(q, "in"))).toEqual([
       ["input_data->>fullQualityOf", [DRAFT_JOB]],
       ["input_data->>fullQualityOf", [DRAFT_JOB, FAILED_JOB]],
+    ])
+  })
+
+  it("a completed Kling 4 run at 720p can be redone in Full Quality (a new take); at 1080p it cannot", async () => {
+    const KLING_720 = "00000000-0000-4000-8000-0000000000e7"
+    const KLING_1080 = "00000000-0000-4000-8000-0000000000e8"
+    const fqRow = jobRow(FQ_JOB, {
+      status: "processing", completed_at: null,
+      input_data: runInput({ engine: "kling-4", fullQualityOf: KLING_720, resolution: "1080p", draft: false }),
+      created_at: "2026-10-21T10:00:00.000000+00:00",
+    })
+    feed(
+      [
+        fqRow,
+        jobRow(KLING_720, { input_data: runInput({ engine: "kling-4", resolution: "720p", draft: false }) }),
+        jobRow(KLING_1080, { input_data: runInput({ engine: "kling-4", resolution: "1080p", draft: false }), created_at: "2026-10-19T10:00:00.000000+00:00" }),
+      ],
+      [fqRow],
+    )
+    const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
+    expect(res.statusCode).toBe(200)
+    const runs = res.json().data
+    expect(runs[0]).toMatchObject({ jobId: FQ_JOB, engine: "kling-4", fullQualityOf: KLING_720, fullQuality: null, fullQualityUntil: null })
+    expect(runs[1]).toMatchObject({
+      jobId: KLING_720, engine: "kling-4", resolution: "720p", draft: false,
+      fullQuality: { jobId: FQ_JOB, status: "processing" },
+      fullQualityUntil: "2026-10-27T10:00:00.000Z",
+    })
+    expect(runs[2]).toMatchObject({ jobId: KLING_1080, engine: "kling-4", fullQuality: null, fullQualityUntil: null })
+    // The upgrades looked up are the 720p run's only.
+    const lookups = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in"))
+    expect(lookups.map((q) => argOf(q, "in"))).toEqual([
+      ["input_data->>fullQualityOf", [KLING_720]],
+      ["input_data->>fullQualityOf", [KLING_720]],
     ])
   })
 
@@ -1491,6 +1605,7 @@ describe("GET /v1/trends/runs/:jobId", () => {
       preview: false,
       resolution: "480p",
       draft: true,
+      engine: "seedance-2-5",
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
