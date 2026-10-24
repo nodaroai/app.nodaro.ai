@@ -2998,8 +2998,8 @@ pickers show:
 | Pickers | Picture |
 |---|---|
 | `person`, `styling`, `held-prop`, `material`, `animal` | A photo, WebP, up to 480px wide. |
-| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | A 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
-| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`). A self-hosted install returns none. |
+| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | Nodaro Cloud: a square photographic render from the Nodaro CDN (a 480px still, plus `imageSrcSet` up to its full size; a language or accent render carries its flag). A self-hosted install: a 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
+| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`), plus `imageSrcSet`. A self-hosted install returns none. |
 
 - **Host.** Self-hosted pictures are served by the installation itself under
   `/picker-art/`, so `imageUrl` uses its public address — `PUBLIC_URL`
@@ -3010,6 +3010,14 @@ pickers show:
   new URL; they are served with `Cache-Control: public, max-age=31536000,
   immutable` and `Access-Control-Allow-Origin: *` (usable from `<img>`,
   `fetch` and canvas on any origin).
+- **Sizes (`imageSrcSet`).** A picture from the Nodaro CDN also carries
+  `imageSrcSet` on the REST routes: the same picture at 240, 480, 960 and
+  1920px wide (the CDN never enlarges, so the largest is at most the
+  source's size), as an HTML `srcset` value. The MCP tools leave it out. Give it to
+  `<img srcset>` with a `sizes` that says how wide the tile is, and the
+  browser fetches the smallest copy that stays sharp on that screen;
+  `imageUrl` is its 480px member. Self-hosted pictures have one size and
+  no `imageSrcSet`.
 - **Topics.** `person` and `styling` also return `sections`: the topics the
   editor groups their settings under, in order — each `{ label, fields,
   imageUrl? }`, where `fields` are the node-data fields of the settings in
@@ -3031,7 +3039,12 @@ A look picker on Nodaro Cloud (`/v1/picker-catalogs/mood`):
 
 ```json
 { "id": "happy", "label": "Happy", "category": "positive", "term": "happy expression",
-  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/images/710df65a-3c1e-485b-b8b7-29f7b3baf479.png" }
+  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png",
+  "imageSrcSet": "https://cdn.nodaro.ai/cdn-cgi/image/width=240,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 240w, https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 480w, https://cdn.nodaro.ai/cdn-cgi/image/width=960,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 960w, https://cdn.nodaro.ai/cdn-cgi/image/width=1920,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 1920w" }
+```
+
+```html
+<img src="{imageUrl}" srcset="{imageSrcSet}" sizes="160px" alt="Happy">
 ```
 
 ### Catalogs (server-driven projection)

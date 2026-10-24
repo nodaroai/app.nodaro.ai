@@ -20,7 +20,9 @@ export const LOOK_PREVIEW_STYLE_FIELD = "previewStyle"
  * Pickers with BOTH a rendered set and a drawn illustration — the only ones
  * where the choice means anything. Every key of LOOK_PREVIEW_SETS must be in
  * exactly one of these two sets (guarded by a test), so a new rendered set
- * cannot ship without someone deciding whether it can switch.
+ * cannot ship without someone deciding whether it can switch. The music /
+ * voice pickers' SOUND_RENDER_SETS are in neither on purpose: their tile falls back
+ * to the 3D emoji or flag, never switches, and is always shown real.
  */
 export const ILLUSTRATED_LOOK_PICKERS: ReadonlySet<string> = new Set([
   "camera-motion",

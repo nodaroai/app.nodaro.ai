@@ -8,6 +8,9 @@
 import { describe, it, expect } from "vitest"
 import {
   LOOK_PREVIEW_SETS,
+  RENDER_WIDTH_LADDER,
+  SOUND_ART,
+  SOUND_RENDER_SETS,
   PERSON_DIMENSION_SECTIONS,
   PERSON_FIELD_BY_DIMENSION,
   STYLING_DIMENSION_ORDER,
@@ -16,6 +19,7 @@ import {
   characterArtPath,
   getRegisteredPickerCatalogs,
   lookPreviewStillUrl,
+  pickerOptionImage,
   pickerOptionImageUrl,
   projectPickerCatalog,
   soundArtPath,
@@ -37,12 +41,19 @@ function projectedOptions(c: PickerCatalog, images?: PickerImageOptions) {
   ] as ReadonlyArray<{ field: string | undefined; option: ProjectedCatalogOption }>
 }
 
+type Sets = Readonly<Record<string, Readonly<Record<string, string>>>>
+
 /** The picture an option should get, from the art maps directly (independent of the projection). */
 function expectedUrl(c: PickerCatalog, field: string | undefined, id: string, images: PickerImageOptions): string | undefined {
-  const own = characterArtPath(c.catalogId, id) ?? (field ? soundArtPath(c.catalogId, field, id) : undefined)
-  if (own) return images.baseUrl.replace(/\/+$/, "") + own
+  const base = images.baseUrl.replace(/\/+$/, "")
+  const photo = characterArtPath(c.catalogId, id)
+  if (photo) return base + photo
+  const musicRender = images.lookPreviews ? (SOUND_RENDER_SETS as Sets)[c.catalogId]?.[id] : undefined
+  if (musicRender) return lookPreviewStillUrl(musicRender)
+  const own = field ? soundArtPath(c.catalogId, field, id) : undefined
+  if (own) return base + own
   if (!images.lookPreviews) return undefined
-  const render = (LOOK_PREVIEW_SETS as Readonly<Record<string, Readonly<Record<string, string>>>>)[c.nodeType]?.[id]
+  const render = (LOOK_PREVIEW_SETS as Sets)[c.nodeType]?.[id]
   return render ? lookPreviewStillUrl(render) : undefined
 }
 
@@ -187,5 +198,85 @@ describe("picker catalog directory imageCount", () => {
     const cloud = pictured(CLOUD)
     expect(everywhere.every((t) => cloud.has(t))).toBe(true)
     for (const look of ["style", "mood", "lens", "framing", "lighting", "camera-motion"]) expect(cloud.has(look), look).toBe(true)
+  })
+})
+
+describe("music / voice picker renders (SOUND_RENDER_SETS)", () => {
+  const SOUND = ["music-genre", "music-mood", "instrumentation", "voice-character", "voice-delivery"] as const
+
+  it("cover exactly the options of the five music / voice pickers, one render each", () => {
+    // Every sound catalog has renders: a new one must ship its pictures (or change this list on purpose).
+    expect(Object.keys(SOUND_ART).sort()).toEqual([...SOUND].sort())
+    for (const catalogId of SOUND) {
+      const ids = Object.values(SOUND_ART[catalogId] as Sets).flatMap((byId) => Object.keys(byId))
+      // Keyed by option id alone: ids must be unique across a catalog's dimensions.
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(Object.keys(SOUND_RENDER_SETS[catalogId]).sort()).toEqual([...ids].sort())
+    }
+    expect(Object.keys(SOUND_RENDER_SETS).sort()).toEqual([...SOUND].sort())
+  })
+
+  it("are distinct stills on the transforming CDN, under keys no look picker uses", () => {
+    const urls = Object.values(SOUND_RENDER_SETS as Sets).flatMap((byId) => Object.values(byId))
+    expect(urls.filter((u) => !/^https:\/\/cdn\.nodaro\.ai\/picker-renders\/[0-9a-f-]{36}\.png$/.test(u))).toEqual([])
+    expect(new Set(urls).size).toBe(urls.length)
+    expect(Object.keys(SOUND_RENDER_SETS).filter((k) => k in LOOK_PREVIEW_SETS)).toEqual([])
+  })
+})
+
+describe("every picker render lives under the platform-owned prefix", () => {
+  // picker-renders/ belongs to no user: no account deletion, retention reaper or
+  // asset cleanup reaches it. A render left on a generation key (images/,
+  // videos/) belongs to whoever generated it and vanishes with their asset —
+  // copy it under picker-renders/ first (server-side copy in the same bucket).
+  it("look previews and music / voice renders alike", () => {
+    const urls = [LOOK_PREVIEW_SETS, SOUND_RENDER_SETS].flatMap((sets) =>
+      Object.values(sets as Sets).flatMap((byId) => Object.values(byId)),
+    )
+    expect(urls.length).toBeGreaterThan(1000)
+    expect(urls.filter((u) => !/^https:\/\/cdn\.nodaro\.ai\/picker-renders\/[0-9a-f-]{36}\.(png|mp4)$/.test(u))).toEqual([])
+  })
+
+  it("replace the emoji and flags on Cloud only", () => {
+    const genre = { nodeType: "music-genre", catalogId: "music-genre" }
+    expect(pickerOptionImageUrl(genre, "genre", "hip-hop", CLOUD)).toBe(lookPreviewStillUrl(SOUND_RENDER_SETS["music-genre"]["hip-hop"]))
+    expect(pickerOptionImageUrl(genre, "genre", "hip-hop", COMMUNITY)).toMatch(/^http:\/\/localhost:3000\/picker-art\/emoji\//)
+    const voice = { nodeType: "voice-character", catalogId: "voice-character" }
+    expect(pickerOptionImageUrl(voice, "language", "english", CLOUD)).toBe(lookPreviewStillUrl(SOUND_RENDER_SETS["voice-character"].english))
+    expect(pickerOptionImageUrl(voice, "language", "english", COMMUNITY)).toMatch(/^http:\/\/localhost:3000\/picker-art\/flags\//)
+  })
+})
+
+describe("picker option imageSrcSet", () => {
+  const CLOUD_SRCSET: PickerImageOptions = { ...CLOUD, srcSet: true }
+  const rock = () => pickerOptionImage({ nodeType: "music-genre", catalogId: "music-genre" }, "genre", "rock", CLOUD_SRCSET)
+
+  it("a CDN render offers every width of the ladder, its imageUrl being the 480px member", () => {
+    const render = SOUND_RENDER_SETS["music-genre"].rock
+    expect(rock()?.srcSet).toBe(RENDER_WIDTH_LADDER.map((w) => `${lookPreviewStillUrl(render, w)} ${w}w`).join(", "))
+    expect(rock()?.srcSet).toContain(`${rock()?.url} 480w`)
+  })
+
+  it("is left out unless asked for (the MCP tools do not ask), and changes nothing else", () => {
+    const plain = pickerOptionImage({ nodeType: "music-genre", catalogId: "music-genre" }, "genre", "rock", CLOUD)
+    expect(plain).toEqual({ url: rock()?.url })
+    const any = CATALOGS.flatMap((c) => projectedOptions(c, CLOUD)).filter(({ option }) => "imageSrcSet" in option)
+    expect(any).toEqual([])
+  })
+
+  it("rides beside imageUrl for every CDN picture, at both detail levels, and never for a self-hosted one", () => {
+    const wrong: string[] = []
+    for (const images of [CLOUD_SRCSET, { ...COMMUNITY, srcSet: true }]) {
+      for (const c of CATALOGS) {
+        for (const detail of ["compact", "full"] as const) {
+          const p = projectPickerCatalog(c, { detail, images })
+          for (const o of [...(p.options ?? []), ...(p.dimensions ?? []).flatMap((d) => d.options)]) {
+            const cdn = o.imageUrl?.startsWith("https://cdn.nodaro.ai/") === true
+            if ("imageSrcSet" in o !== cdn) wrong.push(`${detail} ${c.nodeType}.${o.id}`)
+          }
+        }
+      }
+    }
+    expect(wrong).toEqual([])
   })
 })

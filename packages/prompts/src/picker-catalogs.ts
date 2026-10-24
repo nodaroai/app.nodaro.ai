@@ -93,7 +93,7 @@ import {
   FURNITURE_SUBCATEGORY_ORDER
 } from "@nodaro/shared/catalogs"
 import type { ProjectedCatalog, ProjectedCatalogOption, ProjectedCatalogDimension, ProjectedCatalogSection } from "@nodaro/shared/types"
-import { pickerOptionImageUrl, pickerSectionImageUrl, type PickerImageOptions } from "./picker-art/images.js"
+import { pickerOptionImage, pickerOptionImageUrl, pickerSectionImageUrl, type PickerImageOptions, type PickerOptionImage } from "./picker-art/images.js"
 import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from "./held-prop.js"
 import { FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "./framing.js"
 import { LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS } from "./lighting.js"
@@ -1042,11 +1042,11 @@ export type ProjectedPickerOption = ProjectedCatalogOption
 export type ProjectedPickerDimension = ProjectedCatalogDimension
 export type ProjectedPickerCatalog = ProjectedCatalog
 
-function projectOption(o: PickerOption, detail: PickerCatalogDetail, imageUrl?: string): ProjectedPickerOption {
+function projectOption(o: PickerOption, detail: PickerCatalogDetail, image?: PickerOptionImage): ProjectedPickerOption {
   // `term` rides at BOTH detail levels: a thin client renders `label` and
   // injects `term`, so compact must carry it — it is what makes compact hint
   // mode possible without a second round-trip for the full payload.
-  const projected = projectOptionFields(o, detail, imageUrl)
+  const projected = projectOptionFields(o, detail, image)
   // Per-option params (a wipe's direction) ride at both detail levels too: an
   // id-only client needs the rows to offer the control at all.
   return o.params
@@ -1061,10 +1061,14 @@ function projectOption(o: PickerOption, detail: PickerCatalogDetail, imageUrl?: 
     : projected
 }
 
-function projectOptionFields(o: PickerOption, detail: PickerCatalogDetail, imageUrl?: string): ProjectedPickerOption {
-  // `imageUrl` (display data) rides at both detail levels too, present only
-  // when the option has a picture.
-  const extras = { ...(o.motion ? { motion: o.motion } : {}), ...(imageUrl ? { imageUrl } : {}) }
+function projectOptionFields(o: PickerOption, detail: PickerCatalogDetail, image?: PickerOptionImage): ProjectedPickerOption {
+  // `imageUrl` / `imageSrcSet` (display data) ride at both detail levels too,
+  // present only when the option has a picture (a srcset only for a CDN render).
+  const extras = {
+    ...(o.motion ? { motion: o.motion } : {}),
+    ...(image ? { imageUrl: image.url } : {}),
+    ...(image?.srcSet ? { imageSrcSet: image.srcSet } : {}),
+  }
   return detail === "full"
     ? {
         id: o.id,
@@ -1114,7 +1118,7 @@ export function projectPickerCatalog(
   }
   const images = opts.images
   const imageOf = (field: string | undefined, o: PickerOption) =>
-    images ? pickerOptionImageUrl(c, field, o.id, images) : undefined
+    images ? pickerOptionImage(c, field, o.id, images) : undefined
   const projectDims = (dims: readonly PickerDimension[]) =>
     dims.map((d) => ({
       field: d.field,

@@ -126,6 +126,7 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
             label={resolveLabel(entry.id, entry.label)}
             description={resolveDescription(entry.id, entry.description)}
             art={getSoundArt(art, entry.id)}
+            render={{ pickerKey: art.catalogId, id: entry.id }}
             selected={selected}
             checked={checked}
             sectionLabel={label}

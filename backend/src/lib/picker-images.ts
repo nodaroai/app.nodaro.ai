@@ -10,9 +10,12 @@ import { appBaseUrl } from "./deployment-urls.js"
  *   the same base every other generated link uses (the community stack sets
  *   it; Nodaro Cloud's app host when unset), so an external app always gets
  *   absolute URLs on the install it asked, never on Nodaro's servers;
- * - the rendered look previews, which live on the Nodaro CDN, on Nodaro Cloud
- *   only — the same rule the editor follows (look-previews-bootstrap.ts).
+ * - the rendered previews (the look pickers' and the music / voice pickers'), which
+ *   live on the Nodaro CDN, on Nodaro Cloud only — the same rule the editor
+ *   follows (look-previews-bootstrap.ts);
+ * - with `srcSet`, each CDN picture's widths as `imageSrcSet`: the REST routes
+ *   ask for it (an app draws the picture), the MCP tools do not.
  */
-export function pickerImageOptions(): PickerImageOptions {
-  return { baseUrl: appBaseUrl(), lookPreviews: isCloud() }
+export function pickerImageOptions(opts: { readonly srcSet?: boolean } = {}): PickerImageOptions {
+  return { baseUrl: appBaseUrl(), lookPreviews: isCloud(), srcSet: opts.srcSet === true }
 }

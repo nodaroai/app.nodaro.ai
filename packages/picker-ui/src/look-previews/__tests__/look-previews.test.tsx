@@ -67,8 +67,8 @@ describe("look preview sets", () => {
     for (const [key, set] of Object.entries(LOOK_PREVIEW_SETS)) {
       for (const [id, url] of Object.entries(set as Record<string, string>)) {
         const ok = key === "camera-motion"
-          ? /^https:\/\/cdn\.nodaro\.ai\/videos\/[0-9a-f-]+\.mp4$/.test(url)
-          : /^https:\/\/cdn\.nodaro\.ai\/images\/[0-9a-f-]+\.png$/.test(url)
+          ? /^https:\/\/cdn\.nodaro\.ai\/picker-renders\/[0-9a-f-]+\.mp4$/.test(url)
+          : /^https:\/\/cdn\.nodaro\.ai\/picker-renders\/[0-9a-f-]+\.png$/.test(url)
         if (!ok) bad.push(`${key}.${id}`)
       }
     }
