@@ -245,7 +245,7 @@ export default function LoginPage() {
         }}
       />
 
-      <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
+      <main className="relative z-10 w-full max-w-sm space-y-8 text-center">
         {/* Logo + tagline */}
         <div className="space-y-3">
           <h1>
@@ -366,10 +366,10 @@ export default function LoginPage() {
             </p>
           )}
         </div>
-      </div>
+      </main>
 
       {/* The platform legal policies apply only when the deployment shows its links. */}
-      {surfacePlatformLinks() && <div className="absolute bottom-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+      {surfacePlatformLinks() && <footer className="absolute bottom-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
         <a href="https://nodaro.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
           {t("legal.terms")}
         </a>
@@ -387,7 +387,7 @@ export default function LoginPage() {
             <AccessibilityStatementLink className="hover:text-foreground transition-colors" />
           </>
         )}
-      </div>}
+      </footer>}
     </div>
   )
 }

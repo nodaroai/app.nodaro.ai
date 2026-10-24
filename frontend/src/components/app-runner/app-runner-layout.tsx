@@ -1,3 +1,5 @@
+import { SkipToContent } from "@/components/layout/skip-to-content"
+
 interface AppRunnerLayoutProps {
   showHistory: boolean
   collapsed: boolean
@@ -15,6 +17,8 @@ export function AppRunnerLayout({
 }: AppRunnerLayoutProps) {
   return (
     <div className="h-[100dvh] flex relative">
+      {/* The runs sidebar comes first in reading order; the link jumps past it. */}
+      {sidebar && <SkipToContent />}
       {/* Desktop sidebar: always visible when sidebar content exists */}
       {sidebar && (
         <div className="hidden md:block shrink-0">
@@ -38,9 +42,9 @@ export function AppRunnerLayout({
         </>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <main id="main" tabIndex={-1} className="flex-1 flex flex-col min-w-0 relative focus:outline-none">
         {children}
-      </div>
+      </main>
     </div>
   )
 }
