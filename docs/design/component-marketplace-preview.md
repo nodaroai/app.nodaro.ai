@@ -11,7 +11,7 @@ Two surfaces both have gaps:
 
 1. **Fullscreen marketplace** (`ComponentMarketplaceModal` with `variant="fullscreen"`, opened from the canvas toolbar). Cards show name, preview media, and output-type pills, but never show the component's **inputs**, **outputs**, or exposed **settings**. The description is rendered but is clamped to two lines and disappears behind a hover overlay. Clicking a card adds the component immediately — users have no chance to review what they're picking.
 
-2. **Popup marketplace** (`ComponentMarketplaceModal` with `variant="popup"`, opened from the add-node / right-click menu). Each list item shows the component name plus the creator's display name. The creator name isn't useful for deciding whether to add the component — the description would be.
+2. **Popup marketplace** (`ComponentMarketplaceModal` with `variant="popup"`, opened from the add-node popup). Each list item shows the component name plus the creator's display name. The creator name isn't useful for deciding whether to add the component — the description would be.
 
 Both gaps are about the same root question: "what does this component do?". All the data needed to answer it (`description`, `componentMetadata.inputs/outputs/exposedSettings`, `previewMediaUrl`) is already on the `AppBrowseCard` returned by the marketplace API — it just isn't rendered.
 

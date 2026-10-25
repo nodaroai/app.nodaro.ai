@@ -37,7 +37,6 @@ import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
 import { ReviewInspectorHost } from "@/components/edl-review/review-inspector-host"
 import { FramingEditorHost } from "@/components/speaker-view/region-editor/framing-editor-host"
-import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { CanvasControls } from "./canvas-controls"
 import { MediaPreviewModal } from "./media-preview-modal"
@@ -449,13 +448,6 @@ interface NodeContextMenuState {
   readonly y: number
 }
 
-interface CanvasContextMenuState {
-  readonly x: number
-  readonly y: number
-  readonly flowX: number
-  readonly flowY: number
-}
-
 interface WorkflowCanvasProps {
   readonly sidebarVisible: boolean
   readonly onToggleSidebar: () => void
@@ -524,7 +516,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [undo])
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
-  const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
   const [edgeContextMenu, setEdgeContextMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
   const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
@@ -614,7 +605,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const copilotCentered = useCopilotUiStore((s) => s.mode === "center")
   const copilotPanelOpen = useCopilotUiStore((s) => s.mode === "panel")
   const copilotCenterAllowed = useCopilotCenterAllowed()
-  const askCopilot = useCopilotUiStore((s) => s.askCopilot)
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   // Whether the last pointer press was on the canvas: decides who a Tab press belongs to.
@@ -1484,28 +1474,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       exitZoomFn(zoomedNodeIdRef.current)
     }
     setNodeContextMenu(null)
-    setCanvasContextMenu(null)
     setEdgeContextMenu(null)
     // Don't close the popup if it was just opened by an edge drop
     if (!edgeDropRef.current) setAddNodePopupOpen(false)
     setConnectingFromType(null)
   }, [selectNode, exitZoomFn])
-
-  const handlePaneContextMenu = useCallback(
-    (event: MouseEvent | React.MouseEvent) => {
-      event.preventDefault()
-      setNodeContextMenu(null)
-      setAddNodePopupOpen(false)
-      const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      setCanvasContextMenu({
-        x: event.clientX,
-        y: event.clientY,
-        flowX: flowPosition.x,
-        flowY: flowPosition.y,
-      })
-    },
-    [screenToFlowPosition]
-  )
 
   const getViewportCenter = useCallback(() => {
     const el = document.querySelector('.react-flow')
@@ -1519,7 +1492,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     (position?: { x: number; y: number }) => {
       const flowPosition = position || screenToFlowPosition(getViewportCenter())
       addNode("sticky-note", flowPosition)
-      setCanvasContextMenu(null)
     },
     [addNode, screenToFlowPosition, getViewportCenter]
   )
@@ -1561,24 +1533,28 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [addNode, selectNode, screenToFlowPosition, getViewportCenter]
   )
 
-  // The right-click menu's quick-add list: the node lands where the menu was
-  // opened, focused like a node made from the empty canvas.
-  const handleAddNodeAt = useCallback(
-    (type: SceneNodeType, position: { x: number; y: number }) => {
-      const id = addNode(type, position)
-      if (id) selectNode(id)
-    },
-    [addNode, selectNode]
-  )
-
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
     setAddNodePopupPosition(position ?? getViewportCenter())
     setAddNodeAtCenter(placeAtCenter)
     setConnectionContext(null)
+    // A popup closed by a pane click keeps the node a Tab bound it to; this
+    // opener is never the node-bound one, so it starts unbound.
+    setAutoConnectCtx(null)
     setAddNodePopupOpen(true)
-    setCanvasContextMenu(null)
     setNodeContextMenu(null)
   }, [getViewportCenter])
+
+  // Right-click on the canvas (or the Copilot box over it) opens the full Add
+  // Node popup at the cursor. Inside a text field the browser's own menu stays.
+  const handlePaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      const el = event.target instanceof HTMLElement ? event.target : null
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return
+      event.preventDefault()
+      handleOpenAddNodePopup({ x: event.clientX, y: event.clientY })
+    },
+    [handleOpenAddNodePopup]
+  )
 
   // Empty-state upload bar → open the add-node popup pre-drilled to the "Input"
   // category (Text Prompt, Upload Image/Video/Audio, Video URL, Reference Audio).
@@ -1620,7 +1596,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         color: readHandlePipColor(nodeId, handleId),
       })
       setAddNodePopupOpen(true)
-      setCanvasContextMenu(null)
       setNodeContextMenu(null)
     },
     [getNode, getViewport],
@@ -2003,7 +1978,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       arranged.push(...untouchedNodes)
 
       setNodes(arranged)
-      setCanvasContextMenu(null)
 
       // Fit the view to use screen space optimally
       requestAnimationFrame(() => fitView({ padding: 0.1, duration: 300 }))
@@ -2016,16 +1990,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setNodes(nodes.map((n) => ({ ...n, selected: true })))
   }, [nodes, setNodes])
 
-  const handleClearSelection = useCallback(() => {
-    setNodes(nodes.map((n) => ({ ...n, selected: false })))
-    selectNode(null)
-  }, [nodes, setNodes, selectNode])
-
   const handleNodeContextMenu: NodeMouseHandler = useCallback(
     (event, node) => {
       event.preventDefault()
       selectNode(node.id)
-      setCanvasContextMenu(null)
       setAddNodePopupOpen(false)
       setNodeContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
     },
@@ -2036,7 +2004,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   useEffect(() => {
     const handler = (e: Event) => {
       const { nodeId, x, y } = (e as CustomEvent).detail
-      setCanvasContextMenu(null)
       setAddNodePopupOpen(false)
       setNodeContextMenu({ nodeId, x, y })
     }
@@ -2206,7 +2173,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           return
         }
         setAddNodePopupOpen(false)
-        setCanvasContextMenu(null)
         setNodeContextMenu(null)
         setEdgeContextMenu(null)
         const state = useWorkflowStore.getState()
@@ -2839,8 +2805,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     navigate(`/projects/${projectId}/workflows/${wf.id}`)
   }, [pendingImportData, createWorkflow, navigate])
 
-  const hasSelection = nodes.some((n) => n.selected)
-
   return (
     <>
       {/* Canvas Toolbar (icon buttons on left) */}
@@ -3228,22 +3192,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             </button>
           </div>
         </>
-      )}
-
-      {canvasContextMenu && (
-        <CanvasContextMenu
-          open={true}
-          position={{ x: canvasContextMenu.x, y: canvasContextMenu.y }}
-          onClose={() => setCanvasContextMenu(null)}
-          onAddNode={() => handleOpenAddNodePopup({ x: canvasContextMenu.x, y: canvasContextMenu.y })}
-          onAddStickyNote={() => handleAddStickyNote({ x: canvasContextMenu.flowX, y: canvasContextMenu.flowY })}
-          onTidyUp={handleTidyUp}
-          onSelectAll={handleSelectAll}
-          onClearSelection={handleClearSelection}
-          hasSelection={hasSelection}
-          onAddNodeType={(type) => handleAddNodeAt(type, { x: canvasContextMenu.flowX, y: canvasContextMenu.flowY })}
-          onAskCopilot={copilotSurfaced() ? askCopilot : undefined}
-        />
       )}
 
       {/* Import Dialog — shown when pasting into a non-empty canvas */}

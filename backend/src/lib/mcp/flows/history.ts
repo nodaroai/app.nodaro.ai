@@ -61,7 +61,20 @@ export interface HistoryPlan {
 const INPUT_BOOKKEEPING: ReadonlySet<string> = new Set([
   "type", "userPrompt", "resolvedModel", "batchId", "batchIndex", "injectCharacterContext", "origin",
   "mcp_client", "userId", "workflowId", "nodeId",
+  // The route's probe of the reference clips, kept for the settlement.
+  "refVideoDurationsSec",
 ])
+
+/**
+ * Fields a route has already folded into the input it stored. The video routes
+ * assemble `connectedReferences` into the prompt and `referenceImageUrls` and
+ * record the result, so the stored prompt and list ARE the call; the node reads
+ * them as they are, and the references are not added a second time.
+ */
+const FOLDED_BY_ROUTE: Readonly<Record<string, ReadonlySet<string>>> = {
+  "text-to-video": new Set(["connectedReferences"]),
+  "image-to-video": new Set(["connectedReferences"]),
+}
 
 const PRODUCTS: ReadonlySet<McpConversationClient> = new Set(["claude", "claude-code", "chatgpt"])
 
@@ -70,7 +83,8 @@ function stepOf(job: HistoryJob): PlannedStep | string {
   const type = typeof input.type === "string" ? input.type : ""
   const target = historyRouteFor(type)
   if (!target) return `no node for ${type || "an untyped job"}`
-  const body = Object.fromEntries(Object.entries(input).filter(([k]) => !INPUT_BOOKKEEPING.has(k)))
+  const folded = FOLDED_BY_ROUTE[type]
+  const body = Object.fromEntries(Object.entries(input).filter(([k]) => !INPUT_BOOKKEEPING.has(k) && !folded?.has(k)))
   const spec = flowNodeFor(target.route, body, target.tool)
   if (!spec) return `${type}: the node cannot reproduce it`
   const url = job.output_data?.[OUTPUT_URL_FIELD[spec.outputKey]]

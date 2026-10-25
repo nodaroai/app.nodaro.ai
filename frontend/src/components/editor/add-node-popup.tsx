@@ -948,6 +948,8 @@ export function AddNodePopup({
     <>
     {open && !componentBrowserOpen && <div
       ref={popupRef}
+      // A press or focus in here keeps Tab as Add Node after the pick (canvas-tab-intent.ts).
+      data-canvas-tab-scope=""
       className={cn(
         // 790px is the design width — the nine intent tabs need it to fit on
         // one line without the strip having to scroll.
