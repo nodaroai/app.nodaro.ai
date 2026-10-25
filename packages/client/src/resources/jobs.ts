@@ -175,6 +175,17 @@ export interface Job {
    *  the generation request), or null. See `client.sessions`. */
   session_id?: string | null
   /**
+   * With `list({ withSessions: true })`: every session that holds the job now,
+   * each linkable — empty when it is in no session (General). Absent otherwise.
+   */
+  sessions?: JobSessionRef[]
+  /**
+   * When the job was deleted, on a job read from the Trash
+   * (`client.trash.list()`). A deleted job is left out of every other read, so
+   * this is otherwise absent or `null`.
+   */
+  deleted_at?: string | null
+  /**
    * Whether the job's owner favorited it (`client.gallery.toggleFavorite`).
    * Returned by `get()` and `list()`. Absent from an older server, and when
    * the server could not read it for a moment — treat absent as unknown,
@@ -209,6 +220,14 @@ export interface DeleteJobResult {
   success: true
 }
 
+/** A session that holds a job now (`Job.sessions`). */
+export interface JobSessionRef {
+  id: string
+  title: string | null
+  /** The session's project, or `null` when it has none. */
+  projectId: string | null
+}
+
 export interface ListJobsParams {
   /** One status or several (a job matching any of them). An unknown status is a 400. */
   status?: JobStatus | readonly JobStatus[]
@@ -226,6 +245,19 @@ export interface ListJobsParams {
   rating?: JobRatingFilter
   /** The jobs of one generate-image batch (`count` / `models`) — its `batchId`. */
   batchId?: string
+  /**
+   * The jobs a session of this project holds now — or, `"none"`, a session
+   * with no project. Each job once, however many sessions hold it. Not with
+   * `inSession: false`.
+   */
+  projectId?: string | "none"
+  /**
+   * `false`: the jobs no session holds now (General), whatever session they
+   * were born in. `true`: the jobs at least one session holds.
+   */
+  inSession?: boolean
+  /** `true`: each job carries `sessions`, the sessions that hold it now. */
+  withSessions?: boolean
   /** Page size, 1–100 (server default 50). */
   limit?: number
   /** The previous page's `next`. */
@@ -306,13 +338,23 @@ export class JobsResource {
    * a client app lists its runs with `{ type: "llm-structured", origin: "studio" }`.
    * `status` and `type` take one value or a list; `favorited` and `rating`
    * filter on your own marks, `source` on the surface that created the job.
-   * Every filter combines with AND, and each job
-   * carries `favorited` and `rating`.
+   * `projectId` / `inSession` filter on where the job is now (a project's
+   * sessions, or General), and `withSessions` says which sessions each job is
+   * in — for "everything in this project". Every filter combines with AND,
+   * and each job carries `favorited` and `rating`. A deleted job is never
+   * listed: read the Trash with `client.trash.list()`.
    */
   list(params: ListJobsParams = {}): Promise<ListJobsPage> {
-    const { status, type, source, ...rest } = params
+    const { status, type, source, inSession, withSessions, ...rest } = params
     return this.client.request<ListJobsPage>("GET", "/v1/jobs", {
-      query: { ...rest, status: listParam(status), type: listParam(type), source: listParam(source) },
+      query: {
+        ...rest,
+        status: listParam(status),
+        type: listParam(type),
+        source: listParam(source),
+        inSession: inSession === undefined ? undefined : String(inSession),
+        withSessions: withSessions ? "true" : undefined,
+      },
     })
   }
 
@@ -371,15 +413,30 @@ export class JobsResource {
   }
 
   /**
-   * Delete a job and the private media it produced. Server route is
-   * `DELETE /v1/jobs/:jobId`. Only the job's owner (or an admin) may delete it;
-   * a job that is still running is deleted as-is — cancel it first when its
-   * worker should stop ({@link cancel}).
+   * Delete a job: it goes to the Trash (`client.trash.list()`). It is left out
+   * of every read from then on, stays restorable for 30 days ({@link restore},
+   * back into the sessions it was in), and is then deleted for good, as a
+   * delete always was (a copy saved to the Library stays). `{ forever: true }` deletes a job already in the Trash for good now;
+   * on a live job it fails with a 409 `NodaroError` whose `code` is
+   * `"not_in_trash"`. Only the job's owner (or an admin) may delete it; a job
+   * that is still running keeps running — cancel it first when its worker
+   * should stop ({@link cancel}). Nothing is refunded. OAuth apps need the
+   * `assets:write` scope.
    */
-  delete(id: string): Promise<DeleteJobResult> {
+  delete(id: string, options: { forever?: boolean } = {}): Promise<DeleteJobResult> {
     return this.client.request(
       "DELETE",
       `/v1/jobs/${encodeURIComponent(id)}`,
+      options.forever ? { query: { forever: "true" } } : {},
     )
+  }
+
+  /**
+   * Bring a deleted job back from the Trash: it reappears in every read and in
+   * every session it was in. A job that is not in the Trash succeeds too.
+   * OAuth apps need the `assets:write` scope.
+   */
+  restore(id: string): Promise<{ success: true }> {
+    return this.client.request("POST", `/v1/jobs/${encodeURIComponent(id)}/restore`)
   }
 }

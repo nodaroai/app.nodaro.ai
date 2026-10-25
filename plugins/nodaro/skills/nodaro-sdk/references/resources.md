@@ -4,8 +4,9 @@
 |----------|---------|
 | `workflows` | List, get, create, update, delete, run |
 | `projects` | Workspace organization |
-| `sessions` | Generation sessions inside projects: create, list, rename/archive, delete; the feed (`items`), `importItems` (a link, not a copy), `removeItem`. Send `sessionId` on a generation request to file the job in one |
-| `jobs` | Job status (`get`, lean `getStatus` for poll loops), `list` (status / type / origin / favorited / rating filters), `rate` (good / bad / clear), cancel, delete |
+| `sessions` | Generation sessions inside projects: create, list (`projectId`, or `"none"`), rename/archive, delete; the feed (`items`, `{ removed: true }` for its Trash), `importItems` (a link, not a copy), `moveItems` (atomic, undoable), `removeItem` (to the Trash, `{ forever }`), `restoreItem`. Send `sessionId` on a generation request to file the job in one |
+| `jobs` | Job status (`get`, lean `getStatus` for poll loops), `list` (status / type / origin / favorited / rating filters, `projectId` / `inSession` / `withSessions`), `rate` (good / bad / clear), cancel, delete (to the Trash, `{ forever }`), `restore` |
+| `trash` | The Trash: `list` the items removed from sessions and the deleted jobs, by project (or `"none"`), tool and type |
 | `videoPro` | Generate Video Pro runs: stop / continue a long video (Cloud) |
 | `executions` | Workflow execution status, list, cancel |
 | `nodes` | Node discovery (`list`/`get`) + direct `run` / `runAndWait` / `runMany` |

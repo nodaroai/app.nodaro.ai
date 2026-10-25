@@ -10,6 +10,8 @@ const mocks = {
   update: vi.fn(),
   importItems: vi.fn(),
   removeItem: vi.fn(),
+  restoreItem: vi.fn(),
+  moveItems: vi.fn(),
   delete: vi.fn(),
 }
 
@@ -82,7 +84,32 @@ describe("sessions command", () => {
     mocks.delete.mockResolvedValueOnce({ success: true })
     await runCmd("sessions", "remove", "s1", "j1")
     await runCmd("sessions", "delete", "s1")
-    expect(mocks.removeItem).toHaveBeenCalledWith("s1", "j1")
+    // Removing sends the item to the session's Trash: no `forever`.
+    expect(mocks.removeItem).toHaveBeenCalledWith("s1", "j1", { forever: undefined })
     expect(mocks.delete).toHaveBeenCalledWith("s1")
+  })
+
+  it("remove --forever deletes a removed item for good", async () => {
+    mocks.removeItem.mockResolvedValueOnce({ success: true })
+    await runCmd("sessions", "remove", "s1", "j1", "--forever")
+    expect(mocks.removeItem).toHaveBeenCalledWith("s1", "j1", { forever: true })
+  })
+
+  it("restore brings a removed item back", async () => {
+    mocks.restoreItem.mockResolvedValueOnce({ success: true })
+    await runCmd("sessions", "restore", "s1", "j1")
+    expect(mocks.restoreItem).toHaveBeenCalledWith("s1", "j1")
+  })
+
+  it("move sends the target, the source and the ids", async () => {
+    mocks.moveItems.mockResolvedValueOnce({ data: { moved: 2 } })
+    await runCmd("sessions", "move", "s2", "--from", "s1", "--jobs", "j1, j2")
+    expect(mocks.moveItems).toHaveBeenCalledWith("s2", { jobIds: ["j1", "j2"], fromSessionId: "s1" })
+  })
+
+  it("items --removed lists the session's Trash", async () => {
+    mocks.items.mockResolvedValueOnce({ data: [], next: null })
+    await runCmd("sessions", "items", "s1", "--removed")
+    expect(mocks.items).toHaveBeenCalledWith("s1", { removed: true, limit: undefined, cursor: undefined })
   })
 })

@@ -1,4 +1,4 @@
-import { CHILD_JOB_COLUMN } from "./public-job-data.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "./public-job-data.js"
 import { supabase } from "./supabase.js"
 import { bannedGalleryUsersFilter, galleryHides, type GalleryModeration } from "./gallery-moderation.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "./render-listing.js"
@@ -182,6 +182,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
     let countQuery = supabase
       .from("jobs")
       .select("id", { count: "exact", head: true })
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("status", "completed")
       .not("output_data", "is", null)
       // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
@@ -209,6 +210,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
     let dbQuery = supabase
       .from("jobs")
       .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("status", "completed")
       .not("output_data", "is", null)
       // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).

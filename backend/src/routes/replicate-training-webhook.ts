@@ -136,6 +136,7 @@ export async function replicateTrainingWebhookRoutes(
 
       // Find the matching job row for refund/state.
       const { data: job } = await supabase
+        // trash-read: a provider webhook for a training job's own lifecycle.
         .from("jobs")
         .select("id")
         .eq("user_id", character.user_id)

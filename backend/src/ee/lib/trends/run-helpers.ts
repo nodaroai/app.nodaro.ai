@@ -23,7 +23,7 @@ import { config } from "../../../lib/config.js"
 import { supabase } from "../../../lib/supabase.js"
 import { callerGrantOf, withJobSubmissionContext, type TrustedJobProvenance } from "../../../lib/job-submission-context.js"
 import { resolveWebSurfaceFlag } from "../../../middleware/credit-guard.js"
-import { redactPrivateJobData } from "../../../lib/public-job-data.js"
+import { redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../../lib/public-job-data.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../../lib/job-credit-status.js"
 import { sideHoldChargesFor } from "../../../lib/job-step-charge.js"
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
@@ -242,7 +242,7 @@ export function toTrendRun(
 export async function fullQualityByDraft(draftIds: string[], owners: string | string[]): Promise<Map<string, RunJobRow>> {
   const out = new Map<string, RunJobRow>()
   if (draftIds.length === 0) return out
-  let query = supabase.from("jobs").select(`${RUN_JOB_COLS}, fullQualityOf:input_data->>fullQualityOf`)
+  let query = supabase.from("jobs").select(`${RUN_JOB_COLS}, fullQualityOf:input_data->>fullQualityOf`).is(TRASHED_JOB_COLUMN, null)
   query = typeof owners === "string" ? query.eq("user_id", owners) : query.in("user_id", owners)
   const { data, error } = await query
     .filter("input_data->>type", "eq", "cast-swap")
@@ -411,6 +411,7 @@ export async function followPreviewMasking(
   const { data, error } = await supabase
     .from("jobs")
     .select("id, user_id, status, input_data, output_data")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", opts.previewJobId)
     .eq("user_id", opts.userId)
     .maybeSingle()

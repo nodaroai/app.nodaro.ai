@@ -19,7 +19,7 @@ export function sessionsCommand(): Command {
   cmd
     .command("list")
     .description("your sessions, newest first")
-    .option("--project <id>", "only this project's sessions")
+    .option("--project <id>", "only this project's sessions (none: the sessions with no project)")
     .option("--tool <tool>", "only this tool's sessions, e.g. create-image")
     .option("--archived", "include archived sessions")
     .option("--limit <n>", "page size (1-100)")
@@ -74,13 +74,15 @@ export function sessionsCommand(): Command {
   cmd
     .command("items <id>")
     .description("a session's items, born-in and imported, newest first")
+    .option("--removed", "the items removed from it (its Trash) instead")
     .option("--limit <n>", "page size (1-100)")
     .option("--cursor <cursor>", "the previous page's next")
     .option("--profile <name>")
     .option("--json")
-    .action(async (id: string, opts: { limit?: string; cursor?: string } & GlobalOpts) => {
+    .action(async (id: string, opts: { removed?: boolean; limit?: string; cursor?: string } & GlobalOpts) => {
       try {
         const page = await buildClient(opts.profile).sessions.items(id, {
+          removed: opts.removed,
           limit: opts.limit ? Number(opts.limit) : undefined,
           cursor: opts.cursor,
         })
@@ -93,9 +95,9 @@ export function sessionsCommand(): Command {
             jobId: i.jobId,
             status: i.job.status,
             imported: i.imported ? `from ${i.importedFrom?.title ?? i.importedFrom?.sessionId ?? "?"}` : "",
-            addedAt: i.addedAt,
+            ...(opts.removed ? { removedAt: i.removedAt ?? "" } : { addedAt: i.addedAt }),
           })),
-          ["jobId", "status", "imported", "addedAt"],
+          ["jobId", "status", "imported", opts.removed ? "removedAt" : "addedAt"],
         )
         if (page.next) dim(`next: --cursor ${page.next}`)
       } catch (err) {
@@ -181,18 +183,57 @@ export function sessionsCommand(): Command {
     })
 
   cmd
-    .command("remove <id> <jobId>")
-    .description("remove one item from a session (the link only — the job stays)")
+    .command("move <id>")
+    .description("move items of another session into this one, all-or-nothing (the source keeps them in its Trash)")
+    .requiredOption("--from <sessionId>", "the session they are in now")
+    .requiredOption("--jobs <ids>", "job ids, comma- or space-separated (up to 100)")
     .option("--profile <name>")
     .option("--json")
-    .action(async (id: string, jobId: string, opts: GlobalOpts) => {
+    .action(async (id: string, opts: { from: string; jobs: string } & GlobalOpts) => {
       try {
-        await buildClient(opts.profile).sessions.removeItem(id, jobId)
+        const result = await buildClient(opts.profile).sessions.moveItems(id, { jobIds: idList(opts.jobs), fromSessionId: opts.from })
+        if (opts.json) {
+          emit(result.data, opts)
+          return
+        }
+        success(`moved ${result.data.moved} into session ${id}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("remove <id> <jobId>")
+    .description("remove one item from a session: to its Trash (the job stays); --forever deletes a removed one for good")
+    .option("--forever", "delete an item already removed, for good (the job stays)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, jobId: string, opts: { forever?: boolean } & GlobalOpts) => {
+      try {
+        await buildClient(opts.profile).sessions.removeItem(id, jobId, { forever: opts.forever })
         if (opts.json) {
           emit({ success: true, id, jobId }, opts)
           return
         }
-        success(`removed ${jobId} from session ${id}`)
+        success(opts.forever ? `deleted ${jobId} from session ${id} for good` : `removed ${jobId} from session ${id} (in its Trash)`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("restore <id> <jobId>")
+    .description("bring a removed item back into its session")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, jobId: string, opts: GlobalOpts) => {
+      try {
+        await buildClient(opts.profile).sessions.restoreItem(id, jobId)
+        if (opts.json) {
+          emit({ success: true, id, jobId }, opts)
+          return
+        }
+        success(`restored ${jobId} in session ${id}`)
       } catch (err) {
         handleError(err)
       }

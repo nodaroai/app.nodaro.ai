@@ -14,6 +14,9 @@ interface ListOpts extends GlobalOpts {
   source?: string
   favorited?: boolean
   rating?: string
+  project?: string
+  inSession?: boolean
+  withSessions?: boolean
   limit?: string
   cursor?: string
 }
@@ -43,7 +46,7 @@ function ratingArg(value: string): JobRating | null {
 }
 
 export function jobsCommand(): Command {
-  const cmd = new Command("jobs").description("list, inspect, rate and cancel jobs")
+  const cmd = new Command("jobs").description("list, inspect, rate, cancel, delete and restore jobs")
 
   cmd
     .command("list")
@@ -55,6 +58,10 @@ export function jobsCommand(): Command {
     .option("--favorited", "only jobs you favorited")
     .option("--no-favorited", "only jobs you did not favorite")
     .option("--rating <rating>", "good, bad, rated (any) or unrated")
+    .option("--project <id>", "only jobs a session of this project holds now (none: a session with no project)")
+    .option("--in-session", "only jobs at least one session holds")
+    .option("--no-in-session", "only jobs no session holds (General)")
+    .option("--with-sessions", "show the sessions each job is in")
     .option("--limit <n>", "page size (1-100)")
     .option("--cursor <cursor>", "the previous page's next")
     .option("--profile <name>")
@@ -70,6 +77,9 @@ export function jobsCommand(): Command {
           source: list(opts.source) as JobSource[] | undefined,
           favorited: opts.favorited,
           rating,
+          projectId: opts.project,
+          inSession: opts.inSession,
+          withSessions: opts.withSessions,
           limit: opts.limit ? Number(opts.limit) : undefined,
           cursor: opts.cursor,
         })
@@ -84,9 +94,10 @@ export function jobsCommand(): Command {
             type: (job.input_data as { type?: unknown } | null)?.type ?? job.job_type ?? "",
             favorited: job.favorited ? "yes" : "",
             rating: job.rating ?? "",
+            ...(opts.withSessions ? { sessions: (job.sessions ?? []).map((s) => s.title ?? s.id).join(", ") } : {}),
             created: job.created_at,
           })),
-          ["id", "status", "type", "favorited", "rating", "created"],
+          ["id", "status", "type", "favorited", "rating", ...(opts.withSessions ? ["sessions"] : []), "created"],
         )
         if (page.next) dim(`next: --cursor ${page.next}`)
       } catch (err) {
@@ -138,6 +149,39 @@ export function jobsCommand(): Command {
         const result = await client.jobs.cancel(id)
         if (opts.json) emit(result, opts)
         else success(`cancelled job ${id}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("delete <id>")
+    .description("delete a job: to the Trash for 30 days, then for good (--forever: a job already in the Trash, now)")
+    .option("--forever", "delete a job already in the Trash for good, now")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: { forever?: boolean } & GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.jobs.delete(id, { forever: opts.forever })
+        if (opts.json) emit(result, opts)
+        else success(opts.forever ? `deleted job ${id} for good` : `deleted job ${id} (in the Trash for 30 days)`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("restore <id>")
+    .description("bring a deleted job back from the Trash, into the sessions it was in")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.jobs.restore(id)
+        if (opts.json) emit(result, opts)
+        else success(`restored job ${id}`)
       } catch (err) {
         handleError(err)
       }

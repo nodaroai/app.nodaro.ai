@@ -1910,6 +1910,9 @@ Needs `jobs:read`.
 | `sources` | string[] |  | Who made it; mcp = your MCP clients. At least 1 item. |
 | `favorited` | boolean |  | true: only jobs you favorited; false: only the rest. |
 | `rating` | string |  | Your rating: good, bad, rated (any) or unrated. One of `good`, `bad`, `rated`, `unrated`. |
+| `project_id` | string |  | Jobs a session of this project holds now; none = a session with no project. Each job once. Also takes `none`. |
+| `in_session` | boolean |  | false: jobs no session holds (General); true: jobs at least one holds. |
+| `with_sessions` | boolean |  | Each job also lists the sessions holding it (id, title, projectId). |
 
 ## `list_locations`
 
@@ -2010,6 +2013,17 @@ Needs `workflows:read` · Nodaro Cloud only.
 |---|---|---|---|
 | `limit` | integer |  | Default 25. From 1 to 100. |
 | `cursor` | string |  | `nextCursor` from a prior result — an opaque page token. |
+
+## `list_trash`
+
+Needs `jobs:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | A project's id, or none. Also takes `none`. |
+| `tool` | string |  | e.g. create-image. At most 40 characters. |
+| `types` | string[] |  | input_data.type values, e.g. generate-image. From 1 to 20 items. |
+| `cursor` | string |  | next_cursor from the previous call. At most 400 characters. |
 
 ## `list_trends`
 
@@ -2478,6 +2492,7 @@ Needs `jobs:read`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `session_id` | string | yes | The session's id (from list_sessions). |
+| `removed` | boolean |  | true: the removed items (restore with update_session restore_job_ids). |
 | `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
 
 ## `recaption_character`
@@ -2612,6 +2627,14 @@ Needs `workflows:execute`.
 | `alignment[].word` | string | yes |  |
 | `alignment[].start` | number | yes |  |
 | `alignment[].end` | number | yes |  |
+
+## `restore_job`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes |  |
 
 ## `retry_app_run`
 
@@ -3346,6 +3369,9 @@ Needs `assets:write`.
 | `archived` | boolean |  |  |
 | `cover_job_id` | string or null |  | One of the session's items to lead its previews; null = automatic. |
 | `import_job_ids` | string[] |  | From 1 to 100 items. |
+| `move_job_ids` | string[] |  | Items of from_session_id to move into this session. From 1 to 100 items. |
+| `from_session_id` | string |  | The session move_job_ids are in now. |
+| `restore_job_ids` | string[] |  | Removed items to bring back. From 1 to 100 items. |
 | `remove_job_ids` | string[] |  | From 1 to 100 items. |
 
 ## `update_workflow_json`

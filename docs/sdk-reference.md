@@ -13,6 +13,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.workflows`](#clientworkflows)
   - [`client.projects`](#clientprojects)
   - [`client.sessions`](#clientsessions)
+  - [`client.trash`](#clienttrash)
   - [`client.jobs`](#clientjobs)
   - [`client.llm`](#clientllm)
   - [`client.videoPro`](#clientvideopro)
@@ -67,7 +68,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -1245,16 +1246,18 @@ const { data: items } = await client.sessions.items(session.id)
 | Method | Signature | Notes |
 |--------|-----------|-------|
 | `create` | `create(input: CreateSessionInput): Promise<{ data: GenerationSession }>` | `tool` required (`create-image`, …); `projectId?`, `title?`. |
-| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId`, `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount`, `coverJobId` and up to four `previewUrls` (the cover's image first when one is set). |
+| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId` (`"none"`: the sessions with no project), `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount` (live items), `removedCount` (items in the Trash), `coverJobId` and up to four `previewUrls` (the cover's image first when one is set). |
 | `get` | `get(id: string): Promise<{ data: GenerationSession }>` | |
 | `update` | `update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }>` | `title` (`null` = untitled), `archived`, `coverJobId` (one of the session's items, 404 otherwise; `null` = automatic). The project cannot change. |
 | `delete` | `delete(id: string): Promise<{ success: true }>` | Its jobs are kept, and stay in every other session holding them. |
-| `items` | `items(id: string, params?: ListSessionItemsParams): Promise<SessionPage<SessionItem>>` | The feed, newest first: `jobId`, `addedAt`, `imported`, `importedFrom`, `job`. |
-| `importItems` | `importItems(id: string, input: { jobIds: string[] }): Promise<{ data: { imported: number; requested: number } }>` | A link, not a copy; up to 100 of **your** jobs, all-or-nothing (404 if any is not yours). |
-| `removeItem` | `removeItem(id: string, jobId: string): Promise<{ success: true }>` | Removes the link only — the job and every other session holding it stay. |
+| `items` | `items(id: string, params?: ListSessionItemsParams): Promise<SessionPage<SessionItem>>` | The live feed, newest first: `jobId`, `addedAt`, `removedAt`, `imported`, `importedFrom`, `job`. `{ removed: true }`: the items removed from it (its Trash), newest removal first. |
+| `importItems` | `importItems(id: string, input: { jobIds: string[] }): Promise<{ data: { imported: number; requested: number } }>` | A link, not a copy; up to 100 of **your** live jobs, all-or-nothing (404 if any is not). An item removed from the session comes back where it was. |
+| `moveItems` | `moveItems(targetId: string, input: MoveSessionItemsInput): Promise<{ data: { moved: number } }>` | `{ jobIds, fromSessionId }`: one transaction — the target gets the items, the source keeps them as removed (undo with `restoreItem(fromSessionId, jobId)`). All-or-nothing (404 if any is not a live item of the source). A session in another project is how an item moves to another project. |
+| `removeItem` | `removeItem(id: string, jobId: string, options?: { forever?: boolean }): Promise<{ success: true }>` | To the session's Trash until restored — no automatic cleanup; the job and every other session holding it stay. `{ forever: true }` deletes an item already removed for good (a 409 `NodaroError` `not_in_trash` on a live one). |
+| `restoreItem` | `restoreItem(id: string, jobId: string): Promise<{ success: true }>` | Back into the session, where it was. |
 
-To get work into another project there is no move: `importItems` into a
-session there, then `removeItem` from the old one. `sessionId` and `origin`
+An item that no session holds any more shows in General:
+`client.jobs.list({ inSession: false })`. `sessionId` and `origin`
 (`GenerationSessionParams`) are accepted by every request that creates a job —
 the platform stamps them on the job whatever the route — and are typed on every
 generation params type: `GenerateImageParams`, `GenerateVideoParams`,
@@ -1268,6 +1271,47 @@ a `400 validation_error` on every route. `GenerateImageParams` also types
 it, stored on the job and never sent to the model) and `count` / `models`
 (see [`runBatchAndWait()`](#runbatchandwaittype-params-opts)). A job's
 `session_id` shows on `jobs.get()` / `jobs.list()`.
+
+---
+
+### `client.trash`
+
+The Trash: the items you removed from sessions and the jobs you deleted. A
+creation tool shows it as one entry beside General. See
+[API integration § The Trash](./api-integration.md#the-trash).
+
+```ts
+list(params?: ListTrashParams): Promise<TrashPage> // GET /v1/trash
+
+interface ListTrashParams {
+  projectId?: string | "none" // a project, or the sessions with no project and General
+  tool?: string               // what a session of this tool holds or held
+  type?: string | string[]    // input_data.type, like jobs.list
+  limit?: number              // 1–100 (default 50)
+  cursor?: string             // the previous page's next
+}
+
+type TrashEntry =
+  | { kind: "removed"; removedAt: string; session: TrashSession; job: Job }
+  | { kind: "deleted"; deletedAt: string; purgeAt: string; job: Job }
+```
+
+Newest first. A **removed** item stays until `sessions.restoreItem(session.id,
+job.id)` or `sessions.removeItem(session.id, job.id, { forever: true })`. A
+**deleted** job stays until `purgeAt` (30 days after `deletedAt`), then it is
+deleted for good (a copy saved to the Library stays); `jobs.restore(job.id)` brings it back into
+every session it was in, `jobs.delete(job.id, { forever: true })` deletes it
+now. A removed item whose job you also deleted is listed once, as the deleted
+job. A job no session ever held has no tool, so `tool` leaves it out: pass
+`type` (your tool's job types) to include it.
+
+```ts
+const { data: trash } = await client.trash.list({ projectId, type: ["generate-image", "image-edit"] })
+for (const entry of trash) {
+  if (entry.kind === "deleted") await client.jobs.restore(entry.job.id)
+  else await client.sessions.restoreItem(entry.session.id, entry.job.id)
+}
+```
 
 ---
 
@@ -1340,6 +1384,9 @@ interface ListJobsParams {
   favorited?: boolean                // true: only jobs you favorited; false: only the rest
   rating?: "good" | "bad" | "rated" | "unrated"
   batchId?: string                   // the jobs of one generate-image batch
+  projectId?: string | "none"        // jobs a session of this project (or of none) holds now
+  inSession?: boolean                // false: jobs no session holds (General)
+  withSessions?: boolean             // each job carries sessions: [{ id, title, projectId }]
   limit?: number                     // 1–100 (default 50)
   cursor?: string                    // the previous page's `next`
 }
@@ -1357,7 +1404,13 @@ created the job (`"mcp"`, `"cli"`, `"sdk"`, `"web"`, `"extension"`, `"app"`,
 clients (Claude, ChatGPT, …) made. `favorited` and `rating`
 filter on your own marks: `rating: "rated"` is any rating, `"unrated"` none.
 `batchId` matches `input_data.batchId` (the jobs of one generate-image batch —
-`count` / `models`).
+`count` / `models`). `projectId` keeps the jobs a session of that project
+holds now (`"none"`: a session with no project), each once however many
+sessions hold it; `inSession: false` keeps the jobs no session holds — General —
+and `true` the ones at least one does (`projectId` with `inSession: false` is a
+400). `withSessions: true` adds `sessions` to each job: the sessions it is in,
+for an "everything in this project" view. A deleted job is never listed — it is
+in [`client.trash`](#clienttrash).
 Every filter is exact-match and they combine with AND. Every job carries
 `favorited` and `rating`. A page may hold fewer than `limit` rows — even none —
 and still carry a `next`; page on `next`, never on `data.length`.
@@ -1469,19 +1522,27 @@ already used (a retry after a billed attempt): that is charged.
 const { cancelled } = await client.jobs.cancel(jobId)
 ```
 
-#### `delete(id)`
+#### `delete(id, options?)` / `restore(id)`
 
 ```ts
-delete(id: string): Promise<DeleteJobResult>
+delete(id: string, options?: { forever?: boolean }): Promise<DeleteJobResult>
+restore(id: string): Promise<{ success: true }>
 ```
 
-Deletes a job and the private media it produced (`DELETE /v1/jobs/:id`). Only
-the job's owner (or an admin) may delete it; a job that is still running is
-deleted as-is — `cancel(id)` it first when its worker should stop. Returns
-`{ success: true }`.
+`delete` sends a job to the [Trash](#clienttrash) (`DELETE /v1/jobs/:id`): it
+is left out of every read from then on, stays restorable for 30 days, and is
+then deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays). `restore` (`POST /v1/jobs/:id/restore`)
+brings it back, into every session it was in. `{ forever: true }` deletes a job
+already in the Trash for good now; on a live job it throws a `NodaroError` with
+code `not_in_trash` (status 409). Only the job's owner (or an admin) may delete
+or restore it; a job that is still running keeps running — `cancel(id)` it
+first when its worker should stop. Nothing is refunded. OAuth apps need the
+`assets:write` scope. Both return `{ success: true }`.
 
 ```ts
-await client.jobs.delete(jobId)
+await client.jobs.delete(jobId)                   // to the Trash
+await client.jobs.restore(jobId)                  // undo
+await client.jobs.delete(jobId, { forever: true }) // after a delete: gone for good
 ```
 
 ---

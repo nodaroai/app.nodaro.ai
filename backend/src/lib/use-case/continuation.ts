@@ -75,6 +75,7 @@ import {
   loadContinuationSource,
   type ContinuationSource,
 } from "../../services/workflow-engine/run-continuation.js"
+import { TRASHED_JOB_COLUMN } from "../public-job-data.js"
 
 export type UseCaseContinueMode = "from-failed" | "render-final"
 
@@ -141,7 +142,10 @@ async function existingContinuation(
   filters: Readonly<Record<string, string>>,
   opts: { readonly failedToo?: boolean; readonly startedOnly?: boolean; readonly inFlightOnly?: boolean; readonly completedOnly?: boolean } = {},
 ): Promise<{ id: string; status: string } | null> {
+  // trash-read: a run still under way counts even when deleted — a deleted job keeps running, so it
+  // still holds the one-at-a-time rule; every other check leaves the Trash out (just below).
   let query = supabase.from("jobs").select("id, status").eq("user_id", userId).eq("provider", "use-case")
+  if (!opts.inFlightOnly) query = query.is(TRASHED_JOB_COLUMN, null)
   for (const [field, value] of Object.entries(filters)) query = query.eq(`input_data->>${field}`, value)
   // A wrapper whose run never started is no generation. Its run is named on
   // its input (the start's stamp, or the finaliser's back-fill when that
@@ -222,6 +226,7 @@ async function loadUseCaseRun(input: { readonly nodeType: UseCaseNodeType; reado
   const { data: wrapper, error } = await supabase
     .from("jobs")
     .select("id, user_id, status, provider, job_type, input_data")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", input.jobId)
     .maybeSingle()
   if (error) throw new Error(`use-case continue: run ${input.jobId} unreadable: ${error.message}`)

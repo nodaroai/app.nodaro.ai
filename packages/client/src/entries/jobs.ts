@@ -14,6 +14,7 @@ export type {
   JobStatusResult,
   CancelJobResult,
   DeleteJobResult,
+  JobSessionRef,
   JobFromUploadParams,
   ListJobsParams,
   ListJobsPage,

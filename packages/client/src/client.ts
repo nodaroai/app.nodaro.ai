@@ -1,6 +1,7 @@
 import { WorkflowsResource } from "./resources/workflows.js"
 import { ProjectsResource } from "./resources/projects.js"
 import { SessionsResource } from "./resources/sessions.js"
+import { TrashResource } from "./resources/trash.js"
 import { JobsResource } from "./resources/jobs.js"
 import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
@@ -61,6 +62,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly projects: ProjectsResource
   /** Generation sessions inside projects (Create Image / Video / Music). */
   readonly sessions: SessionsResource
+  /** Your Trash: items removed from sessions and deleted jobs. */
+  readonly trash: TrashResource
   readonly jobs: JobsResource
   readonly videoPro: VideoProResource
   readonly executions: ExecutionsResource
@@ -121,6 +124,7 @@ export class NodaroClient extends NodaroClientCore {
     this.workflows = new WorkflowsResource(this)
     this.projects = new ProjectsResource(this)
     this.sessions = new SessionsResource(this)
+    this.trash = new TrashResource(this)
     this.jobs = new JobsResource(this)
     this.videoPro = new VideoProResource(this)
     this.executions = new ExecutionsResource(this)

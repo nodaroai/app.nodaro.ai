@@ -145,7 +145,7 @@ import { changesStudioPublishFlag } from "../studio-audience.js"
 import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
-import { redactPrivateJobOutput } from "../public-job-data.js"
+import { redactPrivateJobOutput, TRASHED_JOB_COLUMN } from "../public-job-data.js"
 import { assertParentJobId, hostRequestGrantOf, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
@@ -1308,6 +1308,9 @@ async function readJobsOwnedBy(
     .select("id, status, output_data, error_message, error_hint")
     .in("id", ids)
     .eq("user_id", userId)
+    // A job in the Trash (migration 561) is not in the answer, like one that
+    // is not the caller's: what a plugin shows its owner never names a deleted job.
+    .is(TRASHED_JOB_COLUMN, null)
   if (error) throw new Error(`Failed to read jobs: ${error.message}`)
 
   return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((raw) => ({
@@ -1344,6 +1347,8 @@ async function readOwnedJob(jobId: string, userId: string): Promise<PluginOwnedR
     .select(OWNED_RAW_JOB_COLUMNS)
     .eq("id", jobId)
     .eq("user_id", userId)
+    // A job in the Trash (migration 561) reads as absent, like one that is not theirs.
+    .is(TRASHED_JOB_COLUMN, null)
     .maybeSingle()
   if (error?.code === "22P02") return null
   if (error) {

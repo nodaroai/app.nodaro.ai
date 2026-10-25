@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { retainVideo, readRetainedVideo, type RetainedVideo } from "./retained-videos.js"
 import { boundedPublicChunks } from "./safe-fetch-bytes.js"
+import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 export interface RetainedJobVideo {
   jobId: string
@@ -40,6 +41,7 @@ export async function retainJobVideo(args: { userId: string; workflowId: string;
   if (prior.length) return prior[0]!
   const { data, error } = await supabase.from("jobs")
     .select("id,output_data,submission_context")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", args.jobId).eq("user_id", args.userId).eq("workflow_id", args.workflowId)
     .eq("status", "completed").in("job_type", ["text-to-video", "image-to-video"]).maybeSingle()
   if (error) throw new Error("Failed to read the completed video job")

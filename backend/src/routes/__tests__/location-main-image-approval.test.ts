@@ -73,13 +73,15 @@ afterEach(async () => {
 // Mock builders — keep route-table chain shapes co-located.
 // ---------------------------------------------------------------------------
 
-// .from("jobs").select(..).eq("id", ..).eq("user_id", ..).single()
+// .from("jobs").select(..).is("deleted_at", null).eq("id", ..).eq("user_id", ..).single()
+//   — a candidate in the Trash reads as one that does not exist.
 function mockJobFetch(result: { data: unknown; error: unknown }) {
   const single = vi.fn().mockResolvedValue(result)
   const eq2 = vi.fn().mockReturnValue({ single })
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
-  const select = vi.fn().mockReturnValue({ eq: eq1 })
-  return { select, eq1, eq2, single }
+  const notTrashed = vi.fn().mockReturnValue({ eq: eq1 })
+  const select = vi.fn().mockReturnValue({ is: notTrashed })
+  return { select, notTrashed, eq1, eq2, single }
 }
 
 // .from("locations").select("id").eq("id", ..).eq("user_id", ..).is("deleted_at", null).single()

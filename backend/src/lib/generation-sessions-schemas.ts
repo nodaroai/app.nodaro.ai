@@ -22,8 +22,14 @@ export const updateSessionBody = z
     message: "At least one field must be provided",
   })
 
+/** `projectId=none`: the sessions that have no project. */
+export const NO_PROJECT = "none"
+
 export const listSessionsQuery = z.object({
-  projectId: z.string().uuid().optional(),
+  projectId: z
+    .union([z.literal(NO_PROJECT), z.string().uuid()])
+    .optional()
+    .describe("A project's id: its sessions. `none`: the sessions with no project. Absent: all of them."),
   tool: z.string().regex(TOOL_RE).optional(),
   includeArchived: z.enum(["true", "false"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -31,10 +37,27 @@ export const listSessionsQuery = z.object({
 })
 
 export const listItemsQuery = z.object({
+  /** `true`: the session's removed items (its part of the Trash), newest removal first. */
+  removed: z
+    .enum(["true", "false"])
+    .optional()
+    .describe("`true`: the items removed from the session (its part of the Trash), newest removal first."),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   cursor: z.string().max(200).optional(),
 })
 
+export const removeItemQuery = z.object({
+  forever: z
+    .enum(["true", "false"])
+    .optional()
+    .describe("`true`: delete the link for good — only an item already removed (409 `not_in_trash` otherwise). The job stays."),
+})
+
 export const importItemsBody = z.object({
   jobIds: z.array(z.string().uuid()).min(1).max(100),
+})
+
+export const moveItemsBody = z.object({
+  jobIds: z.array(z.string().uuid()).min(1).max(100).describe("Items of `fromSessionId` to move, up to 100."),
+  fromSessionId: z.string().uuid().describe("The session they are in now; it keeps them as removed items, so the move can be undone from its Trash."),
 })

@@ -16,6 +16,7 @@
  */
 import { supabase } from "../../../lib/supabase.js"
 import { isUuid } from "../../../lib/mcp/tools/_id-guard.js"
+import { TRASHED_JOB_COLUMN } from "../../../lib/public-job-data.js"
 
 export type AssetKind = "image" | "video" | "audio"
 
@@ -93,6 +94,7 @@ export async function resolveCopilotAssetRefs(
   const jobs = await supabase
     .from("jobs")
     .select("id, output_data")
+    .is(TRASHED_JOB_COLUMN, null)
     .in("id", wanted)
     .eq("user_id", userId)
   if (jobs.error) throw new Error(`Failed to resolve assets: ${jobs.error.message}`)

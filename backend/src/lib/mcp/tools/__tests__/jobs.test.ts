@@ -31,13 +31,16 @@ beforeEach(() => {
 })
 
 function mockListJobs(rows: unknown[]) {
-  // `.is("parent_job_id", null)`: the shared list filters leave out child jobs.
+  // `.is("parent_job_id", null).is("deleted_at", null)`: the shared list
+  // filters leave out child jobs and the Trash.
   const is = vi.fn()
-  is.mockReturnValue({
+  const tail: Record<string, unknown> = {
     order: vi.fn().mockReturnValue({
       limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
     }),
-  })
+  }
+  tail.is = is
+  is.mockReturnValue(tail)
   ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({ is }),
@@ -47,8 +50,11 @@ function mockListJobs(rows: unknown[]) {
 }
 
 function mockGetJob(row: unknown | null) {
-  // `.is("parent_job_id", null)`: a child job reads as one that does not exist.
-  const is = vi.fn().mockReturnValue({
+  // `.is("parent_job_id", null).is("deleted_at", null)`: a child job, and a
+  // job in the Trash, read as one that does not exist.
+  const is = vi.fn()
+  is.mockReturnValue({
+    is,
     maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
   })
   ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({

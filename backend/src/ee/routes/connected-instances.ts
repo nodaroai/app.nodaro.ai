@@ -55,6 +55,7 @@ export async function connectedInstancesRoutes(app: FastifyInstance) {
       const instances = await Promise.all(
         rows.map(async (row) => {
           const { data: spendRows } = await supabase
+            // trash-read: totals of credits spent count a deleted job until the purge.
             .from("jobs")
             .select("credits, created_at")
             .eq("user_id", req.userId!)

@@ -10,7 +10,7 @@ import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { failureGuidance } from "./_job-error.js"
-import { CHILD_JOB_COLUMN, maskTrendRunError, redactPrivateJobData } from "../../public-job-data.js"
+import { CHILD_JOB_COLUMN, maskTrendRunError, redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { ASSET_SEARCH_COLUMNS, textSearchFilters } from "../../text-search.js"
 import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
 import { isPreviewRender } from "../../preview-render.js"
@@ -370,10 +370,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             ? supabase
                 .from("jobs")
                 .select("id, user_id, job_type, input_data, output_data, completed_at, created_at, provider, status")
+                .is(TRASHED_JOB_COLUMN, null)
                 .eq("user_id", session.userId)
             : supabase
                 .from("jobs")
                 .select("id, user_id, job_type, input_data, output_data, completed_at, created_at, provider, status")
+                .is(TRASHED_JOB_COLUMN, null)
                 .eq("is_public", true)
                 .eq("status", "completed")
                 .neq("user_id", session.userId)
@@ -450,10 +452,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               ? supabase
                   .from("jobs")
                   .select("id", { count: "exact", head: true })
+                  .is(TRASHED_JOB_COLUMN, null)
                   .eq("user_id", session.userId)
               : supabase
                   .from("jobs")
                   .select("id", { count: "exact", head: true })
+                  .is(TRASHED_JOB_COLUMN, null)
                   .eq("is_public", true)
                   .eq("status", "completed")
                   .neq("user_id", session.userId)
@@ -700,6 +704,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           const { data: jobsData } = await supabase
             .from("jobs")
             .select("id, user_id, job_type, input_data, output_data, completed_at, provider")
+            .is(TRASHED_JOB_COLUMN, null)
             .in("id", jobIds)
             // Tenant scope: only hydrate jobs the caller may see (own, or
             // public+completed) — same predicate as get_asset/display_asset.
@@ -786,6 +791,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // error_hint (migration 376) backs failureGuidance's suggestedProvider.
             "id, status, progress, job_type, input_data, output_data, error_message, error_hint, created_at, completed_at, credits, user_id",
           )
+          // A job in the Trash reads as one that does not exist (TRASHED_JOB_COLUMN).
+          .is(TRASHED_JOB_COLUMN, null)
           .eq("id", args.job_id)
           .or(
             `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
@@ -1006,6 +1013,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .select(
             "id, status, job_type, input_data, output_data, completed_at, user_id",
           )
+          .is(TRASHED_JOB_COLUMN, null)
           .eq("id", args.job_id)
           .or(
             `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
@@ -1224,6 +1232,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           const { data: jobs } = await supabase
             .from("jobs")
             .select("id, input_data, provider, completed_at, created_at")
+            .is(TRASHED_JOB_COLUMN, null)
             .in("id", jobIds)
             .eq("user_id", session.userId)
             // Never a child job's input (CHILD_JOB_COLUMN), whatever node_states names.
@@ -1321,6 +1330,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           const { data: visible } = await supabase
             .from("jobs")
             .select("id")
+            .is(TRASHED_JOB_COLUMN, null)
             .eq("id", args.job_id)
             .or(favoritableJobFilter(session.userId))
             // Never a child job (CHILD_JOB_COLUMN): it reads as not found.

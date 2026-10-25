@@ -6,7 +6,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
-import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText } from "../../public-job-data.js"
+import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
@@ -20,6 +20,7 @@ import { JOB_SOURCES } from "../../job-source.js"
 import { applyJobListFilters, jobListFilterSelect, ratingsNotAvailable, withoutFilterEmbeds, MAX_JOB_LIST_FILTER_VALUES, type JobListFilters } from "../../job-list-filters.js"
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../../job-owner-state.js"
 import { JOB_RATINGS, JOB_RATING_FILTERS, setJobRating } from "../../job-ratings.js"
+import { liveSessionsOfJobs } from "../../job-sessions.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 // Rating a job writes to it, as REST's PUT /v1/jobs/:id/rating needs assets:write.
@@ -139,6 +140,12 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           .describe("Who made it; mcp = your MCP clients."),
         favorited: z.boolean().optional().describe("true: only jobs you favorited; false: only the rest."),
         rating: z.enum(JOB_RATING_FILTERS).optional().describe("Your rating: good, bad, rated (any) or unrated."),
+        project_id: z
+          .union([z.literal("none"), z.string().uuid()])
+          .optional()
+          .describe("Jobs a session of this project holds now; none = a session with no project. Each job once."),
+        in_session: z.boolean().optional().describe("false: jobs no session holds (General); true: jobs at least one holds."),
+        with_sessions: z.boolean().optional().describe("Each job also lists the sessions holding it (id, title, projectId)."),
       },
       annotations: { readOnlyHint: true },
     },
@@ -151,12 +158,17 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         ...(args.sources ? { sources: args.sources } : {}),
         ...(args.favorited !== undefined ? { favorited: args.favorited } : {}),
         ...(args.rating ? { rating: args.rating } : {}),
+        ...(args.project_id ? { projectId: args.project_id.toLowerCase() } : {}),
+        ...(args.in_session !== undefined ? { inSession: args.in_session } : {}),
+      }
+      if (filters.projectId && filters.inSession === false) {
+        return { content: [{ type: "text", text: "project_id lists jobs that are in a session: it cannot be combined with in_session false." }], isError: true }
       }
       // Someone else's jobs have no favorite or rating of yours to filter on,
       // and the public scope is the gallery: its kinds are what it lists.
-      if (scope !== "mine" && (filters.types || filters.sources || filters.favorited !== undefined || filters.rating)) {
+      if (scope !== "mine" && (filters.types || filters.sources || filters.favorited !== undefined || filters.rating || filters.projectId || filters.inSession !== undefined || args.with_sessions)) {
         return {
-          content: [{ type: "text", text: "types, sources, favorited and rating filter your own jobs: use scope \"mine\"." }],
+          content: [{ type: "text", text: "types, sources, favorited, rating, project_id, in_session and with_sessions are about your own jobs: use scope \"mine\"." }],
           isError: true,
         }
       }
@@ -180,10 +192,12 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       const excludedUsers = moderation ? bannedGalleryUsersFilter(moderation) : null
       let filtered =
         scope === "mine"
+          // trash-read: applyJobListFilters below leaves the Trash out.
           ? supabase.from("jobs").select(`${baseSelect}, usage_log_id${jobListFilterSelect(filters)}`).eq("user_id", session.userId)
           : supabase
               .from("jobs")
               .select(`${baseSelect}, user_id`)
+              .is(TRASHED_JOB_COLUMN, null)
               .eq("is_public", true)
               .eq("status", "completed")
               .neq("user_id", session.userId)
@@ -302,6 +316,11 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           fastify.log.warn({ err }, "list_jobs: job owner state unavailable, favorited / rating omitted")
         }
         shown = charged.map((r) => ({ ...r, ...ownerStateFields(r.id as string, state) }))
+        if (args.with_sessions) {
+          const links = await liveSessionsOfJobs(session.userId, shown.map((r) => r.id as string))
+          if (links.error) return { content: [{ type: "text", text: "Error: could not read the jobs' sessions — try again." }], isError: true }
+          shown = shown.map((r) => ({ ...r, sessions: links.data.get(r.id as string) ?? [] }))
+        }
       }
       return {
         content: [
@@ -353,8 +372,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         // A child job reads as one that does not exist (CHILD_JOB_COLUMN); an
-        // MCP session has no admin reading.
+        // MCP session has no admin reading. So does a job in the Trash.
         .is(CHILD_JOB_COLUMN, null)
+        .is(TRASHED_JOB_COLUMN, null)
         .maybeSingle()
       if (error) {
         return {
@@ -465,6 +485,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .is(CHILD_JOB_COLUMN, null)
+        .is(TRASHED_JOB_COLUMN, null)
         .maybeSingle()
       if (error) return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true }
       if (!own) return { content: [{ type: "text", text: `Job ${args.job_id} not found` }], isError: true }
@@ -497,6 +518,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .is(CHILD_JOB_COLUMN, null)
+        .is(TRASHED_JOB_COLUMN, null)
         .maybeSingle()
       const charged = row ? (await withCreditsCharged([maskTrendRunError(row, false)]))[0] : null
       // Without the row (gone between the two reads), the wait's own error

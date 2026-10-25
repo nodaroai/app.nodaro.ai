@@ -1320,6 +1320,14 @@ const FACE_MASK_TARGET_BYTES = 173
 // headroom carry across.
 const TOPAZ_VIDEO_TARGET_BYTES = 299
 
+// The Trash and Move for generation sessions and jobs: two new tools, `list_trash` (jobs:read)
+// and `restore_job` (assets:write); `read_session` takes `removed`; `update_session` takes
+// `move_job_ids` + `from_session_id` and `restore_job_ids` and says a removal goes to the
+// Trash; `list_jobs` takes `project_id`, `in_session` and `with_sessions`. Two tools added: the
+// cloud/all, cloud/jobs and community/all membership fixtures move. Measured: 509_474 total −
+// 505_812 = 3_662 B.
+const SESSIONS_TRASH_BYTES = 3_662
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1481,7 +1489,8 @@ export const TOOL_WIRE_BUDGET = {
     USER_REQUEST_ARG_TOTAL_BYTES +
     TRENDS_ORIGINAL_BYTES +
     FACE_MASK_TARGET_BYTES +
-    TOPAZ_VIDEO_TARGET_BYTES,
+    TOPAZ_VIDEO_TARGET_BYTES +
+    SESSIONS_TRASH_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

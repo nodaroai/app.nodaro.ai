@@ -54,10 +54,12 @@ function mockSupabase(opts: {
           select: () => ({
             eq: () => ({
               eq: () => ({
-                // A child job reads as one that does not exist (`.is("parent_job_id", null)`).
-                is: (col: string, v: unknown) => {
+                // A child job, and a job in the Trash, read as one that does not
+                // exist (`.is("parent_job_id", null).is("deleted_at", null)`).
+                is: function isFilter(col: string, v: unknown) {
                   singleFilters.push({ [col]: v })
                   return {
+                    is: isFilter,
                     maybeSingle: () =>
                       Promise.resolve({ data: opts.jobSingle ?? null, error: null }),
                   }
@@ -289,7 +291,7 @@ describe("diagnose_run tool", () => {
     const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
 
     // The caller's own jobs, and never a child job.
-    expect(batchFilters).toEqual([{ user_id: "u1", parent_job_id: null }])
+    expect(batchFilters).toEqual([{ user_id: "u1", parent_job_id: null, deleted_at: null }])
     expect(out.failures).toHaveLength(1)
     expect(out.failures[0].error).toBeNull()
     expect(out.failures[0].provider).toBeNull()
@@ -325,7 +327,7 @@ describe("diagnose_run tool", () => {
     const server = buildServer()
     registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
     const res = await callTool(server, "diagnose_run", { id: "22222222-2222-4222-8222-222222222222" })
-    expect(singleFilters).toEqual([{ parent_job_id: null }])
+    expect(singleFilters).toEqual([{ parent_job_id: null }, { deleted_at: null }])
     expect(res.isError).toBe(true)
   })
 

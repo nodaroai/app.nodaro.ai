@@ -8,6 +8,7 @@ import { sourceOf } from "./conversation-list.js"
 import { flowNodeId, placeFlowNode } from "./flow-graph.js"
 import { flowNodeFor, historyRouteFor, type FlowNodeSpec } from "./node-mappers.js"
 import { OUTPUT_URL_FIELD } from "./mappers/kit.js"
+import { TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 
 /**
  * One account's MCP history made into conversation flows, after the fact:
@@ -158,6 +159,7 @@ export async function loadHistoryJobs(userId: string): Promise<HistoryJob[]> {
     const { data, error } = await supabase
       .from("jobs")
       .select("id, created_at, completed_at, source_detail, input_data, output_data")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("user_id", userId)
       .eq("source", "mcp")
       .eq("status", "completed")

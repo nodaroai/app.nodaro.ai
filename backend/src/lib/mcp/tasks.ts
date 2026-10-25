@@ -32,7 +32,7 @@ import {
   GetTaskRequestSchema,
   ListTasksRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
-import { TREND_RUN_MARKER_SELECT, redactPrivateJobOutput, trendRunErrorText } from "../public-job-data.js"
+import { TREND_RUN_MARKER_SELECT, redactPrivateJobOutput, trendRunErrorText, TRASHED_JOB_COLUMN } from "../public-job-data.js"
 
 export interface Task {
   taskId: string
@@ -271,6 +271,7 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const { data } = await supabase
       .from("jobs")
       .select(`status, output_data, error_message, created_at, started_at, completed_at, ${TREND_RUN_MARKER_SELECT}`)
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("id", taskId)
       .maybeSingle()
 
@@ -362,6 +363,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
     const { data } = await supabase
       .from("jobs")
       .select(`status, output_data, error_message, ${TREND_RUN_MARKER_SELECT}`)
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("id", jobId)
       .maybeSingle()
     if (!data) {

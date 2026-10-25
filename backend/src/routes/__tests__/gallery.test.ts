@@ -359,9 +359,10 @@ describe("POST /v1/gallery/report", () => {
     mockFrom.mockImplementation(() => {
       callCount++
       if (callCount === 1) {
-        // Job lookup: from("jobs").select("id").eq().eq().eq().single()
+        // Job lookup: from("jobs").select("id").is("deleted_at", null).eq().eq().eq().single()
         const chain: Record<string, unknown> = {}
         chain.select = vi.fn().mockReturnValue(chain)
+        chain.is = vi.fn().mockReturnValue(chain)
         chain.eq = vi.fn().mockReturnValue(chain)
         chain.single = vi.fn().mockResolvedValue({ data: { id: validJobId }, error: null })
         return chain as never
@@ -399,6 +400,7 @@ describe("POST /v1/gallery/report", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
+      chain.is = vi.fn().mockReturnValue(chain)
       chain.eq = vi.fn().mockReturnValue(chain)
       chain.single = vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } })
       return chain as never

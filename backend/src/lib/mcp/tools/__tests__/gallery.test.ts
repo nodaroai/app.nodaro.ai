@@ -364,13 +364,15 @@ describe("list_favorites tool", () => {
     }
     // Never a child job, favorited by its id or not.
     const is = vi.fn().mockResolvedValue({ data: [], error: null })
-    const jobsChain = {
-      select: vi.fn().mockReturnValue({
-        in: vi.fn().mockReturnValue({
-          // #4: hydration now applies a visibility .or() filter before resolving.
-          or: vi.fn().mockReturnValue({ is }),
-        }),
+    // A favorite of a job in the Trash is not hydrated (`.is("deleted_at", null)`).
+    const notTrashed = vi.fn().mockReturnValue({
+      in: vi.fn().mockReturnValue({
+        // #4: hydration now applies a visibility .or() filter before resolving.
+        or: vi.fn().mockReturnValue({ is }),
       }),
+    })
+    const jobsChain = {
+      select: vi.fn().mockReturnValue({ is: notTrashed }),
     }
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>)
       .mockReturnValueOnce(favoritesChain)
@@ -912,8 +914,8 @@ describe("get_app_run tool", () => {
     registerGallery({ server, session: readSession(), fastify: Fastify() })
     const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
     expect(result.isError).toBeUndefined()
-    // The caller's own jobs, and never a child job.
-    expect(jobFilters).toEqual([{ user_id: "u1", parent_job_id: null }])
+    // The caller's own jobs, never a child job, never one in the Trash.
+    expect(jobFilters).toEqual([{ user_id: "u1", parent_job_id: null, deleted_at: null }])
     const sc = result.structuredContent as { outputs: Array<{ url: string; prompt?: string; model?: string }> }
     expect(sc.outputs.map((o) => o.url)).toEqual(["https://cdn.test/mine.png"])
     expect(sc.outputs[0]?.prompt).toBeUndefined()

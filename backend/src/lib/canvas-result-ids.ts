@@ -63,6 +63,7 @@
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { needsPublicWorkflowProjection } from "./public-workflow-projection.js"
+import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 // ---------------------------------------------------------------------------
 // The job row, as the rule reads it
@@ -431,6 +432,7 @@ export const fetchJobFacts: FetchJobFacts = async (owner, query) => {
     const { data, error } = await supabase
       .from("jobs")
       .select(JOB_FACTS_SELECT)
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("user_id", owner)
       .eq("status", "completed")
       .or(clauses.join(","))

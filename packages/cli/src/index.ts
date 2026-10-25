@@ -2,6 +2,7 @@ import { Command } from "commander"
 import { authCommand } from "./commands/auth.js"
 import { projectsCommand } from "./commands/projects.js"
 import { sessionsCommand } from "./commands/sessions.js"
+import { trashCommand } from "./commands/trash.js"
 import { workflowsCommand } from "./commands/workflows.js"
 import { jobsCommand } from "./commands/jobs.js"
 import { galleryCommand } from "./commands/gallery.js"
@@ -67,6 +68,7 @@ program.hook("preAction", () => {
 program.addCommand(authCommand())
 program.addCommand(projectsCommand())
 program.addCommand(sessionsCommand())
+program.addCommand(trashCommand())
 program.addCommand(workflowsCommand())
 program.addCommand(appsCommand())
 program.addCommand(nodesCommand())

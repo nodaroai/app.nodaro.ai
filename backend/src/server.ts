@@ -8,6 +8,7 @@ import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
 import { startRetainedImageCleanup } from "./lib/retained-image-cleanup.js"
 import { startSpeakerFramesCacheSweep } from "./lib/speaker-frames-cache-sweep.js"
 import { startTemplateKeptSweep } from "./lib/template-kept-sweep.js"
+import { startJobTrashPurge } from "./lib/job-trash-purge.js"
 import { startJobScratchSweep } from "./lib/job-scratch-sweep.js"
 import { startStorageDeleteRetry } from "./lib/storage-delete-retries.js"
 import { startWebhookDispatcher } from "./lib/webhooks/dispatcher.js"
@@ -57,6 +58,7 @@ async function main() {
   let stopJobScratchSweep: (() => Promise<void>) | undefined
   let stopStorageDeleteRetry: (() => Promise<void>) | undefined
   let stopWebhookDispatcher: (() => Promise<void>) | undefined
+  let stopJobTrashPurge: (() => Promise<void>) | undefined
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
   app.addHook("onClose", async () => { await stopRetainedImageCleanup?.() })
   app.addHook("onClose", async () => { await stopSpeakerFramesCacheSweep?.() })
@@ -64,6 +66,7 @@ async function main() {
   app.addHook("onClose", async () => { await stopJobScratchSweep?.() })
   app.addHook("onClose", async () => { await stopStorageDeleteRetry?.() })
   app.addHook("onClose", async () => { await stopWebhookDispatcher?.() })
+  app.addHook("onClose", async () => { await stopJobTrashPurge?.() })
 
   // Load Telegram routing table before accepting traffic
   try {
@@ -112,6 +115,10 @@ async function main() {
   // Temporary provider uploads a job's end did not empty (a crashed attempt,
   // a job the reconcile cron ended), older than 7 days — ALL editions.
   stopJobScratchSweep = startJobScratchSweep((message) => app.log.warn(message))
+  // Jobs deleted more than 30 days ago, out of the Trash for good — ALL
+  // editions, where scheduled workflows fire (on Railway, production only:
+  // staging shares its database). Idempotent; the age is re-checked under a lock.
+  stopJobTrashPurge = startJobTrashPurge((message) => app.log.warn(message))
   // Storage deletes that failed, retried — ALL editions: every delete path
   // records into storage_delete_retries (lib/storage-delete.ts).
   stopStorageDeleteRetry = startStorageDeleteRetry((message) => app.log.warn(message))

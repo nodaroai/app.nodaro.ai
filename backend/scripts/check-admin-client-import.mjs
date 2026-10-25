@@ -254,6 +254,11 @@ const ALLOWED_PATHS = [
   // plus the request's workspace side; an import reads only the caller's own
   // jobs; the 518 DB guards refuse any item of another owner.
   /^src\/routes\/generation-sessions\.ts$/,
+  // Its item routes (the feed, import, remove / restore / delete for good, and
+  // move — migration 561), split out of the file above: the same tables, the
+  // same per-user scoping, and a move that is one `move_session_items` call
+  // taking the caller's id and workspace.
+  /^src\/routes\/generation-session-items\.ts$/,
 
   // Browser-edit jobs (POST /v1/jobs/from-upload): writes a `jobs` row, which
   // client roles may not insert since migration 474 — the insert goes through

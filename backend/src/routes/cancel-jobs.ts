@@ -91,6 +91,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // already delivered), so "Cancel all" used to skip it in silence and
       // strand its reservation (spec D18).
       const { data: jobs, error: fetchError } = await supabase
+        // trash-read: cancelling stops work: a deleted job still running is stopped too.
         .from("jobs")
         .select("id, status, provider")
         .eq("user_id", userId)

@@ -229,6 +229,8 @@ describe("POST /v1/sessions/:id/items (import)", () => {
     db.respond = (q) => {
       if (q.table === "generation_sessions") return { data: SESSION_ROW, error: null }
       if (q.table === "jobs") return { data: jobs, error: null }
+      // No removed link to revive here.
+      if (q.table === "session_items" && argOf(q, "update")) return { data: [], error: null }
       if (q.table === "session_items") {
         const rows = argOf(q, "upsert")![0] as Array<{ job_id: string }>
         return { data: rows.map((r) => ({ job_id: r.job_id })), error: null }
@@ -290,18 +292,20 @@ describe("POST /v1/sessions/:id/items (import)", () => {
 })
 
 describe("DELETE /v1/sessions/:id/items/:jobId (remove)", () => {
-  it("deletes only the link, scoped to the caller", async () => {
+  it("moves only the link to the Trash, scoped to the caller (migration 561)", async () => {
     db.respond = (q) => {
       if (q.table === "generation_sessions") return { data: SESSION_ROW, error: null }
-      if (q.table === "session_items") return { data: [{ job_id: JOB_A }], error: null }
+      if (q.table === "session_items" && argOf(q, "update")) return { data: [{ job_id: JOB_A }], error: null }
+      if (q.table === "session_items") return { data: { removed_at: null, job: { deleted_at: null } }, error: null }
       return { data: null, error: null }
     }
     const res = await app.inject({ method: "DELETE", url: `/v1/sessions/${SESSION}/items/${JOB_A}`, headers: { "x-user-id": OWNER } })
     expect(res.statusCode).toBe(200)
-    const [del] = queries("session_items", "delete")
-    expect(has(del, "eq", "session_id", SESSION)).toBe(true)
-    expect(has(del, "eq", "job_id", JOB_A)).toBe(true)
-    expect(has(del, "eq", "user_id", OWNER)).toBe(true)
+    const [update] = queries("session_items", "update")
+    expect(has(update, "eq", "session_id", SESSION)).toBe(true)
+    expect(has(update, "eq", "job_id", JOB_A)).toBe(true)
+    expect(has(update, "eq", "user_id", OWNER)).toBe(true)
+    expect(queries("session_items", "delete")).toHaveLength(0)
     expect(queries("jobs")).toHaveLength(0)
   })
 

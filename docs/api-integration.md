@@ -1035,13 +1035,15 @@ curl -s "$BASE/v1/sessions/$SESSION/items" -H "Authorization: Bearer $TOKEN"
 | Route | What it does |
 |-------|--------------|
 | `POST /v1/sessions` | Create. Body: `tool` (required — lowercase letters, digits and dashes, at most 40), `projectId?` (one of your projects), `title?` (at most 200). |
-| `GET /v1/sessions` | Your sessions, newest first. Query: `projectId`, `tool`, `includeArchived=true`, `limit` (1–100, default 50), `cursor`. Each carries `itemCount`, `coverJobId` and up to four `previewUrls`: the cover's image first when one is set, then its newest completed items. |
+| `GET /v1/sessions` | Your sessions, newest first. Query: `projectId` (`none`: the sessions with no project), `tool`, `includeArchived=true`, `limit` (1–100, default 50), `cursor`. Each carries `itemCount` (its live items), `removedCount` (its items in the Trash), `coverJobId` and up to four `previewUrls`: the cover's image first when one is set, then its newest completed items. |
 | `GET /v1/sessions/:id` | One session. |
 | `PATCH /v1/sessions/:id` | `title` (`null` = untitled), `archived`, and `coverJobId`: one of the session's items to lead its previews (`404` if it is not an item of this session), or `null` to go back to automatic. A session's **project is fixed** at creation. |
 | `DELETE /v1/sessions/:id` | Deletes the session and its links. Its jobs are kept, and stay in every other session that holds them. |
-| `GET /v1/sessions/:id/items` | The feed: every item, born in the session or imported, newest first. Each item: `jobId`, `addedAt`, `imported`, `importedFrom { sessionId, title }`, and `job` in the same shape `GET /v1/jobs/:id` returns. Paged with `limit` / `cursor`. |
-| `POST /v1/sessions/:id/items` | **Import** `{ "jobIds": [...] }` (1–100) — a link, never a copy. All-or-nothing: if any id is not one of your jobs, nothing is imported (404). Items already in the session are left as they are. Answers `{ imported, requested }`. |
-| `DELETE /v1/sessions/:id/items/:jobId` | **Remove** one item from this session. Only the link goes: the job, and every other session holding it, stay. |
+| `GET /v1/sessions/:id/items` | The feed: every live item, born in the session or imported, newest first. `removed=true`: the items removed from it (its part of the Trash), newest removal first. Each item: `jobId`, `addedAt`, `removedAt` (`null` when live), `imported`, `importedFrom { sessionId, title }`, and `job` in the same shape `GET /v1/jobs/:id` returns. An item whose job you deleted is in neither list. Paged with `limit` / `cursor`. |
+| `POST /v1/sessions/:id/items` | **Import** `{ "jobIds": [...] }` (1–100) — a link, never a copy. All-or-nothing: if any id is not one of your jobs, or is deleted, nothing is imported (404). Items already in the session are left as they are; an item removed from it comes back where it was. Answers `{ imported, requested }`. |
+| `DELETE /v1/sessions/:id/items/:jobId` | **Remove** one item from this session: it goes to the Trash, and stays there until you restore it or delete it for good — there is no automatic cleanup. Only the link moves: the job, and every other session holding it, stay. `?forever=true` deletes an item already removed for good (the job still stays); on a live item it answers `409 not_in_trash`. |
+| `POST /v1/sessions/:id/items/:jobId/restore` | Bring a removed item back, where it was. |
+| `POST /v1/sessions/:id/items/move` | **Move** `{ "jobIds": [...], "fromSessionId": "…" }` (1–100) into this session, in one transaction: this session gets them (born-in stays born-in, else imported from the source) and the source keeps them as removed items, so the move is undone from the source's Trash. All-or-nothing: if any id is not a live item of `fromSessionId`, nothing moves (404). Answers `{ moved }`. |
 
 **Which generation routes take `sessionId`:** every route that creates a job
 (`generate-image`, `generate-video`, `text-to-video`, `text-to-speech`,
@@ -1051,10 +1053,49 @@ workspace line the request is on (see 4c) — otherwise the request answers
 when it is created, and shows on `GET /v1/jobs/:id` and `GET /v1/jobs`. Runs of
 a workflow are never filed in a session.
 
-**Moving work between projects:** there is no "move". Import the items into a
-session of the other project, then remove them from the old one if you no
-longer want them there. Removing never deletes anything; deleting a job
-(`DELETE /v1/jobs/:id`) removes it from every session.
+**Moving work between projects:** a session's project is fixed, so an item
+moves to another project by moving into one of its sessions
+(`POST /v1/sessions/:id/items/move`). To keep it in both, import it instead.
+
+**Where a job is now:** `GET /v1/jobs` takes `projectId=<id>` (the jobs a
+session of that project holds now), `projectId=none` (the jobs a session with
+no project holds) and `inSession=false` (**General**: the jobs no session holds
+now, whatever session they were born in) or `inSession=true`; each job is
+listed once, however many sessions hold it. `withSessions=true` adds
+`sessions: [{ id, title, projectId }]` to each job — the sessions it is in, for
+an "everything in this project" view. `projectId` cannot be combined with
+`inSession=false` (400). All of them combine with `type`, `status` and the
+other filters.
+
+#### The Trash
+
+Removing an item from a session and deleting a job both go to the **Trash**:
+
+- **A removed item** stays until you restore it
+  (`POST /v1/sessions/:id/items/:jobId/restore`) or delete it for good
+  (`DELETE …/items/:jobId?forever=true`). The job itself is never deleted by a
+  removal; an item in no live session shows in General.
+- **A deleted job** (`DELETE /v1/jobs/:id`) disappears from every read — job
+  lists and reads by id, status polls, the gallery, session feeds and previews,
+  MCP tools and the CLI — and stays restorable for 30 days
+  (`POST /v1/jobs/:id/restore` puts it back in every session it was in). After
+  30 days it is deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays). `DELETE /v1/jobs/:id?forever=true`
+  deletes a job already in the Trash for good now, and answers `409 not_in_trash`
+  for a live one. A job that is still running keeps running — cancel it first.
+  Nothing is refunded on a delete or when it is deleted for good. OAuth apps need
+  `assets:write` to delete or restore a job.
+
+`GET /v1/trash` lists it, newest first, one page at a time (`limit` 1–100,
+default 50, `cursor`): `{ kind: "removed", removedAt, session: { id, title,
+projectId }, job }` and `{ kind: "deleted", deletedAt, purgeAt, job }`. A removed
+item whose job you also deleted is listed once, as the deleted job. Scope it with
+`projectId=<id>` (that project's sessions' removed items, and deleted jobs a
+session of it held), `projectId=none` (the sessions with no project, and
+General), `tool` (what a session of that creation tool holds or held) and
+`type` (the job's `input_data.type`, comma-separated). A job no session ever
+held has no tool, so `tool` leaves it out: filter by `type` alone (your tool's
+job types) to include deleted jobs that were never in a session. Deleting a session
+deletes its removed items with it.
 
 **Pre & post text and `origin` on `generate-image`:** `promptPrefix` /
 `promptSuffix` wrap the prompt the same way they wrap an AI prompt node's (a

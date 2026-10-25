@@ -7,8 +7,9 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { JOB_STATUSES } from "../lib/job-status.js"
 import { JOB_SOURCES } from "../lib/job-source.js"
-import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData } from "../lib/public-job-data.js"
-import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData } from "../lib/public-job-data.js"
+import { registerJobTrashRoutes } from "./job-trash.js"
+import { liveSessionsOfJobs } from "../lib/job-sessions.js"
 import { ORDER_QUALITY_COLUMNS, fillJobRenderQuality, fillJobsRenderQuality } from "../lib/render-label-fill.js"
 import type { ErrorHint } from "../lib/safety-block.js"
 import { creditStatusMapFor, creditStatusOf, creditsChargedOf } from "../lib/job-credit-status.js"
@@ -70,6 +71,15 @@ const JobSummary = z
       .nullable()
       .optional()
       .describe("The generation session this job was born in (sent as `sessionId` on the generation request), or null."),
+    sessions: z
+      .array(z.object({ id: z.string().uuid(), title: z.string().nullable(), projectId: z.string().uuid().nullable() }))
+      .optional()
+      .describe("With `withSessions=true` on the list: every session that holds the job now (a live link), each linkable. Empty when the job is in no session."),
+    deleted_at: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("When the job was deleted, on a job read from the Trash (`GET /v1/trash`). A deleted job is left out of every other read, so it is otherwise absent or null."),
     created_at: z.string(),
     started_at: z.string().nullable(),
     completed_at: z.string().nullable(),
@@ -164,7 +174,7 @@ openApiRegistry.registerPath({
   method: "get",
   path: "/v1/jobs",
   description:
-    "Your jobs, newest first, cursor-paginated. Every filter combines with AND. A page may hold fewer than `limit` jobs — even none — and still carry a `next`; page on `next`.",
+    "Your jobs, newest first, cursor-paginated. Every filter combines with AND. A page may hold fewer than `limit` jobs — even none — and still carry a `next`; page on `next`. A deleted job (in the Trash) is never listed: read it with `GET /v1/trash`.",
   security: [{ bearerAuth: [] }],
   request: {
     query: z.object({
@@ -185,6 +195,18 @@ openApiRegistry.registerPath({
         .describe(`One or more surfaces that created the job (${JOB_SOURCES.join(", ")}) — comma-separated or repeated. An unknown one is a 400.`),
       favorited: z.enum(["true", "false"]).optional().describe("`true`: only jobs you favorited; `false`: only jobs you did not."),
       rating: z.enum(JOB_RATING_FILTERS).optional().describe("Your rating: `good`, `bad`, any (`rated`) or none (`unrated`)."),
+      projectId: z
+        .string()
+        .optional()
+        .describe("A project's id: the jobs a session of that project holds now. `none`: the jobs a session with no project holds. Each job once, however many sessions hold it. Not with `inSession=false`."),
+      inSession: z
+        .enum(["true", "false"])
+        .optional()
+        .describe("`false`: the jobs no session holds now (General), whatever session they were born in. `true`: the jobs at least one session holds."),
+      withSessions: z
+        .enum(["true", "false"])
+        .optional()
+        .describe("`true`: each job carries `sessions`, the sessions that hold it now (`id`, `title`, `projectId`)."),
     }),
   },
   responses: {
@@ -192,7 +214,7 @@ openApiRegistry.registerPath({
       description: "A page of jobs",
       content: { "application/json": { schema: z.object({ data: z.array(JobSummary), next: z.string().nullable() }) } },
     },
-    400: { description: "An unknown status, source, rating or favorited value" },
+    400: { description: "An unknown status, source, rating, favorited, projectId or inSession value, or projectId with inSession=false" },
     401: { description: "Unauthorized" },
     503: { description: "A rating filter on a server where ratings are not available yet" },
   },
@@ -229,6 +251,9 @@ export interface JobRecord {
   /** The generation session this job was born in (migration 518), or null.
    *  The caller's own session id — owner-visible like `source`. */
   session_id?: string | null
+  /** In the Trash since then (migration 561); null = live. Only a Trash read
+   *  selects it: every other read leaves a trashed job out. */
+  deleted_at?: string | null
 }
 
 /** Every key a NON-admin caller may see. An ALLOWLIST (W0, 2026-09-01):
@@ -378,6 +403,8 @@ export async function jobRoutes(app: FastifyInstance) {
       .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
       .in("id", ids)
       .eq("user_id", req.userId)
+      // A job in the Trash is left out like an id that does not exist.
+      .is(TRASHED_JOB_COLUMN, null)
     if (!isAdmin) query = query.is(CHILD_JOB_COLUMN, null)
     const { data, error } = await query
 
@@ -419,6 +446,8 @@ export async function jobRoutes(app: FastifyInstance) {
       .from("jobs")
       .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id")
       .eq("id", id)
+      // A job in the Trash answers, for every caller, as one that does not exist.
+      .is(TRASHED_JOB_COLUMN, null)
 
     // A non-admin reads only their own jobs, and never a child job: it answers
     // exactly as a job that does not exist (CHILD_JOB_COLUMN).
@@ -483,6 +512,7 @@ export async function jobRoutes(app: FastifyInstance) {
       .from("jobs")
       .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
       .eq("id", id)
+      .is(TRASHED_JOB_COLUMN, null)
 
     // As GET /v1/jobs/:id: a non-admin never reads a child job (CHILD_JOB_COLUMN).
     if (!isAdmin) {
@@ -534,9 +564,16 @@ export async function jobRoutes(app: FastifyInstance) {
       rating?: string
       // One generate-image batch (`count` / `models`), by its `batchId`.
       batchId?: string
+      // Where the job is now (lib/job-list-filters.ts), and whether to say so.
+      projectId?: string
+      inSession?: string
+      withSessions?: string
     }
   }>("/v1/jobs", async (req, reply) => {
-    const { userId: queryUserId, limit = "50", cursor, attachToCharacterId, batchId } = req.query
+    const { userId: queryUserId, limit = "50", cursor, attachToCharacterId, batchId, withSessions } = req.query
+    if (withSessions !== undefined && withSessions !== "true" && withSessions !== "false") {
+      return reply.status(400).send({ error: { code: "validation_error", message: "withSessions must be true or false" } })
+    }
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100)
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     const currentUserId = req.userId
@@ -590,6 +627,7 @@ export async function jobRoutes(app: FastifyInstance) {
     // the whole select (PGRST201) — the list answered 500.
     // `jobs-execution-embed-sites.test.ts` holds every such embed to a key.
     let query = supabase
+      // trash-read: applyJobListFilters below leaves the Trash out.
       .from("jobs")
       .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id, usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
       .order("created_at", { ascending: false })
@@ -718,8 +756,16 @@ export async function jobRoutes(app: FastifyInstance) {
     // pagination is concerned, and must advance past the rows it dropped.
     const nextCursor = jobs && jobs.length === limitNum ? jobs[jobs.length - 1]?.created_at : null
 
+    // The sessions each job is in now, in one read for the page — the owner's.
+    let withLinks: typeof sanitizedJobs = sanitizedJobs
+    if (withSessions === "true") {
+      const links = await liveSessionsOfJobs(filterUserId, sanitizedJobs.map((job) => job.id as string))
+      if (links.error) return sendInternalError(reply, req, links.error, "Failed to list jobs")
+      withLinks = sanitizedJobs.map((job) => ({ ...job, sessions: links.data.get(job.id as string) ?? [] }))
+    }
+
     return {
-      data: sanitizedJobs,
+      data: withLinks,
       next: nextCursor,
       previous: null, // Not implementing backwards pagination for now
     }
@@ -754,6 +800,7 @@ export async function jobRoutes(app: FastifyInstance) {
       .from("jobs")
       .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
       .in("id", jobIds)
+      .is(TRASHED_JOB_COLUMN, null)
 
     // A child job is left out for a non-admin, as an id that does not exist
     // (CHILD_JOB_COLUMN).
@@ -776,27 +823,7 @@ export async function jobRoutes(app: FastifyInstance) {
     }
   })
 
-  app.delete<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
-    if (!req.userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-
-    const { id } = req.params
-    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-
-    try {
-      await deleteJobWithPrivateMedia({
-        jobId: id,
-        actorUserId: req.userId,
-        isAdmin,
-        logger: req.log,
-      })
-    } catch (error) {
-      return sendInternalError(reply, req, error, "Failed to delete job")
-    }
-
-    return { success: true }
-  })
+  // DELETE /v1/jobs/:id (to the Trash, or `?forever=true`) and
+  // POST /v1/jobs/:id/restore.
+  registerJobTrashRoutes(app)
 }

@@ -10,6 +10,7 @@ import { MAX_GALLERY_REMOVAL, removeFromGallery } from "../lib/gallery-removal.j
 import { listFavoriteJobIds, toggleGalleryFavorite } from "../lib/gallery-favorites.js"
 import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 
 // ---- Zod Schemas ----
 
@@ -191,6 +192,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .select("id")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("id", jobId)
       .eq("is_public", true)
       .eq("status", "completed")

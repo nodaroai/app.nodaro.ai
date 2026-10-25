@@ -65,7 +65,7 @@ describe("the stored face mask on the wire", () => {
       input_data: { type: "cast-swap", preview: true, trend: { id: "t" }, __faceMasking: stored },
       output_data: { faceMasking: { applied: true } },
     }
-    const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }) }
+    const chain = { select: () => chain, eq: () => chain, is: () => chain, maybeSingle: async () => ({ data: row, error: null }) }
     from.mockReturnValue(chain)
   }
 

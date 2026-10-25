@@ -51,6 +51,7 @@ import { speakerViewTracksServerDeps } from "../lib/speaker-view-tracks-io.js"
 import { speakerFramesTranscriptSpeakers } from "../providers/video/speaker-frames-budget.js"
 import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/private-plugins/speaker-frames-relay-support.js"
 import { requireNodaroConnection } from "../lib/nodaro-connection-gate.js"
+import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 
 /** Light body checks: only what the RELAY needs to exist. */
 const vcpBody = z.object({
@@ -379,6 +380,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
     const { data } = await supabase
       .from("jobs")
       .select("id, user_id, job_type, status, provider_task_id")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("id", jobId)
       .eq("user_id", userId)
       .maybeSingle()
@@ -422,6 +424,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
     const { data } = await supabase
       .from("jobs")
       .select("id, user_id, job_type, provider_task_id")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("id", parsed.data.fromJobId)
       .eq("user_id", userId)
       .maybeSingle()
