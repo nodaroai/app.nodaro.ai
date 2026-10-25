@@ -52,8 +52,9 @@ export const VIDEO_MASK_DEFAULTS = {
    * Off: one pass over the whole clip. On: the clip's scene cuts are found
    * first and each shot is segmented on its own — the model starts afresh
    * after every cut (finding the new shot's subjects), and `holdLastMask`
-   * never carries a mask across a cut. A clip with no cut (a flash is not
-   * one) is one shot: the same mask, fitted to the clip's exact frame count.
+   * never carries a mask across a cut. A clip with no cut (a flash is
+   * usually not one) is one shot: the same mask, fitted to the clip's exact
+   * frame count.
    */
   perShot: false,
 } as const
@@ -78,6 +79,14 @@ export const VIDEO_MASK_LIMITS = {
    * instead. Frames before the first detection stay as they are.
    */
   HOLD_EMPTY_BELOW_FRACTION: 0.00002,
+  /**
+   * `holdLastMask`: the longest a mask is held, in seconds of frames (at the
+   * clip's rate). The hold is for a subject hidden for a moment; a run of
+   * empty frames longer than this shows the held mask for its first second
+   * and then nothing, until the model finds the subject again — a mask held
+   * on for longer sits where the subject no longer is.
+   */
+  HOLD_MAX_SEC: 1,
   /**
    * `minSubjectHeightPct`: drop every connected white region (8-connected)
    * whose bounding box is shorter than this % of the frame height — extras'

@@ -1081,7 +1081,7 @@ image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for 
     .description("track a subject described in text through a video (SAM 3.1, or --model sam-3 at half the price) and get a black-and-white mask video back (white = the subject)")
     .option("--model <model>", `${VIDEO_MASK_PROVIDERS.join(" | ")} (default ${DEFAULT_VIDEO_MASK_PROVIDER})`)
     .option("--threshold <n>", `detection confidence ${VIDEO_MASK_LIMITS.THRESHOLD_MIN}–${VIDEO_MASK_LIMITS.THRESHOLD_MAX} (default ${VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT}; lower finds more)`, parseFloat)
-    .option("--hold-last-mask", "keep the last mask on frames where the subject is lost (e.g. hidden behind a hand)")
+    .option("--hold-last-mask", "keep the last mask on frames where the subject is lost (e.g. hidden behind a hand), for up to 1 s")
     .option("--min-subject-height <pct>", `ignore subjects smaller than this % of the frame height, ${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
     .option("--max-subject-height <pct>", `ignore subjects larger than this % of the frame height, ${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
     .option("--zone <L,R,T,B>", `keep only subjects whose centre is inside these left,right,top,bottom margins, each ${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN}–${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX} % of the frame (default off)`)

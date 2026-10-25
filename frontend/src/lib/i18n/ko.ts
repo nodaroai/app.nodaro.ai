@@ -12574,7 +12574,7 @@ export const ko: ChromeDict = {
   "vidcfg.videoMaskPromptExamples": "예: “강아지”, “빨간 코트를 입은 여성”, “자동차”",
   "vidcfg.videoMaskPricingHint": "클립 길이(30fps 기준)로 요금이 정해지므로 60fps 클립은 두 배로 계산됩니다. 최대 5분 클립까지 지원합니다. SAM 3은 SAM 3.1의 절반 가격입니다.",
   "vidcfg.videoMaskHoldLastMask": "피사체를 놓치면 마스크 유지",
-  "vidcfg.videoMaskHoldLastMaskHint": "피사체가 잠시 가려질 때(얼굴 앞에 손이 있는 경우 등) 빈 프레임 대신 마지막 마스크를 유지합니다.",
+  "vidcfg.videoMaskHoldLastMaskHint": "피사체가 잠시 가려질 때(얼굴 앞에 손이 있는 경우 등) 빈 프레임 대신 마지막 마스크를 최대 1초 동안 유지합니다.",
   "vidcfg.videoMaskMinSubjectHeight": "이보다 작은 피사체 무시 (프레임 높이 대비 %)",
   "vidcfg.videoMaskMinSubjectHeightOff": "끔",
   "vidcfg.videoMaskMinSubjectHeightHint": "각 프레임에서 프레임 높이 대비 이 비율보다 낮은 피사체를 모두 제외합니다(주인공 뒤 엑스트라의 얼굴 등). 0이면 끕니다.",

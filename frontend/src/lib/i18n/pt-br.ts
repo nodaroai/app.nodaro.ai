@@ -12574,7 +12574,7 @@ export const ptBR: ChromeDict = {
   "vidcfg.videoMaskPromptExamples": "ex.: “o cachorro”, “a mulher de casaco vermelho”, “o carro”",
   "vidcfg.videoMaskPricingHint": "O preço depende da duração do clipe a 30 fps, então um clipe a 60 fps conta em dobro. Clipes de até 5 minutos. O SAM 3 custa metade do SAM 3.1.",
   "vidcfg.videoMaskHoldLastMask": "Manter a máscara quando o objeto some",
-  "vidcfg.videoMaskHoldLastMaskHint": "Quando o objeto fica oculto por um momento (uma mão na frente do rosto), mantém a última máscara em vez de um quadro vazio.",
+  "vidcfg.videoMaskHoldLastMaskHint": "Quando o objeto fica oculto por um momento (uma mão na frente do rosto), mantém a última máscara em vez de um quadro vazio, por até 1 segundo.",
   "vidcfg.videoMaskMinSubjectHeight": "Ignorar objetos menores que (% da altura do quadro)",
   "vidcfg.videoMaskMinSubjectHeightOff": "Desligado",
   "vidcfg.videoMaskMinSubjectHeightHint": "Remove em cada quadro todo objeto mais baixo que essa fração da altura do quadro (por exemplo, rostos de figurantes atrás da pessoa principal). 0 desliga.",

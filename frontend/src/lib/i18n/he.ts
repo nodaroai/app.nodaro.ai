@@ -12784,7 +12784,7 @@ export const he: ChromeDict = {
   "vidcfg.videoMaskPromptExamples": "למשל ״הכלב״, ״האישה במעיל האדום״, ״המכונית״",
   "vidcfg.videoMaskPricingHint": "התמחור לפי אורך הקליפ ב־30 פריימים לשנייה, כך שקליפ ב־60 פריימים לשנייה נספר כפול. קליפים של עד 5 דקות. SAM 3 עולה חצי מ־SAM 3.1.",
   "vidcfg.videoMaskHoldLastMask": "החזקת המסכה כשהנושא אובד",
-  "vidcfg.videoMaskHoldLastMaskHint": "כשהנושא מוסתר לרגע (יד מול פנים), נשמרת המסכה האחרונה שלו במקום פריים ריק.",
+  "vidcfg.videoMaskHoldLastMaskHint": "כשהנושא מוסתר לרגע (יד מול פנים), נשמרת המסכה האחרונה שלו במקום פריים ריק, עד שנייה אחת.",
   "vidcfg.videoMaskMinSubjectHeight": "התעלמות מנושאים קטנים מ־(% מגובה הפריים)",
   "vidcfg.videoMaskMinSubjectHeightOff": "כבוי",
   "vidcfg.videoMaskMinSubjectHeightHint": "מסיר בכל פריים כל נושא שנמוך מהחלק הזה של גובה הפריים (למשל פנים של ניצבים מאחורי הדמות הראשית). 0 מכבה.",

@@ -87,7 +87,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
           .optional()
           .describe(`Detection confidence (default ${L.THRESHOLD_DEFAULT}). Lower finds more — try 0.3 when nothing matches.`),
         provider: z.enum(VIDEO_MASK_PROVIDERS).optional().describe("Segmentation model: sam-3.1 (default) or sam-3 (half the price)."),
-        hold_last_mask: z.boolean().optional().describe("Keep the last mask on frames where the subject is lost (default false)."),
+        hold_last_mask: z.boolean().optional().describe("Keep the last mask on frames where the subject is lost, for up to 1 s (default false)."),
         min_subject_height_pct: z.number().min(L.MIN_SUBJECT_HEIGHT_PCT_MIN).max(L.MIN_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions shorter than this % of the frame height (default 0 = off)."),
         max_subject_height_pct: z.number().min(L.MAX_SUBJECT_HEIGHT_PCT_MIN).max(L.MAX_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions taller than this % of the frame height (default 0 = off)."),
         zone: z

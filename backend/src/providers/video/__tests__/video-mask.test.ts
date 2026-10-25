@@ -16,6 +16,7 @@ import {
   countVideoFrames,
   videoMaskFfmpegTimeoutMs,
   holdLastMaskFrames,
+  holdMaxFrames,
   maskRleCoveredPixels,
   dropMaskRegionsBySize,
   dropMaskRegionsBySizeInFrame,
@@ -28,6 +29,7 @@ import {
 import { DeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { assertFrameCountMatches } from "../../../workers/handlers/video-mask.js"
 import type { VideoOverlayBaseProbe } from "../ffmpeg-utils.js"
+import { VIDEO_MASK_LIMITS } from "@nodaro/shared/media"
 
 const probe = (over: Partial<VideoOverlayBaseProbe>): VideoOverlayBaseProbe => ({
   width: 1280, height: 720, rotation: 0, sar: 1, rFrameRate: "30/1", avgFrameRate: "30/1",
@@ -136,6 +138,23 @@ describe("holdLastMaskFrames (holdLastMask)", () => {
     expect(heldFrames).toBe(3)
     // No cuts: exactly the single pass.
     expect(await holdLastMaskFrames([...rle], PIX, [])).toEqual(await holdLastMaskFrames([...rle], PIX))
+  })
+
+  it("holds a run of empty frames for at most maxHoldFrames; the rest stay empty until the next detection", async () => {
+    const rle = [A, "", "", "", "", B, "", "", C]
+    const { rle: out, heldFrames } = await holdLastMaskFrames([...rle], PIX, [], 2)
+    // A is held over 2 of its 4 empty frames; B's 2 empty frames are both held: the count restarts at each detection.
+    expect(out).toEqual([A, A, A, "", "", B, B, B, C])
+    expect(heldFrames).toBe(4)
+    // With cuts: the limit and the shot boundary both apply.
+    expect((await holdLastMaskFrames([A, "", "", "", "", ""], PIX, [3], 5)).rle).toEqual([A, A, A, "", "", ""])
+  })
+
+  it("holdMaxFrames: HOLD_MAX_SEC of frames at the clip's rate, at least one; an unreadable rate counts as FPS_BASIS", () => {
+    expect(VIDEO_MASK_LIMITS.HOLD_MAX_SEC).toBe(1)
+    expect(holdMaxFrames("30/1")).toBe(30)
+    expect(holdMaxFrames("24000/1001")).toBe(24)
+    expect(holdMaxFrames("0/0")).toBe(VIDEO_MASK_LIMITS.FPS_BASIS)
   })
 
   it("counts without allocating, holds in place, and keeps the worker responsive on noisy frames", async () => {

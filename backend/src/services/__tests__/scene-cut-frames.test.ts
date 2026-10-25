@@ -59,6 +59,15 @@ describe("detectCutFrames (real ffmpeg)", () => {
     })
   }, 60_000)
 
+  it("finds a cut into fast motion, which the media proxy's flash check reads as a flash (a hit, a swing, a whip pan)", async () => {
+    // Every frame of the second shot still moves by ~0.85× the cut's own change.
+    await clip("cut-into-motion.mp4", [
+      ["color=gray:s=160x90:r=24:d=1"], ["testsrc2=s=160x90:r=24:d=1,scroll=horizontal=0.1"],
+    ], async (path) => {
+      expect(await detectCutFrames(path, "24/1")).toEqual([24])
+    })
+  }, 60_000)
+
   it("finds both cuts of a three-shot clip", async () => {
     await clip("three.mp4", [
       ["color=red:s=160x90:r=24:d=1"], ["color=blue:s=160x90:r=24:d=1"], ["color=green:s=160x90:r=24:d=1"],

@@ -35,6 +35,7 @@ import {
   renderMaskVideo,
   splitMaskSource,
   holdLastMaskFrames,
+  holdMaxFrames,
   dropMaskRegions,
   normaliseMaskZone,
   shotCutFrames,
@@ -253,8 +254,11 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
       console.log(`[worker] video-mask ${ctx.jobId}: dropped regions — ${cuts.join(", ")}${noneLeft ? " — none left: an empty mask" : ""}`)
     }
     const afterFilters = filtered?.rle ?? modelRle
-    // In place, yielding to the event loop like the region filters. Per shot: a held mask never crosses a cut.
-    const held = holdLastMask === true ? await holdLastMaskFrames(afterFilters, prepared.geometry.width * prepared.geometry.height, cutFrames) : undefined
+    // In place, yielding to the event loop like the region filters. Per shot: a held mask never crosses a cut;
+    // and never for longer than HOLD_MAX_SEC (a cut the scan missed, a subject that left).
+    const held = holdLastMask === true
+      ? await holdLastMaskFrames(afterFilters, prepared.geometry.width * prepared.geometry.height, cutFrames, holdMaxFrames(prepared.geometry.frameRate))
+      : undefined
     const rle = held?.rle ?? afterFilters
     if (held) console.log(`[worker] video-mask ${ctx.jobId}: held the last mask over ${held.heldFrames} empty frame(s)`)
 

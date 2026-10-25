@@ -2567,8 +2567,9 @@ export interface VideoMaskNodeData extends PromptAffixFields {
   threshold: number
   /** Segmentation model — `"sam-3"` is the only one (VIDEO_MASK_PROVIDERS). */
   provider: VideoMaskProvider
-  /** Hold the last mask where the subject is lost (default false). Optional:
-   *  older saved nodes lack it. */
+  /** Hold the last mask where the subject is lost, for up to
+   *  VIDEO_MASK_LIMITS.HOLD_MAX_SEC (default false). Optional: older saved
+   *  nodes lack it. */
   holdLastMask?: boolean
   /** Ignore subjects smaller than this % of the frame height (0 = off). Optional:
    *  older saved nodes lack it. */

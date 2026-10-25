@@ -12574,7 +12574,7 @@ export const ja: ChromeDict = {
   "vidcfg.videoMaskPromptExamples": "例：「犬」「赤いコートの女性」「車」",
   "vidcfg.videoMaskPricingHint": "料金はクリップの長さ（30 fps 換算）で決まるため、60 fps のクリップは 2 倍として数えられます。最長 5 分のクリップまで対応します。SAM 3 は SAM 3.1 の半額です。",
   "vidcfg.videoMaskHoldLastMask": "被写体を見失ったらマスクを保持",
-  "vidcfg.videoMaskHoldLastMaskHint": "被写体が一瞬隠れたとき（顔の前に手がある場合など）、空のフレームの代わりに直前のマスクを保ちます。",
+  "vidcfg.videoMaskHoldLastMaskHint": "被写体が一瞬隠れたとき（顔の前に手がある場合など）、空のフレームの代わりに直前のマスクを最大1秒間保ちます。",
   "vidcfg.videoMaskMinSubjectHeight": "これより小さい被写体を無視（フレームの高さに対する %）",
   "vidcfg.videoMaskMinSubjectHeightOff": "オフ",
   "vidcfg.videoMaskMinSubjectHeightHint": "各フレームで、フレームの高さに対してこの割合より低い被写体をすべて除外します（主役の後ろにいるエキストラの顔など）。0 でオフ。",

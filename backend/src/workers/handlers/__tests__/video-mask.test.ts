@@ -50,7 +50,12 @@ vi.mock("@/lib/job-scratch.js", () => ({
   uploadJobScratchFile: mocks.uploadJobScratchFile,
   uploadJobScratchBuffer: mocks.uploadJobScratchBuffer,
 }))
-vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ createWorkDir: mocks.createWorkDir, cleanupWorkDir: mocks.cleanupWorkDir }))
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  // parseFrameRate is pure (the hold limit reads the clip's rate); the work dir is the test's.
+  parseFrameRate: (await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()).parseFrameRate,
+  createWorkDir: mocks.createWorkDir,
+  cleanupWorkDir: mocks.cleanupWorkDir,
+}))
 vi.mock("@/workers/shared.js", () => ({
   markJobCompleted: mocks.markJobCompleted,
   commitJobCredits: mocks.commitJobCredits,
@@ -139,6 +144,16 @@ describe("video-mask handler — one request", () => {
     // What a retry reuses is the model's answer, not the held one.
     const cached = JSON.parse((await import("node:zlib")).gunzipSync((mocks.uploadJobScratchBuffer.mock.calls[0] as unknown as [Buffer])[0]).toString()) as { rle: string[] }
     expect(cached.rle).toEqual(["", "1 900", "", "1 800", ""])
+  })
+
+  it("holdLastMask on: a mask is held for at most HOLD_MAX_SEC of frames at the clip's rate, then the frames stay empty", async () => {
+    // 10 fps: one second is 10 frames. One detection, then 14 empty frames.
+    const tenFps = { ...geometry, frameRate: "10/1", durationSec: 1.5 }
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 15, geometry: tenFps })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["1 900", ...Array(14).fill("")], requestId: "r", cost: 0.03 })
+    await run({ holdLastMask: true })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["1 900", ...Array(10).fill("1 900"), ...Array(4).fill("")], tenFps, "/tmp/vm/mask.mp4")
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, expect.objectContaining({ output_data: expect.objectContaining({ heldFrames: 10 }) }))
   })
 
   it("minSubjectHeightPct 0 (the default): no size filter, no droppedRegions", async () => {

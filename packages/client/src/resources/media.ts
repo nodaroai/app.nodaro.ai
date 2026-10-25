@@ -461,7 +461,8 @@ export class MediaResource {
    * `holdLastMask: true` keeps the last mask on frames where the subject is
    * lost (a mask covering under 0.002 % of the frame, e.g. a face behind a
    * hand): each such frame after the first detection repeats the most recent
-   * non-empty one; the output then also carries `heldFrames`.
+   * non-empty one, for at most 1 s of frames (`VIDEO_MASK_LIMITS.HOLD_MAX_SEC`;
+   * longer gaps stay empty after that); the output then also carries `heldFrames`.
    * `minSubjectHeightPct` (0–100, default 0 = off) drops every connected
    * region whose bounding box is shorter than that % of the frame height
    * (extras' small faces behind the main subject); it runs before

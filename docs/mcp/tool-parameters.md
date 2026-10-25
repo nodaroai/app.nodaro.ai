@@ -3462,7 +3462,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | What to track (e.g. 'the woman in the red coat'). From 1 to 500 characters. |
 | `threshold` | number |  | Detection confidence (default 0.5). Lower finds more — try 0.3 when nothing matches. From 0.05 to 0.95. |
 | `provider` | string |  | Segmentation model: sam-3.1 (default) or sam-3 (half the price). One of `sam-3.1`, `sam-3`. |
-| `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost (default false). |
+| `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost, for up to 1 s (default false). |
 | `min_subject_height_pct` | number |  | Drop regions shorter than this % of the frame height (default 0 = off). From 0 to 100. |
 | `max_subject_height_pct` | number |  | Drop regions taller than this % of the frame height (default 0 = off). From 0 to 100. |
 | `zone` | object |  | Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too). |

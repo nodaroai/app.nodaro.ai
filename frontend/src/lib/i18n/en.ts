@@ -12879,7 +12879,7 @@ export const en = {
   "vidcfg.videoMaskPromptExamples": "e.g. \"the dog\", \"the woman in the red coat\", \"the car\"",
   "vidcfg.videoMaskPricingHint": "Priced by clip length at 30 fps, so a 60 fps clip counts double. Clips up to 5 minutes. SAM 3 costs half of SAM 3.1.",
   "vidcfg.videoMaskHoldLastMask": "Hold mask when the subject is lost",
-  "vidcfg.videoMaskHoldLastMaskHint": "Where the subject is hidden for a moment (a hand in front of a face), keep its last mask instead of an empty frame.",
+  "vidcfg.videoMaskHoldLastMaskHint": "Where the subject is hidden for a moment (a hand in front of a face), keep its last mask instead of an empty frame, for up to 1 second.",
   "vidcfg.videoMaskMinSubjectHeight": "Ignore subjects smaller than (% of frame height)",
   "vidcfg.videoMaskMinSubjectHeightOff": "Off",
   "vidcfg.videoMaskMinSubjectHeightHint": "Drops every subject shorter than this share of the frame height on each frame (for example extras' faces behind the main person). 0 turns it off.",
