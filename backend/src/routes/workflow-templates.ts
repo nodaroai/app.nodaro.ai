@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
-import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { replyIfListingRefused } from "../lib/listing-refusal.js"
 import { estimateFlagColumn, listingEstimateFlag, selectWithEstimateFlag, writeWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import { usecaseViewerForEveryone } from "../lib/use-case/inner-availability.js"
 import { selectWithMax, writeWithMax } from "../lib/listing-max-columns.js"
@@ -629,8 +629,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         ...usecaseViewerForEveryone(pricedNodes as unknown as EstimateNode[]),
       })
     } catch (err) {
-      // A metered LLM model with no price (R49): nothing is listed at a price its run would refuse.
-      if (await replyIfLlmUnpriced(reply, err)) return reply
+      // A metered LLM model with no price (R49), or a UGC video whose estimate failed for the saved
+      // settings or a choice: nothing is listed at a price its run would refuse, or as free.
+      if (await replyIfListingRefused(reply, err)) return reply
       throw err
     }
     if (keepRun) {

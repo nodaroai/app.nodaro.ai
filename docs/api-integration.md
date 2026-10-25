@@ -368,7 +368,9 @@ it, at the length setting. The listed price is a range: the price at the saved s
 `maxEstimatedCredits` / `maxEstimatedPerMinuteCredits`) are "up to" — the most a
 run can cost over the choices its user has: every exposed field, at the
 publisher's restricted values (`allowedValues`) where set, each model's own
-options, and a reference clip the user supplies at its longest. Up to 256
+options, and a reference clip the user supplies at its longest. A UGC video is
+priced again for each combination, so a script length or language the user can
+choose counts at its priciest. Up to 256
 combinations are priced one by one; past that, each other field is taken at its
 priciest value for each model. The `max*` fields appear on the browse, detail and
 app-page responses only when they differ from "from"; a version published before
@@ -379,7 +381,11 @@ its model's typical call, charged its actual usage per token — so show it
 `≈N`; it is absent for a fixed price and on a deployment running the
 tier-pricing rollback. A publish whose graph names a metered model with no
 price yet is refused `400 validation_error` with `reason: "llm_model_unpriced"`,
-as its run would be ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). A preview picked automatically for an app or a
+as its run would be ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). A publish whose UGC video could not be priced — its
+estimate failed at the saved settings or for a choice the app's user can make — is
+never listed as free: it is refused `503 { "error": { "code": "ugc_listing_unpriced", "reason": "ugc_listing_unpriced", "choice", "message" } }`
+(`reason`, as the unpriced-model refusal carries its own), where `choice` names it (`"a choice its users can make (Hebrew, 60 s)"`;
+`"its saved settings"` alone when it failed before any choice was asked), and nothing is written; publish again. A preview picked automatically for an app or a
 template is read from what ships, so it is never one of those renders (a
 template that includes its run starts from that run's captioned video), nor
 the author's photo or anything on its path. A
@@ -511,7 +517,7 @@ The `202` answer of a continue-from-failed names the execution it continued from
 }
 ```
 
-Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `≈N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
+Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "holdCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `≈N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `holdCredits` is what the run holds while it renders — a [UGC](./nodes/ai-video/ugc-clip.md#prices-in-the-editor) clip at its hold, about twice its price, the part not used coming back when it finishes; never below `estimatedCredits` — and `sufficient` says whether the payer's credits cover that hold, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
 
 | Status | `error.code` | When |
 |---|---|---|
@@ -519,7 +525,7 @@ Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "rende
 | `400` | `render_final_not_a_render` | the node is not an Apply EDL render |
 | `400` | `validation_error` | `renderFinal` sent with `nodeIds` or `inputOverrides`, or without `continueFromExecutionId` |
 
-The run is checked against the payer's credits before it starts, on the figure the quote shows: one its payer cannot cover is refused with `402 { "error": { "code": "insufficient_credits", "message", "required", "available" } }` and no execution is created (`available` is left out when a deployment's operator pays). The check is the balance only; a model your plan cannot use, or a daily limit, is still refused by that node when the run reaches it. A workspace budget's headroom is checked as each node reserves.
+The run is checked against the payer's credits before it starts, on the quote's `holdCredits`: one its payer cannot cover is refused with `402 { "error": { "code": "insufficient_credits", "message", "required", "available" } }` (`required` is that hold) and no execution is created (`available` is left out when a deployment's operator pays). The check is the balance only; a model your plan cannot use, or a daily limit, is still refused by that node when the run reaches it. A workspace budget's headroom is checked as each node reserves.
 
 The run is the authority on every other refusal (`preview_review_required` when another render after this one still reads Preview (`quality: "proxy"`) — under the `PREVIEW_STOP_RULE_ENABLED` flag, as [above](#runs-that-would-stop-for-a-review); a run already going).
 | `400` | `validation_error` | `continueFromExecutionId` is not an execution id |

@@ -153,6 +153,8 @@ export const src = {
   writes: {} as Record<string, Record<string, unknown>>,
   estimateArgs: [] as unknown[],
   steps: 900,
+  /** What the steps hold while they render; null: their price (no UGC part). */
+  stepsHold: null as number | null,
   cover: { ok: true } as { ok: boolean; balance?: number },
   coverArgs: [] as unknown[],
 }
@@ -232,6 +234,10 @@ vi.mock("@/ee/billing/credits.js", async (orig) => ({
   estimateRunSetCredits: async (...a: unknown[]) => {
     src.estimateArgs = a
     return src.steps
+  },
+  estimateRunSetFigures: async (...a: unknown[]) => {
+    src.estimateArgs = a
+    return { credits: src.steps, hold: src.stepsHold ?? src.steps }
   },
   runHoldsMeteredLlmEstimate: () => false,
   CreditsService: {
@@ -350,7 +356,7 @@ beforeEach(() => {
   Object.assign(src, {
     wrapper: failedWrapper, wrapperError: null, graph, source: failedSource,
     finalCredits: { estimatedCredits: 600, sufficient: true, available: 5000 }, finalCreditsArgs: [], foundExec: null, graphReads: [],
-    existingFinal: null, finalQueries: [], estimateArgs: [], steps: 900, cover: { ok: true }, coverArgs: [],
+    existingFinal: null, finalQueries: [], estimateArgs: [], steps: 900, stepsHold: null, cover: { ok: true }, coverArgs: [],
     existingContinue: null, continueQueries: [], continuationsReadError: null, orFilters: [], rows: {}, writes: {},
   })
   const record = (row: Record<string, unknown>) => {

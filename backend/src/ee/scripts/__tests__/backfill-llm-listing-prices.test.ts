@@ -33,12 +33,17 @@ vi.mock("@/lib/private-plugins/load.js", () => ({
 }))
 vi.mock("@/lib/canvas-result-ids.js", () => ({ resolveCanvasResultIds: async (nodes: unknown) => nodes }))
 // The listing the publish path stores: here a fixed figure per graph, so the columns are the arithmetic under test.
-const listing = vi.hoisted(() => ({ value: { preview: 120, final: 0, previewPerMinute: 0, finalPerMinute: 0 } as Record<string, number>, unpricedSlugs: new Set<string>() }))
+const listing = vi.hoisted(() => ({ value: { preview: 120, final: 0, previewPerMinute: 0, finalPerMinute: 0 } as Record<string, number>, unpricedSlugs: new Set<string>(), ugcFailSlugs: new Set<string>() }))
 vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/ee/billing/credits.js")>()),
   estimateWorkflowListingCredits: vi.fn(async (nodes: Array<{ data?: { slug?: string } }>) => {
     if (nodes.some((n) => n.data?.slug && listing.unpricedSlugs.has(n.data.slug))) {
       throw Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" })
+    }
+    if (nodes.some((n) => n.data?.slug && listing.ugcFailSlugs.has(n.data.slug))) {
+      throw Object.assign(new Error("Couldn't price this workflow's UGC video at its saved settings (English, 20 s). Try publishing again."), {
+        name: "UgcListingUnpricedError", code: "ugc_listing_unpriced", choice: "its saved settings (English, 20 s)",
+      })
     }
     return { ...listing.value, ceiling: { ...listing.value, preview: listing.value.preview + 10 } }
   }),
@@ -260,6 +265,19 @@ describe("backfill-llm-listing-prices — the run", () => {
     const r = await runLlmListingBackfill({ apply: true, includeTemplates: false, allowRollback: false, report })
     expect(r).toMatchObject({ ok: true, skipped: 1 })
     expect(db.updates.map((u) => u.id)).toEqual(["app-1"])
+  })
+
+  it("a listing whose UGC video could not be priced is reported skipped and left as it is; the rest are written", async () => {
+    listing.ugcFailSlugs.add("ugc-bad")
+    const BAD = { ...LLM_APP, id: "app-ugc-bad", slug: "ugc-bad", snapshot_nodes: [{ id: "c", type: "llm-chat", data: { llmModel: "claude-opus-5.5", slug: "ugc-bad" } }] }
+    tableReads({ published_apps: [BAD, LLM_APP] })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const r = await runLlmListingBackfill({ apply: true, includeTemplates: false, allowRollback: false, report })
+    expect(r).toMatchObject({ ok: true, skipped: 1 })
+    expect(db.updates.map((u) => u.id)).toEqual(["app-1"])
+    expect(warn.mock.calls.flat().join(" ")).toContain("ugc-bad · published_apps · SKIPPED: ugc_listing_unpriced")
+    warn.mockRestore()
+    listing.ugcFailSlugs.clear()
   })
 
   it("refuses when no private plugin loads — the UGC estimate and the plugin-priced ids would price as 0", async () => {

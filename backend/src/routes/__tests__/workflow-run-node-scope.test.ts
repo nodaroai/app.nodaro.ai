@@ -82,6 +82,15 @@ vi.mock("@/ee/billing/credits.js", async (importOriginal) => {
       edges: Parameters<typeof actual.estimateRunSetCredits>[1],
       runNodeIds: ReadonlySet<string>,
     ) => actual.CreditsService.estimateWorkflowBaseCredits(nodes, edges, { runNodeIds }),
+    // The same figure as the hold: no UGC part here.
+    estimateRunSetFigures: async (
+      nodes: Parameters<typeof actual.estimateRunSetFigures>[0],
+      edges: Parameters<typeof actual.estimateRunSetFigures>[1],
+      runNodeIds: ReadonlySet<string>,
+    ) => {
+      const credits = await actual.CreditsService.estimateWorkflowBaseCredits(nodes, edges, { runNodeIds })
+      return { credits, hold: credits }
+    },
     checkRunSetCredits: async (_user: string, required: number) => ({
       sufficient: mocks.balance >= required,
       required,

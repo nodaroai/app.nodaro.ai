@@ -128,7 +128,7 @@ describe("what of the videos a run executes", () => {
 
   it("a ▶ on UGC Script asks for the script alone", () => {
     const r = ugcEstimateRunParts(pick(T.nodes, "script"), T.nodes, T.edges)
-    expect(r?.chains).toEqual([{ input: { targetDurationSec: 20, screenshotCount: 3, source: "sampled" }, lengthUnread: false, screenshotsUnread: false, nodes: [{ id: "script", part: "script", fanOutOf: "script" }] }])
+    expect(r?.chains).toEqual([{ chain: ugcChains(T.nodes, T.edges)[0], input: { targetDurationSec: 20, screenshotCount: 3, source: "sampled" }, lengthUnread: false, screenshotsUnread: false, nodes: [{ id: "script", part: "script", fanOutOf: "script" }] }])
   })
 
   it("a kept script runs nothing the estimate prices: no UGC part", () => {

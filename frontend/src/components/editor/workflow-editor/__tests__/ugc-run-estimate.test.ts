@@ -151,6 +151,29 @@ describe("ugcRunCredits: a run set's one figure", () => {
       delete window.__NODARO_RUNTIME__
     }
   })
+  it("Render final counts only the UGC parts its own set runs: the script, creator and clips that already ran add nothing", async () => {
+    const { renderFinalRunSet, renderRunOverrides } = await import("@nodaro/render-rules")
+    const { withRunOverrides } = await import("@nodaro/shared/nodes")
+    const { liveExecutable } = await import("../run-from-here-set")
+    window.__NODARO_RUNTIME__ = { previewStopRule: true }
+    try {
+      // A render at Preview feeds the video's join; the script, creator and clips ran before and stay done.
+      const nodes = [...NODES, n("cut", "apply-edl", { quality: "proxy" })]
+      const edges = [...EDGES, e("cut", "join", "in")]
+      // Render final's run, as the editor and the app runner build it: its set, the render at Final.
+      const set = renderFinalRunSet("cut", nodes, edges)
+      const graph = withRunOverrides(nodes, renderRunOverrides("cut", "final", set))
+      const executable = liveExecutable(graph).filter((x) => set.has(x.id))
+      expect(executable.map((x) => x.id).sort()).toEqual(["captions", "cards", "cut", "join", "overlay"])
+      const figure = mod.ugcRunCredits(executable, graph, edges, cost, always(ANSWER))
+      // The join is not the video's (the render feeds it): its own 10. The cards, overlay and captions: their parts.
+      // Never the script's, the creator's or the clips' parts, which the run does not execute.
+      expect(figure).toMatchObject({ credits: 10 + PARTS.cards + PARTS.overlay + PARTS.captions, estimate: "server", rendersClips: false })
+      expect([...figure.nodeCredits!.keys()].sort()).toEqual(["captions", "cards", "overlay"])
+    } finally {
+      delete window.__NODARO_RUNTIME__
+    }
+  })
   it("a part runs as many times as the node that executes it: a List of three into the script is three scripts", () => {
     h.runs = { script: 3 }
     expect(mod.ugcRunCredits(pick("script"), NODES, EDGES, cost, always(ANSWER))).toMatchObject({ credits: 3 * PARTS.script, hold: 3 * PARTS.script })

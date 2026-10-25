@@ -48,6 +48,8 @@ const quoteSchema = z.object({
     estimatedCredits: z.number().nullable(),
     /** Present (true) when `estimatedCredits` includes a metered LLM call's estimate: charged its actual usage, shown `≈N`. */
     estimatedCreditsIsEstimate: z.literal(true).optional(),
+    /** What the run holds while it renders (a UGC clip at its hold): the figure `sufficient` is checked against. */
+    holdCredits: z.number().nullable(),
     sufficient: z.boolean().nullable(),
     available: z.number().nullable(),
   }),
@@ -58,7 +60,7 @@ openApiRegistry.registerPath({
   path: "/v1/workflows/{id}/render-final/estimate",
   description:
     "Quote a Render final: the nodes it will execute (the Apply EDL render and every node after it; Camera Switch first in multicam), " +
-    "the one-shot override it runs with, its estimated credits (`estimatedCreditsIsEstimate: true` when an LLM node in it is charged its actual usage — show `≈N`), and whether the payer can cover them (`sufficient`; `available` is the payer's " +
+    "the one-shot override it runs with, its estimated credits (`estimatedCreditsIsEstimate: true` when an LLM node in it is charged its actual usage — show `≈N`), what the run holds while it renders (`holdCredits`: a UGC clip at its hold, never below the estimate), and whether the payer can cover that hold (`sufficient`; `available` is the payer's " +
     "spendable balance, null when it is not the caller's to see or a workspace budget pays). The figures are null in an edition without credits. " +
     "Nothing is created or charged; a run the payer cannot cover is refused with 402 insufficient_credits.",
   security: [{ bearerAuth: [] }],
@@ -167,6 +169,7 @@ export async function workflowRenderFinalRoutes(app: FastifyInstance) {
           estimatedCredits: credits?.estimatedCredits ?? null,
           // An LLM node in the run is charged its actual usage after it: the figure is an estimate (`≈N`).
           ...(credits?.estimate ? { estimatedCreditsIsEstimate: true as const } : {}),
+          holdCredits: credits?.holdCredits ?? null,
           sufficient: credits?.sufficient ?? null,
           available: credits?.available ?? null,
         },

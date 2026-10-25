@@ -25,6 +25,8 @@ const { db, settings, edition } = vi.hoisted(() => ({
   },
   edition: { hasCredits: true },
 }))
+/** The payer's spendable balance a Render final quote's check reads. */
+const balance = vi.hoisted(() => ({ value: 1_000_000 }))
 
 function modelPricingQuery() {
   let identifier: string | undefined
@@ -59,7 +61,7 @@ function profilesQuery() {
   const query = {
     select: () => query,
     eq: () => query,
-    single: async () => ({ data: { tier: "pro", subscription_tier: "pro", lifetime_topup_credits: 0, subscription_credits: 1_000_000, topup_credits: 0 }, error: null }),
+    single: async () => ({ data: { tier: "pro", subscription_tier: "pro", lifetime_topup_credits: 0, subscription_credits: balance.value, topup_credits: 0 }, error: null }),
   }
   return query
 }
@@ -122,6 +124,7 @@ const ZERO = { script: 0, creator: 0, clip: 0, cards: 0, join: 0, overlay: 0, ca
 
 beforeEach(() => {
   vi.clearAllMocks()
+  balance.value = 1_000_000
   h.estimate.mockResolvedValue({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts: PARTS, holdParts: PARTS })
 })
 
@@ -346,5 +349,311 @@ describe("a Render final quote of a UGC graph: `≈` from the UGC parts its quot
       ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = false
       setLlmMeteredSchemaReadyForTesting(undefined)
     }
+  })
+})
+
+// A run of a SUBSET (an agent's or an app's Render final, a run of named nodes, a continue-from-failed):
+// the UGC part counts only the parts of the nodes the run executes, by the editor's own rule
+// (`ugcEstimateRunParts`). A script, creator and clips that already ran are not re-executed: their parts
+// are not in the run's price, and a part the quote flags `≈` on them does not mark the run's figure.
+describe("a run set's UGC part: only the parts of the nodes it executes", () => {
+  const TAIL = ["cards", "join", "overlay", "captions"]
+
+  it("the tail of a video that already ran is priced at the tail's parts alone, never the script's, creator's or clip's", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    const tally: Record<string, number> = {}
+    const figure = await estimateRunSetCredits(NODES, EDGES, new Set(TAIL), undefined, undefined, (id, credits) => {
+      tally[id] = (tally[id] ?? 0) + credits
+    })
+    expect(figure).toBe(PARTS.cards + PARTS.join + PARTS.overlay + PARTS.captions)
+    expect(Object.keys(tally).sort()).toEqual([...TAIL].sort())
+  })
+
+  it("a run of none of a video's priced nodes asks no part of it", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    expect(await estimateRunSetCredits(NODES, EDGES, new Set(["shot1", "clips"]))).toBe(await CreditsService.estimateWorkflowCredits([NODES[1]!], []))
+    expect(h.estimate).not.toHaveBeenCalled()
+  })
+
+  it("a Render final quote: the figure and the balance it is checked against leave the upstream parts out, and their `≈` with them", async () => {
+    const { setLlmMeteredSchemaReadyForTesting } = await import("../../../lib/llm-metered-schema-gate.js")
+    const { renderFinalCredits } = await import("../../../lib/render-final-run.js")
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      // The creator check is the flagged part; the creator is not in the run.
+      h.estimate.mockImplementation(async () => ({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts: PARTS, holdParts: PARTS, estimateParts: ["creator"] }))
+      const quote = await renderFinalCredits({ userId: "u1", nodes: NODES, edges: EDGES, runNodeIds: TAIL, overrides: undefined, surface: {} })
+      expect(quote?.estimatedCredits).toBe(PARTS.cards + PARTS.join + PARTS.overlay + PARTS.captions)
+      expect(quote?.estimate).toBeUndefined()
+    } finally {
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
+  })
+
+  it("a run of the whole video is priced as the full run is", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    const all = new Set(NODES.map((x) => x.id))
+    expect(await estimateRunSetCredits(NODES, EDGES, all)).toBe(await CreditsService.estimateWorkflowCredits(NODES, EDGES))
+  })
+})
+
+describe("a run set's UGC part: the editor's rules for how many runs, which length and which `≈`", () => {
+  it("a part runs as many times as the node that executes it: a List of three into the script is three scripts", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    const list = n("list", "list", { items: "a\nb\nc" })
+    const figure = await estimateRunSetCredits([...NODES, list], [...EDGES, e("list", "script", "site")], new Set(["script"]))
+    expect(figure).toBe(3 * PARTS.script)
+  })
+
+  it("a script the run leaves out is priced at no less than its length setting, whatever plan it saved before", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    // Saved at 30 s; the setting is now 60 s. A continuation hands on the run's own plan, which the graph does not hold.
+    const nodes = NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 60, result: { plan: { v: 1, hook: "h", targetDurationSec: 30 } } }) : x))
+    await estimateRunSetCredits(nodes, EDGES, new Set(["clip"]))
+    expect(h.estimate.mock.calls[0]![1]).toMatchObject({ targetDurationSec: 60 })
+    // A saved plan longer than the setting: the plan's length.
+    const longer = NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 20, result: { plan: { v: 1, hook: "h", targetDurationSec: 45 } } }) : x))
+    await estimateRunSetCredits(longer, EDGES, new Set(["clip"]))
+    expect(h.estimate.mock.calls[1]![1]).toMatchObject({ targetDurationSec: 45 })
+  })
+
+  it("a part the answer marks an estimate is `≈` only when it costs something", async () => {
+    const { setLlmMeteredSchemaReadyForTesting } = await import("../../../lib/llm-metered-schema-gate.js")
+    const { estimateWorkflowCreditsDetailed } = await import("../credits.js")
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      h.estimate.mockImplementation(async () => ({ expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0, parts: { ...PARTS, creator: 0 }, holdParts: PARTS, estimateParts: ["creator"] }))
+      const detailed = await estimateWorkflowCreditsDetailed(NODES, EDGES)
+      expect(detailed.perNode.creator).toEqual({ credits: 0, estimate: false })
+    } finally {
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
+  })
+})
+
+// A whole run (no run set) counts each UGC part as many times as its node runs, as the editor's
+// run price does: a List of three into the script is three scripts — the run estimate, the API's
+// and MCP's estimates, and a published listing alike.
+describe("a whole run's UGC part counts each node's runs", () => {
+  const list = n("list", "list", { items: "a\nb\nc" })
+  const nodes = [...NODES, list]
+  const edges = [...EDGES, e("list", "script", "site")]
+
+  it("the run estimate: three scripts", async () => {
+    const { estimateWorkflowCreditsDetailed } = await import("../credits.js")
+    const detailed = await estimateWorkflowCreditsDetailed(nodes, edges)
+    expect(detailed.perNode.script!.credits).toBe(3 * PARTS.script)
+    expect(await CreditsService.estimateWorkflowCredits(nodes, edges)).toBe(detailed.credits)
+  })
+
+  it("a published listing: three scripts too, as an app run charges them", async () => {
+    const one = await estimateWorkflowListingCredits(NODES, EDGES, { publishType: "app" })
+    const three = await estimateWorkflowListingCredits(nodes, edges, { publishType: "app" })
+    expect(three.preview + three.final - (one.preview + one.final)).toBeGreaterThanOrEqual(2 * PARTS.script)
+  })
+})
+
+// A Render final quote shows the price, and checks the balance against what the run HOLDS while its
+// clips render (each clip at its hold): a balance between the two cannot start a run whose clip
+// reservation would then fail.
+describe("a Render final quote's balance check reads the hold", () => {
+  it("a balance above the price but below the hold is refused; the quote still shows the price", async () => {
+    const { renderFinalCredits } = await import("../../../lib/render-final-run.js")
+    const HOLDS = { ...PARTS, clip: 2 * PARTS.clip }
+    h.estimate.mockResolvedValue({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts: PARTS, holdParts: HOLDS })
+    const runNodeIds = ["clip", "cards", "join", "overlay", "captions"]
+    const price = PARTS.clip + PARTS.cards + PARTS.join + PARTS.overlay + PARTS.captions
+    balance.value = price + 1
+    const quote = await renderFinalCredits({ userId: "u1", nodes: NODES, edges: EDGES, runNodeIds, overrides: undefined, surface: {} })
+    // The figure the check compared is returned beside the price, for a refusal to name it.
+    expect(quote).toMatchObject({ estimatedCredits: price, holdCredits: price + PARTS.clip, sufficient: false })
+    balance.value = price + PARTS.clip
+    expect((await renderFinalCredits({ userId: "u1", nodes: NODES, edges: EDGES, runNodeIds, overrides: undefined, surface: {} }))?.sufficient).toBe(true)
+  })
+})
+
+// A continuation hands on the earlier run's plan, which the saved graph does not always hold: every
+// plan input that can raise the price is read at no less than the script would write now.
+describe("a run set's script left out: its saved plan never quotes below what the script would write now", () => {
+  const SHOT = { url: "https://cdn.example/1.png" }
+  const withImages = NODES.map((x) => (x.type === "upload-image" ? n(x.id, "upload-image", { url: `https://cdn.example/${x.id}.png` }) : x))
+  const savedScript = (data: Record<string, unknown>, plan: Record<string, unknown>) =>
+    withImages.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 20, ...data, result: { plan: { v: 1, hook: "h", targetDurationSec: 20, ...plan } } }) : x))
+
+  it("the screenshot cards: the larger of the saved plan's and the images wired now", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    // Saved with one screenshot beat; three images are wired now.
+    await estimateRunSetCredits(savedScript({}, { beats: [{ line: "b0", screenshot: SHOT }] }), EDGES, new Set(["clip"]))
+    expect(h.estimate.mock.calls[0]![1]).toMatchObject({ screenshotCount: 3 })
+    // Saved with three beats; one image is wired now.
+    const fewer = savedScript({}, { beats: [0, 1, 2].map((i) => ({ line: `b${i}`, screenshot: SHOT })) }).filter((x) => x.id !== "shot2" && x.id !== "shot3")
+    await estimateRunSetCredits(fewer, EDGES, new Set(["clip"]))
+    expect(h.estimate.mock.calls[1]![1]).toMatchObject({ screenshotCount: 3 })
+  })
+
+  it("the language: when the saved plan's and the setting's differ, both are asked and each part takes the larger figure", async () => {
+    const { estimateRunSetCredits } = await import("../credits.js")
+    const HE = { ...PARTS, clip: 3000, join: 0 }
+    h.estimate.mockImplementation(async (_caller: unknown, input: { language?: string }) => {
+      const parts = input.language === "he" ? HE : PARTS
+      return { expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0, parts, holdParts: parts }
+    })
+    // Saved in English; the setting is Hebrew now.
+    const figure = await estimateRunSetCredits(savedScript({ language: "he" }, { language: "en" }), EDGES, new Set(["clip", "join"]))
+    expect(h.estimate.mock.calls.map((c) => (c[1] as { language?: string }).language).sort()).toEqual(["he", undefined])
+    expect(figure).toBe(3000 + PARTS.join)
+  })
+
+  it("two languages asked: the hold takes each part's larger answer too, whichever language gave it", async () => {
+    const { estimateRunSetFigures } = await import("../credits.js")
+    // Hebrew's clip is the dearer price, English's clip the larger hold; Hebrew's join the larger hold.
+    h.estimate.mockImplementation(async (_caller: unknown, input: { language?: string }) => {
+      const he = input.language === "he"
+      return {
+        expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0,
+        parts: { ...PARTS, clip: he ? 3000 : PARTS.clip },
+        holdParts: { ...PARTS, clip: he ? 5000 : 7000, join: he ? 90 : 40 },
+      }
+    })
+    const figures = await estimateRunSetFigures(savedScript({ language: "he" }, { language: "en" }), EDGES, new Set(["clip", "join"]))
+    expect(figures).toEqual({ credits: 3000 + PARTS.join, hold: 7000 + 90 })
+  })
+})
+
+// An app's List its runner fills (one saved item) into UGC Script: each further item runs the
+// script once more, so the listing's per-item figure carries that part, as a run with more items charges.
+describe("a listing's per-item figure carries the UGC parts a further item runs", () => {
+  const withItems = (count: number) => [...NODES, n("list", "list", { items: Array.from({ length: count }, (_, i) => `item ${i}`).join("\n") })]
+  const edges = [...EDGES, e("list", "script", "site")]
+
+  it("one saved item: the per-item figure is what one more item adds to the run", async () => {
+    const listing = await estimateWorkflowListingCredits(withItems(1), edges, { publishType: "app", exposedListNodeIds: new Set(["list"]) })
+    const one = await CreditsService.estimateWorkflowCredits(withItems(1), edges)
+    const five = await CreditsService.estimateWorkflowCredits(withItems(5), edges)
+    expect(listing.previewPerItem).toBeGreaterThanOrEqual(PARTS.script)
+    // The listing's saved figure plus four further items is what five items charge.
+    expect(listing.preview + 4 * listing.previewPerItem!).toBe(listing.preview - one + five)
+  })
+})
+
+// The same with a use-case node beside the video (Tighten Episode): the listing is priced on the
+// expanded graph, and its per-item figure still carries the UGC parts a further item runs.
+describe("a listing's per-item figure carries the UGC parts on a graph with a use-case node", () => {
+  const rec = { id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4", metadata: { durationSeconds: 600 } } }
+  const tighten = { id: "t1", type: "tighten-episode", data: { label: "Tighten Episode", captions: false } }
+  const withItems = (count: number) => [...NODES, rec, tighten, n("list", "list", { items: Array.from({ length: count }, (_, i) => `item ${i}`).join("\n") })]
+  const edges = [...EDGES, e("list", "script", "site"), { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" }]
+
+  it("one saved item: the per-item figure is what one more item adds to the run", async () => {
+    const listing = await estimateWorkflowListingCredits(withItems(1), edges, { publishType: "app", exposedListNodeIds: new Set(["list"]) })
+    const one = await CreditsService.estimateWorkflowCredits(withItems(1), edges)
+    const five = await CreditsService.estimateWorkflowCredits(withItems(5), edges)
+    expect(listing.previewPerItem).toBeGreaterThanOrEqual(PARTS.script)
+    expect(4 * listing.previewPerItem!).toBe(five - one)
+  })
+})
+
+// A listing's "up to" over the choices an app's user has: a UGC script's exposed length and
+// language move the UGC part, so each combination is priced through the seam, as its run is.
+describe("a listing's ceiling prices each choice's UGC part", () => {
+  const field = (nodeId: string, f: string, allowedValues: unknown[]) => ({ type: "field", id: `${nodeId}-${f}`, nodeId, field: f, allowedValues })
+  const snapshotSettings = { presentationSettings: { inputItems: [field("script", "targetDurationSec", [20, 60]), field("script", "language", ["en", "he"])] } }
+  const byInput = async (_caller: unknown, input: { targetDurationSec: number; language?: string }) => {
+    const clip = input.targetDurationSec * (input.language === "he" ? 200 : 100)
+    const parts = { ...PARTS, clip }
+    return { expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0, parts, holdParts: parts }
+  }
+  const withScript = (data: Record<string, unknown>) => NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 20, ...data }) : x))
+
+  it("exposed length and language: the ceiling is what the priciest choice's run charges; the floor is the saved settings'", async () => {
+    const { estimateWorkflowListingRange } = await import("../credits.js")
+    h.estimate.mockImplementation(byInput)
+    const { floor, ceiling } = await estimateWorkflowListingRange(withScript({}), EDGES, { publishType: "app", snapshotSettings })
+    const saved = await estimateWorkflowListingCredits(withScript({}), EDGES, { publishType: "app" })
+    expect(floor).toEqual(saved)
+    const priciest = await CreditsService.estimateWorkflowCredits(withScript({ targetDurationSec: 60, language: "he" }), EDGES)
+    const savedRun = await CreditsService.estimateWorkflowCredits(withScript({}), EDGES)
+    expect(ceiling.preview + ceiling.final).toBe(floor.preview + floor.final - savedRun + priciest)
+    expect(ceiling.preview).toBeGreaterThan(floor.preview)
+  })
+
+  it("an exposed List with them: the ceiling's per-item figure is the priciest choice's (one more Hebrew script)", async () => {
+    const { estimateWorkflowListingRange } = await import("../credits.js")
+    h.estimate.mockImplementation(async (_caller: unknown, input: { targetDurationSec: number; language?: string }) => {
+      const parts = { ...PARTS, script: input.language === "he" ? 50 : 20, clip: input.targetDurationSec * 100 }
+      return { expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0, parts, holdParts: parts }
+    })
+    const nodes = [...withScript({}), n("list", "list", { items: "one" })]
+    const edges = [...EDGES, e("list", "script", "site")]
+    const { floor, ceiling } = await estimateWorkflowListingRange(nodes, edges, { publishType: "app", exposedListNodeIds: new Set(["list"]), snapshotSettings })
+    expect(floor.previewPerItem).toBe(20)
+    expect(ceiling.previewPerItem).toBe(50)
+  })
+
+  it("a graph with no UGC video asks nothing, its range priced as before", async () => {
+    const { estimateWorkflowListingRange } = await import("../credits.js")
+    const image = [n("img", "generate-image", { provider: "nano-banana-pro", resolution: "1K" })]
+    const settings = { presentationSettings: { inputItems: [field("img", "resolution", ["1K", "4K"])] } }
+    const { floor, ceiling } = await estimateWorkflowListingRange(image, [], { publishType: "app", snapshotSettings: settings })
+    expect(h.estimate).not.toHaveBeenCalled()
+    expect(floor).toEqual(await estimateWorkflowListingCredits(image, [], { publishType: "app" }))
+    expect(ceiling.preview).toBe((await estimateWorkflowListingCredits([n("img", "generate-image", { provider: "nano-banana-pro", resolution: "4K" })], [], { publishType: "app" })).preview)
+  })
+
+  it("asks the estimate once per distinct UGC input, however many combinations share it", async () => {
+    const { estimateWorkflowListingRange } = await import("../credits.js")
+    h.estimate.mockImplementation(byInput)
+    await estimateWorkflowListingRange(withScript({}), EDGES, { publishType: "app", snapshotSettings })
+    const asked = h.estimate.mock.calls.map((c) => JSON.stringify(c[1]))
+    expect(asked.length).toBe(new Set(asked).size)
+  })
+})
+
+// A listing never prices a UGC video it could not price as free: an estimate that fails for the
+// saved settings or for any choice refuses the listing (UgcListingUnpricedError), naming it. A run's
+// estimate keeps counting such a part as 0, with a warning.
+describe("a listing whose UGC video cannot be priced is refused, never listed at 0", () => {
+  const field = (nodeId: string, f: string, allowedValues: unknown[]) => ({ type: "field", id: `${nodeId}-${f}`, nodeId, field: f, allowedValues })
+  const snapshotSettings = { presentationSettings: { inputItems: [field("script", "targetDurationSec", [20, 60]), field("script", "language", ["en", "he"])] } }
+  const answer = { expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0, parts: PARTS, holdParts: PARTS }
+
+  it("a choice whose estimate fails (Hebrew): refused, the choice named", async () => {
+    const { estimateWorkflowListingRange } = await import("../credits.js")
+    h.estimate.mockImplementation(async (_c: unknown, input: { language?: string }) => {
+      if (input.language === "he") throw new Error("no Hebrew price row")
+      return answer
+    })
+    const refused = await estimateWorkflowListingRange(NODES, EDGES, { publishType: "app", snapshotSettings }).catch((e: unknown) => e)
+    expect(refused).toMatchObject({ name: "UgcListingUnpricedError", code: "ugc_listing_unpriced" })
+    expect((refused as Error).message).toMatch(/Hebrew/)
+    expect((refused as { choice: string }).choice).toMatch(/choice its users can make/)
+  })
+
+  it("the saved settings' estimate fails: refused too (the listing and its floor)", async () => {
+    h.estimate.mockRejectedValue(new Error("estimate down"))
+    const refused = await estimateWorkflowListingCredits(NODES, EDGES, { publishType: "app" }).catch((e: unknown) => e)
+    expect(refused).toMatchObject({ name: "UgcListingUnpricedError", code: "ugc_listing_unpriced" })
+    expect((refused as { choice: string }).choice).toMatch(/saved settings/)
+  })
+
+  it("a failure before any estimate is asked (the quote module, the video reading): refused as the saved settings, never a raw error", async () => {
+    const reading = await import("../ugc-run-set.js")
+    const spy = vi.spyOn(reading, "ugcGraphVideos").mockImplementation(() => {
+      throw new Error("reading failed")
+    })
+    try {
+      const refused = await estimateWorkflowListingCredits(NODES, EDGES, { publishType: "app" }).catch((e: unknown) => e)
+      expect(refused).toMatchObject({ name: "UgcListingUnpricedError", code: "ugc_listing_unpriced", choice: "its saved settings" })
+      expect(h.estimate).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it("a run's estimate is unchanged: the failed part counts 0, with a warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    h.estimate.mockRejectedValue(new Error("estimate down"))
+    expect(await CreditsService.estimateWorkflowCredits(NODES, EDGES)).toBe(await CreditsService.estimateWorkflowCredits(INPUTS, []))
+    expect(warn).toHaveBeenCalled()
   })
 })

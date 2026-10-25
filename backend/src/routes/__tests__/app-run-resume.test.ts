@@ -35,7 +35,7 @@ vi.mock("@/middleware/credit-guard.js", () => ({ resolveWebSurfaceFlag: vi.fn().
 vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { checkAppRunEligibility: mocks.eligibility },
   checkRunSetCredits: mocks.checkRunSet,
-  estimateRunSetCredits: vi.fn().mockResolvedValue(0),
+  estimateRunSetFigures: vi.fn().mockResolvedValue({ credits: 0, hold: 0 }),
 }))
 vi.mock("@/ee/lib/app-run-resume-price.js", () => ({ appRunResumeCredits: mocks.price }))
 vi.mock("@/lib/idempotent-insert.js", () => ({

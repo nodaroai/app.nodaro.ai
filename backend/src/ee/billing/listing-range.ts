@@ -130,22 +130,23 @@ function combinations(domains: ReadonlyArray<ListingFieldDomain>, indices: Reado
  * The listing's "up to": each part's largest value over the combinations of
  * `domains`, never below `floor` (the saved settings). `price` prices a graph.
  */
-export function listingCeiling(
+export async function listingCeiling(
   nodes: ReadonlyArray<EstimateNode>,
   domains: ReadonlyArray<ListingFieldDomain>,
   floor: AppListingEstimate,
-  price: (nodes: ReadonlyArray<EstimateNode>) => AppListingEstimate,
-): AppListingEstimate {
+  /** Prices a choice's graph — its UGC part included, asked through the seam for that graph. */
+  price: (nodes: ReadonlyArray<EstimateNode>) => Promise<AppListingEstimate>,
+): Promise<AppListingEstimate> {
   if (domains.length === 0) return floor
   const priced: AppListingEstimate[] = [floor]
-  const evaluate = (choice: Choice): AppListingEstimate => {
-    const e = price(applyChoice(nodes, domains, choice))
+  const evaluate = async (choice: Choice): Promise<AppListingEstimate> => {
+    const e = await price(applyChoice(nodes, domains, choice))
     priced.push(e)
     return e
   }
   const all = domains.map((_, i) => i)
   if (product(domains.map((d) => d.values.length)) <= LISTING_RANGE_MAX_COMBINATIONS) {
-    for (const choice of combinations(domains, all)) evaluate(choice)
+    for (const choice of combinations(domains, all)) await evaluate(choice)
     return partwiseMax(priced)
   }
   // Per model combination (all of them while they fit, else the model fields
@@ -161,12 +162,12 @@ export function listingCeiling(
     for (const i of greedyIdx) {
       let best: { value: unknown; w: number } | undefined
       for (const value of domains[i]!.values) {
-        const w = weight(evaluate(new Map(picks).set(i, value)))
+        const w = weight(await evaluate(new Map(picks).set(i, value)))
         if (!best || w > best.w) best = { value, w }
       }
       picks.set(i, best!.value)
     }
-    evaluate(picks)
+    await evaluate(picks)
   }
   return partwiseMax(priced)
 }

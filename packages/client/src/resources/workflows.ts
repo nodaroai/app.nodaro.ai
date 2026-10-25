@@ -217,9 +217,16 @@ export interface RenderFinalQuote {
    */
   estimatedCreditsIsEstimate?: true
   /**
-   * Whether the payer can cover `estimatedCredits`; `null` in an edition
-   * without credits. When `false`, {@link WorkflowsResource.renderFinal} is
-   * refused with `InsufficientCreditsError` before any execution exists.
+   * What the run holds while it renders (a UGC clip at its hold), never below
+   * `estimatedCredits`: the figure `sufficient` is checked against. `null` in
+   * an edition without credits; absent from an older server.
+   */
+  holdCredits?: number | null
+  /**
+   * Whether the payer can cover what the run holds (`holdCredits`); `null` in
+   * an edition without credits. When `false`, {@link WorkflowsResource.renderFinal}
+   * is refused with `InsufficientCreditsError` (its `required` is that hold)
+   * before any execution exists.
    */
   sufficient: boolean | null
   /**

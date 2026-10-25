@@ -396,6 +396,14 @@ try {
 
 **Constructor:** `new NodaroError(message: string, code: string, status: number, details?: Record<string, unknown>)`
 
+A listing refused rather than priced reaches a raw REST call of a publish route
+(the SDK has no publish method) as `503 ugc_listing_unpriced` — a UGC video whose
+estimate failed for the saved settings or a choice the app's user can make — with
+`reason: "ugc_listing_unpriced"` and `choice`, as the unpriced-model refusal
+(`400 validation_error`, `reason: "llm_model_unpriced"`) carries its own `reason`;
+read through the SDK's error mapping it is a `NodaroError` with that `code` and
+`status` ([API integration](./api-integration.md)).
+
 ### `class UnauthorizedError extends NodaroError`
 
 HTTP 401. Token missing, expired, or invalid.
@@ -985,7 +993,8 @@ with the review applied.
 `estimateRenderFinal` quotes it first and creates nothing: the nodes it will run,
 the override it runs with, its estimated credits (`estimatedCreditsIsEstimate:
 true` when the run executes an LLM node, which is charged its actual usage — show
-it `≈N`), whether the payer can cover them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
+it `≈N`), what the run holds while it renders (`holdCredits`: a UGC clip at its hold, about twice its
+price, never below the estimate), whether the payer can cover that hold (`sufficient`) and the payer's spendable credits (`available`, `null` when a
 workspace budget or a deployment's operator pays). The figures are `null` in an
 edition without credits.
 
@@ -995,7 +1004,7 @@ const { data: quote } = await client.workflows.estimateRenderFinal(id, {
   continueFromExecutionId: previewRunId,
 })
 // quote → { renderNodeId, nodeIds: ["cam", "cut", "captions"], inputOverrides: { cut: { quality: "final" } },
-//           estimatedCredits: 530, sufficient: true, available: 4200 }
+//           estimatedCredits: 530, holdCredits: 530, sufficient: true, available: 4200 }
 const { executionId } = await client.workflows.renderFinal(id, {
   renderNodeId,
   continueFromExecutionId: previewRunId,
@@ -1008,7 +1017,7 @@ such node), `render_final_not_a_render` (not an Apply EDL render) or a
 otherwise refused as `run` is — `preview_review_required` when another render after
 this one still reads Preview (under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
 that is not refused). A run its payer cannot cover — checked on the quoted
-figure, before any execution exists — throws `InsufficientCreditsError` (`402`),
+`holdCredits`, before any execution exists — throws `InsufficientCreditsError` (`402`),
 with `required` and, unless a deployment's operator pays, `available`.
 Requires `workflows:execute` scope when called via OAuth.
 

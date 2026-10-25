@@ -103,3 +103,21 @@ describe("an app run's Retry is priced on what it runs", () => {
     expect(r).toEqual({ credits: 50, hold: 50, reusedClips: 0 })
   })
 })
+
+describe("a Retry reads each video's input as every run-set estimate does", () => {
+  it("a script the Retry leaves out: its saved plan's length, never less than the setting", async () => {
+    const saved = nodes.map((x) => (x.id === "script" ? { ...x, data: { targetDurationSec: 20, result: { plan: { v: 1, hook: "h", targetDurationSec: 40 } } } } : x))
+    await appRunResumeCredits({ caller, nodes: saved, edges, runNodeIds: new Set(["clips", "clip", "join"]), sourceStates: { ...sourceStates, clips: { status: "failed" } }, runKey: "exec-root" })
+    expect(h.estimate.mock.calls[0]![1]).toMatchObject({ targetDurationSec: 40 })
+  })
+})
+
+describe("a Retry counts each UGC step's runs", () => {
+  it("a List of three into the script: three scripts priced, three held", async () => {
+    h.estimate.mockResolvedValue({ parts: PARTS, holdParts: { ...HOLD, script: 15 } })
+    const listed = [...nodes, { id: "list", type: "list", data: { items: "a\nb\nc" } }]
+    const wired = [...edges, { source: "list", target: "script", sourceHandle: "output", targetHandle: "site" }]
+    const r = await appRunResumeCredits({ caller, nodes: listed, edges: wired, runNodeIds: new Set(["script"]), sourceStates, runKey: "exec-root" })
+    expect(r).toEqual({ credits: 50 + 3 * PARTS.script, hold: 50 + 3 * 15, reusedClips: 0 })
+  })
+})

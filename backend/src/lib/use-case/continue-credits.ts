@@ -1,4 +1,4 @@
-// @registry-enumerates prices a continuation's steps by estimateRunSetCredits over whatever node types the graph holds
+// @registry-enumerates prices a continuation's steps by estimateRunSetFigures over whatever node types the graph holds
 /**
  * Can the payer cover a continue-from-failed of a use-case run (decided
  * 2026-10-13)? The steps it still runs, priced by the run-set estimate every
@@ -25,13 +25,22 @@ export async function fromFailedStepCredits(input: {
   readonly nodeIds: readonly string[]
   readonly overrides: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined
 }): Promise<number> {
-  const { estimateRunSetCredits } = await import("../../ee/billing/credits.js")
+  return (await fromFailedStepFigures(input)).credits
+}
+
+/** `fromFailedStepCredits`, with what the steps hold while they render (a UGC clip at its hold): the figure a balance is checked against. */
+async function fromFailedStepFigures(input: {
+  readonly graph: StoredInlineGraph
+  readonly nodeIds: readonly string[]
+  readonly overrides: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined
+}): Promise<{ credits: number; hold: number }> {
+  const { estimateRunSetFigures } = await import("../../ee/billing/credits.js")
   const nodes = withRunOverrides(
     input.graph.nodes.map((n) => ({ ...n, data: { ...n.data } })),
     input.overrides,
   )
-  return estimateRunSetCredits(
-    nodes as unknown as Parameters<typeof estimateRunSetCredits>[0],
+  return estimateRunSetFigures(
+    nodes as unknown as Parameters<typeof estimateRunSetFigures>[0],
     input.graph.edges.map((e) => ({ ...e })),
     new Set(input.nodeIds),
   )
@@ -48,9 +57,12 @@ export async function fromFailedCover(input: {
 }): Promise<ContinueCover | null> {
   if (!hasCredits()) return null
   const { CreditsService, DEPLOYMENT_OUT_OF_CREDITS } = await import("../../ee/billing/credits.js")
-  const steps = await fromFailedStepCredits(input)
-  const totalCredits = steps + input.feeCredits
-  const cover = await CreditsService.checkBalanceCovers(input.userId, totalCredits, input.billingContext, input.webFreeMode)
+  const steps = await fromFailedStepFigures(input)
+  const totalCredits = steps.credits + input.feeCredits
+  // Checked against what the steps hold while they render (a UGC clip at its hold), the fee on top:
+  // a check never passes a run whose reservation would then fail.
+  const holdCredits = steps.hold + input.feeCredits
+  const cover = await CreditsService.checkBalanceCovers(input.userId, holdCredits, input.billingContext, input.webFreeMode)
   if (cover.ok) return { ok: true, totalCredits }
   // A deployment's pool is the operator's: its balance is not the
   // requester's to see, and only the operator can top it up.
@@ -59,6 +71,8 @@ export async function fromFailedCover(input: {
     message:
       input.billingContext?.payer === "deployment"
         ? DEPLOYMENT_OUT_OF_CREDITS
-        : `Continuing this episode is estimated at about ${totalCredits} credits; your balance is ${cover.balance}.`,
+        : holdCredits > totalCredits
+          ? `Continuing this episode can hold up to about ${holdCredits} credits while it renders; your balance is ${cover.balance}.`
+          : `Continuing this episode is estimated at about ${totalCredits} credits; your balance is ${cover.balance}.`,
   }
 }

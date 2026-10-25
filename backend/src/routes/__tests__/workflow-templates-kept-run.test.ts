@@ -258,6 +258,21 @@ describe("POST /v1/templates/publish with includeRunResults", () => {
     expect(w.written.filter((x) => x.table === "workflow_templates")).toEqual([])
   })
 
+  it("a publish whose UGC video could not be priced is refused BEFORE the kept run is copied: no storage written, no template or workflow touched", async () => {
+    vi.mocked(estimateWorkflowListingCredits).mockRejectedValueOnce(
+      Object.assign(new Error("Couldn't price this workflow's UGC video at its saved settings. Try publishing again."), {
+        name: "UgcListingUnpricedError", code: "ugc_listing_unpriced", choice: "its saved settings",
+      }),
+    )
+    const w = await world()
+    const { res } = await publish(w, { includeRunResults: true })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error).toMatchObject({ code: "ugc_listing_unpriced", reason: "ugc_listing_unpriced", choice: "its saved settings" })
+    expect(copyToTemplateKept).not.toHaveBeenCalled()
+    expect(copyToTemplatePreview).not.toHaveBeenCalled()
+    expect(w.written.filter((x) => x.table === "workflow_templates" || x.table === "workflows")).toEqual([])
+  })
+
   it("a ledger read that fails refuses the publish and writes nothing", async () => {
     const w = await world({}, { jobsFail: true })
     const { res } = await publish(w, { includeRunResults: true })

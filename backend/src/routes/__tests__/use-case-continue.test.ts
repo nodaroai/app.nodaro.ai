@@ -229,6 +229,14 @@ describe("render-final", () => {
     expect(res.json().error).toEqual({ code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." })
     nothingWritten()
   })
+
+  it("no words from the payer's check: the refusal names what the run holds while it renders, the figure it was checked against", async () => {
+    src.finalCredits = { estimatedCredits: 600, holdCredits: 900, sufficient: false, available: 100 }
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error).toEqual({ code: "insufficient_credits", message: "Render final can hold up to about 900 credits while it renders." })
+    nothingWritten()
+  })
 })
 
 describe("refused before any row, hold or run", () => {

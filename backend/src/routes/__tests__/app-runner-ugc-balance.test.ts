@@ -506,3 +506,13 @@ describe("an app holding two UGC videos", () => {
     expect(covers).toHaveBeenCalledWith(TEST_USER_ID, 2 * 5873, undefined, expect.any(Boolean))
   })
 })
+
+describe("an app whose script runs once per item of a list", () => {
+  it("holds the script once per item, as the run makes it", async () => {
+    const nodes = [...UGC_NODES, n("list", "list", { items: "a\nb\nc" })]
+    const edges = [...UGC_EDGES, { source: "list", target: "script", targetHandle: "site" }]
+    setupApp(nodes, edges)
+    await run()
+    expect(covers).toHaveBeenCalledWith(TEST_USER_ID, 5873 + 2 * HOLD.script, undefined, expect.any(Boolean))
+  })
+})

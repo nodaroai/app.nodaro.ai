@@ -393,7 +393,12 @@ export function workflowsCommand(): Command {
             dim(
               // `≈`: an LLM node in the run is charged its actual usage, so the figure is an estimate.
               `estimated ${quote.estimatedCreditsIsEstimate ? "≈" : ""}${quote.estimatedCredits} credits` +
-                (quote.sufficient === false ? ` — not covered${quote.available !== null ? ` (${quote.available} available)` : ""}` : ""),
+                (quote.sufficient === false
+                  ? ` — not covered` +
+                    // The balance is checked against what the run holds while it renders: named when it is more than the price.
+                    (typeof quote.holdCredits === "number" && quote.holdCredits > quote.estimatedCredits ? `: holds up to about ${quote.holdCredits} credits while it renders` : "") +
+                    (quote.available !== null ? ` (${quote.available} available)` : "")
+                  : ""),
             )
           }
           return

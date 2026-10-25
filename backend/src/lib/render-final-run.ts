@@ -99,6 +99,11 @@ export interface RenderFinalCredits {
   readonly estimatedCredits: number
   /** `estimatedCredits` includes a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent for a fixed price. */
   readonly estimate?: true
+  /**
+   * What the run holds while it renders (each UGC clip at its hold): the figure `sufficient` was
+   * checked against, never below `estimatedCredits`. A refusal names it.
+   */
+  readonly holdCredits: number
   readonly sufficient: boolean
   /** What the payer can spend; `null` when it is not the caller's to see (a deployment payer) or not what pays (a workspace budget). */
   readonly available: number | null
@@ -118,13 +123,14 @@ export interface ContinuationPricing {
  * The price of a continuation of a saved workflow — a Render final, a run of
  * named nodes, a continue-from-failed — and the payer's verdict on it: ONE
  * funnel for the quote and the run, so the run is refused (402, before any
- * execution row exists) on exactly the figure the quote showed. Priced on the
+ * execution row exists) on exactly the figures the quote read. Priced on the
  * graph the run executes: `overrides` is the merged map the orchestrator
  * applies (the earlier run's pin with the sent overrides over it), and only
  * the nodes the run executes count. With `continuation`, a use-case node that
  * will resume a failed attempt is priced at what that resume charges, the
  * engine's own rule (resume-credits.ts); every other one as a fresh run. The
- * verdict is balance-only (`checkRunSetCredits`); model availability, daily
+ * verdict is balance-only (`checkRunSetCredits`), against what the run holds
+ * while it renders (a UGC clip at its hold; the quote shows the price); model availability, daily
  * caps and allowances stay with each node's own preflight. `null` in an
  * edition without credits.
  */
@@ -138,21 +144,25 @@ export async function renderFinalCredits(input: {
   readonly continuation?: ContinuationPricing
 }): Promise<RenderFinalCredits | null> {
   if (!hasCredits()) return null
-  const { estimateRunSetCredits, checkRunSetCredits, runHoldsMeteredLlmEstimate } = await import("../ee/billing/credits.js")
+  const { estimateRunSetFigures, checkRunSetCredits, runHoldsMeteredLlmEstimate } = await import("../ee/billing/credits.js")
   const priced = withRunOverrides(input.nodes as Array<GraphNode & { type?: string }>, input.overrides)
   const resumed = await resumedCredits(input)
   // The figure's own lines: a part priced elsewhere (a UGC video's, from its quote) says itself whether it is an estimate.
   const lines: Array<{ readonly credits: number; readonly estimate: boolean }> = []
-  const estimatedCredits =
-    (await estimateRunSetCredits(
-      priced as unknown as Parameters<typeof estimateRunSetCredits>[0],
-      input.edges as unknown as Parameters<typeof estimateRunSetCredits>[1],
-      new Set(input.runNodeIds),
-      new Set(resumed.keys()),
-      // A use-case node reads the recordings and framing source its user's run reads: priced as it runs.
-      await usecaseViewerEstimateFor(priced as unknown as Parameters<typeof estimateRunSetCredits>[0], input.userId),
-      (_nodeId, credits, estimate) => lines.push({ credits, estimate }),
-    )) + [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
+  const figures = await estimateRunSetFigures(
+    priced as unknown as Parameters<typeof estimateRunSetFigures>[0],
+    input.edges as unknown as Parameters<typeof estimateRunSetFigures>[1],
+    new Set(input.runNodeIds),
+    new Set(resumed.keys()),
+    // A use-case node reads the recordings and framing source its user's run reads: priced as it runs.
+    await usecaseViewerEstimateFor(priced as unknown as Parameters<typeof estimateRunSetFigures>[0], input.userId),
+    (_nodeId, credits, estimate) => lines.push({ credits, estimate }),
+  )
+  const resumedTotal = [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
+  const estimatedCredits = figures.credits + resumedTotal
+  // What the run holds while it renders (each UGC clip at its hold): the figure the balance is checked
+  // against, so a check never passes a run whose reservation would then fail. The quote shows the price.
+  const holdCredits = figures.hold + resumedTotal
   // An LLM node the run executes is charged its actual usage after it — as is a UGC part its
   // quote flags (the creator check): the figure is an estimate (`≈N`).
   const estimate = runHoldsMeteredLlmEstimate(
@@ -161,15 +171,16 @@ export async function renderFinalCredits(input: {
     new Set(input.runNodeIds),
     lines,
   )
-  const check = await checkRunSetCredits(input.userId, estimatedCredits, {
+  const check = await checkRunSetCredits(input.userId, holdCredits, {
     billingContext: input.surface.billingContext,
     webFreeMode: input.surface.webFreeMode ?? false,
   })
   // A run that costs nothing is never refused for credits, whatever the
   // balance reads (an overdrawn pool, a deployment's empty one).
-  const sufficient = check.sufficient || estimatedCredits <= 0
+  const sufficient = check.sufficient || holdCredits <= 0
   return {
     estimatedCredits,
+    holdCredits,
     // An LLM node in the run is charged its actual usage: the figure is an estimate (`≈N`).
     ...(estimate ? { estimate: true as const } : {}),
     sufficient,

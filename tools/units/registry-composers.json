@@ -144,6 +144,7 @@
           "getChargedPriceTable",
           "chargedPriceTableFrom",
           "estimateRunSetCredits",
+          "estimateRunSetFigures",
           "estimateRunSetCreditsWithoutUgc",
           "estimateWorkflowCredits",
           "estimateWorkflowCreditsDetailed",
