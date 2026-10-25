@@ -12,10 +12,7 @@ import { registerSplitMediaVerb } from "./verbs-split-media.js"
 import { registerSpeakerMapVerb } from "./verbs-speaker-map.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
-  parseJobId,
   errorResult,
-  parseFailure,
-  jobResultWithWidget,
   dispatchJob,
   resolveRefArray,
   StructuredFields,
@@ -1923,23 +1920,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         payload.startTime = args.start_time
         payload.endTime = args.end_time
       }
-      const res = await mcpInject(fastify, session, {
-        method: "POST",
-        url: "/v1/trim-video",
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
       const widgetPrompt = isSmartCut
         ? `smart loop cut (lookback ${args.smart_loop_cut_lookback ?? 16})`
         : isFrameTrim
           ? `trim ${args.trim_start_frames ?? 0} frames from start, ${args.trim_end_frames ?? 0} from end`
           : `trim ${args.start_time}s → ${args.end_time}s` + (args.silent ? " (silent)" : "")
-      return jobResultWithWidget({
-        jobId,
+      return dispatchJob(fastify, session, {
+        url: "/v1/trim-video",
+        payload,
         label: "trim video",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: widgetPrompt,
@@ -2060,22 +2049,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (args.mode === "duration") payload.targetDuration = args.target_duration
       if (args.smart_cut_before_repeat) payload.smartLoopCutBeforeRepeat = true
       if (args.smart_cut_lookback !== undefined) payload.smartLoopCutLookback = args.smart_cut_lookback
-      const res = await mcpInject(fastify, session, {
-        method: "POST",
-        url: "/v1/loop-video",
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
       const widgetPrompt =
         args.mode === "repeat"
           ? `loop ${args.repeat_count}× ${args.smart_cut_before_repeat ? "(smart cut)" : ""}`.trim()
           : `loop to ${args.target_duration}s ${args.smart_cut_before_repeat ? "(smart cut)" : ""}`.trim()
-      return jobResultWithWidget({
-        jobId,
+      return dispatchJob(fastify, session, {
+        url: "/v1/loop-video",
+        payload,
         label: "loop video",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: widgetPrompt,

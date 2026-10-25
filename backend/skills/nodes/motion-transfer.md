@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-10-14T00:02:36.797Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.662Z
+generated_from: db68a9ee4
 ---
 
 # Motion Transfer
@@ -74,6 +74,8 @@ generated_from: b83a9467d
 - `provider`
 - `background_source`
 - `video_duration`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

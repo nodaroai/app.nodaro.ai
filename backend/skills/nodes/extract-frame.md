@@ -1,7 +1,7 @@
 ---
 node_type: extract-frame
-generated_at: 2026-10-14T00:02:35.729Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.313Z
+generated_from: db68a9ee4
 ---
 
 # Extract Frame
@@ -55,6 +55,8 @@ generated_from: b83a9467d
 - `video_asset_id`
 - `mode`
 - `time_seconds`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

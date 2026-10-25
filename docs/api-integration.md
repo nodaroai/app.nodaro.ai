@@ -3282,6 +3282,19 @@ extension**. A type that still resolves to nothing we accept is rejected with
 `400 validation_error` listing the accepted formats. The resolved type is what
 comes back as `mimeType` and what the stored object is served as.
 
+**HEIC, HEIF and AVIF images are converted before they are stored.** Few
+browsers display them and the image models do not accept them, so every image
+upload lane — `POST /v1/upload`, `POST /v1/upload/image`, the proxy PUT behind
+`prepare_image_upload`, the handoff page and widget behind
+`request_image_upload`, and the server-side import of an image URL — stores
+such a file as a JPEG, or as a PNG when the picture has transparency, and
+`mimeType` reports the stored type. A lane that handed out the file's URL
+before the upload (the proxy PUT and the handoff page) keeps that URL; only
+its content type changes. This covers 10-bit AVIF and iPhone HEIC photos;
+those two are read by a decoder that does not keep transparency, so a
+transparent area in them comes out opaque (an 8-bit AVIF keeps it). A file
+that cannot be decoded at all is refused with `400`.
+
 **MP4 and MOV videos are stored with their index in front ("faststart").**
 A recording from OBS or a phone often keeps the MP4/MOV index (the `moov`
 box) at the end of the file, so the first seek into a large upload has to fetch
@@ -4343,8 +4356,8 @@ them in it. The routes are part of Nodaro Cloud and answer 404 on self-hosted
 installs (SDK: [`client.trends`](./sdk-reference.md#clienttrends), MCP: the
 [`list_trends`, `get_trend`, `estimate_trend` and `run_trend`](./mcp/tools.md) verbs).
 
-Only **published** trends exist here: a draft, an unpublished or an unknown
-slug is a `404` on every route.
+Only **published** trends exist here: a draft, an unpublished, an archived or
+an unknown slug is a `404` on every route.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -4352,7 +4365,7 @@ slug is a `404` on every route.
 | `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length, `engine` and `resolutions`). `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, chips, defaults? }`: `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
-| `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
+| `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
 | `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
 | `GET` | `/v1/trends/tags` | The tags in use on published trends, most used first: `{ data: [{ tag, label, count }] }`. `label` is in `?locale=` (as below), else English, else the tag itself; pass `tag` to `GET /v1/trends?tag=`. |
 | `PUT` | `/v1/trends/:slug/favorite` | Add the trend to your favorites. `204`. |

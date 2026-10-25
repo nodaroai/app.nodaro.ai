@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-24T22:28:06.695Z
-generated_from: b9f9a7b82
+generated_at: 2026-10-24T23:37:38.118Z
+generated_from: db68a9ee4
 ---
 
 # Text to Video
@@ -92,6 +92,7 @@ generated_from: b9f9a7b82
 - `character_references`
 - `keep_original_sound`
 - `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

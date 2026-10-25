@@ -142,7 +142,35 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
       if (t.status === "published") t.status = "unpublished"
       touch(t)
     },
+    archive: async (id: string) => {
+      const t = find(id)
+      if (t.status !== "archived") t.status = "archived"
+      touch(t)
+    },
+    restore: async (id: string) => {
+      const t = find(id)
+      if (t.status === "archived") t.status = t.publishedVersion != null ? "unpublished" : "draft"
+      touch(t)
+    },
     favoriteIds: async () => new Set<string>(),
+  }
+})
+
+// The run delete itself (its order, its fences) is pinned in
+// lib/trends/__tests__/run-delete.test.ts; here only what the route asks of it.
+const runDelete = vi.hoisted(() => ({
+  calls: [] as Array<{ runId: string; ownerId: string; actorUserId: string }>,
+  inFlight: false,
+}))
+vi.mock("../../lib/trends/run-delete.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/trends/run-delete.js")>()
+  return {
+    ...actual,
+    deleteTrendTestRun: async (args: { runId: string; ownerId: string; actorUserId: string }) => {
+      if (runDelete.inFlight) throw new actual.TrendRunInFlightError(args.runId)
+      runDelete.calls.push({ runId: args.runId, ownerId: args.ownerId, actorUserId: args.actorUserId })
+      return { deleted: true, libraryRows: 1, filesDeleted: 2, filesKept: 0 }
+    },
   }
 })
 
@@ -375,6 +403,8 @@ beforeEach(async () => {
   world.tagLabels = new Map()
   world.envs = [envRow("production"), envRow("staging")]
   engine.calls = []
+  runDelete.calls = []
+  runDelete.inFlight = false
   _resetPluginSupportsForTests()
   setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
 
@@ -1315,6 +1345,9 @@ describe("access", () => {
     ["DELETE", `/v1/admin/trends/${T1}/examples/0`],
     ["POST", `/v1/admin/trends/${T1}/publish`],
     ["POST", `/v1/admin/trends/${T1}/unpublish`],
+    ["POST", `/v1/admin/trends/${T1}/archive`],
+    ["POST", `/v1/admin/trends/${T1}/restore`],
+    ["DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`],
   ]
 
   it("every route is 401 without a user and 403 for a non-admin, and does nothing", async () => {
@@ -1331,5 +1364,90 @@ describe("access", () => {
     expect(mem.trends).toHaveLength(1)
     expect(mem.trends[0]!.versions[1]!.data).toEqual(draftData())
     expect(world.tagLabels!.size).toBe(0)
+    expect(runDelete.calls).toEqual([])
+  })
+})
+
+// ── archive, restore, deleting a test run ─────────────────────────────────
+
+describe("archive and restore", () => {
+  const audits = () =>
+    db.log.filter((q) => q.table === "admin_actions").map((q) => q.ops.find((op) => op.m === "insert")!.a[0] as Record<string, unknown>)
+
+  it("archiving a published trend takes it off the catalog, refuses a publish, and is audited", async () => {
+    seed({ status: "published", publishedVersion: 1, versions: { 1: { data: draftData({ examples: [EXAMPLE] }), published: true } } })
+    const res = await call("POST", `/v1/admin/trends/${T1}/archive`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ status: "archived", publishedVersion: 1 })
+    expect((await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as(USER) })).statusCode).toBe(404)
+    const publish = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(publish.statusCode).toBe(409)
+    expect(publish.json().error.code).toBe("archived")
+    expect(audits()).toEqual([
+      expect.objectContaining({ admin_user_id: ADMIN, action: "archive_trend", target_type: "trend", target_id: T1, payload: { slug: "neon-dance", from: "published", to: "archived" } }),
+    ])
+  })
+
+  it("restoring brings it back unpublished when it was ever published, else as a draft", async () => {
+    seed({ status: "archived", publishedVersion: 1, versions: { 1: { data: draftData({ examples: [EXAMPLE] }), published: true } } })
+    const res = await call("POST", `/v1/admin/trends/${T1}/restore`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.status).toBe("unpublished")
+
+    mem.trends = []
+    seed({ status: "archived" })
+    expect((await call("POST", `/v1/admin/trends/${T1}/restore`)).json().data.status).toBe("draft")
+  })
+
+  it("archiving an archived trend changes nothing and writes no audit row", async () => {
+    seed({ status: "archived" })
+    const res = await call("POST", `/v1/admin/trends/${T1}/archive`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.status).toBe("archived")
+    expect(audits()).toEqual([])
+  })
+
+  it("an unknown or malformed trend is a 404", async () => {
+    expect((await call("POST", `/v1/admin/trends/${T1}/archive`)).statusCode).toBe(404)
+    expect((await call("POST", "/v1/admin/trends/not-a-uuid/restore")).statusCode).toBe(404)
+  })
+})
+
+describe("deleting a test run", () => {
+  it("deletes an admin's run of this trend, as the admin, and audits it", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, ADMIN2))
+    const res = await call("DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ deleted: true, libraryRows: 1, filesDeleted: 2, filesKept: 0 })
+    expect(runDelete.calls).toEqual([{ runId: RUN, ownerId: ADMIN2, actorUserId: ADMIN }])
+    const audit = db.log.find((q) => q.table === "admin_actions")!.ops.find((op) => op.m === "insert")!.a[0]
+    expect(audit).toMatchObject({ action: "delete_trend_test_run", target_type: "job", target_id: RUN, payload: { trendId: T1, ownerId: ADMIN2 } })
+  })
+
+  it("a run of another trend, or no run, is a 404 and deletes nothing", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ trend: { id: "00000000-0000-4000-8000-0000000000a2", slug: "other", version: 1, name: "Other" } }) }))
+    expect((await call("DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`)).statusCode).toBe(404)
+    expect((await call("DELETE", `/v1/admin/trends/${T1}/test-runs/${CHILD}`)).statusCode).toBe(404)
+    expect(runDelete.calls).toEqual([])
+  })
+
+  it("a user's own run of the trend is refused: it is theirs to delete", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, USER))
+    const res = await call("DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`)
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("not_admin_run")
+    expect(runDelete.calls).toEqual([])
+  })
+
+  it("a run still in flight is a 409 run_in_progress", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    runDelete.inFlight = true
+    const res = await call("DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`)
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("run_in_progress")
   })
 })

@@ -41,6 +41,8 @@ import {
   TrendNotFoundError,
   TrendsUnavailableError,
   unpublish,
+  archive,
+  restore,
 } from "../store.js"
 import type { TrendVersionData } from "../types.js"
 
@@ -285,6 +287,42 @@ describe("publish / unpublish", () => {
     db.respond = () => ok(null)
     await expect(publish(T1)).rejects.toBeInstanceOf(TrendNotFoundError)
     await expect(unpublish(T1)).rejects.toBeInstanceOf(TrendNotFoundError)
+  })
+})
+
+describe("archive / restore", () => {
+  const patchOf = () => argOf(queries("trends", "update")[0]!, "update")![0] as Record<string, unknown>
+
+  it("archive sets status only, from any status, guarded against a concurrent archive", async () => {
+    db.respond = (q) => (q.table === "trends" && argOf(q, "update") ? ok([{ id: T1 }]) : ok(trendRow({ status: "published", published_version: 1 })))
+    await archive(T1)
+    expect(Object.keys(patchOf()).sort()).toEqual(["status", "updated_at"])
+    expect(patchOf().status).toBe("archived")
+    expect(has(queries("trends", "update")[0]!, "neq", "status", "archived")).toBe(true)
+  })
+
+  it("archive of an archived trend writes nothing", async () => {
+    db.respond = () => ok(trendRow({ status: "archived" }))
+    await archive(T1)
+    expect(queries("trends", "update")).toEqual([])
+  })
+
+  it("restore goes to unpublished when the trend was ever published, else to draft, only from archived", async () => {
+    db.respond = (q) => (q.table === "trends" && argOf(q, "update") ? ok([{ id: T1 }]) : ok(trendRow({ status: "archived", published_version: 2 })))
+    await restore(T1)
+    expect(patchOf().status).toBe("unpublished")
+    expect(has(queries("trends", "update")[0]!, "eq", "status", "archived")).toBe(true)
+
+    db.log.length = 0
+    db.respond = (q) => (q.table === "trends" && argOf(q, "update") ? ok([{ id: T1 }]) : ok(trendRow({ status: "archived", published_version: null })))
+    await restore(T1)
+    expect(patchOf().status).toBe("draft")
+  })
+
+  it("restore of a trend that is not archived writes nothing", async () => {
+    db.respond = () => ok(trendRow({ status: "published", published_version: 1 }))
+    await restore(T1)
+    expect(queries("trends", "update")).toEqual([])
   })
 })
 

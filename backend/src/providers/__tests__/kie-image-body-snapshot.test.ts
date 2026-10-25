@@ -48,6 +48,18 @@ vi.mock("../../lib/credit-audit.js", () => ({
   extractCreditFields: vi.fn().mockReturnValue({ kieCredits: 4 }),
 }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+
+// Reference images pass the format chokepoint (ensureImageForProvider), which
+// downloads them: serve every one as a PNG, a format every SKU accepts, so the
+// body under test carries the reference URL unchanged.
+vi.mock("../../lib/safe-fetch.js", async (importOriginal) => {
+  const sharp = (await import("sharp")).default
+  const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#fff" } }).png().toBuffer()
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    safeFetch: vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => png })),
+  }
+})
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),

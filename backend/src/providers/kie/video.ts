@@ -58,6 +58,7 @@ import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
+import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -857,8 +858,32 @@ export async function ensureImageForProvider(
   // survive, the orientation tag does not. Same one-word fix the repo already
   // made in lib/anthropic-image.ts:34. Then optionally cap the longest side,
   // preserving aspect ratio.
+  //
+  // sharp reads every HEIF header but cannot decode a 10-bit AVIF or any HEIC
+  // (utils/heif-decode.ts), so the encodes below run on a source it CAN decode:
+  // the file itself when sharp manages, else ffmpeg's decode of it. An encode
+  // that still fails is the unreadable-file error, never the raw libheif text
+  // ("bad seek to …" was a production Kling 4 job's whole error, 2026-10-25).
+  let source: Buffer = buffer
+  if (format === "heif") {
+    try {
+      source = await withHeifDecodeFallback(buffer, async (input) => {
+        await sharp(input).raw().toBuffer()
+        return input
+      })
+    } catch {
+      throw unreadableImageError(context)
+    }
+  }
+  const encode = async (image: sharp.Sharp): Promise<Buffer> => {
+    try {
+      return await image.toBuffer()
+    } catch {
+      throw unreadableImageError(context)
+    }
+  }
   const pipeline = () => {
-    const s = sharp(buffer).rotate()
+    const s = sharp(source).rotate()
     return maxDim !== undefined
       ? s.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true })
       : s
@@ -884,8 +909,8 @@ export async function ensureImageForProvider(
 
   if (losslessFormat) {
     const lossless = losslessFormat === "webp"
-      ? await pipeline().webp({ lossless: true }).toBuffer()
-      : await pipeline().png({ compressionLevel: 9 }).toBuffer()
+      ? await encode(pipeline().webp({ lossless: true }))
+      : await encode(pipeline().png({ compressionLevel: 9 }))
     if (lossless.length <= IMAGE_MAX_BYTES) {
       const losslessUrl = await uploadJobScratchBuffer(lossless, "provider-converted", losslessFormat, `image/${losslessFormat}`)
       console.log(
@@ -900,16 +925,12 @@ export async function ensureImageForProvider(
 
   // Convert to JPEG — good balance of compatibility and compression
   let quality = 90
-  let converted = await pipeline()
-    .jpeg({ quality, mozjpeg: true })
-    .toBuffer()
+  let converted = await encode(pipeline().jpeg({ quality, mozjpeg: true }))
 
   // If still over 10 MB, progressively lower quality
   while (converted.length > IMAGE_MAX_BYTES && quality > 50) {
     quality -= 10
-    converted = await pipeline()
-      .jpeg({ quality, mozjpeg: true })
-      .toBuffer()
+    converted = await encode(pipeline().jpeg({ quality, mozjpeg: true }))
   }
 
   // If still over limit after quality reduction, resize down further.
@@ -924,11 +945,10 @@ export async function ensureImageForProvider(
     const effectiveWidth = maxDim !== undefined ? Math.min(width, maxDim) : width
     const scale = Math.sqrt(IMAGE_MAX_BYTES / converted.length)
     const newWidth = Math.round(effectiveWidth * scale)
-    converted = await sharp(buffer)
+    converted = await encode(sharp(source)
       .rotate()
       .resize(newWidth)
-      .jpeg({ quality: 80, mozjpeg: true })
-      .toBuffer()
+      .jpeg({ quality: 80, mozjpeg: true }))
   }
 
   // A converted INPUT is disposable once the provider has fetched it: the

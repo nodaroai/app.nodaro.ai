@@ -1,6 +1,7 @@
 import { supabase } from "../../supabase.js"
 import { applyFlowDelta } from "./workflow-delta.js"
 import { workflowIdOfFlowNode } from "./flow-graph.js"
+import { OUTPUT_URL_FIELD, outputKeyOfStep } from "./mappers/kit.js"
 
 /**
  * Fill an MCP conversation node with its job's outcome.
@@ -17,18 +18,6 @@ import { workflowIdOfFlowNode } from "./flow-graph.js"
  * to the job row.
  */
 
-const OUTPUT_URL_FIELD: Record<string, string> = {
-  generatedImageUrl: "imageUrl",
-  generatedVideoUrl: "videoUrl",
-  generatedAudioUrl: "audioUrl",
-}
-
-/** Which result field a conversation node's type fills. */
-const OUTPUT_KEY_BY_TYPE: Record<string, string> = {
-  "generate-image": "generatedImageUrl",
-  "modify-image": "generatedImageUrl",
-  "generate-video": "generatedVideoUrl",
-}
 
 interface JobRow {
   readonly id: string
@@ -55,7 +44,7 @@ export function hydratedNodeData(node: Node, job: JobRow): Record<string, unknow
     return { ...rest, executionStatus: "failed", errorMessage: job.error_message ?? "The generation failed." }
   }
   if (job.status !== "completed") return null
-  const outputKey = OUTPUT_KEY_BY_TYPE[node.type ?? ""]
+  const outputKey = outputKeyOfStep(node.type, data)
   const url = outputKey ? job.output_data?.[OUTPUT_URL_FIELD[outputKey]] : undefined
   // Finished with no media the node shows: done all the same, never left running.
   if (!outputKey || typeof url !== "string" || !url) return { ...rest, executionStatus: "completed" }
@@ -66,8 +55,16 @@ export function hydratedNodeData(node: Node, job: JobRow): Record<string, unknow
     timestamp: job.completed_at ?? new Date().toISOString(),
     jobId: job.id,
   }
+  // Every other media field the job also wrote (Voice Changer on a video keeps
+  // its audio beside it): a later step may be wired from that output.
+  const sidecars = Object.fromEntries(
+    (Object.entries(OUTPUT_URL_FIELD) as Array<[string, string]>)
+      .filter(([key, field]) => key !== outputKey && typeof job.output_data?.[field] === "string")
+      .map(([key, field]) => [key, job.output_data?.[field]]),
+  )
   return {
     ...rest,
+    ...sidecars,
     executionStatus: "completed",
     [outputKey]: url,
     generatedResults: [result, ...results.filter((r) => r.jobId !== job.id)],

@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { AlertTriangle } from "lucide-react"
 import { useT } from "@/lib/i18n"
 
 interface DeleteConfirmationDialogProps {
@@ -30,6 +31,8 @@ interface DeleteConfirmationDialogProps {
    * name one action in its question and a different one on its button.
    */
   readonly confirmLabel?: string
+  /** A consequence the person must not miss, shown apart from the description. */
+  readonly warning?: string
 }
 
 export function DeleteConfirmationDialog({
@@ -41,6 +44,7 @@ export function DeleteConfirmationDialog({
   className,
   overlayClassName,
   confirmLabel,
+  warning,
 }: DeleteConfirmationDialogProps) {
   const t = useT()
   return (
@@ -50,6 +54,12 @@ export function DeleteConfirmationDialog({
           <AlertDialogTitle>{title ?? t("misc.deleteVersionTitle")}</AlertDialogTitle>
           <AlertDialogDescription>{description ?? t("misc.deleteVersionDesc")}</AlertDialogDescription>
         </AlertDialogHeader>
+        {warning && (
+          <p role="alert" className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+            <span>{warning}</span>
+          </p>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onClose}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction

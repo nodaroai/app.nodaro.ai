@@ -52,6 +52,19 @@ describe("the Trends list", () => {
     expect(screen.getByText("Pet parade")).toBeInTheDocument()
   })
 
+  it("keeps archived trends out of All and shows them under Archived", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends"] = () => ({
+      body: { data: [listItem(), listItem({ id: DRAFT_ID, slug: "old-dance", name: "Old dance", status: "archived" })] },
+    })
+    renderWith(<AdminTrendsPage />)
+    await screen.findByText("Office dance")
+    expect(screen.queryByText("Old dance")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /^archived$/i }))
+    expect(screen.getByText("Old dance")).toBeInTheDocument()
+    expect(screen.queryByText("Office dance")).not.toBeInTheDocument()
+  })
+
   it("writes a new sort order through PATCH", async () => {
     const user = userEvent.setup()
     routes[`PATCH /v1/admin/trends/${TREND_ID}`] = () => ({ body: { data: {} } })

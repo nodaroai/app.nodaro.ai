@@ -57,6 +57,18 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// Reference images pass the format chokepoint (ensureImageForProvider), which
+// downloads them: serve every one as a PNG, a format every SKU accepts, so the
+// body under test carries the reference URL unchanged.
+vi.mock("@/lib/safe-fetch.js", async (importOriginal) => {
+  const sharp = (await import("sharp")).default
+  const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#fff" } }).png().toBuffer()
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    safeFetch: vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => png })),
+  }
+})
+
 // The worker → provider-adapter boundary: what each engine's job asks for.
 vi.mock("@/providers/index.js", () => ({
   generateImage: mocks.generateImage,

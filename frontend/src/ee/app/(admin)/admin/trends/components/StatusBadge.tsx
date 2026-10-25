@@ -6,6 +6,7 @@ const STYLES: Readonly<Record<TrendStatus, string>> = {
   published: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   draft: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
   unpublished: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  archived: "border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground",
 }
 
 export function StatusBadge({ status }: { readonly status: TrendStatus }) {

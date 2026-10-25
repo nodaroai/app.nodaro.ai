@@ -15,21 +15,30 @@ The assistant also gets a link to the flow with every step, so it can send it to
 
 ## Which steps become nodes
 
-Today these tools add a node to the conversation's flow:
+These tools add a node to the conversation's flow:
 
-| Tool | Node |
+| Kind | Tools |
 |---|---|
-| `generate_image` | Generate Image |
-| `modify_image`, `image_to_image` | Modify Image |
-| `animate_image`, `generate_video` | Generate Video |
+| Images | `generate_image`, `modify_image`, `image_to_image`, `edit_image` (upscale, remove background, edit), `image_collage`, `image_overlay`, `extract_frame` |
+| Video | `generate_video`, `animate_image`, `modify_video` (video to video), `extend_video`, `video_upscale`, `trim_video`, `loop_video`, `combine_videos`, `merge_video_audio`, `add_captions`, `motion_transfer`, `face_swap`, `lip_sync`, `gif_to_video`, `mask_composite` |
+| Audio | `generate_speech`, `generate_dialogue`, `text_to_audio`, `suno_generate`, `generate_music`, `voice_changer`, `voice_design`, `audio_isolation`, `trim_audio`, `mix_audio`, `pitch_tempo` |
 
-A call the node cannot reproduce exactly is not turned into a node: for example, several
-images in one call (`count`, or more than one model at once), or a palette or moodboard
-direction. Its result is still saved in your library and listed under **Recent from MCP**.
-More tools are being added.
+A call the node cannot reproduce exactly is not turned into a node. Some examples:
 
-Images you pass in that the flow did not make (an upload, or an image from another
-conversation) appear as an **Upload** node wired into the step that used them.
+- several images in one call (`count`, or more than one model at once);
+- a palette or moodboard direction;
+- a mix with per-track volumes or ducking;
+- the same clip twice in one call.
+
+Its result is still saved in your library and listed under **Recent from MCP**. Other tools' results
+(scripts, analyses, 3D, studio productions) stay there too.
+
+Inputs the flow did not make (an upload, or an image from another conversation) appear as
+an **Upload** node wired into the step that used them. A result an earlier step made is wired
+from that step when it is the result the step shows; another take of it gets its own Upload
+node, so the wire always carries the image that was used. An image from outside Nodaro (a link
+to another site) is stored in your files right after the step is added, so the flow keeps
+working if the link stops working; the node remembers the original link.
 
 ## One conversation, one flow
 
@@ -43,6 +52,24 @@ Nodaro keeps one flow per conversation:
 
 Each flow is named after your first request in the conversation (shortened to about 50
 characters), or after the assistant's first prompt when the request is not available.
+
+A flow holds up to **50 steps**. The next step starts **Part 2** of the conversation (named
+"… · Part 2"), linked to the part before, and so on: a very long chat as one graph is hard
+to read.
+
+### Starting or choosing a flow yourself
+
+The same tools take an optional `flow_id`:
+
+- `"new"` starts a new flow for this step, even inside the same chat (ask the assistant to
+  "start a new flow");
+- a flow id from an earlier step's result adds the step to that flow.
+
+Without it, the step joins the conversation's current flow, as above.
+
+Each step's result names its flow and links to it in the editor. If you change the flow
+there (pick another result of a node, or a setting), the assistant is told to read the flow
+before its next step and build on what you selected.
 
 ### Your own words
 
@@ -79,8 +106,8 @@ Open the home screen and pick **MCP Conversations** in the "Jump back in" row:
   - Delete.
 
 **Deleting a conversation** deletes its flow. The images and videos the assistant made stay in
-your library and under **Recent from MCP**; results of runs you started in the editor are deleted
-with the flow, as for any flow.
+your library and under **Recent from MCP**. Results of runs you started in the editor inside the
+conversation are deleted with the flow and cannot be restored; the delete dialog warns about it.
 
 In the editor, a conversation's canvas says which assistant is building it and links
 back to MCP Conversations. Each node an assistant made shows **Where it came from**

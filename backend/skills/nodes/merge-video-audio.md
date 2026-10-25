@@ -1,7 +1,7 @@
 ---
 node_type: merge-video-audio
-generated_at: 2026-10-14T00:02:34.818Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.024Z
+generated_from: db68a9ee4
 ---
 
 # merge-video-audio
@@ -61,6 +61,8 @@ generated_from: b83a9467d
 - `voiceover_volume`
 - `background_volume`
 - `keep_original_audio`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

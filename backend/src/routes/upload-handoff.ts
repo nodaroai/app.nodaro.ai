@@ -25,8 +25,8 @@
  */
 import type { FastifyInstance } from "fastify"
 import multipart from "@fastify/multipart"
-import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
+import { isHeifFamilyMime, transcodeHeifForStorage } from "../utils/heif-decode.js"
 import { s3, withObjectAcl } from "../lib/storage.js"
 import { storageTransferOptions } from "../lib/storage-timeouts.js"
 import { config } from "../lib/config.js"
@@ -267,19 +267,18 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
         })
       }
 
-      // HEIC/HEIF render only in Safari and aren't accepted by downstream
-      // image providers. Convert to JPEG before storing — the public URL is
-      // already known to Claude (its key was minted at token-mint time), so
-      // we keep the same R2 key and just serve as image/jpeg.
+      // HEIC/HEIF/AVIF render in few browsers and aren't accepted by
+      // downstream image providers. Convert (JPEG, or PNG when it has
+      // transparency) before storing — the public URL is already known to
+      // Claude (its key was minted at token-mint time), so we keep the same R2
+      // key and just serve the converted type.
       let finalBuffer = buffer
       let finalMime = data.mimetype
-      if (
-        payload.kind === "image" &&
-        (data.mimetype === "image/heic" || data.mimetype === "image/heif")
-      ) {
+      if (payload.kind === "image" && isHeifFamilyMime(data.mimetype)) {
         try {
-          finalBuffer = await sharp(buffer).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-          finalMime = "image/jpeg"
+          const stored = await transcodeHeifForStorage(buffer)
+          finalBuffer = stored.buffer
+          finalMime = stored.mime
         } catch (err) {
           return reply.status(400).send({
             error: {

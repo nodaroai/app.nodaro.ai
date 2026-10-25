@@ -1,7 +1,7 @@
 ---
 node_type: face-swap
-generated_at: 2026-10-14T00:02:36.987Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.725Z
+generated_from: db68a9ee4
 ---
 
 # Face Swap
@@ -57,6 +57,8 @@ Replaces the face in a video with the face from one image. Wire the face into `f
 - `video_asset_id`
 - `face_image_url`
 - `face_image_asset_id`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

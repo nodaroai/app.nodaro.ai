@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-10-20T06:48:04.069Z
-generated_from: 3812bdec7
+generated_at: 2026-10-24T23:37:38.074Z
+generated_from: db68a9ee4
 ---
 
 # Video to Video
@@ -85,6 +85,8 @@ generated_from: 3812bdec7
 - `reference_audio_urls`
 - `seed`
 - `draft`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

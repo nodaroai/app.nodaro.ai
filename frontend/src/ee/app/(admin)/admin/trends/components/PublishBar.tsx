@@ -1,12 +1,17 @@
 // Publishing: the trend's status, the version users see against the one being
-// edited, Publish / Unpublish, why a publish was refused (one line per
-// reason), and what each environment's Cast Swap engine reports it supports —
-// a trend is published only when every environment can run it.
+// edited, Publish / Unpublish, Archive / Restore, why a publish was refused (one
+// line per reason), and what each environment's Cast Swap engine reports it
+// supports — a trend is published only when every environment can run it.
+//
+// Archiving puts a trend away (off the catalog, kept with its runs) and needs no
+// confirmation: Restore undoes it. An archived trend is restored before it can
+// be published again.
 
-import { Loader2, Upload, EyeOff } from "lucide-react"
+import { Archive, ArchiveRestore, Loader2, Upload, EyeOff } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import type { AdminTrendRow, TrendEngineEnvironment, TrendPublishBlocker } from "@/lib/api"
-import { useEngineEnvironments } from "@/ee/hooks/queries/use-admin-queries"
+import { useArchiveTrend, useEngineEnvironments, useRestoreTrend } from "@/ee/hooks/queries/use-admin-queries"
 import { describeBlocker } from "../model"
 import { StatusBadge } from "./StatusBadge"
 
@@ -22,6 +27,10 @@ interface Props {
 
 export function PublishBar({ trend, dirty, blockers, publishing, unpublishing, onPublish, onUnpublish }: Props) {
   const envs = useEngineEnvironments()
+  const archive = useArchiveTrend(trend.id)
+  const restore = useRestoreTrend(trend.id)
+  const archived = trend.status === "archived"
+  const onError = (err: Error) => toast.error(err.message)
   const ahead = trend.publishedVersion !== null && trend.publishedVersion !== trend.draftVersion
 
   return (
@@ -36,7 +45,7 @@ export function PublishBar({ trend, dirty, blockers, publishing, unpublishing, o
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" className="min-h-9" disabled={dirty || publishing} onClick={onPublish}>
+        <Button type="button" className="min-h-9" disabled={dirty || publishing || archived} onClick={onPublish}>
           {publishing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
           Publish
         </Button>
@@ -46,6 +55,30 @@ export function PublishBar({ trend, dirty, blockers, publishing, unpublishing, o
             Unpublish
           </Button>
         )}
+        {archived ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-9"
+            disabled={restore.isPending}
+            onClick={() => restore.mutate(undefined, { onSuccess: () => toast.success("Restored"), onError })}
+          >
+            {restore.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ArchiveRestore className="mr-1 h-4 w-4" />}
+            Restore
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-9"
+            disabled={archive.isPending}
+            onClick={() => archive.mutate(undefined, { onSuccess: () => toast.success("Archived"), onError })}
+          >
+            {archive.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Archive className="mr-1 h-4 w-4" />}
+            Archive
+          </Button>
+        )}
+        {archived && <span className="text-xs text-muted-foreground">Archived: users can't see it. Restore it to publish again.</span>}
         {dirty && <span className="text-xs text-muted-foreground">Save first: publishing publishes the saved draft.</span>}
       </div>
 

@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-10-14T00:02:36.644Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.604Z
+generated_from: db68a9ee4
 ---
 
 # Lip Sync
@@ -119,6 +119,8 @@ Make a face talk to an audio track (`lip_sync` over MCP): lip-sync, talking head
 - `align_audio`
 - `align_audio_reverse`
 - `templ_start_seconds`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

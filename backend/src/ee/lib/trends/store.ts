@@ -385,6 +385,37 @@ export async function unpublish(trendId: string): Promise<void> {
   if (error) fail(`unpublish trend ${trendId}`, error)
 }
 
+/**
+ * Put a trend away (migration 559): off the catalog whatever its status, with
+ * its versions, favorites and runs kept. Archiving an archived trend is a no-op.
+ */
+export async function archive(trendId: string): Promise<void> {
+  const trend = await requireTrend(trendId)
+  if (trend.status === "archived") return
+  const { error } = await supabase
+    .from("trends")
+    .update({ status: "archived", updated_at: now() })
+    .eq("id", trendId)
+    .neq("status", "archived")
+  if (error) fail(`archive trend ${trendId}`, error)
+}
+
+/**
+ * Bring an archived trend back, unpublished: `unpublished` when it was ever
+ * published (its `published_version` is kept), else `draft`. Publishing it is
+ * a separate, deliberate step. Restoring a trend that is not archived is a no-op.
+ */
+export async function restore(trendId: string): Promise<void> {
+  const trend = await requireTrend(trendId)
+  if (trend.status !== "archived") return
+  const { error } = await supabase
+    .from("trends")
+    .update({ status: trend.publishedVersion != null ? "unpublished" : "draft", updated_at: now() })
+    .eq("id", trendId)
+    .eq("status", "archived")
+  if (error) fail(`restore trend ${trendId}`, error)
+}
+
 // ── Admin writes ──────────────────────────────────────────────────────────
 
 /** Another trend already has this slug. */

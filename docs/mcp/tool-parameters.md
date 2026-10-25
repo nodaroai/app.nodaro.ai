@@ -65,6 +65,8 @@ Needs `workflows:execute`.
 | `segments[].captions[].endMs` | number | yes | At least 0. |
 | `segments[].captions[].timestampMs` | number or null |  | At least 0. Default `null`. |
 | `segments[].captions[].confidence` | number or null |  | From 0 to 1. Default `null`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `add_collection_record`
 
@@ -181,6 +183,7 @@ Needs `workflows:execute`.
 | `described_references[].description` | string | yes | At most 2000 characters. |
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `apply_audio_fx`
 
@@ -280,6 +283,8 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  | Nodaro audio or video job id. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `audio_sync`
 
@@ -477,6 +482,8 @@ Needs `workflows:execute`.
 | `smart_cut_frames_next` | integer |  | Smart-cut search window at each clip's START (frames, default 8). From 1 to 24. |
 | `trim_start_frames` | integer |  | Frames trimmed from the START of each non-first clip (default 1). Pin it for frame-exact cuts; also the smart-cut fallback. From 0 to 120. |
 | `trim_end_frames` | integer |  | Frames trimmed from the END of each non-final clip (default 2). Pin it for frame-exact cuts; also the smart-cut fallback. From 0 to 120. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `competitor_cards`
 
@@ -777,6 +784,8 @@ Needs `workflows:execute`.
 | `style` | string |  | At most 500 characters. |
 | `seed` | integer |  | At least 0. |
 | `mask_url` | string (URL) |  | Inpainting mask (white=edit). Used by nano-banana-edit. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `edit_studio_production`
 
@@ -859,6 +868,8 @@ Needs `workflows:execute`.
 | `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-extend, default true) |
 | `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
 | `seed` | integer |  | From 10000 to 99999. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `extract_frame`
 
@@ -870,6 +881,8 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  |  |
 | `mode` | string |  | One of `first`, `last`, `timestamp`. |
 | `time_seconds` | number |  | Used when mode is 'timestamp'. At least 0. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `face_swap`
 
@@ -881,6 +894,8 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Nodaro video job id. |
 | `face_image_url` | string (URL) |  | Portrait image whose face to use. |
 | `face_image_asset_id` | string |  | Nodaro image job id for the face. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `favorite_asset`
 
@@ -1039,6 +1054,8 @@ Needs `workflows:execute`.
 | `language_code` | string |  | ISO 639-1 hint (e.g. "en", "he"). Omit for auto-detect. At most 10 characters. |
 | `seed` | integer |  | Deterministic sampling. Omit for random. From 0 to 4294967295. |
 | `apply_text_normalization` | string |  | Spell out numbers/dates/abbreviations. Default auto. One of `auto`, `on`, `off`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `generate_image`
 
@@ -1124,6 +1141,7 @@ Needs `workflows:execute`.
 | `moodboard_id` | string |  | Moodboard id (list_moodboards): description joins the prompt, images go as style references. At most 36 characters. |
 | `subject` | object (map of string or string[] or number) |  | Who is in the shot as catalog ids, { field: id \| [ids] }: person / styling fields, heldProp, material, animal (get_picker_catalog). |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `generate_location`
 
@@ -1189,6 +1207,8 @@ Needs `workflows:execute`.
 | `mood` | string |  |  |
 | `reference_audio_url` | string (URL) |  | minimax: the song, voice or instrumental it follows. |
 | `reference_audio_asset_id` | string |  | Or a Nodaro audio job id. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `generate_object`
 
@@ -1277,6 +1297,8 @@ Needs `workflows:execute`.
 | `language_code` | string |  |  |
 | `previous_text` | string |  | The line spoken just BEFORE this one in the finished piece (the previous clip's text) — context for continuous intonation across clips; up to 1,000 characters, the end of a longer passage. Used by models that stitch; others ignore it. Not spoken. At most 1000 characters. |
 | `next_text` | string |  | The line spoken just AFTER this one (the next clip's text) — the start of a longer passage; up to 1,000 characters. Same continuity rule as previous_text. At most 1000 characters. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `generate_studio_clip`
 
@@ -1407,6 +1429,7 @@ Needs `workflows:execute`.
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
 | `keep_original_sound` | boolean |  | kling-4: keep reference videos' own sound. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `get_app_inputs`
 
@@ -1619,6 +1642,8 @@ Needs `workflows:execute`.
 | `target_duration` | number |  | Loop target seconds 2-8 (default 3). Only used when loop_to_minimum. From 2 to 8. |
 | `interpolate` | boolean |  |  |
 | `alpha_background` | string |  | One of `white`, `black`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `image_collage`
 
@@ -1638,6 +1663,8 @@ Needs `workflows:execute`.
 | `background_color` | string |  | Background shown in the gaps, #RRGGBB. Default #ffffff. |
 | `numbered` | boolean |  | Stamp 1-based sequence numbers at each image's corner in `images` order — storyboard mode. |
 | `badge_position` | string |  | Which corner the number/label badges sit in. Default 'top-left' (storyboard convention); 'top-right' keeps them clear of a subject composed left-of-centre. One of `top-left`, `top-right`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `image_overlay`
 
@@ -1705,6 +1732,8 @@ Needs `workflows:execute`.
 | `qr_text` | string |  | Fills every QR layer whose qr.fromInput is true (the node's QR link handle). At most 2000 characters. |
 | `mask_mode` | string |  | The mask the job also emits as output maskUrl (white = may change). Default around — a ring for an AI finish. One of `none`, `layers`, `around`, `outside`. |
 | `mask_spread` | integer |  | Ring width in px for mask_mode around (default 48). From 1 to 400. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `image_to_image`
 
@@ -1725,6 +1754,7 @@ Needs `workflows:execute`.
 | `seed` | integer |  | At least 0. |
 | `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `image_to_text`
 
@@ -1793,6 +1823,8 @@ Needs `workflows:execute`.
 | `align_audio` | boolean |  | volcengine-lipsync 'lite' mode only. Loop the source video when the audio is longer (default on). |
 | `align_audio_reverse` | boolean |  | volcengine-lipsync 'lite' mode only. Ping-pong the loop (requires align_audio on). |
 | `templ_start_seconds` | number |  | volcengine-lipsync only. Start time (seconds) in the source video to drive from (advanced). |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `list_apps`
 
@@ -2024,6 +2056,8 @@ Needs `workflows:execute`.
 | `target_duration` | number |  | Target output duration in seconds (1–300). Required when mode = duration. From 1 to 300. |
 | `smart_cut_before_repeat` | boolean |  | Smart loop cut preprocess. Trims source to its cleanest loop boundary before concatenating. Recommended for stochastic-tail sources. |
 | `smart_cut_lookback` | integer |  | Smart-cut lookback window in frames. Default 16, max 64. From 2 to 64. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `make_chapters`
 
@@ -2117,6 +2151,8 @@ Needs `workflows:execute`.
 | `blur_strength_pct` | number |  | Blur sigma, % of frame width (default 2). From 0.1 to 5. |
 | `background_fit` | string |  | How the background fills the foreground's frame (default cover). One of `cover`, `contain`, `stretch`. |
 | `audio_source` | string |  | Which sound the result carries (default foreground). One of `foreground`, `background`, `mix`, `none`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `merge_video_audio`
 
@@ -2135,6 +2171,8 @@ Needs `workflows:execute`.
 | `voiceover_volume` | number |  | From 0 to 200. |
 | `background_volume` | number |  | From 0 to 200. |
 | `keep_original_audio` | boolean |  |  |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `mix_audio`
 
@@ -2154,6 +2192,8 @@ Needs `workflows:execute`.
 | `duck.attack_ms` | number |  | How fast the dip starts, ms. Default 20. From 1 to 2000. |
 | `duck.release_ms` | number |  | How slowly the others return, ms. Default 500. From 10 to 9000. |
 | `end_at` | string |  | Where the mix ends: "longest" (default) or "voice" — when the voice (the duck.under track) ends. Needs duck. One of `longest`, `voice`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `modify_image`
 
@@ -2196,6 +2236,7 @@ Needs `workflows:execute`.
 | `structured.lens.aperture` | string |  |  |
 | `structured.mood` | string |  |  |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `modify_video`
 
@@ -2218,6 +2259,8 @@ Needs `workflows:execute`.
 | `reference_audio_urls` | string (URL)[] |  | seedance-2-5 only — cite as {audio:N} in the prompt. At most 10 items. |
 | `seed` | integer |  | At least 0. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `motion_transfer`
 
@@ -2235,6 +2278,8 @@ Needs `workflows:execute`.
 | `provider` | string |  | Motion transfer provider. Default kling. |
 | `background_source` | string |  | Which source provides the background. Provider-dependent. One of `input_video`, `input_image`. |
 | `video_duration` | number |  | Output duration in seconds. Provider-dependent. From 1 to 60. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `new_studio_shot_from_frame`
 
@@ -2303,6 +2348,8 @@ Needs `workflows:execute`.
 | `semitones` | number |  | Pitch shift in semitones; 12 = one octave up, −12 = one octave down. Default 0. From -12 to 12. |
 | `tempo` | number |  | Speed factor with the pitch kept (0.5 = half speed, 2 = double). Ignored for video. Default 1. From 0.5 to 2. |
 | `preserve_formants` | boolean |  | Keep the voice's natural timbre while shifting pitch (default true). Turn off for a chipmunk/giant effect. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `plan_edit`
 
@@ -3029,6 +3076,8 @@ Needs `workflows:execute`.
 | `weirdness` | number |  | From 0 to 1. |
 | `audio_weight` | number |  | From 0 to 1. |
 | `duration` | number |  | Song length in seconds (10-360). Only honored when custom_mode=true on a V6-family model; ignored otherwise. From 10 to 360. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `suno_lyrics`
 
@@ -3140,6 +3189,8 @@ Needs `workflows:execute`.
 | `duration` | number |  | Duration in seconds (0.5–30). Priced per second, rounded up; omitted = model picks the length, billed as 5 s. From 0.5 to 30. |
 | `loop` | boolean |  | Whether the output should loop seamlessly. |
 | `prompt_influence` | number |  | How strongly the prompt guides generation (0–1). From 0 to 1. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `tighten_episode`
 
@@ -3203,6 +3254,8 @@ Needs `workflows:execute`.
 | `start_time` | number |  | Start of the trim window in seconds. Omit to keep the start of the source. At least 0. |
 | `end_time` | number |  | End of the trim window in seconds. Omit to keep the end of the source. At least 0. |
 | `audio_format` | string |  | Output audio format. Default mp3. One of `mp3`, `wav`, `aac`. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `trim_video`
 
@@ -3219,6 +3272,8 @@ Needs `workflows:execute`.
 | `smart_loop_cut` | boolean |  | Smart loop cut mode — worker picks trailing frame closest to frame 0 (PSNR) and trims there. Overrides time/frame trim. |
 | `smart_loop_cut_lookback` | integer |  | How many trailing frames to evaluate as candidate cut points. Default 16, max 64. From 2 to 64. |
 | `silent` | boolean |  | Strip audio from the output. Default false. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `ugc_finish_clips`
 
@@ -3430,6 +3485,8 @@ Needs `workflows:execute`.
 | `task_id` | string |  | Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k), or of the Seedance 2.5 draft (seedance-2-5-hd). |
 | `source_job_id` | string |  | seedance-2-5-hd only: the job id of the Seedance 2.5 draft to finalize (alternative to task_id). |
 | `kie_task_id` | string |  | Use task_id. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `voice_changer`
 
@@ -3446,6 +3503,8 @@ Needs `workflows:execute`.
 | `similarity_boost` | number |  | From 0 to 1. |
 | `style` | number |  | Style exaggeration 0..1 — amplifies the source's stylistic delivery. Default 0; values >0 add latency and can reduce stability. From 0 to 1. |
 | `remove_background_noise` | boolean |  |  |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `voice_changer_pro`
 
@@ -3534,6 +3593,8 @@ Needs `workflows:execute`.
 | `seed` | integer |  |  |
 | `quality` | number |  |  |
 | `should_enhance` | boolean |  |  |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
+| `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
 ## `voice_remix`
 

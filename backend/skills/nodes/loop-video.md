@@ -1,7 +1,7 @@
 ---
 node_type: loop-video
-generated_at: 2026-10-14T00:02:36.331Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.521Z
+generated_from: db68a9ee4
 ---
 
 # Loop Video
@@ -57,6 +57,8 @@ generated_from: b83a9467d
 - `target_duration`
 - `smart_cut_before_repeat`
 - `smart_cut_lookback`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

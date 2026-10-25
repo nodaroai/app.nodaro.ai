@@ -2187,8 +2187,8 @@ const { jobId, existing } = await client.castSwap.fullQuality(draftJobId)
 Trends: ready-made Cast Swap recipes. A trend is a short clip with slots (the
 people, pets, products and place you can replace); fill its slots with your own
 pictures and run it. **Cloud edition only**: these routes 404 on self-hosted
-installs. Only published trends exist: a draft, unpublished or unknown slug is a
-`404` on every method. Also importable as `@nodaro/sdk/trends`. Routes:
+installs. Only published trends exist: a draft, unpublished, archived or unknown
+slug is a `404` on every method. Also importable as `@nodaro/sdk/trends`. Routes:
 [Trends](./api-integration.md#13g-trends-cloud-edition).
 
 ```ts

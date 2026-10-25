@@ -1,4 +1,5 @@
-// Admin → Trends: every trend (any status), filtered by status and tag, with
+// Admin → Trends: every trend, filtered by status and tag (archived trends
+// only under their own filter — "All" is every trend not put away), with
 // the catalog fields that live on the trend row (sort order, badges) written
 // in place through PATCH. "New trend" creates a draft and opens its editor
 // (`./detail/page.tsx`); "Tag labels" edits what users see for each tag.
@@ -36,6 +37,7 @@ const STATUS_FILTERS: ReadonlyArray<{ value: TrendStatus | "all"; label: string 
   { value: "published", label: "Published" },
   { value: "draft", label: "Drafts" },
   { value: "unpublished", label: "Unpublished" },
+  { value: "archived", label: "Archived" },
 ]
 
 const BADGES: ReadonlyArray<{ value: TrendBadge; label: string }> = [
@@ -53,7 +55,7 @@ export default function AdminTrendsPage() {
   const trends = useMemo(() => {
     const t = tag.trim().toLowerCase()
     return (data ?? [])
-      .filter((x) => status === "all" || x.status === status)
+      .filter((x) => (status === "all" ? x.status !== "archived" : x.status === status))
       .filter((x) => !t || x.tags.some((g) => g.toLowerCase().includes(t)))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
   }, [data, status, tag])

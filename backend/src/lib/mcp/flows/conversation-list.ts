@@ -3,6 +3,7 @@ import { hasCredits } from "../../config.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
 import { sideHoldChargesFor } from "../../job-step-charge.js"
 import { resolveCanvasResultIds } from "../../canvas-result-ids.js"
+import { KIND_OF_OUTPUT, outputKeyOfStep } from "./mappers/kit.js"
 import { CONVERSATION_IDLE_GAP_MS, monthKey, type McpConversationSettings } from "./conversation-store.js"
 
 /**
@@ -74,10 +75,10 @@ export function sourceOf(client: string | null | undefined, clientName: string |
   return { client: base.toLowerCase(), label: base }
 }
 
-const KIND_BY_TYPE: Record<string, ConversationMediaKind> = {
-  "generate-image": "image",
-  "modify-image": "image",
-  "generate-video": "video",
+/** The media kind of a step's result. */
+function kindOf(step: Node): ConversationMediaKind | undefined {
+  const key = outputKeyOfStep(step.type, step.data)
+  return key ? KIND_OF_OUTPUT[key] : undefined
 }
 
 type Node = { id?: string; type?: string; data?: Record<string, unknown> }
@@ -94,7 +95,10 @@ function latestResult(steps: readonly Node[]): { url: string; kind: "image" | "v
     const results = Array.isArray(data.generatedResults) ? (data.generatedResults as Array<Record<string, unknown>>) : []
     const active = results[typeof data.activeResultIndex === "number" ? data.activeResultIndex : 0] ?? results[0]
     if (!active || typeof active.url !== "string") continue
-    const isVideo = KIND_BY_TYPE[steps[i].type ?? ""] === "video"
+    const kind = kindOf(steps[i])
+    // An audio step has nothing to picture.
+    if (kind === "audio") continue
+    const isVideo = kind === "video"
     if (isVideo && typeof active.thumbnailUrl === "string") return { url: active.thumbnailUrl, kind: "image" }
     return { url: active.url, kind: isVideo ? "video" : "image" }
   }
@@ -116,7 +120,7 @@ export function summarize(row: ConversationRow, now: Date, credits: number | nul
   const steps = stepNodes(row.nodes)
   const counts: Record<ConversationMediaKind, number> = { image: 0, video: 0, audio: 0 }
   for (const step of steps) {
-    const kind = KIND_BY_TYPE[step.type ?? ""]
+    const kind = kindOf(step)
     if (kind) counts[kind] += 1
   }
   const source = sourceOf(conv?.client, conv?.clientName)

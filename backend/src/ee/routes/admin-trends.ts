@@ -20,6 +20,9 @@
  *   DELETE /v1/admin/trends/:id/examples/:index      remove an example
  *   POST   /v1/admin/trends/:id/publish              publish the draft (checks + engine check)
  *   POST   /v1/admin/trends/:id/unpublish            take it off the catalog
+ *   POST   /v1/admin/trends/:id/archive              put it away (admin-trends-lifecycle.ts)
+ *   POST   /v1/admin/trends/:id/restore              bring an archived trend back, unpublished
+ *   DELETE /v1/admin/trends/:id/test-runs/:jobId     delete an admin's test run and its media
  *
  * Replies use the platform's `{ data }` envelope; errors `{ error: { code, message, … } }`.
  *
@@ -89,6 +92,7 @@ import {
   type TrendRun,
 } from "../lib/trends/run-helpers.js"
 import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
+import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
 
@@ -719,6 +723,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const loaded = await loadDraft(req, reply)
       if (!loaded) return reply
       const { trend, draft, revision } = loaded
+      if (trend.status === "archived") return err(reply, 409, "archived", "Restore the trend before publishing it.")
       if (body.data?.revision !== undefined && body.data.revision !== revision) return draftConflict(reply)
       // An outage reading the environments is a 500, never "unknown engine".
       const environments = await listEngineEnvironments()
@@ -748,4 +753,6 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       return unavailableOrInternal(reply, req, e, "Failed to unpublish the trend")
     }
   })
+
+  registerTrendLifecycleRoutes(app, { findTrendRun })
 }

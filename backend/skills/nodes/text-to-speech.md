@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-10-14T00:02:32.078Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:38.132Z
+generated_from: db68a9ee4
 ---
 
 # Text to Speech
@@ -85,6 +85,8 @@ generated_from: b83a9467d
 - `language_code`
 - `previous_text`
 - `next_text`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
