@@ -1,5 +1,16 @@
 # @nodaro/shared
 
+## 3.41.0
+
+### Minor Changes
+
+- 914e157: Cast Swap engines: `CAST_SWAP_ENGINES` (`"seedance-2-5"`, `"kling-4"`), the `CastSwapEngine` type, `CAST_SWAP_ENGINE_WHEN_OMITTED` (Seedance 2.5), `CAST_SWAP_RESOLUTIONS_BY_ENGINE` (each engine's resolutions, its default first) and `castSwapEngineHasDraft`. `CAST_SWAP_KLING_LENGTHS` (`"cut-end"`, `"cut-start"`), the `CastSwapKlingLength` type and `CAST_SWAP_KLING_LENGTH_WHEN_OMITTED` (`"cut-end"`). Kling 4's image cap: `CAST_SWAP_KLING_MAX_IMAGES` (10).
+- dc55645: `ProjectedCatalogOption.imageSrcSet`: the `srcset` (240–1920px) of an option pictured by a Nodaro CDN render.
+
+### Patch Changes
+
+- a76b30a: `stripExportContent` drops the exporter's job id from a node's `mcpProvenance` (where an MCP conversation step came from) and keeps the rest.
+
 ## 3.40.0
 
 ### Minor Changes
