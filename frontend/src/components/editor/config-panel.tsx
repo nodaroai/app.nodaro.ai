@@ -1293,7 +1293,7 @@ export function ConfigPanel() {
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"}
-                    className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-primary-ink hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
                     title={t("configPanel.runFromHereTooltip")}
                   >
                     <FastForward className="w-3.5 h-3.5" />

@@ -104,7 +104,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
               className={cn(
                 "flex flex-col items-center gap-1 px-1.5 py-2 rounded-lg border text-[11px] transition-colors",
                 motion === opt.value
-                  ? "border-primary bg-primary/10 text-primary font-medium"
+                  ? "border-primary bg-primary/10 text-primary-ink font-medium"
                   : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
               )}
             >
@@ -162,7 +162,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 h-11 rounded-lg border transition-colors",
                   (data.aspectRatio ?? "16:9") === opt.value
-                    ? "border-primary bg-primary/10 text-primary"
+                    ? "border-primary bg-primary/10 text-primary-ink"
                     : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
                 )}
               >

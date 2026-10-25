@@ -64,7 +64,7 @@ export function OpenPostLink({ post, className }: { readonly post: FeedPost; rea
       rel="noopener noreferrer"
       onClick={stop}
       onMouseDown={stop}
-      className={cn("flex min-w-0 max-w-[60%] shrink-0 items-center gap-1 text-[#FF0073] hover:underline", className)}
+      className={cn("flex min-w-0 max-w-[60%] shrink-0 items-center gap-1 text-primary-ink hover:underline", className)}
     >
       <span className="truncate">{t("post.openIn", { site: post.site })}</span>
       <ExternalLink className="h-3 w-3 shrink-0" />
@@ -222,7 +222,7 @@ export function PostFeedBody({ posts, onViewAll }: { readonly posts: ReadonlyArr
             <button type="button" onClick={(e) => { stop(e); step(1) }} onMouseDown={stop} aria-label={t("cfgext.igNextPost")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronRight className="h-4 w-4" /></button>
           </>
         )}
-        <button type="button" onClick={(e) => { stop(e); onViewAll() }} onMouseDown={stop} className="ms-auto text-[11.5px] font-bold text-[#FF0073] hover:underline">{t("node.viewAllN", { n: posts.length })}</button>
+        <button type="button" onClick={(e) => { stop(e); onViewAll() }} onMouseDown={stop} className="ms-auto text-[11.5px] font-bold text-primary-ink hover:underline">{t("node.viewAllN", { n: posts.length })}</button>
       </div>
       {posts.length > 1 && <ThumbStrip posts={posts} featured={index} onPick={show} />}
     </div>

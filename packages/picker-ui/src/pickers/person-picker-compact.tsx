@@ -162,7 +162,7 @@ function DimensionPill({
             "group inline-flex items-center gap-1.5 rounded-full border py-1 text-[11px] font-medium transition-colors cursor-pointer max-w-full",
             thumbId ? "ps-[3px] pe-2.5" : "px-2.5",
             selected
-              ? "border-[#ff0073]/40 bg-[#ff0073]/10 text-[#ff0073]"
+              ? "border-[#ff0073]/40 bg-[#ff0073]/10 text-primary-ink"
               : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] text-gray-700 dark:text-[#E2E8F0] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
           )}
         >
@@ -176,7 +176,7 @@ function DimensionPill({
                   className="-my-0.5 size-[22px] rounded-full border border-white dark:border-[#111114]"
                 />
               )}
-              <span className="uppercase tracking-wide text-[9px] font-semibold text-[#ff0073]/70 shrink-0">
+              <span className="uppercase tracking-wide text-[9px] font-semibold text-primary-ink shrink-0">
                 {dimensionLabel}
               </span>
               <span className="truncate">{valueLabel}</span>
@@ -195,7 +195,7 @@ function DimensionPill({
                     toggleOff()
                   }
                 }}
-                className="ml-0.5 inline-flex shrink-0 items-center justify-center rounded-full p-0.5 text-[#ff0073]/70 hover:bg-[#ff0073]/20 hover:text-[#ff0073] cursor-pointer"
+                className="ml-0.5 inline-flex shrink-0 items-center justify-center rounded-full p-0.5 text-primary-ink hover:bg-[#ff0073]/20 hover:text-primary-ink cursor-pointer"
               >
                 <X className="size-3" />
               </span>
@@ -277,7 +277,7 @@ function CompactSection({
         </span>
         {count > 0 && (
           <span
-            className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-[5px] rounded-full bg-[#ff0073]/15 text-[#ff0073] text-[10px] font-semibold leading-none"
+            className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-[5px] rounded-full bg-[#ff0073]/15 text-primary-ink text-[10px] font-semibold leading-none"
             aria-hidden="true"
           >
             {count}

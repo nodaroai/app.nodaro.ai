@@ -145,7 +145,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
           }}
         >
           {isSelected ? (
-            <CheckSquare className="h-5 w-5 text-[#ff0073]" />
+            <CheckSquare className="h-5 w-5 text-primary-ink" />
           ) : (
             <Square className="h-5 w-5 text-muted-foreground" />
           )}
@@ -396,7 +396,7 @@ export default function LibraryPage() {
     <div className="max-w-5xl mx-auto space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <FolderOpen className="h-6 w-6 text-[#ff0073]" />
+          <FolderOpen className="h-6 w-6 text-primary-ink" />
           <h1 className="text-2xl font-bold">{t("lib.title")}</h1>
         </div>
       </div>
@@ -408,7 +408,7 @@ export default function LibraryPage() {
       {hasCredits() && (
       <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <HardDrive className="h-5 w-5 text-[#ff0073]" />
+          <HardDrive className="h-5 w-5 text-primary-ink" />
           <h2 className="text-lg font-semibold">{t("lib.storage")}</h2>
           <span className="text-sm text-muted-foreground ms-auto">
             {formatBytes(storageUsed)} / {formatBytes(storageLimit)}

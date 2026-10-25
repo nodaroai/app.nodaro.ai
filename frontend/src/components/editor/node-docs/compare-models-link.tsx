@@ -18,7 +18,7 @@ export function CompareModelsLink() {
       href={docsUrl(nodeType, "models")}
       target="_blank"
       rel="noopener"
-      className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-[#ff0073] hover:underline"
+      className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-primary-ink hover:underline"
     >
       {t("nodeDocs.compareModels")}
       <ArrowUpRight className="size-3" aria-hidden />

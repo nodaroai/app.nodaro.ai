@@ -125,7 +125,7 @@ export function LlmAuditTable({ result }: { result: LlmAuditResult }) {
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
               filter === f
-                ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20"
+                ? "bg-[#ff0073]/10 text-primary-ink border border-[#ff0073]/20"
                 : "text-muted-foreground hover:text-foreground border border-transparent"
             }`}
           >

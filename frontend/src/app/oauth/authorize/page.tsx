@@ -278,7 +278,7 @@ export default function OAuthAuthorizePage() {
           <ul className="space-y-2">
             {requestedScopes.map((s) => (
               <li key={s} className="flex items-start gap-2 text-sm">
-                <ShieldCheck className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                <ShieldCheck className="h-4 w-4 mt-0.5 text-primary-ink flex-shrink-0" />
                 <span>{SCOPE_DESCRIPTIONS[s] ? t(SCOPE_DESCRIPTIONS[s]) : s}</span>
               </li>
             ))}
@@ -294,7 +294,7 @@ export default function OAuthAuthorizePage() {
               type="button"
               onClick={handleSwitchAccount}
               disabled={submitting || switching}
-              className="font-medium text-primary hover:underline disabled:opacity-50"
+              className="font-medium text-primary-ink hover:underline disabled:opacity-50"
             >
               {switching ? t("oauth.signingOut") : t("oauth.useDifferentAccount")}
             </button>

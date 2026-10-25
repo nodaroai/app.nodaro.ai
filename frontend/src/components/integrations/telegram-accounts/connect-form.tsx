@@ -108,7 +108,7 @@ export function ConnectForm({ values, onChange, consent, consentLoading, showMis
             href="https://my.telegram.org/apps"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+            className="inline-flex items-center gap-1 text-primary-ink underline-offset-2 hover:underline"
           >
             {t("tgacct.keys.openSite")}
             <ExternalLink className="h-3 w-3" aria-hidden />

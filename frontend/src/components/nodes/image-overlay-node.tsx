@@ -431,7 +431,7 @@ function ImageOverlayNodeComponent({ id, data, selected }: NodeProps) {
       {handleCount < OVERLAY_MAX_LAYERS && (
         <button
           type="button"
-          className="nodrag nopan absolute -left-[29px] w-5 h-5 flex items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground hover:text-[#ff0073] hover:border-[#ff0073] bg-background/80"
+          className="nodrag nopan absolute -left-[29px] w-5 h-5 flex items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground hover:text-primary-ink hover:border-[#ff0073] bg-background/80"
           style={{ top: `${overlayAddButtonTop(handleCount)}px`, transform: "translateY(2px)" }}
           title={t("node.overlayAddLayer")}
           aria-label={t("node.overlayAddLayer")}

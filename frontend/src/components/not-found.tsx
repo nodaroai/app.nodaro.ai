@@ -12,7 +12,7 @@ export default function NotFound() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="text-center max-w-md">
         <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10">
-          <FileQuestion className="h-10 w-10 text-primary" />
+          <FileQuestion className="h-10 w-10 text-primary-ink" />
         </div>
         <h1 className="text-7xl font-bold tracking-tight text-foreground">
           404

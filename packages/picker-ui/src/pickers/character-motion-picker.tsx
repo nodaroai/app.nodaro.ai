@@ -130,13 +130,13 @@ export const CharacterMotionPicker = memo(function CharacterMotionPicker({
           )}
         >
           <span className="flex items-center gap-1.5 w-full">
-            <span className={cn("size-4 shrink-0 [&>svg]:size-full", selected ? "text-[#ff0073]" : "text-muted-foreground")}>
+            <span className={cn("size-4 shrink-0 [&>svg]:size-full", selected ? "text-primary-ink" : "text-muted-foreground")}>
               {CHARACTER_MOTION_CATEGORY_ICONS[m.category]}
             </span>
             <span
               className={cn(
                 "text-[11.5px] font-semibold leading-tight",
-                selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                selected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
               )}
             >
               {label}
@@ -180,7 +180,7 @@ export const CharacterMotionPicker = memo(function CharacterMotionPicker({
           {selectedIds.map((id, i) => (
             <li
               key={id}
-              className="inline-flex items-center gap-1 rounded-full border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 text-[#ff0073]"
+              className="inline-flex items-center gap-1 rounded-full border border-[#ff0073]/40 bg-[#ff0073]/10 px-2 py-0.5 text-primary-ink"
             >
               <span className="font-semibold">{i + 1}</span>
               <span>{resolveLabel(id, byId.get(id)?.label ?? id)}</span>
@@ -232,9 +232,9 @@ export const CharacterMotionPicker = memo(function CharacterMotionPicker({
                   className={cn(
                     "relative -mb-px inline-flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[11px] font-medium transition-colors border-b-2 whitespace-nowrap",
                     active
-                      ? "border-[#ff0073] text-[#ff0073]"
+                      ? "border-[#ff0073] text-primary-ink"
                       : count > 0
-                      ? "border-transparent text-[#ff0073]/80 hover:border-[#ff0073]/40 hover:text-[#ff0073]"
+                      ? "border-transparent text-primary-ink hover:border-[#ff0073]/40 hover:text-primary-ink"
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
                   )}
                 >

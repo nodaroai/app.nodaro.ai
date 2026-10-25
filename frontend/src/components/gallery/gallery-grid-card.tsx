@@ -71,7 +71,7 @@ export const GalleryGridCard = memo(function GalleryGridCard({
 
       {selecting ? (
         <span className="pointer-events-none absolute top-2 start-2 z-[4] rounded bg-black/50 p-0.5" aria-hidden>
-          {selected ? <CheckSquare className="h-5 w-5 text-[#ff0073]" /> : <Square className="h-5 w-5 text-white" />}
+          {selected ? <CheckSquare className="h-5 w-5 text-primary-ink" /> : <Square className="h-5 w-5 text-white" />}
         </span>
       ) : (
         /* Action buttons (top-right corner on hover) */
@@ -82,7 +82,7 @@ export const GalleryGridCard = memo(function GalleryGridCard({
               className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
               title={isFavorited ? t("templates.unfavorite") : t("templates.favorite")}
             >
-              <Heart className={cn("h-3.5 w-3.5", isFavorited ? "text-[#ff0073] fill-[#ff0073]" : "text-white")} />
+              <Heart className={cn("h-3.5 w-3.5", isFavorited ? "text-primary-ink fill-[#ff0073]" : "text-white")} />
             </button>
           )}
           {/* Reports are reviewed in the admin panel, which single-user

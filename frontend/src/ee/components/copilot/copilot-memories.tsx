@@ -46,7 +46,7 @@ export function MemorySavedPins() {
           key={memory.id}
           className="flex items-center gap-2 px-2.5 py-2 bg-[var(--copilot-card)] border border-border rounded-[10px]"
         >
-          <Bookmark className="w-3 h-3 flex-none text-primary" strokeWidth={2.2} aria-hidden />
+          <Bookmark className="w-3 h-3 flex-none text-primary-ink" strokeWidth={2.2} aria-hidden />
           <span className="min-w-0 flex-1 text-[11.5px] leading-[1.45] text-foreground break-words">
             <span className="text-[var(--copilot-dim)]">{t(K.memoryRemembered)} · </span>
             {memory.content}
@@ -133,7 +133,7 @@ function MemoriesDialog({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative w-[420px] max-w-[92vw] max-h-[70vh] flex flex-col bg-[var(--copilot-card)] border border-[var(--copilot-strong)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-          <Bookmark className="w-3.5 h-3.5 text-primary" strokeWidth={2.2} aria-hidden />
+          <Bookmark className="w-3.5 h-3.5 text-primary-ink" strokeWidth={2.2} aria-hidden />
           <span className="text-[13px] font-semibold text-foreground">{t(K.memoriesTitle)}</span>
           <button
             type="button"

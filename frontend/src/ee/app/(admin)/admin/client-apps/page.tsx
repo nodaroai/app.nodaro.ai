@@ -189,7 +189,7 @@ export default function AdminClientAppsPage() {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
-        <AppWindow className="h-5 w-5 text-primary" />
+        <AppWindow className="h-5 w-5 text-primary-ink" />
         <h1 className="text-xl font-bold">Client Apps</h1>
         <span className="text-xs text-muted-foreground ml-2">
           {apps.length} registered

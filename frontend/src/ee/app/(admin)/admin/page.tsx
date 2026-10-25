@@ -35,7 +35,7 @@ export default function AdminDashboard() {
             className="border rounded-lg p-4 bg-card flex items-center gap-3"
           >
             <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
-              <card.icon className="h-5 w-5 text-primary" />
+              <card.icon className="h-5 w-5 text-primary-ink" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{card.label}</p>

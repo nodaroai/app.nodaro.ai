@@ -68,7 +68,7 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
         title={isAiAvatarText ? t("node.editScriptShortcut", { sc }) : t("node.editPromptShortcut", { sc })}
         aria-label={isAiAvatarText ? t("node.editScript") : t("node.editPrompt")}
         onClick={handleClick}
-        className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[11px] font-medium whitespace-nowrap text-primary hover:bg-primary/10"
+        className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[11px] font-medium whitespace-nowrap text-primary-ink hover:bg-primary/10"
       >
         <Icon className="w-3 h-3" />
         {!compact && <span>{isAiAvatarText ? t("node.script") : t("node.prompt")}</span>}

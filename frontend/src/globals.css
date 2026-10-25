@@ -121,6 +121,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-cta: var(--cta);
+  --color-primary-ink: var(--primary-ink);
   --color-cta-hover: var(--cta-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -150,6 +151,8 @@
      Pink text on a dark ground and rings stay --primary. */
   --cta: #e0006f;
   --cta-hover: #c90060; /* white on it: 5.75:1 */
+  /* Pink TEXT (text-primary-ink): on white the brand pink gives only 3.82:1, the CTA pink 4.77:1. */
+  --primary-ink: #e0006f;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -262,6 +265,8 @@
      Pink text on a dark ground and rings stay --primary. */
   --cta: #e0006f;
   --cta-hover: #c90060; /* white on it: 5.75:1 */
+  /* Pink TEXT on the dark ground keeps the brand pink: 5.5:1 there, where the CTA pink falls to 4.4:1. */
+  --primary-ink: #ff0073;
   --secondary: #2D2D2D;
   --secondary-foreground: #E2E8F0;
   --muted: #2D2D2D;
@@ -1161,7 +1166,7 @@ html, body {
   color: var(--muted-foreground) !important; /* placeholder visible when backdrop is empty */
 }
 .tag-highlight {
-  color: #ff0073;
+  color: var(--primary-ink);
   background: color-mix(in srgb, #ff0073 12%, transparent);
   border-radius: 3px;
   padding: 1px 2px;

@@ -138,7 +138,7 @@ const AvatarTile = memo(function AvatarTile({
         <span
           className={cn(
             "text-[11px] font-semibold leading-tight truncate",
-            selected ? "text-[#ff0073]" : "text-foreground",
+            selected ? "text-primary-ink" : "text-foreground",
           )}
         >
           {avatar.name}
@@ -474,7 +474,7 @@ export const AvatarPicker = memo(function AvatarPicker({
       {filtered.length > 0 && (
         <p className="text-[11px] text-muted-foreground text-end px-0.5">
           {multiple && (
-            <span className={cn("me-1.5", atCap && "text-[#ff0073]")}>
+            <span className={cn("me-1.5", atCap && "text-primary-ink")}>
               {t("heygen.selectedOfMax", { selected: selectedSet.size, max })}
             </span>
           )}

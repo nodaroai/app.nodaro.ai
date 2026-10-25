@@ -66,7 +66,7 @@ export function CreditTopup() {
                 {t("pricing.popular")}
               </span>
             )}
-            <Coins className="h-5 w-5 text-[#ff0073] mb-2" />
+            <Coins className="h-5 w-5 text-primary-ink mb-2" />
             <span className="text-lg font-bold">{creditUnits(pkg.credits)}</span>
             <span className="text-xs text-muted-foreground">{creditUnitLabel(t("credits.unit.other"))}</span>
             <span className="mt-2 text-sm font-semibold">${pkg.price}</span>

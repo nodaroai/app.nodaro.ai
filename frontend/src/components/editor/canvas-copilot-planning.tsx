@@ -22,7 +22,7 @@ export function CanvasCopilotPlanning() {
         <span className="relative flex items-center justify-center w-11 h-11">
           <span className="absolute inset-0 rounded-full bg-primary/15 animate-ping" aria-hidden />
           <span className="relative flex items-center justify-center w-11 h-11 rounded-full bg-[var(--copilot-surface,var(--muted))] border border-border">
-            <Bot className="w-5 h-5 text-primary" strokeWidth={1.7} />
+            <Bot className="w-5 h-5 text-primary-ink" strokeWidth={1.7} />
           </span>
         </span>
         <div className="text-sm font-medium text-foreground">{t("canvas.copilotPlanning")}</div>

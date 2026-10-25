@@ -207,7 +207,7 @@ export function CopilotCollapsedTab() {
       onClick={openPanel}
       title={t("editor.copilotTitle", { sc: formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform()) })}
       style={{ width: COPILOT_TAB_WIDTH }}
-      className="flex-none bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
+      className="flex-none bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary-ink hover:bg-[var(--copilot-card)] transition-colors"
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
       <span className="[writing-mode:vertical-rl] text-[11px] tracking-[0.18em] font-semibold">{t("editor.copilotTabLabel")}</span>
@@ -275,7 +275,7 @@ export function CopilotToolbarButton() {
       title={t("editor.copilotTitle", { sc: formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform()) })}
       className={`ms-auto me-2 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
         open
-          ? "bg-primary/10 border border-primary/50 text-primary"
+          ? "bg-primary/10 border border-primary/50 text-primary-ink"
           : "bg-[var(--copilot-card)] border border-border text-muted-foreground hover:text-foreground hover:border-[var(--copilot-strong)]"
       }`}
     >

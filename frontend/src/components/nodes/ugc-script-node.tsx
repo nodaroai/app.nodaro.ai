@@ -79,7 +79,7 @@ function UgcScriptNodeComponent({ id, data, selected }: NodeProps) {
           {!running && lines.length > 0 && (
             <div className="flex flex-1 min-h-0 flex-col gap-1.5">
               {d.keepResult && (
-                <span className="self-start rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary" data-testid="ugc-script-kept">
+                <span className="self-start rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary-ink" data-testid="ugc-script-kept">
                   {t("ugc.script.kept")}
                 </span>
               )}

@@ -56,7 +56,7 @@ function EvidencePost({ post, save, wide }: { readonly post: CompetitorPost; rea
         aria-pressed={saved}
         aria-label={saved ? t("social.savedRemove") : t("social.saveToWall")}
         title={saved ? t("social.savedRemove") : t("social.saveToWall")}
-        className={cn("shrink-0 rounded-md p-1 disabled:opacity-50", saved ? "text-[#FF0073]" : "text-muted-foreground hover:text-foreground")}
+        className={cn("shrink-0 rounded-md p-1 disabled:opacity-50", saved ? "text-primary-ink" : "text-muted-foreground hover:text-foreground")}
       >
         {saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
       </button>

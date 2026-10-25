@@ -131,7 +131,7 @@ export default function AdminLlmModelsPage() {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
-        <BrainCircuit className="h-5 w-5 text-primary" />
+        <BrainCircuit className="h-5 w-5 text-primary-ink" />
         <h1 className="text-xl font-bold">LLM Models</h1>
         <span className="text-xs text-muted-foreground ml-2">
           {models.length} models

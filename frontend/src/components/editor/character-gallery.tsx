@@ -188,7 +188,7 @@ export function CharacterGalleryButton() {
         <Users className="h-4 w-4" />
         {t("entity.btnCharacters")}
         {charCount > 0 && (
-          <span className="ms-auto text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{charCount}</span>
+          <span className="ms-auto text-[11px] bg-primary/10 text-primary-ink px-1.5 py-0.5 rounded-full">{charCount}</span>
         )}
       </Button>
 
@@ -208,13 +208,13 @@ export function CharacterGalleryButton() {
             <div className="flex border-b text-[11px]">
               <button
                 onClick={() => setTab("active")}
-                className={`flex-1 py-2 ${tab === "active" ? "text-primary border-b-2 border-primary font-medium" : "text-muted-foreground"}`}
+                className={`flex-1 py-2 ${tab === "active" ? "text-primary-ink border-b-2 border-primary font-medium" : "text-muted-foreground"}`}
               >
                 {t("entity.tabActive")}{activeCount > 0 && <span className="ms-1 opacity-60">({activeCount})</span>}
               </button>
               <button
                 onClick={() => setTab("archived")}
-                className={`flex-1 py-2 ${tab === "archived" ? "text-primary border-b-2 border-primary font-medium" : "text-muted-foreground"}`}
+                className={`flex-1 py-2 ${tab === "archived" ? "text-primary-ink border-b-2 border-primary font-medium" : "text-muted-foreground"}`}
               >
                 {t("entity.tabArchived")}{archivedCount > 0 && <span className="ms-1 opacity-60">({archivedCount})</span>}
               </button>

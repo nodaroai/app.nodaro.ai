@@ -68,10 +68,10 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         {scenePlan && (
           <div className="relative flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             {isRunning && (
-              <Loader2 className="absolute top-1 right-1 w-3 h-3 animate-spin text-[#ff0073]" />
+              <Loader2 className="absolute top-1 right-1 w-3 h-3 animate-spin text-primary-ink" />
             )}
             <div className="text-center">
-              <div className="text-sm font-medium text-[#ff0073]">{t("node.nObjects", { n: objectCount })}</div>
+              <div className="text-sm font-medium text-primary-ink">{t("node.nObjects", { n: objectCount })}</div>
               <div className="text-[11px] text-muted-foreground">
                 {revision ? t("node.revShort", { rev: revision.slice(0, 6) }) : t("node.unversioned")}
                 {lockedCount > 0 ? ` · ${t("node.nLocked", { n: lockedCount })}` : ""}

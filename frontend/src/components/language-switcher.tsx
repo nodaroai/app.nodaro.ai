@@ -75,7 +75,7 @@ function LanguageSwitcherComponent() {
                     )}
                   </span>
                 </span>
-                {selected && <Check className="size-3.5 text-[#ff0073] shrink-0" />}
+                {selected && <Check className="size-3.5 text-primary-ink shrink-0" />}
               </button>
             )
           })}

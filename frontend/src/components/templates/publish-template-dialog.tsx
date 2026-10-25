@@ -296,7 +296,7 @@ export function PublishTemplateDialog({
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[#ff0073] hover:underline"
+                          className="text-primary-ink hover:underline"
                           {...props}
                         >
                           {children}
@@ -348,7 +348,7 @@ export function PublishTemplateDialog({
                   className={cn(
                     "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors",
                     outputTypes.includes(ot.value)
-                      ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                      ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                       : "text-muted-foreground border-border hover:border-zinc-400",
                   )}
                 >

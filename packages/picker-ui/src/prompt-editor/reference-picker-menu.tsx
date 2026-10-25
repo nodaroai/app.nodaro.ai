@@ -168,7 +168,7 @@ export function ReferencePickerMenu({
               )}
               <span className="truncate">{item.label}</span>
               {item.bucket === "boards" && (
-                <span className="ml-1 rounded bg-primary/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-primary">
+                <span className="ml-1 rounded bg-primary/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-primary-ink">
                   board
                 </span>
               )}

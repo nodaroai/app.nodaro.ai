@@ -318,7 +318,7 @@ export default function AdminCreditAudit() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Open provider dashboard logs → DevTools → Network → copy the <code className="text-[#ff0073]">authorization</code> header value from any request
+          Open provider dashboard logs → DevTools → Network → copy the <code className="text-primary-ink">authorization</code> header value from any request
         </p>
         </>
         )}
@@ -385,7 +385,7 @@ export default function AdminCreditAudit() {
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     filter === f
-                      ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20"
+                      ? "bg-[#ff0073]/10 text-primary-ink border border-[#ff0073]/20"
                       : "text-muted-foreground hover:text-foreground border border-transparent"
                   }`}
                 >
@@ -399,7 +399,7 @@ export default function AdminCreditAudit() {
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     filter === f
-                      ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20"
+                      ? "bg-[#ff0073]/10 text-primary-ink border border-[#ff0073]/20"
                       : "text-muted-foreground hover:text-foreground border border-transparent"
                   }`}
                 >

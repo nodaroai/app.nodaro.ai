@@ -495,7 +495,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                             {selectedImage.thumbnailUrl ? (
                               <CachedImage src={selectedImage.thumbnailUrl} alt="" className="w-5 h-5 object-cover rounded" thumbnail thumbnailWidth={80} />
                             ) : (
-                              <ImageIcon className="w-4 h-4 text-[#ff0073]" />
+                              <ImageIcon className="w-4 h-4 text-primary-ink" />
                             )}
                             <span className="truncate">{selectedImage.label}</span>
                           </div>
@@ -509,7 +509,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                             {node.thumbnailUrl ? (
                               <CachedImage src={node.thumbnailUrl} alt="" className="w-5 h-5 object-cover rounded" thumbnail thumbnailWidth={80} />
                             ) : (
-                              <ImageIcon className="w-4 h-4 text-[#ff0073]" />
+                              <ImageIcon className="w-4 h-4 text-primary-ink" />
                             )}
                             <span>{node.label}</span>
                           </div>
@@ -538,7 +538,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                       <SelectValue placeholder={t("node.selectVideo")}>
                         {selectedVideo && (
                           <div className="flex items-center gap-2">
-                            <Clapperboard className="w-4 h-4 text-[#ff0073]" />
+                            <Clapperboard className="w-4 h-4 text-primary-ink" />
                             <span className="truncate">{selectedVideo.label}</span>
                           </div>
                         )}
@@ -548,7 +548,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                       {videoNodes.map((node) => (
                         <SelectItem key={node.id} value={node.id}>
                           <div className="flex items-center gap-2">
-                            <Clapperboard className="w-4 h-4 text-[#ff0073]" />
+                            <Clapperboard className="w-4 h-4 text-primary-ink" />
                             <span>{node.label}</span>
                           </div>
                         </SelectItem>
@@ -575,7 +575,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                     <SelectValue placeholder={t("node.selectAudio")}>
                       {selectedAudio && (
                         <div className="flex items-center gap-2">
-                          <Volume2 className="w-4 h-4 text-[#ff0073]" />
+                          <Volume2 className="w-4 h-4 text-primary-ink" />
                           <span className="truncate">{selectedAudio.label}</span>
                         </div>
                       )}
@@ -585,7 +585,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                     {audioNodes.map((node) => (
                       <SelectItem key={node.id} value={node.id}>
                         <div className="flex items-center gap-2">
-                          <Volume2 className="w-4 h-4 text-[#ff0073]" />
+                          <Volume2 className="w-4 h-4 text-primary-ink" />
                           <span>{node.label}</span>
                         </div>
                       </SelectItem>

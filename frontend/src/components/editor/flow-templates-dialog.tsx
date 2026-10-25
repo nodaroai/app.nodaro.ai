@@ -187,7 +187,7 @@ function FlowTemplateGroupCard({
         </TooltipProvider>
 
         {hasOverride && (
-          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-primary-ink font-medium">
             {t("flowtpl.override")}
           </span>
         )}
@@ -200,7 +200,7 @@ function FlowTemplateGroupCard({
           className={cn(
             "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
             tab === "description"
-              ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
+              ? "bg-[#ff0073]/10 text-primary-ink border border-[#ff0073]/30"
               : "text-muted-foreground hover:bg-muted/50 border border-transparent",
           )}
         >
@@ -212,7 +212,7 @@ function FlowTemplateGroupCard({
           className={cn(
             "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
             tab === "generation"
-              ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
+              ? "bg-[#ff0073]/10 text-primary-ink border border-[#ff0073]/30"
               : "text-muted-foreground hover:bg-muted/50 border border-transparent",
           )}
         >
@@ -295,7 +295,7 @@ function FlowTemplateCard({
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-semibold">{t(info.labelKey)}</h4>
             {hasOverride && (
-              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-primary-ink font-medium">
                 {t("flowtpl.override")}
               </span>
             )}

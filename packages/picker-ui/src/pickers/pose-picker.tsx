@@ -101,7 +101,7 @@ export const PosePicker = memo(function PosePicker({
                       text={label}
                       className={cn(
                         "text-[11px] font-medium leading-tight max-w-full",
-                        selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                        selected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
                       )}
                     />
                   </button>

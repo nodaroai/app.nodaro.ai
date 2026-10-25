@@ -131,7 +131,7 @@ export default function AppRunnerPage() {
         <div className="text-center max-w-md">
           <h1 className="text-2xl font-bold mb-2">{t("runner.appNotFound")}</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
-          <Link to="/projects" className="text-[#ff0073] hover:underline">
+          <Link to="/projects" className="text-primary-ink hover:underline">
             {t("present.goToDashboard")}
           </Link>
         </div>
@@ -241,7 +241,7 @@ export default function AppRunnerPage() {
       {runSlots.isLoadingRun ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl bg-card/60 backdrop-blur-md border border-border/50 shadow-lg">
-            <Loader2 className="h-6 w-6 animate-spin text-[#ff0073]" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary-ink" />
             <span className="text-sm text-muted-foreground">{t("runner.loadingRun")}</span>
           </div>
         </div>

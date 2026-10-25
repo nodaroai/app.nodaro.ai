@@ -528,7 +528,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
           <button
             type="button"
             onClick={() => setShowInfo(!showInfo)}
-            className={`p-1 rounded-md transition-colors ${showInfo ? "bg-[#ff0073]/10 text-[#ff0073]" : "text-muted-foreground hover:text-[var(--text-primary)] hover:bg-muted/50"}`}
+            className={`p-1 rounded-md transition-colors ${showInfo ? "bg-[#ff0073]/10 text-primary-ink" : "text-muted-foreground hover:text-[var(--text-primary)] hover:bg-muted/50"}`}
             title={t("cfgext.compPromptGuide")}
           >
             <Info className="w-3.5 h-3.5" />
@@ -735,7 +735,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
             <button
               type="button"
               onClick={() => addLayer(availableHandles[0])}
-              className="text-[11px] text-[#ff0073] hover:underline"
+              className="text-[11px] text-primary-ink hover:underline"
             >
               {t("cfgext.compAddLayer")}
             </button>
@@ -952,10 +952,10 @@ export function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<Rende
     <div className="flex flex-col gap-3">
       {upstreamComposer && (
         <div className="flex items-center gap-2 p-2 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
-          <Sparkles className="w-4 h-4 text-[#ff0073] shrink-0" />
+          <Sparkles className="w-4 h-4 text-primary-ink shrink-0" />
           <div className="text-xs">
             <span className="text-[var(--text-primary)]">{t("cfgext.compCompositionFrom")}{t("common.fragmentGap")}</span>
-            <span className="font-medium text-[#ff0073]">{localizeNode(upstreamComposer.label)}</span>
+            <span className="font-medium text-primary-ink">{localizeNode(upstreamComposer.label)}</span>
             {upstreamComposer.trackCount > 0 && (
               <span className="ms-1 text-muted-foreground">{t("cfgext.compTracksCount", { count: upstreamComposer.trackCount })}</span>
             )}

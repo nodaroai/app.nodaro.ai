@@ -126,7 +126,7 @@ export function EmptyCanvasState({
                          transition-all hover:-translate-y-0.5 hover:border-[#ff0073]/60 hover:shadow-md
                          dark:border-[#2D2D2D] dark:bg-[#1A1A1A] dark:shadow-none dark:hover:border-[#ff0073]/60"
             >
-              <ArrowUpRight className="absolute end-4 top-4 h-4 w-4 text-slate-300 transition-colors group-hover:text-[#ff0073] dark:text-slate-600" />
+              <ArrowUpRight className="absolute end-4 top-4 h-4 w-4 text-slate-300 transition-colors group-hover:text-primary-ink dark:text-slate-600" />
               <span className={`mb-8 flex h-11 w-11 items-center justify-center rounded-xl ${card.iconWrap}`}>
                 <card.Icon className={`h-5 w-5 ${card.iconColor}`} />
               </span>
@@ -151,7 +151,7 @@ export function EmptyCanvasState({
             <span className="text-[13px] font-semibold text-slate-900 dark:text-white">{t("canvas.haveFile")}</span>
             <span className="text-[12px] text-slate-500 dark:text-slate-400">{t("canvas.uploadOrBrowse")}</span>
           </span>
-          <ArrowRight className={cn("ms-auto h-4 w-4 text-slate-300 transition-colors group-hover:text-[#ff0073] dark:text-slate-600", isRtl && "rotate-180")} />
+          <ArrowRight className={cn("ms-auto h-4 w-4 text-slate-300 transition-colors group-hover:text-primary-ink dark:text-slate-600", isRtl && "rotate-180")} />
         </button>
 
         {/* Tertiary utility pills */}

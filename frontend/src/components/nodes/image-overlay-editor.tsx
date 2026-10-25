@@ -140,7 +140,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
               onValueChange={(id) => updateNodeData(nodeId, overlayPlatformPatch(id, nodeData))}
             >
               <SelectTrigger
-                className={`h-8 rounded-full border-2 ps-2.5 pe-3 gap-2 text-xs font-medium shadow-sm transition-colors ${platform ? "border-cta bg-cta text-white hover:bg-cta-hover" : "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20"}`}
+                className={`h-8 rounded-full border-2 ps-2.5 pe-3 gap-2 text-xs font-medium shadow-sm transition-colors ${platform ? "border-cta bg-cta text-white hover:bg-cta-hover" : "border-[#ff0073] bg-[#ff0073]/10 text-primary-ink hover:bg-[#ff0073]/20"}`}
                 aria-label={t("overlayPlatform.label")}
               >
                 <MonitorSmartphone className="w-4 h-4 shrink-0" aria-hidden />
@@ -163,7 +163,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
                     key={q.id}
                     type="button"
                     aria-pressed={on}
-                    className={`h-7 rounded-full border px-2.5 text-[11px] transition-colors ${on ? "border-[#ff0073] bg-[#ff0073]/15 text-[#ff0073] font-medium" : "border-border/70 text-muted-foreground hover:border-[#ff0073]/60 hover:text-foreground"}`}
+                    className={`h-7 rounded-full border px-2.5 text-[11px] transition-colors ${on ? "border-[#ff0073] bg-[#ff0073]/15 text-primary-ink font-medium" : "border-border/70 text-muted-foreground hover:border-[#ff0073]/60 hover:text-foreground"}`}
                     onClick={() => updateNodeData(nodeId, overlayPlatformPatch(on ? "none" : q.id, nodeData))}
                   >
                     {t(`overlayEditor.quick.${q.key}` as never)}
@@ -236,7 +236,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
               {handleCount < OVERLAY_MAX_LAYERS && (
                 <button
                   type="button"
-                  className="mt-1 w-full py-1 text-[11px] text-muted-foreground hover:text-[#ff0073] text-start px-2"
+                  className="mt-1 w-full py-1 text-[11px] text-muted-foreground hover:text-primary-ink text-start px-2"
                   onClick={() => updateNodeData(nodeId, { layerCount: handleCount + 1 })}
                 >
                   {t("overlayEditor.addLayer")}
@@ -398,14 +398,14 @@ function LayerRow({ index, layer, url, qrText, selected, onSelect, onReorder, on
         <span className="flex-1 min-w-0">
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground truncate">{tag}</span>
           <span className="block truncate" title={content}>{content}</span>
-          {kind === "qr" && <span className="block text-[11px] text-[#ff0073]">{layer.qr?.fromInput ? t("overlayEditor.linkFromWorkflow") : t("overlayEditor.editableLink")}</span>}
+          {kind === "qr" && <span className="block text-[11px] text-primary-ink">{layer.qr?.fromInput ? t("overlayEditor.linkFromWorkflow") : t("overlayEditor.editableLink")}</span>}
         </span>
       </button>
       <span className="flex flex-col">
-        <button type="button" className="h-3.5 hover:text-[#ff0073]" aria-label={t("overlayEditor.bringForward")} title={t("overlayEditor.bringForward")} onClick={() => onReorder("up")}>
+        <button type="button" className="h-3.5 hover:text-primary-ink" aria-label={t("overlayEditor.bringForward")} title={t("overlayEditor.bringForward")} onClick={() => onReorder("up")}>
           <ChevronUp className="w-3 h-3" aria-hidden />
         </button>
-        <button type="button" className="h-3.5 hover:text-[#ff0073]" aria-label={t("overlayEditor.sendBackward")} title={t("overlayEditor.sendBackward")} onClick={() => onReorder("down")}>
+        <button type="button" className="h-3.5 hover:text-primary-ink" aria-label={t("overlayEditor.sendBackward")} title={t("overlayEditor.sendBackward")} onClick={() => onReorder("down")}>
           <ChevronDown className="w-3 h-3" aria-hidden />
         </button>
       </span>

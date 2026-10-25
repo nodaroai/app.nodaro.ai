@@ -163,7 +163,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
         <StatCard
           label={t("nav.executions")}
           value={formatNumber(stats?.totalExecutions ?? 0)}
-          icon={<Activity className="h-3.5 w-3.5 text-[#ff0073]" />}
+          icon={<Activity className="h-3.5 w-3.5 text-primary-ink" />}
           colorClass="bg-[#ff0073]/10"
           loading={loading}
         />

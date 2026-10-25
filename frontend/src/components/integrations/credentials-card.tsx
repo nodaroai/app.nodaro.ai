@@ -104,7 +104,7 @@ export function CredentialsCard({ addOpen, onAddOpenChange }: CredentialsCardPro
     >
       <div className="flex items-start justify-between gap-4 p-5 pb-4">
         <div className="flex gap-3">
-          <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-primary/10 text-primary">
+          <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-primary/10 text-primary-ink">
             <KeyRound className="h-[18px] w-[18px]" />
           </div>
           <div className="flex flex-col gap-0.5">

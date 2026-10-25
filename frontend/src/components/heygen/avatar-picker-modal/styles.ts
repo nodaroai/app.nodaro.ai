@@ -9,7 +9,7 @@ export const KICKER = "text-[11px] font-mono uppercase tracking-[0.12em] text-mu
 export const CHIP =
   "max-w-[220px] overflow-hidden text-ellipsis rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 text-[11.5px] " +
   "text-foreground/80 whitespace-nowrap transition-colors hover:border-foreground/30 cursor-pointer"
-export const CHIP_ON = "border-[#ff0073]/60 bg-[#ff0073]/10 text-[#ff0073] hover:border-[#ff0073]/60"
+export const CHIP_ON = "border-[#ff0073]/60 bg-[#ff0073]/10 text-primary-ink hover:border-[#ff0073]/60"
 
 /** The violet Avatar-V tag on a card / the detail image. */
 export const V_TAG = "rounded-[5px] bg-violet-600/90 text-white grid place-items-center"

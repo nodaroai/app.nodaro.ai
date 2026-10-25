@@ -300,7 +300,7 @@ function InputField({ name, value }: InputFieldProps) {
                   <button
                     type="button"
                     onClick={() => setExpanded(!expanded)}
-                    className="ms-2 text-[#ff0073] hover:underline"
+                    className="ms-2 text-primary-ink hover:underline"
                   >
                     {expanded ? t("templates.readLess") : t("exec.showMore")}
                   </button>
@@ -406,7 +406,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             </div>
             <div className="flex items-center gap-6">
               {state.nodeType && (
-                <span className="text-sm text-[#ff0073] font-mono">{state.nodeType}</span>
+                <span className="text-sm text-primary-ink font-mono">{state.nodeType}</span>
               )}
               {state.startedAt && state.completedAt && (
                 <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-[#94A3B8]">
@@ -415,7 +415,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                 </div>
               )}
               {state.creditsUsed != null && state.creditsUsed > 0 && (
-                <div className="flex items-center gap-1.5 text-sm text-[#ff0073] font-mono">
+                <div className="flex items-center gap-1.5 text-sm text-primary-ink font-mono">
                   <Coins className="w-4 h-4" />
                   {formatCreditUnits(state.creditsUsed)}
                 </div>
@@ -480,7 +480,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                       <div className="py-3">
                         <div className="flex items-start gap-3">
                           <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">{t("exec.colCredits")}</span>
-                          <span className="text-sm text-[#ff0073] font-mono">{formatCreditUnits(state.creditsUsed)}</span>
+                          <span className="text-sm text-primary-ink font-mono">{formatCreditUnits(state.creditsUsed)}</span>
                         </div>
                       </div>
                     )}
@@ -558,7 +558,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         </div>
                       ) : state.status === "running" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
-                          <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-3" />
+                          <Loader2 className="w-8 h-8 animate-spin text-primary-ink mb-3" />
                           <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("credits.processing")}</p>
                         </div>
                       ) : state.status === "pending" ? (
@@ -708,12 +708,12 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
 
           <div className="flex items-center gap-6">
             {/* Type & Provider (provider hidden in cloud edition for regular users) */}
-            <span className="text-sm text-[#ff0073] font-mono">
+            <span className="text-sm text-primary-ink font-mono">
               {provider ? `${jobType} (${provider})` : jobType}
             </span>
 
             {/* Cost */}
-            <div className="flex items-center gap-1.5 text-sm text-[#ff0073] font-mono">
+            <div className="flex items-center gap-1.5 text-sm text-primary-ink font-mono">
               {dollars ? <DollarSign className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
               {getCostDisplayForModal(job, dollars)}
             </div>
@@ -875,7 +875,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                       </div>
                     ) : job.status === "processing" || job.status === "pending" || job.status === "queued" ? (
                       <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
-                        <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-3" />
+                        <Loader2 className="w-8 h-8 animate-spin text-primary-ink mb-3" />
                         <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("credits.processing")}</p>
                         {job.progress > 0 && (
                           <p className="text-xs text-gray-400 dark:text-[#64748B] mt-1">{t("exec.percentComplete", { n: job.progress })}</p>

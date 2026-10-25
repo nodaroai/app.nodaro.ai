@@ -1096,7 +1096,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
               )}
               {isDragOver && firstImageColIdx >= 0 && !isConnectedData && (
                 <div className="absolute inset-0 bg-[#ff0073]/5 border-2 border-dashed border-[#ff0073]/60 rounded-lg flex items-center justify-center z-10">
-                  <div className="flex items-center gap-1.5 text-[#ff0073] text-xs font-medium">
+                  <div className="flex items-center gap-1.5 text-primary-ink text-xs font-medium">
                     <Upload className="w-3.5 h-3.5" />
                     {t("node.dropToAddRows")}
                   </div>

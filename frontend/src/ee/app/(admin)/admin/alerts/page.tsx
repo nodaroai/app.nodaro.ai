@@ -105,7 +105,7 @@ export default function AdminAlertsPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-primary" />
+          <Bell className="h-5 w-5 text-primary-ink" />
           <h1 className="text-xl font-bold">Cost Alerts</h1>
         </div>
 

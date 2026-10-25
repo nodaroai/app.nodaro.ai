@@ -238,7 +238,7 @@ export function AiAvatarConfig({
           <Label className="text-xs text-muted-foreground">
             {t("cfgext.aiAvAvatar")}
             {data.avatarName && (
-              <span className="ms-1.5 text-[#ff0073] font-normal">— {data.avatarName}</span>
+              <span className="ms-1.5 text-primary-ink font-normal">— {data.avatarName}</span>
             )}
           </Label>
           <AvatarPicker
@@ -306,7 +306,7 @@ export function AiAvatarConfig({
             <Label className="text-xs text-muted-foreground">
               {t("field.voice")}
               {data.voiceName && (
-                <span className="ms-1.5 text-[#ff0073] font-normal">— {data.voiceName}</span>
+                <span className="ms-1.5 text-primary-ink font-normal">— {data.voiceName}</span>
               )}
             </Label>
             <VoicePicker

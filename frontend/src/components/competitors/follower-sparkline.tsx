@@ -50,7 +50,7 @@ export function FollowerSparkline({
   const dateOf = (iso: string) => formatDate(Date.parse(iso), { month: "short", day: "numeric" })
   return (
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className={cn("h-10 w-full max-w-[240px] overflow-visible", className)} role="group" aria-label={t(measure === "followers" ? "competitors.followersOverTime" : "competitors.postsPerScan")}>
-      {points.length > 1 && <polyline points={line} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-primary" />}
+      {points.length > 1 && <polyline points={line} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-primary-ink" />}
       {points.map((p, i) => (
         <circle
           key={p.id}

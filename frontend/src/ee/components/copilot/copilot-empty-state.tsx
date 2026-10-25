@@ -12,7 +12,7 @@ import { useT } from "@/lib/i18n"
 
 const ICONS = {
   image: { Icon: ImageIcon, className: "text-[var(--copilot-mention)]" },
-  sparkles: { Icon: Sparkles, className: "text-primary" },
+  sparkles: { Icon: Sparkles, className: "text-primary-ink" },
   video: { Icon: Video, className: "text-[var(--copilot-ok)]" },
   user: { Icon: User, className: "text-[#475569]" },
 } as const
@@ -29,7 +29,7 @@ export function CopilotEmptyState({ firstName, onPick, disabled, moved }: Copilo
   return (
     <div className="flex flex-col gap-[18px] pt-9">
       <div className="flex flex-col items-center gap-3 text-center">
-        <Bot className="w-[26px] h-[26px] text-primary" strokeWidth={1.6} />
+        <Bot className="w-[26px] h-[26px] text-primary-ink" strokeWidth={1.6} />
         <div className={moved ? "text-[20px] font-semibold text-foreground tracking-[-0.02em]" : "text-[26px] font-semibold text-foreground tracking-[-0.02em]"}>
           {moved ? t(K.movedTitle) : firstName ? t(K.emptyGreeting, { name: firstName }) : t(K.emptyGreetingAnon)}
         </div>

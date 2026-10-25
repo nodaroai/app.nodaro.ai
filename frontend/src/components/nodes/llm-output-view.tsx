@@ -58,7 +58,7 @@ const MARKDOWN_CLASS =
   "[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1.5 [&_li]:my-0.5 " +
   "[&_code]:text-[12px] [&_code]:bg-black/5 dark:[&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded " +
   "[&_pre]:bg-black/5 dark:[&_pre]:bg-white/10 [&_pre]:p-2 [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_pre]:my-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 " +
-  "[&_a]:text-[#ff0073] [&_a]:underline [&_strong]:font-semibold [&_em]:italic " +
+  "[&_a]:text-primary-ink [&_a]:underline [&_strong]:font-semibold [&_em]:italic " +
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground [&_blockquote]:my-2 " +
   "[&_hr]:my-3 [&_hr]:border-border " +
   "[&_table]:w-full [&_table]:text-[11px] [&_table]:my-2 [&_th]:text-left [&_th]:font-semibold [&_th]:p-1 [&_th]:border [&_th]:border-border/50 [&_td]:p-1 [&_td]:border [&_td]:border-border/40"

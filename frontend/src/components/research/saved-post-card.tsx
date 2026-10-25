@@ -84,7 +84,7 @@ export function SavedPostCard({
                 key={tag}
                 type="button"
                 onClick={() => onTag(tag)}
-                className="rounded-full border border-[var(--meta-ads-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--meta-ads-text-2)] hover:border-[#FF0073] hover:text-[#FF0073]"
+                className="rounded-full border border-[var(--meta-ads-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--meta-ads-text-2)] hover:border-[#FF0073] hover:text-primary-ink"
                 dir="auto"
               >
                 #{tag}
@@ -97,7 +97,7 @@ export function SavedPostCard({
             {t("inspiration.savedOn", { date: formatDate(Date.parse(save.createdAt), { month: "short", day: "numeric" }) })}
           </span>
           {link && (
-            <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-1 text-[#FF0073] hover:underline">
+            <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-1 text-primary-ink hover:underline">
               {t("social.openPost")} <ExternalLink className="h-3 w-3" />
             </a>
           )}

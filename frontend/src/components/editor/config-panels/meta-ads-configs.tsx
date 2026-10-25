@@ -201,7 +201,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
                 className="h-9 flex-1 border-0 bg-transparent px-0 text-[14px] font-semibold text-[var(--meta-ads-text)] shadow-none focus-visible:ring-0"
               />
               {fieldMappings.query && (
-                <span className="shrink-0 rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-[3px] text-[11px] font-extrabold text-[#FF0073]">
+                <span className="shrink-0 rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-[3px] text-[11px] font-extrabold text-primary-ink">
                   {t("cfgext.metaAdsFromInput")}
                 </span>
               )}
@@ -222,7 +222,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
             />
             <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">
               {t("cfgext.metaAdsPageUrlsHelp", { max: META_ADS_SCRAPE_MAX_SOURCES })}
-              {fieldMappings.pageUrls && <span className="ms-1 font-extrabold text-[#FF0073]">· {t("cfgext.metaAdsFromInput")}</span>}
+              {fieldMappings.pageUrls && <span className="ms-1 font-extrabold text-primary-ink">· {t("cfgext.metaAdsFromInput")}</span>}
             </p>
           </div>
         </MappableField>
@@ -310,7 +310,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
                 className={cn(
                   "flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors",
                   on
-                    ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]"
+                    ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-primary-ink"
                     : "border border-dashed border-[var(--meta-ads-empty-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]",
                 )}
               >
@@ -340,7 +340,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
                 className={cn(
                   "flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors",
                   on
-                    ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]"
+                    ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-primary-ink"
                     : "border border-dashed border-[var(--meta-ads-empty-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]",
                 )}
               >
@@ -520,7 +520,7 @@ export function MetaAdsScrapeResultsTab({
               className={cn(
                 "rounded-full border px-2.5 py-1 text-[11.5px] font-bold transition-colors",
                 on
-                  ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]"
+                  ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-primary-ink"
                   : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]",
               )}
             >
@@ -629,7 +629,7 @@ export function MetaAdsScrapeResultsTab({
                       <span className="flex items-center gap-2">
                         <span className="rounded-[7px] bg-[var(--meta-ads-cta-bg)] px-2.5 py-[5px] text-[11.5px] font-extrabold text-[var(--meta-ads-cta-fg)]">{cta}</span>
                         {link && (
-                          <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#FF0073] hover:underline">
+                          <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary-ink hover:underline">
                             {t("cfgext.metaAdsAdLibrary")} <ExternalLink className="h-3 w-3" />
                           </a>
                         )}

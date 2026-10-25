@@ -103,7 +103,7 @@ export function PromptHelperButton({
         type="button"
         onClick={() => setOpen(true)}
         className={
-          "inline-flex items-center gap-1 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors font-medium whitespace-nowrap " +
+          "inline-flex items-center gap-1 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-primary-ink hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors font-medium whitespace-nowrap " +
           (size === "md"
             ? "px-2.5 py-1.5 text-xs"
             : "px-2 py-0.5 min-h-[32px] sm:min-h-0 text-[11px]")

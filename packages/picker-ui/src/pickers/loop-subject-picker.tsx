@@ -151,7 +151,7 @@ export const LoopSubjectPicker = memo(function LoopSubjectPicker({
                         : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] text-gray-700 dark:text-[#E2E8F0] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
                     )}
                   >
-                    <span className={cn("flex items-center justify-center", selected ? "text-[#ff0073]" : "text-muted-foreground")}>
+                    <span className={cn("flex items-center justify-center", selected ? "text-primary-ink" : "text-muted-foreground")}>
                       {getSubjectIcon(subject.id)}
                     </span>
                     <FitText

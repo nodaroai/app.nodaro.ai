@@ -247,7 +247,7 @@ export default function VideoDirectorPage() {
         {phase === "completed" && !videoUrl && (
           <div className="rounded-md border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-muted-foreground">
             {t("vd.noUrlPre")}{t("common.fragmentGap")}
-            <Link to="/my-files" className="text-primary hover:underline">
+            <Link to="/my-files" className="text-primary-ink hover:underline">
               {t("vd.myFiles")}
             </Link>{t("common.fragmentGap")}
             {t("vd.noUrlPost")}

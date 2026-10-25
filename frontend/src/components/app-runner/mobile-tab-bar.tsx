@@ -65,7 +65,7 @@ export function MobileTabBar({
             type="button"
             onClick={() => onTabChange(id)}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-1.5 touch-manipulation transition-colors ${
-              isActive ? "text-[#ff0073]" : "text-muted-foreground"
+              isActive ? "text-primary-ink" : "text-muted-foreground"
             }`}
           >
             <span className="relative">

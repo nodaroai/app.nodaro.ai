@@ -232,7 +232,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
   const tabClass = (tab: Kling3Tab) =>
     `px-3 py-2 text-xs font-medium transition-colors ${
       activeTab === tab
-        ? "border-b-2 border-[#ff0073] text-[#ff0073] font-semibold"
+        ? "border-b-2 border-[#ff0073] text-primary-ink font-semibold"
         : "text-muted-foreground hover:text-foreground"
     }`
 
@@ -279,8 +279,8 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
           {connectedTextPrompts.map((prompt, idx) => (
             <div key={`${prompt.id}-${idx}`} className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 mb-1">
-                <FileText className="w-3 h-3 text-[#ff0073]" />
-                <span className="text-[11px] text-[#ff0073] font-medium">{prompt.label}</span>
+                <FileText className="w-3 h-3 text-primary-ink" />
+                <span className="text-[11px] text-primary-ink font-medium">{prompt.label}</span>
               </div>
               <Textarea
                 value={prompt.text}
@@ -561,7 +561,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 type="button"
                 onClick={handleAddShot}
                 disabled={shots.length >= 6}
-                className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-primary-ink transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" /> {t("cfgext.kling3AddShot")} {shots.length < 6 && `(${shots.length}/6)`}
               </button>
@@ -590,7 +590,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
           {elements.map((el, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm text-[#ff0073] font-bold shrink-0">@</span>
+                <span className="text-sm text-primary-ink font-bold shrink-0">@</span>
                 <input
                   ref={(ref) => { elementNameRefs.current[i] = ref }}
                   type="text"
@@ -671,14 +671,14 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               <div className="flex items-center gap-1.5 relative">
                 <button
                   type="button"
-                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-primary-ink transition-colors"
                   onClick={() => alert(tx("dash.comingSoon"))}
                 >
                   {t("cfgext.kling3AddLibrary")}
                 </button>
                 <button
                   type="button"
-                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-primary-ink transition-colors disabled:opacity-40"
                   disabled={uploadingIndex === i}
                   onClick={() => fileInputRefs.current[i]?.click()}
                 >
@@ -701,7 +701,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 />
                 <button
                   type="button"
-                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-primary-ink transition-colors"
                   onClick={() => setWorkflowDropdownIndex(workflowDropdownIndex === i ? null : i)}
                 >
                   {t("cfgext.kling3AddWorkflow")}
@@ -754,7 +754,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             type="button"
             onClick={handleAddElement}
             disabled={elements.length >= 5}
-            className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-1.5"
+            className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-primary-ink transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" /> {t("cfgext.kling3AddElement")} {elements.length < 5 && `(${elements.length}/5)`}
           </button>

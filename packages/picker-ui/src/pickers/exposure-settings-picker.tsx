@@ -137,7 +137,7 @@ function CategorySection({
           htmlFor={switchId}
           className={cn(
             "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
-            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+            checked ? "text-primary-ink" : "text-muted-foreground/60",
           )}
         >
           {label}
@@ -173,7 +173,7 @@ function CategorySection({
                 text={entryLabel}
                 className={cn(
                   "text-[11px] font-medium leading-tight max-w-full",
-                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                  selected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               />
             </button>

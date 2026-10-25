@@ -135,7 +135,7 @@ export function NodaroScopeDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Cloud className="h-5 w-5 text-[#ff0073]" />
+            <Cloud className="h-5 w-5 text-primary-ink" />
             {t("integ.scopeTitle")}
           </DialogTitle>
           <DialogDescription>

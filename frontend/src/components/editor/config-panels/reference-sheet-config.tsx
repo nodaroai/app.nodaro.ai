@@ -116,7 +116,7 @@ export function ReferenceSheetConfig({
       <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
         {entityMeta ? (
           <div className="flex items-center gap-2 text-sm">
-            <entityMeta.Icon className="w-4 h-4 text-[#ff0073]" />
+            <entityMeta.Icon className="w-4 h-4 text-primary-ink" />
             <span className="font-medium text-foreground">{t("cfgext.refSheetEntityConnected", { entity: entityMeta.label })}</span>
           </div>
         ) : (

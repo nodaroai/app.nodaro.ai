@@ -409,7 +409,7 @@ export default function AppsPage() {
               className={cn(
                 "text-xs px-2.5 py-1 rounded-full border transition-colors",
                 !selectedCategory
-                  ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                  ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                   : "text-muted-foreground border-border hover:text-foreground hover:border-zinc-400",
               )}
               onClick={() => setSelectedCategory(undefined)}
@@ -423,7 +423,7 @@ export default function AppsPage() {
                 className={cn(
                   "text-xs px-2.5 py-1 rounded-full border transition-colors",
                   selectedCategory === cat.value
-                    ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                    ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                     : "text-muted-foreground border-border hover:text-foreground hover:border-zinc-400",
                 )}
                 onClick={() => setSelectedCategory(selectedCategory === cat.value ? undefined : cat.value)}
@@ -443,7 +443,7 @@ export default function AppsPage() {
                 className={cn(
                   "text-xs px-2.5 py-1 rounded-full border transition-colors",
                   selectedOutputType === ot.value
-                    ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                    ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                     : "text-muted-foreground border-border hover:text-foreground hover:border-zinc-400",
                 )}
                 onClick={() => setSelectedOutputType(selectedOutputType === ot.value ? undefined : ot.value)}
@@ -1095,7 +1095,7 @@ function EditAppDialog({
                   key={ot.value}
                   className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors ${
                     outputTypes.includes(ot.value)
-                      ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                      ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                       : "text-muted-foreground border-border hover:border-zinc-400"
                   }`}
                 >

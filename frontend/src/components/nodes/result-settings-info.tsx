@@ -99,7 +99,7 @@ export function ResultSettingsInfo({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[440px]" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
-            <DialogTitle className="text-primary">{t("node.applyOutputSettings")}</DialogTitle>
+            <DialogTitle className="text-primary-ink">{t("node.applyOutputSettings")}</DialogTitle>
             <DialogDescription>
               {isLoading
                 ? t("node.loadingOutputSettings")

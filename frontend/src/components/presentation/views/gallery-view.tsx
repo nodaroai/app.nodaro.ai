@@ -69,7 +69,7 @@ export function GalleryView({
                 onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   activeTab === tab.key
-                    ? "bg-[#ff0073]/10 text-[#ff0073]"
+                    ? "bg-[#ff0073]/10 text-primary-ink"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >

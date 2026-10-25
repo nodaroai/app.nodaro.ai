@@ -332,7 +332,7 @@ export default function CopilotHomeComposer() {
 
             <div className={`rounded-2xl px-3 pt-3 pb-2.5 flex flex-col gap-2.5 ${GLASS}`}>
               <div className="flex items-center gap-2.5">
-                <Bot className="w-3.5 h-3.5 text-primary" strokeWidth={1.7} />
+                <Bot className="w-3.5 h-3.5 text-primary-ink" strokeWidth={1.7} />
                 <span className="text-[12.5px] font-semibold text-foreground">{t(K.title)}</span>
                 <span className="text-[11.5px] text-[var(--copilot-dim)] hidden sm:inline truncate">
                   {t(K.homeTagline)}
@@ -518,7 +518,7 @@ function CollapsedPill({ shortcut, onOpen }: { shortcut: string; onOpen: () => v
       title={`${t(K.title)} (${shortcut})`}
       className={`pointer-events-auto mx-auto flex items-center gap-2.5 px-4 py-2.5 rounded-full ${GLASS}`}
     >
-      <Bot className="w-3.5 h-3.5 text-primary" strokeWidth={1.7} />
+      <Bot className="w-3.5 h-3.5 text-primary-ink" strokeWidth={1.7} />
       <span className="text-[12.5px] font-semibold text-foreground">{t(K.title)}</span>
       <span className="font-mono text-[11px] text-[var(--copilot-dim)]">{shortcut}</span>
     </button>

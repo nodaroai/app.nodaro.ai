@@ -126,7 +126,7 @@ export function UpdateDialog({
       >
         {/* Header */}
         <div className="flex items-start gap-3.5 border-b px-7 py-5">
-          <span className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full border-2 border-[#ff0073] text-[#ff0073]">
+          <span className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full border-2 border-[#ff0073] text-primary-ink">
             <ArrowUp className="h-4 w-4" strokeWidth={3} />
           </span>
           <div className="min-w-0 flex-1">
@@ -176,7 +176,7 @@ export function UpdateDialog({
                 href={latest.url}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[#ff0073] hover:underline"
+                className="text-primary-ink hover:underline"
               >
                 {t("nav.releaseOnGithub", { version: latest.version })}
               </a>
@@ -185,7 +185,7 @@ export function UpdateDialog({
                   href={compareUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#ff0073] hover:underline"
+                  className="text-primary-ink hover:underline"
                 >
                   {t("nav.compareVersions", { current: V(info.current), latest: V(latest.version) })}
                 </a>
@@ -204,7 +204,7 @@ export function UpdateDialog({
                   href={GUIDE_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-block text-sm text-[#ff0073] hover:underline"
+                  className="mt-2 inline-block text-sm text-primary-ink hover:underline"
                 >
                   {t("nav.backupGuide")}
                 </a>

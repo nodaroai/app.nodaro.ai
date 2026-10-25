@@ -35,7 +35,7 @@ export function ShortcutsHelpModal({ open, onOpenChange }: ShortcutsHelpModalPro
       <DialogContent className="sm:max-w-[640px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Keyboard className="h-4 w-4 text-[#ff0073]" />
+            <Keyboard className="h-4 w-4 text-primary-ink" />
             {t("ctb.keyboardShortcuts")}
           </DialogTitle>
         </DialogHeader>
@@ -46,7 +46,7 @@ export function ShortcutsHelpModal({ open, onOpenChange }: ShortcutsHelpModalPro
             if (items.length === 0) return null
             return (
               <section key={cat}>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#ff0073]">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary-ink">
                   {t(SHORTCUT_CATEGORY_KEYS[cat])}
                 </h3>
                 <ul className="space-y-1.5">

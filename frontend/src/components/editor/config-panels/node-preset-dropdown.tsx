@@ -444,7 +444,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             >
               {triggerLabel}
             </span>
-            {dirty && <span className={cn("font-bold text-[#ff0073]", !isNode && "text-sm")}>*</span>}
+            {dirty && <span className={cn("font-bold text-primary-ink", !isNode && "text-sm")}>*</span>}
             <ChevronDown className={cn("shrink-0 opacity-60", !isNode && "ms-auto h-3.5 w-3.5")} size={np?.icon} />
           </button>
         </PopoverTrigger>
@@ -811,7 +811,7 @@ function PresetRow({
       )}
     >
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-start" onClick={onSelect}>
-        <Check className={cn("h-3.5 w-3.5 shrink-0", active ? "opacity-100 text-[#ff0073]" : "opacity-0")} />
+        <Check className={cn("h-3.5 w-3.5 shrink-0", active ? "opacity-100 text-primary-ink" : "opacity-0")} />
         <span className="min-w-0">
           <span className="block truncate text-sm">{copy.name}</span>
           {copy.description && (
@@ -825,7 +825,7 @@ function PresetRow({
         type="button"
         aria-label={isFavorite ? t("preset.unfavorite") : t("preset.favorite")}
         className={cn(
-          "shrink-0 text-muted-foreground hover:text-[#ff0073]",
+          "shrink-0 text-muted-foreground hover:text-primary-ink",
           isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         )}
         onClick={(e) => {
@@ -833,7 +833,7 @@ function PresetRow({
           onToggleFavorite()
         }}
       >
-        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current text-[#ff0073]")} />
+        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current text-primary-ink")} />
       </button>
       {onDelete && (
         <button

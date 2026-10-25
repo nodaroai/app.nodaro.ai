@@ -580,7 +580,7 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 <button
                   type="button"
-                  className="nodrag nopan text-[#FF0073] hover:underline"
+                  className="nodrag nopan text-primary-ink hover:underline"
                   onMouseDown={stop}
                   onClick={(e) => {
                     stop(e)

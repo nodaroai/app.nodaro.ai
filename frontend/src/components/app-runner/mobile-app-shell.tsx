@@ -1084,7 +1084,7 @@ export function MobileAppShell({
                     <p className="text-sm">{t("runner.fillInputsFirst")}</p>
                     <button
                       type="button"
-                      className="mt-3 text-xs text-primary hover:underline"
+                      className="mt-3 text-xs text-primary-ink hover:underline"
                       onClick={() => setActiveTab("inputs")}
                     >
                       {t("runner.goToInputs")}

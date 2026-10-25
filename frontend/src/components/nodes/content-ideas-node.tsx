@@ -139,7 +139,7 @@ function ContentIdeasNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     {idea.format && (
                       <div>
-                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px]">{idea.format}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary-ink text-[11px]">{idea.format}</span>
                       </div>
                     )}
                     {idea.hook?.line && <div dir="auto" className="italic text-muted-foreground">{t("common.quoted", { text: idea.hook.line })}</div>}

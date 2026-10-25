@@ -38,7 +38,7 @@ export function ViewModeSelector({ viewMode, onChange, allowedModes }: ViewModeS
           title={t(label)}
           className={`flex items-center justify-center w-8 h-7 rounded-md transition-colors ${
             viewMode === mode
-              ? "bg-[#ff0073]/10 text-[#ff0073]"
+              ? "bg-[#ff0073]/10 text-primary-ink"
               : "text-muted-foreground hover:text-foreground hover:bg-muted"
           }`}
         >

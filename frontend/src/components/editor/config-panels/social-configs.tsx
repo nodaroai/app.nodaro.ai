@@ -239,7 +239,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             <button
               type="button"
               onClick={() => setChatIdHelpOpen((v) => !v)}
-              className="text-[11px] text-[#ff0073] hover:text-[#e0005f] underline underline-offset-2 shrink-0"
+              className="text-[11px] text-primary-ink hover:text-[#e0005f] underline underline-offset-2 shrink-0"
             >
               {t("cfgext.socialChatIdHelpToggle")}
             </button>

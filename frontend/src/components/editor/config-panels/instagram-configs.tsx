@@ -109,7 +109,7 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
           <Textarea value={data.targets ?? ""} onChange={(e) => onUpdate({ targets: e.target.value })} placeholder={mode === "post" ? t("cfgext.igPostsPh") : mode === "hashtag" ? t("cfgext.igHashtagsPh") : t("cfgext.igProfilesPh")} dir={mode === "post" ? "ltr" : undefined} rows={3} className={cn(fieldClass, "min-h-[84px] text-[13px]")} />
           <p className="text-[11.5px] leading-normal text-[var(--meta-ads-faint)]">
             {t(mode === "post" ? "cfgext.igPostsHelp" : "cfgext.igTargetsHelp", { max: INSTAGRAM_SCRAPE_MAX_SOURCES })}
-            {fieldMappings.targets && <span className="ms-1 font-extrabold text-[#FF0073]">· {t("cfgext.metaAdsFromInput")}</span>}
+            {fieldMappings.targets && <span className="ms-1 font-extrabold text-primary-ink">· {t("cfgext.metaAdsFromInput")}</span>}
           </p>
         </div>
       </MappableField>
@@ -128,7 +128,7 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <SectionLabel>{t("cfgext.igPostsPerSource")}</SectionLabel>
-              <span className="rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[12px] font-extrabold text-[#FF0073]">{count}</span>
+              <span className="rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[12px] font-extrabold text-primary-ink">{count}</span>
             </div>
             <Slider value={[count]} min={1} max={INSTAGRAM_SCRAPE_MAX_COUNT} step={1} onValueChange={([v]) => onUpdate({ count: v })} />
           </div>
@@ -140,7 +140,7 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
                 const on = selectedFormats.includes(code)
                 const key = instagramFormatLabelKey(code)
                 return (
-                  <button key={code} type="button" onClick={() => toggleFormat(code)} className={cn("rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors", on ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border border-dashed border-[var(--meta-ads-empty-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code}</button>
+                  <button key={code} type="button" onClick={() => toggleFormat(code)} className={cn("rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors", on ? "border border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-primary-ink" : "border border-dashed border-[var(--meta-ads-empty-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code}</button>
                 )
               })}
             </div>
@@ -253,7 +253,7 @@ function InstagramResultsTab({ data, onUpdate }: { readonly data: InstagramScrap
             const key = code === "all" ? "cfgext.metaAdsFormatAll" : instagramFormatLabelKey(code)
             const n = code === "all" ? items.length : formatCount(code)
             return (
-              <button key={code} type="button" onClick={() => onUpdate({ viewFormat: code })} className={cn("rounded-full border px-2.5 py-1 text-[11.5px] font-bold transition-colors", on ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code} <span className="tabular-nums opacity-70">{n}</span></button>
+              <button key={code} type="button" onClick={() => onUpdate({ viewFormat: code })} className={cn("rounded-full border px-2.5 py-1 text-[11.5px] font-bold transition-colors", on ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-primary-ink" : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]")}>{key ? t(key) : code} <span className="tabular-nums opacity-70">{n}</span></button>
             )
           })}
         </div>
@@ -292,7 +292,7 @@ function InstagramResultsTab({ data, onUpdate }: { readonly data: InstagramScrap
                       {stored.length > 0 ? stored.map((c) => (
                         <span key={c.assetId} className="flex items-center gap-1"><SaveToLibraryButton url={c.url} type={c.kind} compact /><span>{c.kind === "video" ? t("cfgext.igOutVideo") : t("cfgext.igOutImage")}</span></span>
                       )) : <span>{t("cfgext.metaAdsNotStored")}</span>}
-                      {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ms-auto flex items-center gap-1 text-[#FF0073] hover:underline">{t("cfgext.igOpenPost")} <ExternalLink className="h-3 w-3" /></a>}
+                      {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ms-auto flex items-center gap-1 text-primary-ink hover:underline">{t("cfgext.igOpenPost")} <ExternalLink className="h-3 w-3" /></a>}
                     </div>
                   </div>
                 )}

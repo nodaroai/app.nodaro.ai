@@ -137,10 +137,10 @@ export function QrStyleEditor({ index, style: raw, wiredText, onChange }: { inde
     <div className="space-y-2">
       <div className="rounded-md border border-[#ff0073]/50 bg-[#ff0073]/5 p-2 space-y-1">
         <div className="flex items-center gap-1.5">
-          <Link2 className="w-3.5 h-3.5 text-[#ff0073]" aria-hidden />
+          <Link2 className="w-3.5 h-3.5 text-primary-ink" aria-hidden />
           <Label htmlFor={`ov-${index}-qr`} className="text-xs font-medium">{t("overlayKinds.qrLinkTitle")}</Label>
           {isOpenableLink(shown) && (
-            <a href={shown.trim()} target="_blank" rel="noreferrer noopener" className="ms-auto text-muted-foreground hover:text-[#ff0073]" aria-label={t("overlayKinds.qrOpen")} title={t("overlayKinds.qrOpen")}>
+            <a href={shown.trim()} target="_blank" rel="noreferrer noopener" className="ms-auto text-muted-foreground hover:text-primary-ink" aria-label={t("overlayKinds.qrOpen")} title={t("overlayKinds.qrOpen")}>
               <ExternalLink className="w-3.5 h-3.5" aria-hidden />
             </a>
           )}
@@ -198,7 +198,7 @@ export function ShapeStyleEditor({ index, style: raw, onChange }: { index: numbe
                 aria-checked={on}
                 aria-label={name}
                 title={name}
-                className={`h-9 rounded-md border flex items-center justify-center transition-colors ${on ? "border-[#ff0073] text-[#ff0073] bg-[#ff0073]/10" : "border-border/70 text-foreground/80 hover:border-[#ff0073]/60 hover:text-foreground"}`}
+                className={`h-9 rounded-md border flex items-center justify-center transition-colors ${on ? "border-[#ff0073] text-primary-ink bg-[#ff0073]/10" : "border-border/70 text-foreground/80 hover:border-[#ff0073]/60 hover:text-foreground"}`}
                 onClick={() => set({ shape: s })}
               >
                 <ShapeGlyph shape={s} />

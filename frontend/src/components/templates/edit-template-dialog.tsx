@@ -152,7 +152,7 @@ export function EditTemplateDialog({
                       key={type.value}
                       className={cn(
                         "flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors",
-                        on ? "border-[#ff0073]/30 bg-[#ff0073]/10 text-[#ff0073]" : "border-border text-muted-foreground hover:border-zinc-400",
+                        on ? "border-[#ff0073]/30 bg-[#ff0073]/10 text-primary-ink" : "border-border text-muted-foreground hover:border-zinc-400",
                       )}
                     >
                       <input

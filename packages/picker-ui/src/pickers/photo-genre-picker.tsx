@@ -98,12 +98,12 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
                     )}
                   >
                     <div className="flex items-center gap-1.5">
-                      <Camera className={cn("size-3 shrink-0", selected ? "text-[#ff0073]" : "text-muted-foreground")} aria-hidden="true" />
+                      <Camera className={cn("size-3 shrink-0", selected ? "text-primary-ink" : "text-muted-foreground")} aria-hidden="true" />
                       <FitText
                         text={label}
                         className={cn(
                           "text-[11px] font-medium leading-tight",
-                          selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                          selected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
                         )}
                       />
                     </div>

@@ -1262,7 +1262,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             </label>
             <button
               type="button"
-              className="text-[11px] text-primary hover:underline"
+              className="text-[11px] text-primary-ink hover:underline"
               onClick={() => {
                 const allSelected = !data.selectedAudioChunks || data.selectedAudioChunks.length === data.generatedAudioUrls!.length
                 onUpdate({ selectedAudioChunks: allSelected ? [] : data.generatedAudioUrls!.map((_, idx) => idx) })
@@ -1286,7 +1286,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     className="w-3.5 h-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
-                  <a href={url} download className="text-[11px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
+                  <a href={url} download className="text-[11px] text-primary-ink hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
               </div>
@@ -1302,7 +1302,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             </label>
             <button
               type="button"
-              className="text-[11px] text-primary hover:underline"
+              className="text-[11px] text-primary-ink hover:underline"
               onClick={() => {
                 const allSelected = !data.selectedVideoChunks || data.selectedVideoChunks.length === data.generatedVideoUrls!.length
                 onUpdate({ selectedVideoChunks: allSelected ? [] : data.generatedVideoUrls!.map((_, idx) => idx) })
@@ -1326,7 +1326,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     className="w-3.5 h-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
-                  <a href={url} download className="text-[11px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
+                  <a href={url} download className="text-[11px] text-primary-ink hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <video controls src={url} className="w-full rounded" style={{ maxHeight: '80px' }} />
               </div>
@@ -1985,7 +1985,7 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
           <button
             type="button"
             onClick={addRamp}
-            className="text-[11px] px-2 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20"
+            className="text-[11px] px-2 py-0.5 rounded bg-[#ff0073]/10 text-primary-ink hover:bg-[#ff0073]/20"
           >
             {t("proccfg.addSegment")}
           </button>

@@ -26,7 +26,7 @@ export function CreatedWorkflowPins() {
           key={workflow.workflowId}
           className="flex items-center gap-2 px-2.5 py-2 bg-[var(--copilot-card)] border border-border rounded-[10px]"
         >
-          <FilePlus2 className="w-3 h-3 flex-none text-primary" strokeWidth={2.2} aria-hidden />
+          <FilePlus2 className="w-3 h-3 flex-none text-primary-ink" strokeWidth={2.2} aria-hidden />
           <span className="min-w-0 flex-1 text-[11.5px] leading-[1.45] text-foreground break-words">
             <span className="text-[var(--copilot-dim)]">{t(K.workflowCreated)} · </span>
             {workflow.name}

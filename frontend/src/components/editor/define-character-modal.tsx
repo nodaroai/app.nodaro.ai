@@ -148,7 +148,7 @@ export function DefineCharacterModal({
                 type="button"
                 onClick={() => setType("reference")}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-md border transition-colors ${
-                  type === "reference" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
+                  type === "reference" ? "border-primary bg-primary/10 text-primary-ink" : "hover:bg-muted"
                 }`}
               >
                 <ImageIcon className="w-3.5 h-3.5" /> {t("field.referenceImage")}
@@ -157,7 +157,7 @@ export function DefineCharacterModal({
                 type="button"
                 onClick={() => setType("description")}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-md border transition-colors ${
-                  type === "description" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
+                  type === "description" ? "border-primary bg-primary/10 text-primary-ink" : "hover:bg-muted"
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" /> {t("entity.textDescription")}
@@ -184,7 +184,7 @@ export function DefineCharacterModal({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="w-full h-24 border-2 border-dashed rounded-md flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                  className="w-full h-24 border-2 border-dashed rounded-md flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary-ink transition-colors"
                 >
                   {uploading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />

@@ -69,7 +69,7 @@ function SearchBody({ report }: { report: SearchReport }) {
         ariaLabel="Clicks and impressions per day"
         labels={daily.map((d) => dayText(d.date))}
         series={[
-          { label: "Clicks", values: daily.map((d) => d.clicks), className: "text-primary" },
+          { label: "Clicks", values: daily.map((d) => d.clicks), className: "text-primary-ink" },
           { label: "Impressions", values: daily.map((d) => d.impressions), className: "text-sky-500" },
         ]}
       />

@@ -508,7 +508,7 @@ function DelimiterSelect({
       <Select value={selectValue} onValueChange={handleChange}>
         <SelectTrigger
           className={`h-5 px-1.5 text-[11px] border-none gap-0.5 ${
-            current ? "text-[#ff0073]" : "text-muted-foreground"
+            current ? "text-primary-ink" : "text-muted-foreground"
           }`}
         >
           <SelectValue />
@@ -722,7 +722,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
           onClick={() => setActiveTab("configure")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
             activeTab === "configure"
-              ? "bg-[#ff0073]/15 text-[#ff0073]"
+              ? "bg-[#ff0073]/15 text-primary-ink"
               : "text-muted-foreground hover:bg-muted/50"
           }`}
         >
@@ -733,7 +733,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
           onClick={() => setActiveTab("data")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
             activeTab === "data"
-              ? "bg-[#ff0073]/15 text-[#ff0073]"
+              ? "bg-[#ff0073]/15 text-primary-ink"
               : "text-muted-foreground hover:bg-muted/50"
           }`}
         >

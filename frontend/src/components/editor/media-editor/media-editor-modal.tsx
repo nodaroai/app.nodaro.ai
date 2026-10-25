@@ -146,7 +146,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
         <div className="flex-1 overflow-y-auto px-6 py-5 min-w-[320px]">
           {isConverting ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <Loader2 className="w-10 h-10 animate-spin text-[#ff0073]" />
+              <Loader2 className="w-10 h-10 animate-spin text-primary-ink" />
               <span className="text-sm text-white/60">{t("mediaed.convertingVideo")}</span>
             </div>
           ) : (
@@ -223,7 +223,7 @@ export function MediaEditorModal({ editor }: MediaEditorModalProps) {
                 type="button"
                 onClick={handleApplyAll}
                 disabled={isProcessing || isConverting}
-                className="px-4 py-2 text-sm text-[#ff0073] border border-[#ff0073]/50 rounded-lg hover:bg-[#ff0073]/10 transition-colors disabled:opacity-40"
+                className="px-4 py-2 text-sm text-primary-ink border border-[#ff0073]/50 rounded-lg hover:bg-[#ff0073]/10 transition-colors disabled:opacity-40"
               >
                 {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin inline me-1.5" />}
                 {t("mediaed.applyUploadAll")}

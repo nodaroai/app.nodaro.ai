@@ -42,7 +42,7 @@ export default function UsagePage() {
       ) : (
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
           <div className="text-sm text-muted-foreground">{t("usage.spent")}</div>
-          <div className="mt-1 text-3xl font-bold" style={{ color: "#ff0073" }}>{t("usage.unavailable")}</div>
+          <div className="mt-1 text-3xl font-bold" style={{ color: "var(--primary-ink)" }}>{t("usage.unavailable")}</div>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{t("usage.unavailableNote")}</p>
         </div>
       )}

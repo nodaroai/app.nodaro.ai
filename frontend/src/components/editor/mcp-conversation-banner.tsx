@@ -49,7 +49,7 @@ export function McpConversationBanner({ workflowId }: { readonly workflowId: str
         <ArrowLeft className={cn("h-3.5 w-3.5", isRtl && "rotate-180")} aria-hidden />
         {t("mcpconv.backToConversations")}
       </Link>
-      <span className="flex items-center gap-1.5 text-[#ff0073]">
+      <span className="flex items-center gap-1.5 text-primary-ink">
         <MessageSquare className="h-3.5 w-3.5" aria-hidden />
         {t("mcpconv.builtLive", { client: mcpClientLabel(marker.client, marker.clientName) })}
       </span>

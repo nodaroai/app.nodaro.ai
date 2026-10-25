@@ -554,7 +554,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           {pipeline?.mode === "guided" && (
             <Badge
               variant="outline"
-              className="bg-pink-50 border-pink-300 text-[#ff0073] dark:bg-pink-950 dark:border-pink-700 dark:text-[#ff66ad]"
+              className="bg-pink-50 border-pink-300 text-primary-ink dark:bg-pink-950 dark:border-pink-700 dark:text-[#ff66ad]"
               data-testid="mode-badge-guided"
             >
               {t("cfgext.genModeGuided")}

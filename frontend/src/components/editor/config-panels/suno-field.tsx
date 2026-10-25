@@ -84,7 +84,7 @@ export const SunoField = memo(function SunoField({
       </div>
       {wired ? (
         <div className="flex items-start gap-1.5 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D] px-2.5 py-2">
-          <Link2 className="size-3 mt-0.5 shrink-0 text-[#ff0073]" />
+          <Link2 className="size-3 mt-0.5 shrink-0 text-primary-ink" />
           <p className="text-xs text-gray-600 dark:text-[#94A3B8] break-words whitespace-pre-wrap flex-1 min-w-0">
             <span className="italic text-gray-400">{t("cfgext.sunoValueFromHandle")}</span>
           </p>

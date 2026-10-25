@@ -111,7 +111,7 @@ export function MultiPickBadge({
         }}
         className={cn(
           "absolute top-1 right-1 z-10 size-4 rounded-full",
-          "border border-[#ff0073] bg-transparent text-[#ff0073]",
+          "border border-[#ff0073] bg-transparent text-primary-ink",
           "flex items-center justify-center transition-colors",
           "hover:bg-[#ff0073]/15 active:bg-[#ff0073] active:text-white",
           "focus:outline-none focus-visible:ring-1 focus-visible:ring-[#ff0073]",
@@ -136,7 +136,7 @@ export function MultiPickBadge({
       className={cn(
         "absolute top-1 right-1 z-10 size-4 rounded-full bg-[#ff0073] text-white",
         "text-[9px] font-semibold flex items-center justify-center transition-colors",
-        "hover:bg-[#ff0073]/90 active:bg-transparent active:text-[#ff0073] active:border active:border-[#ff0073]",
+        "hover:bg-[#ff0073]/90 active:bg-transparent active:text-primary-ink active:border active:border-[#ff0073]",
         "focus:outline-none focus-visible:ring-1 focus-visible:ring-[#ff0073]",
         className,
       )}

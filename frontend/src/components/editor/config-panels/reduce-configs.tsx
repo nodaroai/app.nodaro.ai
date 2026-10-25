@@ -177,7 +177,7 @@ function ReduceInputsTab({
                   <span className="text-muted-foreground font-mono shrink-0">[{i}]</span>
                   <span className="flex-1 min-w-0">{truncated}</span>
                   {isSelected && (
-                    <span className="shrink-0 text-[11px] uppercase font-medium tracking-wide text-[#ff0073]">
+                    <span className="shrink-0 text-[11px] uppercase font-medium tracking-wide text-primary-ink">
                       {t("cfgext.reduceChosen")}
                     </span>
                   )}

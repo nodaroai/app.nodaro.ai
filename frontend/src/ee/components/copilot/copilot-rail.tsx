@@ -71,7 +71,7 @@ function CopilotStrip({ replies, onOpen }: { readonly replies: number; readonly 
       onClick={onOpen}
       aria-label={name}
       title={t("editor.copilotTitle", { sc: formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform()) })}
-      className="absolute inset-0 bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
+      className="absolute inset-0 bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary-ink hover:bg-[var(--copilot-card)] transition-colors"
     >
       <span className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]" aria-hidden />
       <span className="[writing-mode:vertical-rl] text-[11px] tracking-[0.18em] font-semibold" aria-hidden>{t("editor.copilotTabLabel")}</span>

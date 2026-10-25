@@ -120,7 +120,7 @@ export function TimezoneSelect({
               <CommandItem value={`mine:${mine}`} onSelect={() => pick(mine)} className="flex items-center">
                 <Check className="me-1 size-3.5 opacity-0" />
                 <span className="flex-1 truncate">{mine}</span>
-                <span className="text-[11px] uppercase tracking-wider text-[#ff0073]">{t("sched.yourTimezone")}</span>
+                <span className="text-[11px] uppercase tracking-wider text-primary-ink">{t("sched.yourTimezone")}</span>
               </CommandItem>
             )}
             {visible.length === 0 ? (

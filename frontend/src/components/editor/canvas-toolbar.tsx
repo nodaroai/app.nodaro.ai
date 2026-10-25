@@ -73,7 +73,7 @@ function ToolbarButton({ icon, label, shortcut, onClick, active, disabled }: Too
               "text-[var(--pill-fg-muted)]",
               "hover:bg-black/5 hover:text-[var(--pill-fg)] dark:hover:bg-white/10",
               // Active state (same for both modes)
-              active && "bg-[#ff0073]/10 text-[#ff0073] dark:bg-[#ff0073]/20 dark:text-[#ff0073]",
+              active && "bg-[#ff0073]/10 text-primary-ink dark:bg-[#ff0073]/20 dark:text-[#ff0073]",
               // Disabled state
               disabled && "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-[var(--pill-fg-muted)] dark:hover:bg-transparent"
             )}
@@ -117,7 +117,7 @@ function MobileToolbarButton({ icon, label, onClick, active, disabled }: Omit<To
         "w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200 touch-manipulation",
         "text-[var(--pill-fg-muted)]",
         "active:bg-black/5 active:text-[var(--pill-fg)] dark:active:bg-white/10",
-        active && "bg-[#ff0073]/10 text-[#ff0073] dark:bg-[#ff0073]/20 dark:text-[#ff0073]",
+        active && "bg-[#ff0073]/10 text-primary-ink dark:bg-[#ff0073]/20 dark:text-[#ff0073]",
         disabled && "opacity-40 cursor-not-allowed"
       )}
     >

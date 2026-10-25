@@ -44,7 +44,7 @@ export function TelegramConnectDialog({
               href={BOTFATHER_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-primary underline underline-offset-2"
+              className="font-medium text-primary-ink underline underline-offset-2"
             >
               @BotFather
             </a>

@@ -88,7 +88,7 @@ function MinuteBars({ perMinute }: { perMinute: readonly number[] }) {
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-16" role="img" aria-label="Active users per minute, last 30 minutes">
         {oldestFirst.map((users, i) => {
           const height = (users / peak) * (H - 2)
-          return <rect key={i} data-minutes-ago={oldestFirst.length - 1 - i} x={i * slot + 1} y={H - height} width={Math.max(1, slot - 2)} height={height} fill="currentColor" className="text-primary" />
+          return <rect key={i} data-minutes-ago={oldestFirst.length - 1 - i} x={i * slot + 1} y={H - height} width={Math.max(1, slot - 2)} height={height} fill="currentColor" className="text-primary-ink" />
         })}
       </svg>
       <div className="flex justify-between text-[11px] text-muted-foreground">

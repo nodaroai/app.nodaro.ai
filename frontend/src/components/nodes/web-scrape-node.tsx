@@ -236,7 +236,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                     <PeekRow key={i} glyph={peek.glyph(item, i)} text={webScrapePeekLine(actor, item)} href={webScrapeItemLink(actor, item)} />
                   ))}
                   {state.count > peekItems.length && (
-                    <span className="text-[11px] text-[#FF0073]">{t("node.viewAllN", { n: state.count })}</span>
+                    <span className="text-[11px] text-primary-ink">{t("node.viewAllN", { n: state.count })}</span>
                   )}
                 </div>
               )}

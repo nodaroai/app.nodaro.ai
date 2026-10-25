@@ -83,7 +83,7 @@ export function Scene3DRevisionHistory({
                 {entry.changeSummary ?? t(SOURCE_LABEL_KEYS[entry.source])}
               </span>
               {entry.revisionId === activeRevisionId ? (
-                <span className="text-[11px] text-[#ff0073] shrink-0">{t("cfgext.scene3dActiveRevision")}</span>
+                <span className="text-[11px] text-primary-ink shrink-0">{t("cfgext.scene3dActiveRevision")}</span>
               ) : (
                 // The history stays READABLE read-only — only the restore
                 // control, which would rewrite the parent's state, is gone.

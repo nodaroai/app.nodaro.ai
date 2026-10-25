@@ -31,7 +31,7 @@ export function McpProvenanceSection({ data }: { readonly data: unknown }) {
   return (
     <section className="mb-4 rounded-lg border border-[#ff0073]/30 bg-[#ff0073]/5 p-3" aria-label={t("mcpconv.provenanceTitle")}>
       <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
-        <MessageSquare className="h-3.5 w-3.5 text-[#ff0073]" aria-hidden />
+        <MessageSquare className="h-3.5 w-3.5 text-primary-ink" aria-hidden />
         {t("mcpconv.provenanceTitle")}
       </h3>
       {provenance.userRequest && (

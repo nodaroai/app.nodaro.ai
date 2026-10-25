@@ -255,7 +255,7 @@ export function ExtraRefsSection({
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className={cn("w-3 h-3", isRtl && "rotate-180")} />}
           {t("cfgshared.extraRefsTitle")}
           {refs.length > 0 && (
-            <span className="ms-1 text-[11px] px-1.5 py-0.5 rounded bg-primary/20 text-primary normal-case tracking-normal">
+            <span className="ms-1 text-[11px] px-1.5 py-0.5 rounded bg-primary/20 text-primary-ink normal-case tracking-normal">
               {refs.length}
             </span>
           )}
@@ -291,7 +291,7 @@ export function ExtraRefsSection({
               className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded hover:bg-muted text-start"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload className="w-3.5 h-3.5 text-primary" />
+              <Upload className="w-3.5 h-3.5 text-primary-ink" />
               <div className="flex-1">
                 <div className="font-medium">{t("cfgshared.extraRefsUploadDevice")}</div>
                 <div className="text-[11px] text-muted-foreground">PNG, JPG, WebP</div>

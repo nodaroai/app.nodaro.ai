@@ -96,19 +96,19 @@ function PickerInputConfig({
       <span className="text-[11px] text-muted-foreground">{t("present.displayLabel")}</span>
       <div className="flex gap-1">
         <button
-          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "inline" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "inline" ? "bg-[#ff007320] border-[#ff0073] text-primary-ink" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "inline" })}
         >
           {t("present.modeInline")}
         </button>
         <button
-          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "modal" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "modal" ? "bg-[#ff007320] border-[#ff0073] text-primary-ink" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "modal" })}
         >
           {t("present.modeModal")}
         </button>
         <button
-          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "compact" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          className={`text-[11px] px-2 py-0.5 rounded border ${mode === "compact" ? "bg-[#ff007320] border-[#ff0073] text-primary-ink" : "bg-card border-border text-muted-foreground"}`}
           onClick={() => updateCard({ pickerMode: "compact" })}
         >
           {t("present.modeCompact")}
@@ -209,13 +209,13 @@ function OutputDisplayModeToggle({
     <div className="ms-7 mt-1 flex gap-1">
       <span className="text-[11px] text-muted-foreground me-1">{t("present.multipleResults")}</span>
       <button
-        className={`text-[11px] px-2 py-0.5 rounded border ${mode === "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+        className={`text-[11px] px-2 py-0.5 rounded border ${mode === "gallery" ? "bg-[#ff007320] border-[#ff0073] text-primary-ink" : "bg-card border-border text-muted-foreground"}`}
         onClick={() => updateDisplayMode("gallery")}
       >
         {t("present.galleryMode")}
       </button>
       <button
-        className={`text-[11px] px-2 py-0.5 rounded border ${mode !== "gallery" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+        className={`text-[11px] px-2 py-0.5 rounded border ${mode !== "gallery" ? "bg-[#ff007320] border-[#ff0073] text-primary-ink" : "bg-card border-border text-muted-foreground"}`}
         onClick={() => updateDisplayMode("individual")}
       >
         {t("present.individualMode")}
@@ -509,7 +509,7 @@ function NodeRow({
                   updateNodeData(node.id, { presentationPromptHelper: !promptHelperEnabled })
                 }}
               >
-                <Sparkles className={`h-3.5 w-3.5 ${promptHelperEnabled ? "text-[#ff0073]" : "text-muted-foreground"}`} />
+                <Sparkles className={`h-3.5 w-3.5 ${promptHelperEnabled ? "text-primary-ink" : "text-muted-foreground"}`} />
               </Button>
               <Button
                 variant="ghost"
@@ -748,7 +748,7 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                       {t("present.arrayInputs")}
                     </p>
-                    <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073]">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-primary-ink">
                       {t("dash.new")}
                     </span>
                   </div>

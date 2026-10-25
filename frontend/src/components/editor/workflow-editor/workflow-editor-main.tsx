@@ -1382,7 +1382,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               onClick={() => setActiveTab("editor")}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === "editor"
-                  ? "text-[#ff0073] border-[#ff0073]"
+                  ? "text-primary-ink border-[#ff0073]"
                   : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
               }`}
             >
@@ -1400,7 +1400,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               onClick={() => setActiveTab("present")}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === "present"
-                  ? "text-[#ff0073] border-[#ff0073]"
+                  ? "text-primary-ink border-[#ff0073]"
                   : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
               }`}
             >
@@ -1413,7 +1413,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               onClick={() => setActiveTab("executions")}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === "executions"
-                  ? "text-[#ff0073] border-[#ff0073]"
+                  ? "text-primary-ink border-[#ff0073]"
                   : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
               }`}
             >
@@ -1434,7 +1434,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               onClick={() => setActiveTab("cost")}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === "cost"
-                  ? "text-[#ff0073] border-[#ff0073]"
+                  ? "text-primary-ink border-[#ff0073]"
                   : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
               }`}
             >

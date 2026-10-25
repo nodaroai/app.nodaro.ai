@@ -283,7 +283,7 @@ export function TemplatePreviewModal({
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[#ff0073] hover:underline"
+                          className="text-primary-ink hover:underline"
                           {...props}
                         >
                           {children}
@@ -366,7 +366,7 @@ export function TemplatePreviewModal({
                   {template.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="text-xs px-2 py-0.5 rounded-full bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20 font-medium"
+                      className="text-xs px-2 py-0.5 rounded-full bg-[#ff0073]/10 text-primary-ink border border-[#ff0073]/20 font-medium"
                     >
                       <Tag className="inline h-3 w-3 me-0.5 -mt-px" />
                       {tag}
@@ -390,7 +390,7 @@ export function TemplatePreviewModal({
                 className={cn(
                   "h-4 w-4 transition-colors",
                   isFavorited
-                    ? "fill-[#ff0073] text-[#ff0073]"
+                    ? "fill-[#ff0073] text-primary-ink"
                     : "text-muted-foreground",
                 )}
               />

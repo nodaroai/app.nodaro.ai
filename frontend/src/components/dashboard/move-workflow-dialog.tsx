@@ -83,7 +83,7 @@ export function MoveWorkflowDialog({
                 disabled={moving !== null}
               >
                 {p.isDefault ? (
-                  <Star className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]" />
+                  <Star className="h-3.5 w-3.5 text-primary-ink fill-[#ff0073]" />
                 ) : (
                   <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                 )}

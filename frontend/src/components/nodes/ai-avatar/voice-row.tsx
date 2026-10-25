@@ -77,7 +77,7 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
                 </>
               ) : (
                 <>
-                  <span className="text-[12px] text-[#ff0073] leading-tight">{t("node.chooseAVoice")}</span>
+                  <span className="text-[12px] text-primary-ink leading-tight">{t("node.chooseAVoice")}</span>
                   <span className="text-[11px] text-muted-foreground leading-tight">{t("node.neededForTextTts")}</span>
                 </>
               )}
@@ -130,8 +130,8 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
         className={cn(
           "nodrag nopan grid place-items-center w-6 h-6 rounded-full border transition-colors shrink-0",
           isPlaying
-            ? "border-[#ff0073] text-[#ff0073] bg-[#ff0073]/10"
-            : "border-border/70 text-foreground/80 bg-background/60 hover:border-[#ff0073] hover:text-[#ff0073]",
+            ? "border-[#ff0073] text-primary-ink bg-[#ff0073]/10"
+            : "border-border/70 text-foreground/80 bg-background/60 hover:border-[#ff0073] hover:text-primary-ink",
           !canPlay && "opacity-30 cursor-not-allowed hover:border-border/70 hover:text-foreground/70",
         )}
         onClick={handlePlay}

@@ -76,7 +76,7 @@ export function RunsSidebar({
           ))}
           {isLoadingRuns && (
             <div className="flex items-center justify-center py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-[#ff0073]" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary-ink" />
             </div>
           )}
         </div>
@@ -157,7 +157,7 @@ export function RunsSidebar({
         ))}
         {isLoadingRuns && (
           <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#ff0073]" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-ink" />
             {t("runner.loadingRuns")}
           </div>
         )}

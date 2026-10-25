@@ -109,7 +109,7 @@ export function ComponentPreviewModal({
                 <Heart
                   className={cn(
                     "w-4 h-4 transition-colors",
-                    isFavorited ? "fill-[#ff0073] text-[#ff0073]" : "text-muted-foreground",
+                    isFavorited ? "fill-[#ff0073] text-primary-ink" : "text-muted-foreground",
                   )}
                 />
               </button>

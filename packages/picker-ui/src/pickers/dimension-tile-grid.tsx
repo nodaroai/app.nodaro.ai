@@ -238,7 +238,7 @@ export function DimensionTileGrid({
                     className={cn(
                       iconClassName,
                       "flex items-center justify-center",
-                      isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                      isSelected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   >
                     {renderIcon(entry, isSelected)}
@@ -247,7 +247,7 @@ export function DimensionTileGrid({
                     text={label}
                     className={cn(
                       "text-[10px] font-medium leading-tight text-center",
-                      isSelected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+                      isSelected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
                     )}
                   />
                 </button>

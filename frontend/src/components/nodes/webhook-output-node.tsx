@@ -122,7 +122,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
           {credential && (
             <div className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-2 py-1.5">
               <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-primary" />
-              <span className="truncate text-[11px] font-semibold text-primary">
+              <span className="truncate text-[11px] font-semibold text-primary-ink">
                 {credential.name} · {credential.headerName}
               </span>
             </div>

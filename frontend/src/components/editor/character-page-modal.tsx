@@ -733,7 +733,7 @@ centered composition, high quality, single character`
                 className={cn(
                   "px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                   activeTab === tab.id
-                    ? "border-primary text-primary"
+                    ? "border-primary text-primary-ink"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >

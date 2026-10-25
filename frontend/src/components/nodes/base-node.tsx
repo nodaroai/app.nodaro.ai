@@ -793,16 +793,16 @@ function BaseNodeComponent({
               "w-6 h-6 rounded-md flex items-center justify-center [&>svg]:size-4 cursor-pointer transition-colors",
               // Light-bg categories: tint icon to brand pink on hover
               // Dark/brand-pink-bg categories: dim on hover (white icon on pink bg
-              // would vanish if we applied hover:text-[#ff0073])
-              category === "input"      ? "bg-[#007AFF]/10 dark:bg-white/20 text-[#007AFF] dark:text-white hover:text-[#ff0073]" :
-              category === "parameter"  ? "bg-[#6366F1]/10 dark:bg-white/20 text-[#6366F1] dark:text-white hover:text-[#ff0073]" :
-              category === "processing" ? "bg-[#475569]/10 dark:bg-white/20 text-[#475569] dark:text-white hover:text-[#ff0073]" :
-              category === "output"     ? "bg-[#22C55E]/10 dark:bg-white/20 text-[#22C55E] dark:text-white hover:text-[#ff0073]" :
-              category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-[#ff0073]" :
+              // would vanish if we applied hover:text-primary-ink)
+              category === "input"      ? "bg-[#007AFF]/10 dark:bg-white/20 text-[#007AFF] dark:text-white hover:text-primary-ink" :
+              category === "parameter"  ? "bg-[#6366F1]/10 dark:bg-white/20 text-[#6366F1] dark:text-white hover:text-primary-ink" :
+              category === "processing" ? "bg-[#475569]/10 dark:bg-white/20 text-[#475569] dark:text-white hover:text-primary-ink" :
+              category === "output"     ? "bg-[#22C55E]/10 dark:bg-white/20 text-[#22C55E] dark:text-white hover:text-primary-ink" :
+              category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-primary-ink" :
               (category === "character" || category === "location" || category === "object" || category === "creature" ||
                category === "ai"        || category === "scene"    || category === "script" || category === "i2v")
                                         ? "bg-cta dark:bg-white/20 text-white hover:opacity-70" :
-              cn(CATEGORY_ICON_COLOR[category], "hover:text-[#ff0073]")
+              cn(CATEGORY_ICON_COLOR[category], "hover:text-primary-ink")
             )}
           >
             {icon}

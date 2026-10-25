@@ -117,7 +117,7 @@ export function ConnectProviderDialog({
 
           <div className="rounded-lg border p-3 flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <Cloud className="h-4 w-4 text-primary" />
+              <Cloud className="h-4 w-4 text-primary-ink" />
               <span className="text-sm font-medium">nodaro.ai</span>
             </div>
             <p className="text-xs text-muted-foreground">{t("connect.providerFreeCredits")}</p>

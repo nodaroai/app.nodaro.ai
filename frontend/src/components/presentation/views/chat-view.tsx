@@ -56,7 +56,7 @@ function toOutputStatus(nodeStatus: RunSlotNodeState["status"] | undefined, slot
 function chipClass(s: StepChip["status"]): string {
   switch (s) {
     case "completed": return "bg-green-500/10 text-green-600 border-green-500/20"
-    case "running": return "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/20"
+    case "running": return "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/20"
     case "failed": return "bg-red-500/10 text-red-600 border-red-500/20"
     case "skipped": return "bg-muted text-muted-foreground border-border"
     default: return "bg-muted/60 text-muted-foreground border-border"
