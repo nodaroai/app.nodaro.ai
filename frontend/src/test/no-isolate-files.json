@@ -26,7 +26,6 @@
   "src/components/dashboard/home/__tests__/your-path-progress.test.ts",
   "src/components/editor/__tests__/add-node-popup-theme.test.ts",
   "src/components/editor/__tests__/canvas-aria-labels.test.ts",
-  "src/components/editor/__tests__/canvas-context-menu-quick-add.test.tsx",
   "src/components/editor/__tests__/caption-panel-levers.test.ts",
   "src/components/editor/__tests__/component-marketplace-popup-position.test.tsx",
   "src/components/editor/__tests__/config-panel-label-i18n.test.ts",

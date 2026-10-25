@@ -5,7 +5,7 @@
  * It never sends a message itself. The panel registers the editor callbacks a
  * send needs (save, run) when it mounts, so a message typed here is handed to
  * the rail with `sendFromCenter`, which opens it; the panel sends it once it
- * is up (copilot-panel.tsx). Adding a node — here, from the right-click menu,
+ * is up (copilot-panel.tsx). Adding a node — here, from the right-click popup,
  * the toolbar, anywhere — moves the Copilot to the rail as well, through the
  * canvas's own rules (copilot-placement.ts).
  *
@@ -60,7 +60,7 @@ export default function CopilotCenter({ leaving, onCreate, onContextMenu }: Copi
     return () => window.clearTimeout(timer)
   }, [])
 
-  // "Ask Copilot…" from the canvas menu while the Copilot sits here.
+  // askCopilot() (use-copilot-ui-store) while the Copilot sits here.
   useEffect(() => {
     if (focusTick <= handledFocusTick) return
     handledFocusTick = focusTick

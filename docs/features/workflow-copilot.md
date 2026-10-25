@@ -17,11 +17,11 @@ There are three ways in.
 
 In all three boxes **Enter** sends and **Shift + Enter** starts a new line, so a description can run to several lines and a pasted link can sit on its own. If a hand-off from the home page fails before the copilot answers — a lost connection, a closed tab — your sentence comes back into the box so you can send it again, and the empty workflow it had opened for you is cleared away on its own a few hours later.
 
-**From the editor** — it lives as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar (pink while the panel is open), from the narrow strip beside the canvas, by right-clicking the canvas and choosing **Ask Copilot…**, or with `Ctrl/Cmd + J`. The **‹** button in the panel folds it into that strip, which shows how many replies the copilot has given; **×** puts it away. Closing the panel does not stop a message that is still being written.
+**From the editor** — it lives as a side panel on the left of the canvas. Open it from the **Copilot** button in the editor toolbar (pink while the panel is open), from the narrow strip beside the canvas, or with `Ctrl/Cmd + J`. The **‹** button in the panel folds it into that strip, which shows how many replies the copilot has given; **×** puts it away. Closing the panel does not stop a message that is still being written.
 
 When the canvas is empty again and nothing has been said in the conversation, the copilot goes back to the middle. This happens when you delete the last node, and when you fold or close the panel. You can turn it off in the copilot settings: **Back to the middle when the canvas is empty**. With it off, or once a conversation is under way, folding or closing the panel over an empty canvas leaves the canvas bare; the strip or the **Copilot** button brings the copilot back.
 
-The right-click menu on the canvas adds **Image generation**, **Video generation**, **Text / LLM**, **Upload image** or **Upscale image** exactly where you clicked. **More nodes…** opens the full list.
+Right-clicking the canvas opens the full list of nodes where you clicked, the same list **Tab** opens after a click on the canvas.
 
 ## Settings
 
