@@ -12,6 +12,12 @@ const resolver = vi.hoisted(() => ({
   result: { ok: true } as Record<string, unknown>,
   calls: [] as Array<Record<string, unknown>>,
 }))
+// Topaz measures its source before the guard; the plan is stubbed (no network probe).
+vi.mock("@/lib/topaz-video-plan.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/topaz-video-plan.js")>()),
+  planTopazVideoUpscale: vi.fn().mockResolvedValue({ resolution: "1080p", fps: 30, holdUnits: 3, sourceDurationSec: 5 }),
+  topazVideoHoldBaseCredits: vi.fn().mockResolvedValue(120),
+}))
 vi.mock("@/lib/seedance-draft-finalize.js", () => ({
   resolveSeedanceDraftFinalize: async (args: Record<string, unknown>) => {
     resolver.calls.push(args)
@@ -178,6 +184,6 @@ describe("POST /v1/video-upscale — seedance-2-5-hd", () => {
     await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "topaz", videoUrl: "https://x/v.mp4", userId: "user-a" } })
     await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "veo-1080p", taskId: "veo-task", userId: "user-a" } })
     expect(resolver.calls).toEqual([])
-    expect(guardSeen.map((g) => g.id)).toEqual(["topaz-video", "veo-1080p"])
+    expect(guardSeen.map((g) => g.id)).toEqual(["topaz-video:per-unit", "veo-1080p"])
   })
 })

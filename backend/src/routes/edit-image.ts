@@ -1,4 +1,6 @@
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { hasCredits } from "../lib/config.js"
+import { readTopazImageSize, topazImageSizeBaseCredits, topazImageTier, topazImageTooLargeMessage } from "../lib/topaz-image-size.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -102,8 +104,35 @@ export function resolveEditImageCreditIdentifier(req: FastifyRequest): string {
   return buildCreditModelIdentifier(provider, undefined, undefined, undefined, creditTier)
 }
 
+/**
+ * Topaz image upscale is priced by output size: read the image's header BEFORE
+ * the guard, refuse an output past the provider's largest size (a 400, nothing
+ * reserved), and let the guard charge the size's units when they cost more
+ * than the factor's tier (lib/topaz-image-size.ts). Only where credits are
+ * charged; inert for every other provider.
+ */
+async function topazImageSizePreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!hasCredits()) return
+  const body = req.body as Record<string, unknown> | null
+  if (body?.provider !== "topaz-image-upscale") return
+  const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : undefined
+  if (!imageUrl || !safeUrlSchema.safeParse(imageUrl).success) return
+  const reading = await readTopazImageSize(imageUrl, topazImageTier(body).factor)
+  if (reading.kind === "too-large") {
+    return reply.status(400).send({ error: { code: "image_too_large", message: topazImageTooLargeMessage(reading.megapixels) } })
+  }
+  if (reading.kind === "sized") req.topazImageSizeUnits = reading.units
+}
+
+const editImageGuard = creditGuard(resolveEditImageCreditIdentifier, {
+  computeCredits: async (_body, req) =>
+    req.topazImageSizeUnits !== undefined
+      ? topazImageSizeBaseCredits(resolveEditImageCreditIdentifier(req), req.topazImageSizeUnits)
+      : undefined,
+})
+
 export async function editImageRoutes(app: FastifyInstance) {
-  app.post("/v1/edit-image", { preHandler: creditGuard(resolveEditImageCreditIdentifier) }, async (req, reply) => {
+  app.post("/v1/edit-image", { preHandler: [topazImageSizePreHandler, editImageGuard] }, async (req, reply) => {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

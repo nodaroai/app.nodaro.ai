@@ -488,8 +488,16 @@ describe("registration + chain extension when connected", () => {
       "kie",
       "nodaro",
     ])
+    // image-editing and video-upscale fall through to Replicate (the Topaz
+    // upscalers live there since 2026-10-25), with nodaro still last.
     expect((await buildRoutingDecision("image-editing", "nano-banana-edit")).providerChain).toEqual([
       "kie",
+      "replicate",
+      "nodaro",
+    ])
+    expect((await buildRoutingDecision("video-upscale", "topaz")).providerChain).toEqual([
+      "kie",
+      "replicate",
       "nodaro",
     ])
     // A capability the connection does NOT serve stays untouched — local keys

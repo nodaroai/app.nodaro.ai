@@ -55,6 +55,8 @@ import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides } from "@nodaro/shared/nodes"
 import {
   MUSIC_CREDIT_ID,
+  clampTopazVideoFps,
+  isTopazVideoResolution,
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
@@ -89,7 +91,7 @@ import {
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -1532,7 +1534,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "happyhorse-edit": 350,
   "luma-modify": 320,             // (not in KIE pricing data)
   "runway-aleph": 350,             // (V2V conversion)
-  "topaz-video": 190,             // (12 cr/sec * ~5s)
+  "topaz-video": 190,             // retired KIE flat row (pre-2026-10-25 usage logs)
+  // Topaz video upscale on Replicate (decided 2026-10-25): one Topaz unit as
+  // Replicate bills it. A run HOLDS its output-gigapixel ceiling in units
+  // (@nodaro/render-rules topazVideoHoldUnits) and is charged the units
+  // Replicate reports, never above the hold. Seeded by migration 563.
+  "topaz-video:per-unit": 40,
   // ── Motion Transfer (per-second pricing, duration-tiered) ──
   // Kling 3.0 720p: /sec
   "kling-3.0-motion": 300,        // 10s default
@@ -4900,7 +4907,8 @@ export interface AppListingEstimate {
 }
 
 /**
- * Does a listing hold a metered LLM call's estimate (Task 12, R47)? A node of
+ * Does a listing hold a metered estimate — a metered LLM call's (Task 12, R47)
+ * or a Topaz video upscale's hold (charged the units it uses)? A node of
  * the graph — of a use-case node's built chain, as the listing prices it — that
  * makes a metered call (`meteredLlmKeyOfNode`, as it runs: a wired Settings
  * input may set its model), or a UGC part flagged one. Never under the
@@ -4916,7 +4924,12 @@ function listingHoldsMeteredEstimate(
   const uc = expandUseCaseNodes(graph, edges ?? [], flags)
   const nodes = uc.expanded ? uc.nodes : graph
   const wires = uc.expanded ? uc.edges : edges
-  return nodes.some((n) => !ugc?.skip(n) && (meteredLlmKeyOfNode(withWiredSettings(n, nodes, wires)) !== null || componentHoldsMeteredEstimate(n)))
+  return nodes.some((n) => !ugc?.skip(n) && (
+    meteredLlmKeyOfNode(withWiredSettings(n, nodes, wires)) !== null ||
+    componentHoldsMeteredEstimate(n) ||
+    // A Topaz video upscale is metered too: quoted at its hold, charged the units it uses.
+    (n.type === "video-upscale" && isTopazVideoUpscaleNode(n))
+  ))
 }
 
 /** What is being listed: an app, a component (never stops at a Preview), or a template. */
@@ -5939,6 +5952,17 @@ export function graphPricingUnits(
     }
     return speakerFramesEstimateBlocks(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
   }
+  // Topaz video upscale: the units its hold reads — its target at the length
+  // its video wire gives (else the estimate's fallback length), a 16:9 frame.
+  // The run measures the real clip before it reserves (lib/topaz-video-plan.ts).
+  if (node.type === "video-upscale" && isTopazVideoUpscaleNode(node)) {
+    const wired = withWiredSettings(node, nodes, edges ?? [])
+    const lengthOf = runWireLengthOf(nodes, edges, rerunIds)
+    const sec = edges && node.id
+      ? edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source ?? "")).find((v) => v !== undefined)
+      : undefined
+    return topazVideoEstimateUnits(topazVideoEstimateTarget(wired.data ?? {}, sec))
+  }
   if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
   if (!node.id) return EDIT_PLAN_MAX_MINUTES
   // No wiring sent (the route's `edges` omitted): the render may be wired to
@@ -6249,6 +6273,21 @@ function listingParts(
  * Pro extend adds (its row is per second — the same product the route's guard
  * and the workflow run reserve, lib/ltx-extend-credits.ts), else one.
  */
+/** A Video Upscale node on Topaz (the node's default provider). */
+function isTopazVideoUpscaleNode(node: EstimateNode): boolean {
+  const provider = node.data?.provider
+  return provider === undefined || provider === "" || provider === "topaz"
+}
+
+/** What an estimate reads of a Topaz node: its target (else the defaults) at `durationSec`. */
+function topazVideoEstimateTarget(data: Record<string, unknown>, durationSec: number | undefined) {
+  return {
+    resolution: isTopazVideoResolution(data.targetResolution) ? data.targetResolution : undefined,
+    fps: typeof data.targetFps === "number" && Number.isFinite(data.targetFps) ? clampTopazVideoFps(data.targetFps) : undefined,
+    durationSec,
+  }
+}
+
 function estimatePricingUnits(node: EstimateNode): number {
   const data = node.data ?? {}
   if (node.type === "extend-video" && data.provider === "ltx-2.3-pro") return ltxExtendDurationSec(data.duration)
@@ -6592,6 +6631,10 @@ export function getNodeModelIdentifier(
   // the `!provider` bail, which priced it at the node-type row.
   if (nodeType === "text-to-dialogue") return dialogueProviderOf(data.provider)
 
+  // Topaz video upscale (the node's default provider) holds per unit — its
+  // units: graphPricingUnits. Above the `!provider` bail: no provider IS Topaz.
+  if (nodeType === "video-upscale" && isTopazVideoUpscaleNode(node)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
+
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
 
@@ -6680,6 +6723,7 @@ export function getNodeModelIdentifier(
       hasVideoRef: graph.videoRefWired === true,
     })
   }
+
 
   // Topaz's billed lever is the upscale FACTOR (resolveTopazUpscale); the
   // legacy `targetResolution` on stored node data is mapped forward by the

@@ -581,7 +581,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     acceptedImageFormats: ["jpeg", "png", "webp"],
   },
 
-  // Topaz image upscale (image enhancement utility)
+  // Topaz image upscale — RETIRED from routing 2026-10-25 (runs on Replicate:
+  // providers/replicate/topaz.ts). Kept for the admin credit audit of past
+  // KIE bills only; KIE_RETIRED_MODEL_KEYS (index.ts) keeps it out of the chain.
   // See: docs.kie.ai/market/topaz/image-upscale.md
   "topaz-image-upscale": {
     model: "topaz/image-upscale",
@@ -1612,7 +1614,9 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
 // VIDEO UPSCALE MODELS (Video -> Upscaled Video)
 // =============================================================================
 export const KIE_VIDEO_UPSCALE_MODELS: Record<string, KieModelConfig> = {
-  // Topaz Video Upscaler - VERIFIED: docs.kie.ai/market/topaz/video-upscale
+  // Topaz Video Upscaler — RETIRED from routing 2026-10-25 (runs on Replicate:
+  // providers/replicate/topaz.ts). Kept for the admin credit audit of past
+  // KIE bills only. docs.kie.ai/market/topaz/video-upscale
   // video_url: STRING (NOT array!), max 50MB input
   // upscale_factor: "1", "2", or "4"
   "topaz": {

@@ -523,7 +523,35 @@ describe("video-upscale", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls videoUpscaleApi with correct args", async () => {
+  it("sends the Topaz target (resolution + frame rate) and never the old factor", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://low-res.mp4",
+    })
+    mockVideoUpscaleApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("video-upscale", { provider: "topaz", targetResolution: "4k", targetFps: 60, upscaleFactor: "2" }),
+      makeCtx(),
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    const sent = mockVideoUpscaleApi.mock.calls[0][0] as Record<string, unknown>
+    expect(sent).toMatchObject({ videoUrl: "http://low-res.mp4", targetResolution: "4k", targetFps: 60, provider: "topaz" })
+    expect(sent.upscaleFactor).toBeUndefined()
+  })
+
+  it("'same as source' sends no frame rate", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://low-res.mp4" })
+    mockVideoUpscaleApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-upscale", { provider: "topaz", targetResolution: "1080p" }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    const sent = mockVideoUpscaleApi.mock.calls[0][0] as Record<string, unknown>
+    expect(sent.targetResolution).toBe("1080p")
+    expect(sent.targetFps).toBeUndefined()
+  })
+
+  it("a saved node with only the old factor still sends it (the server maps it over the source)", async () => {
     mockResolveNodeInputs.mockReturnValue({
       videoUrl: "http://low-res.mp4",
     })
@@ -543,12 +571,9 @@ describe("video-upscale", () => {
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
-    expect(mockVideoUpscaleApi).toHaveBeenCalledWith({
-      videoUrl: "http://low-res.mp4",
-      upscaleFactor: 2,
-      userId: "u1",
-      provider: "topaz",
-    })
+    const sent = mockVideoUpscaleApi.mock.calls[0][0] as Record<string, unknown>
+    expect(sent).toMatchObject({ videoUrl: "http://low-res.mp4", upscaleFactor: 2, userId: "u1", provider: "topaz" })
+    expect(sent.targetResolution).toBeUndefined()
   })
 
   it("passes undefined upscaleFactor when not set", async () => {

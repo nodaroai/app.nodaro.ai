@@ -1563,6 +1563,8 @@ export async function uploadVideoMaybeWatermark(
   jobId: string,
   jobUserId: string | undefined,
   watermark: boolean,
+  /** `crf`: the browser-safe transcode's CRF when one is needed (default 23). */
+  opts?: { crf?: string },
 ): Promise<string> {
   // POST-PROVIDER by construction: `sourceUrl` is the provider's delivered
   // video. Download-of-result / watermark / transcode / R2-upload failures all
@@ -1580,7 +1582,7 @@ export async function uploadVideoMaybeWatermark(
       }
 
       // Even without watermark, transcode if the codec isn't browser-safe
-      const uploadPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"))
+      const uploadPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"), opts?.crf)
       return await uploadFileToR2(uploadPath, jobId, "video", jobUserId)
     } finally {
       await cleanupWorkDir(workDir)

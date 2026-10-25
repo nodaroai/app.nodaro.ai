@@ -36,7 +36,7 @@ import {
 import {
   RENDER_NODE_TYPES,
 } from "@nodaro/shared/nodes"
-import { SPEAKER_FRAMES_CREDIT_ID } from "@nodaro/render-rules"
+import { SPEAKER_FRAMES_CREDIT_ID, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
 
@@ -65,6 +65,8 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
     LTX_EXTEND_PER_SECOND_CREDIT_ID,
     LTX_RETAKE_PER_SECOND_CREDIT_ID,
   ].map((id) => [id, ANY_UNITS] as const),
+  // Topaz video upscale: whole Topaz units (its hold, lib/topaz-video-plan.ts).
+  [TOPAZ_VIDEO_UNIT_CREDIT_ID, { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: true }] as const,
   ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
 ])

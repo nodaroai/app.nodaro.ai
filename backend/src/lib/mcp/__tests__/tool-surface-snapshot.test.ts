@@ -1313,6 +1313,13 @@ const TRENDS_ORIGINAL_BYTES = 224
 // 505_812 = 173 B; the 64 B of headroom carry across.
 const FACE_MASK_TARGET_BYTES = 173
 
+// Topaz video upscale moved to Replicate (decided 2026-10-25), whose lever is an absolute target:
+// `video_upscale` gains `target_resolution` (720p / 1080p / 4k) and `target_fps` (15–60), and
+// says it is metered; `upscale_factor` stays as the legacy lever with a one-line pointer. No tool
+// was added, so the fixture does NOT move. Measured: 505_875 total − 505_576 = 299 B; the 73 B of
+// headroom carry across.
+const TOPAZ_VIDEO_TARGET_BYTES = 299
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1473,7 +1480,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_ENGINE_BYTES +
     USER_REQUEST_ARG_TOTAL_BYTES +
     TRENDS_ORIGINAL_BYTES +
-    FACE_MASK_TARGET_BYTES,
+    FACE_MASK_TARGET_BYTES +
+    TOPAZ_VIDEO_TARGET_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

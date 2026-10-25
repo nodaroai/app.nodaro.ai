@@ -1506,11 +1506,19 @@ export const REMOTION_INPUT_VIDEO_ARGS = [
  * Returns the output path (same as outputPath) if transcoding occurred,
  * or the original inputPath if the file was already compatible.
  */
-export async function transcodeToBrowserSafe(inputPath: string, outputPath: string): Promise<string> {
+export async function transcodeToBrowserSafe(
+  inputPath: string,
+  outputPath: string,
+  /** Override the encode's CRF (default 23) — a lane whose product is fidelity (an upscale) passes {@link COMBINE_DELIVERY_CRF}. */
+  crf?: string,
+): Promise<string> {
   if (!await needsTranscode(inputPath)) return inputPath
+  const videoArgs = crf === undefined
+    ? BROWSER_SAFE_VIDEO_ARGS
+    : BROWSER_SAFE_VIDEO_ARGS.map((arg, i, all) => (all[i - 1] === "-crf" ? crf : arg))
   await runFfmpeg([
     "-y", "-i", inputPath,
-    ...BROWSER_SAFE_VIDEO_ARGS,
+    ...videoArgs,
     "-c:a", "aac", "-b:a", "128k",
     outputPath,
   ])

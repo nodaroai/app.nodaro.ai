@@ -56,6 +56,12 @@ declare module "fastify" {
      *  `/v1/video-upscale`'s preHandler BEFORE creditGuard, so the credit id and
      *  the reserved amount are priced from the SOURCE job, never the body. */
     seedanceDraftFinalize?: import("../lib/seedance-draft-finalize.js").SeedanceDraftFinalizePlan
+    /** A Topaz upscale's measured plan (target + hold units), set by
+     *  `/v1/video-upscale`'s preHandler BEFORE creditGuard. */
+    topazVideoUpscale?: import("../lib/topaz-video-plan.js").TopazVideoUpscalePlan
+    /** A Topaz image upscale's output size in the provider's units, set by
+     *  `/v1/edit-image`'s preHandler BEFORE creditGuard. */
+    topazImageSizeUnits?: number
     storageSnapshot?: import("./credit-guard.js").StorageSnapshot
     /** SHA-256 fingerprint of (req.url + stable-stringified body), set by
      *  creditGuard for anti-double-click dedup. Route handlers should write

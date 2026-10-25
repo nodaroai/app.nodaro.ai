@@ -16,6 +16,7 @@ import type {
   LipSyncOptions,
   VideoLipSyncOptions,
   VideoUpscaleProvider,
+  VideoUpscaleRequest,
   MotionTransferProvider,
   VideoToVideoProvider,
   SpeechToVideoProvider,
@@ -259,16 +260,19 @@ export class NodaroCloudVideoProvider
 
   async videoUpscale(
     videoUrl: string,
-    upscaleFactor?: "1" | "2" | "4",
+    request?: VideoUpscaleRequest,
     options?: ProviderOptions,
     _reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     // The router resolves the model for chain selection but does not pass it
     // into the provider (VideoUpscaleProvider takes no model arg), so the
-    // cloud route applies its own default — the same one KIE uses.
+    // cloud route applies its own default (Topaz). The target travels as
+    // asked; the cloud route resolves "same as source" against the clip.
     const body: Record<string, unknown> = {
       videoUrl: await ensureCloudReachableMediaUrl(videoUrl),
-      ...(upscaleFactor !== undefined ? { upscaleFactor } : {}),
+      ...(request?.targetResolution !== undefined ? { targetResolution: request.targetResolution } : {}),
+      ...(request?.targetFps !== undefined ? { targetFps: request.targetFps } : {}),
+      ...(request?.upscaleFactor !== undefined ? { upscaleFactor: request.upscaleFactor } : {}),
     }
     const jobId = await createCloudJob("/v1/video-upscale", body)
     return extractVideoResult(await waitForCloudJob(jobId), jobId)

@@ -2644,9 +2644,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "topaz-labs",
     label: "Topaz Video Upscale",
     series: "Topaz",
-    description: "High-quality video upscale and enhancement.",
+    description: "High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel.",
     useCases: ["upscale", "premium"],
-    pricing: [{ identifier: "topaz-video", credits: 190, note: "~5s clip" }],
+    // Metered: a run holds its output-gigapixel ceiling and is charged the
+    // Topaz units the provider reports, never above the hold.
+    pricing: [{ identifier: "topaz-video:per-unit", credits: 40, note: "per Topaz unit (metered)" }],
   },
 
   // ── Motion transfer ──

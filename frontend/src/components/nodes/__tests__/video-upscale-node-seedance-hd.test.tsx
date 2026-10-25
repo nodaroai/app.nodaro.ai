@@ -58,8 +58,8 @@ vi.mock("../base-node", () => ({
   ),
 }))
 vi.mock("../run-node-button", () => ({
-  RunNodeButton: ({ credits, creditsFrom }: { credits?: number; creditsFrom?: boolean }) => (
-    <div data-testid="run" data-credits={String(credits ?? "")} data-from={String(!!creditsFrom)} />
+  RunNodeButton: ({ credits, creditsFrom, creditsEstimate }: { credits?: number; creditsFrom?: boolean; creditsEstimate?: boolean }) => (
+    <div data-testid="run" data-credits={String(credits ?? "")} data-from={String(!!creditsFrom)} data-estimate={String(!!creditsEstimate)} />
   ),
 }))
 vi.mock("../handle-with-popover", async (importOriginal) => ({
@@ -137,6 +137,8 @@ describe("result job lookups", () => {
     renderNode({ provider: "topaz", generatedResults: [RESULT], activeResultIndex: 0, executionStatus: "completed" })
     expect(screen.getByTestId("overlay")).toBeTruthy()
     expect(screen.getByTestId("run").dataset.credits).toBe("19")
+    // Metered: the figure is the server's price for the quoted Topaz units — an estimate (≈).
+    expect(screen.getByTestId("run").dataset.estimate).toBe("true")
     await new Promise((r) => setTimeout(r, 20))
     expect(api.getJobStatus).not.toHaveBeenCalled()
     expect(api.estimate).not.toHaveBeenCalled()
@@ -144,6 +146,7 @@ describe("result job lookups", () => {
 
   it("a VEO upscale result makes no job lookup", async () => {
     renderNode({ provider: "veo-1080p", generatedResults: [RESULT], activeResultIndex: 0, executionStatus: "completed" })
+    expect(screen.getByTestId("run").dataset.estimate).toBe("false")
     await new Promise((r) => setTimeout(r, 20))
     expect(api.getJobStatus).not.toHaveBeenCalled()
   })

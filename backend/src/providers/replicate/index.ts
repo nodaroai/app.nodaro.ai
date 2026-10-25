@@ -8,7 +8,7 @@
 
 import { providerRegistry } from "../registry.js"
 import type { ProviderInfo } from "../provider.interface.js"
-import { ReplicateImageProvider, REPLICATE_IMAGE_MODEL_IDS } from "./image.js"
+import { ReplicateImageProvider, REPLICATE_IMAGE_EDIT_MODEL_IDS, REPLICATE_IMAGE_MODEL_IDS } from "./image.js"
 import { ReplicateVideoProvider } from "./video.js"
 import { ReplicateAudioSeparationProvider } from "./audio-separation.js"
 
@@ -25,15 +25,17 @@ const REPLICATE_I2V_ONLY_MODEL_IDS = ["kling-3-omni"] as const
 const replicateInfo: ProviderInfo = {
   id: "replicate",
   name: "Replicate",
-  capabilities: ["image-generation", "audio-separation"],
+  capabilities: ["image-generation", "image-editing", "video-upscale", "audio-separation"],
   supportedModels: {
     "image-generation": REPLICATE_IMAGE_MODEL_IDS,
-    "image-editing": [],
+    // Topaz image upscale (moved off KIE 2026-10-25).
+    "image-editing": [...REPLICATE_IMAGE_EDIT_MODEL_IDS],
     "image-to-video": [...LTX_VIDEO_MODEL_IDS, ...REPLICATE_I2V_ONLY_MODEL_IDS],
     "text-to-video": [...LTX_VIDEO_MODEL_IDS],
     "video-to-video": [],
     "motion-transfer": [],
-    "video-upscale": [],
+    // Topaz video upscale (moved off KIE 2026-10-25).
+    "video-upscale": ["topaz"],
     "lip-sync": [],
     "speech-to-video": [],
     "music-generation": [],

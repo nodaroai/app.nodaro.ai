@@ -38,6 +38,7 @@ import type {
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { usecaseSavedOutput } from "./use-case-io";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
+import { registerNodeOutputReader } from "@/lib/node-output-reader";
 
 export function buildExecutionLevels(
   nodes: WorkflowNode[],
@@ -1422,3 +1423,7 @@ export function collectAncestorRefs(
     visited,
   );
 }
+
+// The `src/lib` readers that may not import this module (it sits in the
+// editor's import cycle) read a node's output through this registration.
+registerNodeOutputReader(extractNodeOutput);

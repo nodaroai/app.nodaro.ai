@@ -2,7 +2,8 @@
  * KIE.ai Video Provider
  *
  * Implements ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
- * MotionTransferProvider, VideoUpscaleProvider, and LipSyncProvider interfaces.
+ * MotionTransferProvider, and LipSyncProvider interfaces. (Topaz video upscale
+ * moved to Replicate 2026-10-25 — providers/replicate/topaz.ts.)
  * Extracted from services/kie-ai.ts.
  */
 
@@ -12,7 +13,6 @@ import type {
   TextToVideoProvider,
   VideoToVideoProvider,
   MotionTransferProvider,
-  VideoUpscaleProvider,
   LipSyncProvider,
   LipSyncOptions,
   VideoLipSyncOptions,
@@ -46,7 +46,6 @@ import {
   KIE_TEXT_TO_VIDEO_MODELS,
   KIE_VIDEO_TO_VIDEO_MODELS,
   KIE_MOTION_TRANSFER_MODELS,
-  KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
   KIE_CREDIT_USD,
@@ -1722,7 +1721,6 @@ export class KieVideoProvider
     TextToVideoProvider,
     VideoToVideoProvider,
     MotionTransferProvider,
-    VideoUpscaleProvider,
     LipSyncProvider,
     SpeechToVideoProvider
 {
@@ -3034,69 +3032,6 @@ export class KieVideoProvider
 
     console.log(
       `[KIE.ai] Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
-    )
-
-    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
-  }
-
-  async videoUpscale(
-    videoUrl: string,
-    upscaleFactor?: "1" | "2" | "4",
-    options?: ProviderOptions,
-    reconcileOpts?: ReconcileOpts,
-  ): Promise<ProviderResult> {
-    const modelConfig = KIE_VIDEO_UPSCALE_MODELS["topaz"]
-    if (!modelConfig) {
-      throw createSanitizedError(
-        "Video upscale model not configured",
-        "Video upscale"
-      )
-    }
-
-    const factor = upscaleFactor ?? "2"
-
-    console.log(
-      `[KIE.ai] ========== VIDEO UPSCALE REQUEST ==========`
-    )
-    console.log(`[KIE.ai] Model: ${modelConfig.model}`)
-    console.log(`[KIE.ai] Video URL: ${videoUrl}`)
-    console.log(`[KIE.ai] Upscale factor: ${factor}x`)
-    console.log(`[KIE.ai] NOTE: Max input size 50MB`)
-    console.log(
-      `[KIE.ai] ==============================================`
-    )
-
-    // Build input based on KIE.ai docs for topaz/video-upscale
-    // IMPORTANT: video_url is STRING, not array!
-    const input: Record<string, unknown> = {
-      video_url: videoUrl, // Single URL string (NOT array!)
-      upscale_factor: factor,
-    }
-
-    console.log(
-      `[KIE.ai] Final input:`,
-      JSON.stringify(input, null, 2)
-    )
-
-    const { resultJson, providerMs } = await runKieTask(
-      modelConfig.model,
-      input,
-      MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress,
-      { ...reconcileOpts, modelKey: "topaz", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
-    )
-
-    const outputUrl =
-      resultJson.resultUrls?.[0] ?? resultJson.videoUrl
-    if (!outputUrl) {
-      throw createSanitizedError(
-        "Video upscale task succeeded but no URL found",
-        "Video upscale"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Video upscale completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
     return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }

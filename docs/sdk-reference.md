@@ -2929,6 +2929,14 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > source is refused with a 4xx before anything is charged. See
 > [Seedance 2.5 HD (from draft)](./nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft).
 
+> **Topaz video upscale.** `VideoUpscaleParams` takes `targetResolution`
+> (`"720p" | "1080p" | "4k"`, the frame's short side, default 1080p) and
+> `targetFps` (15–60, default the source's own rate):
+> `run("video-upscale", { videoUrl, targetResolution: "4k", targetFps: 60 })`.
+> It is metered — see [Credits (Topaz)](./nodes/processing-video/video-upscale.md#credits-topaz).
+> `upscaleFactor` is deprecated; it is still accepted and applied to the
+> source's short side.
+
 > **Copyright refusals.** `TextToVideoParams` takes `contentPolicyRewrite?: boolean`.
 > Absent or `true`, a copyright refusal is retried once with a reworded prompt;
 > `false` = a copyright refusal fails the job instead of retrying once with a

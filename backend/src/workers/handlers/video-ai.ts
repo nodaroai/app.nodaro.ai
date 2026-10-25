@@ -62,10 +62,14 @@ import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeA
 import { applyDraftAudioMux, draftAudioWarningOutputData } from "../../lib/seedance-draft-audio-apply.js"
 import {
   cleanupWorkDir,
+  COMBINE_DELIVERY_CRF,
   createWorkDir,
   downloadFile,
   stripAudio,
 } from "../../providers/video/ffmpeg-utils.js"
+import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
+import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import type { TopazVideoResolution } from "@nodaro/shared/models"
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
@@ -1107,10 +1111,14 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 }
 
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
-  const { videoUrl, upscaleFactor, provider, kieTaskId, draftAudioMux, draftVideoUrl } = job.data as {
+  const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftVideoUrl } = job.data as {
     jobId: string
     videoUrl?: string
+    /** Legacy relative lever — mapped onto a target over the clip's size. */
     upscaleFactor?: "1" | "2" | "4"
+    /** Topaz target, resolved by the route / workflow run before it priced the run. */
+    targetResolution?: TopazVideoResolution
+    targetFps?: number
     provider?: VideoUpscaleProvider
     kieTaskId?: string
     /** Seedance draft finalize: the mux the draft got after rendering (from the source job). */
@@ -1166,12 +1174,24 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
         return url
       } else {
         if (!videoUrl) throw new Error("videoUrl is required for Topaz upscale")
-        const topazOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
+        // Topaz runs on Replicate (since 2026-10-25): the prediction id is
+        // persisted so the reconcile cron polls Replicate, never KIE.
+        const topazOnTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
         const onProgress: ProgressCallback = async (progress: number) => {
           console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
           await setJobProgress(job, ctx.jobId, progress)
         }
-        const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress }, { onTaskCreated: topazOnTaskCreated })
+        const result = await videoUpscale(
+          videoUrl,
+          "topaz",
+          {
+            ...(upscaleFactor !== undefined ? { upscaleFactor } : {}),
+            ...(targetResolution !== undefined ? { targetResolution } : {}),
+            ...(targetFps !== undefined ? { targetFps } : {}),
+          },
+          { onProgress },
+          { onTaskCreated: topazOnTaskCreated },
+        )
         upscaleMeta = result
         return result.url
       }
@@ -1186,17 +1206,31 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   const muxed = finalizeMux
     ? await applyDraftAudioMux({ videoUrl: outputUrl, mux: finalizeMux, draftVideoUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
     : undefined
-  const r2Url = muxed?.url ?? await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // Topaz delivers HEVC 10-bit: the delivery transcodes it to browser-safe
+  // H.264 at the visually lossless CRF — the user paid for detail.
+  const isTopaz = upscaleProvider === "topaz"
+  const r2Url = muxed?.url ?? (isTopaz
+    ? await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark, { crf: COMBINE_DELIVERY_CRF })
+    : await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark))
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
+  // Topaz is metered: charged the units Replicate reports at the unit's own
+  // price row, never above the hold (the route / workflow run reserved a
+  // ceiling from the clip's output gigapixels). No reported units = the hold.
+  const meteredBaseCredits = isTopaz && upscaleMeta?.billedUnits !== undefined
+    ? await unitRateBaseCredits(TOPAZ_VIDEO_UNIT_CREDIT_ID, upscaleMeta.billedUnits)
+    : undefined
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-upscale",
+    ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
     result: {
       url: outputUrl,
-      cost: null,
+      // Topaz: Replicate's bill for the run (recorded; the charge is the units above).
+      cost: isTopaz ? upscaleMeta?.cost ?? null : null,
       providerUsed: upscaleProvider,
       // Same rebuilt-literal carry as lip-sync above, same reason.
       ...(upscaleMeta?.relayJobId && { relayJobId: upscaleMeta.relayJobId, relayCredits: upscaleMeta.relayCredits ?? null }),

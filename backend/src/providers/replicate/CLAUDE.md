@@ -34,6 +34,13 @@ Current Replicate-only model ids:
 - **`kontext-multi`** — multi-image Flux Kontext Pro (`flux-kontext-apps/multi-image-kontext-pro`), i2i / modify-image. The model exposes ONLY `input_image_1` + `input_image_2`, so the ref cap is **2** (not 4), 4 cr
 - **`flux-lora-character`** — synthetic id; version resolved per-request from `extraParams.lora_version` (the character's stored `lora_replicate_version`), 3 cr/image
 
+## Topaz upscalers (since 2026-10-25, moved off KIE)
+
+`topaz.ts`. Official models, run by `model:` (no version pin — Replicate hides the version of official models).
+- **Video** `topazlabs/video-upscale` — `video`, `target_resolution` ("720p" | "1080p" | "4k" — the short side; portrait stays portrait), `target_fps` (15–60; frames it adds are interpolated). Delivers **HEVC 10-bit**, so the worker's delivery re-encodes to H.264 at `COMBINE_DELIVERY_CRF`.
+- **Image** `topazlabs/image-upscale` — `image`, `upscale_factor` ("None" | "2x" | "4x" | "6x"; we send None/2x/4x), `output_format` (we pin "png"). A 2× is pixel-exact (the identity plate's gate relies on it).
+- **Billing:** both report Topaz units in `metrics.unspecified_billing_metric` (`topaz-units.ts`), NOT GPU time — `extractCost`'s predict-time cost is wrong for them. The video lane is METERED: it holds an output-gigapixel ceiling (`@nodaro/render-rules` `topazVideoHoldUnits`, `lib/topaz-video-plan.ts`) and settles `meteredBaseCredits` = the `topaz-video:per-unit` row × the reported units (worker AND `reconcile/replicate.ts`). Unit cost is not derivable from length × tier (measured 2026-10-25: 5 s 720p→4K60 = 19 units, 34 s 1080p→1080p30 = 6) — never replace the meter with a fixed table without re-measuring. The image lane is fixed-priced by output size (`lib/topaz-image-size.ts`).
+
 ## Character LoRA Training (Cloud only)
 
 Migration 126 adds 7 `lora_*` columns to `characters` + partial index on in-flight statuses. Migration 127 seeds `model_pricing` for `flux-lora-character` (3 cr/image inference) + `character-lora-training` (150 cr/training).

@@ -3483,7 +3483,9 @@ Needs `workflows:execute`.
 | `video_url` | string (URL) |  | Source video URL (required for topaz). |
 | `video_asset_id` | string |  | Nodaro video job id (required for topaz). |
 | `model` | string |  | Upscale model. Default topaz. One of `topaz`, `veo-1080p`, `veo-4k`, `seedance-2-5-hd`. |
-| `upscale_factor` | string |  | Upscale factor for topaz (1×/2×/4×). Default 2. One of `1`, `2`, `4`. |
+| `target_resolution` | string |  | topaz: short side. Default 1080p. One of `720p`, `1080p`, `4k`. |
+| `target_fps` | integer |  | topaz: output fps. Default: the source's. From 15 to 60. |
+| `upscale_factor` | string |  | Legacy; use target_resolution. One of `1`, `2`, `4`. |
 | `task_id` | string |  | Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k), or of the Seedance 2.5 draft (seedance-2-5-hd). |
 | `source_job_id` | string |  | seedance-2-5-hd only: the job id of the Seedance 2.5 draft to finalize (alternative to task_id). |
 | `kie_task_id` | string |  | Use task_id. |

@@ -1,4 +1,7 @@
 import { replicateOutputCost } from "../../providers/replicate/output-cost.js"
+import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { topazBilledUnits } from "../../providers/replicate/topaz-units.js"
+import { unitRateBaseCredits } from "../credit-base-cost.js"
 import { replicateFailureMessage } from "../../providers/replicate/failure-messages.js"
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
@@ -439,11 +442,20 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
 
     const outputCost = row.job_type === "lip-sync"
       ? await replicateOutputCost(String(row.input_data?.provider ?? ""), urls[0]!) : null
+    // A Topaz video upscale is charged the units the prediction reports (the
+    // worker's own settlement), never the whole hold it reserved.
+    const topazUnits = row.job_type === "video-upscale"
+      ? topazBilledUnits(pred.metrics as Record<string, unknown> | undefined)
+      : undefined
+    const meteredBaseCredits = topazUnits !== undefined
+      ? await unitRateBaseCredits(TOPAZ_VIDEO_UNIT_CREDIT_ID, topazUnits)
+      : undefined
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
+      ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
       result: {
         url: urls[0]!,
         extraUrls: urls.slice(1),

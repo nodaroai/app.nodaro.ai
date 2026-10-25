@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-10-24T23:37:39.679Z
-generated_from: db68a9ee4
+generated_at: 2026-10-25T19:02:22.033Z
+generated_from: 24b4818ff
 ---
 
 # Upscale Video
@@ -16,10 +16,12 @@ generated_from: db68a9ee4
 **Required data fields:**
 - `label: string`
 - `provider: VideoUpscaleProvider`
-- `upscaleFactor: "1" | "2" | "4"`
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `targetResolution?: TopazVideoResolution`
+- `targetFps?: number`
+- `upscaleFactor?: "1" | "2" | "4"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
@@ -34,7 +36,7 @@ generated_from: db68a9ee4
 {
   "label": "Upscale Video",
   "provider": "topaz",
-  "upscaleFactor": "2",
+  "targetResolution": "1080p",
   "fieldMappings": {},
   "executionStatus": "idle",
   "generatedResults": [],
@@ -54,6 +56,8 @@ generated_from: db68a9ee4
 - `video_url`
 - `video_asset_id`
 - `model`
+- `target_resolution`
+- `target_fps`
 - `upscale_factor`
 - `task_id`
 - `source_job_id`
@@ -80,7 +84,7 @@ generated_from: db68a9ee4
   "data": {
     "label": "Upscale Video",
     "provider": "topaz",
-    "upscaleFactor": "2",
+    "targetResolution": "1080p",
     "fieldMappings": {},
     "executionStatus": "idle",
     "generatedResults": [],

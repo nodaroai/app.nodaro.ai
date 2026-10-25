@@ -333,3 +333,24 @@ export {
 export type { VoiceChangerModel } from "../voice-changer-models.js"
 // --- Model tree (derive node targets + product-line grouping for the Models tab) ---
 export * from "../model-tree.js"
+// --- Topaz video upscale target (resolution + fps; the legacy factor mapped forward) ---
+export {
+  TOPAZ_VIDEO_RESOLUTIONS,
+  TOPAZ_VIDEO_DEFAULT_RESOLUTION,
+  TOPAZ_VIDEO_SHORT_SIDE,
+  TOPAZ_VIDEO_FPS_MIN,
+  TOPAZ_VIDEO_FPS_MAX,
+  TOPAZ_VIDEO_FPS_CHOICES,
+  TOPAZ_VIDEO_FALLBACK_FPS,
+  isTopazVideoResolution,
+  topazVideoResolutionNearest,
+  clampTopazVideoFps,
+  resolveTopazVideoTarget,
+  topazVideoOutputSize,
+} from "../topaz-video.js"
+export type {
+  TopazVideoResolution,
+  TopazVideoSource,
+  TopazVideoTargetInput,
+  TopazVideoTarget,
+} from "../topaz-video.js"

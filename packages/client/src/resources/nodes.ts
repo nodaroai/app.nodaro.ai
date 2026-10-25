@@ -505,7 +505,12 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
 /**
  * Typed request body for `nodes.run("video-upscale", …)` / `runAndWait`.
  *
- * - `topaz` (default): upscale any `videoUrl` by `upscaleFactor`.
+ * - `topaz` (default): upscale any `videoUrl` to `targetResolution` (the
+ *   frame's short side: 720p / 1080p / 4k, default 1080p) at `targetFps`
+ *   (15–60, default the source's own rate; added frames are interpolated).
+ *   Metered: the run holds a ceiling read from its output size and is charged
+ *   what the upscale actually costs, never more. `upscaleFactor` is the legacy
+ *   lever, mapped over the source's short side when no `targetResolution` is set.
  * - `veo-1080p` / `veo-4k`: re-render a VEO generation by its `taskId`.
  * - `seedance-2-5-hd`: finalize a Seedance 2.5 DRAFT (a `draft: true` run) —
  *   the same take re-rendered at 1080p at the draft's own length. Name the
@@ -519,6 +524,11 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
 export interface VideoUpscaleParams extends GenerationSessionParams {
   provider?: "topaz" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd"
   videoUrl?: string
+  /** topaz: output resolution — the frame's short side. Default "1080p". */
+  targetResolution?: "720p" | "1080p" | "4k"
+  /** topaz: output frame rate, 15–60. Default: the source's own rate. */
+  targetFps?: number
+  /** @deprecated Legacy topaz lever — use `targetResolution`. */
   upscaleFactor?: "1" | "2" | "4"
   taskId?: string
   sourceJobId?: string

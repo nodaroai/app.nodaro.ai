@@ -299,19 +299,19 @@ backend/src/providers/
 | Capability | KIE.ai | Replicate | Notes |
 |------------|--------|-----------|-------|
 | image-generation | Yes | Yes | KIE: + grok, gpt-image |
-| image-editing | Yes | No | KIE only: recraft, nano-banana-edit |
+| image-editing | Yes | Yes | KIE: recraft, nano-banana-edit, …; Replicate: Topaz image upscale (`topaz-image-upscale`, since 2026-10-25) |
 | image-to-video | Yes | Yes | KIE: minimax, veo, kling, grok-i2v, sora2-pro + 11 new (seedance, wan-i2v, wan-turbo, hailuo-2.3-pro/std, hailuo-standard, sora2, bytedance-lite/pro/pro-fast, kling-master); Replicate: runway, pika |
 | text-to-video | Yes | Yes | KIE: minimax, veo, kling; Replicate: runway, pika |
 | video-to-video | Yes | No | KIE only (Wan 2.6) |
 | motion-transfer | Yes | No | KIE only |
-| video-upscale | Yes | No | KIE only (Topaz) |
+| video-upscale | No | Yes | Replicate only: Topaz (`topazlabs/video-upscale`, since 2026-10-25 — metered by the Topaz units Replicate reports, `lib/topaz-video-plan.ts`). The VEO / Seedance HD upscales are KIE task re-renders that bypass the router. |
 | lip-sync | Yes | No | KIE only (kling-avatar, hailuo-avatar) |
 | music-generation | Yes | No | KIE only |
 | text-to-speech | No* | No | *All models (v3/v4/v4-turbo/turbo/multilingual) route through the direct ElevenLabs API — never KIE. KIE's TTS proxy remains registered in the provider registry (unused in production) only for historical actual-cost audit reconciliation. |
 
 ### Routing Logic
 - KIE.ai is the sole primary provider; the legacy `ai_provider` app-setting no longer affects routing (fresh installs seed `"replicate"`, and the old non-`"kie"` branch returned an empty chain that broke registry-routed nodes on self-host — see `providers/config.ts` + migration 307)
-- image-generation -> [kie, replicate] chain (Replicate serves only the "Open" models that live exclusively there)
+- image-generation, image-editing, video-upscale -> [kie, replicate] chain (Replicate serves only the models that live exclusively there: the "Open" image models and the Topaz upscalers)
 - Every other capability -> [kie] chain
 
 ### KIE.ai Models
@@ -440,7 +440,7 @@ that IS stable: which provider serves each node, and how its price is *shaped*.
 | generate-script | tiered by LLM | Gemini Flash; economy / standard / premium ids |
 | generate-image | per-model, some composite | z-image, nano-banana, flux, grok, gpt-image (`:high`), nano-banana-pro (`:4K`), ideogram-v3 |
 | image-to-image | per-model, some composite | flux-pro-i2i, gpt-image-i2i, flux-i2i, ideogram variants |
-| edit-image | per-model | recraft-remove-bg, recraft-upscale, nano-banana-edit, topaz |
+| edit-image | per-model | recraft-remove-bg, recraft-upscale, nano-banana-edit, topaz (Topaz: the factor's tier, or the one-unit row × the output's size units when higher — `lib/topaz-image-size.ts`) |
 | image-to-video | duration/resolution composites | kling-turbo, minimax, kling, grok-i2v, veo3.1, veo3 — most are `:<dur>s[:<res>]` tiered |
 | text-to-video | duration/resolution composites | Same shape as image-to-video |
 | text-to-speech | flat, or per started 100 characters where `SPEECH_LENGTH_PRICING_ENABLED` is on | ElevenLabs v3 / v4 / v4 Turbo / Turbo v2.5 / Multilingual v2 — ALL direct ElevenLabs API (never KIE); `stripAudioTags()` strips `[...]` for every model whose capability sheet has `MODEL_CATALOG[id].tts.audioTags: false` (today turbo and multilingual; v3, v4 and v4 Turbo keep their tags) |

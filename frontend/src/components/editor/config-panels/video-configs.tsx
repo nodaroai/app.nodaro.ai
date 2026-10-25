@@ -55,6 +55,9 @@ import {
   hasFeature,
   MODEL_CATALOG
 } from "@nodaro/shared/model-catalog"
+import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, type TopazVideoResolution } from "@nodaro/shared/models"
+import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
+import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
@@ -2186,15 +2189,14 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
 
 export const MotionTransferConfig = memo(MotionTransferConfigImpl)
 
-export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
+export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<VideoUpscaleData> & { nodeId?: string }) {
   const t = useT()
   // Upscaling is not on free credits: the rows stay listed, locked, with why.
   const freeVideoLimits = useFreeVideoLimits()
-  // Topaz uses the "topaz-video" credit row (NOT the "topaz" processing
-  // row, which is 1 CR for image processing). Backend route maps the
-  // selector → identifier in upscaleCreditModel(); we mirror it here so
-  // the dropdown labels show what's actually charged.
-  useEffect(() => { prefetchModelCredits(["veo-1080p", "veo-4k", "topaz-video"]) }, [])
+  // VEO upscales are flat rows, quoted in the dropdown. Topaz is metered — its
+  // price follows the clip's length, resolution and frame rate — so its option
+  // quotes nothing; the node's pill and Run button show the clip's estimate.
+  useEffect(() => { prefetchModelCredits(["veo-1080p", "veo-4k"]) }, [])
   // The draft finalize is priced by the DRAFT (its length, its reference
   // video), so no row is its price. The dropdown quotes the lowest price any
   // draft can finalize for, from the server (it follows admin-edited rows and
@@ -2202,6 +2204,34 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   // the exact price once a draft is wired (/v1/credits/seedance-hd-estimate).
   const seedanceHdMinimum = useSeedanceHdMinimumCredits()
   const provider = data.provider || "topaz"
+  const isTopaz = provider === "topaz"
+  // Shown: the resolution the node is quoted at — the one reading its price
+  // reads (`topazVideoQuotedResolution`). A saved node that still holds only the
+  // old 1×/2×/4× factor shows the target that factor maps to over the wired
+  // clip's measured size, else 1080p, and says so beneath (decided 2026-10-25).
+  // The note reads the same wired settings the select does, so they cannot disagree.
+  const { resolution, legacyFactor } = topazVideoQuotedTarget({ id: nodeId ?? "", type: "video-upscale", data }, nodes, edges ?? [])
+  const fps = typeof data.targetFps === "number" && Number.isFinite(data.targetFps) ? clampTopazVideoFps(data.targetFps) : undefined
+  // A rate set elsewhere (an agent, the API) that the menu does not list stays selectable.
+  const fpsChoices: readonly number[] = fps === undefined || (TOPAZ_VIDEO_FPS_CHOICES as readonly number[]).includes(fps)
+    ? TOPAZ_VIDEO_FPS_CHOICES
+    : [...TOPAZ_VIDEO_FPS_CHOICES, fps].sort((a, b) => a - b)
+  // Fail-safe (CLAUDE.md step 12b): the target is Topaz's lever only — cleared
+  // on any other provider; on Topaz a value it cannot take is cleared (the run
+  // then uses its default) and a frame rate out of range is clamped. An unset
+  // value is left unset.
+  useEffect(() => {
+    const updates: Partial<VideoUpscaleData> = {}
+    if (!isTopaz) {
+      if (data.targetResolution !== undefined) updates.targetResolution = undefined
+      if (data.targetFps !== undefined) updates.targetFps = undefined
+      if (data.upscaleFactor !== undefined) updates.upscaleFactor = undefined
+    } else {
+      if (data.targetResolution !== undefined && !isTopazVideoResolution(data.targetResolution)) updates.targetResolution = undefined
+      if (data.targetFps !== undefined && fps !== data.targetFps) updates.targetFps = fps
+    }
+    if (Object.keys(updates).length > 0) onUpdate(updates)
+  }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -2214,7 +2244,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
             {/* The credit cache is never populated without billing, so the
                 hardcoded fallbacks below rendered as real prices on a
                 self-host (community grind, 2026-08-13). */}
-            <LockableSelectItem value="topaz" locked={lockedVideoModel(freeVideoLimits, "topaz")}>{`${t("vidcfg.topazFactorBased")}${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
+            <LockableSelectItem value="topaz" locked={lockedVideoModel(freeVideoLimits, "topaz")}>{t("vidcfg.topazTarget")}</LockableSelectItem>
             <LockableSelectItem value="veo-1080p" locked={lockedVideoModel(freeVideoLimits, "veo-1080p")}>{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
             <LockableSelectItem value="veo-4k" locked={lockedVideoModel(freeVideoLimits, "veo-4k")}>{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
             <LockableSelectItem value={SEEDANCE_DRAFT_FINALIZE_PROVIDER} locked={lockedVideoModel(freeVideoLimits, SEEDANCE_DRAFT_FINALIZE_PROVIDER)}>{`${t("vidcfg.seedanceHdFromDraft")}${hasCredits() && seedanceHdMinimum != null ? ` (${t("vidcfg.seedanceHdFromPrice", { credits: `${creditUnits(seedanceHdMinimum)} ${creditUnitLabel(t("credits.unitShort"))}` })})` : ""}`}</LockableSelectItem>
@@ -2222,24 +2252,41 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
 
-      {provider === "topaz" && (
-        <MappableField field="upscaleFactor" label={t("field.upscaleFactor")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      {isTopaz && (
+        <MappableField field="targetResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
-            value={data.upscaleFactor || "2"}
-            onValueChange={(v) => onUpdate({ upscaleFactor: v as VideoUpscaleData["upscaleFactor"] })}
+            value={resolution}
+            // The target replaces the old factor, which the run reads only while no target is set.
+            onValueChange={(v) => onUpdate({ targetResolution: v as TopazVideoResolution, upscaleFactor: undefined })}
           >
-            <SelectTrigger aria-label={t("field.upscaleFactor")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">{t("vidcfg.upscale1x")}</SelectItem>
-              <SelectItem value="2">{t("vidcfg.upscale2x")}</SelectItem>
-              <SelectItem value="4">{t("vidcfg.upscale4x")}</SelectItem>
+              {TOPAZ_VIDEO_RESOLUTIONS.map((r) => <SelectItem key={r} value={r}>{TOPAZ_VIDEO_RESOLUTION_LABELS[r]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {legacyFactor !== undefined && (
+            <p className="mt-1 px-1 text-xs text-muted-foreground">{t("vidcfg.topazLegacyFactorNote", { factor: legacyFactor })}</p>
+          )}
+        </MappableField>
+      )}
+
+      {isTopaz && (
+        <MappableField field="targetFps" label={t("field.fps")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={fps === undefined ? TOPAZ_FPS_SAME_AS_SOURCE : String(fps)}
+            onValueChange={(v) => onUpdate({ targetFps: v === TOPAZ_FPS_SAME_AS_SOURCE ? undefined : Number(v) })}
+          >
+            <SelectTrigger aria-label={t("field.fps")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={TOPAZ_FPS_SAME_AS_SOURCE}>{t("vidcfg.topazFpsSameAsSource")}</SelectItem>
+              {fpsChoices.map((f) => <SelectItem key={f} value={String(f)}>{`${f} fps`}</SelectItem>)}
             </SelectContent>
           </Select>
         </MappableField>
       )}
 
       <p className="text-xs text-muted-foreground px-1">
-        {provider === "topaz"
+        {isTopaz
           ? t("vidcfg.descTopazUpscale")
           : provider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
             ? t("vidcfg.descSeedanceHdUpscale")
@@ -2248,6 +2295,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
     </div>
   )
 }
+
+/** The FPS menu's "same as source" entry — stored as no `targetFps` at all. */
+const TOPAZ_FPS_SAME_AS_SOURCE = "source"
 
 export function VideoDepthConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoDepthData>) {
   const t = useT()
