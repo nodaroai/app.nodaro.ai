@@ -102,6 +102,7 @@ describe("useUserSettings", () => {
       showMostUsedNodes: false,
       variableDisplayMode: "raw",
       nodeDoubleClickAction: "settings",
+      mcpFlowsEnabled: true,
     })
   })
 
@@ -126,6 +127,7 @@ describe("useUserSettings", () => {
       // preference existed, so an existing account sees no change.
       variableDisplayMode: "raw",
       nodeDoubleClickAction: "settings",
+      mcpFlowsEnabled: true,
     })
   })
 

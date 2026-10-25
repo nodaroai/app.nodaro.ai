@@ -35,6 +35,16 @@ export interface UserMcpPreferences {
     ttsModel?: string
     musicModel?: string
   }
+  /** MCP conversations as flows on the canvas: on unless `enabled` is false. */
+  flows?: {
+    enabled?: boolean
+  }
+}
+
+/** Whether this user's MCP conversations become flows (the default is on). */
+export async function mcpFlowsEnabled(userId: string): Promise<boolean> {
+  const prefs = await getUserMcpPreferences(userId)
+  return prefs.flows?.enabled !== false
 }
 
 const CACHE_TTL_MS = 60_000

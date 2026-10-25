@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-10-14T00:02:31.161Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T22:28:06.446Z
+generated_from: b9f9a7b82
 ---
 
 # Modify Image
@@ -88,6 +88,7 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
 - `aspect_ratio`
 - `negative_prompt`
 - `structured`
+- `user_request`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

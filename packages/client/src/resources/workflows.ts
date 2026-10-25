@@ -308,6 +308,48 @@ export class WorkflowCollaboratorsResource {
   }
 }
 
+/** One MCP conversation: a flow its assistant built step by step (`GET /v1/mcp-conversations`). */
+export interface McpConversation {
+  /** The conversation's workflow id — open it with {@link WorkflowsResource.get}. */
+  id: string
+  projectId: string
+  name: string
+  /** The source: "claude", "claude-code", "chatgpt", or another client's name in lower case. */
+  client: string
+  clientLabel: string
+  /** The connection's own name, as the connector was named. */
+  clientName: string
+  startedAt: string
+  lastActivityAt: string
+  /** Still receiving steps: its last step is less than 30 minutes old. */
+  live: boolean
+  /** The user's first request, when the assistant passed it. */
+  firstRequest: string | null
+  nodeCount: number
+  counts: { image: number; video: number; audio: number }
+  /** Credits charged for its jobs; null where credits are not billed. */
+  credits: number | null
+  cover: { url: string; kind: "image" | "video"; setByUser: boolean } | null
+  updatedAt: string
+}
+
+export interface ListMcpConversationsParams {
+  /** "YYYY-MM". Default: the latest month that has conversations. */
+  month?: string
+  /** Keep only these sources ("claude", "claude-code", "chatgpt", …). */
+  sources?: readonly string[]
+}
+
+export interface McpConversationList {
+  /** The month listed. */
+  month: string
+  /** Every month that has conversations, newest first, with its count. */
+  months: Array<{ month: string; conversations: number }>
+  /** The month's sources, with the connection names each one folds in. */
+  sources: Array<{ client: string; label: string; conversations: number; connections: Array<{ clientName: string; conversations: number }> }>
+  data: McpConversation[]
+}
+
 export class WorkflowsResource {
   /** The people this workflow is shared with. See {@link WorkflowCollaboratorsResource}. */
   readonly collaborators: WorkflowCollaboratorsResource
@@ -484,5 +526,17 @@ export class WorkflowsResource {
    */
   sharedWithMe(): Promise<{ data: SharedWorkflow[] }> {
     return this.client.request("GET", "/v1/workflows/shared-with-me")
+  }
+
+  /**
+   * Your MCP conversations of one month (`GET /v1/mcp-conversations`): each is a
+   * flow an assistant built from its steps, newest first. A conversation is a
+   * workflow, so open, rename, export or delete it with the other methods here.
+   */
+  listMcpConversations(params: ListMcpConversationsParams = {}): Promise<McpConversationList> {
+    const query: Record<string, string> = {}
+    if (params.month) query.month = params.month
+    if (params.sources?.length) query.sources = params.sources.join(",")
+    return this.client.request("GET", "/v1/mcp-conversations", { query })
   }
 }

@@ -3,13 +3,14 @@ import { useSyncExternalStore } from "react"
 /** Catalog option id → rendered preview URL, for one picker. */
 export type LookPreviewSet = Readonly<Record<string, string>>
 
-/** Picker (node type) → its preview set. */
+/** Picker (node type; catalog id for the music / voice pickers) → its preview set. */
 export type LookPreviewSets = Readonly<Record<string, LookPreviewSet>>
 
 /**
  * Which rendered look previews this deployment shows. Empty by default: the
  * package never reaches a CDN on its own — the app registers the sets it is
- * allowed to show (the Cloud edition registers LOOK_PREVIEW_SETS at start).
+ * allowed to show (the Cloud edition registers LOOK_PREVIEW_SETS and the music /
+ * voice pickers' SOUND_RENDER_SETS at start).
  * Everything that pictures a look option reads through here, so the picker
  * tile, the canvas node, the app input card and the connected-sources list
  * can never disagree about the picture.

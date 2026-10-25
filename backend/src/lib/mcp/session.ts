@@ -1,4 +1,5 @@
 import type { Scope } from "../scopes.js"
+import type { McpConversationIdentity } from "./flows/conversation-key.js"
 
 /**
  * Per-request MCP session state.
@@ -64,6 +65,21 @@ export interface McpSession {
    * recipes need.
    */
   readonly firstParty: boolean
+  /**
+   * Which chat this request belongs to (`flows/conversation-key.ts`), read
+   * from the request's headers. Set only by the public `/mcp` route: an
+   * in-app session (the Workflow Copilot) has none, so its calls never become
+   * a conversation flow.
+   */
+  conversation?: McpConversationIdentity
+  /**
+   * The user's own words for this call, as the assistant passed them in the
+   * `user_request` argument (`flows/user-request.ts`), for the one tool call
+   * this per-request session serves.
+   */
+  userRequest?: string
+  /** The tool this request is calling, set by the same wrapper. */
+  currentTool?: string
 }
 
 export function newSession(opts: {
@@ -74,6 +90,8 @@ export function newSession(opts: {
   scopedProjectId?: string
   /** See {@link McpSession.firstParty} — server-set, defaults to false. */
   firstParty?: boolean
+  /** See {@link McpSession.conversation} — the public `/mcp` route only. */
+  conversation?: McpConversationIdentity
 }): McpSession {
   return { ...opts, firstParty: opts.firstParty ?? false, progressTokens: new Map() }
 }

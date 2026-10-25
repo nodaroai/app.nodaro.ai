@@ -126,9 +126,11 @@ describe("GET /v1/workflows", () => {
       error: null,
     })
     const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-    // Two .is() links now: the workspace half of the personal filter, then
-    // parent_workflow_id. The first returns a shape carrying the second.
-    const mockIsParent = vi.fn().mockReturnValue({ order: mockOrder })
+    // Three .is() links: the workspace half of the personal filter,
+    // parent_workflow_id, then the MCP conversation hub. Each returns a shape
+    // carrying the next.
+    const mockIsHub = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsParent = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockIsWorkspace = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIsWorkspace })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
@@ -145,15 +147,18 @@ describe("GET /v1/workflows", () => {
     expect(mockEq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     expect(mockIsWorkspace).toHaveBeenCalledWith("workspace_id", null)
     expect(mockIsParent).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIsHub).toHaveBeenCalledWith("settings->mcpHub", null)
     expect(mockOrder).toHaveBeenCalledWith("updated_at", { ascending: false })
   })
 
   it("respects a custom limit", async () => {
     const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
     const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-    // Two .is() links now: the workspace half of the personal filter, then
-    // parent_workflow_id. The first returns a shape carrying the second.
-    const mockIsParent = vi.fn().mockReturnValue({ order: mockOrder })
+    // Three .is() links: the workspace half of the personal filter,
+    // parent_workflow_id, then the MCP conversation hub. Each returns a shape
+    // carrying the next.
+    const mockIsHub = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsParent = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockIsWorkspace = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIsWorkspace })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })

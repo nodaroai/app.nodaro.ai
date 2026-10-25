@@ -244,7 +244,8 @@ describe("GET /v1/projects/:projectId/workflows", () => {
 
   it("returns 200 with empty list", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsHub = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -262,7 +263,8 @@ describe("GET /v1/projects/:projectId/workflows", () => {
 
   it("returns 200 with meta-only data (no nodes/edges)", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [DB_WORKFLOW_META], error: null })
-    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsHub = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -286,7 +288,8 @@ describe("GET /v1/projects/:projectId/workflows", () => {
       data: null,
       error: { message: "DB down" },
     })
-    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsHub = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -1215,6 +1218,22 @@ describe("DELETE /v1/workflows/:id", () => {
 
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns 409 mcp_hub for a month's MCP conversation hub — the RPC is never called", async () => {
+    // Its conversations cascade from it: deleting the hub would delete them all.
+    const reads = mockWorkflowRead({ data: { ...DB_WORKFLOW_FULL, hub: true } })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("mcp_hub")
+    expect(reads.select).toHaveBeenCalledWith(expect.stringContaining("hub:settings->mcpHub"))
+    expect(deleteWorkflowWithPrivateMedia).not.toHaveBeenCalled()
   })
 
   it("returns 500 on DB error", async () => {

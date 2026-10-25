@@ -1,12 +1,13 @@
-import { describe, it, expect, vi } from "vitest"
+import { afterEach, describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { SoundArtTile, type SoundArtTileProps } from "../sound-art-tile"
+import { registerLookPreviews, resetLookPreviewsForTests } from "../../look-previews/registry"
 import { MusicGenrePicker } from "../music-genre-picker"
 import { MusicMoodPicker } from "../music-mood-picker"
 import { InstrumentationPicker } from "../instrumentation-picker"
 import { VoiceCharacterPicker } from "../voice-character-picker"
 import { VoiceDeliveryPicker } from "../voice-delivery-picker"
-import { SOUND_ART_FILES } from "@nodaro/prompts/picker-art"
+import { SOUND_ART_FILES, SOUND_RENDER_SETS } from "@nodaro/prompts/picker-art"
 
 const EMOJI = { url: "/picker-art/emoji/guitar_3d.0000abcd.webp", kind: "emoji" } as const
 const FLAG = { url: "/picker-art/flags/gb.0000abcd.webp", kind: "flag" } as const
@@ -101,6 +102,42 @@ function expectEveryTileHasArt(container: HTMLElement) {
     .map((t) => t.getAttribute("aria-label"))
   expect(bad).toEqual([])
 }
+
+describe("SoundArtTile with a registered render (the music / voice pickers on Cloud)", () => {
+  afterEach(() => resetLookPreviewsForTests())
+  const RENDER = "https://cdn.nodaro.ai/images/00000000-0000-4000-8000-000000000000.png"
+
+  it("fills the tile with the render, resized by the CDN, instead of the emoji", () => {
+    registerLookPreviews({ "music-genre": { rock: RENDER } })
+    const { container } = tile({ render: { pickerKey: "music-genre", id: "rock" } })
+    const img = container.querySelector("img")!
+    expect(img.getAttribute("src")).toMatch(/^https:\/\/cdn\.nodaro\.ai\/cdn-cgi\/image\/width=240,/)
+    expect(img.getAttribute("srcset")).toContain(" 1920w")
+    expect(img.className).toContain("aspect-square")
+    expect(container.querySelectorAll("img")).toHaveLength(1)
+  })
+
+  it("keeps the emoji when the render fails to load", () => {
+    registerLookPreviews({ "music-genre": { rock: RENDER } })
+    const { container } = tile({ render: { pickerKey: "music-genre", id: "rock" } })
+    fireEvent.error(container.querySelector("img")!)
+    expect(container.querySelector("img")!.getAttribute("src")).toBe(EMOJI.url)
+  })
+
+  it("keeps the emoji when no render is registered (a self-hosted install)", () => {
+    const { container } = tile({ render: { pickerKey: "voice-character", id: "female" } })
+    expect(container.querySelector("img")!.getAttribute("src")).toBe(EMOJI.url)
+  })
+
+  it("every Music Genre tile shows its render once the sets are registered", () => {
+    registerLookPreviews(SOUND_RENDER_SETS)
+    const { container } = render(<MusicGenrePicker value={{ genre: "pop" }} onChange={() => {}} />)
+    const tiles = [...container.querySelectorAll("button[role='radio'], button[role='checkbox']")]
+    expect(tiles.length).toBeGreaterThan(0)
+    const bad = tiles.filter((t) => !t.querySelector("img")?.getAttribute("src")?.startsWith("https://cdn.nodaro.ai/cdn-cgi/image/"))
+    expect(bad.map((t) => t.getAttribute("aria-label"))).toEqual([])
+  })
+})
 
 describe("music / voice pickers — every tile carries its picture", () => {
   const noop = () => {}

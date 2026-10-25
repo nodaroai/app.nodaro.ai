@@ -131,7 +131,8 @@ function withProjectScope(otherTables: Record<string, unknown>) {
 describe("GET /v1/projects/:projectId/workflows — filters out child sub-workflows", () => {
   it("applies .is('parent_workflow_id', null) on the list query", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIsHub = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -146,6 +147,8 @@ describe("GET /v1/projects/:projectId/workflows — filters out child sub-workfl
     expect(res.statusCode).toBe(200)
     // The critical assertion: the parent-workflow-id filter was applied.
     expect(mockIs).toHaveBeenCalledWith("parent_workflow_id", null)
+    // And a month's MCP conversation hub is left out.
+    expect(mockIsHub).toHaveBeenCalledWith("settings->mcpHub", null)
     // And the chain is still scoped to the correct project + user.
     expect(mockEq1).toHaveBeenCalledWith("project_id", TEST_PROJECT_ID)
     expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
@@ -155,7 +158,9 @@ describe("GET /v1/projects/:projectId/workflows — filters out child sub-workfl
 describe("GET /v1/workflows/callable — filters out child sub-workflows", () => {
   it("applies .is('parent_workflow_id', null) when no projectId is given", async () => {
     const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    // The month's MCP conversation hub is never a callable target.
+    const mockIsHub = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEq = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
@@ -169,6 +174,7 @@ describe("GET /v1/workflows/callable — filters out child sub-workflows", () =>
 
     expect(res.statusCode).toBe(200)
     expect(mockIsParent).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIsHub).toHaveBeenCalledWith("settings->mcpHub", null)
     expect(mockIs).toHaveBeenCalledWith("workspace_id", null)
     expect(mockEq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
@@ -176,7 +182,9 @@ describe("GET /v1/workflows/callable — filters out child sub-workflows", () =>
   it("applies .is('parent_workflow_id', null) when projectId is given", async () => {
     const mockEqProject = vi.fn().mockResolvedValue({ data: [], error: null })
     const mockLimit = vi.fn().mockReturnValue({ eq: mockEqProject })
-    const mockIsParent = vi.fn().mockReturnValue({ limit: mockLimit })
+    // The month's MCP conversation hub is never a callable target.
+    const mockIsHub = vi.fn().mockReturnValue({ limit: mockLimit })
+    const mockIsParent = vi.fn().mockReturnValue({ is: mockIsHub })
     const mockIs = vi.fn().mockReturnValue({ is: mockIsParent })
     const mockEqUser = vi.fn().mockReturnValue({ is: mockIs })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEqUser })
@@ -190,6 +198,7 @@ describe("GET /v1/workflows/callable — filters out child sub-workflows", () =>
 
     expect(res.statusCode).toBe(200)
     expect(mockIsParent).toHaveBeenCalledWith("parent_workflow_id", null)
+    expect(mockIsHub).toHaveBeenCalledWith("settings->mcpHub", null)
     expect(mockIs).toHaveBeenCalledWith("workspace_id", null)
     expect(mockEqUser).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     expect(mockEqProject).toHaveBeenCalledWith("project_id", TEST_PROJECT_ID)

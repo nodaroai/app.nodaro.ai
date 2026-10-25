@@ -153,3 +153,17 @@ describe("stripExportContent — a type's own run results under generic names", 
     expect(other.data).toEqual({ label: "Other", quote: "a quote to show", durationSec: 12 })
   })
 })
+
+describe("stripExportContent — an MCP conversation step", () => {
+  it("keeps where it came from (the user's request), never the exporter's job id", () => {
+    const [node] = stripExportContent([
+      {
+        id: "n",
+        type: "generate-image",
+        position: { x: 0, y: 0 },
+        data: { label: "Generate Image", prompt: "p", mcpProvenance: { tool: "generate_image", userRequest: "two dolphins", jobId: "j1", client: "claude" } },
+      } as GenericNode,
+    ])
+    expect((node.data as Record<string, unknown>).mcpProvenance).toEqual({ tool: "generate_image", userRequest: "two dolphins", client: "claude" })
+  })
+})

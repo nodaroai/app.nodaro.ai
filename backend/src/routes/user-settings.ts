@@ -127,6 +127,13 @@ const McpPreferencesPatch = z
       })
       .partial()
       .optional(),
+    // Whether an MCP conversation becomes a flow on the canvas (on unless false).
+    flows: z
+      .object({
+        enabled: z.boolean().optional(),
+      })
+      .partial()
+      .optional(),
   })
   .partial()
 
@@ -296,6 +303,9 @@ export async function userSettingsRoutes(app: FastifyInstance) {
           : {}),
         ...(mcpPreferences.audio
           ? { audio: pruneNulls({ ...(current.audio ?? {}), ...mcpPreferences.audio }) }
+          : {}),
+        ...(mcpPreferences.flows
+          ? { flows: pruneNulls({ ...(current.flows ?? {}), ...mcpPreferences.flows }) }
           : {}),
       }
       updates.mcp_preferences = merged

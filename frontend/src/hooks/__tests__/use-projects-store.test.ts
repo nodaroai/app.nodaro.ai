@@ -473,16 +473,20 @@ describe("useProjectsStore", () => {
       const workflowRows = [
         { id: "w1", project_id: "p1", folder_id: "f1", name: "WF", created_at: NOW, updated_at: NOW },
       ]
+      const workflowsChain = makeChain({ data: workflowRows, error: null })
 
       mockSupabase = createMockSupabase({
         fromHandler: (table: string) => {
           if (table === "folders") return makeChain({ data: folderRows, error: null })
-          if (table === "workflows") return makeChain({ data: workflowRows, error: null })
+          if (table === "workflows") return workflowsChain
           return makeChain({ data: [], error: null })
         },
       })
 
       await useProjectsStore.getState().fetchProjectData("p1")
+
+      // A month's MCP conversation hub is never a card on the project page.
+      expect(workflowsChain.is).toHaveBeenCalledWith("settings->mcpHub", null)
 
       const state = useProjectsStore.getState()
       expect(state.folders).toHaveLength(1)

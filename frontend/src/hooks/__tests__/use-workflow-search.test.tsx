@@ -52,6 +52,8 @@ describe("useWorkflowSearch — client-app visibility", () => {
     await waitFor(() =>
       expect(builder.or).toHaveBeenCalledWith("app_slug.is.null,app_slug.in.(studio)"),
     )
+    // A month's MCP conversation hub is never a search result.
+    expect(builder.is).toHaveBeenCalledWith("settings->mcpHub", null)
   })
 
   it("skips the filter when the admin reveal flag is ON", async () => {

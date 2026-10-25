@@ -33,7 +33,7 @@ import {
   touchesStudioPublishFlag,
   changesStudioPublishFlag,
 } from "../lib/studio-audience.js"
-import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
+import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
 import { isCodecOwnedDocument, resolveCanvasResultIds, withResolvedResultIds } from "../lib/canvas-result-ids.js"
 import { reconcileWorkflowTriggers, type ChangedAccountNode, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
@@ -743,6 +743,9 @@ async function movedWorkflowFor(userId: string, row: Record<string, unknown>) {
  * developer-app token is in play, and return the userId. Returns `null` when
  * the request was already terminated by sending an auth/scope error.
  */
+/** What a delete reads: the access columns, the name, and whether it is a month's MCP hub. */
+const WORKFLOW_DELETE_COLS = `${WORKFLOW_ACCESS_COLS}, name, hub:settings->mcpHub`
+
 function authorize(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -824,6 +827,8 @@ export async function workflowRoutes(app: FastifyInstance) {
       .eq("project_id", params.projectId)
       .eq("user_id", userId)
       .is("parent_workflow_id", null)
+      // A month's MCP conversation hub is a container, not a flow (lib/mcp/flows/).
+      .is("settings->mcpHub", null)
       .order("created_at", { ascending: false })
     // A personal API key limited to some workflows lists only those.
     const limitedTo = limitedKeyWorkflows(req)
@@ -970,6 +975,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         .from("workflows")
         .select(WORKFLOW_META_COLS)
         .is("parent_workflow_id", null)
+        .is("settings->mcpHub", null)
         .order("updated_at", { ascending: false })
         .limit(limit)
       if (appSlug) {
@@ -1044,6 +1050,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     listQuery = listQuery
       .is("parent_workflow_id", null)
+      .is("settings->mcpHub", null)
       .order("updated_at", { ascending: false })
       .limit(limit)
     if (appSlug) {
@@ -2015,11 +2022,18 @@ export async function workflowRoutes(app: FastifyInstance) {
     // `canDeleteWorkflow`.
     const loaded = await loadWorkflowFor(
       req, reply, userId, params.id, "view",
-      "id, user_id, workspace_id, visibility, name",
+      WORKFLOW_DELETE_COLS,
       "Failed to delete workflow",
     )
     if (!loaded.ok) return
     const row = toAccessRow(loaded.row)
+    // A month's MCP conversation hub holds every conversation of that month
+    // (their parent_workflow_id cascades): deleting it would delete them all.
+    if ((loaded.row as { hub?: unknown }).hub) {
+      return reply.status(409).send({
+        error: { code: "mcp_hub", message: "This holds a month of MCP conversations. Delete a conversation instead." },
+      })
+    }
 
     if (!(await canDeleteWorkflow(userId, params.id))) {
       return reply.status(403).send({

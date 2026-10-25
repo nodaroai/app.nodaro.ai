@@ -35,6 +35,6 @@ export async function pickerCatalogsRoutes(app: FastifyInstance) {
     }
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data: projectPickerCatalog(catalog, { ...query.data, images: pickerImageOptions() }) })
+      .send({ data: projectPickerCatalog(catalog, { ...query.data, images: pickerImageOptions({ srcSet: true }) }) })
   })
 }

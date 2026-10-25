@@ -207,14 +207,14 @@ The bundles load lazily, so `registerSidecarLoaders` takes a glob of loaders (Vi
 The pickers the editor shows pictures on have them for your app too:
 
 - the photos of **Person, Styling, Held Prop, Material and Animal**;
-- the art of the **music and voice** pickers (Music Genre, Music Mood, Instrumentation, Voice Character, Voice Delivery);
+- the art of the **music and voice** pickers (Music Genre, Music Mood, Instrumentation, Voice Character, Voice Delivery) — on **Nodaro Cloud** all five show a photographic render of each option instead of their 3D emoji and flags (the language and accent renders carry their flags);
 - on **Nodaro Cloud** only, a still of each **look** picker's rendered preview (Style, Color / Look, Era / Period, Lens, Mood, Atmosphere, Composition Effect, Camera / Film, Framing, Lighting, Camera Motion).
 
-**Over the API** (`GET /v1/picker-catalogs/:nodeType`, `GET /v1/catalogs`, the MCP `get_picker_catalog` tool, `client.pickerCatalogs.get()`), every pictured option carries an absolute `imageUrl` on the installation you asked, and an option without a picture has none. Person and Styling also return `sections`: their topics in order, each with a round picture. The URL rules, caching and examples are in [API Integration → Pictures](./api-integration.md#pictures-imageurl-sections).
+**Over the API** (`GET /v1/picker-catalogs/:nodeType`, `GET /v1/catalogs`, the MCP `get_picker_catalog` tool, `client.pickerCatalogs.get()`), every pictured option carries an absolute `imageUrl` on the installation you asked, and an option without a picture has none. On the REST routes (and so the SDK), a render from the Nodaro CDN also carries `imageSrcSet` (240–1920px), so a large tile stays sharp; the MCP tool leaves it out. Person and Styling also return `sections`: their topics in order, each with a round picture. The URL rules, caching and examples are in [API Integration → Pictures](./api-integration.md#pictures-imageurl-sections).
 
 **As a library**, `@nodaro/prompts` builds the same URLs from the same maps:
 
-- `pickerOptionImageUrl(catalog, field, id, { baseUrl })` for an option;
+- `pickerOptionImageUrl(catalog, field, id, { baseUrl })` for an option, or `pickerOptionImage(...)` for `{ url, srcSet? }` (pass `srcSet: true` for the widths);
 - `pickerSectionImageUrl(topicLabel, { baseUrl })` for a Person / Styling topic.
 
 `baseUrl` is the Nodaro installation that serves the files; the pictures are files of that installation, not part of the npm package. Pass `lookPreviews: true` only against Nodaro Cloud.

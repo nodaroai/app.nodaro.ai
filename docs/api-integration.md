@@ -576,6 +576,44 @@ All responses use the same envelope: success returns the payload directly
 
 The full route handler is at `backend/src/routes/api-tokens.ts`.
 
+### MCP conversations
+
+```
+GET /v1/mcp-conversations?month=2026-10&sources=claude,chatgpt
+```
+
+Your MCP conversations of one month, newest first. Each is a flow an assistant built
+from its steps (see [Your MCP conversations become flows](mcp/conversation-flows.md)).
+Authorized by `workflows:read`.
+
+| Query | Meaning |
+|---|---|
+| `month` | `YYYY-MM`. Default: the latest month that has conversations. |
+| `sources` | Comma-separated sources to keep: `claude`, `claude-code`, `chatgpt`, or another client's name in lower case. Default: every source. |
+
+The answer:
+
+- `month`: the month listed.
+- `months`: every month that has conversations, newest first, with its count.
+- `sources`: the listed month's sources with their counts. A source folds the
+  connections of one product together ("Claude Code (nodaro)" and "Claude Code
+  (staging)" are one `claude-code` source); `connections` lists them.
+- `data`: the conversations. Each one has:
+  - `id` and `projectId`: a conversation is a workflow. Open, rename, export, copy or
+    delete it with the workflow routes.
+  - `name`, `client`, `clientLabel` and `clientName`.
+  - `startedAt`, `lastActivityAt`, and `live`: true while its last step is under 30
+    minutes old.
+  - `firstRequest`: your first request, when the assistant passed it.
+  - `nodeCount` and `counts` (`image`, `video`, `audio`).
+  - `credits`: charged for its jobs; `null` where credits are not billed.
+  - `cover`: `{ url, kind, setByUser }`, the cover you set or else the latest result.
+
+Deleting a conversation (`DELETE /v1/workflows/:id`) deletes its flow. The jobs the assistant
+made are not filed in the workflow, so their images and videos stay in your library; runs
+started in the editor are deleted with it, as for any workflow. A month's hub cannot be deleted
+(409 `mcp_hub`). A personal API key limited to some workflows cannot list conversations (403).
+
 ### Moving a workflow between projects
 
 ```
@@ -2998,8 +3036,8 @@ pickers show:
 | Pickers | Picture |
 |---|---|
 | `person`, `styling`, `held-prop`, `material`, `animal` | A photo, WebP, up to 480px wide. |
-| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | A 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
-| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`). A self-hosted install returns none. |
+| `music-genre`, `music-mood`, `instrumentation`, `voice-character`, `voice-delivery` | Nodaro Cloud: a square photographic render from the Nodaro CDN (a 480px still, plus `imageSrcSet` up to its full size; a language or accent render carries its flag). A self-hosted install: a 3D emoji (WebP, 128px) or a flag (WebP, 120px wide). |
+| Look pickers (`style`, `color-look`, `lens`, `framing`, `lighting`, `mood`, `camera-format`, `camera-motion`, …) | Nodaro Cloud only: a 480px still of the rendered preview from the Nodaro CDN (a frame of the clip for `camera-motion`), plus `imageSrcSet`. A self-hosted install returns none. |
 
 - **Host.** Self-hosted pictures are served by the installation itself under
   `/picker-art/`, so `imageUrl` uses its public address — `PUBLIC_URL`
@@ -3010,6 +3048,14 @@ pickers show:
   new URL; they are served with `Cache-Control: public, max-age=31536000,
   immutable` and `Access-Control-Allow-Origin: *` (usable from `<img>`,
   `fetch` and canvas on any origin).
+- **Sizes (`imageSrcSet`).** A picture from the Nodaro CDN also carries
+  `imageSrcSet` on the REST routes: the same picture at 240, 480, 960 and
+  1920px wide (the CDN never enlarges, so the largest is at most the
+  source's size), as an HTML `srcset` value. The MCP tools leave it out. Give it to
+  `<img srcset>` with a `sizes` that says how wide the tile is, and the
+  browser fetches the smallest copy that stays sharp on that screen;
+  `imageUrl` is its 480px member. Self-hosted pictures have one size and
+  no `imageSrcSet`.
 - **Topics.** `person` and `styling` also return `sections`: the topics the
   editor groups their settings under, in order — each `{ label, fields,
   imageUrl? }`, where `fields` are the node-data fields of the settings in
@@ -3031,7 +3077,12 @@ A look picker on Nodaro Cloud (`/v1/picker-catalogs/mood`):
 
 ```json
 { "id": "happy", "label": "Happy", "category": "positive", "term": "happy expression",
-  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/images/710df65a-3c1e-485b-b8b7-29f7b3baf479.png" }
+  "imageUrl": "https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png",
+  "imageSrcSet": "https://cdn.nodaro.ai/cdn-cgi/image/width=240,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 240w, https://cdn.nodaro.ai/cdn-cgi/image/width=480,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 480w, https://cdn.nodaro.ai/cdn-cgi/image/width=960,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 960w, https://cdn.nodaro.ai/cdn-cgi/image/width=1920,format=auto,quality=80/picker-renders/710df65a-3c1e-485b-b8b7-29f7b3baf479.png 1920w" }
+```
+
+```html
+<img src="{imageUrl}" srcset="{imageSrcSet}" sizes="160px" alt="Happy">
 ```
 
 ### Catalogs (server-driven projection)

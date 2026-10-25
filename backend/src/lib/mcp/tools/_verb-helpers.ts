@@ -19,6 +19,7 @@ import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { validateModelInput } from "@nodaro/shared/model-catalog"
 import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
+import { commitFlowNode, flowJobFields, flowLinkText, prepareFlowNode } from "../flows/record.js"
 
 /**
  * Path-1 structured-field input shared by the image AND video generation
@@ -476,10 +477,15 @@ export async function dispatchJob(
     surfaceWarnings?: boolean
   },
 ) {
+  // A call of an MCP conversation becomes a node of its flow (flows/record.ts):
+  // the node id travels in the body like the editor's own single-node Run, so
+  // the job row is tied to the node. Best-effort — null leaves the call as it was.
+  const flow = await prepareFlowNode(session, opts.url, opts.payload)
+  const payload = flow && isPlainObject(opts.payload) ? { ...opts.payload, ...flowJobFields(flow) } : opts.payload
   const res = await mcpInject(fastify, session, {
     method: "POST",
     url: opts.url,
-    payload: opts.payload as string | object | Buffer | undefined,
+    payload: payload as string | object | Buffer | undefined,
     headers: idempotencyHeaders(opts.clientRequestId),
   })
   if (res.statusCode >= 400) {
@@ -489,10 +495,15 @@ export async function dispatchJob(
   const jobId = parseJobId(res.body)
   if (!jobId) return parseFailure(res.body)
   const result = jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
-  const notes = opts.surfaceWarnings ? routeWarnings(res.body) : []
+  const notes = opts.surfaceWarnings ? routeWarnings(res.body).map((n) => `Note: ${n}`) : []
+  if (flow && (await commitFlowNode(flow, jobId))) notes.push(flowLinkText(flow))
   if (notes.length === 0) return result
   const [first, ...rest] = result.content
-  return { ...result, content: [{ ...first, text: `${first.text}\n\n${notes.map((n) => `Note: ${n}`).join("\n")}` }, ...rest] }
+  return { ...result, content: [{ ...first, text: `${first.text}\n\n${notes.join("\n")}` }, ...rest] }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) && !Buffer.isBuffer(value)
 }
 
 /** The messages of a route answer's `warnings` array (none when absent or malformed). */

@@ -55,6 +55,7 @@ import { useUnitQuote } from "@/hooks/use-unit-quote-credits"
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
 import { NodeDocsPill } from "@/components/editor/node-docs/node-docs-pill"
 import { NodeDocsTypeContext } from "@/components/editor/node-docs/node-docs-context"
+import { McpProvenanceSection } from "@/components/editor/config-panels/mcp-provenance-section"
 import { WiredSettingsScope } from "@/components/editor/config-panels/wired-settings-context"
 import {
   getConnectedSources,
@@ -1103,6 +1104,9 @@ export function ConfigPanel() {
               form controls go inert via the disabled fieldset (custom Radix
               controls can still focus, but `updateNodeData` is already gated
               for read-only so edits can't persist). */}
+          {/* A node an assistant made in an MCP conversation: where it came from, first —
+              outside the fieldset, so its Details open while the node runs too. */}
+          <McpProvenanceSection data={nodeData} />
           <fieldset
             disabled={isNodeRunning || isReadOnly}
             className="border-0 p-0 m-0 min-w-0 disabled:opacity-70 disabled:pointer-events-none"

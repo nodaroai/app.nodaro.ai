@@ -146,6 +146,8 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
     .or("provider.is.null,provider.neq.use-case")
     .select("id, input_data")
   if (flipped && flipped.length > 0) {
+    // The conversation node waiting on this job stops showing it running (flows/hydrate.ts).
+    void import("./flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
     // 554: the job's metered SIDE holds settle on their own markers, after the flip.
     const { settleSideHoldsAfterFlip } = await import("../llm-side-hold.js")
     await settleSideHoldsAfterFlip([jobId])

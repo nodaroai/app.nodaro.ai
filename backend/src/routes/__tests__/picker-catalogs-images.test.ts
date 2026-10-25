@@ -41,6 +41,7 @@ beforeEach(() => {
 interface Option {
   id: string
   imageUrl?: string
+  imageSrcSet?: string
 }
 interface Catalog {
   options?: Option[]
@@ -64,6 +65,15 @@ describe("picker pictures — Nodaro Cloud", () => {
   it("serves the look previews from the Nodaro CDN", async () => {
     const mood = await catalog("mood")
     expect(allOptions(mood).every((o) => o.imageUrl?.startsWith("https://cdn.nodaro.ai/"))).toBe(true)
+  })
+
+  it("serves the music / voice pickers' renders from the Nodaro CDN, each with its srcset", async () => {
+    for (const nodeType of ["music-genre", "music-mood", "instrumentation", "voice-character", "voice-delivery"]) {
+      const options = allOptions(await catalog(nodeType))
+      expect(options.length, nodeType).toBeGreaterThan(0)
+      const bad = options.filter((o) => !o.imageUrl?.startsWith("https://cdn.nodaro.ai/cdn-cgi/image/width=480,") || !o.imageSrcSet?.includes(" 1920w"))
+      expect(bad.map((o) => o.id), nodeType).toEqual([])
+    }
   })
 
   it("returns the Person topics with their pictures", async () => {
@@ -127,6 +137,15 @@ describe("get_picker_catalog (MCP) pictures", () => {
     const body = JSON.parse(res.content[0].text) as Catalog
     expect(body).toEqual(await catalog("person"))
     expect(body.sections?.[0]?.imageUrl).toMatch(/^https:\/\/studio\.example\.com\/picker-art\/character\/sections\//)
+  })
+
+  it("on Cloud, gives the same pictures as REST but leaves out imageSrcSet (an agent never draws it)", async () => {
+    const res = await tool()({ node_type: "music-genre" })
+    const body = JSON.parse(res.content[0].text) as Catalog
+    const rest = await catalog("music-genre")
+    expect(allOptions(body).map((o) => o.imageUrl)).toEqual(allOptions(rest).map((o) => o.imageUrl))
+    expect(allOptions(body).filter((o) => "imageSrcSet" in o)).toEqual([])
+    expect(allOptions(rest).every((o) => o.imageSrcSet !== undefined)).toBe(true)
   })
 
   it("the directory carries imageCount", async () => {

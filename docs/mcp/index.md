@@ -39,6 +39,9 @@ The same list is available programmatically:
 - MCP: `list_jobs` with `source: ["mcp"]`
 - CLI: `nodaro jobs list --source mcp`
 
+Each conversation with an assistant also becomes a **flow** you can open, edit and run
+again: see [Your MCP conversations become flows](./conversation-flows.md).
+
 ## Supported clients
 
 - [Claude.ai (web)](./connecting-claude.md)

@@ -27,8 +27,16 @@ describe("bootstrapLookPreviews", () => {
     expect(ui.getLookPreviewUrl("lens", "fisheye")).toMatch(/^https:\/\/cdn\.nodaro\.ai\//)
   })
 
+  it("registers the music / voice pickers' pictures in the Cloud edition, under their catalog ids", async () => {
+    const ui = await bootWithEdition(true)
+    for (const key of Object.keys(ui.SOUND_RENDER_SETS)) expect(ui.hasLookPreviews(key), key).toBe(true)
+    expect(ui.getLookPreviewUrl("music-genre", "hip-hop")).toMatch(/^https:\/\/cdn\.nodaro\.ai\/picker-renders\//)
+  })
+
   it("registers nothing in a self-hosted edition", async () => {
     const ui = await bootWithEdition(false)
-    for (const key of Object.keys(ui.LOOK_PREVIEW_SETS)) expect(ui.hasLookPreviews(key)).toBe(false)
+    for (const key of [...Object.keys(ui.LOOK_PREVIEW_SETS), ...Object.keys(ui.SOUND_RENDER_SETS)]) {
+      expect(ui.hasLookPreviews(key), key).toBe(false)
+    }
   })
 })

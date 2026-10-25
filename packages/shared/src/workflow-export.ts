@@ -268,6 +268,13 @@ export function stripExportContent(nodes: GenericNode[]): GenericNode[] {
     for (const field of NODE_TYPE_EXECUTION_DATA_KEYS[node.type] ?? []) delete data[field]
     const extras = NODE_EXTRA_FIELDS[node.type] ?? []
     for (const field of extras) delete data[field]
+    // A node an assistant made in an MCP conversation keeps where it came from (the
+    // request is what makes the template useful), never the exporter's job id.
+    const provenance = data.mcpProvenance
+    if (provenance && typeof provenance === "object" && "jobId" in provenance) {
+      const { jobId: _jobId, ...kept } = provenance as Record<string, unknown>
+      data.mcpProvenance = kept
+    }
     return { ...node, data }
   })
 }

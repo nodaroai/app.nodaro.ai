@@ -37,6 +37,14 @@ export interface PickerOption {
    * as given: file names carry a content hash, so it can be cached for good.
    */
   imageUrl?: string
+  /**
+   * The same picture at several widths, as an HTML `srcset` value
+   * (`<url> 240w, <url> 480w, <url> 960w, <url> 1920w`) — present only for a
+   * render the Nodaro CDN resizes (Nodaro Cloud: the look previews and the
+   * music pickers' pictures). Pass it to `<img srcset>` with a `sizes` so a
+   * large tile stays sharp; `imageUrl` is its 480px member.
+   */
+  imageSrcSet?: string
 }
 
 export interface PickerDimension {

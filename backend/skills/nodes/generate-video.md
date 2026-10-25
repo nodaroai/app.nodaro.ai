@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-10-23T10:22:27.493Z
-generated_from: 78a012a30
+generated_at: 2026-10-24T22:28:06.517Z
+generated_from: b9f9a7b82
 ---
 
 # Generate Video
@@ -127,6 +127,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 - `reference_audio_urls`
 - `character_references`
 - `keep_original_sound`
+- `user_request`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

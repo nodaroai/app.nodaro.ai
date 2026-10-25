@@ -494,6 +494,8 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
     }
     return { kind: "lost_race" }
   }
+  // An MCP conversation node waiting on this job stops showing it running (lib/mcp/flows/hydrate.ts).
+  void import("./mcp/flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
 
   // R38: a `not-started` verdict is re-checked AFTER the flip (the worker may
   // have started its call in between): the job is not marked already-settled.

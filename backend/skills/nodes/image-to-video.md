@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-23T10:21:06.170Z
-generated_from: 78a012a30
+generated_at: 2026-10-24T22:28:06.491Z
+generated_from: b9f9a7b82
 ---
 
 # image-to-video
@@ -111,6 +111,7 @@ generated_from: 78a012a30
 - `connected_references`
 - `described_references`
 - `reference_order`
+- `user_request`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { newSession, type McpSession } from "./session.js"
+import type { McpConversationIdentity } from "./flows/conversation-key.js"
+import { attachUserRequest } from "./flows/user-request.js"
 import { passesGate, type ToolGate } from "./tool-schemas.js"
 import { registerVerbs } from "./tools/verbs.js"
 import { registerJobs } from "./tools/jobs.js"
@@ -63,8 +65,12 @@ interface BuildOpts {
    * `userId` from the request body.
    */
   fastify: FastifyInstance
-  /** Runs on the new server before any tool is registered (the session probe uses it). */
-  beforeRegister?: (server: McpServer) => void
+  /**
+   * The chat this request belongs to (`flows/conversation-key.ts`). Set only
+   * by the public `/mcp` route: its calls then become nodes of that
+   * conversation's flow, and the mapped verbs take `user_request`.
+   */
+  conversation?: McpConversationIdentity
   /**
    * Pin the session to one project (in-app Workflow Copilot sessions): the
    * workflow tools then read and write inside `projectId` instead of the
@@ -180,7 +186,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
 
   // Register UI resource templates BEFORE tools, so tool _meta.ui.resourceUri
   // references resolve cleanly when the host calls resources/read.
-  opts.beforeRegister?.(server)
+  if (opts.conversation) attachUserRequest(server, session)
 
   registerWidgetResources(server)
 
