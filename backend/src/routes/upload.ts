@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import multipart from "@fastify/multipart"
 import { randomUUID } from "node:crypto"
-import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -28,6 +27,7 @@ import {
 } from "../utils/thumbnail.js"
 import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
 import { faststartVideoBuffer, noteFaststartOutcome } from "../utils/faststart.js"
+import { isHeifFamilyMime, transcodeHeifForStorage } from "../utils/heif-decode.js"
 
 // ============================================================
 // Legacy Constants (kept for backward-compatible endpoints)
@@ -161,13 +161,14 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     const category = validation.category as FileCategory
 
-    // HEIC/HEIF render only in Safari and cost libheif decodes per provider
-    // call; transcode once to JPEG so thumbnails work everywhere and providers
-    // skip re-decode.
-    if (resolvedMime === "image/heic" || resolvedMime === "image/heif") {
+    // HEIC/HEIF/AVIF render in few browsers and no KIE image lane accepts
+    // them; transcode once (JPEG, or PNG when it has transparency) so
+    // thumbnails work everywhere and providers get a file they take.
+    if (isHeifFamilyMime(resolvedMime)) {
       try {
-        buffer = await sharp(buffer).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-        mimeTypeFinal = "image/jpeg"
+        const stored = await transcodeHeifForStorage(buffer)
+        buffer = stored.buffer
+        mimeTypeFinal = stored.mime
       } catch (err) {
         return reply.status(400).send({
           error: { code: "validation_error", message: `Failed to decode ${resolvedMime} image: ${(err as Error).message}` },
@@ -392,10 +393,11 @@ export async function uploadRoutes(app: FastifyInstance) {
       })
     }
 
-    if (mime === "image/heic" || mime === "image/heif") {
+    if (isHeifFamilyMime(mime)) {
       try {
-        buffer = await sharp(buffer).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-        mime = "image/jpeg"
+        const stored = await transcodeHeifForStorage(buffer)
+        buffer = stored.buffer
+        mime = stored.mime
       } catch (err) {
         return reply.status(400).send({
           error: { code: "validation_error", message: `Failed to decode ${file.mimetype} image: ${(err as Error).message}` },

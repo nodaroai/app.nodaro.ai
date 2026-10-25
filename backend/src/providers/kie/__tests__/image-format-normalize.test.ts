@@ -1,4 +1,6 @@
+// @test-watches backend/src/utils/__tests__/fixtures/*.avif backend/src/utils/__tests__/fixtures/*.heic
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { readFileSync } from "node:fs"
 import sharp from "sharp"
 
 // The KIE image lanes hand the source image to the provider. Until 2026-09
@@ -201,5 +203,66 @@ describe("acceptedImageFormats is the per-SKU source of truth", () => {
         `${id} declares a format outside the default set — widen the default instead`,
       ).toBe(true)
     }
+  })
+})
+
+// sharp reads the header of a 10-bit AVIF or a HEIC but cannot decode the
+// pixels (utils/heif-decode.ts). A production Cast Swap run died of both halves
+// on one 10-bit AVIF upload (2026-10-25): its Kling 4 edit failed in this
+// chokepoint with the raw libheif text, and its GPT Image 2 reference
+// preparation sent the AVIF to KIE untouched ("File type not supported").
+const heifFixture = (name: string) =>
+  readFileSync(new URL(`../../../utils/__tests__/fixtures/${name}`, import.meta.url))
+
+describe("HEIF inputs sharp cannot decode (10-bit AVIF, HEIC)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    runKieTask.mockResolvedValue({
+      resultJson: { resultUrls: ["https://out.png"] },
+      providerMs: 1,
+      taskId: "t1",
+    })
+    uploadBufferToR2.mockResolvedValue("https://cdn.test/converted")
+  })
+
+  it.each(["10bit.avif", "hevc.heic"])("a video lane gets a JPEG of the whole %s picture", async (name) => {
+    await serve(heifFixture(name))
+    const { ensureImageForProvider } = await import("../video.js")
+    const url = await ensureImageForProvider("https://cdn.test/face.heif", "kling-4", { context: "Video generation" })
+    expect(url).toBe("https://cdn.test/converted")
+    const [buffer, , contentType] = lastUpload()!
+    expect(contentType).toBe("image/jpeg")
+    const meta = await sharp(buffer).metadata()
+    expect([meta.width, meta.height]).toEqual([96, 64])
+  })
+
+  it("a HEIF no decoder can read fails with the plain message, never the library text", async () => {
+    // The header survives (sharp still says "heif"); the picture is cut off.
+    const whole = heifFixture("10bit.avif")
+    await serve(whole.subarray(0, whole.length - 200))
+    const { ensureImageForProvider } = await import("../video.js")
+    const err = await ensureImageForProvider("https://cdn.test/cut.avif", "kling-4", { context: "Video generation" })
+      .then(() => undefined, (e: unknown) => e as Error)
+    expect(err?.message).toBe(
+      "The input image could not be read (unsupported or corrupt file). Upload a PNG, JPEG, WebP, HEIC or AVIF image.",
+    )
+    expect(String(err?.message)).not.toMatch(/bad seek|Bitstream|libheif/i)
+  })
+
+  it("generateImage converts an AVIF reference before KIE sees it (gpt-image-2-i2i)", async () => {
+    await serve(heifFixture("10bit.avif"))
+    const { KieImageProvider } = await import("../image.js")
+    await new KieImageProvider().generateImage("same person", ["https://cdn.test/face.avif"], "gpt-image-2-i2i")
+    const sent = runKieTask.mock.calls.at(-1)?.[1] as Record<string, string[]>
+    expect(sent.input_urls).toEqual(["https://cdn.test/converted"])
+  })
+
+  it("generateImage passes an accepted reference through untouched", async () => {
+    await serve(await png())
+    const { KieImageProvider } = await import("../image.js")
+    await new KieImageProvider().generateImage("same person", ["https://cdn.test/face.png"], "gpt-image-2-i2i")
+    const sent = runKieTask.mock.calls.at(-1)?.[1] as Record<string, string[]>
+    expect(sent.input_urls).toEqual(["https://cdn.test/face.png"])
+    expect(uploadBufferToR2).not.toHaveBeenCalled()
   })
 })

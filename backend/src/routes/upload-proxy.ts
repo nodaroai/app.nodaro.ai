@@ -23,6 +23,7 @@ import { config } from "../lib/config.js"
 import { redis } from "../lib/queue.js"
 import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
 import { faststartVideoBuffer, noteFaststartOutcome } from "../utils/faststart.js"
+import { isHeifFamilyMime, transcodeHeifForStorage } from "../utils/heif-decode.js"
 
 // Dedicated upload-token signing key, HKDF-derived from the internal secret so
 // the upload-signing purpose is cryptographically separated from the
@@ -193,12 +194,33 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
         buffer = faststart.buffer
       }
 
+      // HEIC/HEIF/AVIF render in few browsers and aren't accepted by
+      // downstream image providers — converted (JPEG, or PNG when it has
+      // transparency) exactly like the handoff lane. The key was minted with
+      // the token and the caller already holds its URL, so it stays; the
+      // object is served as the converted type.
+      let storedMime = payload.mime
+      if (isHeifFamilyMime(payload.mime)) {
+        try {
+          const stored = await transcodeHeifForStorage(buffer)
+          buffer = stored.buffer
+          storedMime = stored.mime
+        } catch (err) {
+          return reply.status(400).send({
+            error: {
+              code: "heic_decode_failed",
+              message: `Failed to decode ${payload.mime}: ${(err as Error).message}`,
+            },
+          })
+        }
+      }
+
       // B4d: deployment upload policy — the proxy lane's bytes are in hand
       // here; police before the R2 write. The uploader rides the signed token.
       const uploadDecision = await applyUploadPolicies({
         kind: uploadKindFromMime(payload.mime),
         lane: "upload-proxy",
-        mime: payload.mime,
+        mime: storedMime,
         sizeBytes: buffer.length,
         userId: payload.userId,
         buffer,
@@ -213,7 +235,7 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
             Bucket: config.R2_BUCKET_NAME,
             Key: payload.key,
             Body: buffer,
-            ContentType: payload.mime,
+            ContentType: storedMime,
             CacheControl: "public, max-age=31536000, immutable",
           })),
           storageTransferOptions(buffer.length),

@@ -3282,6 +3282,19 @@ extension**. A type that still resolves to nothing we accept is rejected with
 `400 validation_error` listing the accepted formats. The resolved type is what
 comes back as `mimeType` and what the stored object is served as.
 
+**HEIC, HEIF and AVIF images are converted before they are stored.** Few
+browsers display them and the image models do not accept them, so every image
+upload lane — `POST /v1/upload`, `POST /v1/upload/image`, the proxy PUT behind
+`prepare_image_upload`, the handoff page and widget behind
+`request_image_upload`, and the server-side import of an image URL — stores
+such a file as a JPEG, or as a PNG when the picture has transparency, and
+`mimeType` reports the stored type. A lane that handed out the file's URL
+before the upload (the proxy PUT and the handoff page) keeps that URL; only
+its content type changes. This covers 10-bit AVIF and iPhone HEIC photos;
+those two are read by a decoder that does not keep transparency, so a
+transparent area in them comes out opaque (an 8-bit AVIF keeps it). A file
+that cannot be decoded at all is refused with `400`.
+
 **MP4 and MOV videos are stored with their index in front ("faststart").**
 A recording from OBS or a phone often keeps the MP4/MOV index (the `moov`
 box) at the end of the file, so the first seek into a large upload has to fetch

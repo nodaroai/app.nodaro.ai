@@ -9,6 +9,7 @@ import {
   reserveStorageIfWithinLimit,
 } from "../utils/file-validation.js"
 import { processImage } from "../utils/thumbnail.js"
+import { transcodeHeifForStorage } from "../utils/heif-decode.js"
 
 /**
  * Server-side import of a remote IMAGE into the caller's storage — the
@@ -27,7 +28,7 @@ import { processImage } from "../utils/thumbnail.js"
  *     (a Content-Length header is advisory and attacker-controlled);
  *   - the bytes must DECODE as an image (sharp metadata is the gate — the
  *     Content-Type header is only a fast-fail hint), and HEIC/HEIF is
- *     transcoded to JPEG exactly like the upload route.
+ *     transcoded exactly like the upload route.
  */
 
 /** Import cap — matches the person app's client-side photo cap. */
@@ -40,7 +41,7 @@ const ACCEPTED_FORMATS: Record<string, { mime: string; ext: string }> = {
   webp: { mime: "image/webp", ext: "webp" },
   avif: { mime: "image/avif", ext: "avif" },
   gif: { mime: "image/gif", ext: "gif" },
-  heif: { mime: "image/heic", ext: "jpg" }, // transcoded to JPEG below
+  heif: { mime: "image/heic", ext: "jpg" }, // HEIC or AVIF — transcoded below
 }
 
 /** Content-Type prefixes that are OBVIOUSLY not images — fail before reading
@@ -196,18 +197,22 @@ export async function storeImportedImageBuffer(args: {
     }
   }
   let mimeType = accepted.mime
+  let ext = accepted.ext
   if (format === "heif") {
-    // Same rationale as the upload route: HEIC renders only in Safari and
-    // costs providers a libheif decode — transcode once to JPEG.
+    // Same rationale as the upload route: sharp reports HEIC AND AVIF as
+    // "heif", both render in few browsers and no KIE image lane takes them —
+    // transcode once (JPEG, or PNG when it has transparency).
     try {
-      buffer = await sharp(body).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-      mimeType = "image/jpeg"
+      const stored = await transcodeHeifForStorage(body)
+      buffer = stored.buffer
+      mimeType = stored.mime
+      ext = stored.ext
     } catch (err) {
       return {
         ok: false,
         status: 400,
         code: "validation_error",
-        message: `Failed to decode HEIC image: ${(err as Error).message}`,
+        message: `Failed to decode HEIC/AVIF image: ${(err as Error).message}`,
       }
     }
   }
@@ -232,7 +237,7 @@ export async function storeImportedImageBuffer(args: {
 
   // ── R2 upload (reservation already counted the bytes — no trackUserId) ──
   const fileId = randomUUID()
-  const r2Key = `uploads/images/${fileId}.${accepted.ext}`
+  const r2Key = `uploads/images/${fileId}.${ext}`
   let publicUrl: string
   try {
     publicUrl = await uploadBufferToR2(buffer, r2Key, mimeType)
@@ -247,14 +252,14 @@ export async function storeImportedImageBuffer(args: {
   try {
     const result = await processImage(buffer)
     metadata = { ...(result.metadata ?? {}) }
-    const thumbKey = `uploads/images/${fileId}_thumb.${accepted.ext}`
+    const thumbKey = `uploads/images/${fileId}_thumb.${ext}`
     thumbnailUrl = await uploadBufferToR2(result.thumbnail, thumbKey, mimeType)
   } catch (err) {
     console.error("[media-import] thumbnail/metadata extraction failed:", err)
   }
 
   // ── Asset record ──
-  const filename = args.filename ?? `imported-${fileId}.${accepted.ext}`
+  const filename = args.filename ?? `imported-${fileId}.${ext}`
   let assetId: string | null = null
   const { data: asset, error: insertError } = await supabase
     .from("assets")

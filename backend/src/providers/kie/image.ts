@@ -250,6 +250,33 @@ export class KieImageProvider
     if (referenceImageUrls?.length && provider === "grok-2") {
       provider = "grok-2-i2i"
     }
+
+    // Reference images in a format this SKU accepts, through the same
+    // chokepoint the edit lane below and every KIE video lane use. They used to
+    // reach KIE verbatim, so an AVIF or HEIC reference was a createTask 500
+    // "File type not supported" (production Cast Swap reference preparation,
+    // 2026-10-25). An accepted file under the size cap comes back as its own
+    // URL. Lossless where the SKU takes it: a reference carries the identity
+    // the run is paying to keep. A caller's inpainting mask is aligned to the
+    // first reference, so its pixel grid must not move.
+    if (referenceImageUrls?.length) {
+      const acceptedFormats = modelConfig.acceptedImageFormats
+        ? new Set(modelConfig.acceptedImageFormats)
+        : undefined
+      const callerMask = typeof extraParams?.mask_url === "string" && extraParams.mask_url.length > 0
+      const refProvider = provider
+      referenceImageUrls = await Promise.all(
+        referenceImageUrls.map((url) =>
+          ensureImageForProvider(url, refProvider, {
+            acceptedFormats,
+            context: "Image generation",
+            preferLossless: true,
+            preserveGeometry: callerMask,
+          }),
+        ),
+      )
+    }
+
     if (provider === "grok-2-i2i") {
       if (!referenceImageUrls?.length) {
         throw createSanitizedError(
