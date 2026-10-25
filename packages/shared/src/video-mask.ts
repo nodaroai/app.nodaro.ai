@@ -57,6 +57,15 @@ export const VIDEO_MASK_DEFAULTS = {
    * frame count.
    */
   perShot: false,
+  /**
+   * 0 = off: a new detection only where a request starts anyway (the clip's
+   * start, every 1,800 frames, and every cut with `perShot`). Above 0: the
+   * model is also sent a new request every this many seconds of footage, so a
+   * subject that first appears mid-shot is found within that time (see
+   * `REDETECT_EVERY_SEC_*`). These boundaries are not cuts: `holdLastMask`
+   * keeps holding across them.
+   */
+  redetectEverySec: 0,
 } as const
 
 export const VIDEO_MASK_LIMITS = {
@@ -115,6 +124,21 @@ export const VIDEO_MASK_LIMITS = {
    */
   ZONE_MARGIN_PCT_MIN: 0,
   ZONE_MARGIN_PCT_MAX: 49,
+  /**
+   * `redetectEverySec`: 0 (off) or `REDETECT_EVERY_SEC_MIN`–`MAX` seconds. The
+   * model picks up its subjects near the start of each request; a face that
+   * turns to the camera, or a person who walks in, partway through a request is
+   * never masked. On, the clip (each shot, with `perShot`) is cut into requests
+   * of at most this many seconds of frames — counted from the shot's start, a
+   * last piece shorter than `VIDEO_MASK_MIN_SHOT_FRAMES` joining the one before
+   * — so the subjects are detected again at every such boundary. Each request
+   * adds wall time (they run three at a time); the price follows the clip's
+   * length and does not change.
+   */
+  REDETECT_EVERY_SEC_MIN: 1,
+  REDETECT_EVERY_SEC_MAX: 10,
+  /** The panel's step (the API takes any value in range). */
+  REDETECT_EVERY_SEC_STEP: 1,
 } as const
 
 const VIDEO_MASK_BUCKETS_SEC = [5, 10, 15, 30, 60, 90, 120, 180, 240, 300] as const
@@ -174,6 +198,19 @@ export function resolveVideoMaskZone(value: unknown): VideoMaskZone | null {
   return zone.leftPct > 0 || zone.rightPct > 0 || zone.topPct > 0 || zone.bottomPct > 0 ? zone : null
 }
 
+/**
+ * `redetectEverySec` as a run reads it: a finite number above 0 clamped to
+ * `REDETECT_EVERY_SEC_MIN`–`MAX` (a value between 0 and the minimum snaps up
+ * to it — it asked for re-detection); anything else (absent, 0, negative,
+ * not a number) is 0 = off. The one reading shared by the worker, a workflow
+ * run's payload, the node's own run and its panel (the route refuses a value
+ * out of range instead).
+ */
+export function resolveVideoMaskRedetectSec(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return 0
+  return Math.min(VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX, Math.max(VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN, value))
+}
+
 /** `POST /v1/video-mask` request body. */
 export interface VideoMaskRequest {
   /** The clip to segment. */
@@ -199,4 +236,10 @@ export interface VideoMaskRequest {
    *  first and the subjects are detected again in every shot; `holdLastMask` never
    *  carries a mask across a cut. The output then carries `shots`. */
   readonly perShot?: boolean
+  /** Detect the subjects again every this many seconds (0 = off, the default, or
+   *  `VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN`–`MAX`): the clip — each shot, with
+   *  `perShot` — is sent to the model in pieces of at most that length, so a subject
+   *  that first appears mid-shot is masked from the next boundary on. Not a cut:
+   *  `holdLastMask` holds across these boundaries. Slower (more requests); same price. */
+  readonly redetectEverySec?: number
 }

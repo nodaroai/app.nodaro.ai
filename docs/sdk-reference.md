@@ -6131,6 +6131,7 @@ videoMask(input: {
     leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number  // 0..49 % each, left out = 0
   } | null
   perShot?: boolean               // default false; detect the subject again in every shot (scene cuts found first)
+  redetectEverySec?: number       // 0 (off, default) or 1..10; also detect the subject again every N s
 }): Promise<{ jobId: string }>
 ```
 
@@ -6147,7 +6148,13 @@ regions whose bounding-box centre lies outside the frame minus the margins
 cuts first and segments each shot on its own — the subject is detected again
 after every cut, `holdLastMask` never crosses a cut, and each shot's mask is
 fitted to that shot's exact frame count; on a clip with no cut it gives the
-same mask, fitted to the clip's exact frame count. Full reference:
+same mask, fitted to the clip's exact frame count. `redetectEverySec` (1–10)
+also sends the clip — each shot, with `perShot` — to the model in pieces of at
+most that many seconds (a last piece under 8 frames joins the one before), so
+someone who walks in or turns to the camera mid-shot is masked from the next
+boundary on; `holdLastMask` holds across these boundaries (they are not cuts).
+Each piece is one more model request, so it is slower; the price does not
+change, and the output's `chunks` counts the requests. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
 
 #### `maskComposite(input)`

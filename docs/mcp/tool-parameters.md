@@ -3471,6 +3471,7 @@ Needs `workflows:execute`.
 | `zone.top_pct` | number |  | From 0 to 49. |
 | `zone.bottom_pct` | number |  | From 0 to 49. |
 | `per_shot` | boolean |  | Detect the subject again in every shot after a scene cut (default false). |
+| `redetect_every_sec` | number |  | Also detect the subject again every N s (0 = off, default; or 1–10) — catches someone who appears or turns to camera mid-shot. Slower, same price. From 0 to 10. |
 
 ## `video_upscale`
 

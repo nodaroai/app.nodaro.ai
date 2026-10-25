@@ -2583,6 +2583,10 @@ export interface VideoMaskNodeData extends PromptAffixFields {
   /** Segment each shot on its own (scene cuts found first; the hold never crosses a cut).
    *  Optional: older saved nodes lack it. */
   perShot?: boolean
+  /** Detect the subjects again every this many seconds (0 = off, or
+   *  VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN–MAX). Not a cut: the hold carries across.
+   *  Optional: older saved nodes lack it. */
+  redetectEverySec?: number
   /** Resolved at execution time from the connected video edge. */
   videoUrl?: string
   activeResultIndex?: number

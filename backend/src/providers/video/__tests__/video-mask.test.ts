@@ -24,6 +24,8 @@ import {
   dropMaskRegions,
   shotCutFrames,
   fitMaskFrames,
+  redetectChunkFrames,
+  VIDEO_MASK_CHUNK_FRAMES,
   VIDEO_MASK_MIN_SHOT_FRAMES,
 } from "../video-mask.js"
 import { DeterministicJobError } from "../../../lib/deterministic-job-error.js"
@@ -138,6 +140,16 @@ describe("holdLastMaskFrames (holdLastMask)", () => {
     expect(heldFrames).toBe(3)
     // No cuts: exactly the single pass.
     expect(await holdLastMaskFrames([...rle], PIX, [])).toEqual(await holdLastMaskFrames([...rle], PIX))
+  })
+
+  it("redetectEverySec: a hold keeps going across a re-detection boundary — only cuts (shotStarts) reset it", async () => {
+    // Re-detection chunks of 3 frames (boundaries 3, 6, 9) and one real cut at 6: the worker passes ONLY the cut.
+    const rle = [A, "", "", "", "", "", "", B, "", ""]
+    const { rle: out } = await holdLastMaskFrames([...rle], PIX, [6])
+    // A is held over frames 1–5 (across the boundary at 3), dropped at the cut at 6; B is held over 8–9 (across 9).
+    expect(out).toEqual([A, A, A, A, A, A, "", B, B, B])
+    // Passing the re-detection boundaries as shot starts would break the hold at 3 — the bug this guards.
+    expect((await holdLastMaskFrames([...rle], PIX, [3, 6, 9])).rle).not.toEqual(out)
   })
 
   it("holds a run of empty frames for at most maxHoldFrames; the rest stay empty until the next detection", async () => {
@@ -607,6 +619,85 @@ describe("chunking a long clip", () => {
         return rgb[i]! > 150 && rgb[i + 1]! < 100 ? "red" : rgb[i + 1]! > 100 && rgb[i]! < 100 ? "green" : "?"
       }
       expect([pixel(paths[0]!, 0), pixel(paths[0]!, 30), pixel(paths[1]!, 0), pixel(paths[1]!, 65)]).toEqual(["red", "red", "green", "green"])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
+  it("redetectEverySec: the chunk length is that many seconds of frames, at least 8, at most a request's 1,800; off = 1,800", () => {
+    expect(redetectChunkFrames("30/1", 1)).toBe(30)
+    expect(redetectChunkFrames("24000/1001", 1)).toBe(24)
+    expect(redetectChunkFrames("30000/1001", 2.5)).toBe(75)
+    // An unreadable rate counts as FPS_BASIS.
+    expect(redetectChunkFrames("0/0", 2)).toBe(60)
+    // Never under VIDEO_MASK_MIN_SHOT_FRAMES (a 5 fps clip at 1 s) nor over a request's cap (240 fps at 10 s).
+    expect(redetectChunkFrames("5/1", 1)).toBe(VIDEO_MASK_MIN_SHOT_FRAMES)
+    expect(redetectChunkFrames("240/1", 10)).toBe(VIDEO_MASK_CHUNK_FRAMES)
+    // Off: today's request size.
+    expect(redetectChunkFrames("30/1", 0)).toBe(VIDEO_MASK_CHUNK_FRAMES)
+    expect(redetectChunkFrames("30/1", -1)).toBe(VIDEO_MASK_CHUNK_FRAMES)
+  })
+  it("redetectEverySec without perShot: a chunk every N frames from the clip's start; a last piece under 8 frames joins the one before", () => {
+    // 100 frames, N = 30: 30, 30, 30, then 10 (≥ 8) stays its own chunk.
+    expect(planMaskChunks(100, 30, [], VIDEO_MASK_MIN_SHOT_FRAMES)).toEqual([
+      { index: 0, startFrame: 0, frames: 30 },
+      { index: 1, startFrame: 30, frames: 30 },
+      { index: 2, startFrame: 60, frames: 30 },
+      { index: 3, startFrame: 90, frames: 10 },
+    ])
+    // 93 frames: the 3-frame tail joins the third chunk (33 frames).
+    expect(planMaskChunks(93, 30, [], VIDEO_MASK_MIN_SHOT_FRAMES)).toEqual([
+      { index: 0, startFrame: 0, frames: 30 },
+      { index: 1, startFrame: 30, frames: 30 },
+      { index: 2, startFrame: 60, frames: 33 },
+    ])
+    // A clip shorter than one piece is one chunk, however short.
+    expect(planMaskChunks(5, 30, [], VIDEO_MASK_MIN_SHOT_FRAMES)).toEqual([{ index: 0, startFrame: 0, frames: 5 }])
+    // Every frame once, in order.
+    const plan = planMaskChunks(9001, 30, [], VIDEO_MASK_MIN_SHOT_FRAMES)
+    expect(plan.reduce((n, c) => n + c.frames, 0)).toBe(9001)
+    expect(plan.every((c, i) => i === 0 || c.startFrame === plan[i - 1]!.startFrame + plan[i - 1]!.frames)).toBe(true)
+  })
+  it("redetectEverySec with perShot: every cut starts a chunk, and each shot is cut every N frames from ITS start (the tail rule per shot)", () => {
+    // Cuts at 40 and 103; N = 30. Shot 1 (0–39): 30 + 10. Shot 2 (40–102): 30 + 30 + a 3-frame tail joined (33).
+    // Shot 3 (103–149): 30 + 17.
+    expect(planMaskChunks(150, 30, [40, 103], VIDEO_MASK_MIN_SHOT_FRAMES)).toEqual([
+      { index: 0, startFrame: 0, frames: 30 },
+      { index: 1, startFrame: 30, frames: 10 },
+      { index: 2, startFrame: 40, frames: 30 },
+      { index: 3, startFrame: 70, frames: 33 },
+      { index: 4, startFrame: 103, frames: 30 },
+      { index: 5, startFrame: 133, frames: 17 },
+    ])
+    // A shot shorter than 8 frames is never folded into the shot before (no chunk spans a cut).
+    expect(planMaskChunks(70, 30, [65], VIDEO_MASK_MIN_SHOT_FRAMES).map((c) => [c.startFrame, c.frames])).toEqual([[0, 30], [30, 35], [65, 5]])
+  })
+  it("off (no tail rule): the 1,800-frame grid plans exactly as before, a short tail included", () => {
+    expect(planMaskChunks(1803, 1800)).toEqual([
+      { index: 0, startFrame: 0, frames: 1800 },
+      { index: 1, startFrame: 1800, frames: 3 },
+    ])
+    expect(planMaskChunks(4000, 1800, [], 0)).toEqual(planMaskChunks(4000, 1800))
+    // A tail is never merged past a request's cap.
+    expect(planMaskChunks(1803, 1800, [], VIDEO_MASK_MIN_SHOT_FRAMES)).toEqual(planMaskChunks(1803, 1800))
+  })
+  it("split argv for re-detection: an even grid without cuts, each boundary one by one with them", () => {
+    expect(buildSplitArgs("in.mp4", "out-%03d.mp4", planMaskChunks(93, 30, [], VIDEO_MASK_MIN_SHOT_FRAMES)).join(" ")).toContain("-force_key_frames expr:eq(mod(n,30),0)")
+    const argv = buildSplitArgs("in.mp4", "out-%03d.mp4", planMaskChunks(150, 30, [40, 103], VIDEO_MASK_MIN_SHOT_FRAMES)).join(" ")
+    expect(argv).toContain("-force_key_frames expr:eq(n,30)+eq(n,40)+eq(n,70)+eq(n,103)+eq(n,133)")
+    expect(argv).toContain("-segment_frames 30,40,70,103,133")
+  })
+  it("cuts a real clip on a re-detection plan with a cut into exactly the planned frames (real ffmpeg)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "video-mask-split-redetect-"))
+    try {
+      const src = join(dir, "src.mp4")
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=160x90:r=10:d=9.7", "-c:v", "libx264", "-pix_fmt", "yuv420p", src])
+      const total = await countVideoFrames(src)
+      expect(total).toBe(97)
+      // 1 s at 10 fps = 10 frames, a cut at 31: 10, 10, 11 (the 1-frame tail joined) | 10 × 5, 16 (the 6-frame tail joined).
+      const chunks = planMaskChunks(total!, redetectChunkFrames("10/1", 1), [31], VIDEO_MASK_MIN_SHOT_FRAMES)
+      const paths = await splitMaskSource(src, dir, { width: 160, height: 90, frameRate: "10/1", durationSec: 9.7 }, chunks)
+      expect(await Promise.all(paths.map((p) => countVideoFrames(p)))).toEqual(chunks.map((c) => c.frames))
+      expect(chunks.map((c) => c.frames)).toEqual([10, 10, 11, 10, 10, 10, 10, 10, 16])
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

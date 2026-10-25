@@ -661,6 +661,17 @@ describe("payload-builder-video-mask.test.ts", () => {
       expect(b({ zone: { leftPct: "10", rightPct: 0 } }).zone).toBeNull()
       expect(b({ zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }).zone).toBeNull()
     })
+
+    it("carries redetectEverySec as the worker reads it (0 = off unless a positive number; clamped to 1–10 s)", () => {
+      const b = (d: Record<string, unknown>) => build(node("video-mask", { prompt: "x", ...d }), { videoUrl: "https://x/c.mp4" }).payload
+      expect(b({}).redetectEverySec).toBe(0)
+      expect(b({ redetectEverySec: 1 }).redetectEverySec).toBe(1)
+      expect(b({ redetectEverySec: 2.5, perShot: true })).toMatchObject({ redetectEverySec: 2.5, perShot: true })
+      expect(b({ redetectEverySec: 0.3 }).redetectEverySec).toBe(1)
+      expect(b({ redetectEverySec: 45 }).redetectEverySec).toBe(10)
+      expect(b({ redetectEverySec: -1 }).redetectEverySec).toBe(0)
+      expect(b({ redetectEverySec: "1" }).redetectEverySec).toBe(0)
+    })
   })
 
   describe("mask-composite payload", () => {

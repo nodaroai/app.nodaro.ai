@@ -1086,6 +1086,7 @@ image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for 
     .option("--max-subject-height <pct>", `ignore subjects larger than this % of the frame height, ${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
     .option("--zone <L,R,T,B>", `keep only subjects whose centre is inside these left,right,top,bottom margins, each ${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN}–${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX} % of the frame (default off)`)
     .option("--per-shot", "detect the subject again in every shot after a scene cut")
+    .option("--redetect-every <sec>", `also detect the subject again every <sec> seconds, ${VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN}–${VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX} (default 0 = off) — catches someone who enters or turns to camera mid-shot; slower, same price`, (v) => Number(v))
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
@@ -1096,10 +1097,11 @@ Examples:
   $ nodaro media video-mask https://x/street.mp4 "person, dog" --threshold 0.3 --watch
   $ nodaro media video-mask https://x/long-take.mp4 "the skater" --model sam-3 --watch
   $ nodaro media video-mask https://x/edit.mp4 "face" --per-shot --zone 10,10,5,5 --watch
+  $ nodaro media video-mask https://x/edit.mp4 "face" --per-shot --redetect-every 1 --watch
 
 Clips up to ${VIDEO_MASK_LIMITS.MAX_BILLED_SEC} s at ${VIDEO_MASK_LIMITS.FPS_BASIS} fps (a faster clip counts proportionally longer); priced by the
 clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
-    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string; holdLastMask?: boolean; minSubjectHeight?: number; maxSubjectHeight?: number; zone?: string; perShot?: boolean } & WatchOpts) => {
+    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string; holdLastMask?: boolean; minSubjectHeight?: number; maxSubjectHeight?: number; zone?: string; perShot?: boolean; redetectEvery?: number } & WatchOpts) => {
       try {
         if (opts.model && !(VIDEO_MASK_PROVIDERS as readonly string[]).includes(opts.model)) {
           warn(`--model must be one of ${VIDEO_MASK_PROVIDERS.join(", ")} (got "${opts.model}")`)
@@ -1121,6 +1123,10 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
           warn("--min-subject-height is above --max-subject-height: no subject could be kept")
           process.exit(1)
         }
+        if (opts.redetectEvery !== undefined && !(Number.isFinite(opts.redetectEvery) && (opts.redetectEvery === 0 || (opts.redetectEvery >= VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN && opts.redetectEvery <= VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX)))) {
+          warn(`--redetect-every must be 0 (off) or a number of seconds from ${VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN} to ${VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX}`)
+          process.exit(1)
+        }
         const zone = opts.zone !== undefined ? parseVideoMaskZone(opts.zone) : undefined
         const client = buildClient(opts.profile)
         const result = await client.media.videoMask({
@@ -1133,6 +1139,7 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
           ...(opts.maxSubjectHeight !== undefined ? { maxSubjectHeightPct: opts.maxSubjectHeight } : {}),
           ...(zone ? { zone } : {}),
           ...(opts.perShot ? { perShot: true } : {}),
+          ...(opts.redetectEvery !== undefined ? { redetectEverySec: opts.redetectEvery } : {}),
         })
         await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video mask" })
       } catch (err) {

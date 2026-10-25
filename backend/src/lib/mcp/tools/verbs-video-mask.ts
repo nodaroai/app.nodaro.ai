@@ -95,6 +95,13 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
           .optional()
           .describe("Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too)."),
         per_shot: z.boolean().optional().describe("Detect the subject again in every shot after a scene cut (default false)."),
+        redetect_every_sec: z
+          .number()
+          .min(0)
+          .max(L.REDETECT_EVERY_SEC_MAX)
+          .refine((v) => v === 0 || v >= L.REDETECT_EVERY_SEC_MIN, { message: `0 or ${L.REDETECT_EVERY_SEC_MIN}–${L.REDETECT_EVERY_SEC_MAX}` })
+          .optional()
+          .describe(`Also detect the subject again every N s (0 = off, default; or ${L.REDETECT_EVERY_SEC_MIN}–${L.REDETECT_EVERY_SEC_MAX}) — catches someone who appears or turns to camera mid-shot. Slower, same price.`),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -114,6 +121,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         ...(args.max_subject_height_pct !== undefined ? { maxSubjectHeightPct: args.max_subject_height_pct } : {}),
         ...(zone ? { zone } : {}),
         ...(args.per_shot !== undefined ? { perShot: args.per_shot } : {}),
+        ...(args.redetect_every_sec !== undefined ? { redetectEverySec: args.redetect_every_sec } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

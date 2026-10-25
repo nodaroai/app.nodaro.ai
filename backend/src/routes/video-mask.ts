@@ -13,7 +13,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared/media"
+import { VIDEO_MASK_DEFAULTS, VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
@@ -44,6 +44,17 @@ export const videoMaskBody = z.object({
   // Segment each shot on its own: the clip's scene cuts become chunk boundaries (the model starts afresh after
   // every cut and finds the subjects of the new shot), and holdLastMask never carries a mask across a cut.
   perShot: z.boolean().optional().default(false),
+  // Detect the subjects again every this many seconds (0 = off, or 1–10): each shot (the whole clip without
+  // perShot) is sent in pieces of at most that length. Not a cut: holdLastMask holds across these boundaries.
+  redetectEverySec: z
+    .number()
+    .min(0)
+    .max(VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX)
+    .refine((v) => v === 0 || v >= VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN, {
+      message: `redetectEverySec must be 0 (off) or ${VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN}–${VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX} seconds`,
+    })
+    .optional()
+    .default(VIDEO_MASK_DEFAULTS.redetectEverySec),
 })
 
 /**

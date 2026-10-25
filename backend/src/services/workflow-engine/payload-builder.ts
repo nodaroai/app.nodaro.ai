@@ -32,6 +32,7 @@ import {
   VIDEO_MASK_LIMITS,
   resolveVideoMaskProvider,
   resolveVideoMaskZone,
+  resolveVideoMaskRedetectSec,
   resolveMaskCompositeSettings,
   maskCompositeFillOf,
   maskCompositeUsesForeground,
@@ -5057,6 +5058,8 @@ export function buildPayload(
           // The worker's own reading of a zone (margins clamped to 0–49, all 0 = null = off).
           zone: resolveVideoMaskZone(data.zone),
           perShot: data.perShot === true,
+          // The worker's own reading: 0 (off) unless a positive number, clamped to 1–10 s.
+          redetectEverySec: resolveVideoMaskRedetectSec(data.redetectEverySec),
           usageLogId,
         },
       }

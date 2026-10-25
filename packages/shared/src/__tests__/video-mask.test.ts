@@ -6,6 +6,7 @@ import {
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
   resolveVideoMaskProvider,
+  resolveVideoMaskRedetectSec,
   resolveVideoMaskZone,
   videoMaskBilledSeconds,
   videoMaskCreditId,
@@ -89,6 +90,28 @@ describe("Video Mask zone", () => {
 describe("Video Mask perShot", () => {
   it("is off by default (one pass over the whole clip)", () => {
     expect(VIDEO_MASK_DEFAULTS.perShot).toBe(false)
+  })
+})
+
+describe("Video Mask redetectEverySec", () => {
+  it("is off by default (0), with a 1–10 s range", () => {
+    expect(VIDEO_MASK_DEFAULTS.redetectEverySec).toBe(0)
+    expect(VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN).toBe(1)
+    expect(VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX).toBe(10)
+  })
+
+  it("resolveVideoMaskRedetectSec: absent / 0 / negative / not a number = 0; above 0 clamped to 1–10", () => {
+    expect(resolveVideoMaskRedetectSec(undefined)).toBe(0)
+    expect(resolveVideoMaskRedetectSec(null)).toBe(0)
+    expect(resolveVideoMaskRedetectSec(0)).toBe(0)
+    expect(resolveVideoMaskRedetectSec(-2)).toBe(0)
+    expect(resolveVideoMaskRedetectSec("1")).toBe(0)
+    expect(resolveVideoMaskRedetectSec(Number.NaN)).toBe(0)
+    expect(resolveVideoMaskRedetectSec(Infinity)).toBe(0)
+    expect(resolveVideoMaskRedetectSec(1)).toBe(1)
+    expect(resolveVideoMaskRedetectSec(2.5)).toBe(2.5)
+    expect(resolveVideoMaskRedetectSec(0.4)).toBe(1)
+    expect(resolveVideoMaskRedetectSec(30)).toBe(10)
   })
 })
 

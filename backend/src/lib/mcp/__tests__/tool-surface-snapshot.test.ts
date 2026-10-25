@@ -1211,6 +1211,11 @@ const VIDEO_MASK_MAX_SUBJECT_BYTES = 156
 // the change: 488_293 total − 487_791 = 502 B; the 103 B of headroom carry across.
 const VIDEO_MASK_ZONE_PER_SHOT_BYTES = 502
 
+// RAISED 2026-10-25 by `video_mask` taking `redetect_every_sec` (0 = off or 1–10 s: detect the subject
+// again every that many seconds) — one arg, nothing else; no tool added, so the fixture does NOT move.
+// Measured by this suite with and without the change: 505_594 total − 505_367 = 227 B; the 58 B of headroom carry across.
+const VIDEO_MASK_REDETECT_BYTES = 227
+
 // RAISED 2026-10-21 by `cast_swap` taking `pre_prompt` (instructions placed before the role
 // instructions, mentioning roles as post_prompt does) — one arg, and its `roles` description
 // saying a pre_prompt alone is enough too — and nothing else. No tool was added, so the fixture
@@ -1434,6 +1439,7 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_MIN_SUBJECT_BYTES +
     VIDEO_MASK_MAX_SUBJECT_BYTES +
     VIDEO_MASK_ZONE_PER_SHOT_BYTES +
+    VIDEO_MASK_REDETECT_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +

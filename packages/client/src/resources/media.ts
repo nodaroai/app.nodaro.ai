@@ -478,7 +478,15 @@ export class MediaResource {
    * detected again after every cut, `holdLastMask` never crosses a cut, and
    * each shot's mask is fitted to that shot's exact frame count; on a clip
    * with no cut it gives the same mask, fitted to the clip's exact frame
-   * count. The output carries `shots` (1 when off).
+   * count. The output carries `shots` (1 when off). `redetectEverySec` (0 =
+   * off, the default, or 1–10) also detects the subject again every that
+   * many seconds — the clip (each shot, with `perShot`) is sent to the model
+   * in pieces of at most that length, a last piece under 8 frames joining the
+   * one before — so someone who walks in or turns to the camera mid-shot is
+   * masked from the next boundary on. These boundaries are not cuts:
+   * `holdLastMask` holds across them. Each piece is one more model request
+   * (three run at a time), so it is slower; the price does not change. The
+   * output's `chunks` counts the requests.
    */
   videoMask(input: VideoMaskRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-mask", { body: input })

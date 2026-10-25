@@ -6599,6 +6599,8 @@ export async function videoMaskApi(params: {
   zone?: VideoMaskZone | null
   /** Detect the subjects again in every shot (scene cuts found first; default false). */
   perShot?: boolean
+  /** Also detect the subjects again every this many seconds (0 = off, the default, or 1–10). */
+  redetectEverySec?: number
   userId?: string
 }): Promise<{ jobId: string }> {
   const { userId, ...rest } = params

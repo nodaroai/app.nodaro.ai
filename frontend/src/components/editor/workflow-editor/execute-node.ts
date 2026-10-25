@@ -34,6 +34,7 @@ import {
   VIDEO_MASK_LIMITS,
   resolveVideoMaskProvider,
   resolveVideoMaskZone,
+  resolveVideoMaskRedetectSec,
   resolveMaskCompositeSettings,
   maskCompositeUsesForeground
 } from "@nodaro/shared/media";
@@ -7126,6 +7127,8 @@ function executeNodeCore(
           // The orchestrator's reading too: margins clamped to 0–49, all 0 = null (off).
           zone: resolveVideoMaskZone(vmData.zone),
           perShot: vmData.perShot === true,
+          // The orchestrator's reading too: 0 (off) unless a positive number, clamped to 1–10 s.
+          redetectEverySec: resolveVideoMaskRedetectSec(vmData.redetectEverySec),
           userId: ctx.userId,
         }),
       "generatedVideoUrl",
