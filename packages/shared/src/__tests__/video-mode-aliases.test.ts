@@ -7,6 +7,7 @@ import {
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   resolveVideoProviderForMode,
+  RETIRED_VIDEO_PROVIDERS,
 } from "../model-constants.js"
 
 const I2V = "image-to-video"
@@ -48,10 +49,18 @@ describe("resolveVideoProviderForMode", () => {
   })
 
   it("passes non-aliased providers through unchanged in both modes", () => {
-    for (const p of ["kling", "seedance", "veo3", "minimax", "ltx-2.3-pro"]) {
+    for (const p of ["kling", "seedance-2", "veo3", "minimax", "ltx-2.3-pro"]) {
       expect(resolveVideoProviderForMode(p, I2V)).toBe(p)
       expect(resolveVideoProviderForMode(p, T2V)).toBe(p)
     }
+  })
+
+  it("resolves a retired id to the model it runs as, in both modes", () => {
+    for (const [retired, runsAs] of Object.entries(RETIRED_VIDEO_PROVIDERS)) {
+      expect(resolveVideoProviderForMode(retired, I2V)).toBe(runsAs)
+      expect(resolveVideoProviderForMode(retired, T2V)).toBe(runsAs)
+    }
+    expect(resolveVideoProviderForMode("seedance", I2V)).toBe("seedance-2-mini")
   })
 
   it("passes single-id i2v-only models (grok-imagine-video-1.5) through unchanged", () => {

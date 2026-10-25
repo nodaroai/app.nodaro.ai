@@ -350,6 +350,7 @@ import { registerNetworkBlockHook } from "./middleware/network-block.js"
 import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
+import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
@@ -553,6 +554,9 @@ export async function buildApp() {
   // them), so a refused run reserves nothing.
   registerTokenWorkflowScopeGuard(app)
   registerSequenceExecutionGuard(app)
+  // A retired video model id in a request body runs as the model it became
+  // (RETIRED_VIDEO_PROVIDERS), before any route prices or validates it.
+  registerRetiredVideoProviderHook(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the
   // identity this validates against. A no-op unless organizations are

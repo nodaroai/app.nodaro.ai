@@ -13,7 +13,6 @@ import type { ShotSpec } from "./scene-node-types.js"
  * route validation + payload building.
  */
 export const PROVIDER_DIRECTIVE_DEFAULTS = {
-  seedance: { multishot: true, disable_internal_music: true, allow_sfx: true },
   "seedance-2": { multishot: true, disable_internal_music: true, allow_sfx: true },
   veo3: { reference_count: "auto" as const },
   "veo3.1": { reference_count: "auto" as const },

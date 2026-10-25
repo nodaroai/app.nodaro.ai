@@ -31,7 +31,7 @@ const MOTION_PROVIDERS = [
   "minimax",
   "hailuo-2.3",
   "wan-i2v",
-  "seedance",
+  "seedance-2-mini",
   "bytedance-lite",
 ] as const
 import { buildClient, handleError } from "../client.js"

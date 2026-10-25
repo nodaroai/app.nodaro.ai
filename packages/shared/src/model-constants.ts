@@ -262,7 +262,6 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "hailuo-standard": 1500,
   "hailuo-2.3-pro": 1500, // t2v 1500 / i2v 5000 → smaller, safe for both modes
   "hailuo-2.3": 5000,
-  "seedance": 2500,       // Seedance 1.5 Pro
   "wan": 5000,
   "wan-i2v": 5000,
   "wan-turbo": 5000,
@@ -886,7 +885,6 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "kling-turbo",
   "kling-3.0",
   "kling-master",
-  "seedance",
   "seedance-2",
   "seedance-2-fast",
   "seedance-2-mini",
@@ -944,7 +942,6 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling-turbo",
   "kling-3.0",
   "grok",
-  "seedance",
   "seedance-2",
   "seedance-2-fast",
   "seedance-2-mini",
@@ -1041,16 +1038,42 @@ export const VIDEO_MODE_ALIASES: readonly VideoModeAlias[] = [
 ] as const
 
 /**
+ * Video model ids the provider retired, each with the model it now runs as.
+ * They have no catalog entry and are in no provider list: every boundary that
+ * receives a stored or sent id (editor load, a run's payload and its estimate,
+ * a request body, the video worker, a pipeline pin, the MCP model choice, the
+ * credit id) passes it through {@link canonicalVideoProvider} first,
+ * so a saved node, an app run or an API call naming one keeps working and is
+ * priced as the model it runs as.
+ *
+ * - `seedance` (Seedance 1.5 Pro, KIE `bytedance/seedance-1.5-pro`): retired
+ *   upstream 2026-10-25 (KIE answers 410). Runs as Seedance 2 Mini, the
+ *   cheapest Seedance left (owner's decision 2026-10-25).
+ */
+export const RETIRED_VIDEO_PROVIDERS: Readonly<Record<string, string>> = {
+  seedance: "seedance-2-mini",
+}
+
+/** A retired video model id becomes the id it runs as; any other value passes through unchanged. Own properties only. */
+export function canonicalVideoProvider<T>(provider: T): T | string {
+  return typeof provider === "string" && Object.hasOwn(RETIRED_VIDEO_PROVIDERS, provider)
+    ? RETIRED_VIDEO_PROVIDERS[provider]!
+    : provider
+}
+
+/**
  * Resolve a (possibly base / cross-mode) video provider id to the concrete KIE
  * id for the given execution mode. Accepts any member id of an alias group
  * (base, i2v, or t2v) so existing workflows that stored either mode's id keep
- * working. Non-aliased providers (single-id models, VEO, Replicate, etc.) pass
+ * working, and a retired id ({@link RETIRED_VIDEO_PROVIDERS}) as the model it
+ * runs as. Non-aliased providers (single-id models, VEO, Replicate, etc.) pass
  * through unchanged.
  */
 export function resolveVideoProviderForMode(
-  provider: string,
+  rawProvider: string,
   mode: "image-to-video" | "text-to-video",
 ): string {
+  const provider = canonicalVideoProvider(rawProvider)
   for (const g of VIDEO_MODE_ALIASES) {
     if (provider === g.base || provider === g.i2v || provider === g.t2v) {
       return mode === "image-to-video" ? g.i2v : g.t2v
@@ -1747,7 +1770,6 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "hailuo-2.3-pro",
   "hailuo-2.3",
   "hailuo-standard",
-  "seedance",
   "seedance-2",
   "seedance-2-fast",
   "seedance-2-mini",
@@ -2890,8 +2912,6 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // provider config → defaultOn); audio is priced into the flat per-duration
   // rate, so NOT cost-affecting (no :audio composite).
   "kling-3-omni": { mode: "native_speech", field: "generateAudio", defaultOn: true },
-  // Seedance 1.x — optional ambient audio (generate_audio); not dialogue.
-  seedance: { mode: "ambient", field: "generateAudio" },
   // Seedance 2.0 — multimodal; lip-syncs to a supplied reference-audio track.
   "seedance-2": { mode: "audio_driven", field: "generateAudio" },
   "seedance-2-fast": { mode: "audio_driven", field: "generateAudio" },
@@ -3076,7 +3096,6 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "hailuo-2.3-pro": "duration",
   "hailuo-2.3": "duration",
   "hailuo-standard": "duration",
-  "seedance": "duration",
   "seedance-2": "duration+resolution+ref",
   "seedance-2-fast": "duration+resolution+ref",
   "seedance-2-mini": "duration+resolution+ref",
@@ -3324,11 +3343,6 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 6, suffix: "6s" },
     { maxSeconds: 10, suffix: "10s" },
   ],
-  "seedance": [
-    { maxSeconds: 4, suffix: "4s" },
-    { maxSeconds: 8, suffix: "8s" },
-    { maxSeconds: 12, suffix: "12s" },
-  ],
   "seedance-2": [
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },
@@ -3494,7 +3508,7 @@ export const OBJECT_MOTION_PROVIDERS = [
   "minimax",          // 5s, end-frame support
   "hailuo-2.3",       // 6/10s
   "wan-i2v",          // 5/10/15s
-  "seedance",         // 4/8/12s
+  "seedance-2-mini",  // 4-15s, 480p/720p
   "bytedance-lite",   // 5/10s
 ] as const
 export type ObjectMotionProvider = (typeof OBJECT_MOTION_PROVIDERS)[number]

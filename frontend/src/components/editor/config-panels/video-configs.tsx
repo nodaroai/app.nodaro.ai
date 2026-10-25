@@ -1076,57 +1076,6 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         </>
       )}
 
-      {data.provider === "seedance" && (
-        <>
-          <div>
-            <Label className="text-xs">{t("field.resolution")}</Label>
-            <Select
-              value={data.resolution || "480p"}
-              onValueChange={(v) => onUpdate({ resolution: v })}
-            >
-              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
-                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
-                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <AspectRatioSelector
-              options={[
-                { value: "16:9", label: t("vidcfg.169Landscape") },
-                { value: "9:16", label: t("vidcfg.916Portrait") },
-                { value: "1:1", label: t("vidcfg.11Square") },
-                { value: "21:9", label: t("vidcfg.219UltraWide") },
-              ]}
-              value={data.aspectRatio || "16:9"}
-              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
-            />
-          </MappableField>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="seedanceFixedLens"
-              checked={data.cameraFixed || false}
-              onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="seedanceFixedLens" className="text-xs">{t("vidcfg.fixedLens")}</label>
-          </div>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="seedanceAudio"
-              checked={data.generateAudio || false}
-              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="seedanceAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
-          </div>
-        </>
-      )}
-
       {isSeedance2Provider(data.provider) && (
         <>
           <SeedanceDraftToggle provider={currentI2VProvider} draft={data.draft} resolutionField="resolution" onUpdate={onUpdate} />
@@ -3696,57 +3645,6 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 <SelectItem value="spicy">{t("vidcfg.spicy")}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </>
-      )}
-
-      {currentProvider === "seedance" && (
-        <>
-          <div>
-            <Label className="text-xs">{t("field.resolution")}</Label>
-            <Select
-              value={data.resolution || "480p"}
-              onValueChange={(v) => onUpdate({ resolution: v })}
-            >
-              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
-                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
-                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <AspectRatioSelector
-              options={[
-                { value: "16:9", label: t("vidcfg.169Landscape") },
-                { value: "9:16", label: t("vidcfg.916Portrait") },
-                { value: "1:1", label: t("vidcfg.11Square") },
-                { value: "21:9", label: t("vidcfg.219UltraWide") },
-              ]}
-              value={data.aspectRatio || "16:9"}
-              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
-            />
-          </MappableField>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="gv-seedanceFixedLens"
-              checked={data.cameraFixed || false}
-              onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="gv-seedanceFixedLens" className="text-xs">{t("vidcfg.fixedLens")}</label>
-          </div>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="gv-seedanceAudio"
-              checked={data.generateAudio || false}
-              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="gv-seedanceAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
           </div>
         </>
       )}

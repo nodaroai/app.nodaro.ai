@@ -16,7 +16,7 @@
     "loop"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 163,
+  "estimatedCredits": 503,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -31,7 +31,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/90c84971-c648-4fe1-aa6d-eb5c65538ae7.png",
   "previewMediaType": "image",
@@ -152,7 +152,7 @@
       },
       "data": {
         "bold": false,
-        "text": "Entrance: Seedance, 8 seconds, 1080p, no audio, pinned to the two frames — it starts on the clean background and ends on your ad, so the ad in it is your ad, not a redraw. Exit: the entrance played backwards, frame for frame, so every element leaves exactly the way it arrived and nothing can smear or linger. Loop: Entrance and Exit cut together — the ad builds, comes apart, and the last frame meets the first. One 16-second clip that loops without a seam. Change the Entrance and rerun it; Exit and Loop follow.",
+        "text": "Entrance: Seedance 2 Mini, 8 seconds, 720p, no audio, pinned to the two frames — it starts on the clean background and ends on your ad, so the ad in it is your ad, not a redraw. Exit: the entrance played backwards, frame for frame, so every element leaves exactly the way it arrived and nothing can smear or linger. Loop: Entrance and Exit cut together — the ad builds, comes apart, and the last frame meets the first. One 16-second clip that loops without a seam. Change the Entrance and rerun it; Exit and Loop follow.",
         "color": "#26221a",
         "label": "Step 5",
         "title": "6 · Entrance, Exit, Loop",
@@ -275,8 +275,8 @@
       "data": {
         "label": "Entrance",
         "prompt": "{Entrance director || The elements of the advertisement arrive one by one on the empty background — the product first, then the graphics, the headline, the smaller text and the button — each easing into its final place while the camera stays almost still, ending exactly on the finished advertisement.} Crisp, stable motion-graphics animation; text, logo and product stay exactly as designed; no morphing, no flicker, no extra objects, no camera shake, no scene change.",
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "9:16",
         "fieldMappings": {},
         "generateAudio": false,

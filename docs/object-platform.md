@@ -97,7 +97,7 @@ nodes or as B-roll loops in product cuts.
   the object's approved main image URL.
 - **Providers** — eight image-to-video providers tuned for object motion
   and product-showcase camera moves: `kling-turbo`, `kling`, `kling-3.0`,
-  `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Source
+  `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance-2-mini`, `bytedance-lite`. Source
   of truth: `OBJECT_MOTION_PROVIDERS` in
   `@nodaro/shared/model-constants.ts`. Default provider is `kling-turbo`
   (the fastest variant; objects favour shorter turnarounds than location

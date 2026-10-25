@@ -132,6 +132,7 @@ import {
 } from "../../lib/reconcile/provider-kind.js"
 import type { ProviderKind } from "../../lib/reconcile/types.js"
 import { applyFrameFitAndDelivery } from "../../lib/video-frame-dispatch.js"
+import { withRunningVideoProvider } from "../../services/workflow-engine/normalize-node-types.js"
 
 /**
  * Lightricks LTX 2.3 dispatch.
@@ -286,7 +287,9 @@ async function chainVeoBaseTo4k(
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft } = job.data as {
+  // A retired model in a queued job (any producer: a pipeline shot, an older
+  // job) runs as the model it became — the one its credit id was priced on.
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
     /** Seedance Draft: render a 480p draft the 1080p finalize can re-render. */
     draft?: boolean
@@ -593,7 +596,8 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat } = job.data as {
+  // A retired model in a queued job runs as the model it became.
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */

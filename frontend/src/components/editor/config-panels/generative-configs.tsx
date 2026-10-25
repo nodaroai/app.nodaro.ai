@@ -88,7 +88,6 @@ function VIDEO_MODEL_LABELS(): Record<string, string> {
     "kling-turbo": tx("cfgext.genVidKlingTurbo"),
     kling: "Kling",
     "kling-3.0": "Kling 3.0",
-    seedance: "Seedance",
     "seedance-2": "Seedance 2",
     "seedance-2-fast": "Seedance 2 Fast",
     "seedance-2-mini": "Seedance 2 Mini",

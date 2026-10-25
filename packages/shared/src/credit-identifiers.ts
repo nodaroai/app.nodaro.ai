@@ -32,6 +32,7 @@ import {
   normalizeWan3Resolution,
   normalizeViduQ4Resolution,
   getVideoAudioCapability,
+  canonicalVideoProvider,
 } from "./model-constants.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
@@ -354,7 +355,7 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
 }
 
 export function buildVideoCreditModelIdentifier(
-  provider: string,
+  rawProvider: string,
   duration?: number | string,
   sound?: boolean,
   nodeType?: "image-to-video" | "text-to-video",
@@ -362,6 +363,8 @@ export function buildVideoCreditModelIdentifier(
   resolution?: string,
   hasVideoRef?: boolean,
 ): string {
+  // A retired model (RETIRED_VIDEO_PROVIDERS) is priced as the model it runs as.
+  const provider = canonicalVideoProvider(rawProvider) as string
   // T2V overrides: some providers have different base costs for text-to-video
   let effectiveProvider = provider
   if (nodeType === "text-to-video") {

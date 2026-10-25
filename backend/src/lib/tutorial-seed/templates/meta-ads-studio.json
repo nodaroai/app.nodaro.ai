@@ -18,7 +18,7 @@
     "video-ads"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 202,
+  "estimatedCredits": 372,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -31,7 +31,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/12c067f3-19e2-46b9-be0a-f1810153a15d.png",
   "previewMediaType": "image",
@@ -569,8 +569,8 @@
       "data": {
         "label": "Claim · Text pop",
         "prompt": "{Motion director || The elements of the advertisement pop into place on the empty background — the product first, then the headline line by line, then the smaller text and the button — each snapping into its final place while the camera stays still, ending exactly on the finished advertisement.} Crisp, stable motion-graphics animation; every element appears once, in its final place, and nothing enters from beyond the edges of the frame; text, logo and product stay exactly as designed; no duplicates, no morphing, no flicker, no extra objects, no camera shake, no scene change.",
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "1:1",
         "fieldMappings": {},
         "generateAudio": false,

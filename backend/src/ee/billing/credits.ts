@@ -151,6 +151,7 @@ import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pric
 // CREDIT_COSTS are the legacy tables below ∪ every unit's rows and credit id.
 import { UNIT_PRICES } from "../nodes/_generated/prices.js"
 import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
+import { withRunningVideoProvider } from "../../services/workflow-engine/normalize-node-types.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -811,11 +812,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "grok-imagine-video-1.5:13s:720p": 820,
   "grok-imagine-video-1.5:14s:720p": 880,
   "grok-imagine-video-1.5:15s:720p": 950,
-  "seedance": 250,                 // (8s default; actual 3.5 KIE/sec)
-  // Seedance duration-tiered pricing (/sec)
-  "seedance:4s": 40,
-  "seedance:8s": 70,
-  "seedance:12s": 150,            // (actual from audit)
   // ── Seedance 2.0 — per-second billing, resolution × video-ref dimensions ──
   // Base fallback (8s/480p/no-ref)
   "seedance-2": 380,
@@ -6324,7 +6320,7 @@ function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>):
 }
 
 export function getNodeModelIdentifier(
-  node: EstimateNode,
+  rawNode: EstimateNode,
   graph: {
     timedCaptionSourceWired?: boolean
     audioSyncSourceCount?: number
@@ -6345,6 +6341,8 @@ export function getNodeModelIdentifier(
     videoRefWired?: boolean
   } = {},
 ): string {
+  // A retired video model is quoted as the model it runs as — what the run reserves.
+  const node = withRunningVideoProvider(rawNode)
   const nodeType = node.type
   const data = node.data ?? {}
 

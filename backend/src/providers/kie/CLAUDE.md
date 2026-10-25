@@ -83,7 +83,6 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-3.0` | `kling-3.0/video` | [kling 3.0](https://docs.kie.ai/market/kling/kling-3.0.md) |
 | `grok-i2v` | `grok-imagine/image-to-video` | [grok i2v](https://docs.kie.ai/market/grok-imagine/image-to-video.md) |
 | `sora2-pro` | `sora-2-pro-image-to-video` | [sora2 pro i2v](https://docs.kie.ai/market/sora2/sora-2-pro-image-to-video.md) |
-| `seedance` | `bytedance/seedance-1.5-pro` | [seedance 1.5 pro](https://docs.kie.ai/market/bytedance/seedance-1.5-pro.md) |
 | `minimax-h3` | `minimax-h3/image-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired — see `minimaxH3TaskModel`) | [minimax-h3 i2v](https://docs.kie.ai/market/minimax-h3/image-to-video.md) / [r2v](https://docs.kie.ai/market/minimax-h3/reference-to-video.md) |
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
@@ -114,7 +113,6 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `grok` | `grok-imagine/text-to-video` | [grok t2v](https://docs.kie.ai/market/grok-imagine/text-to-video.md) |
 | `sora2-pro` | `sora-2-pro-text-to-video` | [sora2 pro t2v](https://docs.kie.ai/market/sora2/sora-2-pro-text-to-video.md) |
 | `kling-3.0` | `kling-3.0/video` | [kling 3.0](https://docs.kie.ai/market/kling/kling-3.0.md) |
-| `seedance` | `bytedance/seedance-1.5-pro` | [seedance t2v](https://docs.kie.ai/market/bytedance/seedance-1.5-pro.md) |
 | `minimax-h3` | `minimax-h3/text-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired) | [minimax-h3 t2v](https://docs.kie.ai/market/minimax-h3/text-to-video.md) |
 | `wan-3` | `wan/3-0-video` (ONE KIE id serves both modes) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |

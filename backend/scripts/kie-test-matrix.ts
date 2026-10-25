@@ -931,38 +931,6 @@ export const VIDEO_TEST_CONFIGS: TestConfig[] = [
     skipByDefault: true,
   },
 
-  // --- Seedance ---
-  {
-    modelKey: "seedance",
-    category: "video",
-    kieModel: "bytedance/seedance-1.5-pro",
-    expectedKieCredits: 100,
-    expectedCostUsd: 0.50,
-    configDesc: "Seedance 1.5 Pro I2V (4s)",
-    apiType: "standard",
-    input: { prompt: "a gentle motion", input_urls: ["{{IMAGE}}"], resolution: "720p", fixed_lens: false, generate_audio: false, duration: 4 },
-    requiresImage: true,
-    requiresAudio: false,
-    requiresVideo: false,
-    estimatedTimeSec: 120,
-    skipByDefault: false,
-  },
-  {
-    modelKey: "seedance:12s",
-    category: "video",
-    kieModel: "bytedance/seedance-1.5-pro",
-    expectedKieCredits: 100,
-    expectedCostUsd: 0.50,
-    configDesc: "Seedance 1.5 Pro I2V (12s, check cost diff)",
-    apiType: "standard",
-    input: { prompt: "a gentle motion", input_urls: ["{{IMAGE}}"], resolution: "720p", fixed_lens: false, generate_audio: false, duration: 12 },
-    requiresImage: true,
-    requiresAudio: false,
-    requiresVideo: false,
-    estimatedTimeSec: 200,
-    skipByDefault: true,
-  },
-
   // --- Wan family (I2V) ---
   {
     modelKey: "wan-i2v",
@@ -1250,23 +1218,6 @@ export const VIDEO_TEST_CONFIGS: TestConfig[] = [
     configDesc: "Kling 3.0 T2V (5s, pro, sound)",
     apiType: "kling3",
     input: { prompt: "a red ball bouncing", sound: true, duration: "5", mode: "pro", multi_shots: false },
-    requiresImage: false,
-    requiresAudio: false,
-    requiresVideo: false,
-    estimatedTimeSec: 120,
-    skipByDefault: false,
-  },
-
-  // --- Seedance T2V ---
-  {
-    modelKey: "seedance-t2v",
-    category: "text-to-video",
-    kieModel: "bytedance/seedance-1.5-pro",
-    expectedKieCredits: 100,
-    expectedCostUsd: 0.50,
-    configDesc: "Seedance 1.5 Pro T2V (4s)",
-    apiType: "standard",
-    input: { prompt: "a red ball bouncing", resolution: "720p", fixed_lens: false, generate_audio: false, duration: 4 },
     requiresImage: false,
     requiresAudio: false,
     requiresVideo: false,

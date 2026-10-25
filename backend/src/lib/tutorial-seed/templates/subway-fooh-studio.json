@@ -17,7 +17,7 @@
     "video-ads"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 109,
+  "estimatedCredits": 279,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -30,7 +30,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/7b0d71b9-a268-4bf5-8ada-e73a75a0930e.png",
   "previewMediaType": "image",
@@ -334,8 +334,8 @@
       "data": {
         "label": "FOOH clip",
         "prompt": "Of the two reference images, the one with a flat poster in the lightbox is the first frame and the one with the giant product bursting out of the lightbox is the last frame. Handheld phone footage on the platform, the camera almost still: the poster ripples, then the product pushes out of the lightbox and swells into a giant three-dimensional object leaning over the tracks, the frame cracking around it, its shadow and reflection growing with it, until it settles exactly as in the last frame; a commuter turns to look. Photoreal; the product keeps its exact shape, materials and colours; the words on the poster stay unchanged; no added objects, no scene change, no text, no flicker.",
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "16:9",
         "fieldMappings": {},
         "generateAudio": false,

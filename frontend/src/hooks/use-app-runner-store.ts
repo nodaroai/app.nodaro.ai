@@ -25,6 +25,7 @@ import {
 import { buildProgressSegments, calculateCombinedProgress, executionOutcome, type ExecutionOutcome, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared/workflow"
 import { getOutputNodes } from "@nodaro/shared/apps"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
 import { resolveInputItems } from "@/components/presentation/helpers"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
@@ -575,7 +576,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
 function migrateAppSnapshot(app: PublishedApp): PublishedApp {
   if (!Array.isArray(app.snapshotNodes)) return app
   const { nodes, edges } = migrateListLoopNodes(
-    app.snapshotNodes as WorkflowNode[],
+    migrateRetiredVideoProviders(app.snapshotNodes as WorkflowNode[]),
     (Array.isArray(app.snapshotEdges) ? app.snapshotEdges : []) as WorkflowEdge[],
   )
   return { ...app, snapshotNodes: nodes, snapshotEdges: edges }

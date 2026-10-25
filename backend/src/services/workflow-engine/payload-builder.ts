@@ -200,6 +200,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
+import { withRunningVideoProvider } from "./normalize-node-types.js"
 import {
   collectAncestorRefs as sharedCollectAncestorRefs,
   LOCATION_REFERENCE_PHOTO_KINDS,
@@ -2726,7 +2727,9 @@ export function buildPayload(
   // Per-wire settings saved for a Teleport Receive (track settings, reference
   // and clip order, …) in the run's terms: the graph is read with the pair
   // bypassed (@nodaro/render-rules teleport-bypass.ts).
-  const node = carriedNodeSettings(rawNode, buildCtx?.edges ?? [])
+  // A retired video model (stored, mapped or sent by an app input) is built,
+  // priced and run as the model it became.
+  const node = withRunningVideoProvider(carriedNodeSettings(rawNode, buildCtx?.edges ?? []))
   const data = node.data
   const type = node.type
 

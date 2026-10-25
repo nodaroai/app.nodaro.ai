@@ -254,6 +254,14 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   //    on the platform (create routes answer 410). Migration 425 deletes the
   //    row; 059's and 288's INSERTs stay on disk, hence documented here. ──
   "voice-clone",
+  // ── seedance (Seedance 1.5 Pro) — retired 2026-10-25: KIE answers 410 for
+  //    `bytedance/seedance-1.5-pro`; a stored "seedance" runs as
+  //    seedance-2-mini. Migration 560 deletes the rows; the older INSERTs and
+  //    UPDATEs (059, 070, 073, 288) stay on disk, hence documented here. ──
+  "seedance",
+  "seedance:4s",
+  "seedance:8s",
+  "seedance:12s",
   // ── Disabled / experimental providers ──
   "tangoflux",
   "musicgen",

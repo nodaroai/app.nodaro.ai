@@ -38,7 +38,7 @@ async function loopback(
 afterEach(() => vi.resetModules())
 
 describe("video create sites — full egress dimensions from the wire body (G9)", () => {
-  it("a generic seedance t2v create call surfaces resolution + audio + duration in dimensions", async () => {
+  it("a seedance-2-mini t2v create call surfaces resolution + audio + duration in dimensions", async () => {
     const srv = await loopback((req, _body, res) => {
       res.writeHead(200, { "content-type": "application/json" })
       res.end(
@@ -54,11 +54,11 @@ describe("video create sites — full egress dimensions from the wire body (G9)"
     const seen: EgressCall[] = []
     setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
     try {
-      await new KieVideoProvider().textToVideo("a dog", "seedance", 8, "16:9", { resolution: "1080p" }, { modelKey: "seedance" })
+      await new KieVideoProvider().textToVideo("a dog", "seedance-2-mini", 8, "16:9", { resolution: "720p" }, { modelKey: "seedance-2-mini" })
       const call = seen.find((c) => c.operation === "jobs.createTask")
       expect(call).toBeDefined()
-      expect(call!.dimensions.resolution).toBe("1080p")
-      expect(call!.dimensions.audio).toBe(false) // seedance extraParams generate_audio:false
+      expect(call!.dimensions.resolution).toBe("720p")
+      expect(call!.dimensions.audio).toBe(true) // seedance-2-mini extraParams generate_audio:true
       expect(call!.dimensions.duration).toBe(8)
       expect(call!.dimensions.durationLabel).toBe("8s")
     } finally {

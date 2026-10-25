@@ -2176,9 +2176,7 @@ export class KieVideoProvider
     }
 
     if (effectiveEndFrameUrl) {
-      if (provider === "seedance") {
-        input.input_urls = [effectiveImageUrl, effectiveEndFrameUrl]
-      } else if (isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || provider === "wan-2.7-i2v") {
+      if (isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || provider === "wan-2.7-i2v") {
         input.last_frame_url = effectiveEndFrameUrl
       } else if (provider === "kling-turbo") {
         input.tail_image_url = effectiveEndFrameUrl
@@ -2236,16 +2234,9 @@ export class KieVideoProvider
 
     // Camera fixed / fixed lens
     if (options?.cameraFixed !== undefined) {
-      if (provider === "seedance") {
-        input.fixed_lens = options.cameraFixed
-      } else if (provider === "bytedance-lite" || provider === "bytedance-pro") {
+      if (provider === "bytedance-lite" || provider === "bytedance-pro") {
         input.camera_fixed = options.cameraFixed
       }
-    }
-
-    if (provider === "seedance") {
-      // generate_audio is handled by applyVideoAudioToggle above (capability field).
-      if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
     }
 
     // Grok Imagine Video 1.5 — forward aspect_ratio when KIE accepts the value

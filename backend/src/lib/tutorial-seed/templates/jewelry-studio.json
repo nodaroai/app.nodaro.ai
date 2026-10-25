@@ -16,7 +16,7 @@
     "catalogue"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 209,
+  "estimatedCredits": 889,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -31,7 +31,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/ce996136-ca28-49e0-966d-dfd8fc1a4c72.png",
   "previewMediaType": "image",
@@ -377,8 +377,8 @@
           "quality": "precise",
           "framesToTest": 48
         },
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "1:1",
         "fieldMappings": {},
         "generateAudio": false,
@@ -423,8 +423,8 @@
         "label": "Bride film",
         "prompt": "Slow-motion bridal film, 8 seconds, vertical, the camera fixed on the hand: the bride's hand from the opening frame stays exactly where it is on the bouquet and turns only a few degrees in the soft window light, so the stone catches a sparkle; the fingers relax slightly, a petal stirs. The ring stays in frame, in focus and the hero of every frame for all 8 seconds, exactly as in the opening frame: {Ring notes || the ring in the opening frame.} No text.",
         "duration": 8,
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "9:16",
         "fieldMappings": {},
         "generateAudio": false,

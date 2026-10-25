@@ -17,6 +17,7 @@ import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { Button } from "@/components/ui/button"
@@ -126,7 +127,7 @@ export function TemplatePreviewModal({
   const { snapshotNodes, snapshotEdges } = useMemo(() => {
     const rawNodes = (fullTemplate?.snapshotNodes as WorkflowNode[] | undefined) ?? []
     const rawEdges = (fullTemplate?.snapshotEdges as WorkflowEdge[] | undefined) ?? []
-    const migrated = migrateListLoopNodes(rawNodes, rawEdges)
+    const migrated = migrateListLoopNodes(migrateRetiredVideoProviders(rawNodes), rawEdges)
     return {
       snapshotNodes: orderNodesParentFirst(migrated.nodes as unknown as Node[]),
       snapshotEdges: migrated.edges as unknown as Edge[],

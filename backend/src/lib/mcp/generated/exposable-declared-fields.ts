@@ -38,7 +38,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "instrumental": { kind: "toggle", values: [true,false] },
   },
   "generate-video": {
-    "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","bytedance-pro-fast","grok-i2v","hailuo-2.3","hailuo-2.3-pro","hailuo-standard","kling","kling-3.0","kling-master","kling-turbo","minimax","runway-kie","minimax-h3","seedance","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan-i2v","wan-turbo","wan-2.7-i2v","happyhorse-i2v","happyhorse-ref2v","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","gemini-omni-flash"] },
+    "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","bytedance-pro-fast","grok-i2v","hailuo-2.3","hailuo-2.3-pro","hailuo-standard","kling","kling-3.0","kling-master","kling-turbo","minimax","runway-kie","minimax-h3","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan-i2v","wan-turbo","wan-2.7-i2v","happyhorse-i2v","happyhorse-ref2v","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","gemini-omni-flash"] },
   },
   "generate-video-pro": {
     "aspectRatio": { kind: "select", values: ["16:9","9:16","1:1","4:3","3:4","21:9","adaptive"] },
@@ -48,7 +48,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "resolution": { kind: "select", values: ["480p","720p","1080p","4k"] },
   },
   "image-to-video": {
-    "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","bytedance-pro-fast","grok-i2v","hailuo-2.3","hailuo-2.3-pro","hailuo-standard","kling","kling-3.0","kling-master","kling-turbo","minimax","runway-kie","minimax-h3","seedance","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan-i2v","wan-turbo","wan-2.7-i2v","happyhorse-i2v","happyhorse-ref2v","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","gemini-omni-flash"] },
+    "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","bytedance-pro-fast","grok-i2v","hailuo-2.3","hailuo-2.3-pro","hailuo-standard","kling","kling-3.0","kling-master","kling-turbo","minimax","runway-kie","minimax-h3","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan-i2v","wan-turbo","wan-2.7-i2v","happyhorse-i2v","happyhorse-ref2v","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","gemini-omni-flash"] },
   },
   "lip-sync": {
     "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","kling-avatar","kling-avatar-pro","infinitalk","omnihuman-1-5","latentsync","wav2lip","video-retalking","sadtalker","heygen-lipsync-precision","lipsync-2-pro","sync-lipsync-v3","volcengine-lipsync"] },
@@ -70,7 +70,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
   "text-to-video": {
     "aspectRatio": { kind: "select", values: ["16:9","9:16","1:1"] },
     "generateAudio": { kind: "toggle", values: [true,false] },
-    "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","grok","kling","kling-3.0","kling-turbo","minimax","hailuo-standard","runway-kie","minimax-h3","seedance","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan","wan-turbo","wan-2.7-t2v","happyhorse","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","gemini-omni-flash"] },
+    "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","grok","kling","kling-3.0","kling-turbo","minimax","hailuo-standard","runway-kie","minimax-h3","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan","wan-turbo","wan-2.7-t2v","happyhorse","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","gemini-omni-flash"] },
   },
   "ugc-script": {
     "language": { kind: "select", values: ["en","he"] },

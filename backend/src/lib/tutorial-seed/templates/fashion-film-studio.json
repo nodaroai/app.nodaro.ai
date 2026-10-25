@@ -16,7 +16,7 @@
     "campaign"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 179,
+  "estimatedCredits": 859,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -29,7 +29,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/4595c2ce-a6f2-4b3b-90aa-ed9f21b4acbc.png",
   "previewMediaType": "image",
@@ -267,8 +267,8 @@
         "label": "Fashion film 1",
         "prompt": "High-end fashion film, 8 seconds, slow motion, no dialogue. {Scene 1 brief || A fashion film scene.} The woman and the gown are exactly as in the opening frame — the same face, the same hair, the same gown, its cut and colour never changing: {Garment notes || the gown in the opening frame.} Cinematic, photorealistic, no text.",
         "duration": 8,
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "16:9",
         "fieldMappings": {},
         "generateAudio": false,
@@ -329,8 +329,8 @@
         "label": "Fashion film 2",
         "prompt": "High-end fashion film, 8 seconds, slow motion, no dialogue. {Scene 2 brief || A fashion film scene.} The woman and the gown are exactly as in the opening frame — the same face, the same hair, the same gown, its cut and colour never changing: {Garment notes || the gown in the opening frame.} Cinematic, photorealistic, no text.",
         "duration": 8,
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "16:9",
         "fieldMappings": {},
         "generateAudio": false,

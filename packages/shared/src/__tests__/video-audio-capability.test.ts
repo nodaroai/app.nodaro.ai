@@ -57,12 +57,6 @@ describe("getVideoAudioCapability", () => {
     }
   })
 
-  it("returns ambient (audio but not dialogue) for Seedance 1.x", () => {
-    const cap = getVideoAudioCapability("seedance")
-    expect(cap.mode).toBe("ambient")
-    expect(cap.field).toBe("generateAudio")
-  })
-
   it("returns ambient with the `audio` field for the Wan 3.0 family", () => {
     // Wan 3.0's lever is literally `input.audio` — neither `sound` nor
     // `generate_audio`. Classified "ambient", NOT audio_driven: the KIE schema
@@ -125,7 +119,6 @@ describe("videoModelSupportsAudio", () => {
     expect(videoModelSupportsAudio("kling-3.0")).toBe(true)
     expect(videoModelSupportsAudio("kling-3-omni")).toBe(true)
     expect(videoModelSupportsAudio("seedance-2")).toBe(true)
-    expect(videoModelSupportsAudio("seedance")).toBe(true)
     expect(videoModelSupportsAudio("gemini-omni-video")).toBe(true)
     expect(videoModelSupportsAudio("gemini-omni-flash")).toBe(true)
     expect(videoModelSupportsAudio("minimax")).toBe(false)
@@ -145,8 +138,6 @@ describe("videoModelCanSpeakDialogue", () => {
     expect(videoModelCanSpeakDialogue("kling")).toBe(true)
     expect(videoModelCanSpeakDialogue("kling-3.0")).toBe(true)
     expect(videoModelCanSpeakDialogue("kling-3-omni")).toBe(true)
-    // ambient-only models are NOT dialogue-capable — their audio is SFX/ambient
-    expect(videoModelCanSpeakDialogue("seedance")).toBe(false)
     // Gemini Omni generates an audio track on every render, but its documented
     // dialogue path is multi-turn extension, which our transport cannot reach.
     expect(videoModelCanSpeakDialogue("gemini-omni-video")).toBe(false)
@@ -232,9 +223,9 @@ describe("applyVideoAudioToggle — neutral audio intent → per-model KIE field
     applyVideoAudioToggle(off, "seedance-2", { sound: false })
     expect(off.generate_audio).toBe(false)
 
-    const v1: Record<string, unknown> = {}
-    applyVideoAudioToggle(v1, "seedance", { sound: true })
-    expect(v1.generate_audio).toBe(true)
+    const mini: Record<string, unknown> = {}
+    applyVideoAudioToggle(mini, "seedance-2-mini", { sound: true })
+    expect(mini.generate_audio).toBe(true)
   })
 
   it("maps the neutral toggle onto Wan 3.0's `audio` field", () => {
@@ -264,7 +255,7 @@ describe("applyVideoAudioToggle — neutral audio intent → per-model KIE field
 
   it("accepts `generateAudio` as a legacy alias on FREE models (Seedance)", () => {
     const input: Record<string, unknown> = {}
-    applyVideoAudioToggle(input, "seedance", { generateAudio: true })
+    applyVideoAudioToggle(input, "seedance-2-mini", { generateAudio: true })
     expect(input.generate_audio).toBe(true)
   })
 
