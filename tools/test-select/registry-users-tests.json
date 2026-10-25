@@ -155,7 +155,6 @@
  "frontend/src/__tests__/units-vocabulary.test.ts",
  "frontend/src/components/editor/__tests__/add-node-popup-connect.test.tsx",
  "frontend/src/components/editor/__tests__/add-node-popup.test.tsx",
- "frontend/src/components/editor/__tests__/canvas-context-menu-quick-add.test.tsx",
  "frontend/src/components/editor/__tests__/config-panel-dialogue-model-switch.test.tsx",
  "frontend/src/components/editor/__tests__/config-panel-label-i18n.test.ts",
  "frontend/src/components/editor/__tests__/config-panel-tts-model-switch.test.tsx",

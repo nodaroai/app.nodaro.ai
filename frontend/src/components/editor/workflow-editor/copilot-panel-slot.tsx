@@ -60,7 +60,7 @@ export interface CopilotCenterProps {
   readonly leaving: boolean
   /** Adds a node at the middle of the canvas (the "Or start manually" buttons). */
   readonly onCreate: (type: SceneNodeType) => void
-  /** The canvas's own right-click menu: a right-click on the box opens it too. */
+  /** The canvas's right-click (the Add Node popup): a right-click on the box opens it too. */
   readonly onContextMenu: (event: ReactMouseEvent) => void
 }
 
