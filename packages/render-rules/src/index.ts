@@ -764,3 +764,21 @@ export {
 export { TIER_BILLED_LLM_FEATURES, isTierBilledLlmFeature, type TierBilledLlmFeature } from "./llm-tier-billed"
 // What a Kling 4 trend run sends Cast Swap (its engine text and pictures), for the trend checks and the trend builder.
 export { KLING_ENGINE_TEXT, klingEngineText, castSwapImagesSent } from "./cast-swap-kling-trend"
+// Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
+export {
+  TOPAZ_VIDEO_UNIT_CREDIT_ID,
+  TOPAZ_VIDEO_HOLD_UNITS_PER_GIGAPIXEL,
+  TOPAZ_VIDEO_MIN_HOLD_UNITS,
+  TOPAZ_VIDEO_ESTIMATE_FALLBACK_SEC,
+  TOPAZ_VIDEO_MAX_OUTPUT_GIGAPIXELS,
+  topazVideoMaxSourceSec,
+  topazVideoOutputGigapixels,
+  topazVideoHoldUnits,
+  topazVideoEstimateUnits,
+  TOPAZ_IMAGE_UNIT_CREDIT_ID,
+  TOPAZ_IMAGE_UNIT_STEPS,
+  TOPAZ_IMAGE_MAX_OUTPUT_MP,
+  topazImageOutputMegapixels,
+  topazImageSizeUnits,
+  type TopazVideoHoldInput,
+} from "./topaz-pricing.js"

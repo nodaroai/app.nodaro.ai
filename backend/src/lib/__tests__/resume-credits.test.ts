@@ -85,6 +85,8 @@ vi.mock("@/lib/supabase.js", () => {
     const q = {
       select: () => q,
       eq: (col: string, v: unknown) => (eqs.push([col, v]), q),
+      // `deleted_at` is null on every row here: none is in the Trash.
+      is: () => q,
       in: () => q,
       or: () => q,
       order: () => q,

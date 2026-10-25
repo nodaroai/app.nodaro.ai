@@ -26,6 +26,9 @@ on:
       - "frontend/src/lib/edition.ts"
       - "frontend/src/lib/site-locale.d.ts"
       - "frontend/src/lib/site-locale-stub.ts"
+      - "frontend/src/lib/site-a11y.d.ts"
+      - "frontend/src/lib/site-a11y-stub.ts"
+      - "frontend/src/lib/accessibility-preferences.ts"
       - "frontend/Caddyfile"
   push:
     branches: [dev, main]
@@ -40,6 +43,9 @@ on:
       - "frontend/src/lib/edition.ts"
       - "frontend/src/lib/site-locale.d.ts"
       - "frontend/src/lib/site-locale-stub.ts"
+      - "frontend/src/lib/site-a11y.d.ts"
+      - "frontend/src/lib/site-a11y-stub.ts"
+      - "frontend/src/lib/accessibility-preferences.ts"
       - "frontend/Caddyfile"
   workflow_dispatch:
 
@@ -88,3 +94,12 @@ jobs:
         run: sh frontend/src/ee/shell/install-package.sh "$GITHUB_WORKSPACE"
       - name: The app's header props fit the package
         run: npx tsc -p frontend/src/ee/shell/contract/tsconfig.json
+      # The app writes the shared accessibility cookie with its own copy of the
+      # package's writer (the package exports none): what it writes, the
+      # pinned package must read back. Skips without the package elsewhere;
+      # here the variable makes a missing package a failure.
+      - name: The app's accessibility cookie reads back in the package
+        working-directory: frontend
+        env:
+          SHARED_HEADER_TESTS_REQUIRE_PACKAGE: "1"
+        run: npx vitest run src/ee/shell/__tests__/a11y-cookie.test.ts

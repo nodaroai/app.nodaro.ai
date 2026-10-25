@@ -8,7 +8,7 @@
  * same table (job-owner-state.ts).
  */
 import { supabase } from "./supabase.js"
-import { CHILD_JOB_COLUMN } from "./public-job-data.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 /**
  * Which jobs a person may favorite, as a PostgREST `or()` filter: their own
@@ -53,6 +53,7 @@ export async function toggleGalleryFavorite(
   let jobQuery = supabase
     .from("jobs")
     .select("id")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", jobId)
     .or(favoritableJobFilter(userId))
   if (!opts.isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
@@ -73,8 +74,10 @@ export async function toggleGalleryFavorite(
 export async function listFavoriteJobIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from("gallery_favorites")
-    .select("job_id")
+    // A favorite of a job in the Trash is left out, as the job is (`!inner`).
+    .select("job_id, job:jobs!gallery_favorites_job_id_fkey!inner(id)")
     .eq("user_id", userId)
+    .is(`job.${TRASHED_JOB_COLUMN}`, null)
     .order("created_at", { ascending: false })
   if (error) throw error
   return ((data ?? []) as Array<{ job_id: string }>).map((row) => row.job_id)

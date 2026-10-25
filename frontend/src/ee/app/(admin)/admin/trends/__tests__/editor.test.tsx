@@ -292,6 +292,45 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(body.data.faceMasking).toEqual({ mode: "always" })
   })
 
+  it("shows Head as what the masks cover when the setting leaves it out, says what it does, and saves no target", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    const covers = await screen.findByRole("combobox", { name: "Covers" })
+    expect(screen.getByText("Covers", { selector: "label" })).toHaveAttribute("for", covers.id)
+    expect(covers).toHaveTextContent("Head (default)")
+    expect(covers).toHaveAccessibleDescription(/also hides the hair and people seen from behind/)
+    await user.type(screen.getByLabelText("Pre prompt"), "x")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.faceMasking).toEqual({ mode: "always" })
+  })
+
+  it("saves Face when chosen, and says the hair stays visible", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "auto" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Covers" }))
+    await user.click(screen.getByRole("option", { name: "Face" }))
+    const covers = screen.getByRole("combobox", { name: "Covers" })
+    expect(covers).toHaveTextContent("Face")
+    expect(covers).toHaveAccessibleDescription(/the hair stays visible/)
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.faceMasking).toEqual({ mode: "auto", target: "face" })
+  })
+
+  it("hides what the masks cover while masking is off", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "off" } }) } })
+    renderEditor()
+    await screen.findByRole("combobox", { name: "Mode" })
+    expect(screen.queryByRole("combobox", { name: "Covers" })).not.toBeInTheDocument()
+  })
+
   it("shows the blur strength only for the blur fill", async () => {
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always", fill: "depth" } }) } })
     renderEditor()

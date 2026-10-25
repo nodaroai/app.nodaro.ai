@@ -4,6 +4,6 @@
     "noEmit": true,
     "incremental": false
   },
-  "include": ["./props.contract.ts", "../site-header.d.ts", "../../../lib/site-locale.d.ts"],
+  "include": ["./props.contract.ts", "../site-header.d.ts", "../../../lib/site-locale.d.ts", "../../../lib/site-a11y.d.ts"],
   "exclude": []
 }

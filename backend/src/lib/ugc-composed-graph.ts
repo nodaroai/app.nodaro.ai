@@ -51,6 +51,7 @@ import { MAX_SUB_WORKFLOW_DEPTH } from "../services/workflow-engine/types.js"
 import { storageUrlPath } from "./key-ownership.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { proveKeptChain, type KeepJobRow } from "./ugc-template-keep-ledger.js"
+import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 interface GraphNode {
   readonly id?: unknown
@@ -228,6 +229,7 @@ async function readOwnerJobs(ids: readonly string[], owner: string): Promise<rea
     // tenant-scope-ignore: owner-scoped below — the proof reads only the template author's own jobs.
     .from("jobs")
     .select("id, user_id, status, input_data, output_data")
+    .is(TRASHED_JOB_COLUMN, null)
     .in("id", [...ids])
     .eq("user_id", owner)
   if (error) throw new UgcGraphReadError()

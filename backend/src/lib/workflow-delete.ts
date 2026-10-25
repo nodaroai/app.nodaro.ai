@@ -40,7 +40,8 @@ async function deleteWithPrivateMedia(args: {
     | "delete_workflow_with_recast_cleanup"
     | "delete_project_with_recast_cleanup"
     | "delete_job_with_recast_cleanup"
-  rpcArgs: Record<string, string | boolean>
+    | "delete_trashed_job_with_recast_cleanup"
+  rpcArgs: Record<string, string | boolean | null>
   scope: DeleteScope
   resourceLabel: "workflow" | "project" | "job"
   logger?: WorkflowDeleteLogger
@@ -178,19 +179,33 @@ export function deleteProjectWithPrivateMedia(args: {
   })
 }
 
+/**
+ * Delete a job for good, with its child jobs and private media. With
+ * `onlyTrashedBefore` (an ISO time, or "infinity") it deletes only a job that
+ * has been in the Trash since before then — re-checked under the row lock
+ * (migration 561), so a job restored meanwhile is kept: the Trash's "delete
+ * forever" and its 30-day purge (lib/job-trash.ts). `actorUserId` null with
+ * `isAdmin` is the purge itself.
+ */
 export function deleteJobWithPrivateMedia(args: {
   jobId: string
-  actorUserId: string
+  actorUserId: string | null
   isAdmin: boolean
+  onlyTrashedBefore?: string
   logger?: WorkflowDeleteLogger
 }): Promise<boolean> {
+  const rpcArgs = {
+    p_job_id: args.jobId,
+    p_actor_user_id: args.actorUserId,
+    p_is_admin: args.isAdmin,
+  }
   return deleteWithPrivateMedia({
-    rpcName: "delete_job_with_recast_cleanup",
-    rpcArgs: {
-      p_job_id: args.jobId,
-      p_actor_user_id: args.actorUserId,
-      p_is_admin: args.isAdmin,
-    },
+    ...(args.onlyTrashedBefore === undefined
+      ? { rpcName: "delete_job_with_recast_cleanup" as const, rpcArgs }
+      : {
+          rpcName: "delete_trashed_job_with_recast_cleanup" as const,
+          rpcArgs: { ...rpcArgs, p_trashed_before: args.onlyTrashedBefore },
+        }),
     scope: { jobId: args.jobId },
     resourceLabel: "job",
     logger: args.logger,

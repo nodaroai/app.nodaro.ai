@@ -77,7 +77,9 @@ describe("toggleGalleryFavorite", () => {
       jobs: [{ data: { id: JOB }, error: null }],
     })
     expect(await toggleGalleryFavorite(USER, JOB, { isAdmin: true })).toEqual({ kind: "toggled", favorited: true })
-    expect(ops[1]!.calls.some((c) => c[0] === "is")).toBe(false)
+    // A child job is the admin's to favorite; a job in the Trash is still nobody's.
+    expect(ops[1]!.calls.some((c) => c[0] === "is" && c[1] === "parent_job_id")).toBe(false)
+    expect(ops[1]!.calls).toContainEqual(["is", "deleted_at", null])
   })
 
   it("removes an existing favorite without checking the job — you can always take back your own favorite", async () => {
@@ -125,8 +127,10 @@ describe("listFavoriteJobIds", () => {
 
     expect(await listFavoriteJobIds(USER)).toEqual(["j2", "j1"])
     expect(ops[0]!.calls).toEqual([
-      ["select", "job_id"],
+      // A favorite of a job in the Trash is left out, as the job is.
+      ["select", "job_id, job:jobs!gallery_favorites_job_id_fkey!inner(id)"],
       ["eq", "user_id", USER],
+      ["is", "job.deleted_at", null],
       ["order", "created_at", { ascending: false }],
     ])
   })

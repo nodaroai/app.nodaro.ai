@@ -72,3 +72,42 @@ export function useSharedHeaderActive(): boolean {
   useSyncExternalStore(subscribe, readFailed, readFailed)
   return sharedHeaderActive()
 }
+
+/*
+ * Whether the header is MOUNTED on this page right now — narrower than the
+ * gate: only `DashboardLayout` mounts it, so sign-in, shares, published apps
+ * and admin have no header even where the gate is open. The header carries the
+ * accessibility menu every product shares; where it is mounted, the app's own
+ * menu steps aside (`AccessibilityMenuRoot`), and everywhere else it stays.
+ * Set by the header's mount itself, once it rendered (a failed or still-loading
+ * header never hides the app's menu).
+ */
+let headerMounts = 0
+const mountListeners = new Set<() => void>()
+
+function subscribeMounts(listener: () => void): () => void {
+  mountListeners.add(listener)
+  return () => {
+    mountListeners.delete(listener)
+  }
+}
+
+const readMounted = () => headerMounts > 0
+
+/** Called by the header's mount when it renders; returns the unmount. */
+export function markSharedHeaderMounted(): () => void {
+  headerMounts += 1
+  for (const listener of mountListeners) listener()
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    headerMounts -= 1
+    for (const listener of mountListeners) listener()
+  }
+}
+
+/** Whether the shared header (and so its accessibility menu) is on this page. */
+export function useSharedHeaderMounted(): boolean {
+  return useSyncExternalStore(subscribeMounts, readMounted, readMounted)
+}

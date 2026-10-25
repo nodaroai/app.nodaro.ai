@@ -32,6 +32,8 @@
  * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { topazVideoHoldBaseCredits } from "@/lib/topaz-video-plan.js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -160,6 +162,9 @@ const CHARGES: Readonly<Record<string, Charge>> = {
   // padded to 50 min 2 s, is 6,004 frames — 7 started blocks of 1,000. The cloud plugin's route reserves
   // through the toolkit's unitRatePrice, the same composition.
   "speaker-frames": { units: 7, charge: async () => (await speakerFramesCreditOverride("speaker-frames", { edl: edlOf(50) }))! },
+  // routes/video-upscale.ts (computeCredits) and the workflow run's computeTopazVideoCreditOverride:
+  // a Topaz plan holding 7 units.
+  [TOPAZ_VIDEO_UNIT_CREDIT_ID]: { units: 7, charge: async () => markedUp(TOPAZ_VIDEO_UNIT_CREDIT_ID, await topazVideoHoldBaseCredits({ holdUnits: 7 })) },
 }
 
 beforeEach(() => {

@@ -1647,6 +1647,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // is one `image-to-video` job; completed jobs + the in-flight job's
       // progress give a smooth percent over the total shot count.
       const { data: videoJobs } = await supabase
+        // trash-read: pipeline orchestration internals.
         .from("jobs")
         .select("status, progress")
         .eq("pipeline_id", req.params.id)

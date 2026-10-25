@@ -1,6 +1,9 @@
-import { useCallback, useMemo, useRef } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react"
 import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
-import { useNavigate } from "react-router-dom"
+import { buttonHiddenOn } from "@/components/accessibility/accessibility-menu"
+import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
+import { markSharedHeaderMounted } from "@/lib/shared-header"
+import { useLocation, useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
 import { Menu } from "lucide-react"
@@ -32,8 +35,13 @@ import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderT
  *   - Language and theme are the app's: the header's pills read and change
  *     them, and its text comes from its own dictionaries for the app's locale.
  *     The language is also every product's (`lib/locale-store.ts`).
- *   - The app still ships its own accessibility menu, so the header's is off
- *     (`accessibilityMenu={false}`) until the app adopts it.
+ *   - Accessibility is the header's: its menu (corner button + Alt+A) renders
+ *     here, and the app's own menu steps aside while this mount is on the page
+ *     (`markSharedHeaderMounted`, read by `AccessibilityMenuRoot`). On a canvas
+ *     page the button is off (`accessibilityButton={false}`), as the app's own
+ *     menu does there (`buttonHiddenOn`); Alt+A still opens it. Its statement
+ *     link is the app's statement route, so there is one statement. Both menus
+ *     keep the same shared choices (`lib/accessibility-preferences.ts`).
  */
 
 /** The app's own phone/desktop switch (Tailwind `md`). */
@@ -62,6 +70,7 @@ export interface AppHeaderProps {
 export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppHeaderProps) {
   const t = useT()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const queryClient = useQueryClient()
   const shell = useRef<SiteHeaderHandle>(null)
   const { resolvedTheme, setTheme } = useTheme()
@@ -69,7 +78,12 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
 
   const here = window.location.origin
   const worldHrefs = useMemo(() => worldHrefsFor(here, SITE), [here])
-  const urls = useMemo(() => ({ app: here, login: "/login" }), [here])
+  const urls = useMemo(
+    () => ({ app: here, login: "/login", accessibility: `${here}${ACCESSIBILITY_STATEMENT_PATH}` }),
+    [here],
+  )
+  // Before paint: the header's menu replaces the app's in the same frame.
+  useLayoutEffect(() => markSharedHeaderMounted(), [])
   const headerT = useMemo(() => shellTranslator(locale), [locale])
 
   const language = useMemo<SiteHeaderLanguage>(
@@ -148,7 +162,7 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
           className="flex min-h-10 w-full items-center rounded-[9px] px-2.5 text-start text-[13px] font-semibold hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-[#ff0073] dark:hover:bg-white/5"
         />
       )}
-      accessibilityMenu={false}
+      accessibilityButton={!buttonHiddenOn(pathname)}
       claimSignupGrant={false}
       onSignOut={onSignOut}
       onOverlayChange={onOverlayChange}

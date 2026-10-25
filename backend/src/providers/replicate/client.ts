@@ -146,7 +146,7 @@ export async function runReplicatePrediction(opts: {
   costModelKey?: string
   /** For a lane the nodaro.ai connection cannot run: the missing-key message must not offer it. */
   keyCoverage?: ProviderKeyCoverage
-}): Promise<{ output: unknown; cost: number | null; predictionId: string }> {
+}): Promise<{ output: unknown; cost: number | null; predictionId: string; metrics?: Record<string, unknown> }> {
   // Keyless self-hosts reach this through DIRECT handlers (face-swap,
   // lip-sync, ...) that bypass the registry, so key-aware registration can't
   // protect them — without this guard the call dies as a raw Replicate 401
@@ -164,7 +164,12 @@ export async function runReplicatePrediction(opts: {
     completed.metrics as Record<string, unknown> | undefined,
     opts.costModelKey,
   )
-  return { output: completed.output, cost, predictionId: prediction.id }
+  return {
+    output: completed.output,
+    cost,
+    predictionId: prediction.id,
+    ...(completed.metrics ? { metrics: completed.metrics as Record<string, unknown> } : {}),
+  }
 }
 
 /**

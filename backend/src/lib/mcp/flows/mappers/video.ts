@@ -123,13 +123,22 @@ const extendVideo: RouteMapper = {
  */
 const videoUpscale: RouteMapper = {
   tools: ["video_upscale"],
-  fields: new Set(["provider", "upscaleFactor", "videoUrl", "taskId"]),
+  fields: new Set(["provider", "upscaleFactor", "targetResolution", "targetFps", "videoUrl", "taskId"]),
   map(body) {
     const provider = str(body.provider) ?? "topaz"
     const videoUrl = str(body.videoUrl)
     const taskId = str(body.taskId)
     if (!videoUrl && !taskId) return null
-    const data = { label: "Upscale Video", provider, upscaleFactor: str(body.upscaleFactor) ?? "2", kieTaskId: taskId }
+    const targetResolution = str(body.targetResolution)
+    const data = {
+      label: "Upscale Video",
+      provider,
+      // Topaz's target as sent; a legacy factor only without a resolution.
+      targetResolution,
+      targetFps: typeof body.targetFps === "number" ? body.targetFps : undefined,
+      upscaleFactor: targetResolution ? undefined : str(body.upscaleFactor),
+      kieTaskId: taskId,
+    }
     if (videoUrl) return videoNode("video-upscale", "video", videoUrl, data)
     return { type: "video-upscale", outputKey: "generatedVideoUrl", inputs: [], data: defined({ ...data, fieldMappings: {} }) }
   },

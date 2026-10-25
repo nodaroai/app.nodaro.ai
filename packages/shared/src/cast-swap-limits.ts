@@ -42,8 +42,21 @@ export const CAST_SWAP_FACE_MASKING_BOUNDS = {
   threshold: [0.05, 0.95],
 } as const satisfies Record<string, readonly [number, number]>
 
+/**
+ * What a Cast Swap face mask covers (`faceMasking.target`):
+ *
+ * - `"head"` (the default): the whole head, hair included, and people seen
+ *   from behind or turned away, with a bigger mask.
+ * - `"face"`: the face only; the hair, and a person turned away, stay visible.
+ */
+export const CAST_SWAP_FACE_MASK_TARGETS = ["face", "head"] as const
+
+export type CastSwapFaceMaskTarget = (typeof CAST_SWAP_FACE_MASK_TARGETS)[number]
+
 /** What Cast Swap uses for a `faceMasking` setting left out. */
 export const CAST_SWAP_FACE_MASKING_DEFAULTS = {
+  /** What a mask covers: the whole head (`CAST_SWAP_FACE_MASK_TARGETS`). */
+  target: "head",
   /** What covers a masked face: a blur (`"depth"`, a depth-color view of it, is the other fill). */
   fill: "blur",
   minFaceHeightPct: 15,

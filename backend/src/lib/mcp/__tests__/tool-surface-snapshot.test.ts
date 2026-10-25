@@ -1307,6 +1307,27 @@ const USER_REQUEST_ARG_TOTAL_BYTES = 7_755
 // does NOT move. Measured: 505_576 total − 505_352 = 224 B; the 73 B of headroom carry across.
 const TRENDS_ORIGINAL_BYTES = 224
 
+// RAISED 2026-10-25 by Cast Swap's face mask target and nothing else: `cast_swap`'s
+// `face_masking` takes `target` ("face" | "head", default "head") with a one-clause description of
+// each. No tool was added, so the fixture does NOT move. Measured by this suite: 505_985 total −
+// 505_812 = 173 B; the 64 B of headroom carry across.
+const FACE_MASK_TARGET_BYTES = 173
+
+// Topaz video upscale moved to Replicate (decided 2026-10-25), whose lever is an absolute target:
+// `video_upscale` gains `target_resolution` (720p / 1080p / 4k) and `target_fps` (15–60), and
+// says it is metered; `upscale_factor` stays as the legacy lever with a one-line pointer. No tool
+// was added, so the fixture does NOT move. Measured: 505_875 total − 505_576 = 299 B; the 73 B of
+// headroom carry across.
+const TOPAZ_VIDEO_TARGET_BYTES = 299
+
+// The Trash and Move for generation sessions and jobs: two new tools, `list_trash` (jobs:read)
+// and `restore_job` (assets:write); `read_session` takes `removed`; `update_session` takes
+// `move_job_ids` + `from_session_id` and `restore_job_ids` and says a removal goes to the
+// Trash; `list_jobs` takes `project_id`, `in_session` and `with_sessions`. Two tools added: the
+// cloud/all, cloud/jobs and community/all membership fixtures move. Measured: 509_474 total −
+// 505_812 = 3_662 B.
+const SESSIONS_TRASH_BYTES = 3_662
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1466,7 +1487,10 @@ export const TOOL_WIRE_BUDGET = {
     LIST_JOBS_SOURCES_BYTES +
     CAST_SWAP_ENGINE_BYTES +
     USER_REQUEST_ARG_TOTAL_BYTES +
-    TRENDS_ORIGINAL_BYTES,
+    TRENDS_ORIGINAL_BYTES +
+    FACE_MASK_TARGET_BYTES +
+    TOPAZ_VIDEO_TARGET_BYTES +
+    SESSIONS_TRASH_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

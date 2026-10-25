@@ -5,6 +5,12 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks -- hoisted before any route import
 // ---------------------------------------------------------------------------
 
+// Topaz measures its source before the guard; the plan is stubbed (no network probe).
+vi.mock("@/lib/topaz-video-plan.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/topaz-video-plan.js")>()),
+  planTopazVideoUpscale: vi.fn().mockResolvedValue({ resolution: "1080p", fps: 30, holdUnits: 3, sourceDurationSec: 5 }),
+  topazVideoHoldBaseCredits: vi.fn().mockResolvedValue(120),
+}))
 vi.mock("@/lib/supabase.js", () => {
   const mockFrom = vi.fn()
   return {

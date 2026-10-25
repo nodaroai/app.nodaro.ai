@@ -46,6 +46,19 @@ export function redactPrivateJobOutput<T>(output: T): T {
  */
 export const CHILD_JOB_COLUMN = "parent_job_id"
 
+/**
+ * The column that puts a job in the Trash (migration 561): `DELETE
+ * /v1/jobs/:id` stamps it, `POST /v1/jobs/:id/restore` clears it, and 30 days
+ * on the purge deletes the job for good (lib/job-trash-purge.ts). A job in the
+ * Trash reads, for EVERY caller and every user-facing read — lists, a read by
+ * id, status polls, the gallery, session feeds, MCP tools — exactly as a job
+ * that does not exist: `query.is(TRASHED_JOB_COLUMN, null)`. Only the Trash
+ * itself (`GET /v1/trash`) and its restore / delete-for-good routes read one.
+ * Totals of work done and credits spent keep counting it until the purge.
+ * `lib/__tests__/job-trash-reads.test.ts` holds every jobs read to it.
+ */
+export const TRASHED_JOB_COLUMN = "deleted_at"
+
 /** What a non-admin reads in place of a trend run's failure text. */
 export const TREND_RUN_FAILURE_MESSAGE = "This run didn't finish."
 

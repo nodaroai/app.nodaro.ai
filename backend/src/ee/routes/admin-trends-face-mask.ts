@@ -30,7 +30,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { deriveJobSource } from "../../lib/job-source.js"
-import { faceMaskingOn, withResolvedZone } from "../../lib/cast-swap-face-masking.js"
+import { faceMaskTargetOf, faceMaskingOn, loadedEngineMasksTarget, withResolvedZone } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, type EngineEnvironment } from "../lib/engine-environments.js"
@@ -141,6 +141,11 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       }
       if (getPluginSupports().castSwap?.storedFaceMask !== true) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot make a stored face mask yet.")
+      }
+      // An engine that does not declare the target strips it and masks heads: a face-only mask made
+      // there would be stored under the face-only settings key, so it is refused before anything is paid.
+      if (!loadedEngineMasksTarget(faceMaskTargetOf(draft.faceMasking))) {
+        return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot mask the face alone yet: choose Head, or wait for the engine.")
       }
       const settingsKey = faceMaskSettingsKey(draft)!
       // The job is paid for once the engine is asked: the draft that records it must save, so it is

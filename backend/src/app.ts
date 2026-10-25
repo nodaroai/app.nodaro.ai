@@ -60,6 +60,7 @@ import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { generationSessionRoutes } from "./routes/generation-sessions.js"
+import { trashRoutes } from "./routes/trash.js"
 import { workflowRoutes } from "./routes/workflows.js"
 import { jobRoutes } from "./routes/jobs.js"
 import { mcpConversationRoutes } from "./routes/mcp-conversations.js"
@@ -577,6 +578,7 @@ export async function buildApp() {
   await app.register(healthRoutes)
   await app.register(projectRoutes)
   await app.register(generationSessionRoutes)
+  await app.register(trashRoutes)
   await app.register(workflowRoutes)
   await app.register(jobRoutes)
   await app.register(mcpConversationRoutes)

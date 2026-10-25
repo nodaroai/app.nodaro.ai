@@ -124,14 +124,17 @@ describe("jobListFilterSelect", () => {
 describe("applyJobListFilters", () => {
   /** Always first: a child job is shown only through its parent. */
   const NO_CHILDREN: [string, ...unknown[]] = ["is", "parent_job_id", null]
+  // Every listing leaves the Trash out too (migration 561).
+  const NO_TRASH: [string, ...unknown[]] = ["is", "deleted_at", null]
+  const ALWAYS = [NO_CHILDREN, NO_TRASH]
   const applied = (filters: JobListFilters) => {
     const { q, calls } = recorder()
     applyJobListFilters(q, filters, OWNER)
     return calls
   }
 
-  it("with no filter, only leaves out child jobs", () => {
-    expect(applied({})).toEqual([NO_CHILDREN])
+  it("with no filter, only leaves out child jobs and the Trash", () => {
+    expect(applied({})).toEqual(ALWAYS)
   })
 
   it("leaves out child jobs under every filter", () => {
@@ -139,31 +142,31 @@ describe("applyJobListFilters", () => {
   })
 
   it("one status is an eq, several an in", () => {
-    expect(applied({ statuses: ["failed"] })).toEqual([NO_CHILDREN, ["eq", "status", "failed"]])
-    expect(applied({ statuses: ["failed", "cancelled"] })).toEqual([NO_CHILDREN, ["in", "status", ["failed", "cancelled"]]])
+    expect(applied({ statuses: ["failed"] })).toEqual([...ALWAYS, ["eq", "status", "failed"]])
+    expect(applied({ statuses: ["failed", "cancelled"] })).toEqual([...ALWAYS, ["in", "status", ["failed", "cancelled"]]])
   })
 
   it("filters type and origin on the input_data paths, never the job_type column", () => {
     expect(applied({ types: ["llm-structured"], origin: "studio" })).toEqual([
-      NO_CHILDREN,
+      ...ALWAYS,
       ["filter", "input_data->>type", "eq", "llm-structured"],
       ["filter", "input_data->>origin", "eq", "studio"],
     ])
     expect(applied({ types: ["generate-image", "generate-video"] })).toEqual([
-      NO_CHILDREN,
+      ...ALWAYS,
       ["in", "input_data->>type", ["generate-image", "generate-video"]],
     ])
   })
 
   it("filters source on the source column: one is an eq, several an in", () => {
-    expect(applied({ sources: ["mcp"] })).toEqual([NO_CHILDREN, ["eq", "source", "mcp"]])
-    expect(applied({ sources: ["mcp", "cli"] })).toEqual([NO_CHILDREN, ["in", "source", ["mcp", "cli"]]])
+    expect(applied({ sources: ["mcp"] })).toEqual([...ALWAYS, ["eq", "source", "mcp"]])
+    expect(applied({ sources: ["mcp", "cli"] })).toEqual([...ALWAYS, ["in", "source", ["mcp", "cli"]]])
   })
 
   it("favorited keeps the owner's favorites only; false keeps the jobs with none (an anti-join)", () => {
-    expect(applied({ favorited: true })).toEqual([NO_CHILDREN, ["eq", "gallery_favorites.user_id", OWNER]])
+    expect(applied({ favorited: true })).toEqual([...ALWAYS, ["eq", "gallery_favorites.user_id", OWNER]])
     expect(applied({ favorited: false })).toEqual([
-      NO_CHILDREN,
+      ...ALWAYS,
       ["eq", "gallery_favorites.user_id", OWNER],
       ["is", "gallery_favorites", null],
     ])
@@ -171,25 +174,25 @@ describe("applyJobListFilters", () => {
 
   it("rating narrows the owner's rating; rated keeps any, unrated keeps the jobs with none", () => {
     expect(applied({ rating: "good" })).toEqual([
-      NO_CHILDREN,
+      ...ALWAYS,
       ["eq", "job_ratings.user_id", OWNER],
       ["eq", "job_ratings.rating", "good"],
     ])
     expect(applied({ rating: "bad" })).toEqual([
-      NO_CHILDREN,
+      ...ALWAYS,
       ["eq", "job_ratings.user_id", OWNER],
       ["eq", "job_ratings.rating", "bad"],
     ])
-    expect(applied({ rating: "rated" })).toEqual([NO_CHILDREN, ["eq", "job_ratings.user_id", OWNER]])
+    expect(applied({ rating: "rated" })).toEqual([...ALWAYS, ["eq", "job_ratings.user_id", OWNER]])
     expect(applied({ rating: "unrated" })).toEqual([
-      NO_CHILDREN,
+      ...ALWAYS,
       ["eq", "job_ratings.user_id", OWNER],
       ["is", "job_ratings", null],
     ])
   })
 
   it("every filter combines with AND (each is one more call on the same query)", () => {
-    expect(applied({ statuses: ["completed"], types: ["generate-image"], favorited: true, rating: "good" })).toHaveLength(6)
+    expect(applied({ statuses: ["completed"], types: ["generate-image"], favorited: true, rating: "good" })).toHaveLength(7)
   })
 })
 

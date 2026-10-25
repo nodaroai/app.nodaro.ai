@@ -5,7 +5,7 @@ import { join } from "node:path"
 import type { Plugin, UserConfig } from "vite"
 import { describe, expect, it } from "vitest"
 
-import { isPackageInstalled, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
+import { isPackageInstalled, SITE_A11Y_ID, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
 
 /**
  * The shared header's module resolver. `virtual:site-header` is the real
@@ -22,10 +22,21 @@ const STUB = "/stub/site-header.tsx"
 const LOCALE_STUB = "/stub/site-locale.ts"
 const RESOLVED = `\0${SITE_HEADER_ID}`
 const RESOLVED_LOCALE = `\0${SITE_LOCALE_ID}`
+const A11Y_STUB = "/stub/site-a11y.ts"
+const A11Y_COOKIE = "C:\\repo\\frontend\\src\\ee\\shell\\a11y-cookie.ts"
+const RESOLVED_A11Y = `\0${SITE_A11Y_ID}`
 const FORCED_OFF = { define: { "import.meta.env.VITE_SHARED_HEADER": JSON.stringify("false") } }
 
 function plugin(installed: boolean, env: Record<string, string>): Plugin {
-  return siteHeaderModule({ root: "/repo/frontend", stubPath: STUB, localeStubPath: LOCALE_STUB, isInstalled: () => installed, readEnv: () => env })
+  return siteHeaderModule({
+    root: "/repo/frontend",
+    stubPath: STUB,
+    localeStubPath: LOCALE_STUB,
+    a11yStubPath: A11Y_STUB,
+    a11yCookiePath: A11Y_COOKIE,
+    isInstalled: () => installed,
+    readEnv: () => env,
+  })
 }
 
 type ConfigHook = (config: UserConfig, env: { mode: string; command: "build" | "serve" }) => Promise<UserConfig | null | void>
@@ -98,6 +109,38 @@ describe("siteHeaderModule", () => {
     }
   })
 
+  it("the shared accessibility choices follow the same decision, as an adapter of their own", async () => {
+    const on = plugin(true, ON)
+    await runConfig(on, "build")
+    expect(resolve(on, SITE_A11Y_ID)).toBe(RESOLVED_A11Y)
+    const source = load(on, RESOLVED_A11Y) ?? ""
+    expect(source).toMatch(/^import ".+\/a11y\.css"$/m)
+    expect(source).toMatch(/^import \{ applySavedAccessibility, readAccessibility \} from ".+\/a11y"$/m)
+    // The app's writer, by an absolute path with forward slashes (Windows too).
+    expect(source).toContain('import { writeAccessibilityCookie } from "C:/repo/frontend/src/ee/shell/a11y-cookie.ts"')
+    expect(source).toMatch(/export const sharedAccessibility = /)
+    expect(source).not.toMatch(/shell\.css|NodaroShell/)
+
+    for (const [installed, env] of [
+      [true, { ...ON, VITE_EDITION: "community" }],
+      [false, { VITE_EDITION: "cloud" }],
+    ] as const) {
+      const off = plugin(installed, env)
+      await runConfig(off, "build")
+      expect(resolve(off, SITE_A11Y_ID)).toBe(A11Y_STUB)
+    }
+  })
+
+  it("resolves the accessibility adapter's imports: the writer by its path, the package from the frontend directory", async () => {
+    const p = plugin(true, ON)
+    await runConfig(p, "build")
+    const context = { resolve: async (id: string) => ({ id: `/resolved/${id}` }) }
+    const resolveId = p.resolveId as (this: typeof context, id: string, importer?: string) => Promise<unknown> | unknown
+    expect(await resolveId.call(context, "C:/repo/frontend/src/ee/shell/a11y-cookie.ts", RESOLVED_A11Y)).toBe(A11Y_COOKIE)
+    const pkgImport = (load(p, RESOLVED_A11Y) ?? "").match(/from "(.+\/a11y)"$/m)?.[1] ?? ""
+    expect(await resolveId.call(context, pkgImport, RESOLVED_A11Y)).toEqual({ id: `/resolved/${pkgImport}` })
+  })
+
   it("resolves the locale adapter's import from the frontend directory too", async () => {
     const p = plugin(true, ON)
     await runConfig(p, "build")
@@ -137,6 +180,8 @@ describe("siteHeaderModule", () => {
       root: "/repo/frontend",
       stubPath: STUB,
       localeStubPath: LOCALE_STUB,
+      a11yStubPath: A11Y_STUB,
+      a11yCookiePath: A11Y_COOKIE,
       isInstalled: () => false,
       readEnv: (_mode, dir) => {
         dirs.push(dir)

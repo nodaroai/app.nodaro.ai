@@ -11,6 +11,7 @@ import { creditGuard } from "../middleware/credit-guard.js"
 import { billedFailureMessage, llmGuardPrecheck, meterOptionalSyncLlm, spendLlmCall, type MeteredSyncLlmMeter } from "../lib/meter-sync-llm.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { PORTRAIT_CAPTION_MODEL } from "../lib/portrait-caption-model.js"
+import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 
 // Bill the paid Sonnet vision caption at the shared prompt-helper rate (same as
 // llm-suggest-description) — the dedicated /llm-caption retry route is otherwise
@@ -165,6 +166,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       supabase
         .from("jobs")
         .select("id, status, output_data")
+        .is(TRASHED_JOB_COLUMN, null)
         .eq("id", body.data.candidateJobId)
         .eq("user_id", req.userId)
         .single(),

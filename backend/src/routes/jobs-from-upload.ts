@@ -43,7 +43,7 @@ import { judgeUrlForRecording, storageUrlPath } from "../lib/key-ownership.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
 import { markJobCompletedDetailed } from "../workers/shared.js"
 import { sanitizeJobForPublic, type JobRecord } from "./jobs.js"
-import { CHILD_JOB_COLUMN } from "../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 import { mayUseChildJobAsSource } from "../lib/job-submission-context.js"
 
 /** The job type this route writes (`input_data.type` and `job_type`). */
@@ -126,6 +126,7 @@ async function sourceFields(userId: string, body: JobFromUploadBody, allowChildS
     let sourceQuery = supabase
       .from("jobs")
       .select("id, status, input_data, output_data")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("id", body.sourceJobId)
       .eq("user_id", userId)
     // A child job reads as a source that does not exist, unless the caller is
@@ -173,6 +174,7 @@ function editStateUrlOf(url: string | undefined): Record<string, unknown> {
 }
 
 async function readJob(userId: string, id: string): Promise<JobRecord> {
+  // trash-read: the row this route just wrote.
   const { data, error } = await supabase.from("jobs").select(JOB_COLUMNS).eq("id", id).eq("user_id", userId).single()
   if (error) throw error
   return data as unknown as JobRecord

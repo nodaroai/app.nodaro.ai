@@ -202,6 +202,7 @@ async function runPollCycle(server: McpServer): Promise<void> {
   // task was registered for (decided 2026-10-06). A job id names a row; it
   // does not prove whose job it is.
   const { data, error } = await supabase
+    // trash-read: the progress of a task this MCP session started itself.
     .from("jobs")
     .select("id, user_id, status, progress")
     .in("id", taskIds)

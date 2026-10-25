@@ -35,6 +35,7 @@ import {
   type VideoToVideoNodeProvider,
   type VideoGenProvider,
   type VideoUpscaleProvider,
+  type TopazVideoResolution,
   type ExtendVideoProvider,
   type FaceSwapProvider,
   type TtsProvider,
@@ -2947,7 +2948,13 @@ export type VideoUpscaleData = {
   [key: string]: unknown
   label: string
   provider: VideoUpscaleProvider
-  upscaleFactor: "1" | "2" | "4"
+  /** Topaz: the output resolution — the frame's SHORT side (default 1080p). */
+  targetResolution?: TopazVideoResolution
+  /** Topaz: the output frame rate, 15–60; absent = the source's own rate. */
+  targetFps?: number
+  /** Legacy Topaz lever (1×/2×/4× of the source). The run reads it only when
+   *  `targetResolution` is absent; a new node never writes it. */
+  upscaleFactor?: "1" | "2" | "4"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -10168,7 +10175,7 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Upscale Video",
       provider: "topaz",
-      upscaleFactor: "2",
+      targetResolution: "1080p",
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],

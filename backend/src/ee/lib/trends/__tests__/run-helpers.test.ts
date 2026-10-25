@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const from = vi.fn()
 vi.mock("../../../../lib/supabase.js", () => ({ supabase: { from: (...a: unknown[]) => from(...a) } }))
 
-import { followPreviewMasking, withoutUnsupportedStoredMask } from "../run-helpers.js"
+import { engineSupports, followPreviewMasking, withoutUnsupportedStoredMask } from "../run-helpers.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
 import type { ComposedTrendRun } from "../compose.js"
 
@@ -27,7 +27,7 @@ function composed(preview: boolean): ComposedTrendRun {
       trendRun: { display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] } },
     },
     display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] },
-    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, trendPrePrompt: false, engine: "seedance-2-5" },
+    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, faceMaskTarget: "head", trendPrePrompt: false, engine: "seedance-2-5" },
     maskingZoneLeftOut: true,
   } as ComposedTrendRun
 }
@@ -65,7 +65,7 @@ describe("the stored face mask on the wire", () => {
       input_data: { type: "cast-swap", preview: true, trend: { id: "t" }, __faceMasking: stored },
       output_data: { faceMasking: { applied: true } },
     }
-    const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }) }
+    const chain = { select: () => chain, eq: () => chain, is: () => chain, maybeSingle: async () => ({ data: row, error: null }) }
     from.mockReturnValue(chain)
   }
 
@@ -88,5 +88,38 @@ describe("the stored face mask on the wire", () => {
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(c.body.faceMasking).toMatchObject({ mode: "always", fill: "blur" })
     expect(c.body.storedFaceMask).toEqual(STORED)
+  })
+
+  it("a full run that follows its masked preview keeps the trend's target", async () => {
+    previewJob({ fill: "blur" })
+    const c = withStored({ mode: "auto", target: "face" })
+    await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
+    expect(c.body.faceMasking).toMatchObject({ mode: "always", target: "face" })
+  })
+})
+
+describe("engineSupports — what the masks cover", () => {
+  beforeEach(() => _resetPluginSupportsForTests())
+  const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true, faceMasking: true }
+  const target = (t: "face" | "head") => {
+    const c = composed(false)
+    c.needs.faceMaskTarget = t
+    return c
+  }
+
+  it("runs a head trend on any masking engine, declared or not", () => {
+    setPluginSupports({ castSwap: BASE })
+    expect(engineSupports(target("head"))).toBe(true)
+    setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["face", "head"] } })
+    expect(engineSupports(target("head"))).toBe(true)
+  })
+
+  it("holds back a face-only trend from an engine that does not declare it (it would strip the target and mask heads)", () => {
+    setPluginSupports({ castSwap: BASE })
+    expect(engineSupports(target("face"))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["head"] } })
+    expect(engineSupports(target("face"))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["face", "head"] } })
+    expect(engineSupports(target("face"))).toBe(true)
   })
 })

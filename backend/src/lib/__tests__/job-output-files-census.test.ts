@@ -241,6 +241,10 @@ const IN_FAMILY_BUILT_ELSEWHERE: Readonly<Record<string, { key: (jobId: string) 
     key: (j) => `videos/${jobFileObjectId(j, "combine")}.mp4`,
     why: "the toolkit's combine-videos result, keyed by the RUNNING job (`getJobId()`, the job whose handler called the toolkit); outside a job no job owns it and the id is random",
   },
+  "lib/private-plugins/toolkit.ts :: jobFileObjectId(getJobId(), \"upscaled\")": {
+    key: (j) => `videos/${jobFileObjectId(j, "upscaled")}.mp4`,
+    why: "the toolkit's Topaz-upscaled clip re-hosted as H.264 (Topaz delivers HEVC), keyed by the running job like the combine result",
+  },
   "lib/private-plugins/toolkit.ts :: `images/${jobFileObjectId(getJobId(), \"plate\")}.${ext}`": {
     key: (j) => `images/${jobFileObjectId(j, "plate")}.png`,
     why: "the toolkit's upscaled plate, keyed by the running job like the combine result",

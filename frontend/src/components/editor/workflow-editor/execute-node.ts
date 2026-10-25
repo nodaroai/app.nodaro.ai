@@ -60,7 +60,9 @@ import {
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
   transcribeLaneSupportsWordTimestamps,
-  DEFAULT_SUNO_STEM_NAME
+  DEFAULT_SUNO_STEM_NAME,
+  clampTopazVideoFps,
+  isTopazVideoResolution,
 } from "@nodaro/shared/models";
 import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs";
 import {
@@ -6573,7 +6575,17 @@ function executeNodeCore(
     setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
-      () => videoUpscaleApi({ videoUrl, upscaleFactor: vuData.upscaleFactor || undefined, userId: ctx.userId, provider: "topaz" }),
+      () => videoUpscaleApi({
+        videoUrl,
+        // The target the node is set to; a saved node holding only the old
+        // factor sends that instead, which the server maps over the source.
+        targetResolution: isTopazVideoResolution(vuData.targetResolution) ? vuData.targetResolution : undefined,
+        upscaleFactor: isTopazVideoResolution(vuData.targetResolution) ? undefined : vuData.upscaleFactor || undefined,
+        // No frame rate = the source's own.
+        targetFps: typeof vuData.targetFps === "number" && Number.isFinite(vuData.targetFps) ? clampTopazVideoFps(vuData.targetFps) : undefined,
+        userId: ctx.userId,
+        provider: "topaz",
+      }),
       "generatedVideoUrl",
       "Upscale Video",
       ctx,

@@ -61,7 +61,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, pickSunoSeparateSource } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -165,6 +165,8 @@ import {
   SUNO_STEM_NAMES,
   type SunoSeparateType,
   type SunoStemName,
+  isTopazVideoResolution,
+  clampTopazVideoFps,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -2692,6 +2694,12 @@ function ranNodeIds(states: Readonly<Record<string, NodeExecutionState>>): Set<s
  */
 function llmNodeCreditId(feature: string, modelId: string, tierId: () => string): string {
   return llmMeteredPricing() ? `${feature}:${modelId}` : tierId()
+}
+
+/** A Topaz frame rate from node data: a number or a numeric string, clamped to 15–60; anything else undefined. */
+function topazFpsOf(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN
+  return Number.isFinite(n) ? clampTopazVideoFps(n) : undefined
 }
 
 /** The plan basis an Apply EDL iteration stamps (`renderPlanBasis`, the rule
@@ -5378,7 +5386,9 @@ export function buildPayload(
         // (seedanceDraftFinalizeStamp) from the SOURCE draft; this bare row is
         // only the build-time basis.
         : vuProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER ? SEEDANCE_DRAFT_FINALIZE_PROVIDER
-        : "topaz-video"
+        // Topaz holds per unit: node-executor stamps the clip's plan
+        // (stampTopazVideoUpscale) and reserves the unit row × its units.
+        : TOPAZ_VIDEO_UNIT_CREDIT_ID
       // The VEO upscalers re-render KIE's own VEO task — they cannot take a URL,
       // so an uploaded (or any non-VEO) video satisfies the media table
       // (videoUrl) yet dies at the route's Zod ("VEO upscale requires kieTaskId")
@@ -5408,6 +5418,11 @@ export function buildPayload(
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          // Topaz target: resolution + fps (absent fps = the source's rate);
+          // the legacy factor is read only when no resolution is set.
+          ...(isTopazVideoResolution(data.targetResolution) ? { targetResolution: data.targetResolution } : {}),
+          // A number, or a numeric string (a mapped value); "source"/absent = the source's rate.
+          ...(topazFpsOf(data.targetFps) !== undefined ? { targetFps: topazFpsOf(data.targetFps) } : {}),
           upscaleFactor: data.upscaleFactor,
           provider: vuProvider,
           kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,

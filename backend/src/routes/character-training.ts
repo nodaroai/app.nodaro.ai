@@ -396,6 +396,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           await cancelCharacterTraining(character.lora_training_replicate_id)
         }
         const { data: trainingJob } = await supabase
+          // trash-read: a training job's own lifecycle.
           .from("jobs")
           .select("id")
           .eq("user_id", req.userId)

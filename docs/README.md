@@ -21,6 +21,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Control what each wired reference contributes** (identity, outfit, background, style — role labels + identity-lock) → [Reference Roles Guide](./reference-roles-guide.md)
 - **Pick the right model for a task** (everyday vs premium tiers, use-case → model table) → [Choosing Models](./choosing-models.md)
 - **Switch the editor's language** (app chrome + picker catalogs, one setting, saved to your account) → [Language Picker](./language-picker.md)
+- **Make pages easier to read** (text size, contrast, motion — one set of choices for every Nodaro product) → [Accessibility Menu](./accessibility.md)
 - **Enrich prompts with reusable fragments** (Identity Lock, Golden Hour, Slow Dolly-In — `/` slash menu) → [Prompt Snippets](./prompt-snippets.md)
 - **Steer image generations with your own colours and references** (saved colour palettes and moodboards used as a generate-image direction — REST, SDK, CLI, MCP) → [Palettes and moodboards](./palettes-and-moodboards.md)
 - **Move a workflow between accounts or installs** (the home screen's Import JSON button, the editor's Export, and what happens to entities and media) → [Workflow Import & Export](./workflow-import-export.md)

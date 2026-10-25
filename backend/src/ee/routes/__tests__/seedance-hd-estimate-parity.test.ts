@@ -24,6 +24,11 @@ const db = vi.hoisted(() => ({
   reserved: [] as Array<{ credits: number; model: string }>,
 }))
 
+// Topaz measures its source before the guard: the probe is stubbed, the pricing is real.
+vi.mock("@/lib/topaz-video-plan.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/topaz-video-plan.js")>()),
+  planTopazVideoUpscale: async () => ({ resolution: "1080p", fps: 30, holdUnits: 7, sourceDurationSec: 20 }),
+}))
 vi.mock("@/lib/seedance-draft-finalize.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/seedance-draft-finalize.js")>()),
   resolveSeedanceDraftFinalize: async () => resolver.result,
@@ -183,7 +188,7 @@ describe("estimate == reservation", () => {
     expect(quote.statusCode, quote.body).toBe(200)
     const run = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: body })
     expect(run.statusCode, run.body).toBe(200)
-    expect(db.reserved).toEqual([{ model: "topaz-video", credits: quote.json().data.reserve }])
+    expect(db.reserved).toEqual([{ model: "topaz-video:per-unit", credits: quote.json().data.reserve }])
   })
 
   it("a reference-video draft whose clip could not be measured (worst case)", async () => {

@@ -354,6 +354,8 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     // in locations.test.ts.
     const prevChain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
+      // `.is("deleted_at", null)`: a candidate in the Trash is left out.
+      is: vi.fn().mockReturnThis(),
       filter: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
@@ -409,6 +411,8 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     // Third .from() call: previousCandidates (completed candidate jobs), empty here.
     const prevChain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
+      // `.is("deleted_at", null)`: a candidate in the Trash is left out.
+      is: vi.fn().mockReturnThis(),
       filter: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),

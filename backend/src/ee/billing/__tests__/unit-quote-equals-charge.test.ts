@@ -69,6 +69,7 @@ import { buildPayload } from "../../../services/workflow-engine/payload-builder.
 import type { SimpleEdge, SimpleNode } from "../../../services/workflow-engine/types.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../../lib/speaker-view-plan.js"
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
+import { topazVideoHoldBaseCredits } from "../../../lib/topaz-video-plan.js"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 
 type Case = {
@@ -119,6 +120,9 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
     case "dubbing":
       // routes/dubbing.ts computeCredits: the language's per-minute row × the span's whole minutes.
       return dubbingBaseCredits(rateId === "elevenlabs-dubbing-v2" ? "he" : "es", units * 60)
+    case "video-upscale":
+      // lib/topaz-video-plan.ts topazVideoHoldBaseCredits: the unit's row × the hold units.
+      return topazVideoHoldBaseCredits({ holdUnits: units })
     case "speaker-frames":
       // The cloud plugin's route and the workflow run (lib/speaker-frames-plan.ts): the row × the blocks.
       return unitRateBaseCredits(rateId, units)

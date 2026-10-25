@@ -32,6 +32,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "projects", cli: ["projects"], routePrefixes: ["/v1/projects"], mcpFiles: ["projects.ts"] },
   // Generation sessions (migration 518). MCP has no delete on purpose.
   { id: "sessions", cli: ["sessions"], routePrefixes: ["/v1/sessions"], mcpFiles: ["sessions.ts"] },
+  // The Trash (migration 561): removed session items and deleted jobs. MCP lists and restores; emptying it is the person's.
+  { id: "trash", cli: ["trash"], routePrefixes: ["/v1/trash"], mcpFiles: ["trash.ts"] },
   { id: "jobs", cli: ["jobs"], routePrefixes: ["/v1/jobs"], mcpFiles: ["jobs.ts"] },
   { id: "videoPro", cli: ["video-pro"], routePrefixes: ["/v1/generate-video-pro"], mcpFiles: [] },
   { id: "executions", cli: ["executions"], routePrefixes: ["/v1/workflow-executions", "/v1/executions", "/v1/execution-stats"], mcpFiles: [] },

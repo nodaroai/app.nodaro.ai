@@ -49,6 +49,7 @@ function draft(over: Partial<AdminTrendData> = {}): AdminTrendData {
 
 const FULL: AdminTrendFaceMasking = {
   mode: "auto",
+  target: "face",
   fill: "blur",
   minFaceHeightPct: 10,
   maxFaceHeightPct: 60,
@@ -81,6 +82,13 @@ describe("face masking and the pre prompt in the form", () => {
     const form = toForm(d)
     form.faceMasking!.zone!.leftPct = 20
     expect(d.faceMasking!.zone!.leftPct).toBe(5)
+  })
+
+  it("keeps the target as chosen (face or head), and leaves it out when it is left out", () => {
+    for (const target of ["face", "head"] as const) {
+      expect(fromForm(toForm(draft({ faceMasking: { mode: "auto", target } }))).faceMasking).toEqual({ mode: "auto", target })
+    }
+    expect(fromForm(toForm(draft({ faceMasking: { mode: "auto" } }))).faceMasking).not.toHaveProperty("target")
   })
 
   it("keeps a setting with only a mode as only a mode, and an 'off' setting as it is", () => {
@@ -163,6 +171,9 @@ describe("face masking and the pre prompt in the form", () => {
     )
     expect(describeBlocker({ code: "engine_unsupported", env: "staging", need: "trendPrePrompt" })).toBe(
       "staging: pre prompts not supported yet",
+    )
+    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "faceMaskTarget:face" })).toBe(
+      "production: face-only masks not supported yet",
     )
   })
 

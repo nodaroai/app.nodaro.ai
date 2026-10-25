@@ -9,6 +9,7 @@ import { creditGuard } from "../middleware/credit-guard.js"
 import { llmMeteredPricing } from "../lib/config.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 
 /**
  * Creature main-image approval + canonical-description LLM caption.
@@ -142,6 +143,7 @@ export async function creatureMainImageApprovalRoutes(app: FastifyInstance) {
         supabase
           .from("jobs")
           .select("id, status, output_data, input_data")
+          .is(TRASHED_JOB_COLUMN, null)
           .eq("id", candidateJobId)
           .eq("user_id", req.userId)
           .single(),

@@ -36,10 +36,11 @@ export async function resolveScene3DSource(input: PluginSceneSourceRequest): Pro
       planSha256: revision.planSha256, contentHash, access }
   }
   if (!input.sourceJobId) missing()
-  const { data, error } = await supabase.from("jobs").select("id,user_id,status,workflow_id,output_data")
+  const { data, error } = await supabase.from("jobs").select("id,user_id,status,workflow_id,output_data,deleted_at")
     .eq("id", input.sourceJobId).eq("user_id", input.userId).maybeSingle()
   if (error) throw new Scene3DArtifactError("SCENE_STORAGE_FAILED", "Could not resolve the scene source")
-  if (!data || data.status !== "completed") missing()
+  // A job in the Trash (deleted_at, migration 561) is no source: it reads as one that does not exist.
+  if (!data || data.status !== "completed" || data.deleted_at) missing()
   const workflowId: string | null = data.workflow_id ?? null
   const access = workflowId ? await workflowAccess(input.userId, workflowId) : "own"
   if (access === "none" || !accessAtLeast(access, input.requiredAccess)) missing()

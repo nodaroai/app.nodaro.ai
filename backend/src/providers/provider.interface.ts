@@ -1,3 +1,4 @@
+import type { TopazVideoResolution } from "@nodaro/shared/models"
 import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 
 // Result types
@@ -46,6 +47,10 @@ export interface ProviderResult {
    *  off a relay. */
   relayJobId?: string
   relayCredits?: number | null
+  /** Billing units the provider reported for this run (Replicate's Topaz
+   *  upscalers bill in Topaz units). Set only where a run is charged by them:
+   *  the handler settles `units × the unit's price row` (`meteredBaseCredits`). */
+  billedUnits?: number
 }
 
 // Capabilities a provider can support
@@ -239,10 +244,23 @@ export interface MotionTransferProvider {
   ): Promise<ProviderResult>
 }
 
+/**
+ * What a video upscale is asked for. Topaz takes an absolute target
+ * (`targetResolution` + `targetFps`); the legacy relative `upscaleFactor` is
+ * still accepted and mapped onto a target over the source's size by
+ * `resolveTopazVideoTarget` (`@nodaro/shared`).
+ */
+export interface VideoUpscaleRequest {
+  upscaleFactor?: "1" | "2" | "4"
+  targetResolution?: TopazVideoResolution
+  /** Output frame rate, 15–60; absent = the source's own rate. */
+  targetFps?: number
+}
+
 export interface VideoUpscaleProvider {
   videoUpscale(
     videoUrl: string,
-    upscaleFactor?: "1" | "2" | "4",
+    request?: VideoUpscaleRequest,
     options?: ProviderOptions,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>

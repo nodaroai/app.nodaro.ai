@@ -67,7 +67,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-flash` | `seedream/5-flash-text-to-image` | [seedream 5 flash t2i](https://docs.kie.ai/market/seedream/5-flash-text-to-image.md) |
 | `seedream-5-flash-i2i` | `seedream/5-flash-image-to-image` | [seedream 5 flash i2i](https://docs.kie.ai/market/seedream/5-flash-image-to-image.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
-| `topaz-image-upscale` | `topaz/image-upscale` | [topaz img upscale](https://docs.kie.ai/market/topaz/image-upscale.md) |
+| ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
 | `recraft-upscale` | `recraft/crisp-upscale` | [recraft upscale](https://docs.kie.ai/market/recraft/crisp-upscale.md) |
 
@@ -133,7 +133,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 |-----------|-------------|---------|
 | `wan` (v2v) | `wan/2-6-video-to-video` | [wan 2.6 v2v](https://docs.kie.ai/market/wan/2-6-video-to-video.md) |
 | `kling` (motion) | `kling-2.6/motion-control` | [kling motion](https://docs.kie.ai/market/kling/motion-control.md) |
-| `topaz` (upscale) | `topaz/video-upscale` | [topaz upscale](https://docs.kie.ai/market/topaz/video-upscale.md) |
+| ~~`topaz` (upscale)~~ | ~~`topaz/video-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit |
 | `kling-avatar` | `kling/ai-avatar-standard` | [kling avatar std](https://docs.kie.ai/market/kling/ai-avatar-standard.md) |
 | `kling-avatar-pro` | `kling/ai-avatar-pro` | [kling avatar pro](https://docs.kie.ai/market/kling/ai-avatar-pro.md) |
 | `infinitalk` | `infinitalk/from-audio` | [infinitalk](https://docs.kie.ai/market/infinitalk/from-audio.md) |

@@ -191,6 +191,7 @@ async function creditsByConversation(userId: string, rows: readonly Conversation
   for (const row of rows) for (const jobId of jobIdsOf(row.nodes)) owner.set(jobId, row.id)
   try {
     for (const ids of batches([...owner.keys()])) {
+      // trash-read: the credits a conversation spent count a deleted job until the purge.
       const { data, error } = await supabase.from("jobs").select("id, usage_log_id").eq("user_id", userId).in("id", ids)
       if (error) fail("the jobs read", error)
       const jobs = (data ?? []) as Array<{ id: string; usage_log_id: string | null }>

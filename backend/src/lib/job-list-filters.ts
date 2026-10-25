@@ -19,8 +19,13 @@
  *    did not.
  *  - `rating`: the owner rated it good / bad (`job_ratings`, migration 520),
  *    rated it at all (`rated`), or did not (`unrated`).
+ *  - `projectId`: a LIVE link to a session of that project — or, `none`, of
+ *    a session with no project. Each job once, however many sessions hold it.
+ *  - `inSession`: a live link to any session (`true`), or to none at all
+ *    (`false`: General — whatever session the job was born in).
  *
- * The last two filter on another table, which PostgREST can only do through
+ * A link is live when it is not removed (migration 561); `favorited`,
+ * `rating`, `projectId` and `inSession` all filter on another table, which PostgREST can only do through
  * an EMBED of that table in the select: `!inner` keeps the jobs that have a
  * matching row, and the plain (left) embed plus `is null` keeps the ones that
  * have none (an anti-join). Each embed names the foreign key it follows, so a
@@ -33,6 +38,8 @@ import { JOB_STATUSES, type JobStatus } from "./job-status.js"
 import { JOB_SOURCES, type JobSource } from "./job-source.js"
 import { JOB_RATING_FILTERS, type JobRatingFilter } from "./job-ratings.js"
 import { isMissingRelationshipError, isMissingTableError } from "./postgrest-errors.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "./public-job-data.js"
+import { NO_PROJECT } from "./generation-sessions-schemas.js"
 
 export interface JobListFilters {
   readonly statuses?: readonly JobStatus[]
@@ -41,7 +48,18 @@ export interface JobListFilters {
   readonly sources?: readonly JobSource[]
   readonly favorited?: boolean
   readonly rating?: JobRatingFilter
+  /** A project's id, or `"none"` for the sessions that have no project. */
+  readonly projectId?: string
+  readonly inSession?: boolean
 }
+
+/** The live-link embed the session filters join (aliased: a list with
+ *  `withSessions` reads session_items again, unfiltered by project). */
+const LIVE_LINK = "live_link"
+const LIVE_LINK_EMBED = `${LIVE_LINK}:session_items!session_items_job_id_fkey`
+/** session_items has two keys to generation_sessions: the item's own one. */
+const LIVE_LINK_SESSION = "live_session"
+const LIVE_LINK_SESSION_EMBED = `${LIVE_LINK_SESSION}:generation_sessions!session_items_session_id_fkey`
 
 /** The most values one list filter takes. */
 export const MAX_JOB_LIST_FILTER_VALUES = 20
@@ -72,7 +90,15 @@ const jobListQuerySchema = z.object({
   source: listParam(z.enum(JOB_SOURCES)).optional(),
   favorited: z.enum(["true", "false"]).optional(),
   rating: z.enum(JOB_RATING_FILTERS).optional(),
+  projectId: z.union([z.literal(NO_PROJECT), z.string().uuid()]).optional(),
+  inSession: z.enum(["true", "false"]).optional(),
 })
+  // A project's jobs are in a session by definition: "in this project and in
+  // no session" asks for nothing, so it is refused rather than answered empty.
+  .refine((q) => !(q.projectId && q.inSession === "false"), {
+    message: "projectId lists jobs that are in a session: it cannot be combined with inSession=false",
+    path: ["inSession"],
+  })
 
 export type ParsedJobListQuery = { success: true; data: JobListFilters } | { success: false; error: z.ZodError }
 
@@ -80,7 +106,7 @@ export type ParsedJobListQuery = { success: true; data: JobListFilters } | { suc
 export function parseJobListQuery(query: unknown): ParsedJobListQuery {
   const parsed = jobListQuerySchema.safeParse(query ?? {})
   if (!parsed.success) return { success: false, error: parsed.error }
-  const { status, type, origin, source, favorited, rating } = parsed.data
+  const { status, type, origin, source, favorited, rating, projectId, inSession } = parsed.data
   return {
     success: true,
     data: {
@@ -90,6 +116,8 @@ export function parseJobListQuery(query: unknown): ParsedJobListQuery {
       ...(source && source.length > 0 ? { sources: source } : {}),
       ...(favorited ? { favorited: favorited === "true" } : {}),
       ...(rating ? { rating } : {}),
+      ...(projectId ? { projectId: projectId.toLowerCase() } : {}),
+      ...(inSession ? { inSession: inSession === "true" } : {}),
     },
   }
 }
@@ -105,6 +133,10 @@ export function jobListFilterSelect(filters: JobListFilters): string {
   if (filters.favorited === false) embeds.push(`${FAVORITES_EMBED}(job_id)`)
   if (filters.rating === "unrated") embeds.push(`${RATINGS_EMBED}(rating)`)
   else if (filters.rating) embeds.push(`${RATINGS_EMBED}!inner(rating)`)
+  // A project (or none) needs the link's session; in-session needs the link alone.
+  if (filters.projectId) embeds.push(`${LIVE_LINK_EMBED}!inner(session_id, ${LIVE_LINK_SESSION_EMBED}!inner(project_id))`)
+  else if (filters.inSession === true) embeds.push(`${LIVE_LINK_EMBED}!inner(session_id)`)
+  else if (filters.inSession === false) embeds.push(`${LIVE_LINK_EMBED}(session_id)`)
   return embeds.map((embed) => `, ${embed}`).join("")
 }
 
@@ -124,10 +156,12 @@ type JobListFilterable<Q> = {
  * Always, whatever the filters: a child job (`parent_job_id` set — a step a
  * worker-side handler ran for its parent) is left out. It is shown only
  * through its parent, as the Library leaves it out (`createAssetFromJob`).
+ * And a job in the Trash is left out (TRASHED_JOB_COLUMN): it reads as one
+ * that does not exist.
  */
 export function applyJobListFilters<Q extends JobListFilterable<Q>>(query: Q, filters: JobListFilters, ownerId: string): Q {
-  let out = query.is("parent_job_id", null)
-  const { statuses, types, origin, sources, favorited, rating } = filters
+  let out = query.is(CHILD_JOB_COLUMN, null).is(TRASHED_JOB_COLUMN, null)
+  const { statuses, types, origin, sources, favorited, rating, projectId, inSession } = filters
   if (statuses && statuses.length > 0) out = statuses.length === 1 ? out.eq("status", statuses[0]!) : out.in("status", statuses)
   if (types && types.length > 0) {
     out = types.length === 1 ? out.filter("input_data->>type", "eq", types[0]!) : out.in("input_data->>type", types)
@@ -143,14 +177,21 @@ export function applyJobListFilters<Q extends JobListFilterable<Q>>(query: Q, fi
     if (rating === "good" || rating === "bad") out = out.eq("job_ratings.rating", rating)
     if (rating === "unrated") out = out.is("job_ratings", null)
   }
+  // Only LIVE links join: a removed one is in the Trash, not "in" the session.
+  if (projectId || inSession !== undefined) out = out.is(`${LIVE_LINK}.removed_at`, null)
+  if (projectId === NO_PROJECT) out = out.is(`${LIVE_LINK}.${LIVE_LINK_SESSION}.project_id`, null)
+  else if (projectId) out = out.eq(`${LIVE_LINK}.${LIVE_LINK_SESSION}.project_id`, projectId)
+  // General: no live link at all (the anti-join).
+  if (!projectId && inSession === false) out = out.is(LIVE_LINK, null)
   return out
 }
 
 /** A listed row without the embeds the filters joined (they are a filtering detail, never output). */
 export function withoutFilterEmbeds<T extends object>(row: T): T {
-  const { gallery_favorites: _favorites, job_ratings: _ratings, ...rest } = row as T & {
+  const { gallery_favorites: _favorites, job_ratings: _ratings, live_link: _link, ...rest } = row as T & {
     gallery_favorites?: unknown
     job_ratings?: unknown
+    live_link?: unknown
   }
   return rest as T
 }

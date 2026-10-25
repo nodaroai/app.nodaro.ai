@@ -24,6 +24,8 @@ vi.mock("../../../supabase.js", () => ({
     from: () => ({
       select: () => ({
         eq: (_col: string, id: string) => ({
+          // `.is("deleted_at", null)`: no job here is in the Trash.
+          is() { return this },
           maybeSingle: async () => ({ data: db.jobs[id] ?? null, error: null }),
           single: async () => ({ data: { mcp_preferences: {} }, error: null }),
         }),

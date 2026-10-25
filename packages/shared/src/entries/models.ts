@@ -212,6 +212,7 @@ export {
   TREND_PROMPT_LIMITS,
   CAST_SWAP_FACE_MASKING_BOUNDS,
   CAST_SWAP_FACE_MASKING_DEFAULTS,
+  CAST_SWAP_FACE_MASK_TARGETS,
   CAST_SWAP_ENGINES,
   CAST_SWAP_ENGINE_WHEN_OMITTED,
   CAST_SWAP_RESOLUTIONS_BY_ENGINE,
@@ -220,7 +221,7 @@ export {
   CAST_SWAP_KLING_LENGTH_WHEN_OMITTED,
   CAST_SWAP_KLING_MAX_IMAGES,
 } from "../cast-swap-limits.js"
-export type { CastSwapEngine, CastSwapKlingLength } from "../cast-swap-limits.js"
+export type { CastSwapEngine, CastSwapFaceMaskTarget, CastSwapKlingLength } from "../cast-swap-limits.js"
 export type {
   ImageAspectRatio,
   ImageResolution,
@@ -332,3 +333,24 @@ export {
 export type { VoiceChangerModel } from "../voice-changer-models.js"
 // --- Model tree (derive node targets + product-line grouping for the Models tab) ---
 export * from "../model-tree.js"
+// --- Topaz video upscale target (resolution + fps; the legacy factor mapped forward) ---
+export {
+  TOPAZ_VIDEO_RESOLUTIONS,
+  TOPAZ_VIDEO_DEFAULT_RESOLUTION,
+  TOPAZ_VIDEO_SHORT_SIDE,
+  TOPAZ_VIDEO_FPS_MIN,
+  TOPAZ_VIDEO_FPS_MAX,
+  TOPAZ_VIDEO_FPS_CHOICES,
+  TOPAZ_VIDEO_FALLBACK_FPS,
+  isTopazVideoResolution,
+  topazVideoResolutionNearest,
+  clampTopazVideoFps,
+  resolveTopazVideoTarget,
+  topazVideoOutputSize,
+} from "../topaz-video.js"
+export type {
+  TopazVideoResolution,
+  TopazVideoSource,
+  TopazVideoTargetInput,
+  TopazVideoTarget,
+} from "../topaz-video.js"

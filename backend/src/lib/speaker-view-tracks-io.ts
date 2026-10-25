@@ -35,6 +35,7 @@ export interface SpeakerViewTracksIo {
 const defaultIo: SpeakerViewTracksIo = {
   loadJob: async (jobId, userId) => {
     const { supabase } = await import("./supabase.js")
+    // trash-read: an input of a render already running; the job's media is kept until the purge.
     const { data, error } = await supabase.from("jobs").select("input_data, output_data").eq("id", jobId).eq("user_id", userId).maybeSingle()
     if (error) throw new Error(`speaker-view: could not read the Speaker Frames job behind the face tracks (${error.message})`)
     return (data as { input_data?: unknown; output_data?: unknown } | null) ?? null

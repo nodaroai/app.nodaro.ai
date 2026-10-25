@@ -27,7 +27,7 @@ import { isModelEstimate, isModelRefused, refusedModelMessage } from "@/hooks/us
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
-import { nodeProviders } from "@nodaro/render-rules"
+import { nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared/workflow"
 import { USE_CASE_FEE_STATIC_CREDITS, expandUseCaseNodes, isUseCaseNodeType, usecaseFeeCreditId, withUseCaseMembers, type UseCaseExpansion } from "@nodaro/render-rules"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
@@ -124,6 +124,9 @@ function isMeteredEstimate(
   // the server served beside the price, stored on the node): the server marks its line `≈` too — only
   // while it prices LLM calls per model (the mode probe answered as an estimate), as the server gates it.
   if (node.type === "component") return componentStoredEstimate(node) && isModelEstimate(meteredModeProbeId())
+  // A Topaz Video Upscale is metered: quoted from its target and the length the graph gives, held
+  // at what the measured clip needs and charged the units Topaz reports — its line is an estimate.
+  if (node.type === "video-upscale") return getModelIdentifier(node, edges, allNodes, rerunIds) === TOPAZ_VIDEO_UNIT_CREDIT_ID
   if (!llmNodePriceIds(node)) return false
   const id = getModelIdentifier(node, edges, allNodes, rerunIds)
   return isModelEstimate(id) && cachedCost(id) !== undefined

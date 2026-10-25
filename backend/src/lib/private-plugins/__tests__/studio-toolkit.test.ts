@@ -340,6 +340,8 @@ describe("tk.jobs.readJobsOwnedBy", () => {
     // Never a post-filter in JS: a query that asks for rows it must then throw
     // away is one refactor from keeping them.
     expect(opsNamed(q, "eq")).toEqual([["eq", "user_id", CALLER]])
+    // Nor a job in the Trash (migration 561), in the query too.
+    expect(opsNamed(q, "is")).toEqual([["is", "deleted_at", null]])
   })
 
   it("returns each row's error_hint (the user-safe failure verdict), null when absent", async () => {

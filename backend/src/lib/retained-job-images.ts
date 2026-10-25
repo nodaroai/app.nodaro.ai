@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { retainImage, readRetainedImage, type RetainedImage } from "./retained-images.js"
 import { safeFetchBytes } from "./safe-fetch-bytes.js"
+import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 export interface RetainedJobImage {
   jobId: string
@@ -40,6 +41,7 @@ export async function retainJobImage(args: { userId: string; workflowId: string;
   if (prior.length) return prior[0]!
   const { data, error } = await supabase.from("jobs")
     .select("id,output_data,submission_context")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", args.jobId).eq("user_id", args.userId).eq("workflow_id", args.workflowId)
     .eq("status", "completed").in("job_type", ["generate-image", "image-to-image"]).maybeSingle()
   if (error) throw new Error("Failed to read the completed image job")

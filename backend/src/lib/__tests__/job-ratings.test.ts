@@ -28,6 +28,7 @@ function seed(answers: Record<string, Answer>) {
       upsert: (payload: unknown, options: unknown) => ((op.verb = "upsert"), (op.payload = payload), (op.options = options), chain),
       delete: () => ((op.verb = "delete"), chain),
       eq: (c: string, v: unknown) => (op.filters.push([c, v]), chain),
+      is: (c: string, v: unknown) => (op.filters.push([c, v]), chain),
       maybeSingle: () => Promise.resolve(answers[table] ?? { data: null, error: null }),
       then: (resolve: (v: Answer) => void) => resolve(answers[table] ?? { data: null, error: null }),
     }
@@ -56,7 +57,8 @@ describe("setJobRating", () => {
     expect(await setJobRating(OWNER, JOB, "good")).toEqual({ kind: "ok", rating: "good" })
 
     const [read, write] = ops
-    expect(read).toMatchObject({ table: "jobs", verb: "select", filters: [["id", JOB], ["user_id", OWNER]] })
+    // A job in the Trash is not rated: it reads as not found.
+    expect(read).toMatchObject({ table: "jobs", verb: "select", filters: [["deleted_at", null], ["id", JOB], ["user_id", OWNER]] })
     expect(write).toMatchObject({
       table: "job_ratings",
       verb: "upsert",

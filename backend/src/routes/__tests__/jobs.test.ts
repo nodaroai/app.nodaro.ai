@@ -222,32 +222,9 @@ beforeEach(async () => {
   await app.ready()
 })
 
-describe("DELETE /v1/jobs/:id", () => {
-  it("uses the atomic private-media cleanup boundary for an owner", async () => {
-    const res = await app.inject({
-      method: "DELETE",
-      url: "/v1/jobs/job-1?__userId=00000000-0000-4000-8000-000000000001",
-    })
-
-    expect(res.statusCode).toBe(200)
-    expect(deleteJobWithPrivateMedia).toHaveBeenCalledWith(expect.objectContaining({
-      jobId: "job-1",
-      actorUserId: "00000000-0000-4000-8000-000000000001",
-      isAdmin: false,
-    }))
-  })
-
-  it("returns 500 when the atomic job delete fails", async () => {
-    vi.mocked(deleteJobWithPrivateMedia).mockRejectedValue(new Error("database down"))
-
-    const res = await app.inject({
-      method: "DELETE",
-      url: "/v1/jobs/job-1?__userId=00000000-0000-4000-8000-000000000001",
-    })
-
-    expect(res.statusCode).toBe(500)
-  })
-})
+// DELETE /v1/jobs/:id moves a job to the Trash now (migration 561): its tests,
+// and delete-for-good through the atomic private-media cleanup, are in
+// job-trash.test.ts.
 
 afterEach(async () => {
   await app.close()
@@ -319,7 +296,8 @@ function seedJobs(rows: SeedJob[], usageLogStatuses: Record<string, string> = {}
     })
     const inFn = vi.fn().mockImplementation((_col: string, ids: string[]) => {
       capturedIds = ids
-      return { eq }
+      // `.is("deleted_at", null)` may come first (batch-status): no seeded row is in the Trash.
+      return { eq, is: () => ({ eq }) }
     })
     const select = vi.fn().mockImplementation((cols: string) => {
       capturedSelect = cols.split(",").map((c) => c.trim())

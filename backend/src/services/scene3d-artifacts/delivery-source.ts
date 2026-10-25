@@ -38,10 +38,11 @@ export async function resolveScene3DDeliverySource(
   if (input.mode !== "render-only" || !isScene3DId(input.source.jobId ?? "")) {
     throw new Scene3DArtifactError("SCENE_JOB_INVALID", "A Basic scene export requires its source job")
   }
-  const { data, error } = await supabase.from("jobs").select("id,user_id,workflow_id,status,output_data")
+  const { data, error } = await supabase.from("jobs").select("id,user_id,workflow_id,status,output_data,deleted_at")
     .eq("id", input.source.jobId!).eq("user_id", input.userId).maybeSingle()
   if (error) throw new Scene3DArtifactError("SCENE_STORAGE_FAILED", "Could not read the scene delivery source")
-  if (!data || data.status !== "completed") {
+  // A job in the Trash (deleted_at, migration 561) is no source: it reads as one that does not exist.
+  if (!data || data.status !== "completed" || data.deleted_at) {
     throw new Scene3DArtifactError("SCENE_JOB_INVALID", "Scene delivery source job is unavailable")
   }
   const workflowId: string | null = data.workflow_id ?? null

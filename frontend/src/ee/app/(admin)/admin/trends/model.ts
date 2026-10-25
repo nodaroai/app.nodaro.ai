@@ -186,6 +186,7 @@ function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
   const num = (v: number | undefined) => typeof v === "number" && Number.isFinite(v)
   return {
     mode: m.mode,
+    ...(m.target ? { target: m.target } : {}),
     ...(m.fill ? { fill: m.fill } : {}),
     ...(num(m.minFaceHeightPct) ? { minFaceHeightPct: m.minFaceHeightPct } : {}),
     ...(num(m.maxFaceHeightPct) ? { maxFaceHeightPct: m.maxFaceHeightPct } : {}),
@@ -416,6 +417,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   fixedReferences: "fixed references",
   faceMasking: "face masking",
   storedFaceMask: "stored face masks",
+  "faceMaskTarget:face": "face-only masks",
   trendPrePrompt: "pre prompts",
   "kling-4": "Kling 4",
   fullQuality: "Full Quality",

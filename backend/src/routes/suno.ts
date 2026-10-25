@@ -34,6 +34,7 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import type { SunoSeparateJobData } from "../workers/handlers/suno-separate.js"
 import { pickSunoSeparateSource } from "@nodaro/render-rules"
+import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -51,6 +52,7 @@ async function userOwnsVoiceTask(
   const { data } = await supabase
     .from("jobs")
     .select("id")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("user_id", userId)
     .eq("job_type", tag)
     .eq("provider_task_id", taskId)
@@ -1448,6 +1450,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     const { data: ownedJobs } = await supabase
       .from("jobs")
       .select("id, status")
+      .is(TRASHED_JOB_COLUMN, null)
       .eq("user_id", userId)
       .eq("job_type", SUNO_VOICE_CREATE_CREDIT_ID)
       .eq("provider_task_id", parsed.data.taskId)

@@ -53,6 +53,7 @@ import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"
 import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
+import { TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -73,6 +74,8 @@ async function resolveSunoIds(
     .from("jobs")
     .select("output_data, user_id, is_public, status")
     .eq("id", jobId)
+    // A job in the Trash reads as one that does not exist.
+    .is(TRASHED_JOB_COLUMN, null)
     .maybeSingle()
   if (!data) return null
   // Allow caller's own jobs OR public completed jobs (mirrors get_asset).

@@ -37,7 +37,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { isUseCaseNodeType, renderEstimateCreditId, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { isUseCaseNodeType, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { countRefModalityEdges } from "@nodaro/shared/workflow"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -46,7 +46,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { pitchTempoQuotedSec, videoMaskQuotedSec, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
@@ -728,6 +728,13 @@ export function getModelIdentifier(
   // `!provider` bail, which quoted the node-type row. Mirror of the backend
   // estimator's branch (ee/billing/credits.ts).
   if (nodeType === "text-to-dialogue") return dialogueProviderOf(data.provider)
+
+  // Video Upscale on Topaz (the provider a node naming none runs on): metered —
+  // the run holds the Topaz units its source needs at this one-unit row and is
+  // charged the units Topaz reports. Every estimate multiplies the row by the
+  // units it quotes (PRICING_UNIT_ESTIMATORS → videoUpscalePricingUnits). ABOVE
+  // the `!provider` bail, which quoted the node-type row.
+  if (nodeType === "video-upscale" && isTopazVideoUpscaleProvider(data.provider)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType

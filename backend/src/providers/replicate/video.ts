@@ -8,11 +8,14 @@
 import type {
   ImageToVideoProvider,
   TextToVideoProvider,
+  VideoUpscaleProvider,
+  VideoUpscaleRequest,
   ProviderResult,
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
 import { extractUrl, runReplicatePrediction } from "./client.js"
+import { runTopazVideoUpscale } from "./topaz.js"
 
 interface ReplicateVideoModelConfig {
   model: string
@@ -83,7 +86,7 @@ const TEXT_TO_VIDEO_MODELS: Record<string, string> = {
 }
 
 export class ReplicateVideoProvider
-  implements ImageToVideoProvider, TextToVideoProvider
+  implements ImageToVideoProvider, TextToVideoProvider, VideoUpscaleProvider
 {
   async imageToVideo(
     imageUrl: string | undefined,
@@ -241,6 +244,15 @@ export class ReplicateVideoProvider
     console.log(`[Replicate:textToVideo] Estimated cost: $${cost?.toFixed(6) ?? "N/A"}`)
 
     return { url: resultUrl, cost }
+  }
+
+  async videoUpscale(
+    videoUrl: string,
+    request?: VideoUpscaleRequest,
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult> {
+    return runTopazVideoUpscale(videoUrl, request, options, reconcileOpts)
   }
 }
 

@@ -336,6 +336,7 @@ describe("misplacedChip", () => {
 describe("trendVersionDataSchema — faceMasking and prePrompt", () => {
   const full = {
     mode: "auto",
+    target: "face",
     fill: "depth",
     minFaceHeightPct: 10,
     maxFaceHeightPct: 60,
@@ -360,6 +361,17 @@ describe("trendVersionDataSchema — faceMasking and prePrompt", () => {
     const off = trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "auto", zone: null } }))
     expect(off.success).toBe(true)
     expect(off.data?.faceMasking).toEqual({ mode: "auto", zone: null })
+  })
+
+  it("takes a target of face or head, stored as given (left out = head, resolved at run time)", () => {
+    for (const target of ["face", "head"]) {
+      const r = trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target } }))
+      expect(r.success, target).toBe(true)
+      expect(r.data?.faceMasking).toEqual({ mode: "always", target })
+    }
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always" } })).data?.faceMasking).not.toHaveProperty("target")
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target: "body" } })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target: null } })).success).toBe(false)
   })
 
   it("refuses an unknown mode or fill, and an unknown key", () => {

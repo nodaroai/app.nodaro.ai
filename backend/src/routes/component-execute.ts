@@ -24,6 +24,7 @@ import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js
 import { requireScope } from "../lib/scopes.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { completedJobColumns } from "../lib/job-status.js"
+import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 
 
 const bodySchema = z.object({
@@ -438,7 +439,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: "jobId must be a UUID" } })
     }
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-    let query = supabase.from("jobs").select("user_id, provider, input_data").eq("id", params.data.jobId)
+    let query = supabase.from("jobs").select("user_id, provider, input_data").is(TRASHED_JOB_COLUMN, null).eq("id", params.data.jobId)
     if (!isAdmin) query = query.eq("user_id", req.userId)
     const { data: wrapper } = await query.maybeSingle()
     // Only a component WRAPPER has an inner execution; any other job (or one

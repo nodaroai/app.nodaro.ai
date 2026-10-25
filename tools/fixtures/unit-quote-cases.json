@@ -1,11 +1,12 @@
 {
- "$comment": "Per-unit runs: the editor's quote of a whole run must equal the server's charge. Each case is a graph whose node `x` is priced per unit; `rateId` + `units` are what the editor prices it at, `quoteId` the id of the whole run's price (`<rateId>:<units>u`), `credits` what the server charges for it at the `pricing` block (the row's base \u00d7 the units, rounded up, marked up ONCE), `servedUnit` the one-unit price the server serves, and `perUnitQuote` the old rule (servedUnit \u00d7 whole units), which quotes more. The margins are test values, not any instance's; the per-service ones make the LTX rows round. `repeat` builds a string of that many copies of `of`.",
+ "$comment": "Per-unit runs: the editor's quote of a whole run must equal the server's charge. Each case is a graph whose node `x` is priced per unit; `rateId` + `units` are what the editor prices it at, `quoteId` the id of the whole run's price (`<rateId>:<units>u`), `credits` what the server charges for it at the `pricing` block (the row's base \u00d7 the units, rounded up, marked up ONCE), `servedUnit` the one-unit price the server serves, and `perUnitQuote` the old rule (servedUnit \u00d7 whole units), which quotes more. The margins are test values, not any instance's; the per-service ones make the LTX and Topaz rows round. `repeat` builds a string of that many copies of `of`.",
  "pricing": {
   "chargePercent": 15,
   "serviceMarginPercent": {
    "ltx-2.3-pro-extend": 12,
    "ltx-2.3-pro-retake": 12,
-   "elevenlabs-dubbing": 12
+   "elevenlabs-dubbing": 12,
+   "topaz-video:per-unit": 12
   },
   "unitRows": {
    "apply-edl": 10,
@@ -22,7 +23,8 @@
    "elevenlabs-v4:per-100-chars": 4,
    "elevenlabs-dialogue:per-100-chars": 4,
    "elevenlabs-dubbing": 40,
-   "speaker-frames": 2
+   "speaker-frames": 2,
+   "topaz-video:per-unit": 40
   }
  },
  "cases": [
@@ -929,6 +931,69 @@
     "servedUnit": 3,
     "credits": 14,
     "perUnitQuote": 18
+   }
+  },
+  {
+   "name": "Video Upscale (Topaz): an 8 s upload to 4K at 60 fps \u2014 40 Topaz units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-upscale",
+     "data": {
+      "provider": "topaz",
+      "targetResolution": "4k",
+      "targetFps": 60
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/v.mp4",
+      "videoDurationSec": 8,
+      "duration": 8
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "topaz-video:per-unit",
+    "units": 40,
+    "quoteId": "topaz-video:per-unit:40u",
+    "servedUnit": 45,
+    "credits": 1792,
+    "perUnitQuote": 1800
+   }
+  },
+  {
+   "name": "Video Upscale (Topaz): nothing wired, the defaults (1080p, 30 fps, the 10 s fallback) \u2014 7 Topaz units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-upscale",
+     "data": {
+      "provider": "topaz",
+      "targetResolution": "1080p"
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "topaz-video:per-unit",
+    "units": 7,
+    "quoteId": "topaz-video:per-unit:7u",
+    "servedUnit": 45,
+    "credits": 314,
+    "perUnitQuote": 315
    }
   }
  ]

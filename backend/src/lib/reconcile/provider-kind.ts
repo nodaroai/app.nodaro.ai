@@ -5,7 +5,7 @@
  * persists the right kind on the job row.
  */
 import { isVeoProvider } from "@nodaro/shared/models"
-import { REPLICATE_IMAGE_MODEL_IDS } from "../../providers/replicate/image.js"
+import { REPLICATE_IMAGE_EDIT_MODEL_IDS, REPLICATE_IMAGE_MODEL_IDS } from "../../providers/replicate/image.js"
 import type { ProviderKind } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -14,6 +14,8 @@ import type { ProviderKind } from "./types.js"
 
 const IMAGE_REPLICATE_MODELS: ReadonlySet<string> = new Set([
   ...REPLICATE_IMAGE_MODEL_IDS,
+  // Topaz image upscale (Replicate since 2026-10-25).
+  ...REPLICATE_IMAGE_EDIT_MODEL_IDS,
   // Synthetic identifier — Character LoRA inference via Replicate. NOT in
   // the IMAGE_MODELS map (the version is resolved per-request from the
   // character's stored `lora_replicate_version`).

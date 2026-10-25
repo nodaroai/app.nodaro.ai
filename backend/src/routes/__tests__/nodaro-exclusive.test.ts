@@ -41,6 +41,8 @@ vi.mock("@/lib/supabase.js", () => {
   // the same chain so scoping depth doesn't matter to the mock.
   const chain: Record<string, unknown> = {}
   chain.eq = vi.fn(() => chain)
+  // `.is("deleted_at", null)`: a job in the Trash reads as one that does not exist.
+  chain.is = vi.fn(() => chain)
   chain.maybeSingle = (...args: unknown[]) => mocks.maybeSingle(...args)
   const select = vi.fn(() => chain)
   return { supabase: { from: vi.fn(() => ({ select })) } }

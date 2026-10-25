@@ -39,7 +39,7 @@ type PublicMembers =
   | "baseUrl" | "auth" | "timeoutMs" | "clientLabel" | "fetch" | "workspaceId"
   | "requestBytes" | "request" | "requestText" | "me" | "connectedApps" | "revokeConnectedApp"
   | "withWorkspace"
-  | "workflows" | "projects" | "sessions" | "jobs" | "videoPro" | "executions" | "nodes" | "scene3d"
+  | "workflows" | "projects" | "sessions" | "trash" | "jobs" | "videoPro" | "executions" | "nodes" | "scene3d"
   | "developerApps" | "oauth" | "webhooks" | "apps" | "characters" | "locations" | "objects" | "creatures"
   | "pipelines" | "reduce" | "promptHelper" | "voices" | "llm" | "media" | "audio" | "credits" | "billing"
   | "uploads" | "library" | "gallery" | "presets" | "savedPosts" | "collections" | "palettes" | "moodboards"

@@ -20,6 +20,10 @@ import {
 } from "@nodaro/shared/credits"
 import { maskCompositeLeadHandle, maskCompositeUnits } from "@nodaro/shared/media"
 import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
+import { clampTopazVideoFps, isTopazVideoResolution, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
+import { withWiredSettings } from "@nodaro/shared/nodes"
+import { resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
+import { readNodeOutput } from "@/lib/node-output-reader"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -240,4 +244,139 @@ export function maskCompositePricingUnits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number {
   return maskCompositeUnits(maskCompositeQuotedSec(node, nodes, edges, rerunIds))
+}
+
+/** Is a Video Upscale set to Topaz — the provider a node that names none runs on? */
+export function isTopazVideoUpscaleProvider(provider: unknown): boolean {
+  return provider === undefined || provider === null || provider === "" || provider === "topaz"
+}
+
+/**
+ * The source length, in seconds, a Topaz Video Upscale is QUOTED at, or
+ * `undefined` when it is not known (the estimate's fallback length then
+ * stands in): the length the graph gives its video wire — the reading the
+ * server's run estimate prices it by — else what the upstream node itself
+ * reports. The run measures the real clip before it reserves.
+ */
+export function topazVideoQuotedSourceSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
+  return fromGraph ?? upstreamVideoDurationSec(node.id, "video", nodes, edges) ?? undefined
+}
+
+/** The old relative levers a saved Video Upscale may still hold (the shared resolver's own set). */
+const TOPAZ_LEGACY_FACTORS: ReadonlySet<string> = new Set(["1", "2", "4"])
+
+/**
+ * The old 1×/2×/4× factor a Topaz Video Upscale still runs by — only while it
+ * names no resolution Topaz takes (a target, once set, replaces it). `undefined`
+ * for a node set the current way.
+ */
+export function topazVideoLegacyFactor(data: Record<string, unknown> | undefined): string | undefined {
+  if (!data || isTopazVideoResolution(data.targetResolution)) return undefined
+  const factor = typeof data.upscaleFactor === "string" ? data.upscaleFactor.trim() : ""
+  return TOPAZ_LEGACY_FACTORS.has(factor) ? factor : undefined
+}
+
+const positivePx = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined)
+
+/**
+ * The pixel size of the video wired into a Video Upscale's `video` input, when
+ * the editor has MEASURED it: the source (through teleports) hands on a url,
+ * and the result row holding that url records its width and height (an
+ * upload records them at upload, any other video when its result is first
+ * shown — `useResultAspectRatio`); an upload with no such row, its upload
+ * metadata while that upload is still the file it hands on. `undefined`
+ * otherwise — an aspect ratio or a resolution SETTING is not a size.
+ */
+export function topazVideoQuotedSourceSize(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): Pick<TopazVideoSource, "width" | "height"> | undefined {
+  const edge = edges.find((e) => e.target === node.id && e.targetHandle === "video")
+  if (!edge) return undefined
+  const src = nodes.find((n) => n.id === edge.source)
+  const origin = resolveGraphOrigin(src, nodes as WorkflowNode[], edges as WorkflowEdge[])
+  if (!origin) return undefined
+  const out = readNodeOutput(origin, origin === src ? edge.sourceHandle ?? undefined : undefined)
+  const url = typeof out === "string" ? out.trim() : ""
+  if (url === "") return undefined
+  const data = (origin.data ?? {}) as Record<string, unknown>
+  const rows = Array.isArray(data.generatedResults) ? (data.generatedResults as Array<Record<string, unknown> | null | undefined>) : []
+  for (const r of rows) {
+    if (typeof r?.url !== "string" || r.url.trim() !== url) continue
+    const width = positivePx(r.width)
+    const height = positivePx(r.height)
+    if (width !== undefined && height !== undefined) return { width, height }
+  }
+  if (origin.type === "upload-video" && !data.externalUrl && typeof data.url === "string" && data.url.trim() === url) {
+    const meta = (data.metadata ?? {}) as Record<string, unknown>
+    const width = positivePx(meta.width)
+    const height = positivePx(meta.height)
+    if (width !== undefined && height !== undefined) return { width, height }
+  }
+  return undefined
+}
+
+/**
+ * The resolution a Topaz Video Upscale is SHOWN and QUOTED at — the one place
+ * the config panel and every estimate read it, so they cannot disagree — and
+ * the old factor it runs by, if any. Both from its settings as it runs (a wired
+ * Settings input included): a target wins; a saved node that holds only the
+ * old factor maps it the way the run does (`resolveTopazVideoTarget`: the
+ * factor × the source's short side, to the nearest target) when the wired
+ * clip's size is known ({@link topazVideoQuotedSourceSize}), else 1080p.
+ */
+export function topazVideoQuotedTarget(
+  node: Pick<WorkflowNode, "id" | "type" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): { resolution: TopazVideoResolution; legacyFactor?: string } {
+  const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  const legacyFactor = topazVideoLegacyFactor(data)
+  const { resolution } = resolveTopazVideoTarget({
+    targetResolution: typeof data.targetResolution === "string" ? data.targetResolution : undefined,
+    upscaleFactor: legacyFactor,
+    source: legacyFactor === undefined ? undefined : topazVideoQuotedSourceSize(node, nodes, edges),
+  })
+  return legacyFactor === undefined ? { resolution } : { resolution, legacyFactor }
+}
+
+/** The resolution of {@link topazVideoQuotedTarget}. */
+export function topazVideoQuotedResolution(
+  node: Pick<WorkflowNode, "id" | "type" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): TopazVideoResolution {
+  return topazVideoQuotedTarget(node, nodes, edges).resolution
+}
+
+/**
+ * The Topaz units a Video Upscale is QUOTED at (`topazVideoEstimateUnits`, the
+ * rule the server's run estimate reads): its resolution as
+ * {@link topazVideoQuotedResolution} reads it, and its frame rate (else 30
+ * fps), at the length {@link topazVideoQuotedSourceSec} gives, on a 16:9
+ * frame. One unit for every other provider, whose row is the whole price. The
+ * node's pill, its Run button, the confirm and the workflow badge all read this.
+ */
+export function videoUpscalePricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  // Priced as it runs: a wired Settings input can set the provider and the target.
+  const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  if (!isTopazVideoUpscaleProvider(data.provider)) return 1
+  return topazVideoEstimateUnits({
+    resolution: topazVideoQuotedResolution(node, nodes, edges),
+    fps: typeof data.targetFps === "number" && Number.isFinite(data.targetFps) ? clampTopazVideoFps(data.targetFps) : undefined,
+    durationSec: topazVideoQuotedSourceSec(node, nodes, edges, rerunIds),
+  })
 }

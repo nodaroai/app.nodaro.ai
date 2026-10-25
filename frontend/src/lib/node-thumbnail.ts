@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from "react"
 import type { WorkflowNode } from "@/types/nodes"
 import { LookPreviewStyleProvider, getParameterPickerMeta, readLookPreviewStyle } from "@/lib/picker-ui"
+import { topazVideoResolutionLabel } from "@/lib/topaz-video-labels"
 
 /** Matches URLs whose extension is a known video container. Used so a node
  *  field that happens to hold a video URL (e.g. a character's starred motion
@@ -187,6 +188,8 @@ const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
   // Aspect ratio: generator `aspectRatio`, aspect-ratio node `ratio`, resize `targetAspect`.
   { key: "aspect", fields: ["aspectRatio", "ratio", "targetAspect"], icon: "ratio" },
   { key: "resolution", fields: ["resolution", "quality"] },
+  // An upscale's target (Video Upscale on Topaz: 720p / 1080p / 4K), else the old factor.
+  { key: "target", fields: ["targetResolution"], render: (v) => (typeof v === "string" ? topazVideoResolutionLabel(v) : undefined) },
   { key: "upscale", fields: ["upscaleFactor"], render: (v) => `${v}×` },
   // Duration in seconds — duration node (`seconds`), video generators (`duration`),
   // composition/FX nodes (`durationSeconds`), split-media (`chunkDuration`).
@@ -195,7 +198,7 @@ const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
     fields: ["seconds", "duration", "durationSeconds", "chunkDuration"],
     render: (v) => (typeof v === "number" && v > 0 ? `${v}s` : undefined),
   },
-  { key: "fps", fields: ["fps"], render: (v) => (typeof v === "number" && v > 0 ? `${v} fps` : undefined) },
+  { key: "fps", fields: ["fps", "targetFps"], render: (v) => (typeof v === "number" && v > 0 ? `${v} fps` : undefined) },
   { key: "voice", fields: ["voiceName", "voiceId", "voiceLabel"] },
   { key: "language", fields: ["language", "targetLanguage"] },
   { key: "style", fields: ["style"], render: (v) => (typeof v === "string" ? snippet(v, 24) : undefined) },

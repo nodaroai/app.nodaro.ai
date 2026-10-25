@@ -26,6 +26,7 @@ import type {
   VideoToVideoProvider,
   MotionTransferProvider,
   VideoUpscaleProvider,
+  VideoUpscaleRequest,
   LipSyncProvider,
   LipSyncOptions,
   VideoLipSyncOptions,
@@ -82,6 +83,8 @@ export interface RouteResult {
    *  so the copy below is conditional rather than an `undefined` value. */
   relayJobId?: string
   relayCredits?: number | null
+  /** See ProviderResult.billedUnits. */
+  billedUnits?: number
 }
 
 // ─── Core routing engine ──────────────────────────────────────────
@@ -284,6 +287,9 @@ async function walkChainAndExecute(
       ...(result.relayJobId
         ? { relayJobId: result.relayJobId, relayCredits: result.relayCredits ?? null }
         : {}),
+      // Provider-reported billing units (Replicate's Topaz upscalers) —
+      // conditional for the same reason: absent on every other result.
+      ...(result.billedUnits !== undefined ? { billedUnits: result.billedUnits } : {}),
     }
   }
 
@@ -424,7 +430,7 @@ export async function motionTransfer(
 export async function videoUpscale(
   videoUrl: string,
   model: string,
-  upscaleFactor?: "1" | "2" | "4",
+  request?: VideoUpscaleRequest,
   options?: ProviderOptions,
   reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
@@ -434,7 +440,7 @@ export async function videoUpscale(
     "videoUpscale",
     async (instance) => {
       const p = resolveModule<VideoUpscaleProvider>(instance, "video")
-      return p.videoUpscale(videoUrl, upscaleFactor, options, reconcileOpts)
+      return p.videoUpscale(videoUrl, request, options, reconcileOpts)
     }
   )
 }

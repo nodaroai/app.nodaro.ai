@@ -5,16 +5,21 @@
  */
 import type { FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
-import { redactPrivateJobData } from "./public-job-data.js"
+import { TRASHED_JOB_COLUMN, redactPrivateJobData } from "./public-job-data.js"
 
 export const SESSION_COLS =
   "id, user_id, project_id, workspace_id, title, tool, created_at, updated_at, archived_at, cover_job_id"
 
 /** The job columns a session feed returns, before `sanitizeJobForPublic`
  *  narrows them to the public allowlist. `parent_job_id` is read only to leave
- *  a child job out of a non-admin's feed (the allowlist drops it). */
+ *  a child job out of a non-admin's feed (the allowlist drops it). The feed
+ *  embeds them `!inner` and filters `TRASHED_JOB_COLUMN` (FEED_LIVE_JOB_FILTER),
+ *  so an item whose job is in the Trash is not a row at all. */
 export const SESSION_FEED_JOB_COLS =
   "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, credits, job_type, source, source_detail, session_id, parent_job_id"
+
+/** The feed's embedded job (`job:jobs!job_id!inner(...)`) must be live. */
+export const FEED_LIVE_JOB_FILTER = `job.${TRASHED_JOB_COLUMN}`
 
 export const TOOL_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
 
@@ -33,7 +38,10 @@ export interface SessionRow {
 }
 
 export interface SessionPreview {
+  /** Live items: links not removed, to jobs not in the Trash (migration 561). */
   itemCount: number
+  /** Items removed from the session — its part of the Trash. */
+  removedCount: number
   previewUrls: string[]
 }
 
@@ -48,6 +56,7 @@ export function toSessionResponse(row: SessionRow, preview: SessionPreview) {
     archivedAt: row.archived_at,
     coverJobId: row.cover_job_id ?? null,
     itemCount: preview.itemCount,
+    removedCount: preview.removedCount,
     previewUrls: preview.previewUrls,
   }
 }
@@ -149,6 +158,8 @@ export function previewUrlOf(outputData: unknown): string | null {
 interface PreviewRow {
   session_id: string
   item_count: number | string
+  /** Migration 561; absent from a database before it (read as 0). */
+  removed_count?: number | string | null
   recent: Array<{ job_id: string; output_data: unknown }> | null
 }
 
@@ -187,6 +198,9 @@ async function loadCoverUrls(
     // Completed only, like the automatic previews: an unfinished cover just
     // leaves the automatic order in place until it has its image.
     .eq("status", "completed")
+    // A cover is cleared when its job goes to the Trash (migration 561); this
+    // read holds that rule on its own too.
+    .is(TRASHED_JOB_COLUMN, null)
   if (error) return { data: map, error }
   for (const row of (data ?? []) as Array<{ id: string; output_data: unknown }>) {
     const url = previewUrlOf(row.output_data)
@@ -221,10 +235,11 @@ export async function loadPreviews(
     const coverUrl = coverJobId ? (covers.data.get(coverJobId) ?? null) : null
     map.set(row.session_id, {
       itemCount: Number(row.item_count) || 0,
+      removedCount: Number(row.removed_count) || 0,
       previewUrls: withCover(coverUrl, coverJobId, auto),
     })
   }
   return { data: map, error: null }
 }
 
-export const EMPTY_PREVIEW: SessionPreview = { itemCount: 0, previewUrls: [] }
+export const EMPTY_PREVIEW: SessionPreview = { itemCount: 0, removedCount: 0, previewUrls: [] }

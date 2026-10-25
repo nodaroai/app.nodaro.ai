@@ -189,6 +189,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
   },
   "video-upscale": {
     "provider": { valueType: "string", fixed: true, values: ["seedance-2-5-hd","topaz","veo-1080p","veo-4k"] },
+    "targetResolution": { valueType: "string", fixed: false, values: ["1080p","4k","720p"] },
   },
   "voice-changer": {
     "model": { valueType: "string", fixed: true, values: ["eleven_english_sts_v2","eleven_multilingual_sts_v2"] },

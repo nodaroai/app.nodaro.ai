@@ -1,4 +1,5 @@
 import { supabase } from "../supabase.js"
+import { TRASHED_JOB_COLUMN } from "../public-job-data.js"
 
 interface ResolveOpts {
   assetId: string | null | undefined
@@ -112,14 +113,17 @@ export async function resolveAssetId(opts: ResolveOpts): Promise<string | null> 
   if (!assetId || assetId.length === 0) return null
 
   // 1. Try jobs (generations) first — most common case for v1.1 verbs.
+  // trash-read: the row's deleted_at is checked in code just below (a job in the Trash is no asset).
   const jobResult = await supabase
     .from("jobs")
-    .select("id, user_id, job_type, output_data")
+    .select(`id, user_id, job_type, output_data, ${TRASHED_JOB_COLUMN}`)
     .eq("id", assetId)
     .maybeSingle()
   if (jobResult.error) throw new Error(`Failed to resolve asset: ${jobResult.error.message}`)
-  if (jobResult.data) {
-    const job = jobResult.data
+  // A job in the Trash is no asset: it reads as an id that names nothing.
+  const found = jobResult.data as Record<string, unknown> | null
+  if (found && found[TRASHED_JOB_COLUMN] == null) {
+    const job = found as { user_id: unknown; job_type: unknown; output_data: unknown }
     if (job.user_id !== userId) {
       throw new Error("forbidden: asset belongs to a different user")
     }

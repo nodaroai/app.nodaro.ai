@@ -544,10 +544,10 @@ describe("typed wrapper dispatch", () => {
     const fn = vi.fn().mockResolvedValue({ url: "u", cost: 0 })
     setupSuccessfulCall("video", "videoUpscale", fn)
 
-    await videoUpscale("vid", "topaz", "2", { mode: "fast" })
+    await videoUpscale("vid", "topaz", { targetResolution: "4k", targetFps: 60 }, { mode: "fast" })
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("video-upscale", "topaz")
-    expect(fn).toHaveBeenCalledWith("vid", "2", { mode: "fast" }, undefined)
+    expect(fn).toHaveBeenCalledWith("vid", { targetResolution: "4k", targetFps: 60 }, { mode: "fast" }, undefined)
   })
 
   it("lipSync routes via lip-sync capability", async () => {

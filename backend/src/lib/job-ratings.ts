@@ -9,6 +9,7 @@
  */
 import { supabase } from "./supabase.js"
 import { isMissingTableError } from "./postgrest-errors.js"
+import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 export const JOB_RATINGS = ["good", "bad"] as const
 export type JobRating = (typeof JOB_RATINGS)[number]
@@ -36,6 +37,7 @@ export async function setJobRating(ownerId: string, jobId: string, rating: JobRa
   const { data: job, error: readError } = await supabase
     .from("jobs")
     .select("id")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", jobId)
     .eq("user_id", ownerId)
     .maybeSingle()

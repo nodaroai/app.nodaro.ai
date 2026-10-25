@@ -1157,7 +1157,21 @@ describe("buildPayload", () => {
       const inputs: ResolvedInputs = { videoUrl: "https://v.mp4" }
       const result = buildPayload(n, jobId, inputs)
       expect(result.jobName).toBe("video-upscale")
-      expect(result.modelIdentifier).toBe("topaz-video")
+      // Held per Topaz unit: node-executor stamps the clip's plan and reserves its units.
+      expect(result.modelIdentifier).toBe("topaz-video:per-unit")
+    })
+
+    it("video-upscale on Topaz sends the node's target (resolution + fps), not a factor default", () => {
+      const n = node("n1", "video-upscale", { provider: "topaz", targetResolution: "4k", targetFps: 60 })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+      expect(result.payload).toMatchObject({ targetResolution: "4k", targetFps: 60 })
+    })
+
+    it("video-upscale drops a target resolution Topaz does not offer and keeps a legacy factor", () => {
+      const n = node("n1", "video-upscale", { provider: "topaz", targetResolution: "8k", upscaleFactor: "4" })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+      expect(result.payload).not.toHaveProperty("targetResolution")
+      expect(result.payload).toMatchObject({ upscaleFactor: "4" })
     })
 
     it("extend-video", () => {

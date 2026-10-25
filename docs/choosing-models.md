@@ -107,6 +107,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | --- | --- | --- | --- | --- | --- |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
+| Topaz Video Upscale | Topaz | Everyday | 44<!-- credits: topaz-video:per-unit --> | video-upscale | High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel. |
 | Bytedance Lite I2V | Bytedance | Everyday | 63<!-- credits: bytedance-lite --> | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
 | Hailuo 02 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-standard --> | i2v, t2v | Hailuo 02 Standard — economical option with end-frame support. |
 | Hailuo 2.3 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-2.3 --> | i2v | Cheaper Hailuo 2.3 tier — good baseline quality. |
@@ -126,7 +127,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Wan 2.7 I2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-i2v --> | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
 | Wan 2.7 T2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-t2v --> | t2v | Wan 2.7 text-to-video — 2–15s at 720p/1080p. |
 | Seedance 2 Mini | Bytedance | Everyday | 209<!-- credits: seedance-2-mini --> | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
-| Topaz Video Upscale | Topaz | Everyday | 209<!-- credits: topaz-video --> | video-upscale | High-quality video upscale and enhancement. |
 | VEO Extend | Google | Everyday | 209<!-- credits: veo-extend --> | extend | Extend an existing VEO 3.1 clip by another segment. |
 | Vidu Q4 | Vidu | Everyday | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |

@@ -98,6 +98,7 @@ export async function fillAssetRenderQuality<T extends AssetLabelRow>(assets: re
   if (ids.length === 0) return [...assets]
 
   const { data, error } = await supabase
+    // trash-read: a render label for a Library item, which outlives a deleted job by design.
     .from("jobs")
     // tenant-scope-ignore: a shared library item's job belongs to another user; only the render label is read.
     .select(ASSET_JOB_SELECT)

@@ -92,8 +92,15 @@ vi.mock("@/providers/video/merge-video-audio.js", () => ({
   mergeVideoAudio: mocks.mockMergeVideoAudio,
 }))
 
+vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/credit-base-cost.js")>()),
+  // The Topaz unit row at 40 base credits.
+  unitRateBaseCredits: vi.fn(async (_rateId: string, units: number) => units * 40),
+}))
+
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
+  COMBINE_DELIVERY_CRF: "18",
 }))
 
 vi.mock("../../shared.js", async (importOriginal) => {
@@ -770,15 +777,18 @@ describe("video-upscale handler", () => {
   const handler = videoAIHandlers["video-upscale"]
 
   it("happy path: upscales, uploads, saves, commits credits", async () => {
-    const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4" })
+    const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4", targetResolution: "4k", targetFps: 60 })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
-      "https://vid.mp4", "topaz", "2",
+      "https://vid.mp4", "topaz", { targetResolution: "4k", targetFps: 60 },
       expect.objectContaining({ onProgress: expect.any(Function) }),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
-    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
+    // Topaz delivers HEVC: the browser-safe transcode runs at the visually lossless CRF.
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.anything(), expect.anything(), { crf: "18" },
+    )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
@@ -802,24 +812,42 @@ describe("video-upscale handler", () => {
     expect(mocks.mockSetJobProgress).toHaveBeenCalledWith(expect.anything(), "job-1", 75)
   })
 
-  it("defaults to upscaleFactor '2' when not specified", async () => {
+  it("sends no target when the job names none (the provider resolves it from the source)", async () => {
     const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
-      expect.anything(), expect.anything(), "2", expect.anything(),
+      expect.anything(), expect.anything(), {}, expect.anything(),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
-  it("uses custom upscaleFactor when specified", async () => {
+  it("forwards a legacy upscaleFactor for the provider to map over the source", async () => {
     const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4", upscaleFactor: "4" })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
-      expect.anything(), expect.anything(), "4", expect.anything(),
+      expect.anything(), expect.anything(), { upscaleFactor: "4" }, expect.anything(),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
+  })
+
+  it("settles a Topaz run at the units Replicate reported (meteredBaseCredits)", async () => {
+    mocks.mockVideoUpscale.mockResolvedValueOnce({ ...VIDEO_RESULT, cost: 0.24, billedUnits: 3 })
+    const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4", targetResolution: "1080p", targetFps: 30 })
+    await handler(job as never, makeCtx())
+
+    const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0][0] as { meteredBaseCredits?: number; result: { cost: number | null } }
+    expect(finalize.result.cost).toBe(0.24)
+    // 3 units × the unit row (40) — never the hold.
+    expect(finalize.meteredBaseCredits).toBe(120)
+  })
+
+  it("commits the hold when Replicate reports no units", async () => {
+    const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0][0]).not.toHaveProperty("meteredBaseCredits")
   })
 })
 

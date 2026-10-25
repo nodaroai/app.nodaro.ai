@@ -23,13 +23,13 @@ import { config } from "../../../lib/config.js"
 import { supabase } from "../../../lib/supabase.js"
 import { callerGrantOf, withJobSubmissionContext, type TrustedJobProvenance } from "../../../lib/job-submission-context.js"
 import { resolveWebSurfaceFlag } from "../../../middleware/credit-guard.js"
-import { redactPrivateJobData } from "../../../lib/public-job-data.js"
+import { redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../../lib/public-job-data.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../../lib/job-credit-status.js"
 import { sideHoldChargesFor } from "../../../lib/job-step-charge.js"
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import { faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskTargetsOf, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError } from "./store.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
@@ -242,7 +242,7 @@ export function toTrendRun(
 export async function fullQualityByDraft(draftIds: string[], owners: string | string[]): Promise<Map<string, RunJobRow>> {
   const out = new Map<string, RunJobRow>()
   if (draftIds.length === 0) return out
-  let query = supabase.from("jobs").select(`${RUN_JOB_COLS}, fullQualityOf:input_data->>fullQualityOf`)
+  let query = supabase.from("jobs").select(`${RUN_JOB_COLS}, fullQualityOf:input_data->>fullQualityOf`).is(TRASHED_JOB_COLUMN, null)
   query = typeof owners === "string" ? query.eq("user_id", owners) : query.in("user_id", owners)
   const { data, error } = await query
     .filter("input_data->>type", "eq", "cast-swap")
@@ -341,8 +341,9 @@ export async function toTrendRuns(
 /**
  * Whether the loaded Cast Swap engine can run this: it declares trend runs,
  * every slot kind the trend uses, fixed references when the trend has some,
- * face masking when the trend masks, a trend pre prompt when it has one, the
- * trend's video engine, and the requested resolution.
+ * face masking when the trend masks (and what its masks cover,
+ * `faceMaskTargets`), a trend pre prompt when it has one, the trend's video
+ * engine, and the requested resolution.
  */
 export function engineSupports(composed: ComposedTrendRun): boolean {
   const cs = getPluginSupports().castSwap
@@ -351,6 +352,8 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   for (const kind of composed.needs.roleKinds) if (!cs.roleKinds.includes(kind)) return false
   if (composed.needs.fixedReferences && cs.fixedReferences !== true) return false
   if (composed.needs.faceMasking && cs.faceMasking !== true) return false
+  // An engine that does not declare the target strips it and masks heads: never send it a face-only trend.
+  if (composed.needs.faceMaskTarget && !faceMaskTargetsOf(cs).includes(composed.needs.faceMaskTarget)) return false
   if (composed.needs.trendPrePrompt && cs.trendPrePrompt !== true) return false
   return cs.resolutions.includes(composed.body.resolution)
 }
@@ -408,6 +411,7 @@ export async function followPreviewMasking(
   const { data, error } = await supabase
     .from("jobs")
     .select("id, user_id, status, input_data, output_data")
+    .is(TRASHED_JOB_COLUMN, null)
     .eq("id", opts.previewJobId)
     .eq("user_id", opts.userId)
     .maybeSingle()

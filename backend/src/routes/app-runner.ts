@@ -1416,6 +1416,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       let inFlightJob = false
       if (!executionActive) {
         const { data: liveJobs, error: jobsError } = await supabase
+          // trash-read: an in-flight check before a delete counts every running job.
           .from("jobs")
           .select("id")
           .eq("workflow_execution_id", run.execution_id)

@@ -2,8 +2,9 @@
  * Provider Routing Configuration
  *
  * Maps ProviderCapability values to provider preference chains.
- * KIE.ai is the sole primary provider; Replicate participates only as the
- * image-generation fallback for the models that live exclusively there.
+ * KIE.ai is the sole primary provider; Replicate participates only for the
+ * models that live exclusively there: the "Open" image-generation models and
+ * the Topaz upscalers (image-editing, video-upscale — moved off KIE 2026-10-25).
  *
  * The legacy `ai_provider` app-setting deliberately does NOT affect routing:
  * migration 005 seeds it to "replicate" on every fresh database, nothing
@@ -49,10 +50,20 @@ export interface RoutingDecision {
 const KIE_ONLY_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
   "video-to-video",
   "motion-transfer",
-  "video-upscale",
   "lip-sync",
   "speech-to-video",
   "text-to-speech",
+])
+
+/**
+ * Capabilities whose chain falls through to Replicate for the model ids it
+ * declares (the router walks each provider's `supportedModels`, so an id KIE
+ * declares never reaches Replicate).
+ */
+const KIE_THEN_REPLICATE_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
+  "image-generation",
+  "image-editing",
+  "video-upscale",
 ])
 
 /**
@@ -93,14 +104,14 @@ export async function buildRoutingDecision(
 ): Promise<RoutingDecision> {
   const settings = await getAppSettings()
 
-  // KIE-only capabilities have no fallback; image-generation falls through to
-  // Replicate for the "Open" (uncensored) models that only live there
-  // (flux-2-klein, kontext-multi) — the router.ts walker uses each provider's
+  // KIE-only capabilities have no fallback; image-generation, image-editing and
+  // video-upscale fall through to Replicate for the models that only live there
+  // (flux-2-klein, kontext-multi, the Topaz upscalers) — the router.ts walker uses each provider's
   // `supportedModels`, so KIE-routed ids never reach Replicate. Everything else
   // is KIE-only. (All three KIE-mode chains share the same markup/provider.)
   const baseChain: RoutingDecision["providerChain"] = KIE_ONLY_CAPABILITIES.has(capability)
     ? ["kie"]
-    : capability === "image-generation"
+    : KIE_THEN_REPLICATE_CAPABILITIES.has(capability)
       ? ["kie", "replicate"]
       : ["kie"]
   // Nodaro Cloud extension — how the chain extends is the USER'S choice

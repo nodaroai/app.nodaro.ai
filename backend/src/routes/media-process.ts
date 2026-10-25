@@ -187,6 +187,7 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
         // (`save-to-storage` writes `output_data.url`).
         for (const path of jobOutputReferrerPaths()) {
           const { count, error } = await supabase
+            // trash-read: a still-referenced check before deleting stored media: a deleted job still holds its media until the purge.
             .from("jobs")
             .select("id", { count: "exact", head: true })
             .eq("user_id", userId)

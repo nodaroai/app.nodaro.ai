@@ -6,6 +6,7 @@ import {
   DEFAULT_SUNO_MODEL,
   FLUX_LORA_CHARACTER_MODEL_ID,
   type VideoUpscaleProvider,
+  type TopazVideoResolution,
   type TtsProvider,
   type SunoSeparateType,
   type SunoStemName,
@@ -6426,6 +6427,11 @@ export async function motionTransferApi(
 
 export async function videoUpscaleApi(opts: {
   videoUrl?: string
+  /** Topaz: the output resolution (the frame's short side). */
+  targetResolution?: TopazVideoResolution
+  /** Topaz: the output frame rate (15–60); absent = the source's own rate. */
+  targetFps?: number
+  /** Legacy Topaz lever — sent only by a saved node that has no `targetResolution`. */
   upscaleFactor?: "1" | "2" | "4"
   userId?: string
   provider?: VideoUpscaleProvider
@@ -6436,7 +6442,9 @@ export async function videoUpscaleApi(opts: {
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {}
   if (opts.videoUrl) body.videoUrl = opts.videoUrl
-  if (opts.upscaleFactor) body.upscaleFactor = opts.upscaleFactor
+  if (opts.targetResolution) body.targetResolution = opts.targetResolution
+  else if (opts.upscaleFactor) body.upscaleFactor = opts.upscaleFactor
+  if (typeof opts.targetFps === "number" && Number.isFinite(opts.targetFps)) body.targetFps = opts.targetFps
   if (opts.userId) body.userId = opts.userId
   if (opts.provider) body.provider = opts.provider
   if (opts.kieTaskId) body.kieTaskId = opts.kieTaskId
@@ -11101,6 +11109,8 @@ export interface AdminTrendSource {
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
 export type AdminTrendFaceMaskingFill = "blur" | "depth"
+/** What a mask covers: "head" (the default; hair and people seen from behind too) or "face" (the face only). */
+export type AdminTrendFaceMaskingTarget = "face" | "head"
 
 /** Frame margins (0–49 % each); a face centred in one is not masked. */
 export interface AdminTrendFaceMaskingZone {
@@ -11116,6 +11126,8 @@ export interface AdminTrendFaceMaskingZone {
  */
 export interface AdminTrendFaceMasking {
   mode: AdminTrendFaceMaskingMode
+  /** Left out = "head" (the engine's default). */
+  target?: AdminTrendFaceMaskingTarget
   fill?: AdminTrendFaceMaskingFill
   /** 0–100 % of the frame's height; default 15. */
   minFaceHeightPct?: number
@@ -11308,6 +11320,7 @@ export interface TrendEngineEnvironment {
       trendRun?: boolean
       storedFaceMask?: boolean
       faceMaskRecipe?: string
+      faceMaskTargets?: AdminTrendFaceMaskingTarget[]
     }
   } & Record<string, unknown>
   updatedAt: string

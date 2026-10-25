@@ -1,10 +1,10 @@
 # Upscale Video
 
-> Upscale video resolution using Topaz or VEO AI, or finalize a Seedance 2.5 draft at 1080p.
+> Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p.
 
 ## Overview
 
-The Video Upscale node enhances video resolution using AI upscaling. Choose between Topaz (factor-based scaling with quality enhancement), VEO (fixed target resolutions), or **Seedance 2.5 HD (from draft)**, which finalizes a Seedance 2.5 draft at 1080p. Unlike most processing nodes, upscaling uses AI processing.
+The Video Upscale node enhances video resolution using AI upscaling. Choose between Topaz (any video, to a target resolution and frame rate, with quality enhancement), VEO (fixed target resolutions), or **Seedance 2.5 HD (from draft)**, which finalizes a Seedance 2.5 draft at 1080p. Unlike most processing nodes, upscaling uses AI processing.
 
 ## Configuration
 
@@ -16,7 +16,35 @@ The Video Upscale node enhances video resolution using AI upscaling. Choose betw
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Upscale Factor | Select | 2 | 1x (enhance only), 2x (recommended), 4x (maximum) |
+| Resolution | Select | 1080p | The output's **short side**: 720p, 1080p or 4K. A portrait clip stays portrait (a 1080×1920 source at 4K comes out 2160×3840). Choosing the source's own resolution enhances it without resizing. |
+| Frame rate | Select | Same as source | 24, 25, 30, 50 or 60 fps (any whole number from 15 to 60 through the API). Frames the source does not have are **interpolated** by Topaz; keep "Same as source" to leave the motion as it is. |
+
+The output is delivered as H.264 (the provider renders HEVC; Nodaro re-encodes it at a visually lossless quality so it plays in every browser and works as an input to every other node).
+
+**Older workflows** that stored an upscale **factor** (1×, 2× or 4×) keep working: the factor is applied to the source's short side and the **nearest** resolution is used (a 720p clip at 2× renders at 1080p, at 4× at 4K; a 1080p clip at 2× at 4K), at the source's own frame rate. Opening the node and picking a resolution replaces the factor.
+
+#### Credits (Topaz)
+
+Topaz is **metered**: you are charged what the upscale actually costs, in Topaz units, and never more than the amount held when the run starts.
+
+- **The hold.** Before the run, Nodaro reads the clip (length, frame size, frame rate) and holds credits for the output it will produce: **10 units per output gigapixel** (output width × height × frames ÷ 1,000,000,000), at least **3 units**. One unit is **44 credits**<!-- credits: topaz-video:per-unit -->.
+- **The charge.** When the upscale finishes, you are charged the units Topaz actually used, and the rest of the hold is refunded. In practice the charge is usually well below the hold. Long clips that keep their resolution are especially cheap, and frame-rate interpolation and 4K cost the most.
+- If the provider does not report the units it used, the hold is charged.
+- A video whose length or size cannot be read is refused before anything is held.
+- **Longest clip.** An upscale may produce at most **25 output gigapixels**, which is about an hour of Topaz processing. That's about **50 s** at 4K / 60 fps, **100 s** at 4K / 30 fps, and **6½ minutes** at 1080p / 30 fps (16:9). A longer clip is refused before anything is held, and the message gives the longest clip the chosen settings allow. Trim the clip, or choose a lower resolution or frame rate.
+
+Holds for a 16:9 clip (the charge is at most this):
+
+| Clip | Output | Hold |
+|---|---|---:|
+| 5 s | 1080p, 30 fps | **176**<!-- credits: topaz-video:per-unit@4 --> |
+| 10 s | 1080p, 30 fps | **308**<!-- credits: topaz-video:per-unit@7 --> |
+| 10 s | 4K, 30 fps | **1100**<!-- credits: topaz-video:per-unit@25 --> |
+| 10 s | 4K, 60 fps | **2200**<!-- credits: topaz-video:per-unit@50 --> |
+
+For example, a 5-second 720p clip upscaled to 1080p at 30 fps holds 176 credits<!-- credits: topaz-video:per-unit@4 --> and, at the 3 units Topaz used for it, is charged **132**<!-- credits: topaz-video:per-unit@3 -->.
+
+**The price you see before you run** is the hold, marked as an estimate (≈). The editor reads the clip's length from the node wired into it when it knows it (an upload, a generation's duration), and otherwise prices a 10-second clip; it assumes a 16:9 frame and, with "Same as source", 30 fps. The run itself measures the real clip, so the amount held can differ from the estimate.
 
 ### VEO Options
 
@@ -24,7 +52,7 @@ Select target resolution: 1080p or 4K.
 
 **VEO upscale only works on a video that a VEO node generated earlier in the same workflow.** It re-renders that generation at the higher resolution rather than processing a file, so an uploaded video, or a clip from any other model, cannot feed it. Wire the VEO node's video output straight into this node. For every other video, choose the Topaz provider.
 
-The node card names the selected provider ("VEO 1080p Upscale", "Topaz 2x Upscale"), and a run with a VEO provider and no VEO source is refused before any credits are reserved, with a message that says to connect the VEO node or switch to Topaz.
+The node card names the selected provider ("VEO 1080p Upscale", "Topaz 4K Upscale"), and a run with a VEO provider and no VEO source is refused before any credits are reserved, with a message that says to connect the VEO node or switch to Topaz.
 
 ### Seedance 2.5 HD (from draft)
 
@@ -77,9 +105,9 @@ Through the API: `POST /v1/video-upscale` with `{ "provider": "seedance-2-5-hd",
 ## Best Practices
 
 - VEO 1080p is a good option for moderate upscaling
-- Use Topaz 2x for highest quality results
+- Use Topaz at 1080p for most publishing; pick 4K only for deliverables that need it
 - Upscale after all other processing is complete to avoid re-processing at higher resolution
-- 1x Topaz (enhance) improves quality without changing resolution
+- Topaz at the source's own resolution (e.g. 1080p for a 1080p clip) enhances quality without resizing
 
 ## Common Use Cases
 
@@ -91,4 +119,4 @@ Through the API: `POST /v1/video-upscale` with `{ "provider": "seedance-2-5-hd",
 
 - Upscaling works best on clean source video — apply noise reduction or effects before upscaling
 - VEO 4K is the highest-quality option — only use for final deliverables that truly need 4K
-- Topaz 1x enhance is great for improving quality without changing dimensions
+- Raising the frame rate (e.g. 24 → 60 fps) makes motion smoother but costs more and can soften fast action — keep "Same as source" unless you need it

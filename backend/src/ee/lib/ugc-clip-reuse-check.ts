@@ -98,6 +98,7 @@ export async function verifiedReusedClips(
     const keyed = claims.length > 0 ? claimKeys(tickets, claims, runKey) : []
     if (keyed === null || keyed.length === 0) return verified
     const { data, error } = await supabase
+      // trash-read: a job in the Trash has no idempotency key (lib/job-trash.ts frees it), so it is no claim's take.
       .from("jobs")
       .select("id, status, idempotency_key, type:input_data->>type")
       .eq("user_id", userId)
@@ -117,6 +118,7 @@ export async function verifiedReusedClips(
     const earlier = new Map<string, string>()
     if (earlierKeys.length > 0) {
       const { data: rows, error: earlierError } = await supabase
+        // trash-read: a lookup by idempotency key, which a job in the Trash no longer holds.
         .from("jobs")
         .select("idempotency_key, status")
         .eq("user_id", userId)

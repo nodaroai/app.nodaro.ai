@@ -65,8 +65,9 @@ over if you have one; if you don't, your local choice stays active on that
 device — but it isn't written to your account until you change the language
 while signed in.
 
-On Nodaro Cloud, your language is one choice for every Nodaro product (a
-self-hosted install keeps it per app, as described above). Pick it in the app, in
+On Nodaro Cloud, your language is one choice for every Nodaro product where the
+shared Nodaro header is on (`VITE_SHARED_HEADER=true`; without it, and on a
+self-hosted install, it stays per app, as described above). Pick it in the app, in
 Studio or on any of the creative tools, signed in or not, and the next product
 you open is already in that language. A tab you left open switches to it when
 you come back to it.

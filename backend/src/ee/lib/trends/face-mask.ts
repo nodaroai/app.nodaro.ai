@@ -8,8 +8,9 @@
  * and approved by an admin, and copied into the trend's storage
  * (`TrendFaceMask`). It is tied to:
  *   - the settings key (`faceMaskSettingsKey`): the source clip and the
- *     masking settings as a run sends them (`withResolvedZone`), all but
- *     `mode` (always and auto mask the same clip);
+ *     masking settings as a run sends them (`withResolvedZone`, the target
+ *     resolved: left out = "head"), all but `mode` (always and auto mask the
+ *     same clip);
  *   - the recipes: core's `VIDEO_MASK_RECIPE` (Video Mask's algorithm) and the
  *     engine's `faceMaskRecipe` (its own masking parameters), per environment.
  * Editing the source or the settings, or a recipe bump, makes it OUT OF DATE
@@ -19,7 +20,7 @@
  */
 import { createHash } from "node:crypto"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
-import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskTargetOf, faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
 import type { EngineEnvironment } from "../engine-environments.js"
 import type { TrendFaceMask, TrendVersionData } from "./types.js"
 
@@ -43,10 +44,17 @@ function stableJson(v: unknown): string {
  * the clip and the setting with its zone resolved, as a run sends it, without
  * its `mode` (always and auto mask the same clip). The same for a setting
  * already resolved (`withResolvedZone` is idempotent). `v2`: v1 hashed the mode too.
+ *
+ * The target is resolved first (left out = "head", `faceMaskTargetOf`) and
+ * hashed only when it is "face": a setting that leaves it out and one that
+ * says "head" hash exactly as every setting did before the target existed,
+ * so the masks approved then (all made of heads) stay up to date, while
+ * switching between face and head makes a stored mask out of date.
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMasking): string {
-  const { mode: _mode, ...settings } = withResolvedZone(masking)
-  const text = stableJson({ videoUrl, faceMasking: settings })
+  const { mode: _mode, target: _target, ...settings } = withResolvedZone(masking)
+  const target = faceMaskTargetOf(masking)
+  const text = stableJson({ videoUrl, faceMasking: target === "head" ? settings : { ...settings, target } })
   return `v2:${createHash("sha256").update(text).digest("hex")}`
 }
 

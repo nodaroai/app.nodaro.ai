@@ -61,6 +61,7 @@ export async function workflowCostRoutes(app: FastifyInstance) {
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
     let query = supabase
+      // trash-read: costs count spending, deleted or not.
       .from("jobs")
       .select("id, status, input_data")
       .in("id", jobIds)

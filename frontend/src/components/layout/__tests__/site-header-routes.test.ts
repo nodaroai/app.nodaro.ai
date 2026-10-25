@@ -55,6 +55,22 @@ describe("where the shared site header can render", () => {
     ])
   })
 
+  it("the shared accessibility choices have their own small module, read only by the app's preferences", () => {
+    // Read before the first paint and by the app's own menu, in the main
+    // bundle: a new importer must be as light as these. The cookie writer
+    // names it for the state's type only.
+    expect(where(/["']virtual:site-a11y["']/)).toEqual([
+      "ee/shell/a11y-cookie.ts",
+      "ee/shell/contract/props.contract.ts",
+      "ee/shell/header-module-plugin.ts",
+      "lib/accessibility-preferences.ts",
+    ])
+  })
+
+  it("only the header's mount says it is on the page (the app's accessibility menu steps aside for it)", () => {
+    expect(where(/\bmarkSharedHeaderMounted\(/)).toEqual(["ee/shell/app-header.tsx", "lib/shared-header.ts"])
+  })
+
   it("the admin layout reads neither the slot nor the gate", () => {
     const admin = FILES.find(({ path }) => path === "ee/layouts/admin-layout.tsx")?.src ?? ""
     expect(admin).not.toMatch(/SiteHeaderSlot|sharedHeaderActive/)

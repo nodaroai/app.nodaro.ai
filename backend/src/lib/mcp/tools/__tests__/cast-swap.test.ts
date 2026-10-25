@@ -226,6 +226,7 @@ describe("cast_swap", () => {
       ...ARGS,
       face_masking: {
         mode: "auto",
+        target: "head",
         fill: "depth",
         min_face_height_pct: 10,
         max_face_height_pct: 60,
@@ -240,6 +241,7 @@ describe("cast_swap", () => {
       ...BODY,
       faceMasking: {
         mode: "auto",
+        target: "head",
         fill: "depth",
         minFaceHeightPct: 10,
         maxFaceHeightPct: 60,
@@ -263,6 +265,32 @@ describe("cast_swap", () => {
     // Not null: an engine that predates zone: null refuses it, and reads all 0 as no margins.
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto", zone: null } })
     expect(calls[1]!.payload).toEqual({ ...BODY, faceMasking: { mode: "auto", zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } } })
+  })
+
+  it("sends the target as given (head, the default, on any engine), and leaves it out when not given", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    _resetPluginSupportsForTests()
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "head" } })
+    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", target: "head" } })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always" } })
+    expect(calls[1]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always" } })
+    expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "body" } })).isError).toBe(true)
+  })
+
+  it("refuses target face, sending nothing, where the loaded engine does not declare it (an older engine would mask heads)", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    for (const castSwap of [undefined, { faceMaskTargets: ["head" as const] }]) {
+      _resetPluginSupportsForTests()
+      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "face" } })
+      expect(res.isError).toBe(true)
+      expect(res.content[0]!.text).toContain("face_mask_target_unavailable")
+    }
+    expect(calls).toEqual([])
+    setPluginSupports({ castSwap: { faceMaskTargets: ["face", "head"] } as never })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "face" } })
+    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", target: "face" } })
+    _resetPluginSupportsForTests()
   })
 
   it("sends no faceMasking key at all without face_masking", async () => {

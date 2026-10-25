@@ -411,6 +411,7 @@ async function spentLines(ids: readonly string[], userId: string): Promise<{ spe
   const rows = new Map<string, SpentJobRow>()
   if (lookups.length > 0) {
     const { data, error } = await supabase
+      // trash-read: what was already spent counts, a job since deleted included.
       .from("jobs")
       .select("id, status, job_type, input_data, credits, credits_actual")
       .in("id", lookups)

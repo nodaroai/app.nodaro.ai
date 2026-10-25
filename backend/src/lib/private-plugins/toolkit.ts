@@ -38,6 +38,7 @@ import {
   probeMediaStreams,
   needsTranscode,
   transcodeToBrowserSafe,
+  COMBINE_DELIVERY_CRF,
   needsContainerRemux,
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
@@ -144,7 +145,7 @@ import { changesStudioPublishFlag } from "../studio-audience.js"
 import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
-import { redactPrivateJobOutput } from "../public-job-data.js"
+import { redactPrivateJobOutput, TRASHED_JOB_COLUMN } from "../public-job-data.js"
 import { assertParentJobId, hostRequestGrantOf, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
@@ -534,6 +535,19 @@ async function renderEdlTimelineToUrl(opts: PluginEdlTimelineOptions): Promise<P
  * last `seconds` via `extractTailToFile` (`providers/video/extract-tail.ts`),
  * and uploads the result to R2.
  */
+async function rehostUpscaledVideo(url: string): Promise<string> {
+  const workDir = await createWorkDir("rehost-video")
+  try {
+    const inputPath = join(workDir, "input.mp4")
+    await downloadFile(url, inputPath)
+    const outPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"), COMBINE_DELIVERY_CRF)
+    // In the running job's family, never the bare job id (the final deliverable's key).
+    return await uploadFileToR2(outPath, jobFileObjectId(getJobId(), "upscaled"), "video")
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
+}
+
 async function extractTailToUrl(url: string, seconds: number, jobId: string): Promise<string> {
   // One line of observability per cut (job dbf95612 post-mortem: the actual
   // `seconds` that reached this function in production was unknowable from
@@ -1294,6 +1308,9 @@ async function readJobsOwnedBy(
     .select("id, status, output_data, error_message, error_hint")
     .in("id", ids)
     .eq("user_id", userId)
+    // A job in the Trash (migration 561) is not in the answer, like one that
+    // is not the caller's: what a plugin shows its owner never names a deleted job.
+    .is(TRASHED_JOB_COLUMN, null)
   if (error) throw new Error(`Failed to read jobs: ${error.message}`)
 
   return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((raw) => ({
@@ -1330,6 +1347,8 @@ async function readOwnedJob(jobId: string, userId: string): Promise<PluginOwnedR
     .select(OWNED_RAW_JOB_COLUMNS)
     .eq("id", jobId)
     .eq("user_id", userId)
+    // A job in the Trash (migration 561) reads as absent, like one that is not theirs.
+    .is(TRASHED_JOB_COLUMN, null)
     .maybeSingle()
   if (error?.code === "22P02") return null
   if (error) {
@@ -1603,9 +1622,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // Provider-routed video enhancement (Topaz by default at the routing
       // layer). The gvp tail-restoration lever calls this on a 2-5s tail —
       // the contract exposes only (url, model, factor); reconcile/progress
-      // hooks stay app-internal.
-      videoUpscale: (videoUrl, model, upscaleFactor) =>
-        videoUpscale(videoUrl, model, upscaleFactor).then((r) => ({ url: r.url })),
+      // hooks stay app-internal. Topaz takes an absolute target since it
+      // moved to Replicate: the factor is mapped over the clip's own size
+      // (resolveTopazVideoTarget), at the clip's own frame rate.
+      // Topaz delivers HEVC 10-bit, which a video model may refuse as a
+      // reference clip (KIE's Topaz delivered H.264), so the result is
+      // re-hosted as browser-safe H.264 at the delivery CRF first.
+      videoUpscale: async (videoUrl, model, upscaleFactor) => {
+        const r = await videoUpscale(videoUrl, model, upscaleFactor !== undefined ? { upscaleFactor } : undefined)
+        return { url: await rehostUpscaledVideo(r.url) }
+      },
       finalizeSeedanceDraft: async (draftTaskId, options) => {
         const r = await runSeedanceDraftFinalize(draftTaskId, {
           reconcile: options?.onTaskCreated ? { onTaskCreated: async (id) => { await options.onTaskCreated?.(id) } } : undefined,

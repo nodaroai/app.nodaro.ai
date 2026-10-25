@@ -105,6 +105,8 @@ import {
 import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
+import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
+import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
@@ -1719,6 +1721,39 @@ function meteredReserveRefusal(message: string, errorCode: string): Error {
 }
 
 /**
+ * A Topaz video upscale holds its output-gigapixel ceiling — the unit's row ×
+ * the units `stampTopazVideoUpscale` stamped, marked up once at the unit id
+ * (the route's guard holds the same) — and is charged the units Replicate
+ * reports when it completes. Undefined for every other job.
+ */
+async function computeTopazVideoCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const base = await topazVideoStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * A Topaz image upscale whose output costs more by its size than by its tier:
+ * the one-unit row × its size units (`stampTopazImageSize`), marked up once at
+ * the tier id — what the route's guard charges. Undefined otherwise.
+ */
+async function computeTopazImageCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const base = await topazImageStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
  * A Seedance draft finalize whose draft had a reference VIDEO bills input +
  * output seconds, which its per-second `-ref` row cannot express alone — the
  * stamped plan's exact base, marked up once at the stamped id (the same basis
@@ -2227,6 +2262,28 @@ async function executeWorkerNode(
   // job keeps the very object the stamps around it write into.
   if (Object.keys(draftFinalizeStamp.patch).length > 0) payload = { ...payload, ...draftFinalizeStamp.patch }
 
+  // 2b'++. Topaz video upscale: measure the source by the route's own rule
+  // (lib/topaz-video-plan.ts), stamp the resolved target and the units it
+  // holds. An unreadable source leaves no jobs row and charges nothing.
+  const topazStamp = await stampTopazVideoUpscale(jobName, payload)
+  if (!topazStamp.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(topazStamp.refusal.message) as Error & { errorCode?: string }
+    err.errorCode = topazStamp.refusal.code
+    throw err
+  }
+  if (Object.keys(topazStamp.patch).length > 0) payload = { ...payload, ...topazStamp.patch }
+  // Topaz image upscale: read the image's size by the route's rule and stamp
+  // its units (a large output costs its size); refuse one past the largest size.
+  const topazImageStamp = await stampTopazImageSize(jobName, payload, hasCredits())
+  if (!topazImageStamp.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(topazImageStamp.message) as Error & { errorCode?: string }
+    err.errorCode = "image_too_large"
+    throw err
+  }
+  if (Object.keys(topazImageStamp.patch).length > 0) payload = { ...payload, ...topazImageStamp.patch }
+
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {
     await supabase.from("jobs").delete().eq("id", jobId)
@@ -2381,6 +2438,8 @@ async function executeWorkerNode(
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
         (await computeSeedanceDraftFinalizeCreditOverride(jobName, payload)) ??
+        (await computeTopazVideoCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeTopazImageCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??

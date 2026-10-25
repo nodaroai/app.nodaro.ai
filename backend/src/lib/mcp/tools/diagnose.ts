@@ -7,7 +7,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { sideHoldChargesFor, withSideCharge } from "../../job-step-charge.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
-import { CHILD_JOB_COLUMN, trendRunErrorText } from "../../public-job-data.js"
+import { CHILD_JOB_COLUMN, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -206,6 +206,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             .in("id", jobIds)
             .eq("user_id", session.userId)
             .is(CHILD_JOB_COLUMN, null)
+            // Nor a job in the Trash: it reads as one that does not exist.
+            .is(TRASHED_JOB_COLUMN, null)
           for (const j of (jobs ?? []) as JobRow[]) {
             if (j.id) jobMap.set(j.id, j)
           }
@@ -283,8 +285,10 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
-        // A child job reads as one that does not exist (CHILD_JOB_COLUMN).
+        // A child job reads as one that does not exist (CHILD_JOB_COLUMN), and
+        // so does a job in the Trash.
         .is(CHILD_JOB_COLUMN, null)
+        .is(TRASHED_JOB_COLUMN, null)
         .maybeSingle()
       if (jobErr) {
         return {

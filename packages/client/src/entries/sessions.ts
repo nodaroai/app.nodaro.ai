@@ -14,5 +14,6 @@ export type {
   ListSessionsParams,
   SessionItem,
   ListSessionItemsParams,
+  MoveSessionItemsInput,
   SessionPage,
 } from "../resources/sessions.js"

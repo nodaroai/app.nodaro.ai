@@ -8,6 +8,8 @@ import {
   itemParams,
   listItemsQuery,
   listSessionsQuery,
+  moveItemsBody,
+  removeItemQuery,
   updateSessionBody,
 } from "../lib/generation-sessions-schemas.js"
 
@@ -20,7 +22,8 @@ const Session = z.object({
   updatedAt: z.string().describe("The session's latest activity: an item added, or an edit."),
   archivedAt: z.string().nullable(),
   coverJobId: z.string().uuid().nullable().describe("The item picked as the session's cover; null = automatic."),
-  itemCount: z.number().int(),
+  itemCount: z.number().int().describe("Live items: not removed, and their job not deleted."),
+  removedCount: z.number().int().describe("Items removed from the session — its part of the Trash (`GET /v1/sessions/{id}/items?removed=true`)."),
   previewUrls: z.array(z.string()).describe(
     "Up to four image links: the cover's image first when one is set, then the newest completed items.",
   ),
@@ -29,6 +32,7 @@ const Session = z.object({
 const SessionItem = z.object({
   jobId: z.string().uuid(),
   addedAt: z.string(),
+  removedAt: z.string().nullable().describe("When the item was removed from the session (it is in the Trash); null for a live item."),
   imported: z.boolean().describe("True when the item was imported from elsewhere rather than born in this session."),
   importedFrom: z.object({ sessionId: z.string().uuid(), title: z.string().nullable() }).nullable(),
   job: z.unknown().describe("The job, in the same shape `GET /v1/jobs/{id}` returns."),
@@ -55,7 +59,7 @@ openApiRegistry.registerPath({
 openApiRegistry.registerPath({
   method: "get",
   path: "/v1/sessions",
-  description: "List your sessions, newest first. Archived ones are left out unless `includeArchived=true`.",
+  description: "List your sessions, newest first. Archived ones are left out unless `includeArchived=true`. `projectId=none` lists the sessions with no project.",
   security,
   request: { query: listSessionsQuery },
   responses: {
@@ -106,7 +110,8 @@ openApiRegistry.registerPath({
 openApiRegistry.registerPath({
   method: "get",
   path: "/v1/sessions/{id}/items",
-  description: "The session's items, born-in and imported, newest first.",
+  description:
+    "The session's live items, born-in and imported, newest first. With `removed=true`, the items removed from it (its part of the Trash), newest removal first. An item whose job was deleted is in neither: it is in the Trash as the deleted job.",
   security,
   request: { params: idParams, query: listItemsQuery },
   responses: {
@@ -123,7 +128,7 @@ openApiRegistry.registerPath({
   method: "post",
   path: "/v1/sessions/{id}/items",
   description:
-    "Import some of your own jobs into the session — a link, not a copy. All-or-nothing: if any id is not one of your jobs, nothing is imported (404). Items already in the session are left as they are.",
+    "Import some of your own jobs into the session — a link, not a copy. All-or-nothing: if any id is not one of your jobs, or is deleted, nothing is imported (404). Items already in the session are left as they are; an item removed from it comes back where it was.",
   security,
   request: { params: idParams, body: { content: { "application/json": { schema: importItemsBody } } } },
   responses: {
@@ -139,8 +144,41 @@ openApiRegistry.registerPath({
 openApiRegistry.registerPath({
   method: "delete",
   path: "/v1/sessions/{id}/items/{jobId}",
-  description: "Remove one item from the session. Only the link is removed: the job, and every other session holding it, are untouched.",
+  description:
+    "Remove one item from the session: it goes to the session's Trash (`GET /v1/trash`, or this session's `items?removed=true`) until it is restored or deleted for good — no automatic cleanup. Only the link moves: the job, and every other session holding it, are untouched; an item in no live session shows in General (`GET /v1/jobs?inSession=false`). With `forever=true` an item already removed is deleted for good (the job stays); a live one answers 409 `not_in_trash`.",
+  security,
+  request: { params: itemParams, query: removeItemQuery },
+  responses: {
+    200: { description: "Removed" },
+    401: unauthorized,
+    404: notFound,
+    409: { description: "`forever=true` on an item that is not removed (`not_in_trash`)" },
+  },
+})
+
+openApiRegistry.registerPath({
+  method: "post",
+  path: "/v1/sessions/{id}/items/{jobId}/restore",
+  description: "Bring a removed item back into the session, where it was. An item that is not removed answers success too.",
   security,
   request: { params: itemParams },
-  responses: { 200: { description: "Removed" }, 401: unauthorized, 404: notFound },
+  responses: { 200: { description: "Restored" }, 401: unauthorized, 404: notFound },
+})
+
+openApiRegistry.registerPath({
+  method: "post",
+  path: "/v1/sessions/{id}/items/move",
+  description:
+    "Move items of another of your sessions into this one, in one transaction: this session gets them (born-in stays born-in, else imported from the source), the source keeps them as removed items, so the move can be undone from its Trash. A session in another project is how an item moves to another project. All-or-nothing: if any id is not a live item of `fromSessionId`, nothing moves (404).",
+  security,
+  request: { params: idParams, body: { content: { "application/json": { schema: moveItemsBody } } } },
+  responses: {
+    200: {
+      description: "Moved",
+      content: { "application/json": { schema: z.object({ data: z.object({ moved: z.number().int() }) }) } },
+    },
+    400: { description: "`fromSessionId` is this session" },
+    401: unauthorized,
+    404: notFound,
+  },
 })

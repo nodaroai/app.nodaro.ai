@@ -108,6 +108,7 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
     if (opts.signal?.aborted) return { status: "aborted", ...nothing, error: `Wait for job ${opts.jobId} was aborted`, jobType: null }
 
     const { data, error } = await supabase
+      // trash-read: the shared wait loop reads by id after its callers' own checks (MCP wait_for_job's leaves the Trash out); server-side waits follow their own runs.
       .from("jobs")
       .select("status, output_data, job_type, error_message, error_hint, progress, created_at, started_at")
       .eq("id", opts.jobId)

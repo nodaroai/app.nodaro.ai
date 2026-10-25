@@ -18,6 +18,7 @@ beforeEach(() => {
       select: () => chain,
       eq: (key: string, value: unknown) => { state.filters.push([table, key, value]); return chain },
       in: (key: string, value: unknown) => { state.filters.push([table, key, value]); return chain },
+      is: (key: string, value: unknown) => { state.filters.push([table, key, value]); return chain },
       maybeSingle: async () => ({ data, error: null }),
       then: (resolve: (result: unknown) => unknown) => Promise.resolve({ data, error: null }).then(resolve),
     }
@@ -36,6 +37,8 @@ describe("server-attested retained job videos", () => {
     for (const [key, value] of [["id", "job"], ["user_id", "owner"], ["workflow_id", "film"], ["status", "completed"]]) {
       expect(state.filters).toContainEqual(["jobs", key, value])
     }
+    // A job in the Trash is never retained: it reads as one that does not exist.
+    expect(state.filters).toContainEqual(["jobs", "deleted_at", null])
     expect(state.fetch).toHaveBeenCalledWith("https://media.test/source", { maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video" })
     expect(state.retain).toHaveBeenCalledWith({ userId: "owner", workflowId: "film", body: Buffer.from("source bytes") })
     expect(state.rpc).toHaveBeenCalledWith("record_retained_job_video", {

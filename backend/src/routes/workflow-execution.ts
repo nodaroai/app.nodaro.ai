@@ -39,7 +39,7 @@ import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
-import { CHILD_JOB_COLUMN, redactPrivateJobData, trendRunErrorText } from "../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
@@ -1198,6 +1198,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
+      // A job in the Trash reads as one that does not exist.
+      .is(TRASHED_JOB_COLUMN, null)
     if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
     const { data: job, error: jobError } = await jobQuery.single()
 
@@ -1258,6 +1260,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         .eq("id", execId)
         .eq("user_id", req.userId)
         .is("workflow_execution_id", null)
+        .is(TRASHED_JOB_COLUMN, null)
       if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
       const { data: job, error: jobError } = await jobQuery.single()
 
@@ -1371,6 +1374,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // Fallback: check if it's a standalone job (single-node execution)
     if (error || !execution) {
       const { data: job, error: jobError } = await supabase
+        // trash-read: cancelling stops work: a deleted job still running can be stopped.
         .from("jobs")
         .select("id, status, provider")
         .eq("id", parsed.data.id)
@@ -1493,6 +1497,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       const userId = req.userId
       void (async () => {
         const { data: activeJobs } = await supabase
+          // trash-read: cancelling an execution stops all its running jobs.
           .from("jobs")
           .select("id, provider")
           .eq("workflow_execution_id", parsed.data.id)
@@ -1580,6 +1585,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         cursorTimestamp = cursorExec.created_at as string
       } else {
         const { data: cursorJob } = await supabase
+          // trash-read: a cursor's position only; the listing below leaves the Trash out.
           .from("jobs")
           .select("created_at")
           .eq("id", cursor)
@@ -1622,6 +1628,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
+      .is(TRASHED_JOB_COLUMN, null)
       .order("created_at", { ascending: false })
       .limit(limit + 1)
 
@@ -1715,6 +1722,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         cursorTimestamp = cursorExec.created_at as string
       } else {
         const { data: cursorJob } = await supabase
+          // trash-read: a cursor's position only; the listing below leaves the Trash out.
           .from("jobs")
           .select("created_at")
           .eq("id", cursor)
@@ -1754,6 +1762,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .from("jobs")
       .select("id, node_id, workflow_id, user_id, status, progress, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .is("workflow_execution_id", null)
+      .is(TRASHED_JOB_COLUMN, null)
       .not("workflow_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(limit + 1)

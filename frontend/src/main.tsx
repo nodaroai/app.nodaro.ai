@@ -60,7 +60,7 @@ import { BrandDocumentHead } from "@/components/brand-document-head"
 import { AppToaster } from "@/components/app-toaster"
 import { AccessBlockedScreen } from "@/components/access-blocked-screen"
 import { AccessibilityMenuRoot } from "@/components/accessibility/accessibility-menu-root"
-import { applyPreferences, loadPreferences } from "@/lib/accessibility-preferences"
+import { applySavedPreferences } from "@/lib/accessibility-preferences"
 import { queryClient } from "@/lib/query-client"
 import { router } from "./router"
 
@@ -72,8 +72,9 @@ const ReactQueryDevtools = lazy(() =>
 
 void bootstrapCatalogs()
 bootstrapLookPreviews()
-// The viewer's accessibility choices apply before the first paint.
-applyPreferences(loadPreferences())
+// The viewer's accessibility choices apply before the first paint (the shared
+// choices on a shared-header build, this browser's elsewhere).
+applySavedPreferences()
 // So does the language: a right-to-left page is right-to-left from the first frame.
 applyDocumentLocale()
 

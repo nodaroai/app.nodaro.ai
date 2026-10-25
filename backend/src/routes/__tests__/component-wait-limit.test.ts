@@ -50,6 +50,8 @@ vi.mock("@/lib/supabase.js", () => {
     const c: Record<string, unknown> = {}
     c.select = () => c
     c.eq = (col: string, v: unknown) => { filters[col] = v; return c }
+    // `.is("deleted_at", null)`: a wrapper in the Trash reads as one that does not exist.
+    c.is = (col: string, v: unknown) => { filters[col] = v; return c }
     c.maybeSingle = async () => {
       h.filters.push({ ...filters })
       const row = h.rows.get(filters.id as string)

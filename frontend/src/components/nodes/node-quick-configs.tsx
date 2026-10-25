@@ -63,7 +63,11 @@ import {
   VOICE_CHANGER_MODELS,
   DEFAULT_VOICE_CHANGER_MODEL,
   SUNO_SEPARATE_TYPES,
+  TOPAZ_VIDEO_DEFAULT_RESOLUTION,
+  TOPAZ_VIDEO_RESOLUTIONS,
 } from "@nodaro/shared/models"
+import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
+import { isTopazVideoUpscaleProvider } from "@/lib/video-utility-estimate"
 import { SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import {
   isSeedanceDraftCapable,
@@ -546,7 +550,7 @@ const voiceDesignModelControl = (): QuickConfigControl => ({
     { value: "eleven_ttv_v3", label: "ElevenLabs v3" },
   ],
 })
-/** video-upscale provider — mirrors video-configs.tsx (~L1554, dynamic credit labels there). */
+/** video-upscale provider — mirrors video-configs.tsx `VideoUpscaleConfig` (VEO rows' prices there). */
 const videoUpscaleProviderControl = (): QuickConfigControl => ({
   field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: (_data) => withFreeVideoLocks([
@@ -555,6 +559,19 @@ const videoUpscaleProviderControl = (): QuickConfigControl => ({
     { value: "veo-4k", label: "VEO 4K" },
     { value: "seedance-2-5-hd", label: "Seedance 2.5 HD (from draft)" },
   ], (v, limits) => lockedVideoModel(limits, v)),
+})
+/** video-upscale target resolution — Topaz's lever only (the shared
+ *  `TOPAZ_VIDEO_RESOLUTIONS`, as `VideoUpscaleConfig` lists it): `[]` on every
+ *  other provider, so the strip hides it and clears the stale value. Choosing
+ *  one clears the old 1×/2×/4× factor, which the run reads only without it. */
+const videoUpscaleResolutionControl = (): QuickConfigControl => ({
+  field: "targetResolution", ariaLabel: tx("field.resolution"), icon: Maximize2,
+  defaultValue: TOPAZ_VIDEO_DEFAULT_RESOLUTION,
+  additionalClear: ["upscaleFactor"],
+  options: (data) =>
+    isTopazVideoUpscaleProvider(data.provider)
+      ? TOPAZ_VIDEO_RESOLUTIONS.map((r) => ({ value: r, label: TOPAZ_VIDEO_RESOLUTION_LABELS[r] }))
+      : [],
 })
 /** Video Depth levers. The valid set per provider comes from the shared
  *  contract (`videoDepthLevers` / `videoDepthColormaps`) — the same functions
@@ -1198,7 +1215,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "voice-design": [voiceDesignModelControl()],
   // voice-remix has no strip control: its endpoint takes no model, so the
   // model dropdown it used to show wrote a field the run never read.
-  "video-upscale": [videoUpscaleProviderControl()],
+  "video-upscale": [videoUpscaleProviderControl(), videoUpscaleResolutionControl()],
   "video-depth": [providerControl(VIDEO_DEPTH_MODELS), videoDepthSizeControl(), videoDepthColormapControl(), videoDepthResolutionControl(), videoDepthSideBySideControl()],
   // ── Language / resolution (other dropdown configs) ──
   "dubbing": [targetLanguageControl()],

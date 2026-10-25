@@ -19,8 +19,11 @@
  * engine when it is not Seedance 2.5 (the engine's `engines`), every
  * resolution that engine offers (Seedance 2.5: 480p, 720p and 1080p; Kling 4:
  * 720p and 1080p), Full Quality and trend runs, and stored face masks when
- * it masks (`storedFaceMask`). An environment with no recorded row is
- * unknown, which blocks like an unsupported one.
+ * it masks (`storedFaceMask`), and the mask's target when it masks the face
+ * only (`faceMaskTargets` with "face", need `FACE_ONLY_NEED`; the head, the
+ * default, is what every engine that makes stored masks covers). An
+ * environment with no recorded row is unknown, which blocks like an
+ * unsupported one.
  *
  * A masked trend also needs an approved face mask that is up to date
  * (`faceMaskState`, face-mask.ts): none is `face_mask_missing`; one made from
@@ -29,7 +32,7 @@
  * `face_mask_out_of_date` (one reason each).
  */
 import type { EngineEnvironment } from "../engine-environments.js"
-import { faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskTargetOf, faceMaskTargetsOf, faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
 import {
   CAST_SWAP_ENGINES,
@@ -59,7 +62,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -81,6 +84,9 @@ const OUT_OF_DATE_MESSAGES: Readonly<Record<FaceMaskOutOfDate["why"], string>> =
 
 const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
 
+/** The need of a trend whose masks cover the face only (`faceMasking.target: "face"`). */
+export const FACE_ONLY_NEED = "faceMaskTarget:face"
+
 export { castSwapEnginesOf }
 
 /** What every environment's engine must support for this draft, in report order. */
@@ -93,6 +99,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...kinds,
     ...(data.references.length > 0 ? ["fixedReferences"] : []),
     ...(faceMaskingOn(data.faceMasking) ? ["faceMasking", "storedFaceMask"] : []),
+    // The head (the default) is every masking engine's: only the face alone is a need of its own.
+    ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "face" ? [FACE_ONLY_NEED] : []),
     ...(data.prePrompt ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? [engine] : []),
@@ -110,6 +118,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === "fixedReferences") return cs.fixedReferences !== true
     if (need === "faceMasking") return cs.faceMasking !== true
     if (need === "storedFaceMask") return cs.storedFaceMask !== true
+    if (need === FACE_ONLY_NEED) return !faceMaskTargetsOf(cs).includes("face")
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)

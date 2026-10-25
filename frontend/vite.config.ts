@@ -34,6 +34,8 @@ export default defineConfig({
       root: __dirname,
       stubPath: path.resolve(__dirname, "src/ee/shell/stub.tsx"),
       localeStubPath: path.resolve(__dirname, "src/lib/site-locale-stub.ts"),
+      a11yStubPath: path.resolve(__dirname, "src/lib/site-a11y-stub.ts"),
+      a11yCookiePath: path.resolve(__dirname, "src/ee/shell/a11y-cookie.ts"),
     }),
   ],
   resolve: {

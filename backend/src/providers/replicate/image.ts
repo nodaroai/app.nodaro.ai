@@ -9,10 +9,12 @@
 
 import type {
   ImageGenerationProvider,
+  ImageEditingProvider,
   ProviderResult,
   ReconcileOpts,
 } from "../provider.interface.js"
 import { extractUrl, runReplicatePrediction } from "./client.js"
+import { runTopazImageUpscale } from "./topaz.js"
 import { translateToEnglish } from "../../lib/translate.js"
 import { isFlux2Model } from "@nodaro/shared/model-catalog"
 import { flux2CostUsd } from "../../lib/pricing/flux2-cost.js"
@@ -261,7 +263,23 @@ async function runImagePrediction(
   }
 }
 
-export class ReplicateImageProvider implements ImageGenerationProvider {
+/** Image-editing ids served on Replicate (the router's walker reads these). */
+export const REPLICATE_IMAGE_EDIT_MODEL_IDS = ["topaz-image-upscale"] as const
+
+export class ReplicateImageProvider implements ImageGenerationProvider, ImageEditingProvider {
+  async editImage(
+    imageUrl: string,
+    _prompt?: string,
+    model?: string,
+    extraParams?: Record<string, unknown>,
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult> {
+    if (model !== "topaz-image-upscale") {
+      throw new Error(`Replicate does not support image-editing model: ${model ?? "(none)"}`)
+    }
+    return runTopazImageUpscale(imageUrl, extraParams, reconcileOpts)
+  }
+
   async generateImage(
     prompt: string,
     referenceImageUrls?: string[],
