@@ -11254,6 +11254,8 @@ export const ptBR: ChromeDict = {
   "apiErr.listTemplates": "Não foi possível listar os templates",
   "apiErr.updateTutorialFlag": "Não foi possível atualizar a marcação de tutorial",
   "apiErr.loadTrends": "Não foi possível carregar as tendências",
+  "apiErr.loadNodaroMotion": "Não foi possível carregar as configurações do Nodaro Motion",
+  "apiErr.saveNodaroMotion": "Não foi possível salvar as configurações do Nodaro Motion",
   "apiErr.saveTrend": "Não foi possível salvar a tendência",
   "apiErr.deleteTrendRun": "Não foi possível excluir a execução",
   "apiErr.updateTemplateListing": "Não foi possível atualizar o template",

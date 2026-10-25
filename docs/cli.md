@@ -308,7 +308,7 @@ nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--
 nodaro recast start <recastId> [--segment-pack scenes-max|scenes|max] [--json]   # render a planned run (idempotent)
 nodaro recast status <recastId> [--json]                # poll status + any pending interactive step
 
-# Trends — ready-made Cast Swap recipes: fill a trend's slots with your own pictures (Cloud edition)
+# Trends — ready-made Nodaro Motion recipes: fill a trend's slots with your own pictures (Cloud edition)
 nodaro trends list [--search <text>] [--tag <tag>] [--favorites] [--locale <l>] [--limit <n>] [--cursor <c>] [--json]
 nodaro trends get <slug> [--locale <l>] [--json]          # its slots (key, kind, required), examples, preview, engine, resolutions
 nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice <key>.<chip>=new|original] [--example <n>] [--details "…"] [--preview] [--resolution 480p|720p|1080p] [--no-draft] [--json]
@@ -317,18 +317,18 @@ nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice 
 #   1-32 of a-z, 0-9 and _, checked before anything is sent);
 #   --choice keeps a trait of the clip (original) or makes it anew from your pictures (new): a person's
 #   body / outfit / hair, a pet's body / coat, a product's shape / finish. --resolution is one the trend offers
-#   (`trends get`); default its first: a 480p draft, or 720p on a Kling 4 trend (which has no draft).
+#   (`trends get`); default its first: a 480p draft, or 720p on a Nodaro Motion Lite trend (which has no draft).
 nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-key <key>] [--json]
 #   SPENDS CREDITS — run `estimate` first; prints the job id (follow it with `nodaro jobs get <id>`).
 #   --session is accepted but not yet applied: trend runs are not filed into sessions yet
 nodaro trends runs [--trend <slug>] [--limit <n>] [--cursor <c>] [--json]   # your trend runs, newest first (--limit 1-60, here and on list)
 nodaro trends favorite <slug>                            # and: nodaro trends unfavorite <slug>
 
-# Cast Swap — Full Quality: finish a run at 1080p (Cloud edition): a draft run (a Cast Swap or trend run made
-# as a draft) as the same take, or a Kling 4 run at 720p as a new take from the same inputs
+# Nodaro Motion (cast-swap) — Full Quality: finish a run at 1080p (Cloud edition): a draft run (a Nodaro Motion
+# or trend run made as a draft) as the same take, or a Nodaro Motion Lite run at 720p as a new take from the same inputs
 nodaro cast-swap full-quality estimate <jobId> [--json]
 #   free quote: "about N credits", whether it is the same take or a new take, each part of the quote
-#   (castSwap + seedanceHd; seedanceHd is 0 when an earlier try's 1080p render is reused) and until when
+#   by label (Nodaro Motion + the 1080p render, which is 0 when an earlier try's render is reused) and until when
 #   the run can be finished (7 days after it completed)
 nodaro cast-swap full-quality run <jobId> [--session <id>] [--json]
 #   SPENDS CREDITS — run `estimate` first; prints the new job id (follow it with `nodaro jobs get <id>`).

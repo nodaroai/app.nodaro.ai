@@ -415,24 +415,11 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
-| `engine` | string |  | The video model. Default "seedance-2-5". "kling-4": 720p or 1080p only, no draft; its Full Quality is a new take. One of `seedance-2-5`, `kling-4`. |
-| `kling_length` | string |  | kling-4 only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
-| `resolution` | string |  | Default "480p" (kling-4: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | Render as a draft, 480p seedance-2-5 only. Default true at 480p, false above. |
+| `engine` | string |  | Default "motion-pro" (Nodaro Motion Pro). "motion-lite" (Nodaro Motion Lite): 720p or 1080p only, no draft; its Full Quality is a new take. One of `motion-pro`, `motion-lite`. |
+| `motion_length` | string |  | motion-lite only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
+| `resolution` | string |  | Default "480p" (motion-lite: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Render as a draft, 480p motion-pro only. Default true at 480p, false above. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
-| `face_masking` | object |  | Default off. |
-| `face_masking.mode` | string | yes | Mask the faces in the clip before the video model: "off", "always", or "auto" = only on a retry after the model refuses the clip. One of `off`, `always`, `auto`. |
-| `face_masking.target` | string |  | Default "head": hides hair and people seen from behind too. "face": the face only, hair stays visible. One of `face`, `head`. |
-| `face_masking.fill` | string |  | Default "blur". One of `blur`, `depth`. |
-| `face_masking.min_face_height_pct` | number |  | Mask faces at least this % of frame height. Default 15. From 0 to 100. |
-| `face_masking.max_face_height_pct` | number |  | And at most this %; default 0 = no limit. From 0 to 100. |
-| `face_masking.zone` | object or null |  | Frame margins, % (a face centred in one is not masked). Left out = left_pct 10, right_pct 10, top_pct 0, bottom_pct 0. Given: a margin left out is 0. null or all 0 = no margins. |
-| `face_masking.zone.left_pct` | number |  | From 0 to 49. |
-| `face_masking.zone.right_pct` | number |  | From 0 to 49. |
-| `face_masking.zone.top_pct` | number |  | From 0 to 49. |
-| `face_masking.zone.bottom_pct` | number |  | From 0 to 49. |
-| `face_masking.blur_strength_pct` | number |  | Blur strength, % of frame width. Default 2. From 0.1 to 5. |
-| `face_masking.threshold` | number |  | Face detection; lower finds more. Default 0.5. From 0.05 to 0.95. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
@@ -824,7 +811,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | The finished run's job id: a Cast Swap or trend run made as a draft, or one made on kling-4 at 720p. |
+| `job_id` | string | yes | The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-lite at 720p. |
 
 ## `estimate_trend`
 
@@ -838,7 +825,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | Default true; only at 480p (a kling-4 trend has none). |
+| `draft` | boolean |  | Default true; only at 480p (a motion-lite trend has none). |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
 ## `export_workflow`
@@ -933,7 +920,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | The finished run's job id: a Cast Swap or trend run made as a draft, or one made on kling-4 at 720p. |
+| `job_id` | string | yes | The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-lite at 720p. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 
@@ -2691,7 +2678,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | Default true; only at 480p (a kling-4 trend has none). |
+| `draft` | boolean |  | Default true; only at 480p (a motion-lite trend has none). |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 | `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |

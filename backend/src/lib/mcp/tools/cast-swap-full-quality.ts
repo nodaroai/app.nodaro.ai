@@ -1,7 +1,8 @@
 /**
- * MCP Full Quality verbs — a finished Cast Swap (or trend) run made again at
- * 1080p, with the clip's audio, as a new job linked to it: a Seedance 2.5
- * DRAFT's own take re-rendered (`kind: "same-take"`), or a new Kling 4 take
+ * MCP Full Quality verbs — a finished Nodaro Motion (Cast Swap) or trend run
+ * made again at 1080p, with the clip's audio, as a new job linked to it: a
+ * Nodaro Motion Pro DRAFT's own take re-rendered (`kind: "same-take"`), or a
+ * new Nodaro Motion Lite take
  * from a 720p run's inputs (`kind: "new-take"`). The quote's `kind` words it;
  * an older engine answers none (a same take). The MCP face of the Cloud
  * plugin's routes:
@@ -17,7 +18,7 @@
  * keys the job by the draft, so no client idempotency key is sent.
  *
  * Results are rebuilt field by field from the route's answer (never spread).
- * The route is the authority on every rule (a draft or a Kling 4 720p run,
+ * The route is the authority on every rule (a draft or a Nodaro Motion Lite 720p run,
  * finished, within 7 days).
  * Its one refusal that ends on its own, 409 `full_quality_pending` (an earlier
  * try's 1080p render is being reviewed or has not started), says to try again
@@ -36,6 +37,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { McpSession } from "../session.js"
+import { neutralBreakdown } from "../../nodaro-motion-quote.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
@@ -44,7 +46,7 @@ import { errorResult, GET_JOB_POLL_HINT } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-const NOT_AVAILABLE = "Cast Swap is a Nodaro Cloud feature and is not served on this deployment."
+const NOT_AVAILABLE = "Nodaro Motion is a Nodaro Cloud feature and is not served on this deployment."
 
 export interface RegisterCastSwapFullQualityToolsOpts {
   server: McpServer
@@ -58,8 +60,8 @@ interface FullQualityQuote {
   /** Absent from an older engine (then a same take). */
   kind?: FullQualityKind
   totalCredits: number
-  /** `castSwap`, and the engine's other parts (`seedanceHd`: the 1080p render, 0 when reused). */
-  breakdown: { castSwap: number; seedanceHd?: number } & Record<string, number>
+  /** `castSwap`, and the engine's other parts by their neutral names (`motionHd`: the 1080p render, 0 when reused). */
+  breakdown: { castSwap: number; motionHd?: number } & Record<string, number>
   availableUntil: string
 }
 
@@ -81,10 +83,9 @@ function quoteOf(body: string): FullQualityQuote | null {
   const q = dataOf(body)
   if (!isRec(q) || !finite(q.totalCredits) || !isRec(q.breakdown) || typeof q.availableUntil !== "string") return null
   if (!finite(q.breakdown.castSwap)) return null
-  // Only the breakdown's own numeric parts, so a new engine's part names pass through.
-  const breakdown = Object.fromEntries(
-    Object.entries(q.breakdown).filter((e): e is [string, number] => finite(e[1])),
-  ) as FullQualityQuote["breakdown"]
+  // Only the breakdown's own numeric parts, by their neutral names (an engine before 0.395.0
+  // also, or only, sends the old ones); a new engine's other part names pass through.
+  const breakdown = neutralBreakdown(q.breakdown) as FullQualityQuote["breakdown"]
   const kind = q.kind === "same-take" || q.kind === "new-take" ? q.kind : undefined
   return { ...(kind ? { kind } : {}), totalCredits: q.totalCredits, breakdown, availableUntil: q.availableUntil }
 }
@@ -96,7 +97,7 @@ function quoteSentence(q: FullQualityQuote): string {
       `for about ${q.totalCredits} credits. Available until ${q.availableUntil}.`
     )
   }
-  const reused = q.breakdown.seedanceHd === 0 ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
+  const reused = q.breakdown.motionHd === 0 ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
   return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${q.totalCredits} credits.${reused} Available until ${q.availableUntil}.`
 }
 
@@ -131,7 +132,7 @@ function refusal(statusCode: number, body: string) {
 
 /** A job id: anything else (a slash, a dot segment) is refused before a request is made. */
 const JOB_ID_RE = /^[A-Za-z0-9-]{1,64}$/
-const JOB_ID_HINT = "The finished run's job id: a Cast Swap or trend run made as a draft, or one made on kling-4 at 720p."
+const JOB_ID_HINT = "The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-lite at 720p."
 const fullQualityUrl = (id: string) => `/v1/cast-swap/${encodeURIComponent(id)}/full-quality`
 
 export function registerCastSwapFullQualityTools({ server, session, fastify }: RegisterCastSwapFullQualityToolsOpts): void {
@@ -149,8 +150,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Estimate Full Quality",
       description:
-        "Quote finishing a Cast Swap or trend run at Full Quality (free; nothing starts): a DRAFT's same take re-rendered at 1080p, " +
-        'or, for a kling-4 run at 720p, a new take at 1080p (the quote\'s kind: "same-take" or "new-take"). ' +
+        "Quote finishing a Nodaro Motion (cast_swap) or trend run at Full Quality (free; nothing starts): a DRAFT's same take re-rendered at 1080p, " +
+        'or, for a motion-lite run at 720p, a new take at 1080p (the quote\'s kind: "same-take" or "new-take"). ' +
         "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free.",
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
@@ -172,8 +173,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Full Quality",
       description:
-        "Finish a Cast Swap or trend run at Full Quality, at 1080p with the clip's audio, as a new job: a DRAFT's same take re-rendered, " +
-        "or a new take of a kling-4 720p run (the quote says which). " +
+        "Finish a Nodaro Motion (cast_swap) or trend run at Full Quality, at 1080p with the clip's audio, as a new job: a DRAFT's same take re-rendered, " +
+        "or a new take of a motion-lite 720p run (the quote says which). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job.",
       inputSchema: {

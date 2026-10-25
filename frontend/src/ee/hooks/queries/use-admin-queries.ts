@@ -15,6 +15,8 @@ import {
   updateAdminNodeDefault,
   deleteAdminNodeDefault,
   fetchAdminTrends,
+  fetchNodaroMotionMasking,
+  saveNodaroMotionMasking,
   createAdminTrend,
   fetchAdminTrend,
   patchAdminTrend,
@@ -1512,6 +1514,23 @@ const handledByScreen = () => {}
 
 export function isDraftConflict(err: unknown): boolean {
   return err instanceof Error && (err as { code?: unknown }).code === "draft_conflict"
+}
+
+export function useNodaroMotionMasking() {
+  return useQuery({
+    queryKey: queryKeys.admin.nodaroMotionMasking(),
+    queryFn: fetchNodaroMotionMasking,
+    enabled: hasAdmin(),
+    staleTime: 30_000,
+  })
+}
+
+export function useSaveNodaroMotionMasking() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: saveNodaroMotionMasking,
+    onSuccess: (view) => queryClient.setQueryData(queryKeys.admin.nodaroMotionMasking(), view),
+  })
 }
 
 export function useAdminTrends() {

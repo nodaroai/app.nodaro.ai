@@ -3130,6 +3130,13 @@ export interface PluginToolkit {
    */
   capabilities?: PluginCapabilities
   /**
+   * Deployment-wide settings an admin saves for a plugin feature
+   * (`PluginSettingsToolkit`). ADDITIVE-OPTIONAL: an older host has no such
+   * member — read it as `tk.settings?.nodaroMotionMasking?.()` and treat
+   * absence as "never saved". Advertised per member in `capabilities`.
+   */
+  settings?: PluginSettingsToolkit
+  /**
    * Where this install lives, for links a plugin puts in front of people
    * (an invitation email, a share link). The public origin is decided in
    * exactly one place on the app side (`lib/deployment-urls.ts`, with its
@@ -3287,6 +3294,53 @@ export interface PluginCapabilities {
    * job carries no origin and no session.
    */
   readonly internalRequestProvenance?: boolean
+  /**
+   * `tk.settings.nodaroMotionMasking()` exists: the face masking an admin set
+   * per Nodaro Motion engine, for every DIRECT Cast Swap run. An older host has
+   * no `tk.settings` at all: a plugin reads that as never saved (no masking).
+   */
+  readonly nodaroMotionMasking?: boolean
+}
+
+/**
+ * A Cast Swap `faceMasking` setting, as the host validates it
+ * (`faceMaskingSchema` in `lib/cast-swap-face-masking.ts`; a structural
+ * mirror, pinned to it by a type test). Keys left out take the engine's
+ * defaults.
+ */
+export interface PluginFaceMasking {
+  mode: "off" | "always" | "auto"
+  target?: "face" | "head"
+  fill?: "blur" | "depth"
+  minFaceHeightPct?: number
+  maxFaceHeightPct?: number
+  zone?: { leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number } | null
+  blurStrengthPct?: number
+  threshold?: number
+}
+
+/**
+ * Nodaro Motion's face masking per engine, keyed by the PUBLIC engine ids
+ * (`"motion-pro"` = Seedance 2.5, `"motion-lite"` = Kling 4). An engine left
+ * out masks nothing.
+ */
+export type PluginNodaroMotionMasking = Partial<Record<"motion-pro" | "motion-lite", PluginFaceMasking>>
+
+/**
+ * Deployment-wide settings a plugin feature reads (host → plugin), each a
+ * short in-process cached read of an `app_settings` row (about 60 s, cleared
+ * on this process's own admin write). Grows one optional member at a time.
+ */
+export interface PluginSettingsToolkit {
+  /**
+   * The admin's face masking per Nodaro Motion engine, for direct runs (a
+   * trend run keeps its own trend's setting): each entry validated by the host
+   * (an invalid one is dropped and logged), or null when it was never saved
+   * (then no engine masks). Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read: a failed read is never
+   * "never saved".
+   */
+  nodaroMotionMasking?(): Promise<PluginNodaroMotionMasking | null>
 }
 
 /**
@@ -3356,6 +3410,16 @@ export interface PluginSupports {
    *   absent ⇒ an engine that predates the choice, read as `["seedance-2-5"]`
    *   (such an engine drops an `engine` it does not know and runs Seedance,
    *   so a run on any other engine is held back until it is declared here).
+   *   Either vocabulary: Nodaro Motion's public ids (`"motion-pro"`,
+   *   `"motion-lite"`) or the internal ones — an engine with `engineAliases`
+   *   (0.394.0+) declares all four, the internal ids as aliases of the public
+   *   ones. The host reads every form as the internal ids (`castSwapEnginesOf`:
+   *   two engines, never four) and keeps sending the internal ids, which every
+   *   engine takes (0.393.0 and older refuse the public ones).
+   * - `engineAliases`: the engine takes `engine` in either vocabulary (the
+   *   public ids and the internal ones, normalised to the public ids at parse
+   *   time) and records the public id. Additive-optional: absent ⇒ an engine
+   *   that takes the internal ids only.
    * - `storedFaceMask`: the engine makes a trend's face mask ahead of time
    *   (`POST /v1/cast-swap/face-mask`, internal only) and a trend run accepts
    *   the approved one (`storedFaceMask: { url, frames }`) in place of masking
@@ -3382,7 +3446,8 @@ export interface PluginSupports {
     readonly trendRun: boolean
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
-    readonly engines?: readonly ("seedance-2-5" | "kling-4")[]
+    readonly engines?: readonly ("seedance-2-5" | "kling-4" | "motion-pro" | "motion-lite")[]
+    readonly engineAliases?: boolean
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string
     readonly faceMaskTargets?: readonly ("face" | "head")[]

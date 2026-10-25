@@ -36,6 +36,13 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.internalRequestProvenance).toBe(true)
   })
 
+  it("advertises tk.settings.nodaroMotionMasking, and has it", () => {
+    // An older host has no tk.settings at all: the plugin reads that as never saved (no masking).
+    const tk = buildToolkit()
+    expect(tk.capabilities?.nodaroMotionMasking).toBe(true)
+    expect(typeof tk.settings?.nodaroMotionMasking).toBe("function")
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

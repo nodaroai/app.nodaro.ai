@@ -6,7 +6,7 @@ import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 
 /**
- * `cast_swap` — the MCP face of `POST /v1/cast-swap` (Cloud plugin).
+ * `cast_swap` — the MCP face of `POST /v1/cast-swap` (Nodaro Motion, Cloud plugin).
  *
  * The contracts under test:
  *  - without `confirm` it quotes (`/v1/cast-swap/estimate`) and never runs;
@@ -76,6 +76,8 @@ function serverWith(fastify: FastifyInstance, scopes: Scope[] = ["workflows:exec
 }
 
 const QUOTE = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0 }, settlesLower: false }
+/** What the tool adds to a quote that names no engine (an older engine's: Nodaro Motion Pro). */
+const PRO = { engine: "motion-pro", engineName: "Nodaro Motion Pro" }
 
 const ARGS = {
   video_url: "https://cdn.example/clip.mp4",
@@ -114,7 +116,7 @@ describe("cast_swap", () => {
     expect(res.isError).toBeFalsy()
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /v1/cast-swap/estimate"])
     expect(calls[0]!.payload).toEqual(BODY)
-    expect(res.structuredContent).toEqual({ ...QUOTE, confirmed: false })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { castSwap: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
     expect(res.content[0]!.text).toContain("12 credits")
     expect(res.content[0]!.text).toContain("confirm: true")
   })
@@ -137,7 +139,15 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toContain("costs about 31 credits (up to 40 held while it runs).")
     // The expected charge already is the lower figure: no "lower than this quote" after it.
     expect(res.content[0]!.text).not.toMatch(/lower than this quote/)
-    expect(res.structuredContent).toEqual({ ...quote, confirmed: false })
+    expect(res.structuredContent).toEqual({
+      ...PRO,
+      totalCredits: 40,
+      expectedCredits: 31,
+      // The engine's old key names are answered by their neutral ones.
+      breakdown: { castSwap: 5, references: 3, motion: 32, motionExpected: 23 },
+      settlesLower: true,
+      confirmed: false,
+    })
   })
 
   it("names the reference preparation in the quote when it costs something", async () => {
@@ -147,7 +157,7 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toContain("15 credits")
     expect(res.content[0]!.text).toMatch(/3 credits?[^.]*prepar/i)
     expect(res.content[0]!.text).toContain("prepare_references: false")
-    expect(res.structuredContent).toEqual({ ...withPrep, confirmed: false })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 15, breakdown: { castSwap: 5, references: 3, motion: 7 }, settlesLower: false, confirmed: false })
   })
 
   it("says nothing of the preparation when it costs nothing", async () => {
@@ -220,198 +230,169 @@ describe("cast_swap", () => {
     expect(calls).toHaveLength(0)
   })
 
-  it("sends face_masking to the route as faceMasking, every key in camelCase", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "cast_swap", {
-      ...ARGS,
-      face_masking: {
-        mode: "auto",
-        target: "head",
-        fill: "depth",
-        min_face_height_pct: 10,
-        max_face_height_pct: 60,
-        zone: { left_pct: 5, right_pct: 6, top_pct: 0, bottom_pct: 20 },
-        blur_strength_pct: 3,
-        threshold: 0.4,
-      },
+  it("accepts face_masking from an older client and ignores it: nothing of it reaches the route (Nodaro sets it per engine)", async () => {
+    const { fastify, calls } = stubFastify({
+      "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-fm" } },
     })
-
-    expect(res.isError).toBeFalsy()
-    expect(calls[0]!.payload).toEqual({
-      ...BODY,
-      faceMasking: {
-        mode: "auto",
-        target: "head",
-        fill: "depth",
-        minFaceHeightPct: 10,
-        maxFaceHeightPct: 60,
-        zone: { leftPct: 5, rightPct: 6, topPct: 0, bottomPct: 20 },
-        blurStrengthPct: 3,
-        threshold: 0.4,
-      },
-    })
-  })
-
-  it("sends only the face_masking keys given, so the route's defaults apply", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", zone: { top_pct: 10 } } })
-    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", zone: { topPct: 10 } } })
-  })
-
-  it("leaves a zone left out to the route's default margins, and sends zone: null as all four margins 0 (no margins)", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto" } })
-    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "auto" } })
-    // Not null: an engine that predates zone: null refuses it, and reads all 0 as no margins.
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto", zone: null } })
-    expect(calls[1]!.payload).toEqual({ ...BODY, faceMasking: { mode: "auto", zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } } })
-  })
-
-  it("sends the target as given (head, the default, on any engine), and leaves it out when not given", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    _resetPluginSupportsForTests()
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "head" } })
-    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", target: "head" } })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always" } })
-    expect(calls[1]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always" } })
-    expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "body" } })).isError).toBe(true)
-  })
-
-  it("refuses target face, sending nothing, where the loaded engine does not declare it (an older engine would mask heads)", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    for (const castSwap of [undefined, { faceMaskTargets: ["head" as const] }]) {
-      _resetPluginSupportsForTests()
-      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
-      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "face" } })
-      expect(res.isError).toBe(true)
-      expect(res.content[0]!.text).toContain("face_mask_target_unavailable")
-    }
-    expect(calls).toEqual([])
-    setPluginSupports({ castSwap: { faceMaskTargets: ["face", "head"] } as never })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", target: "face" } })
-    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", target: "face" } })
-    _resetPluginSupportsForTests()
-  })
-
-  it("sends no faceMasking key at all without face_masking", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    await callTool(serverWith(fastify), "cast_swap", ARGS)
-    expect("faceMasking" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
-  })
-
-  it("refuses a kling-4 run, sending nothing, where the loaded engine does not declare it (an older engine would run Seedance)", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    for (const castSwap of [undefined, { engines: ["seedance-2-5" as const] }]) {
-      _resetPluginSupportsForTests()
-      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+    const server = serverWith(fastify)
+    for (const face_masking of [
+      { mode: "always", target: "face", fill: "depth", zone: { left_pct: 5 } },
+      { mode: "auto" },
+      // Shapes the tool once refused are no error now: the key is not the tool's any more.
+      { mode: "sometimes", threshold: 7 },
+      "on",
+    ]) {
       for (const confirm of [undefined, true]) {
-        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", ...(confirm ? { confirm } : {}) })
-        expect(res.isError).toBe(true)
-        expect(res.content[0]!.text).toContain("engine_unavailable")
+        const res = await callTool(server, "cast_swap", { ...ARGS, face_masking, ...(confirm ? { confirm } : {}) })
+        expect(res.isError, JSON.stringify(face_masking)).toBeFalsy()
+      }
+    }
+    expect(calls).toHaveLength(8)
+    for (const c of calls) {
+      expect(c.payload).toEqual(BODY)
+      expect("faceMasking" in (c.payload as Record<string, unknown>)).toBe(false)
+    }
+  })
+
+  it("lists no face_masking argument", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
+    expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).not.toContain("face_masking")
+    expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).not.toContain("kling_length")
+    expect(JSON.stringify(tool)).not.toMatch(/mask|blur|depth|seedance|kling|SAM\b/i)
+  })
+
+  it("takes an older client's kling_length as motion_length (unlisted), and refuses one that is not a length fit", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, kling_length: "cut-start" })
+    expect(calls[0]!.payload).toEqual({ ...BODY, klingLength: "cut-start" })
+    // motion_length wins over it.
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, motion_length: "cut-end", kling_length: "cut-start" })
+    expect(calls[1]!.payload).toEqual({ ...BODY, klingLength: "cut-end" })
+    const bad = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, kling_length: "pad" })
+    expect(bad.isError).toBe(true)
+    expect(calls).toHaveLength(2)
+  })
+
+  it("refuses a motion-lite run (or the old kling-4 id), sending nothing, where the loaded engine does not declare it (an older engine would run Pro)", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    for (const castSwap of [undefined, { engines: ["seedance-2-5" as const] }, { engines: ["motion-pro" as const], engineAliases: true }]) {
+      _resetPluginSupportsForTests()
+      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+      for (const engine of ["motion-lite", "kling-4"]) {
+        for (const confirm of [undefined, true]) {
+          const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, ...(confirm ? { confirm } : {}) })
+          expect(res.isError).toBe(true)
+          expect(res.content[0]!.text).toContain("engine_unavailable")
+          expect(res.content[0]!.text).not.toMatch(/kling/i)
+        }
       }
     }
     expect(calls).toEqual([])
-    // Seedance named outright still runs anywhere.
+    // Pro named outright, by either id, still runs anywhere, sent as the internal id.
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pro" })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "seedance-2-5" })
-    expect(calls).toHaveLength(1)
+    expect(calls.map((c) => (c.payload as { engine?: string }).engine)).toEqual(["seedance-2-5", "seedance-2-5"])
+    _resetPluginSupportsForTests()
   })
 
-  describe("on an engine that declares kling-4", () => {
-    beforeEach(() => setPluginSupports({ castSwap: { engines: ["seedance-2-5", "kling-4"] } as never }))
-    afterEach(() => _resetPluginSupportsForTests())
-
-    it("quotes a kling-4 run (breakdown.kling, expected = hold) as one price, with nothing held beside it", async () => {
-      const kling = { engine: "kling-4", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
-      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: kling } })
-      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4" })
-      expect(res.structuredContent).toEqual({ ...kling, confirmed: false })
-      expect(res.content[0]!.text).toContain("about 420 credits.")
-      expect(res.content[0]!.text).not.toMatch(/held|lower/)
-    })
-
-    it("sends engine to the route as given (quote and run alike), and no engine key without it", async () => {
-      const { fastify, calls } = stubFastify({
-        "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-        "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-k" } },
-      })
-      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", resolution: "1080p", kling_length: "cut-start" })
-      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", resolution: "1080p", kling_length: "cut-start", confirm: true })
-      for (const c of calls) expect(c.payload).toEqual({ ...BODY, engine: "kling-4", resolution: "1080p", klingLength: "cut-start" })
-      calls.length = 0
-      await callTool(serverWith(fastify), "cast_swap", ARGS)
-      expect("engine" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
-    })
-
-    it("refuses an engine it does not know before calling the route; leaves draft on kling-4 to the route", async () => {
-      const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Kling 4 has no draft." } } } })
-      expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-3" })).isError).toBe(true)
-      expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", kling_length: "pad" })).isError).toBe(true)
-      expect(calls).toEqual([])
-      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-4", draft: true })
-      expect(res.isError).toBe(true)
-      expect(res.content[0]!.text).toContain("draft_unsupported")
-      expect(calls[0]!.payload).toMatchObject({ engine: "kling-4", draft: true })
-    })
-  })
-
-  it("refuses a face_masking value outside its range before calling the route", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    for (const face_masking of [
-      { mode: "sometimes" },
-      { mode: "auto", fill: "pixelate" },
-      { mode: "auto", zone: { left_pct: 50 } },
-      { mode: "auto", threshold: 1 },
-      { mode: "auto", blur_strength_pct: 0 },
-      { mode: "auto", min_face_height_pct: 101 },
-    ]) {
-      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking })
-      expect(res.isError, JSON.stringify(face_masking)).toBe(true)
+  it("answers the quote's engine by its public id and name, whichever vocabulary the engine answered in", async () => {
+    for (const [answered, engine, engineName] of [
+      [undefined, "motion-pro", "Nodaro Motion Pro"],
+      ["seedance-2-5", "motion-pro", "Nodaro Motion Pro"],
+      ["motion-pro", "motion-pro", "Nodaro Motion Pro"],
+    ] as const) {
+      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: { ...QUOTE, ...(answered ? { engine: answered } : {}) } } })
+      const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+      expect(res.structuredContent).toMatchObject({ engine, engineName, confirmed: false })
+      expect(res.content[0]!.text).toContain(`This ${engineName} preview costs`)
     }
-    expect(calls).toEqual([])
   })
 
-  it("names the masking credits that auto charges only if masking runs", async () => {
+  // An older engine declares the internal ids; a newer one the public ids with `engineAliases`.
+  for (const declared of [
+    { engines: ["seedance-2-5", "kling-4"] },
+    { engines: ["motion-pro", "motion-lite"], engineAliases: true },
+  ]) {
+    describe(`on an engine that declares ${declared.engines.join(" + ")}`, () => {
+      beforeEach(() => setPluginSupports({ castSwap: declared as never }))
+      afterEach(() => _resetPluginSupportsForTests())
+
+      it("quotes a motion-lite run (expected = hold) as one price, named Nodaro Motion Lite, with nothing held beside it", async () => {
+        const lite = { engine: declared.engineAliases ? "motion-lite" : "kling-4", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
+        const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: lite } })
+        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, preview: false, engine: "motion-lite" })
+        expect(res.structuredContent).toEqual({ engine: "motion-lite", engineName: "Nodaro Motion Lite", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
+        expect(res.content[0]!.text).toContain("This Nodaro Motion Lite run costs about 420 credits.")
+        expect(res.content[0]!.text).not.toMatch(/held|lower|kling/i)
+      })
+
+      it("sends engine to the route as the internal id, public or old id alike (quote and run), and no engine key without it", async () => {
+        const { fastify, calls } = stubFastify({
+          "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+          "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-k" } },
+        })
+        // motion_length, or the deprecated kling_length from an older client.
+        for (const [engine, length] of [["motion-lite", "motion_length"], ["kling-4", "kling_length"]]) {
+          await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start" })
+          await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start", confirm: true })
+        }
+        expect(calls).toHaveLength(4)
+        // Sent as motionLength only where the engine takes Nodaro Motion's names; an older one knows klingLength alone.
+        const lengthKey = declared.engineAliases ? "motionLength" : "klingLength"
+        for (const c of calls) expect(c.payload).toEqual({ ...BODY, engine: "kling-4", resolution: "1080p", [lengthKey]: "cut-start" })
+        calls.length = 0
+        await callTool(serverWith(fastify), "cast_swap", ARGS)
+        expect("engine" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
+      })
+
+      it("refuses an engine it does not know before calling the route; leaves draft on motion-lite to the route", async () => {
+        const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Nodaro Motion Lite has no draft." } } } })
+        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-3" })).isError).toBe(true)
+        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-max" })).isError).toBe(true)
+        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-lite", motion_length: "pad" })).isError).toBe(true)
+        expect(calls).toEqual([])
+        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-lite", draft: true })
+        expect(res.isError).toBe(true)
+        expect(res.content[0]!.text).toContain("draft_unsupported")
+        expect(calls[0]!.payload).toMatchObject({ engine: "kling-4", draft: true })
+      })
+    })
+  }
+
+  it("names the credits of a retry that Nodaro's setting charges only if the clip is refused, never naming masking", async () => {
     const auto = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
     const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: auto } })
-    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto" } })
-    expect(res.content[0]!.text).toContain("12 credits")
-    expect(res.content[0]!.text).toMatch(/4 more credits?[^.]*only if/i)
-    expect(res.structuredContent).toEqual({ ...auto, confirmed: false })
-  })
-
-  it("names the masking included in the quote with always", async () => {
-    const always = { totalCredits: 16, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: always } })
-    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always" } })
-    expect(res.content[0]!.text).toContain("16 credits")
-    expect(res.content[0]!.text).toMatch(/includes 4 credits?[^.]*mask/i)
-    expect(res.content[0]!.text).not.toMatch(/only if/i)
-  })
-
-  it("words the masking by the mode asked for, not by which numbers the quote carries", async () => {
-    const both = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
-    const onlyBreakdown = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
-    const text = async (body: unknown, args: Record<string, unknown>) => {
-      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
-      return (await callTool(serverWith(fastify), "cast_swap", { ...ARGS, ...args })).content[0]!.text
-    }
-    // auto: the retry wording, even when only the breakdown names the masking.
-    const auto = await text(onlyBreakdown, { face_masking: { mode: "auto" } })
-    expect(auto).toMatch(/4 more credits?[^.]*only if/i)
-    expect(auto).not.toMatch(/includes 4/i)
-    // always: the "included" wording, even when the quote also carries maskingCredits.
-    const always = await text(both, { face_masking: { mode: "always" } })
-    expect(always).toMatch(/includes 4 credits?[^.]*mask/i)
-    expect(always).not.toMatch(/only if/i)
-    // off, or no face_masking: nothing about masking.
-    expect(await text(both, { face_masking: { mode: "off" } })).not.toMatch(/mask/i)
-    expect(await text(both, {})).not.toMatch(/mask/i)
-  })
-
-  it("says nothing of masking when the quote has none", async () => {
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
-    expect(res.content[0]!.text).not.toMatch(/mask/i)
+    expect(res.content[0]!.text).toContain("12 credits")
+    expect(res.content[0]!.text).toMatch(/retried once, for 4 more credits charged only then/)
+    expect(res.content[0]!.text).not.toMatch(/mask|blur|depth|seedance|kling/i)
+    expect(res.structuredContent).toMatchObject({ totalCredits: 12, privacyCredits: 4, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 }, confirmed: false })
+    expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance|kling|masking/i)
+  })
+
+  it("reads the neutral key names first (an engine that sends both), and the old ones from an older engine", async () => {
+    const both = {
+      totalCredits: 12, breakdown: { castSwap: 5, seedance: 99, motion: 7, references: 0, masking: 9, privacy: 4 },
+      maskingCredits: 9, privacyCredits: 4, settlesLower: false,
+    }
+    const fresh = { totalCredits: 12, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false }
+    for (const body of [both, fresh]) {
+      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
+      const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+      expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false, confirmed: false })
+      expect(res.content[0]!.text).toMatch(/for 4 more credits/)
+    }
+  })
+
+  it("says nothing more when the setting's charge is already in the totals, or there is none", async () => {
+    const always = { totalCredits: 16, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
+    for (const body of [always, QUOTE, { ...QUOTE, maskingCredits: 0 }]) {
+      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
+      const text = (await callTool(serverWith(fastify), "cast_swap", ARGS)).content[0]!.text
+      expect(text).not.toMatch(/retried|mask/i)
+    }
   })
 
   it("still passes the deprecated quality through", async () => {

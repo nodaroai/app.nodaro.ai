@@ -630,7 +630,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       const jobId = jobIdOf(res.body)
-      if (!jobId) return err(reply, 502, "engine_error", "Cast Swap did not return a job id.")
+      if (!jobId) return err(reply, 502, "engine_error", "Nodaro Motion did not return a job id.")
       return reply.status(202).send({ data: { jobId } })
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to start the test run")

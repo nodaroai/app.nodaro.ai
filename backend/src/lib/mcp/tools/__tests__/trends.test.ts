@@ -78,7 +78,8 @@ const DETAIL = {
   ...CARD,
   version: 3,
   previewSec: 4,
-  engine: "seedance-2-5",
+  engine: "motion-pro",
+  engineName: "Nodaro Motion Pro",
   resolutions: ["480p", "720p", "1080p"],
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example/hint-lead.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
@@ -124,7 +125,7 @@ const BODY = {
   sessionId: "s-1",
 }
 
-const QUOTE = { data: { expectedCredits: 10, holdCredits: 14, breakdown: { castSwap: 4, seedance: 10 } } }
+const QUOTE = { data: { expectedCredits: 10, holdCredits: 14, breakdown: { castSwap: 4, motion: 10 } } }
 
 afterEach(() => {
   h.credits = true
@@ -169,13 +170,17 @@ describe("get_trend", () => {
     expect(JSON.parse(res.content[0]!.text!)).toEqual(DETAIL)
   })
 
-  it("hands back a Kling 4 trend's engine and its resolutions; an unknown or missing engine reads as Seedance 2.5", async () => {
-    const kling = { ...DETAIL, engine: "kling-4", resolutions: ["720p", "1080p"] }
-    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: kling } } })
-    expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(kling)
-    const { engine: _e, ...older } = DETAIL
-    const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: older } } })
-    expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "seedance-2-5" })
+  it("hands back a Nodaro Motion Lite trend's engine and its resolutions, from either vocabulary; an unknown or missing engine reads as Pro", async () => {
+    const lite = { ...DETAIL, engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] }
+    for (const answered of ["motion-lite", "kling-4"]) {
+      const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: { ...lite, engine: answered } } } })
+      expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(lite)
+    }
+    const { engine: _e, engineName: _n, ...older } = DETAIL
+    for (const body of [older, { ...older, engine: "kling-3" }]) {
+      const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: body } } })
+      expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "motion-pro", engineName: "Nodaro Motion Pro" })
+    }
   })
 
   it("hands back only the public fields, whatever else the body carries", async () => {
@@ -290,10 +295,11 @@ describe("estimate_trend", () => {
       },
     })
     const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {} })
-    expect((res.structuredContent as { breakdown: unknown }).breakdown).toEqual({ castSwap: 4, seedance: 10 })
+    // …by their neutral names: an older server's `seedance` is answered as `motion`.
+    expect((res.structuredContent as { breakdown: unknown }).breakdown).toEqual({ castSwap: 4, motion: 10 })
   })
 
-  it("names the masking credits, and sends preview_job_id as previewJobId", async () => {
+  it("names the privacy credits (an older server's maskingCredits too), and sends preview_job_id as previewJobId", async () => {
     const PREVIEW = "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10"
     const { fastify, calls } = stubFastify({
       "POST /v1/trends/dance-off/estimate": {
@@ -305,10 +311,11 @@ describe("estimate_trend", () => {
     expect(res.isError).toBeFalsy()
     expect(calls[0]!.payload).toEqual({ slots: {}, previewJobId: PREVIEW })
     expect(res.content[0]!.text).toContain("Plus 6 only if the clip is refused")
-    expect(res.structuredContent).toMatchObject({ maskingCredits: 6, breakdown: { masking: 6 } })
+    expect(res.structuredContent).toMatchObject({ privacyCredits: 6, breakdown: { privacy: 6 } })
+    expect(JSON.stringify(res.structuredContent)).not.toMatch(/masking/i)
 
     const run = await callTool(serverWith(fastify), "run_trend", { slug: "dance-off", slots: {}, preview_job_id: PREVIEW })
-    expect(run.structuredContent).toMatchObject({ maskingCredits: 6, confirmed: false })
+    expect(run.structuredContent).toMatchObject({ privacyCredits: 6, confirmed: false })
   })
 
   it("takes any id the route takes as a uuid (no version or variant check)", async () => {

@@ -66,7 +66,8 @@ const detail: TrendDetail = {
   ...card,
   version: 3,
   previewSec: 4,
-  engine: "seedance-2-5",
+  engine: "motion-pro",
+  engineName: "Nodaro Motion Pro",
   resolutions: ["480p", "720p", "1080p"],
   original,
   slots: [
@@ -108,7 +109,8 @@ const run: TrendRun = {
   preview: false,
   resolution: "480p",
   draft: true,
-  engine: "seedance-2-5",
+  engine: "motion-pro",
+  engineName: "Nodaro Motion Pro",
   videoUrl: "https://cdn.example.com/out.mp4",
   posterUrl: null,
   creditsCharged: 7,
@@ -178,10 +180,10 @@ describe("trends resource", () => {
     expect(Object.fromEntries(call(fetchMock, 1).url.searchParams)).toEqual({ locale: "he" })
   })
 
-  it("get returns a Kling 4 trend's engine and its resolutions (no draft)", async () => {
-    const kling: TrendDetail = { ...detail, engine: "kling-4", resolutions: ["720p", "1080p"] }
-    const fetchMock = vi.fn().mockReturnValue(mockOk({ data: kling }))
-    await expect(make(fetchMock).trends.get("dance-off")).resolves.toMatchObject({ engine: "kling-4", resolutions: ["720p", "1080p"] })
+  it("get returns a Nodaro Motion Lite trend's engine, its name and its resolutions (no draft)", async () => {
+    const lite: TrendDetail = { ...detail, engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] }
+    const fetchMock = vi.fn().mockReturnValue(mockOk({ data: lite }))
+    await expect(make(fetchMock).trends.get("dance-off")).resolves.toMatchObject({ engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] })
   })
 
   it("get returns the original and a slot's hint picture; a trend with no example has examples [] and its cover is the original", async () => {
@@ -224,7 +226,7 @@ describe("trends resource", () => {
   })
 
   it("estimate POSTs the request to /v1/trends/:slug/estimate and returns the quote", async () => {
-    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, seedance: 25 } }
+    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, motion: 25 } }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: quote }))
     const client = make(fetchMock)
 
@@ -236,8 +238,8 @@ describe("trends resource", () => {
     expect(JSON.parse(init.body as string)).toEqual(request)
   })
 
-  it("estimate and run send previewJobId, and the quote carries maskingCredits", async () => {
-    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, seedance: 25, masking: 12 }, maskingCredits: 12 }
+  it("estimate and run send previewJobId, and the quote carries privacyCredits", async () => {
+    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, motion: 25, privacy: 12 }, privacyCredits: 12 }
     const fetchMock = vi
       .fn()
       .mockReturnValueOnce(mockOk({ data: quote }))
@@ -246,7 +248,7 @@ describe("trends resource", () => {
     const withPreview: TrendRunRequest = { ...request, previewJobId: "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10" }
 
     const got = await client.trends.estimate("dance-off", withPreview)
-    expect(got.maskingCredits).toBe(12)
+    expect(got.privacyCredits).toBe(12)
     await client.trends.run("dance-off", withPreview)
 
     for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {

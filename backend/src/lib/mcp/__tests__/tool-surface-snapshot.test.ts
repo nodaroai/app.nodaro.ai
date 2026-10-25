@@ -1313,6 +1313,12 @@ const TRENDS_ORIGINAL_BYTES = 224
 // 505_812 = 173 B; the 64 B of headroom carry across.
 const FACE_MASK_TARGET_BYTES = 173
 
+// LOWERED 2026-10-25 by Nodaro Motion: `cast_swap` no longer lists `face_masking` (Nodaro sets it
+// per engine) or `kling_length` (an older client's is still read, unlisted, as `motion_length`), its
+// engines are "motion-pro" / "motion-lite", and the cast_swap / trend / Full Quality descriptions
+// name Nodaro Motion. No tool was added or removed, so the fixture does NOT move. Measured by this
+// suite: 504_667 total − 505_985 = −1_318 B; the 64 B of headroom carry across.
+const NODARO_MOTION_BYTES = -1_318
 // Topaz video upscale moved to Replicate (decided 2026-10-25), whose lever is an absolute target:
 // `video_upscale` gains `target_resolution` (720p / 1080p / 4k) and `target_fps` (15–60), and
 // says it is metered; `upscale_factor` stays as the legacy lever with a one-line pointer. No tool
@@ -1489,6 +1495,7 @@ export const TOOL_WIRE_BUDGET = {
     USER_REQUEST_ARG_TOTAL_BYTES +
     TRENDS_ORIGINAL_BYTES +
     FACE_MASK_TARGET_BYTES +
+    NODARO_MOTION_BYTES +
     TOPAZ_VIDEO_TARGET_BYTES +
     SESSIONS_TRASH_BYTES,
 }

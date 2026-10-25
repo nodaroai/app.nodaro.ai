@@ -155,4 +155,6 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // Trends — admin-only (and only where credits exist), its editor a child path.
   "trends",
   "trends/:id",
+  // Nodaro Motion — admin-only (and only where credits exist): its face masking per engine.
+  "nodaro-motion",
 ]

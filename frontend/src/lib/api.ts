@@ -11199,8 +11199,15 @@ export interface AdminTrendData {
 /** Which end of the clip a Kling 4 run cuts to whole seconds: the end (default) or the start. */
 export type AdminTrendKlingLength = "cut-end" | "cut-start"
 
-/** Cast Swap's video engines: Seedance 2.5 (480p draft, 720p, 1080p) or Kling 4 (720p, 1080p; no draft). */
+/**
+ * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
+ * 2.5 (Nodaro Motion Pro: 480p draft, 720p, 1080p) or Kling 4 (Nodaro Motion
+ * Lite: 720p, 1080p; no draft). People see the public ids (`NodaroMotionEngine`).
+ */
 export type AdminTrendEngine = "seedance-2-5" | "kling-4"
+
+/** Nodaro Motion's public engine ids, as every user-facing response names them. */
+export type NodaroMotionEngine = "motion-pro" | "motion-lite"
 
 /** `archived`: put away by an admin — off the catalog, kept with its runs. */
 export type TrendStatus = "draft" | "published" | "unpublished" | "archived"
@@ -11286,8 +11293,13 @@ export interface AdminTrendRun {
   preview: boolean
   resolution: string
   draft: boolean
-  /** The engine it was made on (Seedance 2.5 for every run before the choice). */
-  engine?: AdminTrendEngine
+  /**
+   * The engine it was made on, by its PUBLIC id (Nodaro Motion Pro for every
+   * run before the choice); an older server answered the internal id.
+   */
+  engine?: NodaroMotionEngine | AdminTrendEngine
+  /** Its name, "Nodaro Motion Pro" or "Nodaro Motion Lite" (absent from an older server). */
+  engineName?: string
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
@@ -11348,6 +11360,34 @@ export class TrendPublishBlockedError extends Error {
     super(message)
     this.name = "TrendPublishBlockedError"
   }
+}
+
+// ---- Admin: Nodaro Motion (EE; /v1/admin/nodaro-motion, backend/src/ee/routes/admin-nodaro-motion.ts) ----
+
+/** Nodaro Motion's face masking per engine, keyed by public id; an engine left out masks nothing. */
+export type NodaroMotionMasking = Partial<Record<NodaroMotionEngine, AdminTrendFaceMasking>>
+
+export interface NodaroMotionMaskingView {
+  /** null = never saved: no engine masks a direct run. */
+  masking: NodaroMotionMasking | null
+  updatedAt: string | null
+  /** The engines, by public id and name, with the internal engine each runs on. */
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+}
+
+const ADMIN_NODARO_MOTION_MASKING = "/v1/admin/nodaro-motion/masking"
+
+export async function fetchNodaroMotionMasking(): Promise<NodaroMotionMaskingView> {
+  return (await apiRequest<{ data: NodaroMotionMaskingView }>(ADMIN_NODARO_MOTION_MASKING, "apiErr.loadNodaroMotion")).data
+}
+
+export async function saveNodaroMotionMasking(masking: NodaroMotionMasking): Promise<NodaroMotionMaskingView> {
+  return (
+    await apiRequest<{ data: NodaroMotionMaskingView }>(ADMIN_NODARO_MOTION_MASKING, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { masking },
+    })
+  ).data
 }
 
 const ADMIN_TRENDS = "/v1/admin/trends"

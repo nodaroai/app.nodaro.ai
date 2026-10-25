@@ -122,7 +122,7 @@ import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
 import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideHoldsAvailable } from "../llm-side-hold.js"
 import { appBaseUrl } from "../deployment-urls.js"
-import { getAppSettings } from "../app-settings.js"
+import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
@@ -1559,6 +1559,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   seedanceDraft: true,
   voiceChangerProRespeakSlotArgs: true,
   internalRequestProvenance: true,
+  nodaroMotionMasking: true,
 })
 
 export interface BuildToolkitOptions {
@@ -2085,6 +2086,17 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       scene3dLocal: hasCredits() && config.SCENE3D_ADVANCED_ENABLED && config.SCENE3D_LOCAL_ENABLED,
     },
     capabilities: HOST_CAPABILITIES,
+    settings: {
+      // A copy: the cached settings are shared by every reader in this process.
+      // A failed read throws, never answers null: null means "never saved"
+      // (no masking), and a database hiccup must not silently unmask runs.
+      nodaroMotionMasking: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_masking: the app settings could not be read")
+        const masking = settings.nodaro_motion_masking
+        return masking ? structuredClone(masking) : null
+      },
+    },
     deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,

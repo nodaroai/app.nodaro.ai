@@ -165,7 +165,7 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       const jobId = jobIdOf(res.body)
-      if (!jobId) return err(reply, 502, "engine_error", "Cast Swap did not return a job id.")
+      if (!jobId) return err(reply, 502, "engine_error", "Nodaro Motion did not return a job id.")
       await audit(req, "make_trend_face_mask", "trend", trend.id, { slug: trend.slug, jobId, settingsKey })
 
       // The job is paid for: record it on the draft even when another write

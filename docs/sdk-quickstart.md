@@ -671,7 +671,7 @@ manifest semantics, and conflict handling.
 
 ### Run a trend with your own picture (Cloud)
 
-A trend is a ready-made Cast Swap recipe with slots to fill. Pick one, put your
+A trend is a ready-made Nodaro Motion recipe with slots to fill. Pick one, put your
 pictures in its slots, quote the run, then start it and follow the job:
 
 ```ts

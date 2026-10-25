@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { dim, emit, info, success, terminalSafe, type OutputOpts } from "../output.js"
+import { neutralQuote, quotePartLabel } from "../quote-parts.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -12,7 +13,7 @@ interface GlobalOpts extends OutputOpts {
  */
 function fullQualityCommand(): Command {
   const cmd = new Command("full-quality").description(
-    "finish a run (Cast Swap or trend) at Full Quality at 1080p, as a new job: a draft's same take, or a new take of a Kling 4 720p run — `estimate` quotes it (free), `run` SPENDS CREDITS",
+    "finish a run (Nodaro Motion or trend) at Full Quality at 1080p, as a new job: a draft's same take, or a new take of a Nodaro Motion Lite 720p run — `estimate` quotes it (free), `run` SPENDS CREDITS",
   )
 
   cmd
@@ -22,7 +23,7 @@ function fullQualityCommand(): Command {
     .option("--json")
     .action(async (jobId: string, opts: GlobalOpts) => {
       try {
-        const quote = await buildClient(opts.profile).castSwap.fullQualityEstimate(jobId)
+        const quote = neutralQuote(await buildClient(opts.profile).castSwap.fullQualityEstimate(jobId))
         if (opts.json) {
           emit(quote, opts)
           return
@@ -32,9 +33,9 @@ function fullQualityCommand(): Command {
         if (quote.kind === "new-take") dim("a NEW take at 1080p from the same inputs (the 720p run stays)")
         else dim("the same take at 1080p")
         for (const [part, credits] of Object.entries(quote.breakdown)) {
-          if (typeof credits === "number") dim(`  ${terminalSafe(part)}: ${credits}`)
+          if (typeof credits === "number") dim(`  ${terminalSafe(quotePartLabel(part))}: ${credits}`)
         }
-        if (quote.kind !== "new-take" && quote.breakdown.seedanceHd === 0) dim("  an earlier try's 1080p render is reused")
+        if (quote.kind !== "new-take" && quote.breakdown.motionHd === 0) dim("  an earlier try's 1080p render is reused")
         dim(`available until ${terminalSafe(quote.availableUntil)}`)
       } catch (err) {
         handleError(err)
@@ -70,7 +71,7 @@ function fullQualityCommand(): Command {
 }
 
 export function castSwapCommand(): Command {
-  const cmd = new Command("cast-swap").description("Cast Swap — replace who and what is in a short video (Cloud edition)")
+  const cmd = new Command("cast-swap").description("Nodaro Motion — replace who and what is in a short video (Cloud edition)")
   cmd.addCommand(fullQualityCommand())
   return cmd
 }

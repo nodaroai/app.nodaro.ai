@@ -8,8 +8,9 @@
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
-  CAST_SWAP_ENGINES,
+  CAST_SWAP_ENGINE_IDS_ACCEPTED,
   CAST_SWAP_ENGINE_WHEN_OMITTED,
+  castSwapEngineFrom,
   CAST_SWAP_KLING_LENGTHS,
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
@@ -224,7 +225,12 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     faceMaskJob: trendFaceMaskJobSchema.optional(),
     // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
     // names none is kept without the key, so re-saving an old draft is no change.
-    engine: z.enum(CAST_SWAP_ENGINES).optional(),
+    // Nodaro Motion's public ids are taken too and stored as the internal id
+    // they name (`castSwapEngineFrom`), the vocabulary every stored version uses.
+    engine: z
+      .enum(CAST_SWAP_ENGINE_IDS_ACCEPTED)
+      .transform((id): CastSwapEngine => castSwapEngineFrom(id)!)
+      .optional(),
     // Absent = "cut-end". Read only on a Kling 4 trend.
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     examples: z.array(trendExampleSchema),

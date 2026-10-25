@@ -125,6 +125,7 @@ const AdminAppReports = lazy(() => import("@/ee/app/(admin)/admin/app-reports/pa
 const AdminReview = lazy(() => import("@/ee/app/(admin)/admin/review/page"))
 const AdminTrends = lazy(() => import("@/ee/app/(admin)/admin/trends/page"))
 const AdminTrendEditor = lazy(() => import("@/ee/app/(admin)/admin/trends/detail/page"))
+const AdminNodaroMotion = lazy(() => import("@/ee/app/(admin)/admin/nodaro-motion/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -189,6 +190,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
         ? [
             { path: "trends", element: <SuspenseWrapper><AdminTrends /></SuspenseWrapper> },
             { path: "trends/:id", element: <SuspenseWrapper><AdminTrendEditor /></SuspenseWrapper> },
+            { path: "nodaro-motion", element: <SuspenseWrapper><AdminNodaroMotion /></SuspenseWrapper> },
           ]
         : []),
     ],
