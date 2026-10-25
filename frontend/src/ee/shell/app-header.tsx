@@ -31,6 +31,9 @@ import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderT
  *     its height. Its leading button opens the sidebar drawer.
  *   - Language and theme are the app's: the header's pills read and change
  *     them, and its text comes from its own dictionaries for the app's locale.
+ *     The language is also every product's (`lib/locale-store.ts`).
+ *   - The app still ships its own accessibility menu, so the header's is off
+ *     (`accessibilityMenu={false}`) until the app adopts it.
  */
 
 /** The app's own phone/desktop switch (Tailwind `md`). */
@@ -145,6 +148,7 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
           className="flex min-h-10 w-full items-center rounded-[9px] px-2.5 text-start text-[13px] font-semibold hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-[#ff0073] dark:hover:bg-white/5"
         />
       )}
+      accessibilityMenu={false}
       claimSignupGrant={false}
       onSignOut={onSignOut}
       onOverlayChange={onOverlayChange}

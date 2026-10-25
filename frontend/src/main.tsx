@@ -55,7 +55,7 @@ import { RouterProvider } from "react-router-dom"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ThemeProvider } from "@/components/theme-provider"
 import { PickerUiLocaleBridge } from "@/components/picker-ui-locale-bridge"
-import { AppDirectionProvider, I18nHtmlDir } from "@/components/i18n-html-dir"
+import { AppDirectionProvider, I18nHtmlDir, applyDocumentLocale } from "@/components/i18n-html-dir"
 import { BrandDocumentHead } from "@/components/brand-document-head"
 import { AppToaster } from "@/components/app-toaster"
 import { AccessBlockedScreen } from "@/components/access-blocked-screen"
@@ -74,6 +74,8 @@ void bootstrapCatalogs()
 bootstrapLookPreviews()
 // The viewer's accessibility choices apply before the first paint.
 applyPreferences(loadPreferences())
+// So does the language: a right-to-left page is right-to-left from the first frame.
+applyDocumentLocale()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

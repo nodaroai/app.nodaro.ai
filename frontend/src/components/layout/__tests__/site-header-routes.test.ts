@@ -44,6 +44,17 @@ describe("where the shared site header can render", () => {
     expect(where(/["']virtual:site-header["']/)).toEqual(["ee/shell/app-header.tsx", "ee/shell/header-module-plugin.ts"])
   })
 
+  it("the shared language has its own small module, read only by the locale store and <html> mirror", () => {
+    // Its own id so the main bundle never carries the header: the locale store
+    // reads it at startup. A new importer must be as light as these.
+    expect(where(/["']virtual:site-locale["']/)).toEqual([
+      "components/i18n-html-dir.tsx",
+      "ee/shell/contract/props.contract.ts",
+      "ee/shell/header-module-plugin.ts",
+      "lib/locale-store.ts",
+    ])
+  })
+
   it("the admin layout reads neither the slot nor the gate", () => {
     const admin = FILES.find(({ path }) => path === "ee/layouts/admin-layout.tsx")?.src ?? ""
     expect(admin).not.toMatch(/SiteHeaderSlot|sharedHeaderActive/)

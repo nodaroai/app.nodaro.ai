@@ -6,6 +6,8 @@ import {
   shellTranslator,
   type NodaroShellProps,
 } from "@nodaroai/shell"
+import * as sharedLocale from "@nodaroai/shell/locale"
+import type * as appLocale from "virtual:site-locale"
 
 import { HEADER_BALANCE_KEY } from "../../lib/invalidate-balance"
 import { HEADER_QUERY_KEYS } from "../query-keys"
@@ -54,3 +56,11 @@ export const plansKey: typeof PLANS_QUERY_KEY = HEADER_QUERY_KEYS.plans
 export const plansKeyBack: typeof HEADER_QUERY_KEYS.plans = PLANS_QUERY_KEY
 export const connectedAppsKey: typeof CONNECTED_APPS_QUERY_KEY = HEADER_QUERY_KEYS.connectedApps
 export const connectedAppsKeyBack: typeof HEADER_QUERY_KEYS.connectedApps = CONNECTED_APPS_QUERY_KEY
+
+/**
+ * The shared language (`virtual:site-locale`, typed by `lib/site-locale.d.ts`):
+ * each function the app calls is the package's, at the type the app calls it.
+ */
+export const readSavedLocaleFits: typeof appLocale.readSavedLocale = sharedLocale.readSavedLocale
+export const saveLocaleFits: typeof appLocale.saveLocale = sharedLocale.saveLocale
+export const watchSavedLocaleFits: typeof appLocale.watchSavedLocale = sharedLocale.watchSavedLocale

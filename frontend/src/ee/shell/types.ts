@@ -12,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
  * Grows with the wiring: only props the app actually passes belong here.
  */
 
-export type SiteWorldId = "image" | "video" | "music" | "ads" | "app" | "studio"
+export type SiteWorldId = "image" | "video" | "music" | "trends" | "ads" | "app" | "studio"
 
 export interface SiteHeaderTheme {
   readonly value: "light" | "dark"
@@ -74,6 +74,8 @@ export interface SiteHeaderProps {
   readonly onAccountPage?: (path: string, page: SiteAccountPage) => void
   /** Rows added to the account menu (the accessibility statement); the function form is handed the menu's close. */
   readonly accountMenuExtras?: ReactNode | ((menu: { readonly close: () => void }) => ReactNode)
+  /** Off: the app still ships its own accessibility menu (its choices are carried over when it adopts the header's). */
+  readonly accessibilityMenu?: boolean
   /** The app claims the signup grant on its own boot path. */
   readonly claimSignupGrant?: boolean
   /** One phone row on pages whose height belongs to the app (the editor). */

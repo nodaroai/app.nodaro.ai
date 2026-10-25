@@ -30,7 +30,11 @@ export default defineConfig({
   plugins: [
     react(),
     filerobotReactShim(),
-    siteHeaderModule({ root: __dirname, stubPath: path.resolve(__dirname, "src/ee/shell/stub.tsx") }),
+    siteHeaderModule({
+      root: __dirname,
+      stubPath: path.resolve(__dirname, "src/ee/shell/stub.tsx"),
+      localeStubPath: path.resolve(__dirname, "src/lib/site-locale-stub.ts"),
+    }),
   ],
   resolve: {
     alias: {

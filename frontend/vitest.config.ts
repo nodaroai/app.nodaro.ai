@@ -70,6 +70,7 @@ export default defineConfig({
       // stub (vite.config's resolver plugin is not loaded here). A test that
       // needs the header mocks "virtual:site-header".
       "virtual:site-header": path.resolve(__dirname, "./src/ee/shell/stub.tsx"),
+      "virtual:site-locale": path.resolve(__dirname, "./src/lib/site-locale-stub.ts"),
     },
     // The picker-ui package is consumed via a workspace symlink; without
     // dedupe its own node_modules/react loads as a SECOND React copy and every
