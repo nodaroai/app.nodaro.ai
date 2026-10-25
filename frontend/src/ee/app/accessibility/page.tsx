@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useLocaleStore } from "@/lib/locale-store"
 import { getLocaleDirection, type LocaleId } from "@nodaro/shared/i18n"
-import { statementFor, type StatementForm } from "./statement-content"
+import { statementFor, statementIntro, type StatementForm } from "./statement-content"
 
 /**
  * The accessibility statement (Israeli Equal Rights for Persons with
@@ -189,7 +189,7 @@ export default function AccessibilityStatementPage() {
       <main id="main" className="mx-auto max-w-3xl space-y-10 px-4 py-10 leading-relaxed">
         <div className="space-y-3">
           <h1 className="text-3xl font-bold">{text.title}</h1>
-          <p>{text.intro}</p>
+          <p>{statementIntro(text)}</p>
         </div>
 
         <Section title={text.levelTitle}>
