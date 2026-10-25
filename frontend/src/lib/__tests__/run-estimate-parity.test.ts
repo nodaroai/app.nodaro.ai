@@ -33,7 +33,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { parseUnitQuoteCreditId, videoSfxCreditId } from "@nodaro/shared/credits"
-import { PREVIEW_RENDER_NODE_TYPES, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
+import { PREVIEW_RENDER_NODE_TYPES, REVIEW_HOLDING_USE_CASE_TYPES, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -89,11 +89,12 @@ const isRender = (n: WorkflowNode): boolean => PREVIEW_RENDER_NODE_TYPES.has(n.t
 
 /** The editor's Render final of a template, through whichever step reviews:
  *  its render (as handleRenderFinal prices it: the run set, the render at
- *  Final) or its Tighten Episode (the node's run-only override, the node alone). */
+ *  Final) or its use-case node set to review first (Tighten Episode, Clip Pack,
+ *  Trailer: the node's run-only override, the node alone). */
 function templateFinal({ nodes, edges }: Graph, cachedCost: (id: string) => number | undefined): number {
   const render = nodes.find(isRender)
   if (!render) {
-    const node = nodes.find((n) => n.type === "tighten-episode")!
+    const node = nodes.find((n) => REVIEW_HOLDING_USE_CASE_TYPES.has(n.type))!
     const overridden = withRunOverrides(nodes, { [node.id]: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } })
     return estimateRunCredits(overridden.filter((n) => n.id === node.id), overridden, edges, cachedCost)
   }

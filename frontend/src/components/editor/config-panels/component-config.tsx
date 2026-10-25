@@ -121,7 +121,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
         exposedSettings: newSettings,
       })
         .then((res) => {
-          // The flag is always written (true or false), so a re-estimate that is fixed clears a stale `~`.
+          // The flag is always written (true or false), so a re-estimate that is fixed clears a stale `≈`.
           if (res.estimatedCredits > 0) onUpdate({ estimatedCredits: res.estimatedCredits, estimatedCreditsIsEstimate: res.estimatedCreditsIsEstimate === true })
         })
         .catch(() => {})
@@ -169,7 +169,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
       {/* Info card */}
       <div className="rounded-lg bg-gray-100 dark:bg-[#1a1a2e] border border-gray-200 dark:border-[#2D2D2D] p-3">
         <div className="flex items-center gap-2 mb-1">
-          <Puzzle className="w-4 h-4 text-[#ff0073]" />
+          <Puzzle className="w-4 h-4 text-primary-ink" />
           <span className="text-sm font-medium truncate">{localizeNode(nodeData.label || "Component")}</span>
         </div>
         {nodeData.pinnedVersion > 0 && (

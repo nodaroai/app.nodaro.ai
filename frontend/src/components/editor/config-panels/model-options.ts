@@ -134,7 +134,6 @@ export const VIDEO_I2V_MODELS = [
   { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
   { value: "runway-kie", label: "Runway", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
   { value: "minimax-h3", label: "minimax-h3", desc: "MiniMax premium, 4-15s, 2K or 768P, multimodal references, native audio" },
-  { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s, audio generation" },
   { value: "seedance-2", label: "Seedance 2.0", desc: "Bytedance, 4-15s, multimodal references" },
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "seedance-2-mini", label: "Seedance 2.0 Mini", desc: "Bytedance budget, 4-15s, 480p/720p" },
@@ -175,7 +174,6 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "hailuo-standard", label: "MiniMax Standard", desc: "Budget Hailuo, 6-10s" },
   { value: "runway-kie", label: "Runway", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
   { value: "minimax-h3", label: "minimax-h3", desc: "MiniMax premium, 4-15s, 2K or 768P, multimodal references, native audio" },
-  { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s with audio option" },
   { value: "seedance-2", label: "Seedance 2.0", desc: "Bytedance, 4-15s, multimodal references" },
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "seedance-2-mini", label: "Seedance 2.0 Mini", desc: "Bytedance budget, 4-15s, 480p/720p" },
@@ -328,7 +326,7 @@ export function formatPerSecondCreditBadge(credits15s: number): string | undefin
   if (!hasCredits()) return undefined
   if (!(credits15s > 0)) return undefined
   // credit-gated: unreachable without credits — the guard above returns first.
-  return `~${creditUnits(Math.max(1, Math.round(credits15s / 15)))} ${creditUnitLabel()}/s`
+  return `≈${creditUnits(Math.max(1, Math.round(credits15s / 15)))} ${creditUnitLabel()}/s`
 }
 
 // =============================================================================

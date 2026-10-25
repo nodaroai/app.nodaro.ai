@@ -994,10 +994,14 @@ describe("CreditsService", () => {
       ])).toBe(255)
     })
 
-    it("resolves I2V seedance:12s", () => {
-      expect(CreditsService.estimateWorkflowBaseCredits([
+    it("estimates a retired seedance node as the seedance-2-mini it runs as", () => {
+      const retired = CreditsService.estimateWorkflowBaseCredits([
         { type: "image-to-video", data: { provider: "seedance", duration: 12 } },
-      ])).toBe(150)
+      ])
+      expect(retired).toBe(CreditsService.estimateWorkflowBaseCredits([
+        { type: "image-to-video", data: { provider: "seedance-2-mini", duration: 12 } },
+      ]))
+      expect(retired).toBeGreaterThan(0)
     })
 
     it("falls back for unknown provider", () => {

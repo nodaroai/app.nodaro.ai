@@ -737,7 +737,7 @@ export interface UgcTicketQuoteRequest {
 export interface UgcTicketQuote extends UgcClipsQuote {
   readonly parts: Readonly<Record<UgcEstimatePart, number>>
   readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
-  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `~`. Absent: none. */
+  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `≈`. Absent: none. */
   readonly estimateParts?: readonly UgcEstimatePart[]
 }
 
@@ -774,7 +774,7 @@ export interface UgcRunEstimate {
   readonly parts: Readonly<Record<UgcEstimatePart, number>>
   /** What each part holds while the clips render (each clip at the server's multiple of its price, at the longest length); they add up to `worstCase`. */
   readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
-  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `~`. Absent: none. */
+  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `≈`. Absent: none. */
   readonly estimateParts?: readonly UgcEstimatePart[]
   /**
    * The plan's line limits, in characters — the opening line's, a beat line's, the closing
@@ -6599,6 +6599,8 @@ export async function videoMaskApi(params: {
   zone?: VideoMaskZone | null
   /** Detect the subjects again in every shot (scene cuts found first; default false). */
   perShot?: boolean
+  /** Also detect the subjects again every this many seconds (0 = off, the default, or 1–10). */
+  redetectEverySec?: number
   userId?: string
 }): Promise<{ jobId: string }> {
   const { userId, ...rest } = params
@@ -7437,7 +7439,7 @@ export interface BatchModelCreditCosts {
   missing: string[]
   /** The ids whose figure is an ESTIMATE — a metered LLM call's price key
    *  (`llmPriceKey`), charged its actual usage after the run. Shown with a
-   *  leading `~`. Absent when the server sent none (no metered key asked, or
+   *  leading `≈`. Absent when the server sent none (no metered key asked, or
    *  metered pricing rolled back — then those keys are in `missing`). */
   estimates?: string[]
   /** Why a metered key cannot be priced (`llm_model_unpriced`): the run would
@@ -8679,7 +8681,7 @@ export async function getSharedWorkflow(token: string): Promise<{
   edges: unknown[]
   isOwner: boolean
   estimatedCost?: number
-  /** `estimatedCost` holds a metered LLM estimate (show it `~`); absent for a fixed figure. */
+  /** `estimatedCost` holds a metered LLM estimate (show it `≈`); absent for a fixed figure. */
   estimatedCostIsEstimate?: boolean
   /**
    * The workflow holds a metered LLM model with no price (R51): the page renders with `estimatedCost`
@@ -9273,7 +9275,7 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the app is given (decided 2026-10-07):
    *  the price is `estimatedCredits` plus this per minute. 0 or absent: none. */
@@ -9338,7 +9340,7 @@ export interface AppBrowseCard {
   iconUrl: string | null
   estimatedCredits: number
   /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual
-   *  usage after the run): the card shows it `~N` (spec §8.5). Supplied by the
+   *  usage after the run): the card shows it `≈N` (spec §8.5). Supplied by the
    *  listing's price (Task 12); absent: a fixed price, shown as before. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the app is given; 0 or absent: none. */
@@ -10112,7 +10114,7 @@ export interface WorkflowTemplate {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
@@ -10144,7 +10146,7 @@ export interface TemplateBrowseCard {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
@@ -10437,7 +10439,7 @@ export interface FlowTutorialItem {
   previewMediaType: "image" | "video" | null
   complexity: "simple" | "intermediate" | "advanced"
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given; 0 or absent: none. */
   estimatedPerMinuteCredits?: number
@@ -11046,6 +11048,8 @@ export interface AdminTrendSlot {
   kind: TrendSlotKind
   required: boolean
   hint?: TrendLocalizedText
+  /** A picture of who (or what) this slot replaces, in trend storage (`/media` kind `hint`). Shown with the slot; never sent with a run. */
+  hintImageUrl?: string
   /** Who this is in the source clip (hidden from users). */
   roleName: string
   /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
@@ -11073,11 +11077,26 @@ export interface AdminTrendExample {
   sourceJobId: string
 }
 
+/**
+ * The source clip as users see it: a browser-safe MP4 re-encoded from the
+ * upload into its own file, with a poster (made by `/media` kind `source`).
+ * Width, height and length are the copy's. Runs never read it.
+ */
+export interface AdminTrendSourceDisplay {
+  videoUrl: string
+  posterUrl: string
+  width: number
+  height: number
+  durationSec: number
+}
+
 export interface AdminTrendSource {
   videoUrl: string
   durationSec: number
   width?: number
   height?: number
+  /** Absent on a clip stored before display copies existed: such a draft cannot publish (`source_display_missing`). */
+  display?: AdminTrendSourceDisplay
 }
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
@@ -11113,6 +11132,35 @@ export interface AdminTrendFaceMasking {
   threshold?: number
 }
 
+/** A trend's approved face mask: its whole source clip, masked once and stored in trend storage. */
+export interface AdminTrendFaceMask {
+  url: string
+  frames: number
+  recipe: { core: string | null; plugin: string }
+  settingsKey: string
+  jobId: string
+  stats: AdminTrendFaceMaskStats
+  approvedAt: string
+  approvedBy: string
+}
+
+export interface AdminTrendFaceMaskStats {
+  shots: number
+  heldFrames: number
+  /** The share of the picture covered, 0–1. */
+  coverage: number
+  droppedRegions: number
+}
+
+/** Why a stored face mask is out of date. */
+export type AdminTrendFaceMaskOutOfDate = { why: "settings" } | { why: "core_recipe" } | { why: "plugin_recipe"; env: string }
+
+/** The draft's face mask, as the server judges it: none, approved and up to date, or out of date (with why). */
+export interface AdminTrendFaceMaskState {
+  status: "none" | "approved" | "out_of_date"
+  reasons: AdminTrendFaceMaskOutOfDate[]
+}
+
 export interface AdminTrendData {
   name: TrendLocalizedText
   description?: TrendLocalizedText
@@ -11125,6 +11173,10 @@ export interface AdminTrendData {
   /** Placed at the start of every run's prompt (hidden from users). */
   prePrompt?: string
   faceMasking?: AdminTrendFaceMasking
+  /** The approved face mask (hidden; written only by the face mask routes, kept by a draft save). */
+  faceMask?: AdminTrendFaceMask
+  /** The face mask job started last and not approved yet (hidden; written only by the face mask routes). */
+  faceMaskJob?: { jobId: string; settingsKey: string; startedAt: string }
   /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
   engine?: AdminTrendEngine
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
@@ -11176,6 +11228,16 @@ export interface AdminTrendDetail {
   published: AdminTrendData | null
   /** The draft's revision: sent back on every draft write; a stale one is a 409 `draft_conflict`. */
   revision: string
+  /** The draft's face mask state (absent from an older server). */
+  faceMaskState?: AdminTrendFaceMaskState
+  /** The face mask being made; `current` = started for the draft's current source and settings. */
+  faceMaskJob?: AdminTrendPendingFaceMaskJob | null
+}
+
+export interface AdminTrendPendingFaceMaskJob {
+  jobId: string
+  startedAt: string
+  current: boolean
 }
 
 /** What a draft write returns. */
@@ -11244,6 +11306,8 @@ export interface TrendEngineEnvironment {
       fullQuality?: boolean
       resolutions?: TrendResolution[]
       trendRun?: boolean
+      storedFaceMask?: boolean
+      faceMaskRecipe?: string
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11257,6 +11321,8 @@ export interface TrendPublishBlocker {
   example?: number
   slots?: string[]
   message?: string
+  /** `face_mask_out_of_date`: why. */
+  why?: AdminTrendFaceMaskOutOfDate["why"]
 }
 
 /** `POST /v1/admin/trends/:id/publish` refused: every reason, to list on the screen. */
@@ -11332,13 +11398,24 @@ export async function saveAdminTrendDraft(
   ).data
 }
 
-/** Copy a URL (an upload, a library asset) into the trend's own storage. */
+export type AdminTrendMediaKind = "source" | "reference" | "hint"
+
+/** What `/media` stored: a source clip also has its length, size and display copy. */
+export interface AdminTrendStoredMedia {
+  url: string
+  durationSec?: number
+  width?: number
+  height?: number
+  display?: AdminTrendSourceDisplay
+}
+
+/** Copy a URL (an upload, a library asset) into the trend's own storage: the source clip, a reference or a slot's hint picture. */
 export async function storeAdminTrendMedia(
   id: string,
-  input: { url: string; kind: "source" | "reference" },
-): Promise<{ url: string; durationSec?: number; width?: number; height?: number }> {
+  input: { url: string; kind: AdminTrendMediaKind },
+): Promise<AdminTrendStoredMedia> {
   return (
-    await apiRequest<{ data: { url: string; durationSec?: number; width?: number; height?: number } }>(
+    await apiRequest<{ data: AdminTrendStoredMedia }>(
       `${trendPath(id)}/media`,
       "apiErr.saveTrend",
       { method: "POST", body: input },
@@ -11440,6 +11517,72 @@ export async function deleteAdminTrendTestRun(id: string, jobId: string): Promis
       { method: "DELETE" },
     )
   ).data
+}
+
+/**
+ * Mask the saved draft's whole source clip once (billed to the admin), at `revision`. Follow the job,
+ * then approve it. It returns the job and the draft's new revision (the job is recorded on the draft;
+ * `recorded: false` when it could not be, and the job is still approvable); `draftMoved`: another
+ * write landed meanwhile, so the screen reloads the trend. (The return type is
+ * spelt out: a paid call is one whose declared return type names `jobId`, paid-run-mark-guard.)
+ */
+export async function startAdminTrendFaceMask(
+  id: string,
+  revision: string,
+): Promise<{ jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean }> {
+  return (
+    await apiRequest<{ data: { jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean } }>(
+      `${trendPath(id)}/face-mask`,
+      "apiErr.saveTrend",
+      { method: "POST", body: { revision } },
+    )
+  ).data
+}
+
+/** What approving or clearing the face mask returns: the draft's new revision and its face mask state. */
+export interface TrendFaceMaskWrite extends TrendDraftWrite {
+  faceMask?: AdminTrendFaceMask
+  faceMaskState: AdminTrendFaceMaskState
+}
+
+/** Store a finished face mask job's clip on the draft at `revision`. */
+export async function approveAdminTrendFaceMask(id: string, jobId: string, revision: string): Promise<TrendFaceMaskWrite> {
+  return (
+    await apiRequest<{ data: TrendFaceMaskWrite }>(`${trendPath(id)}/face-mask/approve`, "apiErr.saveTrend", {
+      method: "POST",
+      body: { jobId, revision },
+    })
+  ).data
+}
+
+/** Clear the draft's face mask at `revision`. */
+export async function clearAdminTrendFaceMask(id: string, revision: string): Promise<TrendFaceMaskWrite> {
+  return (
+    await apiRequest<{ data: TrendFaceMaskWrite }>(
+      `${trendPath(id)}/face-mask?revision=${encodeURIComponent(revision)}`,
+      "apiErr.saveTrend",
+      { method: "DELETE" },
+    )
+  ).data
+}
+
+/** A face mask job as the trend screen follows it (`GET /v1/jobs/:id`, the admin's own job). */
+export interface AdminTrendFaceMaskJob {
+  id: string
+  status: string
+  progress?: number | null
+  error_message?: string | null
+  output_data?: {
+    maskedUrl?: string | null
+    reason?: string
+    frames?: number
+    stats?: Partial<AdminTrendFaceMaskStats>
+    [key: string]: unknown
+  } | null
+}
+
+export async function fetchAdminTrendFaceMaskJob(jobId: string): Promise<AdminTrendFaceMaskJob> {
+  return (await apiRequest<{ data: AdminTrendFaceMaskJob }>(`/v1/jobs/${encodeURIComponent(jobId)}`, "apiErr.loadTrends")).data
 }
 
 export async function fetchTrendEngineEnvironments(): Promise<TrendEngineEnvironment[]> {

@@ -69,8 +69,8 @@ describe("RunUpToHereNotice", () => {
     mockPrice = { credits: 240, hold: 240, estimating: true, unchecked: "checking" }
     render(unrun())
     const button = screen.getByRole("button", { name: t("runUpToHere.buttonEstimate", { credits: 240 }) })
-    // `~` before every estimate (the owner's rule), as the Execute button's `(~N CR)`.
-    expect(button.textContent).toContain("Run up to here · ~240")
+    // `≈` before every estimate (the owner's rule), as the Execute button's `(≈N CR)`.
+    expect(button.textContent).toContain("Run up to here · ≈240")
     expect(button.getAttribute("title")).toBe(t("ugc.price.checking"))
   })
 
@@ -84,15 +84,15 @@ describe("RunUpToHereNotice", () => {
     expect(screen.getByRole("button", { name: t("runUpToHere.buttonEstimate", { credits: 240 }) }).getAttribute("title")).toBe(t("ugc.price.uncheckedHeld"))
   })
 
-  it("a figure holding a metered LLM call's estimate reads `~N`, as Execute does — in every locale", () => {
+  it("a figure holding a metered LLM call's estimate reads `≈N`, as Execute does — in every locale", () => {
     mockPrice = { credits: 240, hold: 240, estimating: false, approx: true }
     render(unrun())
-    const button = screen.getByRole("button", { name: "Run up to here · ~240" })
+    const button = screen.getByRole("button", { name: "Run up to here · ≈240" })
     expect(button.getAttribute("title")).toBe(t("runUpToHere.tooltip"))
     for (const locale of ["en", "he", "ja", "ko", "pt-BR"] as const) {
       const label = translate(locale, "runUpToHere.buttonEstimate", { credits: 240 })
-      expect(label, locale).toContain("~240")
-      expect(label, locale).not.toContain("≈")
+      expect(label, locale).toContain("≈240")
+      expect(label, locale).not.toContain("~")
       expect(translate(locale, "runUpToHere.buttonUnpriced"), locale).not.toContain("{")
     }
   })

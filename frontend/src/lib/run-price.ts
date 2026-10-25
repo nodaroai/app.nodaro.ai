@@ -65,7 +65,7 @@ export interface ListedPrice {
   readonly perMinute: number
   /** Per item beyond the saved count of a List the user fills (decided 2026-10-07); 0 when none. */
   readonly perItem?: number
-  /** The listing holds a metered LLM call's estimate (Task 12 / R47): shown `~`. */
+  /** The listing holds a metered LLM call's estimate (Task 12 / R47): shown `≈`. */
   readonly estimate?: boolean
 }
 
@@ -99,11 +99,11 @@ export function appRunListedPrice(app: {
  * The Run button's price, as the " (…)" after its label: the listing while a
  * recording's length is pending and the listing has a per-minute part, else
  * the exact figure. Empty when there is nothing to show. An exact figure that
- * holds a metered LLM call's ESTIMATE (`estimate`) reads `~N` (spec §8.5).
+ * holds a metered LLM call's ESTIMATE (`estimate`) reads `≈N` (spec §8.5).
  */
 export function runCostLabel(args: {
   readonly exact: number
-  /** `exact` includes a metered LLM call's estimate: shown `~N`. */
+  /** `exact` includes a metered LLM call's estimate: shown `≈N`. */
   readonly estimate?: boolean
   readonly listing: ListedPrice | null | undefined
   readonly pending: boolean
@@ -117,7 +117,7 @@ export function runCostLabel(args: {
   const { exact, estimate, listing, pending, plusPerMinute, plusPerItem } = args
   if (pending && listing && listing.perMinute > 0) {
     const perItem = (listing.perItem ?? 0) > 0 && plusPerItem ? ` ${plusPerItem(creditUnits(listing.perItem ?? 0))}` : ""
-    return ` (${listing.estimate ? "~" : ""}${formatCreditUnits(listing.fixed)} ${plusPerMinute(creditUnits(listing.perMinute))}${perItem})`
+    return ` (${listing.estimate ? "≈" : ""}${formatCreditUnits(listing.fixed)} ${plusPerMinute(creditUnits(listing.perMinute))}${perItem})`
   }
-  return exact > 0 ? ` (${estimate ? "~" : ""}${formatCreditUnits(exact)})` : ""
+  return exact > 0 ? ` (${estimate ? "≈" : ""}${formatCreditUnits(exact)})` : ""
 }

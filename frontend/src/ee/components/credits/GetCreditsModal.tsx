@@ -70,7 +70,7 @@ export function GetCreditsModal({
       <DialogContent className="sm:max-w-lg max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <Sparkles className="w-5 h-5 text-[#ff0073]" />
+            <Sparkles className="w-5 h-5 text-primary-ink" />
             {t("credits.getMoreCreditsTitle")}
           </DialogTitle>
           {/* Each sentence is ONE key with its bold figures filled in, so a
@@ -96,7 +96,7 @@ export function GetCreditsModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Crown className="w-4 h-4 text-[#ff0073]" />
+                  <Crown className="w-4 h-4 text-primary-ink" />
                   {isFree ? t("credits.subscribeMonthlyTitle") : t("credits.upgradePlanTitle")}
                 </h3>
                 <div className="flex items-center bg-muted rounded-full p-0.5 text-xs">
@@ -143,7 +143,7 @@ export function GetCreditsModal({
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">{upTier.name}</span>
                           {isHighlighted && (
-                            <span className="text-[11px] font-medium text-[#ff0073] bg-[#ff0073]/10 px-1.5 py-0.5 rounded-full">
+                            <span className="text-[11px] font-medium text-primary-ink bg-[#ff0073]/10 px-1.5 py-0.5 rounded-full">
                               {t("pricing.popular")}
                             </span>
                           )}

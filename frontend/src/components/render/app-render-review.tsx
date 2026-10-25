@@ -250,7 +250,7 @@ export function AppRenderReviewBar({ review }: { readonly review: AppRenderRevie
         <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
           {t("appReview.final")}
         </span>
-        <button type="button" className="text-xs text-[#ff0073] hover:underline" onClick={review.togglePreview}>
+        <button type="button" className="text-xs text-primary-ink hover:underline" onClick={review.togglePreview}>
           {review.showingPreview ? t("appReview.showFinal") : t("appReview.showPreview")}
         </button>
       </div>
@@ -292,7 +292,7 @@ function AppRenderFinalAction({
     )
   }
   // The question states the price as the button did: an estimate (a figure not the server's checked
-  // one, or a metered LLM call's) is `~N`, a run holding a node the server refuses to price says it is
+  // one, or a metered LLM call's) is `≈N`, a run holding a node the server refuses to price says it is
   // not priced yet (run-price.ts) — with the reason under it, where a title would never show.
   const price = unchecked || approx || unpriced
     ? `${t("renderFinal.action")}${runPriceSuffix(t, credits, unchecked, { approx, ...(unpriced ? { unpriced } : {}) })}`

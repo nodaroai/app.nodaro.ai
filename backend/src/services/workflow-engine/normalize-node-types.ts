@@ -1,3 +1,5 @@
+import { canonicalVideoProvider } from "@nodaro/shared/models"
+
 /**
  * Minimal structural shape this helper reads. Intentionally has NO string index
  * signature so concrete node types (e.g. `SimpleNode`) satisfy `T extends RawNode`
@@ -10,6 +12,20 @@ interface RawNode {
 }
 
 /**
+ * A node whose `data.provider` names a retired video model
+ * (`RETIRED_VIDEO_PROVIDERS`) carries the model it runs as instead. Copies on
+ * rewrite; any other node passes through by reference. Applied at load
+ * ({@link migrateLegacyNodeType}) and again in `buildPayload`, which also sees
+ * a provider a FieldMapping or an app input wrote at run time.
+ */
+export function withRunningVideoProvider<T extends RawNode>(node: T): T {
+  const data = node.data as Record<string, unknown> | undefined
+  const provider = data?.provider
+  const runsAs = canonicalVideoProvider(provider)
+  return runsAs === provider ? node : ({ ...node, data: { ...data, provider: runsAs } } as T)
+}
+
+/**
  * Normalize a SINGLE legacy node type to its canonical form, BEFORE the
  * execution engine reads `node.type`. Idempotent. Single source of truth for the
  * load-time migration — shared by the orchestrator, sub-workflow handler,
@@ -19,10 +35,12 @@ interface RawNode {
  *  - image-to-image → modify-image
  *  - collect (no `order[]`) → reduce   (old fan-in reducer; see migration 151)
  *  - loop → list                       (Table → canonical List; see DB sweep)
+ *  - a retired video provider → the model it runs as ({@link withRunningVideoProvider})
  *
  * Non-mutating: copies on rewrite, passes untouched nodes through by reference.
  */
-export function migrateLegacyNodeType<T extends RawNode>(node: T): T {
+export function migrateLegacyNodeType<T extends RawNode>(rawNode: T): T {
+  const node = withRunningVideoProvider(rawNode)
   if (node.type === "edit-image") {
     const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
     if (provider === "nano-banana-edit") return { ...node, type: "modify-image" } as T

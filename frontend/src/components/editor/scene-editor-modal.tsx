@@ -271,7 +271,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                 <span className="text-[11px] text-muted-foreground dark:text-[#64748B] bg-muted dark:bg-[#2D2D2D] px-2 py-0.5 rounded-full">
                   {t("scene.linkedTo", { script: linkedActiveScript?.title ?? linkedScriptData?.label ?? t("scene.scriptFallback"), scene: linkedSceneName ? `${data.sourceSceneIndex + 1}. ${linkedSceneName}` : t("cfgext.sceneNumbered", { index: data.sourceSceneIndex + 1 }) })}
                 </span>
-                <button type="button" onClick={handleSyncFromScript} className="text-[11px] text-[#ff0073] hover:text-[#ff0073]/80 transition-colors">{t("scene.sync")}</button>
+                <button type="button" onClick={handleSyncFromScript} className="text-[11px] text-primary-ink hover:text-primary-ink transition-colors">{t("scene.sync")}</button>
               </div>
             )}
           </div>
@@ -324,7 +324,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                 <>
                   {status === "running" && (
                     <div className="flex items-center justify-center h-64 rounded-xl bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]">
-                      <Loader2 className="w-8 h-8 animate-spin text-[#ff0073]" />
+                      <Loader2 className="w-8 h-8 animate-spin text-primary-ink" />
                     </div>
                   )}
 
@@ -414,7 +414,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   {generatingVideo && (
                     <div className="flex items-center justify-center h-64 rounded-xl bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]">
                       <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="w-8 h-8 animate-spin text-[#ff0073]" />
+                        <Loader2 className="w-8 h-8 animate-spin text-primary-ink" />
                         <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">{t("kling3.generatingVideo")}</span>
                       </div>
                     </div>

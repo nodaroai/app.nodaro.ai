@@ -381,7 +381,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <div className="flex-1 min-w-0 text-[12px] font-semibold text-slate-200 truncate">
           {nodeData.characterName || t("cfgext.entUnnamed")}
           {showVariantSuffix && (
-            <span className="text-[#ff0073] font-normal ml-1">{`• ${variantName}`}</span>
+            <span className="text-primary-ink font-normal ml-1">{`• ${variantName}`}</span>
           )}
         </div>
         {/* Custom-styled dropdown via shadcn `Select` — the native <select>
@@ -613,7 +613,7 @@ function AssetBadge({ label, count, status }: { readonly label: string; readonly
     )
   }
   return (
-    <span className={`flex items-center justify-center gap-0.5 px-1 py-0.5 rounded ${count > 0 ? "bg-primary/10 text-primary" : "bg-[#1a1d27] text-slate-600"}`}>
+    <span className={`flex items-center justify-center gap-0.5 px-1 py-0.5 rounded ${count > 0 ? "bg-primary/10 text-primary-ink" : "bg-[#1a1d27] text-slate-600"}`}>
       {label} {count}
     </span>
   )

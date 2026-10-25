@@ -528,7 +528,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                         </span>
                         {isCanvasFocused && (
                           <span
-                            className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/15 text-[#ff0073] font-semibold uppercase tracking-wide shrink-0 flex items-center gap-1"
+                            className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/15 text-primary-ink font-semibold uppercase tracking-wide shrink-0 flex items-center gap-1"
                             title={t("addnode.focusedOnCanvas")}
                           >
                             <MapPin className="w-2.5 h-2.5" />
@@ -752,7 +752,7 @@ function ConnectorGroup({
       className={cn(
         "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] border transition-colors max-w-[140px]",
         opts.connected
-          ? "bg-[#ff0073]/12 border-[#ff0073]/45 text-[#ff0073]"
+          ? "bg-[#ff0073]/12 border-[#ff0073]/45 text-primary-ink"
           : "border-[#E2E8F0] dark:border-[#3D3D3D] text-[#64748B] dark:text-[#94A3B8] hover:border-[#94A3B8]",
         opts.focused && "ring-2 ring-[#ff0073]/70",
       )}

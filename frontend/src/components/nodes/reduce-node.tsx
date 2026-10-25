@@ -355,7 +355,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-mono text-muted-foreground">#{i + 1}</span>
                           {win && (
-                            <span className="text-[11px] font-mono tracking-[0.1em] px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073]">
+                            <span className="text-[11px] font-mono tracking-[0.1em] px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-primary-ink">
                               {t("node.winner")}
                             </span>
                           )}

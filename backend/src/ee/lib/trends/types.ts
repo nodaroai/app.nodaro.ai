@@ -7,10 +7,13 @@
  * (`trend_versions`) is a full `TrendVersionData` snapshot. Users only ever
  * see a trend's published version.
  *
- * HIDDEN: `source`, `TrendSlot.roleName`, `references`, `trendPrompt`,
- * `prePrompt`, `faceMasking` and `klingLength` never leave the server — public responses are
- * built from the other fields. `engine` is public: the trend's page names it
- * and offers its resolutions.
+ * HIDDEN: the uploaded `source` clip (its `videoUrl`, length and size),
+ * `TrendSlot.roleName`, `references`, `trendPrompt`, `prePrompt`,
+ * `faceMasking`, `faceMask`, `faceMaskJob` and `klingLength` never leave the server — public responses
+ * are built from the other fields. The source's display copy
+ * (`source.display`, a browser-safe re-encode in its own file) is public: the
+ * trend's page shows it as the original. `engine` is public: the trend's page
+ * names it and offers its resolutions.
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
@@ -40,6 +43,12 @@ interface TrendSlotBase {
   label: LocalizedText
   required: boolean
   hint?: LocalizedText
+  /**
+   * A picture of who (or what) this slot replaces, e.g. a frame of that actor
+   * from the original; in trend storage. Optional; shown with the slot, never
+   * sent with a run.
+   */
+  hintImageUrl?: string
   /** HIDDEN. Who this is in the source clip, e.g. "the woman on the left" (1–200). */
   roleName: string
 }
@@ -58,6 +67,43 @@ export type TrendSlot =
 /** HIDDEN. A fixed reference sent with every run: 1–3 images and its prompt line (1–500). */
 export interface TrendReference { images: string[]; line: string }
 
+/**
+ * HIDDEN. A trend's approved face mask: its WHOLE source clip with the faces
+ * covered, made once ahead of time (a `cast-swap-face-mask` job of the admin
+ * who made it) and copied into the trend's own storage. A run of the trend
+ * sends it in place of masking per run (`storedFaceMask`), while it still
+ * matches what it was made from: `settingsKey` (`faceMaskSettingsKey`: the
+ * source clip and the resolved masking settings) and `recipe` (core's
+ * `VIDEO_MASK_RECIPE` and the engine's `faceMaskRecipe`). Written only by the
+ * face mask routes; a draft save keeps the stored one.
+ */
+export interface TrendFaceMask {
+  /** The masked clip, in the trend's storage (`trends/<id>/…`). */
+  url: string
+  /** Its frame count (the source clip's). */
+  frames: number
+  recipe: { core: string | null; plugin: string }
+  settingsKey: string
+  /** The job that made it. */
+  jobId: string
+  stats: { shots: number; heldFrames: number; coverage: number; droppedRegions: number }
+  approvedAt: string
+  /** The admin who approved it. */
+  approvedBy: string
+}
+
+/**
+ * HIDDEN. The face mask being made: the job "Make face mask" started and the
+ * settings key it was made from. Approving requires this job, made from the
+ * draft's current settings; approving clears it. Written only by the face
+ * mask routes; a draft save keeps the stored one.
+ */
+export interface TrendFaceMaskJob {
+  jobId: string
+  settingsKey: string
+  startedAt: string
+}
+
 /** A promoted example run: its result video and the pictures used per slot. */
 export interface TrendExample {
   videoUrl: string
@@ -70,11 +116,31 @@ export interface TrendExample {
   sourceJobId: string
 }
 
+/**
+ * The source clip as it is SHOWN: an H.264 / yuv420p / AAC MP4 (faststart)
+ * re-encoded from the upload into its OWN file under `trends/<id>/`, even when
+ * the upload is already H.264, plus a poster frame. Width, height and length
+ * are the copy's (rotation applied, so a portrait phone clip reads portrait).
+ * Runs never read it: they edit the uploaded `source.videoUrl`.
+ */
+export interface TrendSourceDisplay {
+  videoUrl: string
+  posterUrl: string
+  width: number
+  height: number
+  durationSec: number
+}
+
 export interface TrendVersionData {
   name: LocalizedText
   description?: LocalizedText
-  /** HIDDEN. The clip the trend recasts (4–30 s); null while the draft has none. */
-  source: { videoUrl: string; durationSec: number; width?: number; height?: number } | null
+  /**
+   * The clip the trend recasts (4–30 s); null while the draft has none. Its
+   * `videoUrl`, length and size are HIDDEN; `display` is its public copy,
+   * made when it is uploaded (absent on a version saved before that; such a
+   * draft cannot publish: `source_display_missing`).
+   */
+  source: { videoUrl: string; durationSec: number; width?: number; height?: number; display?: TrendSourceDisplay } | null
   /** Where the 4 s preview starts; null = no preview offered. */
   previewStart: number | null
   slots: TrendSlot[]
@@ -89,6 +155,10 @@ export interface TrendVersionData {
    * masked (`TrendRunRequest.previewJobId`) is sent as `"always"`.
    */
   faceMasking?: FaceMasking
+  /** HIDDEN. The approved face mask (see `TrendFaceMask`); absent = none. */
+  faceMask?: TrendFaceMask
+  /** HIDDEN. The face mask job started last and not approved yet (see `TrendFaceMaskJob`). */
+  faceMaskJob?: TrendFaceMaskJob
   /**
    * The video engine every run of this trend uses; the person running it
    * never chooses. Absent = `"seedance-2-5"` (every version saved before the

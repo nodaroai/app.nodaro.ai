@@ -144,7 +144,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
     const creatorCall = vi.mocked(priceUgcCalls).mock.calls.find(([, calls]) => (calls as Call[]).some((c) => c.tool === "generate_image"))!
     expect(creatorCall[2]).toBe("estimate")
   })
-  it("R58 flags: fixed mode marks only the creator check an estimate (its part `~`); the ticket form marks nothing", async () => {
+  it("R58 flags: fixed mode marks only the creator check an estimate (its part `≈`); the ticket form marks nothing", async () => {
     const tickets = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12)], false)
     expect(tickets.estimateParts).toBeUndefined()
     expect(tickets.lines.some((l) => l.estimate)).toBe(false)
@@ -444,7 +444,7 @@ describe("round 3 — a clip's reading as the plugin charges it (clipReadingMode
       { key: "clip", n: 2, credits: 1000 },
       { key: "clipReading", n: 2, credits: 3 },
     ])
-    // The reading lines are estimates (charged their actual usage), and so is the clip part: the editor shows `~`.
+    // The reading lines are estimates (charged their actual usage), and so is the clip part: the editor shows `≈`.
     expect(r.lines.filter((l) => l.estimate).map((l) => l.key)).toEqual(["clipReading", "clipReading"])
     expect(r.estimateParts).toEqual(["clip"])
     const join = joinOf(12, 10)

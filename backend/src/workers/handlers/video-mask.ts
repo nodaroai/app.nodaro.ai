@@ -8,7 +8,11 @@
  * the clip's scene cuts are found first (services/scene-cut-frames.ts) and
  * every cut starts a chunk too: the model starts afresh on each shot (a
  * tracker started on the first shot finds no new subject after a hard cut),
- * and `holdLastMask` never carries a mask across a cut.
+ * and `holdLastMask` never carries a mask across a cut. With
+ * `redetectEverySec`, each shot (the whole clip without `perShot`) is also
+ * cut into requests of at most that many seconds, so the model detects its
+ * subjects again at each — a face that turns to the camera mid-shot is found
+ * there. Those boundaries are not cuts: `holdLastMask` holds across them.
  * The fal request is NOT registered with the reconcile cron (see
  * providers/fal/sam3-video.ts): a crash re-runs the job on its BullMQ retry,
  * the pre-task sweep is the backstop. Masks are intermediate artifacts — never
@@ -20,7 +24,7 @@
 
 import { dirname, join } from "node:path"
 import { gzipSync, gunzipSync } from "node:zlib"
-import { maskCompositeEffectiveAudioSource, maskCompositeUsesForeground, resolveMaskCompositeSettings, resolveVideoMaskProvider, VIDEO_MASK_LIMITS } from "@nodaro/shared/media"
+import { maskCompositeEffectiveAudioSource, maskCompositeUsesForeground, resolveMaskCompositeSettings, resolveVideoMaskProvider, resolveVideoMaskRedetectSec, VIDEO_MASK_LIMITS, VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { listObjectsByPrefixWithMeta, readR2ObjectBuffer, uploadFileToR2 } from "../../lib/storage.js"
 import { jobScratchPrefix, uploadJobScratchBuffer, uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -30,11 +34,14 @@ import { detectCutFrames } from "../../services/scene-cut-frames.js"
 import { cleanupWorkDir, createWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import {
   VIDEO_MASK_CHUNK_FRAMES,
+  VIDEO_MASK_MIN_SHOT_FRAMES,
   planMaskChunks,
+  redetectChunkFrames,
   prepareVideoMaskSource,
   renderMaskVideo,
   splitMaskSource,
   holdLastMaskFrames,
+  holdMaxFrames,
   dropMaskRegions,
   normaliseMaskZone,
   shotCutFrames,
@@ -90,6 +97,8 @@ interface CachedChunk {
   readonly chunk: MaskChunk
   /** Kept by a `perShot` run (absent on chunks kept before perShot existed = false). */
   readonly perShot?: boolean
+  /** Kept by a `redetectEverySec` run (absent on chunks kept before it existed, or with it off = 0). */
+  readonly redetectEverySec?: number
   readonly rle: readonly string[]
   readonly cost: number | null
 }
@@ -102,7 +111,7 @@ const sameGeometry = (a: MaskGeometry, b: MaskGeometry) =>
  * folder, which the job's end empties. A BullMQ retry after the model
  * answered — a failed chunk, encode or upload, a worker restart — draws those
  * chunks instead of paying for them again. Only for the same model, geometry,
- * chunk plan and `perShot` (the source is prepared again on every attempt,
+ * chunk plan, `perShot` and `redetectEverySec` (the source is prepared again on every attempt,
  * and so are its cuts — an attempt can plan other chunks than the last one,
  * so every kept answer for a chunk is looked at, not only the first). Any
  * read problem counts as no cache.
@@ -113,6 +122,7 @@ async function readCachedChunks(
   geometry: MaskGeometry,
   chunks: readonly MaskChunk[],
   perShot: boolean,
+  redetectEverySec: number,
 ): Promise<Map<number, CachedChunk>> {
   const found = new Map<number, CachedChunk>()
   try {
@@ -125,6 +135,7 @@ async function readCachedChunks(
         if (!body) continue
         const cached = JSON.parse(gunzipSync(body).toString("utf8")) as CachedChunk
         const samePlan = cached.chunk?.startFrame === chunk.startFrame && cached.chunk?.frames === chunk.frames && (cached.perShot ?? false) === perShot
+          && (cached.redetectEverySec ?? 0) === redetectEverySec
         if (cached.model === model && cached.geometry && sameGeometry(cached.geometry, geometry) && samePlan && Array.isArray(cached.rle)) {
           found.set(chunk.index, cached)
           break
@@ -160,7 +171,7 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
 }
 
 const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
-  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct, zone: rawZone, perShot: rawPerShot } = job.data as {
+  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct, zone: rawZone, perShot: rawPerShot, redetectEverySec: rawRedetect } = job.data as {
     jobId: string
     videoUrl: string
     prompt: string
@@ -171,9 +182,13 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
     maxSubjectHeightPct?: number
     zone?: unknown
     perShot?: boolean
+    redetectEverySec?: number
   }
   // Absent (a job queued before perShot existed) = one pass over the whole clip.
   const perShot = rawPerShot === true
+  // Absent / 0 (a job queued before re-detection existed too) = off: requests start only at the clip's
+  // start, every 1,800 frames and (perShot) every cut.
+  const redetectEverySec = resolveVideoMaskRedetectSec(rawRedetect)
   const model = resolveVideoMaskProvider(provider)
   const detection = threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
   console.log(`[worker] video-mask ${ctx.jobId}: "${prompt}" (${model}, threshold ${detection})`)
@@ -191,11 +206,18 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
       }))
       : []
     const shots = cutFrames.length + 1
-    const chunks = planMaskChunks(totalFrames, VIDEO_MASK_CHUNK_FRAMES, cutFrames)
-    if (perShot) console.log(`[worker] video-mask ${ctx.jobId}: ${shots} shot(s)${cutFrames.length > 0 ? ` (cuts at frames ${cutFrames.join(", ")})` : ""}, ${chunks.length} chunk(s)`)
+    // redetectEverySec: each shot cut every that-many seconds of frames from its start (a last piece under
+    // VIDEO_MASK_MIN_SHOT_FRAMES joins the one before); off = the 1,800-frame grid, planned exactly as before.
+    const redetect = redetectEverySec > 0
+    const chunks = redetect
+      ? planMaskChunks(totalFrames, redetectChunkFrames(prepared.geometry.frameRate, redetectEverySec), cutFrames, VIDEO_MASK_MIN_SHOT_FRAMES)
+      : planMaskChunks(totalFrames, VIDEO_MASK_CHUNK_FRAMES, cutFrames)
+    if (perShot || redetect) {
+      console.log(`[worker] video-mask ${ctx.jobId}: ${shots} shot(s)${cutFrames.length > 0 ? ` (cuts at frames ${cutFrames.join(", ")})` : ""}, ${chunks.length} chunk(s)${redetect ? ` (re-detect every ${redetectEverySec} s)` : ""}`)
+    }
     await setJobProgress(job, ctx.jobId, 10)
 
-    const cached = await readCachedChunks(ctx.jobId, model, prepared.geometry, chunks, perShot)
+    const cached = await readCachedChunks(ctx.jobId, model, prepared.geometry, chunks, perShot, redetectEverySec)
     if (cached.size > 0) console.log(`[worker] video-mask ${ctx.jobId}: drawing ${cached.size}/${chunks.length} chunk(s) an earlier attempt paid for`)
     const missing = chunks.filter((c) => !cached.has(c.index))
     // A long clip is cut once, locally; a one-chunk clip goes as it is.
@@ -216,14 +238,15 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
             : videoUrl
         const answer = await runSam3Video({ model, videoUrl: modelInputUrl, prompt, threshold: detection, frameCount: chunk.frames })
         assertFrameCountMatches(answer.rle.length, chunk.frames)
-        await cacheChunk(ctx.jobId, { model, geometry: prepared.geometry, chunk, ...(perShot ? { perShot } : {}), rle: answer.rle, cost: answer.cost })
+        await cacheChunk(ctx.jobId, { model, geometry: prepared.geometry, chunk, ...(perShot ? { perShot } : {}), ...(redetect ? { redetectEverySec } : {}), rle: answer.rle, cost: answer.cost })
         return { rle: answer.rle, cost: answer.cost }
       }),
     )
     const cost = answers.every((a) => a.cost === null) ? null : answers.reduce((sum, a) => sum + (a.cost ?? 0), 0)
-    // perShot: each chunk fitted to exactly its planned frames, so a count the tolerance let through in
-    // one shot never moves the next shot's masks off its cut. Off: joined as the model answered.
-    const modelRle = perShot ? answers.flatMap((a, i) => fitMaskFrames(a.rle, chunks[i]!.frames)) : answers.flatMap((a) => a.rle)
+    // perShot / redetect: each chunk fitted to exactly its planned frames, so a count the tolerance let
+    // through in one chunk never moves the next chunk's masks off its boundary (dozens of short re-detection
+    // chunks would otherwise add up to a drift). Both off: joined as the model answered.
+    const modelRle = perShot || redetect ? answers.flatMap((a, i) => fitMaskFrames(a.rle, chunks[i]!.frames)) : answers.flatMap((a) => a.rle)
     // The chunks' own arrays are no longer needed: let them go, so a frame the size filter replaces
     // leaves no second copy behind (the retry cache already holds the model's answer).
     answers.length = 0
@@ -253,8 +276,12 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
       console.log(`[worker] video-mask ${ctx.jobId}: dropped regions — ${cuts.join(", ")}${noneLeft ? " — none left: an empty mask" : ""}`)
     }
     const afterFilters = filtered?.rle ?? modelRle
-    // In place, yielding to the event loop like the region filters. Per shot: a held mask never crosses a cut.
-    const held = holdLastMask === true ? await holdLastMaskFrames(afterFilters, prepared.geometry.width * prepared.geometry.height, cutFrames) : undefined
+    // In place, yielding to the event loop like the region filters. Per shot: a held mask never crosses a cut
+    // — the CUTS only, never the re-detection boundaries (a subject hidden across one stays held);
+    // and never for longer than HOLD_MAX_SEC (a cut the scan missed, a subject that left).
+    const held = holdLastMask === true
+      ? await holdLastMaskFrames(afterFilters, prepared.geometry.width * prepared.geometry.height, cutFrames, holdMaxFrames(prepared.geometry.frameRate))
+      : undefined
     const rle = held?.rle ?? afterFilters
     if (held) console.log(`[worker] video-mask ${ctx.jobId}: held the last mask over ${held.heldFrames} empty frame(s)`)
 
@@ -285,6 +312,8 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         ...(held ? { heldFrames: held.heldFrames } : {}),
         // Size and zone together (a region dropped by both counts once).
         ...(filtered ? { droppedRegions: filtered.droppedRegions } : {}),
+        // What made this mask: a mask stored and reused later is out of date once it changes.
+        recipe: VIDEO_MASK_RECIPE,
       },
       provider: model,
       provider_cost: cost,

@@ -1,5 +1,54 @@
 # @nodaro/sdk
 
+## 2.45.1
+
+### Patch Changes
+
+- 9d9fe04: `VIDEO_MASK_RECIPE` (`@nodaro/shared/media`): the version of what a Video Mask run's mask looks like for a given clip and settings, starting at `"2026-10-25"`. Every finished `video-mask` job now reports it as `output_data.recipe`, so a mask stored and reused later can tell when the algorithm that made it has changed.
+
+  `@nodaro/sdk`: `media.videoMask`'s documentation lists the output's new `recipe`.
+
+- Updated dependencies [9d9fe04]
+  - @nodaro/shared@3.43.0
+
+## 2.45.0
+
+### Minor Changes
+
+- 12f9aac: Trends show their original. `TrendDetail.original?` (`TrendOriginal`: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`) is the clip every run of the trend starts from, as you may show it: a browser-safe (H.264 MP4) copy, with where the 4-second preview starts when the trend offers one (`0` included). It is absent only on a version without a display copy (and from an older server). `TrendDetailSlot.hintImageUrl?` is a picture of who or what the slot is in the original, for an empty slot; a run never sends it. A trend may now be published with no example: its `examples` is `[]` and its card's `cover` is the original's copy (`TrendCard.cover` is the first example, else the original). On such a trend, leave `TrendRunRequest.example` out (sending one answers `400 example_out_of_range`): an optional slot left out then stays as in the original (no pictures, `fromExample: false`), and the run records `TrendRun.example` `0` ("no example"; never show it as "Example 0").
+
+### Patch Changes
+
+- 906b8ed: Estimated credit figures are marked `≈N` (was `~N`) in `nodaro nodes list`, `nodaro models cost` and `nodaro workflows` output, matching the editor and the apps. The SDK's doc comments for estimate fields say `≈N` too; no type or behaviour changes.
+- 7c5daf4: `RenderFinalQuote` gains `holdCredits`: what the run holds while it renders (a UGC clip at its hold), never below `estimatedCredits`. `sufficient` is checked against it, and a refused `renderFinal` names it as `InsufficientCreditsError.required`.
+- 14402d5: Video Mask: `holdLastMask` / `--hold-last-mask` now say the mask is held for at most 1 second.
+- 1999c19: Video Mask re-detection: `nodaro media video-mask --redetect-every <sec>` (0 = off, or 1–10) sends `redetectEverySec`, and `client.media.videoMask` documents it — the subject is detected again every that many seconds, so someone who walks in or turns to the camera mid-shot is masked. Slower; same price.
+- Updated dependencies [2c92a8c]
+- Updated dependencies [14402d5]
+- Updated dependencies [1999c19]
+  - @nodaro/shared@3.42.0
+  - @nodaro/prompts@1.42.1
+
+## 2.44.0
+
+### Minor Changes
+
+- 914e157: Cast Swap runs on two engines. `CastSwapParams.engine` (`CastSwapEngine`: `"seedance-2-5" | "kling-4"`; left out = Seedance 2.5, as before) chooses it on `run()` and `estimate()`. Kling 4 renders `"720p"` (its default) or `"1080p"` and has no draft: `draft: true` answers `400 draft_unsupported`, and 480p is refused. Its Full Quality makes a NEW take at 1080p from a completed 720p run's inputs: `CastSwapFullQualityEstimate.kind` (`CastSwapFullQualityKind`: `"same-take" | "new-take"`; absent from an older engine = same take) says which. Trends: `TrendDetail.engine?` (`TrendEngine`; absent = Seedance 2.5) and its `resolutions` (Kling 4: `["720p", "1080p"]`, default first), `TrendRun.engine?` (absent = Seedance 2.5), a Kling 4 720p run's `fullQualityUntil`, and the `draft_unsupported` / `resolution_unsupported` refusals of `estimate()` / `run()`. A Kling 4 quote names its `engine`, prices the take as `breakdown.kling` (in place of `seedance` / `seedanceExpected`), with `expectedCredits` equal to `totalCredits` and `settlesLower: false`; a Kling 4 Full Quality quote has `breakdown.kling` in place of `seedanceHd`. So `CastSwapEstimate.breakdown.seedance` and `CastSwapFullQualityEstimate.breakdown.seedanceHd` are now optional (absent on Kling 4). Kling 4's own refusals: `draft_unsupported`, `resolution_unsupported`, `output_format_unsupported` and `too_many_images` (more than 10 images in a run); its 8,000-character prompt cap answers `prompt_too_long`. `CastSwapParams.klingLength` (`CastSwapKlingLength`: `"cut-end"` — the default — or `"cut-start"`) sets which end of the clip a Kling 4 run cuts to whole seconds; Seedance 2.5 ignores it.
+
+  Release order: the Cast Swap engine that declares `engines` (and reads `klingLength`) must be pinned on an environment BEFORE this platform version is relied on for Kling 4 there. A platform whose engine predates it refuses a Kling 4 trend run (`engine_unsupported`) or MCP `cast_swap` (`engine_unavailable`) instead of letting it run on Seedance.
+
+- 54d4de2: List your MCP conversations — each a flow an assistant built from its steps: `client.workflows.listMcpConversations({ month, sources })` (`GET /v1/mcp-conversations`) and `nodaro workflows mcp-conversations [--month YYYY-MM] [--source claude,chatgpt]`.
+- dc55645: `PickerOption.imageSrcSet`: a picker option pictured by a Nodaro CDN render (on Nodaro Cloud: the look pickers and, new, the music and voice pickers' pictures) also carries its picture at 240, 480, 960 and 1920px wide as an HTML `srcset` value, so a large tile stays sharp.
+
+### Patch Changes
+
+- Updated dependencies [914e157]
+- Updated dependencies [a76b30a]
+- Updated dependencies [dc55645]
+- Updated dependencies [dc55645]
+  - @nodaro/shared@3.41.0
+  - @nodaro/prompts@1.42.0
+
 ## 2.43.0
 
 ### Minor Changes

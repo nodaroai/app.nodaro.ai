@@ -17,7 +17,7 @@
     "video-ads"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 232,
+  "estimatedCredits": 572,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -30,7 +30,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/b0904d16-22f3-4895-ab19-2de3f530d2c1.png",
   "previewMediaType": "image",
@@ -573,8 +573,8 @@
       "data": {
         "label": "CTA · Entrance",
         "prompt": "{Entrance director || The elements of the advertisement arrive one by one on the empty background — the product first, then the graphics, the headline, the smaller text and the button — each easing into its final place while the camera stays almost still, ending exactly on the finished advertisement.} Crisp, stable motion-graphics animation; every element appears once, in its final place, and nothing enters from beyond the edges of the frame; text, logo and product stay exactly as designed; no duplicates, no morphing, no flicker, no extra objects, no camera shake, no scene change.",
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "3:4",
         "fieldMappings": {},
         "generateAudio": false,

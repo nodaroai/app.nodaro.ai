@@ -60,7 +60,7 @@ function EffectEditor({
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2">
-          <Wand2 className="w-3 h-3 text-[#ff0073]" />
+          <Wand2 className="w-3 h-3 text-primary-ink" />
           <span className="font-medium">{label}</span>
         </div>
         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -246,7 +246,7 @@ export function AfterEffectsPreview({
               {disabledEffects.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground" />
               ) : (
-                <Eye className="w-3 h-3 text-[#ff0073]" />
+                <Eye className="w-3 h-3 text-primary-ink" />
               )}
             </button>
             <div className={`flex-1 ${disabledEffects.has(i) ? "opacity-40" : ""}`}>

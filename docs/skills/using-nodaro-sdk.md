@@ -159,7 +159,7 @@ through the tokens it writes; see the
 [Credits](https://nodaro.ai/docs/node/llm-chat#credits) section (every model's
 rate is in the repository's `docs/pricing/llm-models.md`).
 `client.credits.modelCosts([llmPriceKey(feature, model)])` returns a call's
-estimate (listed in `estimates`; show it as `~N`). Workflow/canvas LLM nodes carry the same field on
+estimate (listed in `estimates`; show it as `≈N`). Workflow/canvas LLM nodes carry the same field on
 their node `data`, and `client.promptHelper.*` accepts it directly in its
 request body.
 

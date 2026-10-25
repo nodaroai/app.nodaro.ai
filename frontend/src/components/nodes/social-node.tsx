@@ -78,7 +78,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                   href={nodeData.platformPostUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-[#ff0073] hover:underline truncate max-w-[180px]"
+                  className="text-[11px] text-primary-ink hover:underline truncate max-w-[180px]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {t("cfgext.socialViewPost")}

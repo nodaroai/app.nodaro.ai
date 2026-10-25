@@ -498,7 +498,7 @@ export interface NodeDescriptor {
   creditCost?: number | string
   /**
    * `creditCost` is an ESTIMATE — a metered LLM node's typical call on its
-   * default model (spec §8.5), charged its actual usage after the run (`~`).
+   * default model (spec §8.5), charged its actual usage after the run (`≈`).
    * Never on the static registry: the served descriptor sets it
    * (`chargedDescriptor`) while metered pricing is on. Absent otherwise.
    */

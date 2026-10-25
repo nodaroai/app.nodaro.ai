@@ -46,6 +46,7 @@ export interface TrendRun {
   createdAt: string
   completedAt: string | null
   trend: TrendRunDisplay["trend"]
+  /** 1-based example used for empty optional slots; 0 = the trend had no example. */
   example: number
   slots: TrendRunDisplay["slots"]
   details?: string
@@ -355,6 +356,19 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
 }
 
 /**
+ * The body without `storedFaceMask` when the loaded engine does not declare
+ * it takes one (`castSwap.storedFaceMask`): such an engine would refuse or
+ * drop a field it does not know, so the run masks per run instead, and the
+ * estimate quotes that. Called by the estimate, the run and the admin test
+ * run alike, after `followPreviewMasking`. Mutates `composed.body`.
+ */
+export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
+  if (composed.body.storedFaceMask && getPluginSupports().castSwap?.storedFaceMask !== true) {
+    delete composed.body.storedFaceMask
+  }
+}
+
+/**
  * A full run follows its preview's face masking. Only when the trend's masking
  * is "auto" and the body to send is not itself a preview (`composed.body.preview`,
  * what the engine gets, not a separate flag): the request's `previewJobId`
@@ -372,7 +386,8 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
  * before the default margins) or `zone: null` ran with none, so the run is
  * sent with none (all four 0). A stored zone that is not a valid one leaves
  * the trend's (the default margins). A trend's own zone, null or 0 included,
- * still wins.
+ * still wins. The trend's stored face mask (`storedFaceMask`) is kept: the
+ * engine uses it for the masked attempt.
  *
  * Anything else (no such job, another user's, another trend's, a full run, not
  * completed, not masked, a database error) leaves the body as it is: no

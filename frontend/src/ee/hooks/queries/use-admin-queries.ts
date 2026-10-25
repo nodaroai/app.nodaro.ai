@@ -32,9 +32,14 @@ import {
   restoreAdminTrend,
   deleteAdminTrendTestRun,
   fetchTrendEngineEnvironments,
+  startAdminTrendFaceMask,
+  approveAdminTrendFaceMask,
+  clearAdminTrendFaceMask,
+  fetchAdminTrendFaceMaskJob,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
   type AdminTrendData,
+  type AdminTrendMediaKind,
   type AdminTrendRun,
   type TrendBadge,
   type TrendLocalizedText,
@@ -1599,7 +1604,7 @@ export function useSaveTrendTagLabels() {
 export function useTrendMedia(id: string) {
   return useMutation({
     onError: handledByScreen,
-    mutationFn: (input: { url: string; kind: "source" | "reference" }) => storeAdminTrendMedia(id, input),
+    mutationFn: (input: { url: string; kind: AdminTrendMediaKind }) => storeAdminTrendMedia(id, input),
   })
 }
 
@@ -1700,6 +1705,49 @@ export function useDeleteTrendTestRun(id: string) {
     onError: handledByScreen,
     mutationFn: (jobId: string) => deleteAdminTrendTestRun(id, jobId),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.trendTestRuns(id) }),
+  })
+}
+
+/** Mask the saved draft's source clip once (the admin pays); follow the job with `useTrendFaceMaskJob`. */
+export function useStartTrendFaceMask(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (revision: string) => startAdminTrendFaceMask(id, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Follow a face mask job until it ends (every 5 s while it runs). */
+export function useTrendFaceMaskJob(jobId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.admin.trendFaceMaskJob(jobId ?? ""),
+    queryFn: () => fetchAdminTrendFaceMaskJob(jobId!),
+    enabled: hasAdmin() && !!jobId,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status
+      return status === "completed" || status === "failed" || status === "cancelled" ? false : 5_000
+    },
+  })
+}
+
+/** Store a finished face mask on the draft at `revision`. */
+export function useApproveTrendFaceMask(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => approveAdminTrendFaceMask(id, jobId, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Clear the draft's face mask at `revision`. */
+export function useClearTrendFaceMask(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (revision: string) => clearAdminTrendFaceMask(id, revision),
+    onSuccess: () => invalidate(id),
   })
 }
 

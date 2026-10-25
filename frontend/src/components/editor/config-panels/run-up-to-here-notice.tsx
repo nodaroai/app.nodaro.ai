@@ -16,7 +16,7 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  * "Run up to here · ≈N" — the editor's run-up-to-here action, priced with the
  * run's own estimate over the very set the run executes. A set holding UGC
  * nodes is priced with the server's figure for its UGC part; until that lands,
- * or while it is not checked, the button's figure is marked `~N` and its
+ * or while it is not checked, the button's figure is marked `≈N` and its
  * tooltip says why. A node the server refuses to price makes it say
  * "not priced yet". Nothing shows once everything upstream has run.
  */
@@ -37,7 +37,7 @@ export function RunUpToHereNotice({ nodeId, nodes, edges, showMessage = true }: 
   const executable = useMemo(() => runUpToHereSet(nodeId, nodesArr, edgesArr).executable, [nodeId, nodesArr, edgesArr])
   const { credits, estimating, unchecked, approx, unpriced } = useRunSetPrice(executable, nodesArr, edgesArr)
   if (executable.length === 0) return null
-  // `~N` when unchecked (the tooltip says why) or when the figure holds a metered LLM estimate.
+  // `≈N` when unchecked (the tooltip says why) or when the figure holds a metered LLM estimate.
   const marked = hasCredits() && (estimating || approx)
   // A node the server refuses to price: no figure (it would leave that node out) — "not priced yet",
   // with the server's sentence on hover.

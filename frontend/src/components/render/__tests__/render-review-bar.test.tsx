@@ -61,15 +61,15 @@ describe("RenderReviewBar", () => {
     controls.finalUnchecked = "checking"
     controls.previewUnchecked = "editor"
     render(<RenderReviewBar renderId="r" busy={false} />)
-    const final = screen.getByText(`Render final · ~530`).closest("button")!
+    const final = screen.getByText(`Render final · ≈530`).closest("button")!
     expect(final.title).toBe(translate("en", "ugc.price.checking"))
-    const preview = screen.getByText(`Update preview · ~144`).closest("button")!
+    const preview = screen.getByText(`Update preview · ≈144`).closest("button")!
     expect(preview.title).toBe(translate("en", "ugc.price.unchecked"))
   })
 
   it("a run that executes a metered LLM node is shown approximate, as the server's quote flags it (no reason: nothing is unchecked)", () => {
     render(<RenderReviewBarView onRenderFinal={vi.fn()} onUpdatePreview={vi.fn()} finalCredits={530} finalApprox previewCredits={144} busy={false} />)
-    expect(screen.getByText("Render final · ~530").closest("button")!.title).toBe("")
+    expect(screen.getByText("Render final · ≈530").closest("button")!.title).toBe("")
     expect(screen.getByText("Update preview · 144")).toBeInTheDocument()
   })
 

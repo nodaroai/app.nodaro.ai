@@ -10,12 +10,21 @@
  *   trend's pre prompt and face masking (top-level fields; the engine refuses
  *   either inside `display`);
  * - `display`: the public record of the run (English labels, the user's own
- *   pictures, the example's pictures for empty optional slots, the chips and
- *   the user's raw details), also carried in `body.trendRun.display`;
+ *   pictures, the example's pictures for empty optional slots — none on a
+ *   trend with no example, whose empty optional slots stay as in the
+ *   original — the chips and the user's raw details), also carried in
+ *   `body.trendRun.display`;
  * - `needs`: what the engine must support for this run.
  *
  * HIDDEN data (source, roleName, references, trendPrompt, prePrompt,
  * faceMasking) goes only into the engine's own fields, never into `display`.
+ *
+ * A masked trend whose approved face mask was made from these exact settings
+ * (`storedFaceMaskFor`, face-mask.ts) also sends `storedFaceMask: { url,
+ * frames }`: the engine cuts and pads that masked clip like the source and
+ * masks nothing per run. Out of date or absent, the key is left out and the
+ * run masks per run. (An engine that does not take it gets the body without
+ * it: `withoutUnsupportedStoredMask`, run-helpers.ts.)
  *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
@@ -34,6 +43,7 @@ import { castSwapImagesSent } from "@nodaro/render-rules"
 import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
+import { storedFaceMaskFor } from "./face-mask.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
@@ -83,13 +93,17 @@ export interface TrendRunDisplaySlot extends Chips {
   label: string
   kind: TrendSlotKind
   images: string[]
-  /** True when the slot was left empty and the example's pictures filled it. */
+  /**
+   * True when the slot was left empty and the example's pictures filled it.
+   * False with no pictures: left empty on a trend with no example, so it
+   * stays as in the original.
+   */
   fromExample: boolean
 }
 
 export interface TrendRunDisplay {
   trend: { id: string; slug: string; version: number; /** English. */ name: string }
-  /** 1-based example used for empty optional slots. */
+  /** 1-based example used for empty optional slots; 0 = the trend had no example (none was used). */
   example: number
   slots: TrendRunDisplaySlot[]
   /** The user's own details, as sent (`{slot:<key>}` mentions unmapped). */
@@ -103,6 +117,8 @@ export interface TrendRunBody {
   prePrompt?: string
   postPrompt?: string
   faceMasking?: FaceMasking
+  /** The trend's approved face mask, while it matches the masking sent (never without `faceMasking`). */
+  storedFaceMask?: { url: string; frames: number }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
@@ -210,11 +226,15 @@ export function composeTrendRun(
     }
   }
 
-  const example = req.example ?? 1
+  // A trend may have no example (only its original). Leaving `example` out
+  // then means "no example": an empty optional slot is sent with no pictures,
+  // so the original's person stays (the engine keeps a role with none as in
+  // the clip), and the run records example 0. With examples, an empty
+  // optional slot takes the chosen example's pictures (Example 1 by default).
+  const noExample = req.example === undefined && data.examples.length === 0
+  const example = noExample ? 0 : (req.example ?? 1)
   const exampleInRange = Number.isInteger(example) && example >= 1 && example <= data.examples.length
-  // An explicit example must exist. The default (Example 1) is only needed
-  // when an optional slot is left empty, so a draft with no examples yet can
-  // still be test-run with every slot filled.
+  // An explicit example must exist, on a trend with none too.
   if (req.example !== undefined && !exampleInRange) {
     throw new TrendRunError("example_out_of_range", `This trend has no example ${req.example}.`)
   }
@@ -230,7 +250,11 @@ export function composeTrendRun(
       images = [...own]
     } else if (slot.required) {
       throw new TrendRunError("missing_slot", `"${pickText(slot.label, "en")}" needs a picture.`, slot.key)
+    } else if (noExample) {
+      images = []
     } else {
+      // Unreachable today (an out-of-range example is refused above, and no example is `noExample`):
+      // kept so the index below can never read past `examples`.
       if (!exampleInRange) throw new TrendRunError("example_out_of_range", `This trend has no example ${example}.`)
       const fill = data.examples[example - 1]!.slots
       const picked = Object.hasOwn(fill, slot.key) ? fill[slot.key] : undefined
@@ -265,6 +289,7 @@ export function composeTrendRun(
   }
 
   const masking = faceMaskingOn(data.faceMasking) ? data.faceMasking : undefined
+  const stored = masking ? storedFaceMaskFor(data) : undefined
   const engine = engineOf(data)
   const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
   if (req.draft === true && !castSwapEngineHasDraft(engine)) {
@@ -312,6 +337,7 @@ export function composeTrendRun(
     // the margins the trend means. A run that follows its masked preview takes the preview's
     // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
     ...(masking ? { faceMasking: withResolvedZone(structuredClone(masking)) } : {}),
+    ...(stored ? { storedFaceMask: stored } : {}),
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),

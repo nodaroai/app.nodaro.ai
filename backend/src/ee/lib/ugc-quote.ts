@@ -85,7 +85,7 @@ export interface UgcQuoteItem {
 export interface UgcQuoteLine {
   readonly label: string
   readonly credits: number
-  /** A metered LLM call's ESTIMATE (R26): charged its actual usage, so shown `~`. Absent for a fixed price. */
+  /** A metered LLM call's ESTIMATE (R26): charged its actual usage, so shown `≈`. Absent for a fixed price. */
   readonly estimate?: true
 }
 export interface UgcQuote {
@@ -97,7 +97,7 @@ export interface UgcQuote {
   readonly total: number
   /** `spent_job_ids` entries that are not this user's jobs (or not job ids at all). */
   readonly skipped: string[]
-  /** Some line still to come is a metered LLM estimate, so the total is one (`~`). Absent otherwise. */
+  /** Some line still to come is a metered LLM estimate, so the total is one (`≈`). Absent otherwise. */
   readonly totalIsEstimate?: true
 }
 
@@ -126,13 +126,13 @@ export class UgcQuoteUnpricedError extends UgcQuoteError {
 
 /**
  * How the UGC plugin charges a clip's per-take reading (the frame check) — R58: the ONE source for
- * how that reading is quoted, held and flagged (`~`), declared by the plugin (`ugc.clipReadingMode`)
+ * how that reading is quoted, held and flagged (`≈`), declared by the plugin (`ugc.clipReadingMode`)
  * and read by its admission too:
  *  - `"metered"` (the plugin says so AND metered side holds are available now): the reading is its
  *    own metered side hold — quoted as a separate `clipReading` line at its `:direct` estimate,
- *    never inside the clip (`ugc-estimate.ts`), and an estimate (`~`);
+ *    never inside the clip (`ugc-estimate.ts`), and an estimate (`≈`);
  *  - `"fixed"` (every plugin that predates it, anything else, the rollback): the reading inside the
- *    clip at its TIER row — exactly what the plugin charges (`priceUgcCalls`' default) — no `~`.
+ *    clip at its TIER row — exactly what the plugin charges (`priceUgcCalls`' default) — no `≈`.
  */
 export function ugcClipReadingMode(): "metered" | "fixed" {
   try {
@@ -449,8 +449,8 @@ export async function buildUgcQuote(input: {
   // The items the AGENT runs through public tools (`build_ugc_clips`' quoteItems — its frame check
   // included): each is a call through a host route, an Image to Text one read by
   // /v1/image-to-text/describe, which bills it metered whenever metered pricing is on. So it is priced
-  // as that route reserves it (its estimate, `~`) in every plugin mode — never by `ugcClipReadingMode`,
-  // which governs only the reading inside the plugin's own clip job (`quoteTickets`, the `~` flag).
+  // as that route reserves it (its estimate, `≈`) in every plugin mode — never by `ugcClipReadingMode`,
+  // which governs only the reading inside the plugin's own clip job (`quoteTickets`, the `≈` flag).
   for (const item of input.items) lines.push(await priceItem(item, ctx, callerGates, UGC_ROUTE_CALL_PRICED_AT))
   const { spent, skipped } = await spentLines(input.spentJobIds.slice(0, UGC_SPENT_JOB_IDS_MAX), input.userId)
   const total = [...spent, ...lines].reduce((sum, l) => sum + l.credits, 0)
@@ -493,7 +493,7 @@ export async function priceUgcCalls(
 /**
  * {@link priceUgcCalls} with each call's line: its credits, and `estimate`
  * when it is a metered LLM call priced at its estimate (charged its actual
- * usage, `~`). The canvas quote reads these flags; the plugin's
+ * usage, `≈`). The canvas quote reads these flags; the plugin's
  * `tk.http.priceUgcCalls` keeps its plain `number[]`.
  */
 export async function priceUgcCallLines(

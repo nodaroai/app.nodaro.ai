@@ -19,10 +19,10 @@
  * render at Final and every node after it, the set the editor, the API and the
  * app runner run).
  *
- * The one-node Tighten Episode template is listed the same way: its node is
- * set to review first, its preview part the node's first run (fee included),
- * its final part the node's Render final. Its review is the node's own
- * setting, so the sync never flips it.
+ * The one-node podcast templates (Tighten Episode, Clip Pack, Trailer) are
+ * listed the same way: each node is set to review first, its preview part the
+ * node's first run (fee included), its final part the node's Render final. Its
+ * review is the node's own setting, so the sync never flips it.
  *
  * All of that holds with the preview stop rule (PREVIEW_STOP_RULE_ENABLED)
  * off, which this file sets rather than reading the environment. With it on, a
@@ -48,7 +48,7 @@ import { fileURLToPath } from "node:url"
 import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
 import { EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanMinutesBaseCredits, editPlanRateCreditId, parseEditPlanMinutesCreditId } from "@nodaro/shared/edl"
 import { videoSfxCreditId } from "@nodaro/shared/credits"
-import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
+import { PREVIEW_RENDER_NODE_TYPES, REVIEW_HOLDING_USE_CASE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -81,13 +81,20 @@ const fixture = JSON.parse(readFileSync(join(here, "fixtures", "run-estimate-par
   graphFinals: Record<string, number>
 }
 
-/** The one-node Tighten Episode template: its node is set to review first, so
- *  it is listed in two parts like the others, but its review is the node's own
- *  setting, which the preview stop rule's sync never changes. */
+/** The one-node podcast templates, each with its use-case node's type: the
+ *  node is set to review first, so each is listed in two parts like the
+ *  others, but its review is the node's own setting, which the preview stop
+ *  rule's sync never changes. */
+const ONE_NODE_TYPES: Record<string, string> = {
+  "podcast-clip-pack-one-node": "clip-pack",
+  "podcast-tighten-episode-one-node": "tighten-episode",
+  "podcast-trailer-formats-one-node": "episode-trailer",
+}
 const ONE_NODE = "podcast-tighten-episode-one-node"
-const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", ONE_NODE, "podcast-trailer-formats", "podcast-vertical-speaker-clip"]
+const ONE_NODES = Object.keys(ONE_NODE_TYPES)
+const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", "podcast-trailer-formats", "podcast-vertical-speaker-clip", ...ONE_NODES].sort()
 /** The templates the sync writes at Final where the preview stop rule is off. */
-const FLIPPED = PODCAST.filter((slug) => slug !== ONE_NODE)
+const FLIPPED = PODCAST.filter((slug) => !ONE_NODES.includes(slug))
 const docs = new Map(
   readdirSync(templatesDir)
     .filter((f) => f.endsWith(".json"))
@@ -115,7 +122,7 @@ function renderFinalEstimate({ nodes, edges }: Graph, renderId: string): number 
   return CreditsService.estimateWorkflowBaseCredits(priced, edges, { runNodeIds: set })
 }
 
-/** The run estimate of a Tighten Episode's Render final: the node's run-only
+/** The run estimate of a use-case node's Render final: the node's run-only
  *  override (`useCaseContinue: render-final`), the node alone. */
 function useCaseFinalEstimate({ nodes, edges }: Graph, nodeId: string): number {
   const overridden = nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, useCaseContinue: { mode: "render-final", jobId: "job-1" } } } : n))
@@ -126,25 +133,26 @@ function useCaseFinalEstimate({ nodes, edges }: Graph, nodeId: string): number {
  *  clip — a render node of the registry either way. */
 const isRender = (n: Node): boolean => PREVIEW_RENDER_NODE_TYPES.has(n.type)
 
-/** The review step the fixture expects of a template: its render at Preview,
- *  or its Tighten Episode set to review first. */
-const expectedReviewStep = (slug: string): string =>
-  slug === ONE_NODE ? "tighten-episode:review on" : `${templates.get(slug)!.nodes.find(isRender)!.type}:proxy`
-
-/** A template's one review step: its render at Preview, or its Tighten
- *  Episode set to review first. */
+/** A template's one review step: its render at Preview, or its use-case
+ *  node set to review first. */
 function reviewStep({ nodes }: Graph): string[] {
   return [
     ...nodes.filter(isRender).map((n) => `${n.type}:${String(n.data?.quality)}`),
-    ...nodes.filter((n) => n.type === "tighten-episode").map((n) => `tighten-episode:review ${n.data?.reviewBeforeRender === true ? "on" : "off"}`),
+    ...nodes.filter((n) => REVIEW_HOLDING_USE_CASE_TYPES.has(n.type)).map((n) => `${n.type}:review ${n.data?.reviewBeforeRender === true ? "on" : "off"}`),
   ]
 }
+
+/** The review step a podcast template is authored with: its use-case node set
+ *  to review first, or its render (Apply EDL, or Speaker View) at Preview. */
+const authoredReviewStep = (slug: string): string[] => [
+  ONE_NODE_TYPES[slug] ? `${ONE_NODE_TYPES[slug]}:review on` : `${templates.get(slug)!.nodes.find(isRender)!.type}:proxy`,
+]
 
 /** The run estimate of a template's Render final, through whichever step reviews. */
 function templateFinalEstimate(graph: Graph): number {
   const render = graph.nodes.find(isRender)
   if (render) return renderFinalEstimate(graph, render.id)
-  return useCaseFinalEstimate(graph, graph.nodes.find((n) => n.type === "tighten-episode")!.id)
+  return useCaseFinalEstimate(graph, graph.nodes.find((n) => REVIEW_HOLDING_USE_CASE_TYPES.has(n.type))!.id)
 }
 
 const cases: Array<[string, Graph, number]> = [
@@ -194,9 +202,9 @@ describe("the server's run estimate quotes what the listing lists", () => {
 describe("a template's Render final quotes the listing's final part", () => {
   it.each(PODCAST)("%s", (slug) => {
     const graph = templates.get(slug)!
-    // One render, set to Preview (decided 2026-10-08), or one Tighten Episode
+    // One render, set to Preview (decided 2026-10-08), or one use-case node
     // set to review first: the run stops at it.
-    expect(reviewStep(graph), slug).toEqual([expectedReviewStep(slug)])
+    expect(reviewStep(graph), slug).toEqual(authoredReviewStep(slug))
     expect(templateFinalEstimate(graph), `${slug}: Render final run estimate`).toBe(fixture.templateFinals[slug])
   })
 })
@@ -373,7 +381,7 @@ describe("the template the sync writes, in each state of the preview stop rule",
     stopRule.on = true
     const doc = templateForPreviewStopRule(docs.get(slug)!, true)
     const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
-    expect(reviewStep({ nodes, edges }), slug).toEqual([expectedReviewStep(slug)])
+    expect(reviewStep({ nodes, edges }), slug).toEqual(authoredReviewStep(slug))
     expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
     expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(fixture.templates[slug]! + fixture.templateFinals[slug]!)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(fixture.templateRunsWithStopRule[slug])
@@ -413,18 +421,32 @@ describe("the one-node Tighten Episode template", () => {
     expect(fixture.templates[ONE_NODE]).toBe(fixture.graphs[REVIEW_FIRST]!.credits)
     expect(fixture.templateFinals[ONE_NODE]).toBe(fixture.graphFinals[REVIEW_FIRST])
   })
+})
 
-  // The node's review is its own setting (a review-on run stops at the
-  // preview whatever the preview stop rule says), so the sync
-  // writes the template as authored with the rule off too, and every figure
-  // is the rule-on one.
-  it("rule off: written as authored, listed and estimated as with the rule on", () => {
-    const doc = templateForPreviewStopRule(docs.get(ONE_NODE)!, false)
-    expect(doc).toBe(docs.get(ONE_NODE))
+describe("the one-node podcast templates", () => {
+  // Each node's review is its own setting (a review-on run stops at the
+  // preview whatever the preview stop rule says), so the sync writes the
+  // template as authored with the rule off too, and every figure is the
+  // rule-on one.
+  it.each(ONE_NODES)("%s, rule off: written as authored, listed and estimated as with the rule on", (slug) => {
+    const doc = templateForPreviewStopRule(docs.get(slug)!, false)
+    expect(doc).toBe(docs.get(slug))
     const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
-    expect(listingPartsAtCap({ nodes, edges }), "listing at the cap").toEqual({ preview: fixture.templates[ONE_NODE], final: fixture.templateFinals[ONE_NODE] })
-    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), "the listing stored").toBe(fixture.templates[ONE_NODE]! + fixture.templateFinals[ONE_NODE]!)
-    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), "run estimate").toBe(fixture.templateRunsWithStopRule[ONE_NODE])
-    expect(templateFinalEstimate({ nodes, edges }), "Render final run estimate").toBe(fixture.templateFinals[ONE_NODE])
+    expect(listingPartsAtCap({ nodes, edges }), "listing at the cap").toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
+    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), "the listing stored").toBe(fixture.templates[slug]! + fixture.templateFinals[slug]!)
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), "run estimate").toBe(fixture.templateRunsWithStopRule[slug])
+    expect(templateFinalEstimate({ nodes, edges }), "Render final run estimate").toBe(fixture.templateFinals[slug])
+  })
+
+  it("a first run stops at its preview whatever the preview stop rule says", () => {
+    for (const slug of ONE_NODES) expect(fixture.templateRunsWithStopRule[slug], slug).toBe(fixture.templates[slug])
+  })
+
+  // The Trailer's first run is the hand-built chain's run up to its Preview,
+  // plus the fee: the same transcription, plan and preview render.
+  it("Trailer: the hand-built template's run with the stop rule on, plus the fee", () => {
+    expect(fixture.templates["podcast-trailer-formats-one-node"]).toBe(
+      fixture.templateRunsWithStopRule["podcast-trailer-formats"]! + fixture.prices["use-case-fee:episode-trailer"]!,
+    )
   })
 })

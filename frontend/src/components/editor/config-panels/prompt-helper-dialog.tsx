@@ -233,10 +233,10 @@ export function PromptHelperDialog({
     }
   }
 
-  // The model's estimate while metered pricing is on (shown `~N`), else the
+  // The model's estimate while metered pricing is on (shown `≈N`), else the
   // tier price, exactly as before (`useLlmPrice`).
   const { credits: creditCost, estimate: creditEstimate } = useLlmNodeCredits("prompt-helper", { llmModel, reasoningEffort }, 1)
-  const creditLabel = creditCost === undefined ? "" : `${creditEstimate ? "~" : ""}${formatCreditUnits(creditCost)}`
+  const creditLabel = creditCost === undefined ? "" : `${creditEstimate ? "≈" : ""}${formatCreditUnits(creditCost)}`
 
   // -- Phase 1: Analyze --
   async function handleAnalyze() {
@@ -441,7 +441,7 @@ export function PromptHelperDialog({
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#ff0073]" />
+            <Sparkles className="w-4 h-4 text-primary-ink" />
             {t("cfgext.phdTitle")}
             {phase !== "input" && (
               <span className="text-xs font-normal text-muted-foreground ms-2">
@@ -452,7 +452,7 @@ export function PromptHelperDialog({
           <button
             type="button"
             onClick={() => setShowPreference((p) => !p)}
-            className={`absolute top-4 end-10 p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-[#ff0073] bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
+            className={`absolute top-4 end-10 p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-primary-ink bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
             title={t("cfgext.phdPrefsTitle")}
           >
             <Settings className="w-3.5 h-3.5" />

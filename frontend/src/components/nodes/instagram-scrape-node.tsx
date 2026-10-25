@@ -187,7 +187,7 @@ function FeaturedPost({ post }: { readonly post: Record<string, unknown> }) {
       <div className="flex items-center justify-between text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
         <span>{[instagramTimestampLabel(post), counts.videos > 0 ? (counts.videos === 1 ? t("cfgext.metaAdsVideoOne") : t("cfgext.metaAdsVideoCount", { count: counts.videos })) : (counts.images === 1 ? t("cfgext.metaAdsImageOne") : t("cfgext.metaAdsImageCount", { count: counts.images }))].filter(Boolean).join(" · ")}</span>
         {link && (
-          <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#FF0073] hover:underline">
+          <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary-ink hover:underline">
             {t("cfgext.igOpenPost")} <ExternalLink className="h-3 w-3" />
           </a>
         )}
@@ -228,7 +228,7 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
 
   const mode = instagramScrapeMode(nodeData.mode)
   const scrapeCredits = useScrapeNodeCredits(id, "instagram-scrape", nodeData)
-  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `~`.
+  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `≈`.
   const analysisCredits = useScrapeAnalysisCredits("instagram-scrape", nodeData)
   const credits = analysisCredits?.credits ?? scrapeCredits
   const state = deriveInstagramScrapeCardState(nodeData)
@@ -308,7 +308,7 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
                   <button type="button" onClick={(e) => { stop(e); stepFeatured(-1) }} onMouseDown={stop} aria-label={t("cfgext.igPrevPost")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronLeft className="h-4 w-4" /></button>
                   <span className="text-[11.5px] font-semibold tabular-nums text-[var(--meta-ads-muted)]">{featuredPos + 1} / {visible.length}</span>
                   <button type="button" onClick={(e) => { stop(e); stepFeatured(1) }} onMouseDown={stop} aria-label={t("cfgext.igNextPost")} className="rounded-full border border-[var(--meta-ads-border)] p-1 text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]"><ChevronRight className="h-4 w-4" /></button>
-                  <button type="button" onClick={(e) => { stop(e); selectNode?.(id) }} onMouseDown={stop} className="ms-auto text-[11.5px] font-bold text-[#FF0073] hover:underline">{t("node.viewAllN", { n: items.length })}</button>
+                  <button type="button" onClick={(e) => { stop(e); selectNode?.(id) }} onMouseDown={stop} className="ms-auto text-[11.5px] font-bold text-primary-ink hover:underline">{t("node.viewAllN", { n: items.length })}</button>
                 </div>
               )}
               {visible.length > 1 && <ThumbStrip items={items} visible={visible} featured={featured} onPick={setFeatured} />}

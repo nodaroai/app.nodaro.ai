@@ -187,8 +187,8 @@ export function ListInputCard({
 
       {hasCredits() && (
         <div className="mt-3 px-3 py-2 rounded-md bg-[#ff007310] border border-[#ff007330] flex justify-between items-center">
-          <span className="text-xs text-[#ff0073]">{t("present.fanOut")}</span>
-          <span className="text-sm font-semibold text-[#ff0073]">
+          <span className="text-xs text-primary-ink">{t("present.fanOut")}</span>
+          <span className="text-sm font-semibold text-primary-ink">
             {items.length === 1 ? t("present.oneIteration") : t("present.iterations", { n: items.length })}
           </span>
         </div>

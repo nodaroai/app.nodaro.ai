@@ -119,7 +119,7 @@ describe("models cost", () => {
     estimates: ["llm-chat:gemini-3.6-flash"],
   }
 
-  it("asks the batch endpoint for every id and prints an estimate as ~N", async () => {
+  it("asks the batch endpoint for every id and prints an estimate as ≈N", async () => {
     credits.modelCosts.mockResolvedValueOnce(RESULT)
     await runCmd("models", "cost", "nano-banana-pro", "llm-chat:gemini-3.6-flash", "mystery-model", "llm-chat:unpriced-model")
     expect(credits.modelCosts).toHaveBeenCalledWith(["nano-banana-pro", "llm-chat:gemini-3.6-flash", "mystery-model", "llm-chat:unpriced-model"])
@@ -127,7 +127,7 @@ describe("models cost", () => {
     expect(columns).toEqual(["id", "credits", "note"])
     expect(rows).toEqual([
       { id: "nano-banana-pro", credits: "33", note: "" },
-      { id: "llm-chat:gemini-3.6-flash", credits: "~3", note: "estimate: charged per token used" },
+      { id: "llm-chat:gemini-3.6-flash", credits: "≈3", note: "estimate: charged per token used" },
       { id: "mystery-model", credits: "-", note: "no price on this server" },
       { id: "llm-chat:unpriced-model", credits: "-", note: "This model has no price yet." },
     ])

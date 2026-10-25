@@ -22,6 +22,18 @@ vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
     if (nodes.some((n) => n.data?.llmModel === "unpriced-model")) {
       throw Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
     }
+    // A UGC video whose estimate failed for a choice: the listing refuses it (UgcListingUnpricedError).
+    // …or failed before any estimate was asked (the video reading): the saved settings, no detail.
+    if (nodes.some((n) => (n.data as { ugcReadingFails?: unknown } | undefined)?.ugcReadingFails === true)) {
+      throw Object.assign(new Error("Couldn't price this workflow's UGC video at its saved settings. Try publishing again."), {
+        name: "UgcListingUnpricedError", code: "ugc_listing_unpriced", choice: "its saved settings",
+      })
+    }
+    if (nodes.some((n) => (n.data as { ugcFails?: unknown } | undefined)?.ugcFails === true)) {
+      throw Object.assign(new Error("Couldn't price this workflow's UGC video for a choice its users can make (Hebrew, 60 s). Try publishing again."), {
+        name: "UgcListingUnpricedError", code: "ugc_listing_unpriced", choice: "a choice its users can make (Hebrew, 60 s)",
+      })
+    }
     return est.split
   },
 }))
@@ -117,6 +129,31 @@ describe("backfill-listing-range — a row with an unpriced metered LLM model (R
     expect(rows.find((r) => r.slug === "priced-app")).toMatchObject({ changed: true })
     expect(rows.find((r) => r.slug === "priced-app")).not.toHaveProperty("skipped")
     expect(warn.mock.calls.flat().join(" ")).toContain("unpriced-app · app · SKIPPED (llm_model_unpriced: unpriced-model)")
+    warn.mockRestore()
+    log.mockRestore()
+  })
+})
+
+describe("backfill-listing-range — a row whose UGC video could not be priced", () => {
+  it("is reported and skipped, never written; the rows after it are priced and written", async () => {
+    const report = join(tmpdir(), `range-ugc-unpriced-${process.pid}.json`)
+    const updates = serveRows({
+      published_apps: [
+        { id: "a1", slug: "ugc-app", creator_id: "u", publish_type: "app", snapshot_nodes: [{ id: "s", type: "ugc-script", data: { ugcFails: true } }], snapshot_edges: [], snapshot_settings: {} },
+        { id: "a0", slug: "ugc-reading-app", creator_id: "u", publish_type: "app", snapshot_nodes: [{ id: "s", type: "ugc-script", data: { ugcReadingFails: true } }], snapshot_edges: [], snapshot_settings: {} },
+        { id: "a2", slug: "priced-app", creator_id: "u", publish_type: "app", snapshot_nodes: [{ id: "g", type: "generate-image", data: {} }], snapshot_edges: [], snapshot_settings: {} },
+      ],
+      workflow_templates: [],
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined)
+    const result = await runRangeBackfill({ apply: true, includeTemplates: true, report })
+    expect(result).toMatchObject({ ok: true, written: 1 })
+    expect(updates.map((u) => u.table)).toEqual(["published_apps"])
+    const rows = (JSON.parse(readFileSync(report, "utf8")) as { rows: Array<{ slug: string; skipped?: string; changed: boolean }> }).rows
+    expect(rows.find((r) => r.slug === "ugc-app")).toMatchObject({ skipped: "ugc_listing_unpriced: a choice its users can make (Hebrew, 60 s)", changed: false })
+    expect(rows.find((r) => r.slug === "ugc-reading-app")).toMatchObject({ skipped: "ugc_listing_unpriced: its saved settings", changed: false })
+    expect(warn.mock.calls.flat().join(" ")).toContain("ugc-app · app · SKIPPED (ugc_listing_unpriced")
     warn.mockRestore()
     log.mockRestore()
   })

@@ -57,7 +57,7 @@ function ElementEditor({
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2">
-          <Shapes className="w-3 h-3 text-[#ff0073]" />
+          <Shapes className="w-3 h-3 text-primary-ink" />
           <span className="font-medium truncate">{displayName}</span>
           <span className="text-[11px] text-muted-foreground">({label})</span>
         </div>
@@ -254,7 +254,7 @@ export function MotionGraphicsPreview({
               {disabledElements.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground" />
               ) : (
-                <Eye className="w-3 h-3 text-[#ff0073]" />
+                <Eye className="w-3 h-3 text-primary-ink" />
               )}
             </button>
             <div className={`flex-1 ${disabledElements.has(i) ? "opacity-40" : ""}`}>

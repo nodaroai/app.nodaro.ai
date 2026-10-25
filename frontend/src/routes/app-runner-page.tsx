@@ -93,7 +93,7 @@ export default function AppRunnerPage() {
       // per-minute listing at the longest recording (decided 2026-10-07).
       // Never below what a run can cost: the "up to" when the app's user has pricier choices.
       estimatedCost: listingCeilingCredits(Math.max(app.estimatedCredits ?? 0, app.maxEstimatedCredits ?? 0), Math.max(app.perMinuteCredits ?? 0, app.maxPerMinuteCredits ?? 0)),
-      // The listing holds a metered LLM estimate (Task 12 / R47): the seeded figure reads `~N`.
+      // The listing holds a metered LLM estimate (Task 12 / R47): the seeded figure reads `≈N`.
       estimatedCostIsEstimate: app.estimatedCreditsIsEstimate === true,
       // The Run button lists the app run alone, its Render final part left out (review round F4).
       listedPrice: appRunListedPrice(app),
@@ -131,7 +131,7 @@ export default function AppRunnerPage() {
         <div className="text-center max-w-md">
           <h1 className="text-2xl font-bold mb-2">{t("runner.appNotFound")}</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
-          <Link to="/projects" className="text-[#ff0073] hover:underline">
+          <Link to="/projects" className="text-primary-ink hover:underline">
             {t("present.goToDashboard")}
           </Link>
         </div>
@@ -241,7 +241,7 @@ export default function AppRunnerPage() {
       {runSlots.isLoadingRun ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl bg-card/60 backdrop-blur-md border border-border/50 shadow-lg">
-            <Loader2 className="h-6 w-6 animate-spin text-[#ff0073]" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary-ink" />
             <span className="text-sm text-muted-foreground">{t("runner.loadingRun")}</span>
           </div>
         </div>

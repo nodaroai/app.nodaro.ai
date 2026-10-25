@@ -128,7 +128,7 @@ export function computeLiveRunEstimate(
   return estimateWholeRun(effectiveNodes, args.edges, getCachedCredits, isModelUnpriced)
 }
 
-/** The live figure, and whether it holds a metered LLM call's ESTIMATE (shown `~`). */
+/** The live figure, and whether it holds a metered LLM call's ESTIMATE (shown `≈`). */
 export interface LiveRunFigure {
   readonly total: number
   readonly estimate: boolean
@@ -143,7 +143,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
 
 /**
  * {@link useLiveRunEstimate}, plus whether the figure holds a metered LLM
- * call's estimate — any metered node in the run makes its Run label `~N`.
+ * call's estimate — any metered node in the run makes its Run label `≈N`.
  */
 export function useLiveRunFigure(args: LiveRunEstimateArgs, deps: LiveRunEstimateDeps): LiveRunFigure {
   const { nodes, edges, inputValues, enabled, mediaLengths } = args

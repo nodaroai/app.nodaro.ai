@@ -284,7 +284,7 @@ export default function AdminSettingsPage() {
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <div className="flex items-center gap-2 mb-6">
-          <Settings className="h-5 w-5 text-primary" />
+          <Settings className="h-5 w-5 text-primary-ink" />
           <h1 className="text-xl font-bold">Settings</h1>
         </div>
 
@@ -310,7 +310,7 @@ export default function AdminSettingsPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-2 mb-6">
-        <Settings className="h-5 w-5 text-primary" />
+        <Settings className="h-5 w-5 text-primary-ink" />
         <h1 className="text-xl font-bold">Settings</h1>
       </div>
 

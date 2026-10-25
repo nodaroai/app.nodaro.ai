@@ -22,6 +22,15 @@ describe("from-failed: the balance covers what the run still executes plus its f
     expect(src.coverArgs.slice(0, 2)).toEqual([USER, 910])
   })
 
+  it("checked against what the steps hold while they render, the fee on top; the refusal names that figure", async () => {
+    src.stepsHold = 1500
+    src.cover = { ok: false, balance: 1000 }
+    const res = await post({ jobId: ID, mode: "from-failed" })
+    expect(src.coverArgs.slice(0, 2)).toEqual([USER, 1510])
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error.message).toBe("Continuing this episode can hold up to about 1510 credits while it renders; your balance is 1000.")
+  })
+
   it("a Render final's chain: every step it had left, no fee", async () => {
     src.wrapper = { ...failedWrapper, input_data: { ...failedWrapper.input_data, mode: "render-final", _feeCredits: 0, _finalOf: "00000000-0000-4000-8000-0000000000bb" } }
     src.source = { ...failedSource, inputOverrides: { "uc-render": { quality: "final" } } }

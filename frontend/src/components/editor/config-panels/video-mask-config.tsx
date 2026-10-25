@@ -1,6 +1,6 @@
 "use client"
 
-import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, resolveVideoMaskProvider, resolveVideoMaskZone, type VideoMaskProvider, type VideoMaskZone } from "@nodaro/shared/media"
+import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, resolveVideoMaskProvider, resolveVideoMaskRedetectSec, resolveVideoMaskZone, type VideoMaskProvider, type VideoMaskZone } from "@nodaro/shared/media"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { PromptEditor } from "@/lib/picker-ui"
@@ -32,8 +32,8 @@ const NO_ZONE: VideoMaskZone = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 
 
 /**
  * Video Mask settings: the subject to track (prompt, with the Edit⇄Final
- * toggle and snippets, like Generate Mask), the detection threshold, and the
- * model. Every bound comes from `VIDEO_MASK_LIMITS` — the same numbers the
+ * toggle and snippets, like Generate Mask), the detection threshold, the
+ * model, and the region / hold / per-shot / re-detection levers. Every bound comes from `VIDEO_MASK_LIMITS` — the same numbers the
  * route's Zod schema and the MCP verb read.
  */
 export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<VideoMaskNodeData> & { nodeId?: string }) {
@@ -61,6 +61,8 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
   // The zone as a run reads it (clamped, all 0 = off); a margin edit keeps the others and stores null when all are 0.
   const zone = resolveVideoMaskZone(data.zone) ?? NO_ZONE
   const setZoneMargin = (field: keyof VideoMaskZone, pct: number) => onUpdate({ zone: resolveVideoMaskZone({ ...zone, [field]: pct }) })
+  // Re-detection as a run reads it (0 = off, else 1–10 s). The slider's 0 is off and 1–10 its seconds.
+  const redetectEverySec = resolveVideoMaskRedetectSec(data.redetectEverySec)
 
   return (
     <div className="flex flex-col gap-4">
@@ -217,6 +219,26 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           <span className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskPerShot")}</span>
         </label>
         <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskPerShotHint")}</p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="video-mask-redetect" className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskRedetect")}</label>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {redetectEverySec > 0 ? t("vidcfg.videoMaskRedetectValue", { sec: redetectEverySec }) : t("vidcfg.videoMaskMinSubjectHeightOff")}
+          </span>
+        </div>
+        <input
+          id="video-mask-redetect"
+          type="range"
+          min={0}
+          max={VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MAX}
+          step={VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_STEP}
+          value={redetectEverySec}
+          onChange={(e) => onUpdate({ redetectEverySec: resolveVideoMaskRedetectSec(parseFloat(e.target.value)) })}
+          className="w-full accent-[#ff0073]"
+        />
+        <p className="text-[11px] text-muted-foreground">{t("vidcfg.videoMaskRedetectHint")}</p>
       </div>
     </div>
   )

@@ -1,5 +1,32 @@
 # @nodaro/shared
 
+## 3.43.0
+
+### Minor Changes
+
+- 9d9fe04: `VIDEO_MASK_RECIPE` (`@nodaro/shared/media`): the version of what a Video Mask run's mask looks like for a given clip and settings, starting at `"2026-10-25"`. Every finished `video-mask` job now reports it as `output_data.recipe`, so a mask stored and reused later can tell when the algorithm that made it has changed.
+
+  `@nodaro/sdk`: `media.videoMask`'s documentation lists the output's new `recipe`.
+
+## 3.42.0
+
+### Minor Changes
+
+- 2c92a8c: `seedance` (Seedance 1.5 Pro) is retired: the provider stopped serving the model on 2026-10-25. It leaves the model catalog, `IMAGE_TO_VIDEO_PROVIDERS` / `TEXT_TO_VIDEO_PROVIDERS` / `VIDEO_GEN_PROVIDERS`, `OBJECT_MOTION_PROVIDERS` (where `seedance-2-mini` takes its place), the duration and audio tables, `PIPELINE_PINNABLE_VIDEO_MODELS` and the prompt-wizard descriptions. New `RETIRED_VIDEO_PROVIDERS` + `canonicalVideoProvider()` map a retired id to the model it now runs as (`seedance` → `seedance-2-mini`), and `resolveVideoProviderForMode` applies it, so a saved or sent `seedance` keeps working. The CLI's `objects motion --provider` offers `seedance-2-mini` instead of `seedance`. Code that names the literal `"seedance"` as one of those lists' member types (`ObjectMotionProvider`, `TextToVideoProvider`, `VideoGenProvider`, `PipelinePinnableVideoModel`) no longer compiles: pass it through `canonicalVideoProvider` or use `seedance-2-mini`.
+- 14402d5: `VIDEO_MASK_LIMITS.HOLD_MAX_SEC` (1): Video Mask's `holdLastMask` holds a mask for at most one second of frames.
+- 1999c19: Video Mask `redetectEverySec`: `VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN` / `_MAX` / `_STEP` (1 / 10 / 1), `VIDEO_MASK_DEFAULTS.redetectEverySec` (0 = off), `resolveVideoMaskRedetectSec`, and the optional `redetectEverySec` on `VideoMaskRequest` — detect the subject again every N seconds (the clip, or each shot with `perShot`, is sent in pieces of at most that length), so a subject that appears mid-shot is masked. Not a cut: `holdLastMask` holds across these boundaries. Slower; same price.
+
+## 3.41.0
+
+### Minor Changes
+
+- 914e157: Cast Swap engines: `CAST_SWAP_ENGINES` (`"seedance-2-5"`, `"kling-4"`), the `CastSwapEngine` type, `CAST_SWAP_ENGINE_WHEN_OMITTED` (Seedance 2.5), `CAST_SWAP_RESOLUTIONS_BY_ENGINE` (each engine's resolutions, its default first) and `castSwapEngineHasDraft`. `CAST_SWAP_KLING_LENGTHS` (`"cut-end"`, `"cut-start"`), the `CastSwapKlingLength` type and `CAST_SWAP_KLING_LENGTH_WHEN_OMITTED` (`"cut-end"`). Kling 4's image cap: `CAST_SWAP_KLING_MAX_IMAGES` (10).
+- dc55645: `ProjectedCatalogOption.imageSrcSet`: the `srcset` (240–1920px) of an option pictured by a Nodaro CDN render.
+
+### Patch Changes
+
+- a76b30a: `stripExportContent` drops the exporter's job id from a node's `mcpProvenance` (where an MCP conversation step came from) and keeps the rest.
+
 ## 3.40.0
 
 ### Minor Changes

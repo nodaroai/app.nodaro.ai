@@ -368,7 +368,9 @@ it, at the length setting. The listed price is a range: the price at the saved s
 `maxEstimatedCredits` / `maxEstimatedPerMinuteCredits`) are "up to" — the most a
 run can cost over the choices its user has: every exposed field, at the
 publisher's restricted values (`allowedValues`) where set, each model's own
-options, and a reference clip the user supplies at its longest. Up to 256
+options, and a reference clip the user supplies at its longest. A UGC video is
+priced again for each combination, so a script length or language the user can
+choose counts at its priciest. Up to 256
 combinations are priced one by one; past that, each other field is taken at its
 priciest value for each model. The `max*` fields appear on the browse, detail and
 app-page responses only when they differ from "from"; a version published before
@@ -376,10 +378,14 @@ the range existed carries none until it is republished or backfilled.
 `estimatedCreditsIsEstimate: true` (browse, detail, app page, your own apps
 `/v1/apps/mine`, template gallery and Tutorials) marks a listed price that holds a metered LLM call's estimate —
 its model's typical call, charged its actual usage per token — so show it
-`~N`; it is absent for a fixed price and on a deployment running the
+`≈N`; it is absent for a fixed price and on a deployment running the
 tier-pricing rollback. A publish whose graph names a metered model with no
 price yet is refused `400 validation_error` with `reason: "llm_model_unpriced"`,
-as its run would be ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). A preview picked automatically for an app or a
+as its run would be ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). A publish whose UGC video could not be priced — its
+estimate failed at the saved settings or for a choice the app's user can make — is
+never listed as free: it is refused `503 { "error": { "code": "ugc_listing_unpriced", "reason": "ugc_listing_unpriced", "choice", "message" } }`
+(`reason`, as the unpriced-model refusal carries its own), where `choice` names it (`"a choice its users can make (Hebrew, 60 s)"`;
+`"its saved settings"` alone when it failed before any choice was asked), and nothing is written; publish again. A preview picked automatically for an app or a
 template is read from what ships, so it is never one of those renders (a
 template that includes its run starts from that run's captioned video), nor
 the author's photo or anything on its path. A
@@ -511,7 +517,7 @@ The `202` answer of a continue-from-failed names the execution it continued from
 }
 ```
 
-Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `~N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
+Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "holdCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `≈N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `holdCredits` is what the run holds while it renders — a [UGC](./nodes/ai-video/ugc-clip.md#prices-in-the-editor) clip at its hold, about twice its price, the part not used coming back when it finishes; never below `estimatedCredits` — and `sufficient` says whether the payer's credits cover that hold, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
 
 | Status | `error.code` | When |
 |---|---|---|
@@ -519,7 +525,7 @@ Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "rende
 | `400` | `render_final_not_a_render` | the node is not an Apply EDL render |
 | `400` | `validation_error` | `renderFinal` sent with `nodeIds` or `inputOverrides`, or without `continueFromExecutionId` |
 
-The run is checked against the payer's credits before it starts, on the figure the quote shows: one its payer cannot cover is refused with `402 { "error": { "code": "insufficient_credits", "message", "required", "available" } }` and no execution is created (`available` is left out when a deployment's operator pays). The check is the balance only; a model your plan cannot use, or a daily limit, is still refused by that node when the run reaches it. A workspace budget's headroom is checked as each node reserves.
+The run is checked against the payer's credits before it starts, on the quote's `holdCredits`: one its payer cannot cover is refused with `402 { "error": { "code": "insufficient_credits", "message", "required", "available" } }` (`required` is that hold) and no execution is created (`available` is left out when a deployment's operator pays). The check is the balance only; a model your plan cannot use, or a daily limit, is still refused by that node when the run reaches it. A workspace budget's headroom is checked as each node reserves.
 
 The run is the authority on every other refusal (`preview_review_required` when another render after this one still reads Preview (`quality: "proxy"`) — under the `PREVIEW_STOP_RULE_ENABLED` flag, as [above](#runs-that-would-stop-for-a-review); a run already going).
 | `400` | `validation_error` | `continueFromExecutionId` is not an execution id |
@@ -1858,7 +1864,7 @@ not in the route's own response body.
 the LLM caption sub-failed (portrait still set; retry via `llm-caption`).
 
 The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens
-it used, at that model's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical, under
+it used, at that model's rate (≈20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical, under
 `prompt-helper:claude-sonnet-4.6`; [LLM model rates](pricing/llm-models.md)) —
 on `approve-portrait`, on `llm-caption`, and on every location, object and
 creature `approve-main-image` / `llm-caption`. An approval is never refused for
@@ -2080,7 +2086,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `estimate` (`true` when `creditCost` is a metered LLM node's typical call on its default model — charged its actual usage, shown `~N`; Choose Best states its free strategies up to its AI judge's typical call on the default judge, a `"0-N"` range marked `estimate`; absent for a fixed price; a metered LLM node whose default model has no price yet lists `creditCost: "unpriced"` — a run on it is refused `validation_error` with `reason: "llm_model_unpriced"`), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `estimate` (`true` when `creditCost` is a metered LLM node's typical call on its default model — charged its actual usage, shown `≈N`; Choose Best states its free strategies up to its AI judge's typical call on the default judge, a `"0-N"` range marked `estimate`; absent for a fixed price; a metered LLM node whose default model has no price yet lists `creditCost: "unpriced"` — a run on it is refused `validation_error` with `reason: "llm_model_unpriced"`), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -2171,7 +2177,7 @@ server from the edit it samples, so to quote a run before it starts, send the
 workflow to `POST /v1/credits/estimate-workflow` (`{ nodes, edges? }` →
 `{ data: { totalCredits, … } }`; `estimate: true` rides along when a metered LLM
 node is in the total — its model's typical call, charged its actual usage, so
-the total is shown `~N`: the estimates plus the fixed prices, never a hold): it counts the wired edit's frames the way the
+the total is shown `≈N`: the estimates plus the fixed prices, never a hold): it counts the wired edit's frames the way the
 [editor's estimate](./nodes/processing-video/speaker-frames.md#what-the-estimate-shows-before-you-run)
 does. With the block count in hand, `speaker-frames:<N>u` is its exact price,
 and `GET /v1/nodes/speaker-frames` serves the per-block rate as `creditRate`
@@ -2207,11 +2213,11 @@ API — `llmPriceKey(feature, model, reasoningEffort?, advancedMode?)` from
 `@nodaro/shared/llm-models` builds it (for example `llm-chat:gemini-3.6-flash`,
 `describe-to-picker:claude-opus-5.5:direct`). Both endpoints answer it with an
 **estimate**, a typical call of that feature on that model (Generate Text on
-Gemini 3.6 Flash: ~3 credits<!-- credits: llm-chat:gemini-3.6-flash -->), and say so:
+Gemini 3.6 Flash: ≈3 credits<!-- credits: llm-chat:gemini-3.6-flash -->), and say so:
 `POST /v1/credits/model-costs` lists such identifiers in `estimates: string[]`
 (omitted when a batch asks only fixed prices, so a fixed-price batch answers
 exactly as before) and `GET /v1/credits/model-cost` adds `estimate: true` to
-its `data` (that answer is never cached). Show an estimate as `~N`. A model
+its `data` (that answer is never cached). Show an estimate as `≈N`. A model
 with no rate on the lane it would be served on cannot be run: the batch lists
 its key in `errors`, with `errorCodes: { "<key>": { code: "llm_model_unpriced",
 message } }`, and the run itself is refused `400 validation_error` with
@@ -3123,11 +3129,11 @@ hold is reserved — each batch's first attempt at the model's output cap — an
 a balance below it is refused (`402`, "Needs up to N credits"). What the server
 quotes beforehand (`POST /v1/credits/model-costs`, listed under `estimates`):
 
-- no `llmModel` (Gemini 3.8 Flash at Auto) → `text-to-picker:gemini-3.8-flash`, ~16 credits<!-- credits: text-to-picker:gemini-3.8-flash -->;
-- `llmModel: "claude-sonnet-5.5"` → ~53 credits<!-- credits: text-to-picker:claude-sonnet-5.5 -->;
+- no `llmModel` (Gemini 3.8 Flash at Auto) → `text-to-picker:gemini-3.8-flash`, ≈16 credits<!-- credits: text-to-picker:gemini-3.8-flash -->;
+- `llmModel: "claude-sonnet-5.5"` → ≈53 credits<!-- credits: text-to-picker:claude-sonnet-5.5 -->;
 - `llmModel: "claude-opus-5.5"` with no effort (it runs at `"high"` on
-  Anthropic's own API) → `text-to-picker:claude-opus-5.5:direct`, ~262 credits<!-- credits: text-to-picker:claude-opus-5.5:direct -->;
-- `llmModel: "claude-fable-5"` (offered on this route) → ~262 credits<!-- credits: text-to-picker:claude-fable-5 -->.
+  Anthropic's own API) → `text-to-picker:claude-opus-5.5:direct`, ≈262 credits<!-- credits: text-to-picker:claude-opus-5.5:direct -->;
+- `llmModel: "claude-fable-5"` (offered on this route) → ≈262 credits<!-- credits: text-to-picker:claude-fable-5 -->.
 
 Every batch the provider billed is charged, a failed one included; a run
 whose batches the provider did not bill is refunded.
@@ -3156,9 +3162,9 @@ model's rate on the lane that served it ([LLM model rates](pricing/llm-models.md
 the same rule as [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost).
 The hold is the first attempt at the model's output cap; a balance below it is
 refused (`402`, "Needs up to N credits"). What the server quotes beforehand for
-a typical call: ~18 credits<!-- credits: llm-structured:gemini-3.6-flash --> on the default, Gemini 3.6 Flash;
-~31<!-- credits: llm-structured:claude-sonnet-5.5 --> on Claude Sonnet 5.5; ~62<!-- credits: llm-structured:claude-opus-5.5 --> on Claude Opus 5.5 with no effort;
-~154<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5, which this route offers. A failure the
+a typical call: ≈18 credits<!-- credits: llm-structured:gemini-3.6-flash --> on the default, Gemini 3.6 Flash;
+≈31<!-- credits: llm-structured:claude-sonnet-5.5 --> on Claude Sonnet 5.5; ≈62<!-- credits: llm-structured:claude-opus-5.5 --> on Claude Opus 5.5 with no effort;
+≈154<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5, which this route offers. A failure the
 provider billed (an answer that never validated after its retries, a refusal,
 an answer cut off at the cap) is charged for that usage and the error says how
 much; one it did not bill is refunded. It is
@@ -4100,12 +4106,12 @@ authenticated caller.
 Both forms answer `lines` (each with an English `label`, its `credits` and a stable `key`; a clip
 line also its number `n` and its `seconds`; a line that holds a metered LLM call — a creator check,
 a clip's frame check while the UGC plugin meters it — is marked `"estimate": true`: charged its
-actual usage, show it `~N`), `expected` (what the video is expected to cost),
+actual usage, show it `≈N`), `expected` (what the video is expected to cost),
 `ceiling` (what it holds while its clips render: each clip at twice its price), `parts` (the
 expected credits per part of the video: `script`, `creator`, `clip`, `cards`, `join`, `overlay`
 and `captions`, adding up to `expected`) and `holdParts` (what each part holds; they add up to
 the ticket form's `ceiling`). `estimateParts` (present only when one is) lists the parts whose figure
-holds such an estimate, so a price that counts one of those parts is shown `~N`; the editor's Execute
+holds such an estimate, so a price that counts one of those parts is shown `≈N`; the editor's Execute
 and Run from here buttons and the server's own workflow estimate read it. The estimate also answers `range` (what it is expected to cost at
 0.8× and 1.2× the length) and `worstCase` (what it holds at the longer length; its `holdParts`
 add up to it), and, when the server supplies all three, `limits`: the script's line limits in
@@ -4362,8 +4368,8 @@ an unknown slug is a `404` on every route.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length, `engine` and `resolutions`). `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, chips, defaults? }`: `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
-| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+A trend whose face mask was made and approved ahead of time (the same mask for every run) masks nothing per run: its quote carries no masking charge (`maskingCredits` is 0), and the run is charged the same. | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
 | `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
@@ -4379,7 +4385,9 @@ The estimate and run body is
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
-  example `example` (1-based, default 1). The chips are the ones the slot's
+  example `example` (1-based, default 1). On a trend with no example, leave
+  `example` out: an optional slot left out then stays as in the original, and
+  the run records `example: 0`. The chips are the ones the slot's
   `chips` lists (of its kind's own: a person `body` / `outfit` / `hair`, a pet
   `body` / `coat`, a product `shape` / `finish`, a location none), each
   `"new"` (from your pictures) or `"original"` (as in the clip). A chip the
@@ -4426,7 +4434,7 @@ anything is charged:
 | `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Kling 4 trend). |
 | `400` | `too_many_images` | A Kling 4 trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
-| `400` | `example_out_of_range` | `example` names an example the trend does not have, or an optional slot is left empty and the trend has no example (1, by default) to fill it. |
+| `400` | `example_out_of_range` | `example` names an example the trend does not have (any `example` on a trend with none). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
 | `400` | `invalid_slot_mention` | `details` mentions `{slot:<key>}` with a key the trend does not have. |
 | `400` | `prompt_too_long` | `details` is too long for this trend; shorten it. |
@@ -4518,7 +4526,7 @@ pipeline starts with empty chat history per chat-enabled stage.
 AI assistance for writing prompts for generation nodes. One endpoint, three
 actions — discriminated by the `action` field. Each call is charged for the
 tokens it used at the model's rate on the lane that served it (a hold first,
-then the real charge; ~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on the default Gemini 3.6 Flash —
+then the real charge; ≈4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on the default Gemini 3.6 Flash —
 [LLM model rates](pricing/llm-models.md)); a refusal the provider billed is
 charged for that usage.
 
@@ -5286,7 +5294,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-overlay` | 1–20 timed image layers over a video, local FFmpeg, **22 credits**<!-- credits: video-overlay --> (`{ videoUrl, layers[]: { imageUrl, start, end?, preset?: card\|corner-badge\|full-frame, corner?, anchor?, x?, y?, width?, height?, fit?: contain\|cover, opacity?, animate?, zIndex? }, outputAspect?: 16:9\|9:16\|1:1\|4:5, baseFit?: cover\|contain, backgroundColor? }`; an explicit box field overrides the preset, neither = a corner badge (bottom-right, or the `corner` it names); `end` omitted = to the end of the video; base audio untouched; 30 requests / minute per user) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec, warnings[] }`. Full reference: [Video Overlay](./nodes/processing-video/video-overlay.md). |
 | `POST` | `/v1/video-depth` | Turn a video into a depth video — near is bright, far is dark (`{ videoUrl, provider?: video-depth-anything\|depth-anything-frames, modelSize?: small\|base\|large, colormap?: grayscale\|turbo\|inferno\|magma\|viridis, resolution?: auto\|360p\|480p\|720p\|1080p, sideBySide? }`; `provider` defaults to `video-depth-anything` and `modelSize` to `large`). `video-depth-anything` honours every lever; `depth-anything-frames` (per frame, may flicker) honours `modelSize` and `colormap` `grayscale` or `inferno` only. A lever the provider does not take is ignored and a colormap it cannot render becomes `grayscale`, so switching providers never fails a request — but every value sent must still be valid (an unknown provider, model size, colormap or resolution is a `400 validation_error`). The clip is measured before anything is created and priced by its length tier: `400 video_too_long` over the provider's limit (2,400 frames and at most 300 s for `video-depth-anything`, a clip with no frame rate counted at 30 fps; 80 s for `depth-anything-frames`), `400 video_unreadable` when the clip cannot be read, `400 validation_error` on a malformed body, `403 model_not_available` when this deployment has turned the provider off (an omitted `provider` is checked as the default) — nothing is reserved on any of them. → `{ jobId }`; output `{ videoUrl, thumbnailUrl }`. Full reference: [Video Depth](./nodes/processing-video/video-depth.md). |
 | `POST` | `/v1/generate-mask` | Text-prompted image segmentation (Grounded SAM) → a black-and-white mask image, white = the subject (`{ imageUrl, prompt (1–500 chars, e.g. "the person"), threshold?: 0–1 (default 0.3; lower selects more) }`; a malformed body is a `400 validation_error`). → `{ jobId }`; output `{ maskUrl, imageUrl }` — `maskUrl` is the mask PNG, `imageUrl` the source image passed through unchanged. Price: `GET /v1/credits/model-cost?model=generate-mask`. Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md). |
-| `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`), zone?: { leftPct?, rightPct?, topPct?, bottomPct? } \| null (each 0–49 % of the frame cut off that side, a side left out is 0; default null = off — keeps only the regions whose bounding-box centre is inside the rectangle left, after the size cuts and before holdLastMask), perShot?: boolean (default false — the clip's scene cuts are found first and each shot is segmented on its own: the subject is detected again after every cut, holdLastMask never crosses a cut, each shot's mask is fitted to that shot's exact frame count; on a clip with no cut it is one shot: the same mask, fitted to the clip's exact frame count) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, shots, coverage, kept }` (`shots` is 1 unless perShot found cuts; `kept` is false only when the size / zone filters left nothing on any frame — read it rather than `coverage`, which is rounded to 4 decimals). Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
+| `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`), zone?: { leftPct?, rightPct?, topPct?, bottomPct? } \| null (each 0–49 % of the frame cut off that side, a side left out is 0; default null = off — keeps only the regions whose bounding-box centre is inside the rectangle left, after the size cuts and before holdLastMask), perShot?: boolean (default false — the clip's scene cuts are found first and each shot is segmented on its own: the subject is detected again after every cut, holdLastMask never crosses a cut, each shot's mask is fitted to that shot's exact frame count; on a clip with no cut it is one shot: the same mask, fitted to the clip's exact frame count), redetectEverySec?: 0 \| 1–10 (default 0 = off — the subject is also detected again every that many seconds: the clip, or each shot with perShot, is sent to the model in pieces of at most that length, a last piece under 8 frames joining the one before; holdLastMask holds across these boundaries; slower — one more request per piece — at the same price; a value between 0 and 1 or above 10 is a 400) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, shots, coverage, kept, recipe }` (`shots` is 1 unless perShot found cuts; `recipe` is the version of the masking algorithm that made it (`VIDEO_MASK_RECIPE` in `@nodaro/shared/media`), which changes whenever the same clip and settings would give a different mask; `kept` is false only when the size / zone filters left nothing on any frame — read it rather than `coverage`, which is rounded to 4 decimals). Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
 | `POST` | `/v1/mask-composite` | A foreground video over a background video through a mask video (white = foreground), local FFmpeg, keyless, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s of the result** (the video it follows measured first; over 300 s → 400 `video_duration_exceeds_limit`) (`{ foregroundUrl?, backgroundUrl, maskUrl, invertMask?, feather?: 0–20, grow?: -10–10, opacity?: 0–1 (default 1; inside the mask, opacity × fill + (1 − opacity) × background), fill?: video\|pixelate\|blur (default video), pixelSizePct?: 0.2–10 (default 1.25; block = max(2, round(width × pct ÷ 100)) px), blurStrengthPct?: 0.1–5 (default 2; gaussian sigma = width × pct ÷ 100 px), backgroundFit?: cover\|contain\|stretch, audioSource?: foreground\|background\|mix\|none }`; the result follows the foreground's size, rate and length — the background loops, the mask holds its last frame. `foregroundUrl` is required for `fill: "video"` (400 `validation_error` without it); `pixelate` / `blur` fill the mask with the background itself, take no foreground (one sent is ignored), follow and are priced on the background, and the result always carries the background's sound (`audioSource` is ignored)) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec }`. Full reference: [Mask Composite](./nodes/processing-video/mask-composite.md). |
 | `POST` | `/v1/site-capture` | A web page captured at phone width: full page + up to 8 section stills and a section map, **11 credits**<!-- credits: site-capture --> (`{ url, maxStills?: 3–8 }`). Always answers `{ jobId, status: "pending" }` at once; poll `GET /v1/jobs/:id`. Blocked, empty, unreachable or failed captures are refunded; a site that answers 403 or 429, or shows only a bot challenge, counts as blocked. Each still is shot with its section scrolled into view, so sections that appear as you scroll are captured too. A still that renders as one flat colour, or as mostly one empty band, is shot once more and then skipped: the next section takes its place (`still_blank_skipped:<section order>` in `warnings`). A section whose heading still does not show once it is on screen (a carousel slide that is not showing, for one) is skipped (`still_hidden_skipped:<section order>`), and the stills stop after about 45 s with what they have (`stills_time_budget`). `facts[]` are whole figures on one line (a price with its period, a count with its noun, a percentage, a date). A robots.txt disallow, an unreadable robots.txt, an address that does not resolve, or missing media storage is a 422 before any charge. Output `{ pageUrl, finalUrl, title, lang, dir, fullPage, stills[], sections[], facts[], usableStills, warnings[] }`; a failed job carries `error.code`. Served only where capture is enabled on the install (`SITE_CAPTURE_ENABLED`, on by default); elsewhere the route answers 404. |
 | `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |

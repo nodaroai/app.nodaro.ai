@@ -12,7 +12,7 @@ import type { RunUnpriced } from "@/components/editor/workflow-editor/run-unpric
 type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string
 
 /**
- * " · {credits}" on a credit edition with a price to show — `~` before an estimate, the one
+ * " · {credits}" on a credit edition with a price to show — `≈` before an estimate, the one
  * convention of every run price (Execute, Run from here, Run up to here): a UGC part's figure
  * not the server's checked one (`unchecked`: still checking, could not be checked, an older
  * answer, a saved script's length unread — the reason on the button's title, `runPriceTitle`),
@@ -30,7 +30,7 @@ export function runPriceSuffix(
   if (!hasCredits()) return ""
   if (opts.unpriced) return ` · ${t("renderFinal.priceNotPricedYet")}`
   if (credits <= 0) return ""
-  return ` · ${unchecked || opts.approx ? "~" : ""}${creditUnits(credits)}`
+  return ` · ${unchecked || opts.approx ? "≈" : ""}${creditUnits(credits)}`
 }
 
 /** Why a run button's price is marked (an estimate, or not priced yet), for its title; undefined when it is not. */

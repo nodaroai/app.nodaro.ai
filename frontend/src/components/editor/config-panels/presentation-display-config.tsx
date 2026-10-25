@@ -68,7 +68,7 @@ export function PresentationDisplayConfig({
               onClick={() => onChange({ ...display, columns: opt.value })}
               className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 display.columns === opt.value
-                  ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                  ? "bg-[#ff0073]/15 text-primary-ink border border-[#ff0073]/30"
                   : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
               }`}
             >
@@ -90,7 +90,7 @@ export function PresentationDisplayConfig({
                 onClick={() => onChange({ ...display, elementSize: opt.value })}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   display.elementSize === opt.value
-                    ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                    ? "bg-[#ff0073]/15 text-primary-ink border border-[#ff0073]/30"
                     : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
                 }`}
               >
@@ -112,7 +112,7 @@ export function PresentationDisplayConfig({
                 onClick={() => onChange({ ...display, viewMode: opt.value })}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   display.viewMode === opt.value
-                    ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                    ? "bg-[#ff0073]/15 text-primary-ink border border-[#ff0073]/30"
                     : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
                 }`}
               >
@@ -133,7 +133,7 @@ export function PresentationDisplayConfig({
               onClick={() => onChange({ ...display, maxWidth: opt.value === 100 ? undefined : opt.value })}
               className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 (display.maxWidth ?? 100) === opt.value
-                  ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                  ? "bg-[#ff0073]/15 text-primary-ink border border-[#ff0073]/30"
                   : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
               }`}
             >
@@ -153,7 +153,7 @@ export function PresentationDisplayConfig({
               onClick={() => onChange({ ...display, align: opt.value === "left" ? undefined : opt.value })}
               className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 (display.align ?? "left") === opt.value
-                  ? "bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
+                  ? "bg-[#ff0073]/15 text-primary-ink border border-[#ff0073]/30"
                   : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
               }`}
             >

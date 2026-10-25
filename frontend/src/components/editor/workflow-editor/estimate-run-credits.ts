@@ -92,7 +92,7 @@ export function estimateRunCreditLines(
     const cost = variants.reduce((sum, v) => sum + oneRunCost(v, allNodes, edges, rerunIds, cachedCost, exactUnitsOf(quantity)), 0)
     // A metered LLM node priced at its server estimate (the key it resolves
     // to is one the server marked `estimates`): the line, and every total it
-    // is part of, is an estimate — shown `~` (spec §8.5).
+    // is part of, is an estimate — shown `≈` (spec §8.5).
     const estimate = isMeteredEstimate(node, edges, allNodes, rerunIds, cachedCost)
     // A metered call on a model the server refuses to price (R49): no figure — never the tier's —
     // and the server's sentence for the refusal, which every total this line is in shows.
@@ -121,7 +121,7 @@ function isMeteredEstimate(
   // A scrape whose analysis is priced per call: an estimate while that price is (the server's rule).
   if (scrapeAnalysisRunCredits(node, cachedCost) !== undefined) return true
   // A Component priced at its published listing, whose listing holds a metered LLM estimate (the flag
-  // the server served beside the price, stored on the node): the server marks its line `~` too — only
+  // the server served beside the price, stored on the node): the server marks its line `≈` too — only
   // while it prices LLM calls per model (the mode probe answered as an estimate), as the server gates it.
   if (node.type === "component") return componentStoredEstimate(node) && isModelEstimate(meteredModeProbeId())
   if (!llmNodePriceIds(node)) return false
@@ -222,7 +222,7 @@ export function estimateWholeRun(
   const unpriced = runLinesUnpriced(lines)
   return {
     total: sumRunCreditLines(lines),
-    // Any metered node in the run makes its total an estimate (`~`).
+    // Any metered node in the run makes its total an estimate (`≈`).
     estimate: runLinesAreEstimate(lines),
     // A node the server refuses to price: the total leaves it out, and says so.
     ...(unpriced ? { unpriced } : {}),

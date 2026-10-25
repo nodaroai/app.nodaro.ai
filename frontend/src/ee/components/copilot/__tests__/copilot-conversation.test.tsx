@@ -147,7 +147,7 @@ describe("the run decision", () => {
 
   it("quotes the estimate, and says so plainly when the price is not known yet", () => {
     renderConversation(persistedHistory)
-    expect(screen.getByText("~12 credits")).toBeInTheDocument()
+    expect(screen.getByText("≈12 credits")).toBeInTheDocument()
 
     useCopilotStore.getState().setBridge({ estimateStale: true })
     renderConversation(persistedHistory)

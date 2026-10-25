@@ -5,7 +5,7 @@ import { join } from "node:path"
 import type { Plugin, UserConfig } from "vite"
 import { describe, expect, it } from "vitest"
 
-import { isPackageInstalled, SITE_HEADER_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
+import { isPackageInstalled, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
 
 /**
  * The shared header's module resolver. `virtual:site-header` is the real
@@ -19,11 +19,13 @@ import { isPackageInstalled, SITE_HEADER_ID, siteHeaderDecision, siteHeaderModul
  */
 
 const STUB = "/stub/site-header.tsx"
+const LOCALE_STUB = "/stub/site-locale.ts"
 const RESOLVED = `\0${SITE_HEADER_ID}`
+const RESOLVED_LOCALE = `\0${SITE_LOCALE_ID}`
 const FORCED_OFF = { define: { "import.meta.env.VITE_SHARED_HEADER": JSON.stringify("false") } }
 
 function plugin(installed: boolean, env: Record<string, string>): Plugin {
-  return siteHeaderModule({ root: "/repo/frontend", stubPath: STUB, isInstalled: () => installed, readEnv: () => env })
+  return siteHeaderModule({ root: "/repo/frontend", stubPath: STUB, localeStubPath: LOCALE_STUB, isInstalled: () => installed, readEnv: () => env })
 }
 
 type ConfigHook = (config: UserConfig, env: { mode: string; command: "build" | "serve" }) => Promise<UserConfig | null | void>
@@ -78,6 +80,33 @@ describe("siteHeaderModule", () => {
     expect(source).toMatch(/^export \{ NodaroShell, shellTranslator \} from ".+"$/m)
   })
 
+  it("the shared language follows the same decision, as an adapter of its own (no header in the main bundle)", async () => {
+    const on = plugin(true, ON)
+    await runConfig(on, "build")
+    expect(resolve(on, SITE_LOCALE_ID)).toBe(RESOLVED_LOCALE)
+    const source = load(on, RESOLVED_LOCALE) ?? ""
+    expect(source).toMatch(/^export \{ readSavedLocale, saveLocale, watchSavedLocale \} from ".+\/locale"$/m)
+    expect(source).not.toMatch(/shell\.css|NodaroShell/)
+
+    for (const [installed, env] of [
+      [true, { ...ON, VITE_EDITION: "community" }],
+      [false, { VITE_EDITION: "cloud" }],
+    ] as const) {
+      const off = plugin(installed, env)
+      await runConfig(off, "build")
+      expect(resolve(off, SITE_LOCALE_ID)).toBe(LOCALE_STUB)
+    }
+  })
+
+  it("resolves the locale adapter's import from the frontend directory too", async () => {
+    const p = plugin(true, ON)
+    await runConfig(p, "build")
+    const context = { resolve: async (id: string) => ({ id: `/resolved/${id}` }) }
+    const resolveId = p.resolveId as (this: typeof context, id: string, importer?: string) => Promise<unknown>
+    const pkgImport = (load(p, RESOLVED_LOCALE) ?? "").match(/from "(.+)"$/m)?.[1] ?? ""
+    expect(await resolveId.call(context, pkgImport, RESOLVED_LOCALE)).toEqual({ id: `/resolved/${pkgImport}` })
+  })
+
   it("another edition with the flag on: the stub, and the flag is forced off", async () => {
     for (const edition of ["community", "business"]) {
       const p = plugin(true, { ...ON, VITE_EDITION: edition })
@@ -107,6 +136,7 @@ describe("siteHeaderModule", () => {
     const p = siteHeaderModule({
       root: "/repo/frontend",
       stubPath: STUB,
+      localeStubPath: LOCALE_STUB,
       isInstalled: () => false,
       readEnv: (_mode, dir) => {
         dirs.push(dir)

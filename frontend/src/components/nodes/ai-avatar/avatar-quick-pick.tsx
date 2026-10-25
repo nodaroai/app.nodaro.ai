@@ -115,7 +115,7 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
           </span>
         )}
       </div>
-      <span className={cn("mt-1 px-0.5 text-[11px] leading-tight truncate", selected ? "text-[#ff0073]" : "text-foreground")}>
+      <span className={cn("mt-1 px-0.5 text-[11px] leading-tight truncate", selected ? "text-primary-ink" : "text-foreground")}>
         {person}
       </span>
       <span className="px-0.5 text-[11px] leading-tight text-muted-foreground truncate">

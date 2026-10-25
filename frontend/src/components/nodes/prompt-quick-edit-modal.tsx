@@ -358,7 +358,7 @@ export function PromptQuickEditModal() {
         {/* Header: node type icon + title + optional gray custom name + EDIT toggle */}
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="text-primary flex items-center gap-2">
+            <DialogTitle className="text-primary-ink flex items-center gap-2">
               <Icon className="w-4 h-4 shrink-0" />
               {typeLabel}
               {customName && (

@@ -140,7 +140,7 @@ function SwitchButton({
       className={cn(
         "flex items-center px-1.5 py-0.5 transition-colors",
         active
-          ? "bg-[#ff0073]/15 text-[#ff0073]"
+          ? "bg-[#ff0073]/15 text-primary-ink"
           : "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
       )}
     >

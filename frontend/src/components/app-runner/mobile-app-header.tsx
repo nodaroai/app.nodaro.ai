@@ -270,7 +270,7 @@ export function MobileAppHeader({
                         }}
                         className={`w-full text-start px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
                           selectedVersion === null
-                            ? "bg-[#ff0073]/10 text-[#ff0073]"
+                            ? "bg-[#ff0073]/10 text-primary-ink"
                             : "hover:bg-muted text-foreground"
                         }`}
                       >
@@ -289,7 +289,7 @@ export function MobileAppHeader({
                             }}
                             className={`w-full text-start px-3 py-2 rounded-md text-sm touch-manipulation transition-colors ${
                               selectedVersion === v.version
-                                ? "bg-[#ff0073]/10 text-[#ff0073]"
+                                ? "bg-[#ff0073]/10 text-primary-ink"
                                 : "hover:bg-muted text-foreground"
                             }`}
                           >
@@ -314,7 +314,7 @@ export function MobileAppHeader({
                       closeMenu()
                     }}
                     disabled={isRemixing}
-                    className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-primary-ink transition-colors disabled:opacity-50"
                   >
                     <Shuffle className="h-4 w-4" />
                     {isRemixing ? t("runner.remixing") : t("runner.remixThisMiniApp")}
@@ -327,7 +327,7 @@ export function MobileAppHeader({
                 <a
                   href="/apps"
                   onClick={() => closeMenu()}
-                  className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
+                  className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-primary-ink transition-colors"
                 >
                   <LayoutGrid className="h-4 w-4" />
                   {t("runner.moreMiniApps")}
@@ -370,7 +370,7 @@ export function MobileAppHeader({
                       onSignIn()
                       closeMenu()
                     }}
-                    className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-[#ff0073] transition-colors"
+                    className="flex items-center gap-2 text-sm touch-manipulation min-h-[44px] text-foreground hover:text-primary-ink transition-colors"
                   >
                     <LogIn className="h-4 w-4" />
                     {t("auth.signIn")}

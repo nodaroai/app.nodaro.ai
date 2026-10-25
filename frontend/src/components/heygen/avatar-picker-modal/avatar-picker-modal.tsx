@@ -186,7 +186,7 @@ export function AvatarPickerModal({ open, onOpenChange, value, onSelect, initial
     body = (
       <div className="flex flex-col items-center justify-center gap-2 text-center" data-testid="avatar-picker-no-match">
         <p className="text-sm text-muted-foreground">{t("heygen.noAvatarsMatchThese")}</p>
-        <button type="button" className="text-[12px] text-[#ff0073] hover:underline" onClick={() => patchFilters(DEFAULT_FILTERS)}>
+        <button type="button" className="text-[12px] text-primary-ink hover:underline" onClick={() => patchFilters(DEFAULT_FILTERS)}>
           {t("heygen.clearSearchFilters")}
         </button>
       </div>

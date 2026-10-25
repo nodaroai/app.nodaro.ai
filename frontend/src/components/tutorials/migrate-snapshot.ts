@@ -10,6 +10,7 @@
 // Same functions, same order as `use-workflow-store.ts:loadWorkflow`.
 
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
 import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
@@ -19,7 +20,7 @@ export function migrateSnapshot(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
-  const list = migrateListLoopNodes(nodes, edges)
+  const list = migrateListLoopNodes(migrateRetiredVideoProviders(nodes), edges)
   let migratedNodes = migratePersonNodes(list.nodes)
   let migratedEdges = list.edges
 

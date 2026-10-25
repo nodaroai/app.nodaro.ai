@@ -206,7 +206,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                     {dollars ? (
                       <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     ) : (
-                      <Coins className="w-4 h-4 text-[#ff0073]" />
+                      <Coins className="w-4 h-4 text-primary-ink" />
                     )}
                     <span className="ms-1.5 text-xs font-medium">
                       {dollars ? "$" : serverUnitLabel(summary?.unit, t("credits.unitShort"))}
@@ -251,7 +251,7 @@ export function CostTab({ className = "" }: CostTabProps) {
           {/* Total cost card */}
           <div className="mb-6 p-5 rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
             <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-bold text-[#ff0073] font-mono">
+              <span className="text-3xl font-bold text-primary-ink font-mono">
                 {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits, summary.unit)}
               </span>
               <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
@@ -310,7 +310,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                         ? formatDollarsN(item.runs > 0 && item.total_cost_usd != null ? item.total_cost_usd / item.runs : null)
                         : formatCreditsN(item.avg_credits_per_run, summary.unit)}
                     </td>
-                    <td className="px-4 py-3 text-end text-[#ff0073] font-mono font-medium">
+                    <td className="px-4 py-3 text-end text-primary-ink font-mono font-medium">
                       {dollars ? formatDollarsN(item.total_cost_usd ?? null) : formatCreditsN(item.total_credits, summary.unit)}
                     </td>
                   </tr>
@@ -326,7 +326,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                     {summary.total_jobs}
                   </td>
                   <td />
-                  <td className="px-4 py-3 text-end text-[#ff0073] font-mono font-bold">
+                  <td className="px-4 py-3 text-end text-primary-ink font-mono font-bold">
                     {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits, summary.unit)}
                   </td>
                 </tr>

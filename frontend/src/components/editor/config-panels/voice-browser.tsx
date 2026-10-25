@@ -415,7 +415,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors ${tab === t ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors ${tab === t ? "border-b-2 border-primary text-primary-ink" : "text-muted-foreground hover:text-foreground"}`}
             >
               {tabLabels[t]}
             </button>
@@ -458,7 +458,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     key={g}
                     type="button"
                     onClick={() => setPremadeGender(g)}
-                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${premadeGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${premadeGender === g ? "border-primary bg-primary/10 text-primary-ink font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
                     {genderLabels[g]}
                   </button>
@@ -530,7 +530,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                         if (!isActive) setLibraryFeatured(false)
                       }
                     }}
-                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${isActive ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${isActive ? "border-primary bg-primary/10 text-primary-ink font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
                     {cat.label}
                   </button>
@@ -540,7 +540,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               <button
                 type="button"
                 onClick={() => { setLibraryHighQuality(!libraryHighQuality) }}
-                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${libraryHighQuality ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${libraryHighQuality ? "border-primary bg-primary/10 text-primary-ink font-medium" : "hover:bg-muted text-muted-foreground"}`}
               >
                 <span className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm border text-[11px] leading-none ${libraryHighQuality ? "border-primary bg-cta text-primary-foreground" : "border-muted-foreground/40"}`}>
                   {libraryHighQuality && "✓"}
@@ -557,7 +557,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     key={g}
                     type="button"
                     onClick={() => { setLibraryGender(g) }}
-                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${libraryGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${libraryGender === g ? "border-primary bg-primary/10 text-primary-ink font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
                     {genderLabels[g]}
                   </button>
@@ -580,7 +580,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               <button
                 type="button"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className={`flex items-center gap-1 text-xs transition-colors ${hasActiveAdvancedFilters ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                className={`flex items-center gap-1 text-xs transition-colors ${hasActiveAdvancedFilters ? "text-primary-ink font-medium" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <SlidersHorizontal className="h-3 w-3" />
                 {showAdvancedFilters ? t("cfgext.voiceHideFilters") : t("cfgext.voiceMoreFilters")}
@@ -773,11 +773,11 @@ function MyVoicesTab({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <FitText text={clone.name} className="text-sm font-medium" />
-                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary-ink shrink-0">
                         {t("cfgshared.custom")}
                       </span>
                       {isSelected && (
-                        <span className="text-xs text-primary">&#10003;</span>
+                        <span className="text-xs text-primary-ink">&#10003;</span>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -912,7 +912,7 @@ function VoiceList({
                     </span>
                   )}
                   {isSelected && (
-                    <span className="text-xs text-primary">&#10003;</span>
+                    <span className="text-xs text-primary-ink">&#10003;</span>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground truncate">

@@ -163,7 +163,7 @@ describe("the Clip Pack review anchored at a Speaker View", () => {
     loadClipCanvas({ plan: SV_CLIPS })
     mountClipInspector()
     const footer = screen.getByTestId("clip-footer")
-    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toMatch(/ · ~\d+$/))
+    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toMatch(/ · ≈\d+$/))
   })
 
   it("each clip's basis is the one Speaker View's run of its row stamps (clipRenderBasesBy)", () => {
@@ -203,7 +203,7 @@ describe("priced (C4, decided 2026-10-10): the review quotes Speaker View's own 
     mountClipInspector()
     const footer = screen.getByTestId("clip-footer")
     // 3 clips × 1 minute × 10 (a final, at most two speakers on screen, no zoom).
-    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toBe("Render final · 3 clips · ~30"))
+    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toBe("Render final · 3 clips · ≈30"))
     expect(footer.textContent).not.toContain(NOT_PRICED)
   })
 
@@ -215,7 +215,7 @@ describe("priced (C4, decided 2026-10-10): the review quotes Speaker View's own 
     const final = () => within(screen.getByTestId("clip-footer")).getByRole("button", { name: /^Render final/ }) as HTMLButtonElement
     // The quote is the run at Final, whatever Quality the node is saved at: 3 × 1 minute × 10.
     await waitFor(() => expect(final().disabled).toBe(false))
-    await waitFor(() => expect(final().textContent).toBe("Render final · 3 clips · ~30"))
+    await waitFor(() => expect(final().textContent).toBe("Render final · 3 clips · ≈30"))
     fireEvent.click(final())
     expect(renderFinal).toHaveBeenCalledWith("cut", "final")
   })
@@ -225,6 +225,6 @@ describe("priced (C4, decided 2026-10-10): the review quotes Speaker View's own 
     mountClipInspector()
     const footer = screen.getByTestId("clip-footer")
     // 3 clips × 1 minute × 12.
-    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toBe("Render final · 3 clips · ~36"))
+    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toBe("Render final · 3 clips · ≈36"))
   })
 })

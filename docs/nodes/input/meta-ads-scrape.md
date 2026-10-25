@@ -129,7 +129,7 @@ Credits are charged for the requested batch; a narrow period or a quiet keyword 
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds one LLM call per analysed ad — its frame and copy, your focus, and the analysis it writes — charged for the tokens it actually used at the analysis model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)). A run's analyses are added up and charged once, on top of the scrape's own price, as one charge. A typical analysis on the default model, Gemini 3.6 Flash, is estimated at ~4 credits<!-- credits: meta-ads-analysis:gemini-3.6-flash -->; Gemini 4 Argon runs only on its provider's own API and is charged at that lane's rate.
+Turning on **AI analysis** adds one LLM call per analysed ad — its frame and copy, your focus, and the analysis it writes — charged for the tokens it actually used at the analysis model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)). A run's analyses are added up and charged once, on top of the scrape's own price, as one charge. A typical analysis on the default model, Gemini 3.6 Flash, is estimated at ≈4 credits<!-- credits: meta-ads-analysis:gemini-3.6-flash -->; Gemini 4 Argon runs only on its provider's own API and is charged at that lane's rate.
 
 - **Before the run** a hold is reserved: the scrape's price plus a typical analysis per requested ad. A balance below it is refused before anything runs (`402`, "Needs up to N credits").
 - **After the run** it is charged the scrape's price plus what the analyses used. An ad the run never analysed (the batch came back short, or a long run hit its time budget) costs nothing; an analysis the provider billed is charged even when it failed.

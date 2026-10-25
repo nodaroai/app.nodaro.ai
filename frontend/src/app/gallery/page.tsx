@@ -553,7 +553,7 @@ export default function GalleryPage() {
                         className={cn(
                           "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
                           favoritesSet.has(selectedItem.id)
-                            ? "border-[#ff0073] text-[#ff0073] hover:bg-[#ff0073]/10"
+                            ? "border-[#ff0073] text-primary-ink hover:bg-[#ff0073]/10"
                             : "border-zinc-200 dark:border-zinc-700 text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800",
                         )}
                         title={favoritesSet.has(selectedItem.id) ? t("templates.unfavorite") : t("templates.favorite")}

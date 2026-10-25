@@ -16,14 +16,16 @@
  * is a 404 on every route (a miss is never a 403).
  *
  * HIDDEN data never leaves: the store hands back a trend version's full data
- * (source clip, slot `roleName`, fixed references, trend prompt, the examples'
- * source jobs), so every response is built field by field from the public
- * ones, never spread. A trend run is composed here (`composeTrendRun`) and
- * dispatched to the Cast Swap engine as an INTERNAL request as the caller (the
- * only way a run can carry `trendRun`); the engine keeps the hidden parts in
- * `__` keys of the job's `input_data`, which every job read drops. The run
- * reads redact those keys too and then map each job to the `TrendRun`
- * whitelist. A Full Quality version of a draft is a run of its own.
+ * (the uploaded source clip, slot `roleName`, fixed references, trend prompt,
+ * the examples' source jobs), so every response is built field by field from
+ * the public ones, never spread. The trend's page shows its original from the
+ * source's DISPLAY copy (`source.display`: a browser-safe re-encode in its own
+ * file), never from the uploaded clip a run edits. A trend run is composed
+ * here (`composeTrendRun`) and dispatched to the Cast Swap engine as an
+ * INTERNAL request as the caller (the only way a run can carry `trendRun`);
+ * the engine keeps the hidden parts in `__` keys of the job's `input_data`,
+ * which every job read drops. The run reads redact those keys too and then
+ * map each job to the `TrendRun` whitelist. A Full Quality version of a draft is a run of its own.
  *
  * Reads need `jobs:read` for an OAuth app; estimate and run `workflows:execute`
  * (as the Cast Swap MCP verb); favorites `assets:write` (as the gallery's).
@@ -59,6 +61,7 @@ import {
   engineRequest,
   engineSupports,
   followPreviewMasking,
+  withoutUnsupportedStoredMask,
   isRec,
   jobIdOf,
   listedRunsPage,
@@ -91,6 +94,7 @@ export interface TrendCard {
   description?: string
   tags: string[]
   badges: string[]
+  /** Example 1, else (a trend with no example) the original's display copy. */
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
   needs: Record<TrendSlotKind, number>
   durationSec: number
@@ -104,9 +108,25 @@ export interface TrendTag {
   count: number
 }
 
+/**
+ * The clip a trend recasts, as shown: the source's display copy (never the
+ * uploaded file a run edits). `previewStartSec` is where the 4 s preview
+ * starts, sent whenever the trend offers one (0 included).
+ */
+export interface TrendOriginal {
+  videoUrl: string
+  posterUrl?: string
+  width: number
+  height: number
+  durationSec: number
+  previewStartSec?: number
+}
+
 export interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null
+  /** Absent only on a version whose source has no display copy (none can publish since). */
+  original?: TrendOriginal
   /** The video engine every run of this trend uses (the person never chooses it). */
   engine: CastSwapEngine
   /**
@@ -121,7 +141,18 @@ export interface TrendDetail extends TrendCard {
    * run that sends it is refused (`chip_not_offered`). `defaults` covers only
    * the listed chips.
    */
-  slots: Array<{ key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string; chips: ChipKey[]; defaults?: Chips }>
+  slots: Array<{
+    key: string
+    label: string
+    kind: TrendSlotKind
+    required: boolean
+    hint?: string
+    /** A picture that shows who or what the slot is in the original (the admin's, optional). */
+    hintImageUrl?: string
+    chips: ChipKey[]
+    defaults?: Chips
+  }>
+  /** May be empty: a trend can be published with only its original. */
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
 }
 
@@ -208,13 +239,14 @@ function needsOf(slots: TrendSlot[]): Record<TrendSlotKind, number> {
 }
 
 /**
- * The card of a published trend. Its cover is Example 1 — never the source
- * clip — so a version without an example (or without a source, which no
- * published version has) has no card.
+ * The card of a published trend. Its cover is Example 1, else the original's
+ * display copy — never the uploaded source clip — so a version with neither
+ * (or without a source, which no published version has) has no card.
  */
 function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorite: boolean): TrendCard | null {
-  const cover = data.examples[0]
-  if (!cover || !data.source) return null
+  if (!data.source) return null
+  const cover = data.examples[0] ?? data.source.display
+  if (!cover) return null
   const description = pickText(data.description, locale)
   return {
     id: row.id,
@@ -246,14 +278,30 @@ function slotDefaults(slot: TrendSlot): Chips | undefined {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
+/** The source's display copy as the trend's original, or undefined when the version has none. */
+function originalOf(data: TrendVersionData): TrendOriginal | undefined {
+  const display = data.source?.display
+  if (!display) return undefined
+  return {
+    videoUrl: display.videoUrl,
+    ...(display.posterUrl ? { posterUrl: display.posterUrl } : {}),
+    width: display.width,
+    height: display.height,
+    durationSec: display.durationSec,
+    ...(data.previewStart !== null ? { previewStartSec: data.previewStart } : {}),
+  }
+}
+
 function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale: string, isFavorite: boolean): TrendDetail | null {
   const card = toCard(row, data, locale, isFavorite)
   if (!card) return null
   const keys = new Set(data.slots.map((s) => s.key))
+  const original = originalOf(data)
   return {
     ...card,
     version,
     previewSec: data.previewStart === null ? null : PREVIEW_SEC,
+    ...(original ? { original } : {}),
     engine: engineOf(data),
     resolutions: [...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engineOf(data)]],
     slots: data.slots.map((s) => {
@@ -265,6 +313,7 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
         kind: s.kind,
         required: s.required,
         ...(hint ? { hint } : {}),
+        ...(s.hintImageUrl ? { hintImageUrl: s.hintImageUrl } : {}),
         chips: shownChips(s),
         ...(defaults ? { defaults } : {}),
       }
@@ -363,6 +412,7 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
     previewJobId: parsed.data.previewJobId,
     log: req.log,
   })
+  withoutUnsupportedStoredMask(composed)
   return { composed, ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}) }
 }
 

@@ -16,7 +16,7 @@
     "model"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 224,
+  "estimatedCredits": 904,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -32,7 +32,7 @@
   "providersUsed": [
     "claude-sonnet-4.6",
     "gpt-image-2",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/f547bf1f-1481-4957-843c-8863b3a87d0a.png",
   "previewMediaType": "image",
@@ -174,7 +174,7 @@
       },
       "data": {
         "bold": false,
-        "text": "Each clip starts from the model card and adds one fixed motion: a walk-in (4 s), a slow full turn (8 s), a push-in to the fabric (4 s). Seedance 1.5 at 1080p, no audio. Open a clip to change its motion or its seconds, then rerun just that node.",
+        "text": "Each clip starts from the model card and adds one fixed motion: a walk-in (4 s), a slow full turn (8 s), a push-in to the fabric (4 s). Seedance 2 Mini at 720p, no audio. Open a clip to change its motion or its seconds, then rerun just that node.",
         "color": "#26221a",
         "label": "Step 6",
         "title": "6 · Three clips",
@@ -331,8 +331,8 @@
         "label": "Clip 1 · Walk-in",
         "prompt": "The model from the first frame walks slowly toward the camera, three relaxed steps, arms loose, a soft smile, the fabric moving naturally with each step, full body in frame throughout. The outfit exactly as in the first frame, its cut unchanged — no slit, no new straps, no new seams: {Clothing notes || the clothing in the first frame.} Pure white seamless studio, soft even light, camera locked off at chest height. Clean e-commerce product video, natural motion, no text, no watermark, HD, stable picture.",
         "duration": 4,
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "9:16",
         "fieldMappings": {},
         "generateAudio": false,
@@ -355,8 +355,8 @@
         "label": "Clip 2 · Turn",
         "prompt": "The model from the first frame makes one slow, smooth full turn in place — front, side, back, side, front — arms relaxed, hair moving gently, so the outfit is seen from every side, full body in frame throughout. The outfit exactly as in the first frame, its cut unchanged — no slit, no new straps, no new seams: {Clothing notes || the clothing in the first frame.} Pure white seamless studio, soft even light, camera locked off at chest height. Clean e-commerce product video, natural motion, no text, no watermark, HD, stable picture.",
         "duration": 8,
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "9:16",
         "fieldMappings": {},
         "generateAudio": false,
@@ -379,8 +379,8 @@
         "label": "Clip 3 · Detail",
         "prompt": "The camera pushes in slowly from full body to a close-up of the neckline, the fabric texture and the drape; the model stands almost still with a slight sway, one hand lightly smoothing the fabric. The outfit exactly as in the first frame, its cut unchanged — no slit, no new straps, no new seams: {Clothing notes || the clothing in the first frame.} Pure white seamless studio, soft even light. Clean e-commerce product video, natural motion, no text, no watermark, HD, stable picture.",
         "duration": 4,
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "9:16",
         "fieldMappings": {},
         "generateAudio": false,

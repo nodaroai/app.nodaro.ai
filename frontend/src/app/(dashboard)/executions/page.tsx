@@ -254,7 +254,7 @@ export default function ExecutionsPage() {
       {/* Content */}
       {isLoading && executions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24">
-          <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-4" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary-ink mb-4" />
           <p className="text-sm text-muted-foreground">{t("exec.loading")}</p>
         </div>
       ) : error ? (
@@ -432,7 +432,7 @@ function GlobalExecutionRow({
           {workflowLink ? (
             <Link
               to={workflowLink}
-              className="text-sm text-[#ff0073] hover:underline truncate max-w-[200px] block"
+              className="text-sm text-primary-ink hover:underline truncate max-w-[200px] block"
               onClick={(e) => e.stopPropagation()}
             >
               {exec.workflowName ?? t("exec.untitled")}
@@ -484,7 +484,7 @@ function GlobalExecutionRow({
         </td>
         {hasCredits() && (
           <td className="px-4 py-3">
-            <span className="text-sm text-[#ff0073] font-mono">
+            <span className="text-sm text-primary-ink font-mono">
               {exec.totalCreditsUsed > 0 ? (
                 <span className="inline-flex items-center gap-1">
                   <Coins className="w-3 h-3" />
@@ -587,7 +587,7 @@ function GlobalExecutionRow({
                           </td>
                           {hasCredits() && (
                             <td className="px-3 py-1.5">
-                              <span className="text-xs text-[#ff0073] font-mono">
+                              <span className="text-xs text-primary-ink font-mono">
                                 {state.creditsUsed && state.creditsUsed > 0 ? (
                                   <span className="inline-flex items-center gap-0.5">
                                     <Coins className="w-3 h-3" />

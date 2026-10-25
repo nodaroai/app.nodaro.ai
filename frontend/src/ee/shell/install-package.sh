@@ -18,7 +18,7 @@
 # cannot print it.
 set -eu
 
-PIN="0.2.1"
+PIN="0.5.0"
 VERSION="${SHARED_HEADER_PKG_VERSION:-$PIN}"
 
 if [ "${VITE_EDITION:-}" != "cloud" ] || [ "${VITE_SHARED_HEADER:-}" != "true" ]; then

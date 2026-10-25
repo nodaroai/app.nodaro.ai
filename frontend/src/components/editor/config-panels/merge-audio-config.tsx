@@ -96,7 +96,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
     <div className="flex flex-col gap-4">
       {/* Video Source Section */}
       <div>
-        <Label className="text-xs text-[#ff0073] uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
+        <Label className="text-xs text-primary-ink uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
           <Film className="w-3.5 h-3.5" />
           {t("audiocfg.mergeVideoSource")}
         </Label>
@@ -174,11 +174,11 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
 
       {/* Audio Tracks Section */}
       <div>
-        <Label className="text-xs text-[#ff0073] uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
+        <Label className="text-xs text-primary-ink uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
           <Volume2 className="w-3.5 h-3.5" />
           {t("audiocfg.mergeAudioTracks")}
           {audioSources.length > 0 && (
-            <span className="bg-[#ff0073]/15 text-[#ff0073] text-[11px] rounded-full px-1.5 py-0.5 font-mono">
+            <span className="bg-[#ff0073]/15 text-primary-ink text-[11px] rounded-full px-1.5 py-0.5 font-mono">
               {audioSources.length}
             </span>
           )}

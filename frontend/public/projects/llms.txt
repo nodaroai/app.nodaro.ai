@@ -501,7 +501,7 @@ Generate video from text prompt.
 
 **Providers & durations:**
 - `minimax` (5s), `veo3` (8s), `kling` (5-10s), `kling-turbo` (5-10s), `kling-3.0` (3-15s)
-- `grok` (6-10s), `sora2-pro` (5-10s), `sora2` (5-10s), `seedance` (4-12s)
+- `grok` (6-10s), `sora2-pro` (5-10s), `sora2` (5-10s), `seedance-2-mini` (4-15s)
 - `wan` (5-15s), `wan-turbo` (5s), `hailuo-standard` (6-10s)
 - `bytedance-lite` (5-10s), `bytedance-pro` (5-10s), `runway-kie` (5-10s)
 
@@ -527,7 +527,7 @@ Animate an image into video.
 }
 ```
 
-**Providers:** `minimax`, `veo3`, `veo3.1`, `kling`, `kling-turbo`, `kling-3.0`, `kling-master`, `seedance`, `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard`, `sora2-pro`, `sora2`, `wan-i2v`, `wan-turbo`, `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast`, `grok-i2v`, `runway-kie`
+**Providers:** `minimax`, `veo3`, `veo3.1`, `kling`, `kling-turbo`, `kling-3.0`, `kling-master`, `seedance-2-mini`, `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard`, `sora2-pro`, `sora2`, `wan-i2v`, `wan-turbo`, `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast`, `grok-i2v`, `runway-kie`
 
 **Optional fields:**
 - `generateAudio`: boolean (veo3, veo3.1 only)

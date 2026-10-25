@@ -396,6 +396,14 @@ try {
 
 **Constructor:** `new NodaroError(message: string, code: string, status: number, details?: Record<string, unknown>)`
 
+A listing refused rather than priced reaches a raw REST call of a publish route
+(the SDK has no publish method) as `503 ugc_listing_unpriced` — a UGC video whose
+estimate failed for the saved settings or a choice the app's user can make — with
+`reason: "ugc_listing_unpriced"` and `choice`, as the unpriced-model refusal
+(`400 validation_error`, `reason: "llm_model_unpriced"`) carries its own `reason`;
+read through the SDK's error mapping it is a `NodaroError` with that `code` and
+`status` ([API integration](./api-integration.md)).
+
 ### `class UnauthorizedError extends NodaroError`
 
 HTTP 401. Token missing, expired, or invalid.
@@ -985,7 +993,8 @@ with the review applied.
 `estimateRenderFinal` quotes it first and creates nothing: the nodes it will run,
 the override it runs with, its estimated credits (`estimatedCreditsIsEstimate:
 true` when the run executes an LLM node, which is charged its actual usage — show
-it `~N`), whether the payer can cover them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
+it `≈N`), what the run holds while it renders (`holdCredits`: a UGC clip at its hold, about twice its
+price, never below the estimate), whether the payer can cover that hold (`sufficient`) and the payer's spendable credits (`available`, `null` when a
 workspace budget or a deployment's operator pays). The figures are `null` in an
 edition without credits.
 
@@ -995,7 +1004,7 @@ const { data: quote } = await client.workflows.estimateRenderFinal(id, {
   continueFromExecutionId: previewRunId,
 })
 // quote → { renderNodeId, nodeIds: ["cam", "cut", "captions"], inputOverrides: { cut: { quality: "final" } },
-//           estimatedCredits: 530, sufficient: true, available: 4200 }
+//           estimatedCredits: 530, holdCredits: 530, sufficient: true, available: 4200 }
 const { executionId } = await client.workflows.renderFinal(id, {
   renderNodeId,
   continueFromExecutionId: previewRunId,
@@ -1008,7 +1017,7 @@ such node), `render_final_not_a_render` (not an Apply EDL render) or a
 otherwise refused as `run` is — `preview_review_required` when another render after
 this one still reads Preview (under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
 that is not refused). A run its payer cannot cover — checked on the quoted
-figure, before any execution exists — throws `InsufficientCreditsError` (`402`),
+`holdCredits`, before any execution exists — throws `InsufficientCreditsError` (`402`),
 with `required` and, unless a deployment's operator pays, `available`.
 Requires `workflows:execute` scope when called via OAuth.
 
@@ -1483,8 +1492,8 @@ Structured LLM output: your system prompt and JSON Schema in, a validated
 object out. Billed under `llm-structured` for the tokens the call used, at the
 model's rate on the lane that served it (see
 [Structured LLM output](api-integration.md#structured-llm-output-any-schema) and
-[LLM model rates](pricing/llm-models.md)): a typical call is ~18 credits<!-- credits: llm-structured:gemini-3.6-flash -->
-on the default Gemini 3.6 Flash and ~154 credits<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5,
+[LLM model rates](pricing/llm-models.md)): a typical call is ≈18 credits<!-- credits: llm-structured:gemini-3.6-flash -->
+on the default Gemini 3.6 Flash and ≈154 credits<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5,
 which is offered. A failure the provider billed is charged for that usage.
 
 #### `structured(input)`
@@ -2225,7 +2234,7 @@ interface ListTrendsParams {
 interface TrendCard {
   id: string; slug: string; name: string; description?: string
   tags: string[]; badges: string[]
-  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example
+  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example, else the original's display copy
   needs: Record<TrendSlotKind, number>   // slots of each kind
   durationSec: number
   isFavorite: boolean
@@ -2236,19 +2245,28 @@ interface TrendDetail extends TrendCard {
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
   engine?: "seedance-2-5" | "kling-4"  // TrendEngine: the video model every run uses (the trend's choice); absent = seedance-2-5
   resolutions: ("480p" | "720p" | "1080p")[] // default first: seedance-2-5 ["480p" (draft), "720p", "1080p"], kling-4 ["720p", "1080p"]
+  original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy
   slots: TrendDetailSlot[]
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []
+}
+
+// A browser-safe copy (H.264 MP4) of the clip the trend recasts
+interface TrendOriginal {
+  videoUrl: string; posterUrl?: string; width: number; height: number
+  durationSec: number                    // the copy's length
+  previewStartSec?: number               // where the 4 s preview starts (0 included), when previewSec is 4
 }
 
 interface TrendDetailSlot {
   key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
+  hintImageUrl?: string                  // a picture of who or what the slot is in the original (never sent by a run)
   chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
   defaults?: TrendChips                  // the starting value of those chips
 }
 
 interface TrendRunRequest {
   slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + the slot's `chips`
-  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1
+  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1; leave it out on a trend with no examples
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
@@ -2264,6 +2282,7 @@ interface TrendEstimate {
   holdCredits: number                // what is reserved when it starts
   breakdown: Record<string, number>  // the parts of the quote (with maskingCredits, `masking` is listed but not in the totals)
   maskingCredits?: number            // charged only if the clip is refused and the run retries with the faces masked
+                                     // (0 on a trend whose face mask was approved ahead of time: it masks nothing per run)
 }
 
 interface TrendRun {
@@ -2271,7 +2290,7 @@ interface TrendRun {
   error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | cancelled | failed
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
-  example: number
+  example: number                    // 1-based; 0 = the trend had no example (none was used)
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean
@@ -2310,7 +2329,10 @@ else your profile's language, else English).
 A required slot left empty is refused with `400 missing_slot`; an optional one
 left out takes the chosen example's pictures (`fromExample: true` on the run),
 or is refused with `missing_slot` when that example has none for it
-(`example_out_of_range` when the trend has no such example).
+(`example_out_of_range` when the trend has no such example). On a trend with
+no example, leave `example` out: an optional slot left out then stays as in
+the original (no pictures, `fromExample: false`) and the run records
+`example: 0`.
 `estimate()` and `run()` answer `400` before charging for `missing_slot`,
 `unknown_slot`, `invalid_choice` (a chip the slot's kind does not take),
 `chip_not_offered` (a chip of the kind that the slot's `chips` does not list:
@@ -4729,7 +4751,7 @@ run(input: ReduceInput): Promise<ReduceResult>
 
 | Strategy | Config shape |
 |----------|--------------|
-| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model; the judge's call is charged per token at that model's rate, ~6 credits<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5 ([LLM model rates](./pricing/llm-models.md)) |
+| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model; the judge's call is charged per token at that model's rate, ≈6 credits<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5 ([LLM model rates](./pricing/llm-models.md)) |
 | `concat` | `{ separator?: string }` (default `"\n\n"`) |
 | `first-non-empty` | `{}` |
 | `count` | `{}` |
@@ -4771,7 +4793,7 @@ credits surface as `InsufficientCreditsError`.
 AI prompt assistance for generation nodes. All three methods delegate to
 `POST /v1/prompt-helper/wizard` (see
 [API Integration §12](./api-integration.md#15-prompt-wizard)). Each call
-is charged for the tokens it used at the model's rate (~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on
+is charged for the tokens it used at the model's rate (≈4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on
 the default Gemini 3.6 Flash; [LLM model rates](pricing/llm-models.md)).
 
 All three inputs also accept optional `llmModel`, `reasoningEffort`, `advancedMode`, `temperature` and `maxTokens` fields
@@ -4861,7 +4883,7 @@ absent on an app published before the range existed until its next publish.
 Templates carry `maxEstimatedCredits` / `maxEstimatedPerMinuteCredits` the same
 way. `estimatedCreditsIsEstimate: true` (apps, templates, tutorials) marks a
 listed price that holds a metered LLM call's estimate — charged its actual usage
-per token — so show it `~N`; it is absent for a fixed price.
+per token — so show it `≈N`; it is absent for a fixed price.
 
 ```ts
 const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
@@ -6110,6 +6132,7 @@ videoMask(input: {
     leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number  // 0..49 % each, left out = 0
   } | null
   perShot?: boolean               // default false; detect the subject again in every shot (scene cuts found first)
+  redetectEverySec?: number       // 0 (off, default) or 1..10; also detect the subject again every N s
 }): Promise<{ jobId: string }>
 ```
 
@@ -6126,7 +6149,13 @@ regions whose bounding-box centre lies outside the frame minus the margins
 cuts first and segments each shot on its own — the subject is detected again
 after every cut, `holdLastMask` never crosses a cut, and each shot's mask is
 fitted to that shot's exact frame count; on a clip with no cut it gives the
-same mask, fitted to the clip's exact frame count. Full reference:
+same mask, fitted to the clip's exact frame count. `redetectEverySec` (1–10)
+also sends the clip — each shot, with `perShot` — to the model in pieces of at
+most that many seconds (a last piece under 8 frames joins the one before), so
+someone who walks in or turns to the camera mid-shot is masked from the next
+boundary on; `holdLastMask` holds across these boundaries (they are not cuts).
+Each piece is one more model request, so it is slower; the price does not
+change, and the output's `chunks` counts the requests. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
 
 #### `maskComposite(input)`
@@ -6614,7 +6643,7 @@ the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
 | `data` | `Record<string, number>` | Priced identifier → credit cost. |
 | `missing` | `string[]` | Identifiers with no pricing row (render `'—'`). |
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
-| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `~N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
+| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `≈N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
 | `errorCodes` | `Record<string, { code, message }>?` | Why each identifier in `errors` has no price — today `llm_model_unpriced`: a model with no rate on the lane it would be served on (it cannot be run). Omitted when `errors` is empty. |
 
 ```ts
@@ -6631,7 +6660,7 @@ import { llmPriceKey } from "@nodaro/shared/llm-models"
 
 const key = llmPriceKey("llm-chat", "claude-fable-5") // "llm-chat:claude-fable-5"
 const { data, estimates } = await client.credits.modelCosts([key])
-const shown = estimates?.includes(key) ? `~${data[key]}` : String(data[key])
+const shown = estimates?.includes(key) ? `≈${data[key]}` : String(data[key])
 ```
 
 `GET /v1/credits/model-cost?model=<id>` answers one identifier as
@@ -7567,7 +7596,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature for the tokens its batches used, at the model's rate on the lane that served each ([LLM model rates](pricing/llm-models.md); a default run reads every picker's catalog). A typical run: ~16 credits<!-- credits: text-to-picker:gemini-3.8-flash --> on the default, ~53<!-- credits: text-to-picker:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ~262<!-- credits: text-to-picker:claude-opus-5.5:direct --> on Claude Opus 5.5. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the aggregator. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API; any other model with no effort keeps Auto. Claude Fable 5 is offered. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature for the tokens its batches used, at the model's rate on the lane that served each ([LLM model rates](pricing/llm-models.md); a default run reads every picker's catalog). A typical run: ≈16 credits<!-- credits: text-to-picker:gemini-3.8-flash --> on the default, ≈53<!-- credits: text-to-picker:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ≈262<!-- credits: text-to-picker:claude-opus-5.5:direct --> on Claude Opus 5.5. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the aggregator. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API; any other model with no effort keeps Auto. Claude Fable 5 is offered. |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —

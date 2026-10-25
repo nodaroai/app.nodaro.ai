@@ -1,0 +1,114 @@
+{
+  "slug": "podcast-trailer-formats-one-node",
+  "name": "Trailer + Formats in One Node",
+  "description": "Cut a 20–40 second teaser from a long recording with a single node: Trailer transcribes it, picks the strongest moments and renders the cut as a 720p Preview first. Review it, then Render final renders it at full quality and delivers it as a 9:16 story or reel, a square post and a 4:5 portrait post. Connect a short title-card video to its Intro card input to play it before the trailer.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "trailer",
+    "social",
+    "video"
+  ],
+  "complexity": "beginner",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 6,
+  "estimatedCredits": 123,
+  "estimatedPerMinuteCredits": 4,
+  "nodeTypesUsed": [
+    "upload-video",
+    "episode-trailer",
+    "sticky-note"
+  ],
+  "providersUsed": [],
+  "nodes": [
+    {
+      "id": "trailer-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -680
+      },
+      "data": {
+        "bold": false,
+        "text": "Trailer + Formats in one node\n\nDrop your recording on the Episode Recording node, then Run Trailer. It transcribes the recording, picks the strongest moments, joins them into one 20–40 second trailer and renders it as a 720p Preview. Review it (you can edit the cut), then choose Render final on Trailer: it renders the trailer at full quality and delivers it as a 9:16 story or reel, a 1:1 square post and a 4:5 portrait post.\n\nTo skip the review, turn off Trailer's Review before render.\n\nThe intro card is optional: connect a short title-card video (15 seconds at most) to Trailer's Intro card input and it plays before the trailer. Make it the same size and shape as your recording, or one of the two is letterboxed.\n\nEvery format is padded, never cropped, so no speaker is cut off. Its settings choose the formats, a 16:9 landscape among them.\n\nWant to adjust each step yourself? The Trailer + Formats template builds the same chain node by node.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 460,
+        "height": 760,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 460,
+        "height": 760
+      }
+    },
+    {
+      "id": "trailer-src",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "label": "Episode Recording",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "trailer",
+      "type": "episode-trailer",
+      "position": {
+        "x": 440,
+        "y": 40
+      },
+      "data": {
+        "label": "Trailer",
+        "formats": [
+          "9:16",
+          "1:1",
+          "4:5"
+        ],
+        "reviewBeforeRender": true,
+        "planTier": "standard",
+        "instructions": "",
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "trailer-e-src-trailer",
+      "source": "trailer-src",
+      "target": "trailer",
+      "sourceHandle": "video",
+      "targetHandle": "media"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 120,
+      "y": 460,
+      "zoom": 0.55
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

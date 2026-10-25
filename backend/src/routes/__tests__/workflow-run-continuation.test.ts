@@ -481,19 +481,20 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
   // all after it) not run: it is never stamped `all`, so it never supersedes
   // its source as "done" (decided 2026-10-18).
   describe("is checked against its payer before it starts, priced on what is left", () => {
-    const short = { estimatedCredits: 90, sufficient: false, available: 40, message: "Insufficient credits: 90 needed, 40 available" }
+    // Checked on what the run holds while it renders (120), not its price (90): the refusal names the hold.
+    const short = { estimatedCredits: 90, holdCredits: 120, sufficient: false, available: 40, message: "Insufficient credits: 120 needed, 40 available" }
 
     it("a resume whose remaining steps the payer cannot cover: 402, and no execution is created", async () => {
       vi.mocked(renderFinalCredits).mockResolvedValueOnce(short)
       const res = await fromFailed()
       expect(res.statusCode).toBe(402)
-      expect(res.json().error).toEqual({ code: "insufficient_credits", message: short.message, required: 90, available: 40 })
+      expect(res.json().error).toEqual({ code: "insufficient_credits", message: short.message, required: 120, available: 40 })
       expect(mocks.inserts).toHaveLength(0)
       expect(mocks.queueAdd).not.toHaveBeenCalled()
     })
 
     it("priced on the nodes it runs — what the failed run did not complete — with the states it is seeded from", async () => {
-      vi.mocked(renderFinalCredits).mockResolvedValueOnce({ estimatedCredits: 30, sufficient: true, available: 40 })
+      vi.mocked(renderFinalCredits).mockResolvedValueOnce({ estimatedCredits: 30, holdCredits: 30, sufficient: true, available: 40 })
       const res = await fromFailed()
       expect(res.statusCode).toBe(202)
       const asked = vi.mocked(renderFinalCredits).mock.calls[0]![0]
@@ -517,7 +518,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
           },
         }),
       )
-      vi.mocked(renderFinalCredits).mockResolvedValueOnce({ estimatedCredits: 0, sufficient: true, available: 0 })
+      vi.mocked(renderFinalCredits).mockResolvedValueOnce({ estimatedCredits: 0, holdCredits: 0, sufficient: true, available: 0 })
       const res = await fromFailed()
       expect(res.statusCode).toBe(202)
       expect(vi.mocked(renderFinalCredits).mock.calls[0]![0].runNodeIds).toEqual(["hook"])

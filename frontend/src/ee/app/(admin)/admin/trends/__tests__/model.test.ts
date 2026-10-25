@@ -268,3 +268,51 @@ describe("the model (engine) in the form", () => {
     }
   })
 })
+
+describe("the original's display copy and a slot's hint picture", () => {
+  const DISPLAY = {
+    videoUrl: "https://cdn.test/trends/a1/display.mp4",
+    posterUrl: "https://cdn.test/trends/a1/poster.png",
+    width: 720,
+    height: 1280,
+    durationSec: 12.04,
+  }
+  const withBoth = () =>
+    draft({
+      source: { videoUrl: "https://cdn.test/src.mp4", durationSec: 12, width: 720, height: 1280, display: DISPLAY },
+      slots: [{ key: "lead", label: { en: "Lead" }, kind: "person", required: true, roleName: "the woman", hintImageUrl: "https://cdn.test/trends/a1/hint.png" }],
+    })
+
+  it("round-trips source.display and a slot's hintImageUrl exactly (a save never drops them)", () => {
+    const d = withBoth()
+    const out = fromForm(toForm(d))
+    expect(out).toEqual(savedOf(d))
+    expect(out.source?.display).toEqual(DISPLAY)
+    expect(out.slots[0]?.hintImageUrl).toBe("https://cdn.test/trends/a1/hint.png")
+  })
+
+  it("saves only the display copy's own fields (the server's schema is strict)", () => {
+    const form = toForm(withBoth())
+    form.source = { ...form.source!, display: { ...DISPLAY, extra: "x" } as typeof DISPLAY }
+    expect(fromForm(form).source?.display).toEqual(DISPLAY)
+  })
+
+  it("leaves out an empty hint picture, and a source with no display copy saves none", () => {
+    const form = toForm(draft())
+    form.slots = form.slots.map((s) => ({ ...s, hintImageUrl: "" }))
+    const out = fromForm(form)
+    expect(out.slots[0]).not.toHaveProperty("hintImageUrl")
+    expect(out.source).not.toHaveProperty("display")
+  })
+
+  it("keeps the hint picture through a kind change", () => {
+    const [form] = toForm(withBoth()).slots
+    expect(withKind(form!, "pet").hintImageUrl).toBe("https://cdn.test/trends/a1/hint.png")
+  })
+
+  it("describes a source without its display copy, and says to upload the clip again", () => {
+    expect(describeBlocker({ code: "source_display_missing" })).toBe(
+      "The source clip has no display copy (the copy users see). Upload the clip again to make one.",
+    )
+  })
+})

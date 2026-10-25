@@ -33,7 +33,7 @@ export function forgetUnpricedModels(): void {
 /**
  * Ids the server answered with an ESTIMATE (the batch's `estimates`, the GET's
  * `estimate: true`): a metered LLM call's price key, charged its actual usage
- * after the run. Every surface shows such a figure with a leading `~`. Only the
+ * after the run. Every surface shows such a figure with a leading `≈`. Only the
  * server marks one — under the tier-pricing rollback no metered key is priced,
  * so nothing lands here and every surface looks exactly as before.
  */

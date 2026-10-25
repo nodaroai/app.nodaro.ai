@@ -7,6 +7,7 @@ import {
   VIDEO_CRITIC_FRAME_MODES,
 } from "./pipeline-defaults.js"
 import { SceneMetadataSchema } from "./scene-node-types.js"
+import { canonicalVideoProvider } from "./model-constants.js"
 
 // ─── Input schema (POST /v1/pipelines body) ───────────────────────────────────
 
@@ -74,7 +75,6 @@ export const PIPELINE_PINNABLE_VIDEO_MODELS = [
   "kling-turbo",
   "kling",
   "kling-3.0",
-  "seedance",
   "seedance-2",
   "seedance-2-fast",
   "seedance-2-mini",
@@ -119,7 +119,9 @@ export const PIPELINE_ACCEPTED_SCRIPT_LLMS = [
 export type PipelinePinnableScriptLlm = (typeof PIPELINE_ACCEPTED_SCRIPT_LLMS)[number]
 
 const ImageModelEnum = z.enum(PIPELINE_ACCEPTED_IMAGE_MODELS)
-const VideoModelEnum = z.enum(PIPELINE_PINNABLE_VIDEO_MODELS)
+// A saved pipeline pinned to a retired video model (RETIRED_VIDEO_PROVIDERS)
+// reads as the model it now runs as, never as an invalid config.
+const VideoModelEnum = z.preprocess(canonicalVideoProvider, z.enum(PIPELINE_PINNABLE_VIDEO_MODELS))
 const ScriptLlmEnum = z.enum(PIPELINE_ACCEPTED_SCRIPT_LLMS)
 
 // Per-stage override map. Each stage key maps to a model id valid for its

@@ -1,18 +1,24 @@
 /**
- * Locale state for parameter-node picker i18n.
+ * The interface language: the app chrome and the picker catalogs.
  *
- * - Source of truth at rest: `profiles.preferred_locale` (per user).
- * - Hydrated into this store on app load (via `hydrateLocaleFromProfile`).
- * - When the user changes the locale via any picker's <LocalePicker>:
- *     1. Optimistically update this store.
- *     2. Persist via PATCH /v1/user/settings { preferredLocale: ... }.
- *     3. localStorage mirror so reload-without-network shows last choice.
+ * - One language for every Nodaro product: on a build with the shared site
+ *   header, the choice is also the language cookie every product reads and
+ *   writes (`virtual:site-locale`); elsewhere that module is a stub and the
+ *   app's own storage is all there is.
+ * - Signed in, the account's language (`profiles.preferred_locale`) wins once
+ *   per sign-in (`markHydrated`, called by `useLoadUserSettings`), and is
+ *   written to the cookie, so it follows the account to every product.
+ * - A change the user makes (`setLocale`) is written to the cookie and to
+ *   localStorage; the caller also PATCHes /v1/user/settings { preferredLocale }.
+ * - A change another product made while this tab was away is only SHOWN
+ *   (`followLocale`), never written back.
  * - Fallback chain on first load:
- *     profile.preferred_locale  →  localStorage  →  DEFAULT_LOCALE  →  navigator.language  →  "en"
+ *     shared cookie  →  localStorage  →  DEFAULT_LOCALE  →  navigator.language  →  "en"
  */
 
 import { create } from "zustand"
 import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared/i18n"
+import { readSavedLocale, saveLocale } from "virtual:site-locale"
 import { isOfferedLocale } from "./i18n/offered-locales"
 import { runtimeDefaultLocale } from "./runtime-config"
 import { surfaceLocaleDefault } from "./surface-selectors"
@@ -104,6 +110,18 @@ function writeStoredLocale(value: LocaleId) {
   }
 }
 
+/** The language the viewer chose on any Nodaro product (the shared cookie), or null. */
+function readSharedLocale(): LocaleId | null {
+  const shared = readSavedLocale()
+  return isSupportedLocale(shared) ? shared : null
+}
+
+/** A choice to keep: for every product (the shared cookie) and on this device. */
+function keepLocale(value: LocaleId) {
+  writeStoredLocale(value)
+  saveLocale(value)
+}
+
 interface LocaleStore {
   /** Current effective locale (display language for pickers). */
   locale: LocaleId
@@ -111,42 +129,61 @@ interface LocaleStore {
   dir: LocaleDirection
   /** Whether the locale was loaded from the user profile yet (vs initial guess). */
   hydrated: boolean
-  /** Set the locale and persist to localStorage (does NOT call backend — caller does that). */
+  /** The user whose account language was applied on this page, once (null until then). */
+  hydratedFor: string | null
+  /** The user picked a language on this page: a profile fetch that answers later must not take it back. */
+  picked: boolean
+  /** The user picked a language: show it and keep it for every product (does NOT call backend — caller does that). */
   setLocale: (locale: LocaleId) => void
-  /** Mark the store as hydrated (after profile fetch). */
-  markHydrated: (locale: LocaleId | null) => void
+  /** Another product changed the shared language: show it, and write nothing. */
+  followLocale: (locale: LocaleId) => void
+  /**
+   * The profile arrived for `userId`. Once per user per page — never again on
+   * a remount or a refetch, which would drag back a language chosen since —
+   * the account's language, when it has one, wins and is kept for every
+   * product; unless the user already picked one on this page.
+   */
+  markHydrated: (locale: LocaleId | null, userId: string) => void
 }
 
 /**
  * The locale a page starts in, before the user profile hydrates:
+ *   the language chosen on any Nodaro product (the shared cookie) →
  *   saved choice (localStorage) → deployment default (`DEFAULT_LOCALE`) →
  *   browser detection → "en"
- * The deployment default outranks browser detection — an instance that declares
- * an audience should win over how a visitor's laptop happens to be configured —
- * but never a saved choice: a user who deliberately picked a language is not
- * dragged back. The profile locale, when it arrives via `markHydrated`,
- * outranks all of this.
+ * The shared choice comes first: it is the newest one, wherever it was made
+ * (every choice in this app writes both). The deployment default outranks
+ * browser detection — an instance that declares an audience should win over
+ * how a visitor's laptop happens to be configured — but never a saved choice:
+ * a user who deliberately picked a language is not dragged back. The profile
+ * locale, when it arrives via `markHydrated`, outranks all of this.
  */
 export function resolveInitialLocale(): LocaleId {
-  return readStoredLocale() ?? readRuntimeDefaultLocale() ?? detectBrowserLocale()
+  return readSharedLocale() ?? readStoredLocale() ?? readRuntimeDefaultLocale() ?? detectBrowserLocale()
 }
 
 const initialLocale: LocaleId = resolveInitialLocale()
 
-export const useLocaleStore = create<LocaleStore>((set) => ({
+export const useLocaleStore = create<LocaleStore>((set, get) => ({
   locale: initialLocale,
   dir: getLocaleDirection(initialLocale),
   hydrated: false,
+  hydratedFor: null,
+  picked: false,
   setLocale: (locale) => {
-    writeStoredLocale(locale)
-    set({ locale, dir: getLocaleDirection(locale) })
+    keepLocale(locale)
+    set({ locale, dir: getLocaleDirection(locale), picked: true })
   },
-  markHydrated: (locale) => {
-    if (locale && isSupportedLocale(locale)) {
-      writeStoredLocale(locale)
-      set({ locale, dir: getLocaleDirection(locale), hydrated: true })
+  followLocale: (locale) => {
+    if (isSupportedLocale(locale)) set({ locale, dir: getLocaleDirection(locale) })
+  },
+  markHydrated: (locale, userId) => {
+    if (get().hydratedFor === userId) return
+    if (locale && isSupportedLocale(locale) && !get().picked) {
+      keepLocale(locale)
+      set({ locale, dir: getLocaleDirection(locale), hydrated: true, hydratedFor: userId })
     } else {
-      set({ hydrated: true })
+      set({ hydrated: true, hydratedFor: userId })
     }
   },
 }))

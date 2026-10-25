@@ -90,7 +90,7 @@ export default function ProjectPage() {
     return (
       <div className="p-6 text-center text-muted-foreground">
         <p>{t("project.notFound")}</p>
-        <Link to="/projects" className="text-primary underline text-sm mt-2 block">
+        <Link to="/projects" className="text-primary-ink underline text-sm mt-2 block">
           {t("nav.backToProjects")}
         </Link>
       </div>
@@ -113,7 +113,7 @@ export default function ProjectPage() {
                 className="flex-shrink-0"
               >
                 <Star
-                  className="h-4 w-4 text-[#ff0073] fill-[#ff0073]"
+                  className="h-4 w-4 text-primary-ink fill-[#ff0073]"
                   aria-label={t("project.defaultWorkspace")}
                 />
               </span>

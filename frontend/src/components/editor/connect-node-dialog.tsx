@@ -131,7 +131,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
         <h3 className="text-[15px] font-semibold text-[#1E293B] dark:text-white flex items-center gap-2">
           <span>{t("connect.title", { newLabel: newName })}</span>
           <span className="text-[#94A3B8]">{isRtl ? "←" : "→"}</span>
-          <span className="text-[#ff0073]">{focusedName}</span>
+          <span className="text-primary-ink">{focusedName}</span>
         </h3>
       </div>
 
@@ -191,7 +191,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
                 <span
                   className={cn(
                     "shrink-0 text-xs font-semibold",
-                    isAfter ? "text-[#1E293B] dark:text-[#e8eaed]" : "text-[#ff0073]",
+                    isAfter ? "text-[#1E293B] dark:text-[#e8eaed]" : "text-primary-ink",
                   )}
                 >
                   {t(isAfter ? "connect.roleNew" : "connect.roleCurrent")}

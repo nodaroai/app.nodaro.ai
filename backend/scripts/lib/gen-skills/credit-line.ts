@@ -30,7 +30,7 @@ import { parseMeteredLlmId } from "../../../src/ee/billing/metered-llm-id.js"
 import { hostedStatedPrices } from "../../../src/ee/billing/stated-prices.js"
 import { NODE_REGISTRY, UNPRICED_CREDIT_COST, chargedDescriptor } from "../../../src/lib/node-registry.js"
 
-/** A node's advertised figure, whether it is a metered LLM estimate (`~`), and the feature its LLM call is priced under. */
+/** A node's advertised figure, whether it is a metered LLM estimate (`≈`), and the feature its LLM call is priced under. */
 interface NodeCreditFigure {
   readonly cost: number | string
   readonly estimate: boolean
@@ -91,7 +91,7 @@ export function renderCreditCostLine(nodeType: string): string {
   if (figure.estimate) {
     // A metered LLM node: charged per token at its model's rate, so the figure is its default
     // model's typical call — an estimate, never a fixed price.
-    return `**Credit cost:** \`~${figure.cost}\` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — ${figure.llmFeature ? llmLivePrice(figure.llmFeature) : LIVE_PRICE}; \`GET /v1/nodes\` gives this node's figure live.`
+    return `**Credit cost:** \`≈${figure.cost}\` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — ${figure.llmFeature ? llmLivePrice(figure.llmFeature) : LIVE_PRICE}; \`GET /v1/nodes\` gives this node's figure live.`
   }
   return `**Credit cost:** \`${figure.cost}\` charged on Nodaro Cloud — ${LIVE_PRICE}; \`GET /v1/nodes\` gives this node's figure live.`
 }

@@ -687,7 +687,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           <div className="flex-1 overflow-y-auto p-4 bg-[#F8FAFC] dark:bg-[#121212]">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
-                <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#ff0073]" />
+                <Loader2 className="w-8 h-8 animate-spin mb-2 text-primary-ink" />
                 <p className="text-sm">{t("assetlib.loading")}</p>
               </div>
             ) : error ? (
@@ -736,7 +736,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                           </div>
                         )}
                         <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
-                        <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-primary-ink bg-[#ff0073]/10">
                           {t(TYPE_KEY[asset.type])}
                         </span>
                         {projectName && (
@@ -1282,7 +1282,7 @@ export function UnifiedAssetLibraryButton() {
             <div className="flex-1 overflow-y-auto p-4 bg-[#F8FAFC] dark:bg-[#121212]">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
-                  <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#ff0073]" />
+                  <Loader2 className="w-8 h-8 animate-spin mb-2 text-primary-ink" />
                   <p className="text-sm">{t("assetlib.loading")}</p>
                 </div>
               ) : error ? (
@@ -1339,7 +1339,7 @@ export function UnifiedAssetLibraryButton() {
                             </div>
                           )}
                           <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
-                          <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-full uppercase font-medium text-primary-ink bg-[#ff0073]/10">
                             {t(TYPE_KEY[asset.type])}
                           </span>
                           {projectName && (

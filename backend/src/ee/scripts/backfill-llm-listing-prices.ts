@@ -65,7 +65,7 @@ import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { supabase } from "../../lib/supabase.js"
 import { config, hasCredits, llmMeteredPricing } from "../../lib/config.js"
-import { isLlmUnpricedError } from "../../lib/llm-unpriced-refusal.js"
+import { listingRefusalSkip } from "../../lib/listing-refusal.js"
 import { SYSTEM_ACCOUNT_EMAIL_PATTERN } from "../../lib/system-account.js"
 import { ugcChains } from "@nodaro/render-rules"
 import { probeLlmMeteredSchemaNow } from "../../lib/llm-metered-schema-gate.js"
@@ -288,10 +288,12 @@ export async function runLlmListingBackfill(
     try {
       after = await price()
     } catch (err) {
-      // A metered model with no price (R49): its listing cannot be priced — reported and left as it is.
-      if (!isLlmUnpricedError(err)) throw err
-      report.push({ table, slug: row.slug, before: Object.fromEntries(columns.map((c) => [c, row[c]])), changed: false, skipped: `llm_model_unpriced: ${err.modelId}` })
-      console.warn(`${row.slug} · ${table} · SKIPPED: model ${err.modelId} has no price (llm_model_unpriced)`)
+      // A listing refused rather than priced — a metered model with no price (R49), or a UGC video whose
+      // estimate failed for a choice (ugc_listing_unpriced): reported and left as it is.
+      const skipped = listingRefusalSkip(err)
+      if (skipped === null) throw err
+      report.push({ table, slug: row.slug, before: Object.fromEntries(columns.map((c) => [c, row[c]])), changed: false, skipped })
+      console.warn(`${row.slug} · ${table} · SKIPPED: ${skipped}`)
       return
     }
     const write = planListingWrite(row, after)
@@ -337,7 +339,7 @@ export async function runLlmListingBackfill(
 
   const changed = report.filter((r) => r.changed).length
   const skipped = report.filter((r) => r.skipped).length
-  console.log(`[llm-listing-backfill] ${report.length} row(s), ${changed} differ, ${skipped} skipped (unpriced model)${opts.apply ? `, ${written} written` : " (dry run — nothing written)"}`)
+  console.log(`[llm-listing-backfill] ${report.length} row(s), ${changed} differ, ${skipped} skipped (refused: unpriced model or UGC estimate)${opts.apply ? `, ${written} written` : " (dry run — nothing written)"}`)
   writeFileSync(opts.report, JSON.stringify({ generatedAt: new Date().toISOString(), apply: opts.apply, metered, rows: report }, null, 2))
   console.log(`[llm-listing-backfill] report: ${opts.report}`)
   return { ok: true, rows: report.length, changed, written, skipped }

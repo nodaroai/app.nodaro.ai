@@ -4,8 +4,8 @@
  * complete, each priced as the run will charge it — never the steps it hands on.
  *
  * - Every step but a UGC video's: the run set's estimate (`estimateRunSetCreditsWithoutUgc`).
- * - A UGC video's steps in the run set: their parts of the video's estimate, as every UGC run is
- *   priced. A UGC Clip whose UGC Clips completed (its tickets are seeded, never made again) is priced
+ * - A UGC video's steps in the run set: their parts of the video's estimate, read as every run-set
+ *   estimate reads them (`ugcRunSetVideos`: each part times its node's runs). A UGC Clip whose UGC Clips completed (its tickets are seeded, never made again) is priced
  *   from those very tickets (the ticket quote), and a clip the failed run finished is free only when
  *   it is the runner's own finished take of exactly that clip under this run's key — the chain root
  *   the Retry sends (lib/continuation-run-root.ts) — checked against the runner's jobs
@@ -14,9 +14,10 @@
  * The hold is what the run reserves while its clips render (each at the plugin's hold factor), the
  * figure a balance is checked against. Neither is ever below what the run charges.
  */
-import { ugcClipTicketQuote, ugcChainInput, ugcChains, ugcSumPerNode, type UseCaseViewerFlags } from "@nodaro/render-rules"
-import { ugcClipBody, ugcKeptOutputs } from "@nodaro/shared/ugc"
+import { ugcClipTicketQuote, ugcSumPerNode, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { ugcClipBody } from "@nodaro/shared/ugc"
 import { estimateRunSetCreditsWithoutUgc } from "../billing/credits.js"
+import { ugcRunSetVideos, ugcVideoEstimate } from "../billing/ugc-run-set.js"
 import { estimateUgcRun, quoteUgcTickets } from "./ugc-estimate.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { verifiedReusedClips, type UgcReuseClaim } from "./ugc-clip-reuse-check.js"
@@ -67,20 +68,12 @@ export async function appRunResumeCredits(input: {
   const { caller, nodes, edges, runNodeIds, sourceStates, runKey } = input
   const rest = await (input.viewer ? estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds, input.viewer) : estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds))
   const byId = new Map(nodes.map((n) => [n.id, n] as const))
-  const keeps = (id: string, type: "ugc-script" | "ugc-creator") => ugcKeptOutputs(type, byId.get(id)?.data ?? {}) !== null
   const prices: Array<{ id: string; credits: number }> = []
   const holds: Array<{ id: string; credits: number }> = []
   let reusedClips = 0
-  for (const chain of ugcChains(nodes, edges)) {
-    const members = chain.members.filter(
-      (m) =>
-        m.part !== null &&
-        runNodeIds.has(m.id) &&
-        !(m.part === "script" && keeps(m.id, "ugc-script")) &&
-        !(m.part === "creator" && keeps(m.id, "ugc-creator")),
-    )
-    if (members.length === 0) continue
-    const estimate = await estimateUgcRun(caller, ugcChainInput(chain, nodes, edges).input)
+  // The parts the Retry executes, read as every run-set estimate reads them (`ugcRunSetVideos`).
+  for (const { chain, inputs, parts: members } of ugcRunSetVideos(nodes, edges, runNodeIds)) {
+    const estimate = await ugcVideoEstimate(inputs, (input) => estimateUgcRun(caller, input))
     // The video's clips when they are fixed: its UGC Clips completed in the failed run and is seeded.
     const clipsState = chain.clipsId !== undefined && !runNodeIds.has(chain.clipsId) ? sourceStates[chain.clipsId] : undefined
     const saved =
@@ -99,8 +92,8 @@ export async function appRunResumeCredits(input: {
         holds.push({ id: m.id, credits: quote.holdParts.clip })
         continue
       }
-      prices.push({ id: m.id, credits: estimate.parts[m.part!] })
-      holds.push({ id: m.id, credits: estimate.holdParts[m.part!] })
+      prices.push({ id: m.id, credits: estimate.parts[m.part] * m.runs })
+      holds.push({ id: m.id, credits: estimate.holdParts[m.part] * m.runs })
     }
   }
   return { credits: rest + ugcSumPerNode(prices), hold: rest + ugcSumPerNode(holds), reusedClips }

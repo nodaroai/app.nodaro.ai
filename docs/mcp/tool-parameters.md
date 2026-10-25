@@ -118,7 +118,7 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ~4<!-- credits: prompt-helper:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ≈4<!-- credits: prompt-helper:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent). A higher effort usually spends more output tokens, and the call is charged per token. On a Claude model any effort runs on Anthropic's own API, charged at that lane's rate (docs/pricing/llm-models.md). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply, charged per token at that lane's rate (docs/pricing/llm-models.md); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -133,7 +133,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
@@ -811,7 +811,7 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ~4<!-- credits: prompt-helper:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ≈4<!-- credits: prompt-helper:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent). A higher effort usually spends more output tokens, and the call is charged per token. On a Claude model any effort runs on Anthropic's own API, charged at that lane's rate (docs/pricing/llm-models.md). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply, charged per token at that lane's rate (docs/pricing/llm-models.md); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -832,8 +832,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
-| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's, or with none stays as in the original. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
@@ -1029,7 +1029,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `motion_prompt` | string | yes | Creature/camera-move description (e.g. 'slow 360-degree rotation', 'parallax pan'). From 1 to 2000 characters. |
 | `source_image_url` | string (URL) | yes | Source frame — typically the creature's approved main image URL. |
-| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 121<!-- credits: kling-turbo:5s --> cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Default `kling-turbo`. |
+| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 121<!-- credits: kling-turbo:5s --> cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance-2-mini`, `bytedance-lite`. Default `kling-turbo`. |
 | `name` | string | yes | Display name for the creature (used in the generated prompt context). From 1 to 200 characters. |
 | `category` | string |  | At most 100 characters. |
 | `style` | string |  | At most 50 characters. |
@@ -1234,7 +1234,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `motion_prompt` | string | yes | Object/camera-move description (e.g. 'slow 360-degree rotation', 'parallax pan'). From 1 to 2000 characters. |
 | `source_image_url` | string (URL) | yes | Source frame — typically the object's approved main image URL. |
-| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 121<!-- credits: kling-turbo:5s --> cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Default `kling-turbo`. |
+| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 121<!-- credits: kling-turbo:5s --> cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance-2-mini`, `bytedance-lite`. Default `kling-turbo`. |
 | `name` | string | yes | Display name for the object (used in the generated prompt context). From 1 to 200 characters. |
 | `category` | string |  | At most 100 characters. |
 | `style` | string |  | At most 50 characters. |
@@ -1260,7 +1260,7 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ~4<!-- credits: prompt-helper:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ≈4<!-- credits: prompt-helper:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent). A higher effort usually spends more output tokens, and the call is charged per token. On a Claude model any effort runs on Anthropic's own API, charged at that lane's rate (docs/pricing/llm-models.md). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply, charged per token at that lane's rate (docs/pricing/llm-models.md); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -1349,7 +1349,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 8000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported value. -1 = Auto (Seedance 2): the model picks the length. |
 | `aspect_ratio` | string |  | Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. |
@@ -1766,7 +1766,7 @@ Needs `workflows:execute`.
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `detail_level` | string |  | How much detail to include. Default detailed. One of `brief`, `detailed`, `comprehensive`. |
 | `custom_prompt` | string |  | Override the default system prompt with a specific question (e.g. 'List all text visible in the image'). At most 2000 characters. |
-| `llmModel` | string |  | LLM model id. Defaults to Claude Sonnet 5.5 (`claude-sonnet-5.5`). Charged per token at the model's rate: ~6<!-- credits: image-to-text:claude-sonnet-5.5 --> credits typical on Claude Sonnet 5.5 (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to Claude Sonnet 5.5 (`claude-sonnet-5.5`). Charged per token at the model's rate: ≈6<!-- credits: image-to-text:claude-sonnet-5.5 --> credits typical on Claude Sonnet 5.5 (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent). A higher effort usually spends more output tokens, and the call is charged per token. On a Claude model any effort runs on Anthropic's own API, charged at that lane's rate (docs/pricing/llm-models.md). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply, charged per token at that lane's rate (docs/pricing/llm-models.md); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -1929,7 +1929,7 @@ Always visible.
 | `mode` | string |  | Filter to a specific operation (e.g. 't2i' = text-to-image, 'i2v' = image-to-video). One of `t2i`, `i2i`, `edit`, `upscale`, `remove-bg`, `i2v`, `t2v`, `v2v`, `extend`, `motion-transfer`, `lip-sync`, `video-upscale`, `tts`, `music`, `sfx`, `stt`, `voice-design`, `voice-changer`, `voice-changer-pro`, `isolation`, `dubbing`, `forced-alignment`, `video-analysis`, `video-audit`. |
 | `family` | string |  | Filter by vendor / lab name (e.g. 'Google', 'OpenAI', 'Bytedance'). |
 | `featuredOnly` | boolean |  | Return only editor-picked best-in-tier models. |
-| `priceIds` | string[] |  | Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API), e.g. `llm-chat:claude-sonnet-5.5`. Answers `{ prices: { <id>: { credits, estimate? } \| { error } } }`; `estimate`: charged actual usage, show `~N`. From 1 to 50 items. |
+| `priceIds` | string[] |  | Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API), e.g. `llm-chat:claude-sonnet-5.5`. Answers `{ prices: { <id>: { credits, estimate? } \| { error } } }`; `estimate`: charged actual usage, show `≈N`. From 1 to 50 items. |
 
 ## `list_moodboards`
 
@@ -2662,8 +2662,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
-| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's, or with none stays as in the original. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
@@ -3462,7 +3462,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | What to track (e.g. 'the woman in the red coat'). From 1 to 500 characters. |
 | `threshold` | number |  | Detection confidence (default 0.5). Lower finds more — try 0.3 when nothing matches. From 0.05 to 0.95. |
 | `provider` | string |  | Segmentation model: sam-3.1 (default) or sam-3 (half the price). One of `sam-3.1`, `sam-3`. |
-| `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost (default false). |
+| `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost, for up to 1 s (default false). |
 | `min_subject_height_pct` | number |  | Drop regions shorter than this % of the frame height (default 0 = off). From 0 to 100. |
 | `max_subject_height_pct` | number |  | Drop regions taller than this % of the frame height (default 0 = off). From 0 to 100. |
 | `zone` | object |  | Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too). |
@@ -3471,6 +3471,7 @@ Needs `workflows:execute`.
 | `zone.top_pct` | number |  | From 0 to 49. |
 | `zone.bottom_pct` | number |  | From 0 to 49. |
 | `per_shot` | boolean |  | Detect the subject again in every shot after a scene cut (default false). |
+| `redetect_every_sec` | number |  | Also detect the subject again every N s (0 = off, default; or 1–10) — catches someone who appears or turns to camera mid-shot. Slower, same price. From 0 to 10. |
 
 ## `video_upscale`
 

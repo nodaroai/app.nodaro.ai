@@ -108,7 +108,7 @@ function EntryTile({ dimension, entry, sectionLabel, checked, selectedIndex, mul
         {entryIcon(dimension, entry.id, "size-6")}
         <FitText
           text={label}
-          className={cn("text-[11px] font-medium leading-tight max-w-full", selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]")}
+          className={cn("text-[11px] font-medium leading-tight max-w-full", selected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]")}
         />
       </button>
       {badge()}
@@ -133,7 +133,7 @@ export function StylingDimensionSection({ dimension, entries, checked, selectedI
           htmlFor={switchId}
           className={cn(
             "cursor-pointer select-none text-[15px] font-bold uppercase tracking-[.02em] transition-colors @min-[520px]:text-[17px]",
-            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+            checked ? "text-primary-ink" : "text-muted-foreground/60",
           )}
         >
           {baseLabel}

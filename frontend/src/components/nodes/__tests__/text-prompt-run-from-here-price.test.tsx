@@ -81,8 +81,8 @@ describe("the Text node's Run from here price", () => {
     let land!: (v: unknown) => void
     h.estimate.mockReturnValue(new Promise((resolve) => { land = resolve }))
     renderSelected()
-    // `~` before an estimate, as the Execute button shows one.
-    const marked = await screen.findByText(/^\(~\d+ CR\)$/)
+    // `≈` before an estimate, as the Execute button shows one.
+    const marked = await screen.findByText(/^\(≈\d+ CR\)$/)
     expect(marked.getAttribute("title")).toBe("Checking the video's price. Until it arrives, this is the editor's own estimate.")
     land(ANSWER)
     await waitFor(() => expect(screen.getByText("(20 CR)")).toBeTruthy())
@@ -93,7 +93,7 @@ describe("the Text node's Run from here price", () => {
     h.estimate.mockRejectedValue(new Error("503"))
     renderSelected()
     await waitFor(() =>
-      expect(screen.getByText(/^\(~\d+ CR\)$/).getAttribute("title")).toBe(
+      expect(screen.getByText(/^\(≈\d+ CR\)$/).getAttribute("title")).toBe(
         "The video's price could not be checked. This is the editor's own estimate, and the video may cost more.",
       ),
     )
@@ -110,11 +110,11 @@ describe("the Text node's Run from here price with a metered LLM node downstream
     }
   }
 
-  it("an estimate reads `~N`, like the Execute button", async () => {
+  it("an estimate reads `≈N`, like the Execute button", async () => {
     h.graph = chatGraph()
     h.estimates.set(KEY, 6)
     renderSelected()
-    const price = await screen.findByText("(~6 CR)")
+    const price = await screen.findByText("(≈6 CR)")
     expect(price.getAttribute("title")).toBeNull()
   })
 

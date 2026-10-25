@@ -43,6 +43,9 @@ import {
   unpublish,
   archive,
   restore,
+  attachDisplayCopy,
+  DisplayAttachConflictError,
+  listVersionsLackingDisplay,
 } from "../store.js"
 import type { TrendVersionData } from "../types.js"
 
@@ -647,5 +650,144 @@ describe("a guarded copy-forward never overwrites another writer's version + 1",
     published(1, { revision: "r-orphan", published_at: "2026-10-20T10:00:00+00:00", created_at: OLD })
     await expect(saveDraft(T1, DATA, { expectedRevision: "r-pub" })).rejects.toBeInstanceOf(DraftConflictError)
     expect(writesToV2()).toHaveLength(0)
+  })
+})
+
+describe("attachDisplayCopy — the one write a published version may get (S7 backfill)", () => {
+  const DISPLAY = { videoUrl: "https://cdn.example.com/display.mp4", posterUrl: "https://cdn.example.com/poster.png", width: 240, height: 320, durationSec: 12.04 }
+  const REV = "11111111-1111-4111-8111-111111111111"
+  // A published version with every kind of field, so "nothing else changed" means something.
+  const FULL: TrendVersionData = {
+    ...DATA,
+    name: { en: "Dance off", he: "קרב ריקוד" },
+    source: { videoUrl: "https://cdn.example.com/src.mov", durationSec: 12, width: 1080, height: 1920 },
+    previewStart: 3,
+    references: [{ url: "https://cdn.example.com/ref.png" }] as never,
+    examples: [{ videoUrl: "https://cdn.example.com/ex.mp4", width: 1080, height: 1920, durationSec: 12, slots: {} }] as never,
+  }
+
+  it("writes data.source.display on a PUBLISHED row and nothing else: same data otherwise, no revision, no published_at", async () => {
+    const before = structuredClone(FULL)
+    db.respond = (q) => (argOf(q, "update") ? ok([{ version: 2 }]) : ok({ data: FULL, revision: REV, published_at: "2026-10-20T10:00:00+00:00" }))
+    expect(await attachDisplayCopy(T1, 2, DISPLAY)).toBe("set")
+
+    const write = queries("trend_versions", "update")
+    expect(write).toHaveLength(1)
+    const payload = argOf(write[0]!, "update")![0] as Record<string, unknown>
+    expect(Object.keys(payload)).toEqual(["data"])
+    const next = payload.data as TrendVersionData
+    expect(next.source).toEqual({ ...before.source, display: DISPLAY })
+    const { source: _a, ...restNext } = next
+    const { source: _b, ...restBefore } = before
+    expect(JSON.stringify(restNext)).toBe(JSON.stringify(restBefore))
+    expect(JSON.stringify({ ...next.source, display: undefined })).toBe(JSON.stringify(before.source))
+    // The caller's object is not mutated.
+    expect(FULL).toEqual(before)
+
+    // Guarded: the row read (its revision) and display still absent — never on published_at.
+    expect(has(write[0]!, "eq", "trend_id", T1) && has(write[0]!, "eq", "version", 2)).toBe(true)
+    expect(has(write[0]!, "eq", "revision", REV)).toBe(true)
+    expect(has(write[0]!, "is", "data->source->>display", null)).toBe(true)
+    expect(write[0]!.ops.some((op) => op.m === "is" && op.a[0] === "published_at")).toBe(false)
+    expect(queries("trends", "update")).toHaveLength(0)
+  })
+
+  it("is 'already' and writes nothing when the version has a display copy", async () => {
+    db.respond = () => ok({ data: { ...FULL, source: { ...FULL.source!, display: DISPLAY } }, revision: REV, published_at: null })
+    expect(await attachDisplayCopy(T1, 2, { ...DISPLAY, videoUrl: "https://cdn.example.com/other.mp4" })).toBe("already")
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("a guarded write that matched nothing re-reads: a display set meanwhile is 'already'", async () => {
+    let reads = 0
+    db.respond = (q) => {
+      if (argOf(q, "update")) return ok([])
+      reads += 1
+      return reads === 1
+        ? ok({ data: FULL, revision: REV, published_at: null })
+        : ok({ data: { ...FULL, source: { ...FULL.source!, display: DISPLAY } }, revision: REV, published_at: null })
+    }
+    expect(await attachDisplayCopy(T1, 2, DISPLAY)).toBe("already")
+    expect(queries("trend_versions", "update")).toHaveLength(1)
+  })
+
+  it("retries on a moved revision, then gives up with DisplayAttachConflictError", async () => {
+    db.respond = (q) => (argOf(q, "update") ? ok([]) : ok({ data: FULL, revision: randomRevision(), published_at: null }))
+    const err = await attachDisplayCopy(T1, 2, DISPLAY).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DisplayAttachConflictError)
+    expect((err as DisplayAttachConflictError).reason).toBe("concurrent_write")
+    expect(queries("trend_versions", "update")).toHaveLength(3)
+  })
+
+  it("refuses a copy made from another source clip than the row now has (the admin replaced it)", async () => {
+    db.respond = () => ok({ data: FULL, revision: REV, published_at: null })
+    const err = await attachDisplayCopy(T1, 2, DISPLAY, { sourceVideoUrl: "https://cdn.example.com/old.mov" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DisplayAttachConflictError)
+    expect((err as DisplayAttachConflictError).reason).toBe("source_changed")
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("a row gone (the trend deleted) or a source cleared since the listing is a conflict, never a write", async () => {
+    db.respond = () => ok(null)
+    const gone = await attachDisplayCopy(T1, 9, DISPLAY).catch((e: unknown) => e)
+    expect(gone).toBeInstanceOf(DisplayAttachConflictError)
+    expect((gone as DisplayAttachConflictError).reason).toBe("version_missing")
+    expect((gone as Error).message).toMatch(/version 9/)
+    db.respond = () => ok({ data: { ...FULL, source: null }, revision: REV, published_at: null })
+    const cleared = await attachDisplayCopy(T1, 2, DISPLAY).catch((e: unknown) => e)
+    expect(cleared).toBeInstanceOf(DisplayAttachConflictError)
+    expect((cleared as DisplayAttachConflictError).reason).toBe("source_removed")
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("throws (a plain error) for a copy that IS the source clip and a non-http(s) address", async () => {
+    db.respond = () => ok({ data: FULL, revision: REV, published_at: null })
+    await expect(attachDisplayCopy(T1, 2, { ...DISPLAY, videoUrl: FULL.source!.videoUrl })).rejects.toThrow(/own file/)
+    // A storage without R2_PUBLIC_URL answers "/trends/…": never stored as a display address.
+    const notHttp = await attachDisplayCopy(T1, 2, { ...DISPLAY, posterUrl: "/trends/x.png" }).catch((e: unknown) => e)
+    expect((notHttp as Error).message).toMatch(/http\(s\)/)
+    expect(notHttp).not.toBeInstanceOf(DisplayAttachConflictError)
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+})
+
+function randomRevision(): string {
+  return `00000000-0000-4000-8000-${String(Math.floor(Math.random() * 1e12)).padStart(12, "0")}`
+}
+
+describe("listVersionsLackingDisplay", () => {
+  const SRC = { videoUrl: "https://cdn.example.com/src.mp4", durationSec: 12 }
+  it("lists every version (published and draft) with a source and no display copy, with its trend's slug", async () => {
+    db.respond = (q) => {
+      if (q.table === "trends") return ok([{ id: T1, slug: "dance-off" }, { id: T2, slug: "jump" }])
+      return ok([
+        { trend_id: T1, version: 1, published_at: "2026-10-20T10:00:00+00:00", source: SRC },
+        { trend_id: T1, version: 2, published_at: null, source: SRC },
+        // What the database filters should already drop — filtered again here.
+        { trend_id: T2, version: 1, published_at: null, source: { ...SRC, display: { videoUrl: "x" } } },
+        { trend_id: T2, version: 2, published_at: null, source: null },
+        { trend_id: T3, version: 1, published_at: null, source: SRC },
+      ])
+    }
+    expect(await listVersionsLackingDisplay()).toEqual([
+      { trendId: T1, slug: "dance-off", version: 1, published: true, sourceVideoUrl: SRC.videoUrl },
+      { trendId: T1, version: 2, slug: "dance-off", published: false, sourceVideoUrl: SRC.videoUrl },
+      { trendId: T3, slug: null, version: 1, published: false, sourceVideoUrl: SRC.videoUrl },
+    ])
+    const q = queries("trend_versions")[0]!
+    expect(has(q, "not", "data->>source", "is", null)).toBe(true)
+    expect(has(q, "is", "data->source->>display", null)).toBe(true)
+    expect(argOf(q, "update")).toBeUndefined()
+  })
+
+  it("reads every page before returning", async () => {
+    const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => ({ trend_id: T1, version: from + i + 1, published_at: null, source: SRC }))
+    db.respond = (q) => {
+      if (q.table === "trends") return ok([{ id: T1, slug: "dance-off" }])
+      const [from] = argOf(q, "range") as [number, number]
+      return ok(from === 0 ? page(0, 500) : page(500, 3))
+    }
+    expect(await listVersionsLackingDisplay()).toHaveLength(503)
+    expect(queries("trend_versions")).toHaveLength(2)
   })
 })

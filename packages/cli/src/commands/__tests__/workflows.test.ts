@@ -348,4 +348,12 @@ describe("workflows render-final", () => {
     expect(mocks.renderFinal).not.toHaveBeenCalled()
     expect(vi.mocked(emit)).toHaveBeenCalledWith(quote, expect.anything())
   })
+
+  it("--estimate not covered: names what the run holds while it renders, the figure the balance is checked against", async () => {
+    const { dim } = await import("../../output.js")
+    const quote = { renderNodeId: "cut", nodeIds: ["cut"], inputOverrides: { cut: { quality: "final" } }, estimatedCredits: 100, holdCredits: 250, sufficient: false, available: 150 }
+    mocks.estimateRenderFinal.mockResolvedValue({ data: quote })
+    await runCmd("workflows", "render-final", "wf-1", "--from", "ex-preview", "--render", "cut", "--estimate")
+    expect(vi.mocked(dim)).toHaveBeenCalledWith("estimated 100 credits — not covered: holds up to about 250 credits while it renders (150 available)")
+  })
 })

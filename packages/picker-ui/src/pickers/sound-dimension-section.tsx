@@ -61,7 +61,7 @@ export function SoundSectionHeader({
       <label
         htmlFor={switchId}
         className={cn(
-          "select-none text-[15px] font-bold uppercase tracking-[.02em] text-[#ff0073] @min-[520px]:text-[17px]",
+          "select-none text-[15px] font-bold uppercase tracking-[.02em] text-primary-ink @min-[520px]:text-[17px]",
           switchDisabled ? "cursor-default" : "cursor-pointer",
         )}
       >

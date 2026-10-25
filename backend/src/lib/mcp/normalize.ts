@@ -14,6 +14,7 @@
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
+import { canonicalVideoProvider } from "@nodaro/shared/models"
 
 /**
  * Resolve any model id (or freeform string) to a known catalog entry id.
@@ -307,7 +308,8 @@ export function normalizeImageInput(
  */
 function normalizeModelStrict(input: string | undefined | null): string | undefined {
   if (!input) return undefined
-  const trimmed = String(input).trim()
+  // A retired model id (Seedance 1.5) is the model it now runs as, not an unknown id.
+  const trimmed = canonicalVideoProvider(String(input).trim()) as string
   if (!trimmed) return undefined
   if (MODEL_CATALOG[trimmed]) return trimmed
   const lower = trimmed.toLowerCase()
@@ -347,8 +349,9 @@ export function normalizeVideoInput(
   fallbackModel: string,
 ): NormalizedVideoParams {
   const explicitModel = normalizeModelStrict(raw.model)
+  const savedRunsAs = saved.model ? (canonicalVideoProvider(saved.model) as string) : undefined
   const savedModel =
-    saved.model && MODEL_CATALOG[saved.model] ? saved.model : undefined
+    savedRunsAs && MODEL_CATALOG[savedRunsAs] ? savedRunsAs : undefined
   const model = explicitModel ?? savedModel ?? fallbackModel
   const modelEntry = MODEL_CATALOG[model]
 

@@ -34,10 +34,10 @@ describe("runCostLabel", () => {
     expect(runCostLabel({ exact: 40, listing: { fixed: 40, perMinute: 0 }, pending: true, plusPerMinute: plus })).toBe(" (40 CR)")
     expect(runCostLabel({ exact: 40, listing: null, pending: true, plusPerMinute: plus })).toBe(" (40 CR)")
   })
-  it("R47: a listing that holds a metered LLM estimate reads ~ (the app's listing flag)", () => {
+  it("R47: a listing that holds a metered LLM estimate reads ≈ (the app's listing flag)", () => {
     const listing = appRunListedPrice({ estimatedCredits: 82, perMinuteCredits: 14, estimatedCreditsIsEstimate: true })
     expect(listing).toMatchObject({ estimate: true })
-    expect(runCostLabel({ exact: 2602, listing, pending: true, plusPerMinute: plus })).toBe(" (~82 CR + 14/min)")
+    expect(runCostLabel({ exact: 2602, listing, pending: true, plusPerMinute: plus })).toBe(" (≈82 CR + 14/min)")
     // A fixed listing is as before (no estimate key at all).
     expect(appRunListedPrice({ estimatedCredits: 82, perMinuteCredits: 14 })).not.toHaveProperty("estimate")
   })

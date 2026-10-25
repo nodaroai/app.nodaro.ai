@@ -130,7 +130,7 @@ export const TransitionPicker = memo(function TransitionPicker({
           <span
             className={cn(
               "text-[11.5px] font-semibold leading-tight w-full",
-              selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
+              selected ? "text-primary-ink" : "text-gray-700 dark:text-[#E2E8F0]",
             )}
           >
             {label}
@@ -206,9 +206,9 @@ export const TransitionPicker = memo(function TransitionPicker({
                   className={cn(
                     "relative -mb-px inline-flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[11px] font-medium transition-colors border-b-2 whitespace-nowrap",
                     active
-                      ? "border-[#ff0073] text-[#ff0073]"
+                      ? "border-[#ff0073] text-primary-ink"
                       : hasPick
-                      ? "border-transparent text-[#ff0073]/80 hover:border-[#ff0073]/40 hover:text-[#ff0073]"
+                      ? "border-transparent text-primary-ink hover:border-[#ff0073]/40 hover:text-primary-ink"
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
                   )}
                 >

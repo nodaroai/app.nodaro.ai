@@ -187,7 +187,7 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
 nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
 #   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
-#   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ~N;
+#   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ≈N;
 #   every model's per-token rate is in docs/pricing/llm-models.md. An id with no price prints "-" and why
 
 # Billing — plans and prices, your subscription (buying and changing plans stay in the app)
@@ -515,7 +515,7 @@ nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--
                                                          # "1.2-2.6"); --preset/--corner apply to every positional layer. --layers-file takes the full API
                                                          # layers array instead (per-layer boxes, opacity, animate, zIndex). --base-fit and --background-color
                                                          # need --aspect. See docs/nodes/processing-video/video-overlay.md.
-nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--model sam-3.1|sam-3] [--hold-last-mask] [--min-subject-height <pct>] [--max-subject-height <pct>] [--zone <L,R,T,B>] [--per-shot] [--watch] [--poll-interval <ms>] [--json]
+nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--model sam-3.1|sam-3] [--hold-last-mask] [--min-subject-height <pct>] [--max-subject-height <pct>] [--zone <L,R,T,B>] [--per-shot] [--redetect-every <sec>] [--watch] [--poll-interval <ms>] [--json]
                                                          # tracks a subject described in text through a video (SAM 3.1 by default; --model sam-3 costs
                                                          # half) and returns a black-and-white mask video (white = the subject). --threshold 0.05-0.95
                                                          # (default 0.5; lower finds more). Clips up to 5 minutes at 30 fps (a faster clip counts
@@ -524,7 +524,9 @@ nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--model sam-3.1|s
                                                          # frame height, --max-subject-height those taller (applied first). --zone 10,10,5,5 keeps only
                                                          # subjects whose centre is inside those left,right,top,bottom margins (0-49 % each). --per-shot
                                                          # finds the scene cuts first and detects the subject again in every shot (on a clip with no
-                                                         # cut, the same mask, fitted to the clip's exact frame count). See
+                                                         # cut, the same mask, fitted to the clip's exact frame count). --redetect-every 1-10
+                                                         # (default 0 = off) also detects the subject again every that many seconds (in each shot with
+                                                         # --per-shot), catching someone who enters or turns to camera mid-shot; slower, same price. See
                                                          # docs/nodes/ai-video/video-mask.md.
 nodaro media mask-composite <foregroundUrl> <backgroundUrl> <maskUrl> [--invert] [--feather <px>] [--grow <px>] [--background-fit cover|contain|stretch] [--audio foreground|background|mix|none] [--watch] [--poll-interval <ms>] [--json]
 nodaro media mask-composite <backgroundUrl> <maskUrl> --fill pixelate|blur [--pixel-size-pct <pct>] [--blur-strength-pct <pct>] [--invert] [--feather <px>] [--grow <px>] [--audio …] [--watch] [--json]

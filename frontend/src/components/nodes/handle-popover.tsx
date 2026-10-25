@@ -855,7 +855,7 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
           type="button"
           aria-label={t("handle.connectNode", { label: candidate.nodeLabel })}
           title={t("handle.connect")}
-          className="p-1 hover:bg-background hover:text-primary rounded"
+          className="p-1 hover:bg-background hover:text-primary-ink rounded"
           onClick={(e) => {
             e.stopPropagation()
             onConnect()

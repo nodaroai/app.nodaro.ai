@@ -77,7 +77,7 @@ export function NodeDoubleClickToggle() {
               className={cn(
                 "flex h-7 w-8 items-center justify-center rounded-md transition-colors",
                 active
-                  ? "bg-[#ff0073]/15 text-[#ff0073] ring-1 ring-inset ring-[#ff0073]/60"
+                  ? "bg-[#ff0073]/15 text-primary-ink ring-1 ring-inset ring-[#ff0073]/60"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
               )}
             >

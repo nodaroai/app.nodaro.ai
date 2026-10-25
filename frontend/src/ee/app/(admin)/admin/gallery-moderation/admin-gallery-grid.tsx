@@ -53,7 +53,7 @@ function ItemCard({
           <AudioCard url={item.outputUrl} />
         )}
         <span className="absolute top-2 start-2 z-[4] rounded bg-black/50 p-0.5" aria-hidden>
-          {selected ? <CheckSquare className="h-5 w-5 text-[#ff0073]" /> : <Square className="h-5 w-5 text-white" />}
+          {selected ? <CheckSquare className="h-5 w-5 text-primary-ink" /> : <Square className="h-5 w-5 text-white" />}
         </span>
       </button>
       <div className="space-y-2 p-2.5">

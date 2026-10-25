@@ -2,7 +2,7 @@
  * The LLM features whose calls still bill a TIER row while metered pricing is
  * on — the one list the server's price resolvers (the metered id parser, the
  * deployment price list) and the editor's model pickers read, so a picker can
- * never quote a per-model `~N` for a call the server charges at its tier.
+ * never quote a per-model `≈N` for a call the server charges at its tier.
  *
  * - `workflow-copilot`: the Copilot keeps its own hand-set reservation
  *   ceilings (decided: Copilot unchanged under metered pricing).

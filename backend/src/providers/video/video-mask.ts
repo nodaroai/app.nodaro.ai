@@ -114,19 +114,51 @@ export function fitMaskFrames(rle: readonly string[], frames: number): readonly 
  * `cutFrames` (`perShot`: the frames where a new shot starts), every cut
  * starts a chunk, and a shot longer than `chunkFrames` is cut every
  * `chunkFrames` from ITS start — so no chunk spans a cut and the model starts
- * afresh on every shot. No cuts = the plain grid. Pure.
+ * afresh on every shot. No cuts = the plain grid.
+ *
+ * `minTailFrames` (`redetectEverySec`, whose short grid leaves a remainder in
+ * almost every shot): a shot's last piece shorter than this joins the chunk
+ * before it in the same shot, as long as that chunk stays within
+ * `VIDEO_MASK_CHUNK_FRAMES` — so the chunk can run to `chunkFrames +
+ * minTailFrames − 1`. 0 (the default) = no merging: a 1,800-frame grid keeps
+ * its plan exactly as before re-detection existed. Pure.
  */
-export function planMaskChunks(totalFrames: number, chunkFrames: number = VIDEO_MASK_CHUNK_FRAMES, cutFrames: readonly number[] = []): MaskChunk[] {
+export function planMaskChunks(
+  totalFrames: number,
+  chunkFrames: number = VIDEO_MASK_CHUNK_FRAMES,
+  cutFrames: readonly number[] = [],
+  minTailFrames: number = 0,
+): MaskChunk[] {
   const total = Math.max(1, Math.round(totalFrames))
   const shotStarts = [0, ...validCutFrames(total, cutFrames)]
   const chunks: MaskChunk[] = []
   for (const [s, shotStart] of shotStarts.entries()) {
     const shotEnd = shotStarts[s + 1] ?? total
+    const first = chunks.length
     for (let start = shotStart; start < shotEnd; start += chunkFrames) {
-      chunks.push({ index: chunks.length, startFrame: start, frames: Math.min(chunkFrames, shotEnd - start) })
+      const frames = Math.min(chunkFrames, shotEnd - start)
+      const prev = chunks[chunks.length - 1]
+      if (frames < minTailFrames && prev && chunks.length > first && prev.frames + frames <= VIDEO_MASK_CHUNK_FRAMES) {
+        chunks[chunks.length - 1] = { ...prev, frames: prev.frames + frames }
+        continue
+      }
+      chunks.push({ index: chunks.length, startFrame: start, frames })
     }
   }
   return chunks
+}
+
+/**
+ * The chunk length `redetectEverySec` asks for at `frameRate` (an ffmpeg
+ * rational): `sec` seconds of frames, never fewer than
+ * `VIDEO_MASK_MIN_SHOT_FRAMES` nor more than `VIDEO_MASK_CHUNK_FRAMES` (a
+ * request's cap); an unreadable rate counts as `FPS_BASIS`. 0 or less = off:
+ * the plain `VIDEO_MASK_CHUNK_FRAMES`. Pure.
+ */
+export function redetectChunkFrames(frameRate: string, sec: number): number {
+  if (!(sec > 0)) return VIDEO_MASK_CHUNK_FRAMES
+  const fps = parseFrameRate(frameRate) ?? VIDEO_MASK_LIMITS.FPS_BASIS
+  return Math.min(VIDEO_MASK_CHUNK_FRAMES, Math.max(VIDEO_MASK_MIN_SHOT_FRAMES, Math.round(fps * sec)))
 }
 
 /**
@@ -337,6 +369,16 @@ async function yieldIfDue(sliceStart: number): Promise<number> {
 }
 
 /**
+ * The most frames `holdLastMaskFrames` holds a mask over at `frameRate` (an
+ * ffmpeg rational): `VIDEO_MASK_LIMITS.HOLD_MAX_SEC` of them, at least one;
+ * an unreadable rate counts as `FPS_BASIS`. Pure.
+ */
+export function holdMaxFrames(frameRate: string): number {
+  const fps = parseFrameRate(frameRate) ?? VIDEO_MASK_LIMITS.FPS_BASIS
+  return Math.max(1, Math.round(fps * VIDEO_MASK_LIMITS.HOLD_MAX_SEC))
+}
+
+/**
  * Hold the last mask where the subject is lost (`holdLastMask`). A frame whose
  * mask covers less than `VIDEO_MASK_LIMITS.HOLD_EMPTY_BELOW_FRACTION` of the
  * picture (0.002 %) is empty; every empty frame AFTER the first non-empty one
@@ -358,16 +400,24 @@ async function yieldIfDue(sliceStart: number): Promise<number> {
  * starts afresh at each, so a shot's empty frames are never drawn from the
  * shot before the cut — a held mask would sit on a picture it was not drawn
  * for. None = one shot.
+ *
+ * `maxHoldFrames` (`VIDEO_MASK_LIMITS.HOLD_MAX_SEC` at the clip's rate): a
+ * run of empty frames is held for at most this many, the rest stay empty
+ * until the next non-empty frame. A missed cut, or a subject that has left,
+ * would otherwise leave the mask where the subject no longer is for as long
+ * as the shot lasts. None = no limit.
  */
 export async function holdLastMaskFrames(
   rle: string[],
   pixels: number,
   shotStarts: readonly number[] = [],
+  maxHoldFrames: number = Number.POSITIVE_INFINITY,
 ): Promise<{ readonly rle: string[]; readonly heldFrames: number }> {
   const emptyBelow = pixels * VIDEO_MASK_LIMITS.HOLD_EMPTY_BELOW_FRACTION
   const starts = [...shotStarts].sort((a, b) => a - b)
   let nextStart = 0
   let last: string | undefined
+  let run = 0
   let heldFrames = 0
   let sliceStart = performance.now()
   for (let f = 0; f < rle.length; f++) {
@@ -379,8 +429,10 @@ export async function holdLastMaskFrames(
     const covered = maskRleCoveredPixels(rle[f]!)
     if (covered > 0 && covered >= emptyBelow) {
       last = rle[f]
-    } else if (last !== undefined) {
+      run = 0
+    } else if (last !== undefined && run < maxHoldFrames) {
       rle[f] = last
+      run++
       heldFrames++
     }
     sliceStart = await yieldIfDue(sliceStart)

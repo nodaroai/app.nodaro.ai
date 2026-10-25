@@ -300,7 +300,6 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 | `grok` | General purpose video generation |
 | `sora2-pro` | OpenAI premium, cinematic quality |
 | `sora2` | OpenAI standard video generation |
-| `seedance` | Dance and movement specialization |
 | `wan` | Versatile, good for animations and transformations |
 | `wan-turbo` | Faster Wan generation |
 | `hailuo-standard` | Standard quality, cost-effective |
@@ -319,7 +318,6 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 | `kling-turbo` | Faster Kling animation |
 | `kling-3.0` | Latest Kling with advanced motion |
 | `kling-master` | Highest quality Kling |
-| `seedance` | Dance/movement from still images |
 | `hailuo-2.3-pro` | Premium Hailuo animation |
 | `hailuo-2.3` | Standard Hailuo animation |
 | `hailuo-standard` | Cost-effective animation |

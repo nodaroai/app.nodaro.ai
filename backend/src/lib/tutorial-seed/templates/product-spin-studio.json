@@ -16,7 +16,7 @@
     "e-commerce"
   ],
   "complexity": "beginner",
-  "estimatedCredits": 109,
+  "estimatedCredits": 449,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
@@ -29,7 +29,7 @@
   ],
   "providersUsed": [
     "claude-sonnet-4.6",
-    "seedance"
+    "seedance-2-mini"
   ],
   "previewMediaUrl": "https://cdn.nodaro.ai/images/45655729-e916-4bfc-b832-1b57a3bb602a.png",
   "previewMediaType": "image",
@@ -129,7 +129,7 @@
       },
       "data": {
         "bold": false,
-        "text": "Seedance 1.5 at 1080p, square, 8 seconds, no audio. Your photo is the first and the last frame, and the loop trim cuts the tail on the frame that matches the start. Open the node to change speed, direction or size, then rerun just this node.",
+        "text": "Seedance 2 Mini at 720p, square, 8 seconds, no audio. Your photo is the first and the last frame, and the loop trim cuts the tail on the frame that matches the start. Open the node to change speed, direction or size, then rerun just this node.",
         "color": "#26221a",
         "label": "Step 4",
         "title": "4 · The spin",
@@ -250,8 +250,8 @@
           "quality": "precise",
           "framesToTest": 48
         },
-        "provider": "seedance",
-        "resolution": "1080p",
+        "provider": "seedance-2-mini",
+        "resolution": "720p",
         "aspectRatio": "1:1",
         "fieldMappings": {},
         "generateAudio": false,

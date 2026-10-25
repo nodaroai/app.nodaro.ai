@@ -93,7 +93,7 @@ function QuickStatsCard({ models }: { readonly models: ReadonlyArray<DBModelPric
     <div className="border rounded-lg bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
         <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center">
-          <Zap className="h-5 w-5 text-primary" />
+          <Zap className="h-5 w-5 text-primary-ink" />
         </div>
         <h2 className="text-sm font-semibold uppercase tracking-wider">Quick Stats</h2>
       </div>
@@ -115,7 +115,7 @@ function SubscriptionTiersSection() {
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-4 border-b">
-        <CreditCard className="h-4 w-4 text-primary" />
+        <CreditCard className="h-4 w-4 text-primary-ink" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">Subscription Tiers</h2>
       </div>
       <div className="overflow-x-auto">
@@ -156,7 +156,7 @@ function TopUpSection() {
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-4 border-b">
-        <ShoppingCart className="h-4 w-4 text-primary" />
+        <ShoppingCart className="h-4 w-4 text-primary-ink" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">Top-Up Credits</h2>
         <span className="text-xs text-muted-foreground ml-2">Non-expiring (unlike subscription credits)</span>
       </div>
@@ -431,7 +431,7 @@ function AIModelsSection({
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-4 border-b">
-        <DollarSign className="h-4 w-4 text-primary" />
+        <DollarSign className="h-4 w-4 text-primary-ink" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">AI Model Pricing</h2>
         {pendingCount > 0 && (
           <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 text-[11px]">
@@ -440,7 +440,7 @@ function AIModelsSection({
         )}
         <Link
           to="/admin/models"
-          className="ml-auto text-xs text-[#ff0073] hover:underline inline-flex items-center gap-1"
+          className="ml-auto text-xs text-primary-ink hover:underline inline-flex items-center gap-1"
         >
           Edit model pricing
           <ExternalLink className="h-3 w-3" />
@@ -557,7 +557,7 @@ export default function AdminPricingPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
-          <DollarSign className="h-5 w-5 text-primary" />
+          <DollarSign className="h-5 w-5 text-primary-ink" />
         </div>
         <div>
           <h1 className="text-xl font-bold">Pricing Overview</h1>

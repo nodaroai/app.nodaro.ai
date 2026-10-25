@@ -407,7 +407,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       if (await replyIfLlmUnpriced(reply, err)) return reply
       throw err
     }
-    // A metered LLM line makes the figure an estimate (`~`, spec §8.5); present only then.
+    // A metered LLM line makes the figure an estimate (`≈`, spec §8.5); present only then.
     return reply.send({ estimatedCredits: estimate.credits, ...(estimate.estimate ? { estimatedCreditsIsEstimate: true } : {}) })
   })
 

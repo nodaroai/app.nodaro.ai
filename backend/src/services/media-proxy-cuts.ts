@@ -51,6 +51,22 @@
  * `flashReturn` × as large (a second cut, a whip pan): rule 2 cannot tell that
  * from a return, since mafd compares each frame only with the one before it.
  *
+ * Video Mask (`scene-cut-frames.ts`) adds an escape from rule 2
+ * (`isolatedSpikeIsCut`): a spike rule 2 calls a flash is still a candidate
+ * when it stands `isolation` × over EVERY other frame within `windowMs` — a
+ * lone spike, not one of a plateau. There a missed cut is the expensive
+ * mistake (the tracker keeps the last shot's subject, and a held mask sits on
+ * a picture it was not drawn for) while an extra cut only starts the model
+ * afresh once more. A cut that opens on fast motion (the next frame still
+ * differs by over `flashReturn` × the cut) is what rule 2 loses, and it is a
+ * lone spike: its next frames' scores are motion, not a second jump. A
+ * one-frame flash is one too (its jump back scores near 0: that frame differs
+ * from the flash by as much as the flash did from the one before), so there
+ * it starts a shot. A held flash's jump in and jump back score alike, so
+ * neither stands over the other and it stays a flash; a pan's frames score
+ * alike too, so rule 2's other work, keeping a plateau out, is unchanged. The
+ * media proxy does not use the escape.
+ *
  * Pure apart from reading a line stream: `video-proxy-encode.ts` adds the
  * filter, hands the file's lines here and converts the times.
  */
@@ -131,11 +147,16 @@ export async function readSceneScores(input: Readable): Promise<SceneFrameScore[
   return out
 }
 
+export interface FindSceneCutsOptions {
+  /** Video Mask's escape from rule 2 (see the top of this file): a lone spike is a candidate even when it reads as a flash. */
+  readonly isolatedSpikeIsCut?: boolean
+}
+
 /**
  * The times (s, from the seek point) of the frames that start a new shot, by
  * the rule at the top of this file. Frames are in decode order.
  */
-export function findSceneCuts(frames: readonly SceneFrameScore[]): number[] {
+export function findSceneCuts(frames: readonly SceneFrameScore[], options: FindSceneCutsOptions = {}): number[] {
   const windowS = SCENE_CUT.windowMs / 1000
   // Rule 2: a spike followed within flashFrames frames by a change of at least
   // flashReturn × its own mafd is a flash, from its jump in to that change
@@ -154,7 +175,7 @@ export function findSceneCuts(frames: readonly SceneFrameScore[]): number[] {
       }
     }
   }
-  const candidate = frames.map((f, k) => f.score >= SCENE_CUT.threshold && !flash[k])
+  const candidate = frames.map((f, k) => f.score >= SCENE_CUT.threshold && (!flash[k] || (options.isolatedSpikeIsCut === true && isLoneSpike(frames, k, windowS))))
   const out: number[] = []
   let lo = 0
   for (let k = 0; k < frames.length; k++) {
@@ -168,6 +189,15 @@ export function findSceneCuts(frames: readonly SceneFrameScore[]): number[] {
     if (f.score >= SCENE_CUT.isolation * background) out.push(f.t)
   }
   return out
+}
+
+/** Frame `k` scores at least `isolation` × every other frame within `windowS` of it. */
+function isLoneSpike(frames: readonly SceneFrameScore[], k: number, windowS: number): boolean {
+  const f = frames[k]
+  let neighbour = 0
+  for (let j = k - 1; j >= 0 && frames[j].t >= f.t - windowS; j--) neighbour = Math.max(neighbour, frames[j].score)
+  for (let j = k + 1; j < frames.length && frames[j].t <= f.t + windowS; j++) neighbour = Math.max(neighbour, frames[j].score)
+  return f.score >= SCENE_CUT.isolation * neighbour
 }
 
 /** Whole microseconds: `10300 + 1.034367 × 1000` is otherwise a float hair off. */

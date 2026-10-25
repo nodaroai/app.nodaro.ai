@@ -13,7 +13,7 @@
  * the color / border / cursor / press-feedback.
  */
 export const RUN_BUTTON_CLASS =
-  "cursor-pointer border-2 border-[#ff0073]/70 bg-[#ff0073]/10 text-[#ff0073] " +
+  "cursor-pointer border-2 border-[#ff0073]/70 bg-[#ff0073]/10 text-primary-ink " +
   "hover:bg-[#ff0073]/20 active:bg-[#ff0073]/30 active:scale-[0.97] " +
   "transition-[background-color,transform] duration-150"
 
@@ -29,7 +29,7 @@ export const RUN_BUTTON_CLASS =
  * child of a blurred parent double-stacks the effect and adds per-node GPU cost.
  */
 export const RUN_BUTTON_GLASS_CLASS =
-  "cursor-pointer border-2 border-[#ff0073]/70 bg-[#ff0073]/20 text-[#ff0073] " +
+  "cursor-pointer border-2 border-[#ff0073]/70 bg-[#ff0073]/20 text-primary-ink " +
   "backdrop-blur-md shadow-lg shadow-[#ff0073]/30 " +
   "hover:bg-[#ff0073]/30 active:bg-[#ff0073]/40 active:scale-[0.97] " +
   "transition-[background-color,transform] duration-150"

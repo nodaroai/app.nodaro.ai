@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import AccessibilityStatementPage, { REPORT_EMAIL } from "../page"
-import { STATEMENT_CONTENT, statementFor } from "../statement-content"
+import { NODARO_PRODUCTS, STATEMENT_CONTENT, statementFor, statementIntro } from "../statement-content"
 import { useLocaleStore } from "@/lib/locale-store"
 import { axeViolations } from "@/test/axe"
 
@@ -89,6 +89,17 @@ describe("accessibility statement page", () => {
     }
   })
 
+  it("covers Nodaro as one product: every copy names every product, none names one site", () => {
+    for (const [locale, copy] of Object.entries(STATEMENT_CONTENT)) {
+      if (!copy) continue
+      expect(copy.intro, locale).toContain("{products}")
+      const intro = statementIntro(copy)
+      for (const product of NODARO_PRODUCTS) expect(intro, `${locale} ${product}`).toContain(product)
+      const all = JSON.stringify(copy)
+      expect(all, locale).not.toMatch(/nodaro\.ai/)
+    }
+  })
+
   it("gives the interface its own language back on leave", () => {
     document.documentElement.lang = "en"
     document.documentElement.dir = "ltr"
@@ -101,7 +112,7 @@ describe("accessibility statement page", () => {
   it("has the required parts: level, what was done, what is not accessible, how to report, the date", () => {
     renderPage()
     expect(screen.getByRole("heading", { level: 1, name: "הצהרת נגישות" })).toBeInTheDocument()
-    for (const name of ["רמת הנגישות", "מה הונגש באתר", "תפריט הנגישות", "רכיבים שאינם נגישים במלואם", "נתקלתם בבעיית נגישות?"]) {
+    for (const name of ["רמת הנגישות", "מה הונגש", "תפריט הנגישות", "רכיבים שאינם נגישים במלואם", "נתקלתם בבעיית נגישות?"]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument()
     }
     expect(screen.getByText(/ת״י 5568/)).toBeInTheDocument()

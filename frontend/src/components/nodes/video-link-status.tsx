@@ -39,7 +39,7 @@ const TONE: Record<Variant, { text: string; accent: string; accentText: string; 
   panel: {
     text: "text-xs",
     accent: "bg-[#ff0073] hover:bg-[#ff0073]/90",
-    accentText: "text-[#ff0073]",
+    accentText: "text-primary-ink",
     bar: "bg-[#ff0073]",
     input: "focus:border-[#ff0073]",
   },

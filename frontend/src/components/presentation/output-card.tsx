@@ -123,7 +123,7 @@ function OutputCardImpl({
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-foreground">{label}</span>
             {preview && <PreviewBadge />}
-            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/10 text-[#ff0073] font-medium">
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#ff0073]/10 text-primary-ink font-medium">
               {t("present.resultsCount", { n: listResults.length })}
             </span>
           </div>

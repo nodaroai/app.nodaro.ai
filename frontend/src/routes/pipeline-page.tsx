@@ -807,7 +807,7 @@ function EntityDescGate({
               onClick={() => setLibTab("featured")}
               className={`rounded-md px-2 py-0.5 text-[11px] ${
                 libTab === "featured"
-                  ? "bg-[#ff0073]/10 text-[#ff0073]"
+                  ? "bg-[#ff0073]/10 text-primary-ink"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -818,7 +818,7 @@ function EntityDescGate({
               onClick={() => setLibTab("mine")}
               className={`rounded-md px-2 py-0.5 text-[11px] ${
                 libTab === "mine"
-                  ? "bg-[#ff0073]/10 text-[#ff0073]"
+                  ? "bg-[#ff0073]/10 text-primary-ink"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1262,7 +1262,7 @@ function ScriptView({
       {screenplay.scenes.map((sc, i) => (
         <div key={i}>
           <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-[#ff0073]">
+            <div className="text-xs font-medium uppercase tracking-wide text-primary-ink">
               {sc.heading}
             </div>
             {!editing && (

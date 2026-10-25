@@ -1012,6 +1012,23 @@ describe("video-mask", () => {
     await mockPollJobWithNodeUpdate.mock.calls[0][1]()
     expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ perShot, zone }))
   })
+
+  it.each([
+    [{}, 0],
+    [{ redetectEverySec: 1 }, 1],
+    [{ redetectEverySec: 2.5, perShot: true }, 2.5],
+    [{ redetectEverySec: 0.3 }, 1],
+    [{ redetectEverySec: 45 }, 10],
+    [{ redetectEverySec: -1 }, 0],
+    [{ redetectEverySec: "1" }, 0],
+  ] as const)("sends redetectEverySec (%j → %s), read as the orchestrator reads it", async (data, redetectEverySec) => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoMaskApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-mask", { prompt: "the face", ...data }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ redetectEverySec }))
+  })
 })
 
 describe("mask-composite", () => {

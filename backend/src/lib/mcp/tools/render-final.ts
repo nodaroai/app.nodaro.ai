@@ -42,8 +42,10 @@ interface Quote {
   renderNodeId: string
   nodeIds: string[]
   estimatedCredits: number | null
-  /** `estimatedCredits` includes an LLM node's estimate (charged its actual usage): about, `~N`. */
+  /** `estimatedCredits` includes an LLM node's estimate (charged its actual usage): about, `≈N`. */
   estimatedCreditsIsEstimate?: true
+  /** What the run holds while it renders (a UGC clip at its hold): the figure `sufficient` is checked against. */
+  holdCredits?: number | null
   /** Whether the payer can cover it; null without credits. */
   sufficient?: boolean | null
   /** The payer's spendable balance, when it is the caller's to see. */
@@ -100,11 +102,12 @@ export function registerRenderFinal({ server, session, fastify }: RegisterRender
       if (args.confirm !== true) {
         const billed = quote.estimatedCredits !== null && hasCredits()
         const price = billed
-          ? `costs about ${quote.estimatedCreditsIsEstimate ? "~" : ""}${quote.estimatedCredits} credits${quote.estimatedCreditsIsEstimate ? " (an estimate: its LLM calls are charged their actual usage)" : ""}`
+          ? `costs about ${quote.estimatedCreditsIsEstimate ? "≈" : ""}${quote.estimatedCredits} credits${quote.estimatedCreditsIsEstimate ? " (an estimate: its LLM calls are charged their actual usage)" : ""}`
           : "is not billed in credits on this edition"
         const next =
           billed && quote.sufficient === false
-            ? `The user's credits cannot cover it${typeof quote.available === "number" ? ` (${quote.available} available)` : ""}: ` +
+            ? // The check reads what the run holds while it renders: named when it is more than the price.
+              `The user's credits cannot cover it${typeof quote.holdCredits === "number" && quote.holdCredits > (quote.estimatedCredits ?? 0) ? `: it holds up to about ${quote.holdCredits} credits while it renders` : ""}${typeof quote.available === "number" ? ` (${quote.available} available)` : ""}: ` +
               "tell them, and run it only after they have added credits — until then the run is refused with insufficient credits."
             : "Present this to the user; call render_final again with confirm: true once they accept."
         return {

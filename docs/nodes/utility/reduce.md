@@ -21,7 +21,7 @@ Pick one option in the config panel ("What to do with the candidates"). The AI j
 
 | Option | Use when | Credits |
 |--------|----------|---------|
-| **AI picks the best** (`pick-best-llm`) | You want an AI judge to compare every candidate against your criteria and pick one | per token at the judge model's rate — ~6 cr<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default judge (see below) |
+| **AI picks the best** (`pick-best-llm`) | You want an AI judge to compare every candidate against your criteria and pick one | per token at the judge model's rate — ≈6 cr<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default judge (see below) |
 | **Join into one text** (`concat`) | You want every candidate in a single text, with a separator between them | 0 cr |
 | **First that has content** (`first-non-empty`) | You want the first candidate that is not empty | 0 cr |
 | **Count them** (`count`) | You want how many candidates arrived | 0 cr |
@@ -41,15 +41,15 @@ Sends the candidates to an AI judge with your criteria. The judge replies with t
 
 | Judge model | Price key | Typical judge call |
 |---|---|---|
-| Gemini 3.6 Flash | `reduce:pick-best-llm:gemini-3.6-flash` | ~4 cr<!-- credits: reduce:pick-best-llm:gemini-3.6-flash --> |
-| Claude Sonnet 5.5 (default) | `reduce:pick-best-llm:claude-sonnet-5.5` | ~6 cr<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> |
-| Claude Opus 5.5 | `reduce:pick-best-llm:claude-opus-5.5` | ~11 cr<!-- credits: reduce:pick-best-llm:claude-opus-5.5 --> |
+| Gemini 3.6 Flash | `reduce:pick-best-llm:gemini-3.6-flash` | ≈4 cr<!-- credits: reduce:pick-best-llm:gemini-3.6-flash --> |
+| Claude Sonnet 5.5 (default) | `reduce:pick-best-llm:claude-sonnet-5.5` | ≈6 cr<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> |
+| Claude Opus 5.5 | `reduce:pick-best-llm:claude-opus-5.5` | ≈11 cr<!-- credits: reduce:pick-best-llm:claude-opus-5.5 --> |
 
 More or longer candidates cost more. A judge answer the provider billed is charged even when it is cut off (the node then falls back to the first candidate).
 
 **Worked example:**
 - Upstream: List of 5 prompts → Generate Image (Z-Image) → Choose Best(pick-best-llm, criteria="brightest colors", inputKind="image-url", default judge)
-- Cost: 5 image generations + the AI judge = 5 × 3<!-- credits: z-image --> + ~6<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> = ~21 cr<!-- credits: 5*z-image + reduce:pick-best-llm:claude-sonnet-5.5 --> estimated; the judge is then charged what its call used.
+- Cost: 5 image generations + the AI judge = 5 × 3<!-- credits: z-image --> + ≈6<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> = ≈21 cr<!-- credits: 5*z-image + reduce:pick-best-llm:claude-sonnet-5.5 --> estimated; the judge is then charged what its call used.
 
 ### Join into one text, First that has content, Count them, Most common answer, Merge JSON objects
 

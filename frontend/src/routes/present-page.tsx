@@ -40,7 +40,7 @@ export default function PresentPage() {
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
           <button
             onClick={() => navigate("/projects")}
-            className="text-[#ff0073] hover:underline"
+            className="text-primary-ink hover:underline"
           >
             {t("present.goToDashboard")}
           </button>

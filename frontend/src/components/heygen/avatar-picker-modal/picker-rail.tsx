@@ -98,7 +98,7 @@ function Libraries({ libraries, active, onPick }: { libraries: readonly LibraryE
             onClick={() => onPick(lib.id)}
             {...roving(i)}
           >
-            <Icon className={cn("size-3.5 shrink-0", on ? "text-[#ff0073]" : "text-muted-foreground")} aria-hidden />
+            <Icon className={cn("size-3.5 shrink-0", on ? "text-primary-ink" : "text-muted-foreground")} aria-hidden />
             <span className="flex-1 whitespace-nowrap">{lib.label}</span>
             <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{formatNumber(lib.count)}</span>
           </button>

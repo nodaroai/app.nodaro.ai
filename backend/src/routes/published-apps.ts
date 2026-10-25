@@ -7,7 +7,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
-import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { replyIfListingRefused } from "../lib/listing-refusal.js"
 import { estimateFlagColumn, listingEstimateFlag, selectWithEstimateFlag, writeWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import { usecaseViewerForEveryone } from "../lib/use-case/inner-availability.js"
 import { invalidateAppCache } from "./app-runner.js"
@@ -110,7 +110,7 @@ function toCamelCase(row: Record<string, unknown>) {
     finalPerItemCredits: storedListingFinalPerItem(row as StoredAppListing),
     // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
     ...storedListingRange(row as StoredAppListingMax),
-    // The listed price holds a metered LLM estimate (`~N`, only while metered pricing is on).
+    // The listed price holds a metered LLM estimate (`≈N`, only while metered pricing is on).
     ...listingEstimateFlag(row),
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
@@ -146,7 +146,7 @@ function toBrowseCard(row: Record<string, unknown>) {
     perItemCredits: perMinuteOf(row, "per_item_credits"),
     // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
     ...storedListingRange(row as StoredAppListingMax),
-    // The listed price holds a metered LLM estimate: the card shows it `~N` (only while metered pricing is on).
+    // The listed price holds a metered LLM estimate: the card shows it `≈N` (only while metered pricing is on).
     ...listingEstimateFlag(row),
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -690,8 +690,9 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
         ...usecaseViewerForEveryone(snapshotNodes as EstimateNode[]),
       })
     } catch (err) {
-      // A metered LLM model with no price (R49): nothing is listed at a price its run would refuse.
-      if (await replyIfLlmUnpriced(reply, err)) return reply
+      // A metered LLM model with no price (R49), or a UGC video whose estimate failed for the saved
+      // settings or a choice: nothing is listed at a price its run would refuse, or as free.
+      if (await replyIfListingRefused(reply, err)) return reply
       throw err
     }
     // No ceiling computed (none to compute): "up to" is the "from".
@@ -844,7 +845,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           snapshot_settings: published.settings || {},
           base_estimated_credits: baseEstimatedCredits,
           estimated_credits: estimatedCredits,
-          // The listed price holds a metered LLM estimate (shown `~N`, Task 12 / R47).
+          // The listed price holds a metered LLM estimate (shown `≈N`, Task 12 / R47).
           ...estimateFlagColumn(listingSplit),
           base_per_minute_credits: basePerMinuteCredits,
           per_minute_credits: perMinuteCredits,
@@ -945,7 +946,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       isEmbeddable: app.is_embeddable,
       allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
-      // `true` when the listed price holds a metered LLM estimate (shown `~N`), while metered pricing is on.
+      // `true` when the listed price holds a metered LLM estimate (shown `≈N`), while metered pricing is on.
       ...listingEstimateFlag(app),
       baseEstimatedCredits: app.base_estimated_credits ?? 0,
       // The Render finals' part of the listed price, which the creator's fee never marks up.

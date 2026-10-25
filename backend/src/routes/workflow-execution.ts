@@ -1051,7 +1051,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           error: {
             code: "insufficient_credits",
             message: credits.message ?? "Insufficient credits",
-            required: credits.estimatedCredits,
+            // The figure the check compared: what the run holds while it renders.
+            required: credits.holdCredits,
             // Withheld when it is not the caller's to see (a deployment payer).
             ...(credits.available !== null ? { available: credits.available } : {}),
           },

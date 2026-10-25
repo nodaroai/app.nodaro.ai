@@ -31,7 +31,7 @@ export function SubscriptionRequiredModal({ open, onClose }: SubscriptionRequire
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-[#ff0073]" />
+            <Sparkles className="w-5 h-5 text-primary-ink" />
             {t("credits.subscriptionRequired")}
           </DialogTitle>
           <DialogDescription>

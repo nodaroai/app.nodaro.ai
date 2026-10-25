@@ -1,0 +1,171 @@
+/**
+ * A trend's stored face mask (lib/trends/face-mask.ts): what ties it to what
+ * it was made from, when it is out of date, and what a run sends of it. The
+ * routes that make, approve and clear one are pinned in
+ * routes/__tests__/admin-trends.test.ts.
+ */
+import { describe, expect, it } from "vitest"
+import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
+import { withResolvedZone } from "../../../../lib/cast-swap-face-masking.js"
+import type { EngineEnvironment } from "../../engine-environments.js"
+import {
+  faceMaskSettingsKey,
+  faceMaskSettingsKeyOf,
+  faceMaskState,
+  faceMaskStats,
+  pendingFaceMaskJob,
+  storedFaceMaskFor,
+} from "../face-mask.js"
+import { publishBlockers } from "../publish-check.js"
+import type { TrendFaceMask, TrendVersionData } from "../types.js"
+
+const SRC = "https://cdn.example/trends/t1/src.mp4"
+const MASKING = { mode: "always" as const, threshold: 0.4 }
+
+function data(over: Partial<TrendVersionData> = {}): TrendVersionData {
+  return {
+    name: { en: "Dance" },
+    // A complete source: publishing also needs its display copy (source_display_missing).
+    source: {
+      videoUrl: SRC,
+      durationSec: 12,
+      display: { videoUrl: "https://cdn.example/display.mp4", posterUrl: "https://cdn.example/poster.png", width: 240, height: 320, durationSec: 12 },
+    },
+    previewStart: 0,
+    slots: [{ key: "lead", kind: "person", label: { en: "Lead" }, required: true, roleName: "the woman" }],
+    references: [],
+    examples: [{ videoUrl: "https://cdn.example/ex.mp4", width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots: { lead: ["https://cdn.example/l.png"] } }],
+    faceMasking: MASKING,
+    ...over,
+  }
+}
+
+function mask(over: Partial<TrendFaceMask> = {}): TrendFaceMask {
+  return {
+    url: "https://cdn.example/trends/t1/mask.mp4",
+    frames: 360,
+    recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" },
+    settingsKey: faceMaskSettingsKey(data())!,
+    jobId: "job-1",
+    stats: { shots: 2, heldFrames: 0, coverage: 0.02, droppedRegions: 0 },
+    approvedAt: "2026-10-25T10:00:00.000Z",
+    approvedBy: "admin",
+    ...over,
+  }
+}
+
+const ALL = {
+  roleKinds: ["person"] as Array<"person">,
+  fixedReferences: true,
+  fullQuality: true,
+  resolutions: ["480p", "720p", "1080p"] as Array<"480p" | "720p" | "1080p">,
+  trendRun: true,
+  faceMasking: true,
+  storedFaceMask: true,
+  faceMaskRecipe: "1",
+}
+const env = (name: string, castSwap: Record<string, unknown> = ALL): EngineEnvironment => ({
+  env: name,
+  pluginBuildId: "b",
+  supports: { castSwap: castSwap as never },
+  updatedAt: "2026-10-25T00:00:00Z",
+})
+const ENVS = [env("staging"), env("production")]
+const REQUIRED = ["staging", "production"]
+
+describe("faceMaskSettingsKey", () => {
+  it("is the same for the setting as stored and as a run sends it (zone resolved), whatever the key order", () => {
+    const key = faceMaskSettingsKeyOf(SRC, MASKING)
+    expect(faceMaskSettingsKeyOf(SRC, withResolvedZone(MASKING))).toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { threshold: 0.4, mode: "always" })).toBe(key)
+    expect(faceMaskSettingsKey(data())).toBe(key)
+  })
+
+  it("changes with the source clip and with any setting that changes the mask", () => {
+    const key = faceMaskSettingsKeyOf(SRC, MASKING)
+    expect(faceMaskSettingsKeyOf("https://cdn.example/other.mp4", MASKING)).not.toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, threshold: 0.5 })).not.toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, fill: "depth" })).not.toBe(key)
+    // No margins is not the default margins.
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, zone: null })).not.toBe(key)
+  })
+
+  it("leaves the mode out: always and auto mask the same clip", () => {
+    const key = faceMaskSettingsKeyOf(SRC, MASKING)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, mode: "auto" })).toBe(key)
+    expect(key.startsWith("v2:")).toBe(true)
+  })
+
+  it("is null with no source clip or no masking", () => {
+    expect(faceMaskSettingsKey(data({ source: null }))).toBeNull()
+    expect(faceMaskSettingsKey(data({ faceMasking: { mode: "off" } }))).toBeNull()
+    expect(faceMaskSettingsKey(data({ faceMasking: undefined }))).toBeNull()
+  })
+})
+
+describe("faceMaskState", () => {
+  it("none, approved, and out of date for each reason", () => {
+    expect(faceMaskState(data(), ENVS, REQUIRED)).toEqual({ status: "none", reasons: [] })
+    expect(faceMaskState(data({ faceMask: mask() }), ENVS, REQUIRED)).toEqual({ status: "approved", reasons: [] })
+    expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, threshold: 0.6 } }), ENVS, REQUIRED).reasons).toEqual([{ why: "settings" }])
+    expect(faceMaskState(data({ faceMask: mask(), source: { videoUrl: "https://cdn.example/new.mp4", durationSec: 10 } }), ENVS, REQUIRED).reasons).toEqual([
+      { why: "settings" },
+    ])
+    expect(faceMaskState(data({ faceMask: mask({ recipe: { core: null, plugin: "1" } }) }), ENVS, REQUIRED).reasons).toEqual([{ why: "core_recipe" }])
+    expect(faceMaskState(data({ faceMask: mask() }), [env("staging"), env("production", { ...ALL, faceMaskRecipe: "2" })], REQUIRED)).toEqual({
+      status: "out_of_date",
+      reasons: [{ why: "plugin_recipe", env: "production" }],
+    })
+  })
+
+  it("leaves the engine recipes unchecked when the environments are unknown, or an environment cannot hold a stored mask", () => {
+    expect(faceMaskState(data({ faceMask: mask() }), null, REQUIRED).status).toBe("approved")
+    const states = faceMaskState(data({ faceMask: mask() }), [env("production", { ...ALL, storedFaceMask: false, faceMaskRecipe: "9" })], REQUIRED)
+    expect(states.status).toBe("approved")
+  })
+})
+
+describe("storedFaceMaskFor", () => {
+  it("sends the mask only while it was made from these settings", () => {
+    expect(storedFaceMaskFor(data({ faceMask: mask() }))).toEqual({ url: mask().url, frames: 360 })
+    expect(storedFaceMaskFor(data({ faceMask: mask(), faceMasking: { ...MASKING, fill: "depth" } }))).toBeUndefined()
+    expect(storedFaceMaskFor(data({ faceMask: mask(), faceMasking: { mode: "off" } }))).toBeUndefined()
+    expect(storedFaceMaskFor(data())).toBeUndefined()
+  })
+})
+
+describe("pendingFaceMaskJob", () => {
+  it("is the job being made, current while the draft's settings are the ones it was started for", () => {
+    const job = { jobId: "j", settingsKey: faceMaskSettingsKey(data())!, startedAt: "2026-10-25T09:00:00.000Z" }
+    expect(pendingFaceMaskJob(data())).toBeNull()
+    expect(pendingFaceMaskJob(data({ faceMaskJob: job }))).toEqual({ jobId: "j", startedAt: job.startedAt, current: true })
+    expect(pendingFaceMaskJob(data({ faceMaskJob: job, faceMasking: { ...MASKING, mode: "auto" } }))?.current).toBe(true)
+    expect(pendingFaceMaskJob(data({ faceMaskJob: job, faceMasking: { ...MASKING, threshold: 0.6 } }))?.current).toBe(false)
+    expect(pendingFaceMaskJob(data({ faceMaskJob: job, faceMasking: { mode: "off" } }))?.current).toBe(false)
+  })
+})
+
+describe("faceMaskStats", () => {
+  it("is a number for each stat, 0 where the engine left one out or sent nonsense", () => {
+    expect(faceMaskStats({ shots: 3, heldFrames: 4, coverage: 0.5, droppedRegions: 2 })).toEqual({ shots: 3, heldFrames: 4, coverage: 0.5, droppedRegions: 2 })
+    expect(faceMaskStats({ shots: "3", heldFrames: -1 })).toEqual({ shots: 0, heldFrames: 0, coverage: 0, droppedRegions: 0 })
+    expect(faceMaskStats(undefined)).toEqual({ shots: 0, heldFrames: 0, coverage: 0, droppedRegions: 0 })
+  })
+})
+
+describe("publishBlockers — a masked trend", () => {
+  it("needs an approved, up-to-date mask and engines that take one", () => {
+    expect(publishBlockers(data({ faceMask: mask() }), ENVS, REQUIRED)).toEqual([])
+    expect(publishBlockers(data(), ENVS, REQUIRED)).toEqual([{ code: "face_mask_missing", message: expect.any(String) }])
+    expect(publishBlockers(data({ faceMask: mask({ recipe: { core: "old", plugin: "1" } }) }), ENVS, REQUIRED)).toEqual([
+      { code: "face_mask_out_of_date", why: "core_recipe", message: expect.any(String) },
+    ])
+    expect(publishBlockers(data({ faceMask: mask() }), [env("staging"), env("production", { ...ALL, storedFaceMask: undefined })], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: "storedFaceMask" },
+    ])
+  })
+
+  it("needs no mask when the trend does not mask", () => {
+    expect(publishBlockers(data({ faceMasking: { mode: "off" } }), ENVS, REQUIRED)).toEqual([])
+  })
+})

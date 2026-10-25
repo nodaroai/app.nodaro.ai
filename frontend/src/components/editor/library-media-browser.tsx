@@ -507,7 +507,7 @@ const AssetCard = memo(function AssetCard({
 
         {/* Shared library badge */}
         {asset.isLibraryItem && (
-          <span className="absolute top-1.5 end-1.5 px-1.5 py-0.5 text-[11px] font-medium rounded-full bg-[#ff0073]/20 text-[#ff0073] flex items-center gap-0.5">
+          <span className="absolute top-1.5 end-1.5 px-1.5 py-0.5 text-[11px] font-medium rounded-full bg-[#ff0073]/20 text-primary-ink flex items-center gap-0.5">
             <Globe className="w-3 h-3" />
             {t("assetlib.sharedBadge")}
           </span>
@@ -618,7 +618,7 @@ const AssetCard = memo(function AssetCard({
                   e.stopPropagation()
                   onPromote(asset)
                 }}
-                className="w-full px-2 py-1 text-[11px] font-medium rounded bg-[#ff0073]/10 hover:bg-[#ff0073]/20 text-[#ff0073] flex items-center justify-center gap-1 transition-colors"
+                className="w-full px-2 py-1 text-[11px] font-medium rounded bg-[#ff0073]/10 hover:bg-[#ff0073]/20 text-primary-ink flex items-center justify-center gap-1 transition-colors"
               >
                 <Globe className="w-3 h-3" />
                 {t("assetlib.addToSharedLibrary")}

@@ -79,7 +79,7 @@ export function toFlowResponse(row: FlowRow) {
     previewMediaType: row.preview_media_type,
     complexity: row.complexity ?? "simple",
     estimatedCredits: row.estimated_credits ?? 0,
-    // The listed price holds a metered LLM estimate (`~N`, only while metered pricing is on).
+    // The listed price holds a metered LLM estimate (`≈N`, only while metered pricing is on).
     ...listingEstimateFlag(row as unknown as Record<string, unknown>),
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
     estimatedPerMinuteCredits: perMinuteOf(row as unknown as Record<string, unknown>, "estimated_per_minute_credits"),

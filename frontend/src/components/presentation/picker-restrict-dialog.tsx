@@ -233,7 +233,7 @@ function RestrictChecklistDialog({
       <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col" dir={dir}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Filter className="size-4 text-[#ff0073]" />
+            <Filter className="size-4 text-primary-ink" />
             {t("present.restrictLabel", { label: pickerLabel })}
           </DialogTitle>
         </DialogHeader>

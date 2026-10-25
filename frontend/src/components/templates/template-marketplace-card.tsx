@@ -35,7 +35,7 @@ export function TemplateMeta({
   return (
     <span className={cn("flex items-center gap-1 text-[11px] text-[var(--home-muted)]", className)}>
       <CreditGate>
-        <CreditCost credits={template.estimatedCredits} perMinute={template.estimatedPerMinuteCredits} upTo={{ credits: template.maxEstimatedCredits, perMinute: template.maxEstimatedPerMinuteCredits }} prefix="~" suffix={creditUnitLabel(t("credits.unit.other"))} />
+        <CreditCost credits={template.estimatedCredits} perMinute={template.estimatedPerMinuteCredits} upTo={{ credits: template.maxEstimatedCredits, perMinute: template.maxEstimatedPerMinuteCredits }} prefix="≈" suffix={creditUnitLabel(t("credits.unit.other"))} />
         <span aria-hidden>·</span>
       </CreditGate>
       <span>{t("templates.nodes", { n: template.nodeCount })}</span>

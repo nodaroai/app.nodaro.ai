@@ -46,6 +46,19 @@ vi.mock("@/ee/billing/credits.js", async (orig) => {
         runNodeIds,
         ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
       }),
+    // The same figures, the hold the price (no UGC part here).
+    estimateRunSetFigures: async (
+      nodes: Parameters<typeof actual.estimateRunSetFigures>[0],
+      edges: Parameters<typeof actual.estimateRunSetFigures>[1],
+      runNodeIds: ReadonlySet<string>,
+      pricedElsewhereNodeIds?: ReadonlySet<string>,
+    ) => {
+      const credits = await actual.CreditsService.estimateWorkflowBaseCredits(nodes, edges, {
+        runNodeIds,
+        ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
+      })
+      return { credits, hold: credits }
+    },
     checkRunSetCredits: async (_user: string, required: number) => ({ sufficient: db.balance >= required, required, available: db.balance }),
     // Its static methods are not own enumerable properties: inherit them.
     CreditsService: class extends actual.CreditsService {

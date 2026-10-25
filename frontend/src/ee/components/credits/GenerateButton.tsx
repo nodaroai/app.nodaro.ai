@@ -85,7 +85,7 @@ export function GenerateButton({
   // shown converts.
   const shownCost = creditUnits(totalCost)
   // A metered LLM node priced at the server's estimate for its model (the id
-  // the server marked `estimates`): `~N` (spec §8.5). An override is a figure
+  // the server marked `estimates`): `≈N` (spec §8.5). An override is a figure
   // the caller computed, never this id's price.
   const estimate = creditOverride === undefined && isModelEstimate(modelIdentifier)
 

@@ -455,13 +455,16 @@ export class MediaResource {
    * `height`, `frames`, `coverage` (the fraction of pixels selected, rounded
    * to 4 decimals) and `kept` (any region left on any frame: false only when
    * the size / zone filters left an empty mask — read it rather than
-   * `coverage`, which a few pixels round to 0). Feed the mask to
+   * `coverage`, which a few pixels round to 0), and `recipe` (the version of
+   * the masking algorithm that made it, `VIDEO_MASK_RECIPE`: it changes
+   * whenever the same clip and settings would give a different mask). Feed the mask to
    * {@link MediaResource.maskComposite}.
    *
    * `holdLastMask: true` keeps the last mask on frames where the subject is
    * lost (a mask covering under 0.002 % of the frame, e.g. a face behind a
    * hand): each such frame after the first detection repeats the most recent
-   * non-empty one; the output then also carries `heldFrames`.
+   * non-empty one, for at most 1 s of frames (`VIDEO_MASK_LIMITS.HOLD_MAX_SEC`;
+   * longer gaps stay empty after that); the output then also carries `heldFrames`.
    * `minSubjectHeightPct` (0–100, default 0 = off) drops every connected
    * region whose bounding box is shorter than that % of the frame height
    * (extras' small faces behind the main subject); it runs before
@@ -477,7 +480,15 @@ export class MediaResource {
    * detected again after every cut, `holdLastMask` never crosses a cut, and
    * each shot's mask is fitted to that shot's exact frame count; on a clip
    * with no cut it gives the same mask, fitted to the clip's exact frame
-   * count. The output carries `shots` (1 when off).
+   * count. The output carries `shots` (1 when off). `redetectEverySec` (0 =
+   * off, the default, or 1–10) also detects the subject again every that
+   * many seconds — the clip (each shot, with `perShot`) is sent to the model
+   * in pieces of at most that length, a last piece under 8 frames joining the
+   * one before — so someone who walks in or turns to the camera mid-shot is
+   * masked from the next boundary on. These boundaries are not cuts:
+   * `holdLastMask` holds across them. Each piece is one more model request
+   * (three run at a time), so it is slower; the price does not change. The
+   * output's `chunks` counts the requests.
    */
   videoMask(input: VideoMaskRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-mask", { body: input })

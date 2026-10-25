@@ -16,6 +16,7 @@ export {
   type TrendCard,
   type TrendDetailSlot,
   type TrendExample,
+  type TrendOriginal,
   type TrendDetail,
   type TrendRunSlot,
   type TrendRunRequest,

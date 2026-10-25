@@ -205,13 +205,18 @@ function cleanText(t: TrendLocalizedText): TrendLocalizedText {
   return out
 }
 
+/** The source as saved; its display copy (what users see) is kept field by field, as the server's strict schema takes it. */
 function cleanSource(s: AdminTrendData["source"]): AdminTrendData["source"] {
   if (!s) return null
+  const d = s.display
   return {
     videoUrl: s.videoUrl,
     durationSec: s.durationSec,
     ...(s.width !== undefined ? { width: s.width } : {}),
     ...(s.height !== undefined ? { height: s.height } : {}),
+    ...(d
+      ? { display: { videoUrl: d.videoUrl, posterUrl: d.posterUrl, width: d.width, height: d.height, durationSec: d.durationSec } }
+      : {}),
   }
 }
 
@@ -226,6 +231,7 @@ function cleanSlot(s: FormSlot): AdminTrendSlot {
     roleName: s.roleName.trim(),
   }
   if (hasAnyText(s.hint)) out.hint = cleanText(s.hint!)
+  if (s.hintImageUrl) out.hintImageUrl = s.hintImageUrl
   const defaults: Partial<Record<TrendChipKey, TrendChoice>> = {}
   for (const chip of CHIPS_BY_KIND[s.kind]) {
     const v = s.defaults?.[chip]
@@ -409,6 +415,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   location: "location slots",
   fixedReferences: "fixed references",
   faceMasking: "face masking",
+  storedFaceMask: "stored face masks",
   trendPrePrompt: "pre prompts",
   "kling-4": "Kling 4",
   fullQuality: "Full Quality",
@@ -423,12 +430,16 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return "No source clip yet."
     case "no_required_slot":
       return "At least one slot must be required."
-    case "no_example":
-      return "Add at least one example."
+    case "source_display_missing":
+      return "The source clip has no display copy (the copy users see). Upload the clip again to make one."
     case "example_slots_incomplete":
       return `Example ${r.example ?? "?"} has no pictures for: ${(r.slots ?? []).join(", ")}.`
     case "invalid_data":
       return `The draft is not valid: ${r.message ?? "unknown problem"}.`
+    case "face_mask_missing":
+      return "This trend masks faces: make its face mask and approve it (6. Face masking)."
+    case "face_mask_out_of_date":
+      return `The face mask is out of date: ${describeFaceMaskOutOfDate({ why: r.why ?? "settings", env: r.env ?? "?" })}`
     case "engine_unknown":
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {
@@ -437,6 +448,20 @@ export function describeBlocker(r: TrendPublishBlocker): string {
     }
     default:
       return r.message ?? r.code
+  }
+}
+
+/** Why a stored face mask is out of date, as a sentence. */
+export function describeFaceMaskOutOfDate(r: { why: string; env?: string }): string {
+  switch (r.why) {
+    case "settings":
+      return "the source clip or the face masking settings changed since it was made. Make it again."
+    case "core_recipe":
+      return "Video Mask changed how it masks since it was made. Make it again."
+    case "plugin_recipe":
+      return `${r.env ?? "?"}'s Cast Swap engine masks faces differently since it was made. Make it again.`
+    default:
+      return "make it again."
   }
 }
 

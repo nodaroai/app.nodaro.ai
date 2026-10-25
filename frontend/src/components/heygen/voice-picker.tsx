@@ -132,7 +132,7 @@ const VoiceRow = memo(function VoiceRow({
           "shrink-0 flex items-center justify-center size-6 rounded-full border transition-colors",
           isPlaying
             ? "border-[#ff0073] bg-cta text-white"
-            : "border-gray-300 dark:border-[#3D3D3D] text-muted-foreground hover:border-[#ff0073] hover:text-[#ff0073]",
+            : "border-gray-300 dark:border-[#3D3D3D] text-muted-foreground hover:border-[#ff0073] hover:text-primary-ink",
           !voice.previewAudio && "opacity-30 cursor-not-allowed",
         )}
       >
@@ -149,7 +149,7 @@ const VoiceRow = memo(function VoiceRow({
           <span
             className={cn(
               "text-xs font-medium truncate",
-              selected ? "text-[#ff0073]" : "text-foreground",
+              selected ? "text-primary-ink" : "text-foreground",
             )}
           >
             {voice.name}

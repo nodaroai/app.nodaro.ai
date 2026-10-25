@@ -141,7 +141,7 @@ function ContentRecipeNodeComponent({ id, data, selected }: NodeProps) {
                 {recipe.topic && <div dir="auto" className="font-medium leading-snug">{recipe.topic}</div>}
                 <div className="flex flex-wrap gap-1">
                   {recipe.format?.label && (
-                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px]">
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary-ink text-[11px]">
                       {recipe.format.label}
                       {confidence !== undefined && <span className="tabular-nums opacity-70"> · {confidence}%</span>}
                     </span>

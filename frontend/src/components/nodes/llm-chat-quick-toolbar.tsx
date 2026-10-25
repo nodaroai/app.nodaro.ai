@@ -74,7 +74,7 @@ interface LlmChatQuickToolbarProps {
   readonly nodeId: string
   readonly data: LLMChatData
   readonly credits: number | undefined
-  /** `credits` is an estimate (metered pricing): the Run button shows `~`. */
+  /** `credits` is an estimate (metered pricing): the Run button shows `≈`. */
   readonly creditsEstimate?: boolean
   readonly isRunning: boolean
   /** Fires whenever a select / popover opens or closes, so the parent can

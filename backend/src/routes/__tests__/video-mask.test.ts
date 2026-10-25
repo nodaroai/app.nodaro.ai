@@ -150,6 +150,25 @@ describe("POST /v1/video-mask", () => {
     for (const v of ["yes", 1, null]) expect((await post({ ...body, perShot: v })).statusCode).toBe(400)
   })
 
+  it("redetectEverySec defaults to 0 (off), passes 0 and 1–10 through (onto the job's input too), refuses anything else", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
+    expect((await post(body)).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ redetectEverySec: 0 }))
+    for (const v of [0, 1, 2.5, 10]) {
+      expect((await post({ ...body, redetectEverySec: v })).statusCode).toBe(200)
+      expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ redetectEverySec: v }))
+    }
+    expect((await post({ ...body, redetectEverySec: 1, perShot: false })).statusCode).toBe(200)
+    expect(inserted?.input_data).toMatchObject({ redetectEverySec: 1, perShot: false })
+    // Between 0 and the minimum, past the maximum, negative, or not a number: a 400 naming the field.
+    for (const v of [0.5, 10.5, 60, -1, "1", null]) {
+      const res = await post({ ...body, redetectEverySec: v })
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toContain("redetectEverySec")
+    }
+  })
+
   it("minSubjectHeightPct defaults to 0, passes 0–100 through, and refuses out of range", async () => {
     probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
     const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }

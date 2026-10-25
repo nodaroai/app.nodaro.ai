@@ -50,7 +50,12 @@ vi.mock("@/lib/job-scratch.js", () => ({
   uploadJobScratchFile: mocks.uploadJobScratchFile,
   uploadJobScratchBuffer: mocks.uploadJobScratchBuffer,
 }))
-vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ createWorkDir: mocks.createWorkDir, cleanupWorkDir: mocks.cleanupWorkDir }))
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  // parseFrameRate is pure (the hold limit reads the clip's rate); the work dir is the test's.
+  parseFrameRate: (await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()).parseFrameRate,
+  createWorkDir: mocks.createWorkDir,
+  cleanupWorkDir: mocks.cleanupWorkDir,
+}))
 vi.mock("@/workers/shared.js", () => ({
   markJobCompleted: mocks.markJobCompleted,
   commitJobCredits: mocks.commitJobCredits,
@@ -63,6 +68,7 @@ vi.mock("@/workers/shared.js", () => ({
 
 import { gzipSync } from "node:zlib"
 import { videoMaskHandlers } from "../video-mask.js"
+import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 
 const ctx = { jobId: "00000000-0000-4000-8000-0000000000aa", jobUserId: "user1", usageLogId: "ul1", shouldWatermark: true }
 const job = (data: Record<string, unknown>) => ({ data: { jobId: ctx.jobId, ...data }, updateProgress: vi.fn() }) as never
@@ -87,7 +93,7 @@ describe("video-mask handler — one request", () => {
     expect(mocks.uploadFileToR2).toHaveBeenCalledTimes(1)
     expect(mocks.uploadFileToR2).toHaveBeenCalledWith("/tmp/vm/mask.mp4", ctx.jobId, "video", "user1")
     expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, {
-      output_data: { videoUrl: `https://r2/videos/${ctx.jobId}.mp4`, thumbnailUrl: "https://r2/thumb.webp", width: 640, height: 360, frames: 90, chunks: 1, shots: 1, coverage: 0.25, kept: true },
+      output_data: { videoUrl: `https://r2/videos/${ctx.jobId}.mp4`, thumbnailUrl: "https://r2/thumb.webp", width: 640, height: 360, frames: 90, chunks: 1, shots: 1, coverage: 0.25, kept: true, recipe: VIDEO_MASK_RECIPE },
       provider: "sam-3.1",
       provider_cost: 0.03,
     })
@@ -139,6 +145,16 @@ describe("video-mask handler — one request", () => {
     // What a retry reuses is the model's answer, not the held one.
     const cached = JSON.parse((await import("node:zlib")).gunzipSync((mocks.uploadJobScratchBuffer.mock.calls[0] as unknown as [Buffer])[0]).toString()) as { rle: string[] }
     expect(cached.rle).toEqual(["", "1 900", "", "1 800", ""])
+  })
+
+  it("holdLastMask on: a mask is held for at most HOLD_MAX_SEC of frames at the clip's rate, then the frames stay empty", async () => {
+    // 10 fps: one second is 10 frames. One detection, then 14 empty frames.
+    const tenFps = { ...geometry, frameRate: "10/1", durationSec: 1.5 }
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 15, geometry: tenFps })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["1 900", ...Array(14).fill("")], requestId: "r", cost: 0.03 })
+    await run({ holdLastMask: true })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["1 900", ...Array(10).fill("1 900"), ...Array(4).fill("")], tenFps, "/tmp/vm/mask.mp4")
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, expect.objectContaining({ output_data: expect.objectContaining({ heldFrames: 10 }) }))
   })
 
   it("minSubjectHeightPct 0 (the default): no size filter, no droppedRegions", async () => {
@@ -477,6 +493,147 @@ describe("video-mask handler — perShot", () => {
       await run({ perShot: true })
       expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
       expect(mocks.runSam3Video).toHaveBeenCalledWith(expect.objectContaining({ frameCount: 400 }))
+    })
+  })
+})
+
+describe("video-mask handler — redetectEverySec", () => {
+  const prepared = { localPath: "/tmp/vm/source.mp4", frameCount: 97, geometry }
+  const prefix = `tmp/provider-input/${ctx.jobId}/`
+  const outputOf = () => (mocks.markJobCompleted.mock.calls[0] as unknown as [string, { output_data: Record<string, unknown> }])[1].output_data
+  const framesSent = () => mocks.runSam3Video.mock.calls.map((c) => (c[0] as { frameCount: number }).frameCount)
+  const drawn = () => (mocks.renderMaskVideo.mock.calls[0] as unknown as [string[]])[0]
+
+  it("off (0, absent or junk): the plan of today — one SAM call on the clip as it is", async () => {
+    for (const redetectEverySec of [undefined, 0, -3, "2"]) {
+      vi.clearAllMocks()
+      mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+      mocks.runSam3Video.mockImplementation(async (p: { frameCount: number }) => answer(p.frameCount))
+      await run(redetectEverySec === undefined ? {} : { redetectEverySec })
+      expect(mocks.splitMaskSource).not.toHaveBeenCalled()
+      expect(framesSent()).toEqual([97])
+      expect(outputOf()).toMatchObject({ chunks: 1, shots: 1 })
+    }
+  })
+
+  it("on without perShot: no cut scan; the clip is sent in pieces of that many seconds from its start (a tail under 8 frames joins the last)", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+    await run({ redetectEverySec: 1 })
+    expect(mocks.detectCutFrames).not.toHaveBeenCalled()
+    // 97 frames at 30 fps: 30, 30, then 30 + the 7-frame tail.
+    expect(mocks.splitMaskSource).toHaveBeenCalledWith("/tmp/vm/source.mp4", "/tmp/vm", geometry, [
+      { index: 0, startFrame: 0, frames: 30 }, { index: 1, startFrame: 30, frames: 30 }, { index: 2, startFrame: 60, frames: 37 },
+    ])
+    expect(framesSent()).toEqual([30, 30, 37])
+    expect(drawn()).toHaveLength(97)
+    expect(outputOf()).toMatchObject({ frames: 97, chunks: 3, shots: 1 })
+  })
+
+  it("reads the piece length off the clip's own frame rate (24000/1001 at 2 s = 48 frames)", async () => {
+    const g = { ...geometry, frameRate: "24000/1001" }
+    mocks.prepareVideoMaskSource.mockResolvedValue({ ...prepared, geometry: g })
+    await run({ redetectEverySec: 2 })
+    expect(framesSent()).toEqual([48, 49])
+  })
+
+  it("a held mask keeps going across a re-detection boundary (not a cut)", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+    // Chunk 0 (frames 0–29): the face, lost on its last 5 frames; chunk 1 (30–59) opens on 10 empty frames.
+    mocks.runSam3Video.mockImplementation(async (p: { frameCount: number; videoUrl: string }) => ({
+      rle: p.videoUrl.endsWith("c0.mp4") ? [...Array(25).fill("1 900"), ...Array(5).fill("")]
+        : p.videoUrl.endsWith("c1.mp4") ? [...Array(10).fill(""), ...Array(20).fill("1 800")]
+          : Array(p.frameCount).fill("1 800"),
+      requestId: "r", cost: 0.03,
+    }))
+    await run({ redetectEverySec: 1, holdLastMask: true })
+    // 15 empty frames (25–39) at 30 fps — inside HOLD_MAX_SEC — all held from frame 24, across the boundary at 30.
+    expect(drawn().slice(25, 40)).toEqual(Array(15).fill("1 900"))
+    expect(outputOf()).toMatchObject({ heldFrames: 15, shots: 1 })
+  })
+
+  it("with perShot: every cut starts a chunk AND each shot is cut every N frames; the hold resets at the cut only", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+    mocks.detectCutFrames.mockResolvedValue([50])
+    // Shot 1 (0–49) = 30 + 20, shot 2 (50–96) = 30 + 17.
+    const byChunk: Record<string, string[]> = {
+      c0: [...Array(25).fill("1 900"), ...Array(5).fill("")],
+      c1: Array(20).fill(""),
+      c2: Array(30).fill(""),
+      c3: Array(17).fill("1 800"),
+    }
+    mocks.runSam3Video.mockImplementation(async (p: { videoUrl: string }) => ({
+      rle: [...byChunk[p.videoUrl.match(/-(c\d)\.mp4$/)![1]!]!], requestId: "r", cost: 0.03,
+    }))
+    await run({ perShot: true, redetectEverySec: 1, holdLastMask: true })
+    expect(mocks.splitMaskSource).toHaveBeenCalledWith("/tmp/vm/source.mp4", "/tmp/vm", geometry, [
+      { index: 0, startFrame: 0, frames: 30 }, { index: 1, startFrame: 30, frames: 20 },
+      { index: 2, startFrame: 50, frames: 30 }, { index: 3, startFrame: 80, frames: 17 },
+    ])
+    const out = drawn()
+    // Held over 25–49 (across the re-detection boundary at 30)…
+    expect(out.slice(25, 50)).toEqual(Array(25).fill("1 900"))
+    // …and never across the cut at 50.
+    expect(out.slice(50, 80)).toEqual(Array(30).fill(""))
+    expect(out.slice(80)).toEqual(Array(17).fill("1 800"))
+    expect(outputOf()).toMatchObject({ chunks: 4, shots: 2, heldFrames: 25 })
+  })
+
+  it("each re-detection chunk is fitted to its planned frames, so a short answer never shifts the next chunk", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+    mocks.runSam3Video.mockImplementation(async (p: { frameCount: number; videoUrl: string }) => {
+      const c = p.videoUrl.match(/-(c\d)\.mp4$/)![1]!
+      // Chunk 0 comes back two frames short (28 of 30, inside the tolerance).
+      return { rle: Array.from({ length: c === "c0" ? 28 : p.frameCount }, (_, i) => `${c}-${i}`), requestId: "r", cost: 0.03 }
+    })
+    await run({ redetectEverySec: 1 })
+    const out = drawn()
+    expect(out).toHaveLength(97)
+    expect(out.slice(27, 30)).toEqual(["c0-27", "c0-27", "c0-27"])
+    expect(out[30]).toBe("c1-0")
+    expect(out[60]).toBe("c2-0")
+  })
+
+  describe("the retry cache keys on redetectEverySec", () => {
+    const body = (index: number, startFrame: number, frames: number, over: Record<string, unknown> = {}) =>
+      gzipSync(JSON.stringify({ model: "sam-3.1", geometry, chunk: { index, startFrame, frames }, rle: Array(frames).fill("1 1"), cost: 0.1, ...over }))
+    // The 1 s plan of 97 frames at 30 fps: 30 / 30 / 37.
+    const kept = (over: Record<string, unknown>) => {
+      mocks.listObjectsByPrefixWithMeta.mockResolvedValue([0, 1, 2].map((i) => ({ key: `${prefix}sam3-rle-c${i}-k.gz` })))
+      mocks.readR2ObjectBuffer.mockImplementation(async (key: string) =>
+        key.includes("-c0-") ? body(0, 0, 30, over) : key.includes("-c1-") ? body(1, 30, 30, over) : key.includes("-c2-") ? body(2, 60, 37, over) : null)
+    }
+
+    it("draws chunks kept by an attempt on the same re-detection, and marks what it keeps", async () => {
+      mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+      kept({ redetectEverySec: 1 })
+      await run({ redetectEverySec: 1 })
+      expect(mocks.runSam3Video).not.toHaveBeenCalled()
+      vi.clearAllMocks()
+      mocks.runSam3Video.mockImplementation(async (p: { frameCount: number }) => answer(p.frameCount))
+      mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+      mocks.listObjectsByPrefixWithMeta.mockResolvedValue([])
+      await run({ redetectEverySec: 1 })
+      const stored = JSON.parse((await import("node:zlib")).gunzipSync((mocks.uploadJobScratchBuffer.mock.calls[0] as unknown as [Buffer])[0]).toString()) as Record<string, unknown>
+      expect(stored).toMatchObject({ redetectEverySec: 1 })
+      expect(stored).not.toHaveProperty("perShot")
+    })
+
+    it("ignores chunks on the same ranges kept without re-detection, or with another interval", async () => {
+      for (const over of [{}, { redetectEverySec: 2 }]) {
+        vi.clearAllMocks()
+        mocks.runSam3Video.mockImplementation(async (p: { frameCount: number }) => answer(p.frameCount))
+        mocks.prepareVideoMaskSource.mockResolvedValue(prepared)
+        kept(over)
+        await run({ redetectEverySec: 1 })
+        expect(mocks.runSam3Video).toHaveBeenCalledTimes(3)
+      }
+    })
+
+    it("a job with re-detection off never marks or reads a re-detection answer", async () => {
+      mocks.prepareVideoMaskSource.mockResolvedValue({ ...prepared, frameCount: 4000, geometry: { ...geometry, durationSec: 133.3 } })
+      await run({})
+      const stored = JSON.parse((await import("node:zlib")).gunzipSync((mocks.uploadJobScratchBuffer.mock.calls[0] as unknown as [Buffer])[0]).toString()) as Record<string, unknown>
+      expect(stored).not.toHaveProperty("redetectEverySec")
     })
   })
 })

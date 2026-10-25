@@ -1,6 +1,5 @@
 import { executionOutcome } from "@nodaro/shared/workflow"
-import { ugcKeptOutputs } from "@nodaro/shared/ugc"
-import { ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { ugcSumPerNode } from "@nodaro/render-rules"
 /**
  * App Runner routes — consumer-facing endpoints for running published apps.
  * GET    /v1/app/:slug          — Load published app (public, auth optional)
@@ -559,25 +558,22 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       if (snapshotNodes.some((n) => n.type === "ugc-clip")) {
         // Core may not import ee/ statically (tools/check-ee-imports.mjs): every name comes from the dynamic import.
         const { estimateUgcRun, UgcEstimateUnavailable } = await import("../ee/lib/ugc-estimate.js")
+        const { ugcGraphVideos, ugcVideoEstimate } = await import("../ee/billing/ugc-run-set.js")
         const snapshotEdges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>
         try {
           // One estimate per UGC video, each read through its own wires; each node the video prices
-          // holds its part's worst case, a node two videos share once (the editor's balance check
-          // reads the same). A script or creator that hands on what it keeps makes no call, as the
-          // run itself reads it (the run's input over the snapshot). `?? {}`: a run with no
-          // overrides still counts the slots that will HOLD an image, not the slots that are wired.
-          const snapshotById = new Map(snapshotNodes.map((n) => [n.id, n] as const))
-          const keeps = (id: string, type: "ugc-script" | "ugc-creator") =>
-            ugcKeptOutputs(type, { ...(snapshotById.get(id)?.data ?? {}), ...(inputOverrides?.[id] ?? {}) }) !== null
+          // holds its part's worst case once per run of the node that executes it, a node two videos
+          // share once (`ugcGraphVideos`, the editor's balance check reads the same). A script or
+          // creator that hands on what it keeps makes no call, as the run itself reads it (the run's
+          // input over the snapshot). `?? {}`: a run with no overrides still counts the slots that
+          // will HOLD an image, not the slots that are wired.
+          const overrides = inputOverrides ?? {}
+          const asRun = snapshotNodes.map((n) => (overrides[n.id] ? { ...n, data: { ...(n.data ?? {}), ...overrides[n.id] } } : n))
           const holds: Array<{ id: string; credits: number }> = []
-          for (const chain of ugcChains(snapshotNodes, snapshotEdges)) {
-            const members = chain.members.filter(
-              (m) => m.part !== null && !(m.part === "script" && keeps(m.id, "ugc-script")) && !(m.part === "creator" && keeps(m.id, "ugc-creator")),
-            )
-            if (members.length === 0) continue
-            const { input } = ugcChainInput(chain, snapshotNodes, snapshotEdges, { overrides: inputOverrides ?? {} })
-            const est = await estimateUgcRun({ userId: req.userId, billingContext: req.billingContext }, input)
-            for (const m of members) holds.push({ id: m.id, credits: est.holdParts[m.part!] })
+          const caller = { userId: req.userId, billingContext: req.billingContext }
+          for (const video of ugcGraphVideos(asRun, snapshotEdges, { overrides })) {
+            const est = await ugcVideoEstimate(video.inputs, (input) => estimateUgcRun(caller, input))
+            for (const m of video.parts) holds.push({ id: m.id, credits: est.holdParts[m.part] * m.runs })
           }
           const worstCase = ugcSumPerNode(holds)
           const cover = await CreditsService.checkBalanceCovers(req.userId, worstCase, req.billingContext, await resolveWebSurfaceFlag(req))

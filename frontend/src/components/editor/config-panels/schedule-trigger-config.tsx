@@ -145,7 +145,7 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
                 className={cn(
                   "px-2.5 py-1 rounded-full border text-[11.5px] font-semibold transition-colors",
                   on
-                    ? "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073]"
+                    ? "border-[#ff0073] bg-[#ff0073]/10 text-primary-ink"
                     : "border-border bg-background text-muted-foreground hover:border-[#ff0073]/50 hover:text-foreground",
                 )}
               >
@@ -174,7 +174,7 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
         <Button
           type="button"
           variant="outline"
-          className="w-full h-10 border-dashed text-muted-foreground hover:text-[#ff0073] hover:border-[#ff0073]/60 hover:bg-[#ff0073]/5"
+          className="w-full h-10 border-dashed text-muted-foreground hover:text-primary-ink hover:border-[#ff0073]/60 hover:bg-[#ff0073]/5"
           onClick={addRule}
         >
           <Plus className="h-4 w-4 me-1.5" />

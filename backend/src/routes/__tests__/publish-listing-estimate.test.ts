@@ -340,6 +340,49 @@ describe("a publish whose graph holds an unpriced metered LLM model", () => {
   })
 })
 
+// A UGC video the listing could not price (its estimate failed, for the saved settings or for a choice
+// the app's user can make) is never listed as free: the publish is refused, naming the choice.
+describe("a publish whose UGC video could not be priced", () => {
+  const failed = () =>
+    Object.assign(new Error("failed"), {
+      name: "UgcListingUnpricedError",
+      code: "ugc_listing_unpriced",
+      choice: "a choice its users can make (Hebrew, 60 s)",
+      message: "Couldn't price this workflow's UGC video for a choice its users can make (Hebrew, 60 s). Try publishing again.",
+    })
+
+  it.each([
+    ["/v1/apps/publish", "published_apps"],
+    ["/v1/templates/publish", "workflow_templates"],
+  ])("%s answers 503 ugc_listing_unpriced naming the choice, and stores nothing", async (url, table) => {
+    serve({ workflows: WORKFLOW })
+    estimates.listing.mockRejectedValue(failed())
+    const res = await app.inject({ method: "POST", url, headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut" } })
+    expect(res.statusCode).toBe(503)
+    // `reason` names it as the unpriced-model refusal names its own: a client keyed on it sees both.
+    expect(res.json().error).toEqual({
+      code: "ugc_listing_unpriced",
+      reason: "ugc_listing_unpriced",
+      choice: "a choice its users can make (Hebrew, 60 s)",
+      message: "Couldn't price this workflow's UGC video for a choice its users can make (Hebrew, 60 s). Try publishing again.",
+    })
+    expect(writes.find((w) => w.table === table && w.op === "insert")).toBeUndefined()
+  })
+
+  it("a REPUBLISH refused for it writes nothing: the live version is not retired, the workflow not touched", async () => {
+    serve({
+      workflows: WORKFLOW,
+      published_apps: { id: APP_ID, version: 3, slug: "cut-app-abc123", is_listed: true, monetization_enabled: false, monetization_flat_fee: 0, monetization_percent: 0 },
+    })
+    estimates.listing.mockRejectedValue(failed())
+    const res = await app.inject({ method: "POST", url: "/v1/apps/publish", headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut" } })
+    expect(res.statusCode).toBe(503)
+    expect(writes.filter((w) => w.table === "published_apps")).toEqual([])
+    expect(writes.filter((w) => w.table === "workflows")).toEqual([])
+    expect(writes).toEqual([])
+  })
+})
+
 // R47: the listing's own estimate flag is stored beside its price (migration 553).
 describe("the listing's estimate flag stored at publish", () => {
   it.each([
@@ -357,7 +400,7 @@ describe("the listing's estimate flag stored at publish", () => {
   })
 })
 
-// R47: the readers serve the stored flag — the marketplace card and the template gallery show `~N` —
+// R47: the readers serve the stored flag — the marketplace card and the template gallery show `≈N` —
 // only while metered pricing is on; under the rollback the answer is as before.
 describe("the listing's estimate flag served to the cards", () => {
   const APP_ROW = { id: APP_ID, slug: "cut-app", name: "Cut", estimated_credits: 280, estimated_credits_is_estimate: true }

@@ -90,6 +90,20 @@ describe("render_final", () => {
     expect(text).not.toContain("confirm: true once they accept")
   })
 
+  it("refused on what the run holds while it renders: the text names the hold, never only a price the balance covers", async () => {
+    const { server } = stub({
+      quoteBody: {
+        data: { renderNodeId: "cut", nodeIds: ["cut", "cap"], inputOverrides: { cut: { quality: "final" } }, estimatedCredits: 100, holdCredits: 250, sufficient: false, available: 150 },
+      },
+    })
+    const result = await callTool(server, "render_final", args)
+    expect(result.structuredContent).toMatchObject({ estimatedCredits: 100, holdCredits: 250, sufficient: false })
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("100 credits")
+    expect(text).toContain("holds up to about 250 credits")
+    expect(text).toContain("150 available")
+  })
+
   it("with confirm it runs the server's Render final as the caller, continuing the execution", async () => {
     const { server, seen } = stub()
     const result = await callTool(server, "render_final", { ...args, confirm: true, client_request_id: "retry-7f3a9c" })

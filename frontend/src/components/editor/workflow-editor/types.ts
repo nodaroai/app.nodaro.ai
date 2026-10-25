@@ -1120,7 +1120,7 @@ export interface RunCreditLine {
   readonly quantity: RunCreditQuantity;
   /** One run's price × fanOut — a per-unit node's run priced as the whole the server charges (`lib/unit-quote.ts`), each of several providers at its own price, summed: exactly what the run's total adds for this node. */
   readonly credits: number;
-  /** `credits` includes a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `~N`. */
+  /** `credits` includes a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `≈N`. */
   readonly estimate?: true;
   /** The node's metered LLM call is on a model the server refuses to price (`llm_model_unpriced`):
    *  it adds nothing here — never its tier's figure — and the run itself is refused. Every total

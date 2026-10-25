@@ -60,7 +60,7 @@ export function WorkflowUpdatedCard({
         <button
           type="button"
           onClick={onShowOnCanvas}
-          className="self-start px-3 py-1.5 bg-[var(--copilot-surface)] border border-[var(--copilot-strong)] rounded-lg text-xs font-medium text-foreground transition-colors hover:border-primary hover:text-primary"
+          className="self-start px-3 py-1.5 bg-[var(--copilot-surface)] border border-[var(--copilot-strong)] rounded-lg text-xs font-medium text-foreground transition-colors hover:border-primary hover:text-primary-ink"
         >
           {t(K.updatedShowOnCanvas)}
         </button>
@@ -120,7 +120,7 @@ export function RunProposalCard({
       <div className="flex items-baseline gap-2">
         <span className="text-[12.5px] font-semibold text-foreground whitespace-nowrap">{t(K.proposeTitle)}</span>
         <span
-          className="ms-auto text-xs text-primary font-semibold tabular-nums"
+          className="ms-auto text-xs text-primary-ink font-semibold tabular-nums"
           title={!estimateStale && estimateUnchecked ? t(ugcPriceNoteKey(estimateUnchecked)) : undefined}
         >
           {estimateStale

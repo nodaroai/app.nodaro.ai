@@ -127,7 +127,7 @@ const ReasonRow = memo(function ReasonRow({ stat, locked, canEdit, onProbe, onRe
         disabled={!canEdit}
         aria-label={t("edlReview.reasonBox", { reason: label })}
         onCheckedChange={(next) => (next === true ? onCut(stat.reason) : onRestore(stat.reason))}
-        className="grid size-4 shrink-0 place-content-center rounded-[4px] border border-input outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=indeterminate]:border-primary data-[state=indeterminate]:text-primary"
+        className="grid size-4 shrink-0 place-content-center rounded-[4px] border border-input outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=indeterminate]:border-primary data-[state=indeterminate]:text-primary-ink"
       >
         <CheckboxPrimitive.Indicator>
           {stat.state === "partial" ? <Minus className="size-3" /> : <Check className="size-3" />}

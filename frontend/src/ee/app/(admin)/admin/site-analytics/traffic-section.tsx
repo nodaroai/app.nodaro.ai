@@ -74,7 +74,7 @@ function TrafficBody({ report, siteDomain }: { report: TrafficReport; siteDomain
         ariaLabel="Views and active users per day"
         labels={daily.map((d) => dayText(d.date))}
         series={[
-          { label: "Views", values: daily.map((d) => d.views), className: "text-primary" },
+          { label: "Views", values: daily.map((d) => d.views), className: "text-primary-ink" },
           { label: "Active users", values: daily.map((d) => d.activeUsers), className: "text-sky-500" },
         ]}
       />

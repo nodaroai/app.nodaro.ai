@@ -55,7 +55,7 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
               "dark:text-[#94A3B8]",
               "dark:hover:bg-[#2D2D2D] dark:hover:text-white",
               // Active state
-              active && "bg-[#ff0073]/10 text-[#ff0073] dark:bg-[#ff0073]/20 dark:text-[#ff0073]"
+              active && "bg-[#ff0073]/10 text-primary-ink dark:bg-[#ff0073]/20 dark:text-[#ff0073]"
             )}
           >
             {icon}

@@ -1,0 +1,119 @@
+{
+  "slug": "podcast-clip-pack-one-node",
+  "name": "Clip Pack in One Node",
+  "description": "Cut a long recording into a pack of short clips with a single node: Clip Pack transcribes it, finds the best moments and renders each one as a 720p Preview first, framed 9:16 for social (the framing needs 2–6 speakers on one camera; otherwise the clips show the camera full frame). Review them, then Render final renders the clips you keep at full quality, each with word-level (karaoke) captions.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "clips",
+    "social",
+    "captions"
+  ],
+  "complexity": "beginner",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 5,
+  "estimatedCredits": 692,
+  "estimatedPerMinuteCredits": 4,
+  "nodeTypesUsed": [
+    "upload-video",
+    "clip-pack",
+    "sticky-note"
+  ],
+  "providersUsed": [],
+  "nodes": [
+    {
+      "id": "clips-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -600
+      },
+      "data": {
+        "bold": false,
+        "text": "Clip Pack in one node\n\nDrop your recording on the Episode Recording node, then Run Clip Pack. It transcribes the recording, finds up to 8 moments of about a minute each and renders every clip as a 720p Preview, framed 9:16 with the speakers stacked. The framing needs 2–6 speakers on one camera; otherwise the clips show the camera full frame. Review them (keep or drop each clip, keeping at least one, and edit its hook), then choose Render final on Clip Pack: it renders the clips you keep at full quality, each with word-level (karaoke) captions.\n\nTo skip the review, turn off Clip Pack's Review before render.\n\nIts settings also change how many clips it finds and how long they are, their shape and layout, and the caption style.\n\nWant to adjust each step yourself? The Clip Pack template builds the chain node by node, without the framing.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 460,
+        "height": 680,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 460,
+        "height": 680
+      }
+    },
+    {
+      "id": "clips-src",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "label": "Episode Recording",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "clips",
+      "type": "clip-pack",
+      "position": {
+        "x": 440,
+        "y": 40
+      },
+      "data": {
+        "label": "Clip Pack",
+        "count": 8,
+        "targetDurationSec": 60,
+        "framing": {
+          "aspect": "9:16",
+          "layout": "stacked",
+          "switchType": "pan",
+          "emphasisStyle": "scale"
+        },
+        "captions": true,
+        "captionStyle": "karaoke",
+        "reviewBeforeRender": true,
+        "planTier": "standard",
+        "instructions": "",
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "clips-e-src-clips",
+      "source": "clips-src",
+      "target": "clips",
+      "sourceHandle": "video",
+      "targetHandle": "media"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 120,
+      "y": 415,
+      "zoom": 0.55
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

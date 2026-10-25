@@ -565,7 +565,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 <button
                   type="button"
                   className={`flex-1 rounded-lg border p-2 text-sm font-medium transition-colors ${
-                    publishType === "app" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+                    publishType === "app" ? "border-primary bg-primary/10 text-primary-ink" : "border-border text-muted-foreground"
                   }`}
                   onClick={() => setPublishType("app")}
                 >
@@ -776,7 +776,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             key={ot.value}
                             className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors ${
                               outputTypes.includes(ot.value)
-                                ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                                ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                                 : "text-muted-foreground border-border hover:border-zinc-400"
                             }`}
                           >
@@ -875,7 +875,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                             title={t(label)}
                             className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
                               isActive
-                                ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                                ? "bg-[#ff0073]/10 text-primary-ink border-[#ff0073]/30"
                                 : "text-muted-foreground border-border hover:text-muted-foreground hover:border-border"
                             }`}
                           >

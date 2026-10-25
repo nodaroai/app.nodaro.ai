@@ -25,11 +25,12 @@ describe("readSiteEnv", () => {
 })
 
 describe("worldHrefsFor", () => {
-  it("the four simple worlds on the tools origin, Studio on its origin, the App on this page's own /projects", () => {
+  it("the five simple worlds on the tools origin, Studio on its origin, the App on this page's own /projects", () => {
     expect(worldHrefsFor(HERE, { tools: "https://tools.example", studio: "https://studio.example" })).toEqual({
       image: "https://tools.example/image",
       video: "https://tools.example/video",
       music: "https://tools.example/music",
+      trends: "https://tools.example/trends",
       ads: "https://tools.example/ads",
       studio: "https://studio.example/",
       app: "https://next.nodaro.ai/projects",

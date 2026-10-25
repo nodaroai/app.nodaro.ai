@@ -114,15 +114,15 @@ describe("ugcRunCredits: a run set's one figure", () => {
       script: PARTS.script, creator: PARTS.creator, clips: 0, clip: PARTS.clip, cards: PARTS.cards, join: PARTS.join, overlay: PARTS.overlay, captions: PARTS.captions,
     })
   })
-  it("`~` exactly when the server's figure is one: a covered node's part the answer marks an estimate (`estimateParts`)", () => {
-    // No part marked: a fixed figure, no `~`.
+  it("`≈` exactly when the server's figure is one: a covered node's part the answer marks an estimate (`estimateParts`)", () => {
+    // No part marked: a fixed figure, no `≈`.
     expect(mod.ugcRunCredits(TOOLBAR, NODES, EDGES, cost, always(ANSWER)).approx).toBe(false)
     // The creator check is metered (fixed-mode plugin): the run's figure is an estimate.
     const creatorMetered = { ...ANSWER, estimateParts: ["creator"] } as UgcRunEstimate
     expect(mod.ugcRunCredits(TOOLBAR, NODES, EDGES, cost, always(creatorMetered)).approx).toBe(true)
     // A run that does not execute the marked part is not an estimate (the script's ▶ alone).
     expect(mod.ugcRunCredits(pick("script"), NODES, EDGES, cost, always(creatorMetered)).approx).toBe(false)
-    // A metered clip reading marks the clip part: Run from a node above it is `~` too.
+    // A metered clip reading marks the clip part: Run from a node above it is `≈` too.
     const clipMetered = { ...ANSWER, estimateParts: ["clip"] } as UgcRunEstimate
     expect(mod.ugcRunCredits(pick("clip", "join"), NODES, EDGES, cost, always(clipMetered)).approx).toBe(true)
   })
@@ -147,6 +147,29 @@ describe("ugcRunCredits: a run set's one figure", () => {
       // The join is no longer the video's (one of its inputs is not the video's clip): the render runs (0 here),
       // the join, the cards, the overlay and the captions wait.
       expect(mod.ugcRunCredits(run, nodes, edges, cost, always(ANSWER)).credits).toBe(45 + PARTS.script + PARTS.creator + PARTS.clip)
+    } finally {
+      delete window.__NODARO_RUNTIME__
+    }
+  })
+  it("Render final counts only the UGC parts its own set runs: the script, creator and clips that already ran add nothing", async () => {
+    const { renderFinalRunSet, renderRunOverrides } = await import("@nodaro/render-rules")
+    const { withRunOverrides } = await import("@nodaro/shared/nodes")
+    const { liveExecutable } = await import("../run-from-here-set")
+    window.__NODARO_RUNTIME__ = { previewStopRule: true }
+    try {
+      // A render at Preview feeds the video's join; the script, creator and clips ran before and stay done.
+      const nodes = [...NODES, n("cut", "apply-edl", { quality: "proxy" })]
+      const edges = [...EDGES, e("cut", "join", "in")]
+      // Render final's run, as the editor and the app runner build it: its set, the render at Final.
+      const set = renderFinalRunSet("cut", nodes, edges)
+      const graph = withRunOverrides(nodes, renderRunOverrides("cut", "final", set))
+      const executable = liveExecutable(graph).filter((x) => set.has(x.id))
+      expect(executable.map((x) => x.id).sort()).toEqual(["captions", "cards", "cut", "join", "overlay"])
+      const figure = mod.ugcRunCredits(executable, graph, edges, cost, always(ANSWER))
+      // The join is not the video's (the render feeds it): its own 10. The cards, overlay and captions: their parts.
+      // Never the script's, the creator's or the clips' parts, which the run does not execute.
+      expect(figure).toMatchObject({ credits: 10 + PARTS.cards + PARTS.overlay + PARTS.captions, estimate: "server", rendersClips: false })
+      expect([...figure.nodeCredits!.keys()].sort()).toEqual(["captions", "cards", "overlay"])
     } finally {
       delete window.__NODARO_RUNTIME__
     }

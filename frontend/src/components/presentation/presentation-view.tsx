@@ -382,7 +382,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   )
   const dynamicEstimatedCost = liveFigure.total
   // The live figure holds a metered LLM call's estimate: the Run label reads
-  // `~N` (spec §8.5). Until the live figure is in, the seeded server figure
+  // `≈N` (spec §8.5). Until the live figure is in, the seeded server figure
   // says itself whether it is one (`estimatedCostIsEstimate`, Task 12).
   const seededIsEstimate = usePresentationStore((s) => s.estimatedCostIsEstimate)
   const estimateIsApprox = dynamicEstimatedCost > 0 ? liveFigure.estimate : isFullscreen && seededIsEstimate

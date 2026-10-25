@@ -120,7 +120,7 @@ export interface UgcQuoteLineOut {
   seconds?: number
   /** A clip line the run hands back from an earlier render (`reusedClips`): priced at nothing. */
   reused?: true
-  /** The line holds a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `~`. */
+  /** The line holds a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `≈`. */
   estimate?: true
 }
 /** Expected credits per part of the video, every part present (0 when the quote has none of it). */
@@ -142,7 +142,7 @@ export interface UgcQuoteResult {
   /**
    * The parts whose expected credits hold a metered LLM call's ESTIMATE (a line
    * marked `estimate`): charged their actual usage, so a figure that counts one
-   * of them is shown `~`. Absent when no part does (a quote with none is
+   * of them is shown `≈`. Absent when no part does (a quote with none is
    * byte-identical to before). The one rule the server's run estimate and the
    * editor read (R58: a clip's reading only when the plugin meters it).
    */
@@ -322,7 +322,7 @@ async function quoteTickets(
   // A clip handed back makes no call, so it prices none.
   const callsOf = tickets.map((t, i) => (reused(i) ? [] : [t.video, ...(t.speech ? [t.speech] : []), ...(metered ? [] : [READING])]))
   // The clips, the finish and the steps after them are priced at once, and read back in run order.
-  // R58: a fixed-mode reading inside the clip at the tier row the plugin charges (no `~`); in metered mode
+  // R58: a fixed-mode reading inside the clip at the tier row the plugin charges (no `≈`); in metered mode
   // the clip holds no reading (its own line, below), so this answer prices no LLM call.
   const pricing = started(priceUgcCallLines(caller, callsOf.flat(), ugcClipReadingPricedAt()))
   const finishing = started(finishes ? laneStepLines(caller, [UGC_FINISH_CALL]) : Promise.resolve([]))

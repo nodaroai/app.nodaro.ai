@@ -167,7 +167,7 @@ export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo })
                 <tr key={row.line.nodeId}>
                   <td className={`py-0.5 pe-3 ${row.indented ? "ps-4 text-muted-foreground" : "font-medium"}`}>{localize(row.line.label)}</td>
                   <td className="py-0.5 pe-3 text-muted-foreground">{lineQuantity(row.line, t)}</td>
-                  {/* A metered LLM node's line is its estimate: `~N`. */}
+                  {/* A metered LLM node's line is its estimate: `≈N`. */}
                   <td className="py-0.5 text-end tabular-nums" title={row.line.unpriced ? row.line.unpricedMessage : undefined}>
                     {row.line.unpriced ? notPriced : creditUnitsApprox(row.line.credits, row.line.estimate)}
                   </td>

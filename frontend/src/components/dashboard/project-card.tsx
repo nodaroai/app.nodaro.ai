@@ -116,20 +116,20 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
                 className="flex-shrink-0"
               >
                 <Star
-                  className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]"
+                  className="h-3.5 w-3.5 text-primary-ink fill-[#ff0073]"
                   aria-label={t("project.defaultWorkspace")}
                 />
               </span>
             )}
             <h2 className="font-medium text-sm truncate">{displayName}</h2>
             {readOnly && (
-              <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+              <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-primary-ink flex-shrink-0">
                 {t("project.studioBadge")}
               </Badge>
             )}
           </div>
           {showOwner && isOwn && (
-            <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-primary-ink flex-shrink-0">
               {t("dash.mine")}
             </Badge>
           )}
@@ -167,19 +167,19 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
                   className="flex-shrink-0"
                 >
                   <Star
-                    className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]"
+                    className="h-3.5 w-3.5 text-primary-ink fill-[#ff0073]"
                     aria-label={t("project.defaultWorkspace")}
                   />
                 </span>
               )}
               <h2 className="font-medium text-sm truncate">{displayName}</h2>
               {readOnly && (
-                <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-primary-ink flex-shrink-0">
                   {t("project.studioBadge")}
                 </Badge>
               )}
               {showOwner && isOwn && (
-                <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-primary-ink flex-shrink-0">
                   {t("dash.mine")}
                 </Badge>
               )}

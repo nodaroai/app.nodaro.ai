@@ -75,7 +75,7 @@ export function CreditCost({
    *  choices its user has. Shown as a range only when it differs from the figure. */
   upTo?: { readonly credits?: number | null; readonly perMinute?: number | null; readonly perItem?: number | null }
   /** The figure is an ESTIMATE (a metered LLM call, charged its actual usage):
-   *  written `~N`, right before the number (spec §8.5). */
+   *  written `≈N`, right before the number (spec §8.5). */
   approx?: boolean
 }) {
   const t = useT()
@@ -91,7 +91,7 @@ export function CreditCost({
   ].filter(Boolean)
   const title = titleParts.length > 0 ? titleParts.join(" · ") : undefined
   const convert = (n: number | null | undefined) => (unit === undefined ? creditUnits(n) : (n ?? 0))
-  const tilde = approx ? "~" : ""
+  const tilde = approx ? "≈" : ""
   const describe = (fixed: number, perMin: number, item: number) =>
     `${tilde}${fixed}${label ? ` ${label}` : ""}${perMin ? ` ${t("credits.plusPerMinute", { n: perMin })}` : ""}${item ? ` ${t("credits.plusPerItem", { n: item })}` : ""}`
   const topFigure = upTo?.credits != null ? convert(Math.max(upTo.credits, credits ?? 0)) : undefined

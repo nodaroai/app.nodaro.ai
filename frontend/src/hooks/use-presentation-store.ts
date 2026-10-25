@@ -7,6 +7,7 @@ import { create } from "zustand"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "./use-workflow-store"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
 import type { ListedPrice } from "@/lib/run-price"
 import {
   getSharedWorkflow,
@@ -37,7 +38,7 @@ interface PresentationState {
 
   // Presentation config (from workflow settings)
   estimatedCost: number
-  /** The seeded `estimatedCost` holds a metered LLM estimate (charged its actual usage): shown `~` until the live figure is in. */
+  /** The seeded `estimatedCost` holds a metered LLM estimate (charged its actual usage): shown `≈` until the live figure is in. */
   estimatedCostIsEstimate: boolean
   /** The server could not price the run (a metered LLM model with no price, R51): no figure, and why. Null otherwise. */
   estimatedCostUnpriced: { modelId: string; message: string } | null
@@ -109,7 +110,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       // normalization), so without this the presentation render path still
       // sees `loop`. Mirrors useWorkflowStore.loadWorkflow.
       const { nodes, edges } = migrateListLoopNodes(
-        data.nodes as WorkflowNode[],
+        migrateRetiredVideoProviders(data.nodes as WorkflowNode[]),
         data.edges as WorkflowEdge[],
       )
       set({

@@ -184,7 +184,7 @@ export function LottieOverlayPreview({
               {disabledOverlays.has(i) ? (
                 <EyeOff className="w-3 h-3 text-muted-foreground" />
               ) : (
-                <Eye className="w-3 h-3 text-[#ff0073]" />
+                <Eye className="w-3 h-3 text-primary-ink" />
               )}
             </button>
             <div className={`flex-1 ${disabledOverlays.has(i) ? "opacity-40" : ""}`}>

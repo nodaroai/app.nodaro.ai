@@ -3356,6 +3356,14 @@ export interface PluginSupports {
    *   absent ⇒ an engine that predates the choice, read as `["seedance-2-5"]`
    *   (such an engine drops an `engine` it does not know and runs Seedance,
    *   so a run on any other engine is held back until it is declared here).
+   * - `storedFaceMask`: the engine makes a trend's face mask ahead of time
+   *   (`POST /v1/cast-swap/face-mask`, internal only) and a trend run accepts
+   *   the approved one (`storedFaceMask: { url, frames }`) in place of masking
+   *   per run. Additive-optional: absent ⇒ `false` (the platform then never
+   *   sends `storedFaceMask`, and publishing a masked trend is held back).
+   * - `faceMaskRecipe`: the version of the engine's own masking parameters
+   *   (`maskClip`); a stored face mask made under another is out of date.
+   *   Additive-optional: read only with `storedFaceMask`.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3369,6 +3377,8 @@ export interface PluginSupports {
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
     readonly engines?: readonly ("seedance-2-5" | "kling-4")[]
+    readonly storedFaceMask?: boolean
+    readonly faceMaskRecipe?: string
   }
 }
 

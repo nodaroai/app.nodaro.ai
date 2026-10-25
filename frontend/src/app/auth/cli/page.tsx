@@ -101,7 +101,7 @@ export default function AuthCliPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md rounded-lg border bg-card p-8 shadow-lg">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <Terminal className="h-6 w-6 text-primary" />
+          <Terminal className="h-6 w-6 text-primary-ink" />
         </div>
 
         <h1 className="mb-2 text-2xl font-semibold">{t("cli.authorizeTitle")}</h1>

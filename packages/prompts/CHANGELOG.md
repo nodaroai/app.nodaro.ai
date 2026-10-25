@@ -1,5 +1,28 @@
 # @nodaro/prompts
 
+## 1.42.1
+
+### Patch Changes
+
+- 2c92a8c: `seedance` (Seedance 1.5 Pro) is retired: the provider stopped serving the model on 2026-10-25. It leaves the model catalog, `IMAGE_TO_VIDEO_PROVIDERS` / `TEXT_TO_VIDEO_PROVIDERS` / `VIDEO_GEN_PROVIDERS`, `OBJECT_MOTION_PROVIDERS` (where `seedance-2-mini` takes its place), the duration and audio tables, `PIPELINE_PINNABLE_VIDEO_MODELS` and the prompt-wizard descriptions. New `RETIRED_VIDEO_PROVIDERS` + `canonicalVideoProvider()` map a retired id to the model it now runs as (`seedance` → `seedance-2-mini`), and `resolveVideoProviderForMode` applies it, so a saved or sent `seedance` keeps working. The CLI's `objects motion --provider` offers `seedance-2-mini` instead of `seedance`. Code that names the literal `"seedance"` as one of those lists' member types (`ObjectMotionProvider`, `TextToVideoProvider`, `VideoGenProvider`, `PipelinePinnableVideoModel`) no longer compiles: pass it through `canonicalVideoProvider` or use `seedance-2-mini`.
+- Updated dependencies [2c92a8c]
+- Updated dependencies [14402d5]
+- Updated dependencies [1999c19]
+  - @nodaro/shared@3.42.0
+
+## 1.42.0
+
+### Minor Changes
+
+- dc55645: Music and voice pickers get photographic pictures: `SOUND_RENDER_SETS` holds a render for every option of Music Genre, Music Mood, Instrumentation, Voice Character and Voice Delivery, and with `lookPreviews: true` (Nodaro Cloud) `pickerOptionImageUrl` returns it in place of the 3D emoji or flag. New `pickerOptionImage(...)` returns `{ url, srcSet? }`: with `srcSet: true` in the picture options, every CDN render gets a `srcSet` over `RENDER_WIDTH_LADDER`, which the catalog projections carry as `imageSrcSet`. Every render URL (these and `LOOK_PREVIEW_SETS`) now points at `cdn.nodaro.ai/picker-renders/`, a key no account owns, so no user deletion or cleanup can remove a picker picture.
+
+### Patch Changes
+
+- Updated dependencies [914e157]
+- Updated dependencies [a76b30a]
+- Updated dependencies [dc55645]
+  - @nodaro/shared@3.41.0
+
 ## 1.41.0
 
 ### Minor Changes

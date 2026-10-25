@@ -136,7 +136,7 @@ export function VideoLinkRunnerStatus({ view, limit, rawError, onDownload }: Vid
     case "checking":
       return (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-ink" />
           <span>{t("videolink.checking")}</span>
         </div>
       )
@@ -149,9 +149,9 @@ export function VideoLinkRunnerStatus({ view, limit, rawError, onDownload }: Vid
       return (
         <div className="flex flex-col gap-1.5 rounded-lg bg-muted/30 p-2.5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-ink" />
             <span>{phaseLabel[view.phase]}</span>
-            <span className="ms-auto font-mono text-[#ff0073]">{view.percent}%</span>
+            <span className="ms-auto font-mono text-primary-ink">{view.percent}%</span>
           </div>
           <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.percent} className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
             <div className="h-full rounded-full bg-[#ff0073] transition-all duration-300 ease-out" style={{ width: `${view.percent}%` }} />

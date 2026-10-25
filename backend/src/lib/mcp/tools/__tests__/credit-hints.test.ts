@@ -58,17 +58,17 @@ describe("estimateHint — a metered LLM call's typical figure", () => {
   it("states the server's estimate for the feature on the model, as approximate, never a tier price", () => {
     const quoted = statedPrices().credits("llm-chat:gemini-3.6-flash")!
     expect(quoted).toBeGreaterThan(0)
-    expect(estimateHint("llm-chat", "gemini-3.6-flash")).toBe(`~${quoted} credits typical on Gemini 3.6 Flash`)
+    expect(estimateHint("llm-chat", "gemini-3.6-flash")).toBe(`≈${quoted} credits typical on Gemini 3.6 Flash`)
     // The default model when none is named — Choose Best's judge borrows pick-best-llm's.
     expect(estimateHint("reduce:pick-best-llm")).toBe(
-      `~${statedPrices().credits("reduce:pick-best-llm:claude-sonnet-5.5")} credits typical on Claude Sonnet 5.5`,
+      `≈${statedPrices().credits("reduce:pick-best-llm:claude-sonnet-5.5")} credits typical on Claude Sonnet 5.5`,
     )
     // A default effort that serves direct is quoted on the direct key (Describe to Picker on Opus 5.5 at high).
     expect(estimateHint("describe-to-picker", "claude-opus-5.5")).toBe(
-      `~${statedPrices().credits("describe-to-picker:claude-opus-5.5:direct")} credits typical on Claude Opus 5.5`,
+      `≈${statedPrices().credits("describe-to-picker:claude-opus-5.5:direct")} credits typical on Claude Opus 5.5`,
     )
     expect(meteredLlmPriceSentence("prompt-helper", "claude-sonnet-4.6")).toBe(
-      `Charged per token at the model's rate: ~${statedPrices().credits("prompt-helper:claude-sonnet-4.6")} credits typical on Claude Sonnet 4.6 (every model: docs/pricing/llm-models.md).`,
+      `Charged per token at the model's rate: ≈${statedPrices().credits("prompt-helper:claude-sonnet-4.6")} credits typical on Claude Sonnet 4.6 (every model: docs/pricing/llm-models.md).`,
     )
   })
 
@@ -77,7 +77,7 @@ describe("estimateHint — a metered LLM call's typical figure", () => {
     try {
       process.env.NODARO_PRICE_ANNOTATIONS = "1"
       expect(estimateHint("llm-chat", "gemini-3.6-flash")).toBe(
-        `~${statedPrices().credits("llm-chat:gemini-3.6-flash")}<!-- credits: llm-chat:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash`,
+        `≈${statedPrices().credits("llm-chat:gemini-3.6-flash")}<!-- credits: llm-chat:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash`,
       )
     } finally {
       if (was === undefined) delete process.env.NODARO_PRICE_ANNOTATIONS

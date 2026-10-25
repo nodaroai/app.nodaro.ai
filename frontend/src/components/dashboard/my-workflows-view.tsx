@@ -164,7 +164,7 @@ export function MyWorkflowsView({
                   <p className="mt-0.5 text-[11px] text-muted-foreground truncate flex items-center gap-1">
                     {wf.projectIsDefault && (
                       <Star
-                        className="h-2.5 w-2.5 text-[#ff0073] fill-[#ff0073] flex-shrink-0"
+                        className="h-2.5 w-2.5 text-primary-ink fill-[#ff0073] flex-shrink-0"
                         aria-label={t("dash.defaultWorkspace")}
                       />
                     )}

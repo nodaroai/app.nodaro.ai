@@ -101,7 +101,7 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   className={cn(
                     "nodrag rounded px-1.5 py-0.5 text-[11px] font-medium border",
-                    chip.key === activeResult?.format ? "border-primary bg-primary/10 text-primary" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted",
+                    chip.key === activeResult?.format ? "border-primary bg-primary/10 text-primary-ink" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted",
                   )}
                   aria-pressed={chip.key === activeResult?.format}
                   onClick={(e) => {

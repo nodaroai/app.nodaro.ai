@@ -9,7 +9,7 @@ generated_from: 9ae3392be
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `llm-chat`
 **Category:** ai
-**Credit cost:** `~3` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=llm-chat:<model id>` (MCP: `list_models` with `priceIds: ["llm-chat:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `≈3` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=llm-chat:<model id>` (MCP: `list_models` with `priceIds: ["llm-chat:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `references`, `system-prompt`
 **Outputs (source handles):** `text`, `items`
 

@@ -259,17 +259,18 @@ describe("KieVideoProvider.imageToVideo", () => {
     expect(result.cost).toBe(1.00)
   })
 
-  it("handles end frame for seedance via input_urls array", async () => {
+  it("handles end frame for seedance-2-mini via last_frame_url", async () => {
     await provider.imageToVideo(
       "https://start.png",
       "cinematic",
-      "seedance",
+      "seedance-2-mini",
       undefined,
       "https://end.png",
     )
     const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
-    // Seedance sends both frames in input_urls array, NOT a separate end_frame param
-    expect(input.input_urls).toEqual(["https://start.png", "https://end.png"])
+    // Seedance 2 sends the end frame as last_frame_url, NOT a generic end_frame param
+    expect(input.last_frame_url).toBe("https://end.png")
+    expect(input.input_urls).toBeUndefined()
     expect(input.end_frame).toBeUndefined()
     expect(input.end_image_url).toBeUndefined()
     expect(input.tail_image_url).toBeUndefined()

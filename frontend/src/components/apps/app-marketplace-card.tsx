@@ -139,7 +139,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
         <Heart
           className={cn(
             "h-4 w-4 transition-colors",
-            isFavorited ? "fill-[#ff0073] text-[#ff0073]" : "text-white",
+            isFavorited ? "fill-[#ff0073] text-primary-ink" : "text-white",
           )}
         />
       </button>

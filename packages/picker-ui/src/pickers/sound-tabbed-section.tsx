@@ -193,9 +193,9 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
                   className={cn(
                     "relative -mb-px inline-flex items-center gap-[5px] whitespace-nowrap border-b-2 pt-1 pb-2 text-[11px] font-medium transition-colors @min-[520px]:text-[12px]",
                     active
-                      ? "border-[#ff0073] text-[#ff0073]"
+                      ? "border-[#ff0073] text-primary-ink"
                       : hasPick
-                        ? "border-transparent text-[#ff0073] hover:border-[#ff0073]/40"
+                        ? "border-transparent text-primary-ink hover:border-[#ff0073]/40"
                         : "border-transparent text-[#6b6b75] hover:text-foreground dark:text-[#9a9aa6]",
                   )}
                 >

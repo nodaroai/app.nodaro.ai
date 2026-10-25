@@ -114,7 +114,7 @@ export const AestheticPicker = memo(function AestheticPicker({
                         text={label}
                         className={cn(
                           "text-[11px] font-semibold leading-tight w-full",
-                          selected ? "text-[#ff0073]" : "text-gray-800 dark:text-[#E2E8F0]",
+                          selected ? "text-primary-ink" : "text-gray-800 dark:text-[#E2E8F0]",
                         )}
                       />
                       <span className="text-[10px] leading-snug text-muted-foreground line-clamp-2 w-full">

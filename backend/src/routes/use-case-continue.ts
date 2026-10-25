@@ -171,7 +171,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
             surface: { billingContext, webFreeMode },
           })
           if (credits && !credits.sufficient) {
-            const message = credits.message ?? `Render final is estimated at about ${credits.estimatedCredits} credits.`
+            const message = credits.message ?? `Render final can hold up to about ${credits.holdCredits} credits while it renders.`
             return reply.status(402).send({ error: { code: "insufficient_credits", message } })
           }
         } catch (err) {

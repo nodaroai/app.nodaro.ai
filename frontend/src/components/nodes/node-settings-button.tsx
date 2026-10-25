@@ -42,7 +42,7 @@ export function NodeSettingsButton({ nodeId }: { readonly nodeId: string }) {
         className={cn(
           "nodrag flex items-center justify-center h-6 w-6 shrink-0 rounded-md transition-colors",
           isEditing
-            ? "text-[#ff0073]"
+            ? "text-primary-ink"
             : "text-[var(--pill-fg-muted)] hover:text-[var(--pill-fg)] hover:bg-black/5 dark:hover:bg-white/10",
         )}
       >

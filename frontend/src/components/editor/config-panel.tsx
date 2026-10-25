@@ -881,7 +881,7 @@ export function ConfigPanel() {
   const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
   // A metered LLM node: its two price ids in one batch (the metered key and the
   // tier id). Subscribing re-renders the panel when the answer lands, so the
-  // Run button below re-reads `getModelIdentifier` — the key, shown `~N`, once
+  // Run button below re-reads `getModelIdentifier` — the key, shown `≈N`, once
   // the server marked it an estimate; the tier id under the rollback.
   const _llmPriceIdsList = useMemo(() => {
     const ids = displayNode ? llmNodePriceIds(displayNode) : undefined
@@ -1293,7 +1293,7 @@ export function ConfigPanel() {
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"}
-                    className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-primary-ink hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
                     title={t("configPanel.runFromHereTooltip")}
                   >
                     <FastForward className="w-3.5 h-3.5" />

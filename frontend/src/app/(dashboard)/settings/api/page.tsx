@@ -241,23 +241,23 @@ export default function ApiSettingsPage() {
           <h3 className="text-sm font-semibold mb-2">{t("apiTok.buildWith")}</h3>
           <ul className="text-sm text-muted-foreground space-y-1">
             {surfacePlatformLinks() && <li>
-              <a className="text-primary hover:underline" href="https://www.npmjs.com/package/@nodaro/sdk" target="_blank" rel="noreferrer">TypeScript SDK — @nodaro/sdk</a>
+              <a className="text-primary-ink hover:underline" href="https://www.npmjs.com/package/@nodaro/sdk" target="_blank" rel="noreferrer">TypeScript SDK — @nodaro/sdk</a>
               <span> {t("apiTok.sdkDesc")}</span>
             </li>}
             {surfacePlatformLinks() && <li>
-              <a className="text-primary hover:underline" href="https://www.npmjs.com/package/@nodaro/cli" target="_blank" rel="noreferrer">CLI — @nodaro/cli</a>
+              <a className="text-primary-ink hover:underline" href="https://www.npmjs.com/package/@nodaro/cli" target="_blank" rel="noreferrer">CLI — @nodaro/cli</a>
               <span> {t("apiTok.cliDesc")}</span>
             </li>}
             <li>
-              <a className="text-primary hover:underline" href={`${window.location.origin}/v1/openapi.json`} target="_blank" rel="noreferrer">{t("apiTok.openapiLink")}</a>
+              <a className="text-primary-ink hover:underline" href={`${window.location.origin}/v1/openapi.json`} target="_blank" rel="noreferrer">{t("apiTok.openapiLink")}</a>
               <span> {t("apiTok.openapiDesc")}</span>
             </li>
             {surfacePlatformLinks() && <li>
-              <a className="text-primary hover:underline" href={docsPageUrl("developers/api")} target="_blank" rel="noreferrer">{t("apiTok.guideLink")}</a>
+              <a className="text-primary-ink hover:underline" href={docsPageUrl("developers/api")} target="_blank" rel="noreferrer">{t("apiTok.guideLink")}</a>
               <span> {t("apiTok.guideDesc")}</span>
             </li>}
             {surfacePlatformLinks() && <li>
-              <a className="text-primary hover:underline" href={docsPageUrl("mcp")} target="_blank" rel="noreferrer">{t("apiTok.mcpLink")}</a>
+              <a className="text-primary-ink hover:underline" href={docsPageUrl("mcp")} target="_blank" rel="noreferrer">{t("apiTok.mcpLink")}</a>
               <span> {t("apiTok.mcpDesc")}</span>
             </li>}
           </ul>

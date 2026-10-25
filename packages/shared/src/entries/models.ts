@@ -133,6 +133,8 @@ export {
   videoProviderRequiresImage,
   videoProviderFoldsLoneEndFrame,
   VIDEO_MODE_ALIASES,
+  RETIRED_VIDEO_PROVIDERS,
+  canonicalVideoProvider,
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   resolveVideoProviderForMode,
   resolveVideoModeForInputs,

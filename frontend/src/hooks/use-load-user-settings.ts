@@ -12,14 +12,14 @@ export function useLoadUserSettings() {
 
   useEffect(() => {
     if (!data || !user?.id) return
+    // The account's language: once per user for the page's life, which the
+    // store itself guards (this hook remounts with its layout).
+    useLocaleStore
+      .getState()
+      .markHydrated((data.preferredLocale ?? null) as LocaleId | null, user.id)
     if (initializedFor.current === user.id) return
     initializedFor.current = user.id
     useWorkflowStore.getState().setUserPromptTemplates(data.promptTemplates)
     useWorkflowStore.getState().setUserTextTemplates(data.textTemplates ?? [])
-    // Hydrate the locale store from the user's saved preference. Falls back
-    // to whatever the store inferred from localStorage / navigator.language.
-    useLocaleStore
-      .getState()
-      .markHydrated((data.preferredLocale ?? null) as LocaleId | null)
   }, [data, user?.id])
 }

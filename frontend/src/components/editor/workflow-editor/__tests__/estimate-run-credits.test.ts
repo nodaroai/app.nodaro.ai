@@ -117,7 +117,7 @@ describe("the Execute-workflow badge is the run's own estimate", () => {
     expect(src).toContain("useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges)")
     expect(src).toContain("ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf, ugcAnswers.ticketAnswerOf)")
     expect(src).toContain("setUgcPriceState(figure ? runSetPriceState(figure, ugcAnswers) : undefined)")
-    // `~` before every estimate: an unchecked UGC figure reads `(~N CR)` like a metered one, the hover saying why.
+    // `≈` before every estimate: an unchecked UGC figure reads `(≈N CR)` like a metered one, the hover saying why.
     expect(src).toContain("formatCreditsSuffix(t, workflowCreditEstimate, ugcPriceState !== undefined || workflowCreditEstimateIsApprox)")
     expect(src).not.toContain("node.creditsSuffixEstimate")
     expect(src).toContain("title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}")

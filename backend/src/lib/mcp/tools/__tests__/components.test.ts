@@ -70,7 +70,7 @@ describe("list_components tool", () => {
     expect(result.content[0]?.text).toContain('"scope": "public"')
   })
 
-  it("carries estimated_credits_is_estimate while metered (a `~N` listing), and drops it under the rollback", async () => {
+  it("carries estimated_credits_is_estimate while metered (a `≈N` listing), and drops it under the rollback", async () => {
     const run = async () => {
       chainResolves([{ id: "c1", slug: "writer", name: "Writer", estimated_credits: 6, estimated_credits_is_estimate: true, created_at: "2026-04-01T00:00:00Z" }])
       const server = buildServer()

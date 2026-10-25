@@ -753,17 +753,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     supportsEndFrame: false,
   },
 
-  // Seedance 1.5 Pro - docs.kie.ai/market/bytedance/seedance-1.5-pro
-  // Uses input_urls array (0-2 images for start/end frame)
-  "seedance": {
-    model: "bytedance/seedance-1.5-pro",
-    credits: 33,
-    cost: 0.165,  // avg (4s=14, 8s=28, 12s=60; actual from audit)
-    imageParam: "input_urls",  // Array format: [startFrame] or [startFrame, endFrame]
-    extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
-    allowedDurations: [4, 8, 12],
-    supportsEndFrame: true,  // End frame via input_urls array (handled in video.ts)
-  },
+  // `seedance` (Seedance 1.5 Pro, `bytedance/seedance-1.5-pro`) was retired
+  // upstream 2026-10-25 — KIE answers 410. A stored "seedance" runs as
+  // seedance-2-mini (RETIRED_VIDEO_PROVIDERS in @nodaro/shared).
 
   // Seedance 2.0 — docs.kie.ai/market/bytedance/seedance-2
   // Per-second pricing: 480p no-ref 19 cr/s, 480p ref 11.5 cr/s, 720p no-ref 41 cr/s, 720p ref 25 cr/s
@@ -1251,14 +1243,6 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
-  // Seedance 1.5 Pro T2V - docs.kie.ai/market/bytedance/seedance-1.5-pro
-  "seedance": {
-    model: "bytedance/seedance-1.5-pro",
-    credits: 33,
-    cost: 0.165,  // avg (4s=14, 8s=28, 12s=60; actual from audit)
-    extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
-    allowedDurations: [4, 8, 12],
-  },
 
   // Seedance 2.0 T2V — docs.kie.ai/market/bytedance/seedance-2
   "seedance-2": {

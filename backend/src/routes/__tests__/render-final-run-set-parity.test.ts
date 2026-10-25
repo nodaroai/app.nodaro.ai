@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   queueAdd: vi.fn().mockResolvedValue({ id: "orch-job-1" }),
   loadSource: vi.fn(),
   estimate: vi.fn(async () => 120),
+  /** What the run holds while it renders, when it is more than the price (a UGC clip at its hold); null: the price. */
+  hold: null as number | null,
   meteredEstimate: vi.fn((..._a: unknown[]) => false),
   afford: vi.fn(async (_userId: string, required: number, _surface?: unknown) => ({ sufficient: true, required, available: 1000 }) as {
     sufficient: boolean
@@ -56,7 +58,7 @@ vi.mock("@/lib/queue.js", () => ({
 }))
 vi.mock("@/lib/sse.js", () => ({ createSSEStream: vi.fn() }))
 vi.mock("@/lib/execution-events.js", () => ({ executionEvents: { on: vi.fn(), off: vi.fn(), emit: vi.fn() } }))
-vi.mock("@/ee/billing/credits.js", () => ({ unpricedMeteredLlmOfRun: () => null, CreditsService: { refundCredits: vi.fn() }, estimateRunSetCredits: mocks.estimate, checkRunSetCredits: mocks.afford, runHoldsMeteredLlmEstimate: mocks.meteredEstimate }))
+vi.mock("@/ee/billing/credits.js", () => ({ unpricedMeteredLlmOfRun: () => null, CreditsService: { refundCredits: vi.fn() }, estimateRunSetCredits: mocks.estimate, estimateRunSetFigures: async (...a: unknown[]) => { const credits = (await (mocks.estimate as (...b: unknown[]) => Promise<number>)(...a)); return { credits, hold: mocks.hold ?? credits } }, checkRunSetCredits: mocks.afford, runHoldsMeteredLlmEstimate: mocks.meteredEstimate }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
 // The leaf the consumers read from forwards to the mock above.
 vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
@@ -137,6 +139,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   mocks.inserts.length = 0
   mocks.credits = true
+  mocks.hold = null
   useGraph(FIXTURE.cases["tighten"]!)
   mockTables()
   mocks.loadSource.mockResolvedValue(source())
@@ -365,7 +368,7 @@ describe("POST /v1/workflows/:id/render-final/estimate", () => {
     expect(mocks.queueAdd).not.toHaveBeenCalled()
   })
 
-  it("flags the figure an estimate exactly when an LLM node the run executes is metered (`~N`), asked on the run's own set", async () => {
+  it("flags the figure an estimate exactly when an LLM node the run executes is metered (`≈N`), asked on the run's own set", async () => {
     useGraph(FIXTURE.cases["multicam"]!)
     mocks.loadSource.mockResolvedValue(source())
     const fixed = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
@@ -377,11 +380,21 @@ describe("POST /v1/workflows/:id/render-final/estimate", () => {
     expect([...runNodeIds].sort()).toEqual(["c", "cam", "render"])
   })
 
+  it("answers what the run holds beside its price, the figure the payer's check reads", async () => {
+    useGraph(FIXTURE.cases["multicam"]!)
+    mocks.hold = 300
+    mocks.afford.mockResolvedValue({ sufficient: false, required: 300, available: 200 })
+    const res = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
+    expect(res.json().data).toMatchObject({ estimatedCredits: 120, holdCredits: 300, sufficient: false, available: 200 })
+    expect(mocks.afford.mock.calls[0]![1]).toBe(300)
+  })
+
   it("without a credit system it answers the set with no figure", async () => {
     mocks.credits = false
     const res = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.estimatedCredits).toBeNull()
+    expect(res.json().data.holdCredits).toBeNull()
     expect(mocks.estimate).not.toHaveBeenCalled()
   })
 

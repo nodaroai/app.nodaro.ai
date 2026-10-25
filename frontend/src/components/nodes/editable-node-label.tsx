@@ -76,7 +76,7 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
         // uniform across every node, determined only by the normalized
         // lucide glyph. `[&>svg]:size-4` is still the single source of truth
         // for the 16px glyph size, overriding any per-node `w-3.5`/bare size.
-        className="nopan nodrag inline-flex items-center justify-center [&>svg]:size-4 transition-colors hover:text-[#ff0073] cursor-pointer"
+        className="nopan nodrag inline-flex items-center justify-center [&>svg]:size-4 transition-colors hover:text-primary-ink cursor-pointer"
         onClick={(e) => { e.stopPropagation(); handleIconClick() }}
         onMouseDown={(e) => e.stopPropagation()}
         title={t("node.openSettings")}
@@ -103,7 +103,7 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
       ) : (
         <span
           dir={textDir}
-          className="truncate cursor-text hover:text-[#ff0073] transition-colors"
+          className="truncate cursor-text hover:text-primary-ink transition-colors"
           {...pressable((e) => { e.stopPropagation(); setEditing(true) })}
           onMouseDown={(e) => e.stopPropagation()}
           title={t("node.clickToRename")}

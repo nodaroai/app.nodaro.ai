@@ -77,10 +77,10 @@ export const trendRunShape = {
   slots: z
     .record(z.string().regex(/^[a-z0-9_]{1,32}$/), slotInput)
     .describe(
-      "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. " +
+      "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's, or with none stays as in the original. " +
         'Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot\'s chips.',
     ),
-  example: z.number().int().min(1).optional().describe("The example (1-based, default 1) whose pictures fill optional slots left out."),
+  example: z.number().int().min(1).optional().describe("The example (1-based, default 1) whose pictures fill optional slots left out. Leave out if the trend has none."),
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
@@ -90,7 +90,7 @@ export const trendRunShape = {
 
 type RunArgs = z.infer<z.ZodObject<typeof trendRunShape>> & { session_id?: string }
 
-/** The route's camelCase body; an empty images list is left out (the slot then takes the example's). */
+/** The route's camelCase body; an empty images list is left out (the slot then takes the example's, or stays as in the original on a trend with none). */
 function runBody(args: RunArgs): Record<string, unknown> {
   const slots: Record<string, Record<string, unknown>> = {}
   for (const [key, { images, ...chips }] of Object.entries(args.slots)) {
@@ -148,15 +148,33 @@ function cardView(c: Rec): Rec {
   }
 }
 
+/** The trend's original (the clip it recasts, as shown), or undefined when the route sends none. */
+function originalView(v: unknown): Rec | undefined {
+  if (!isRec(v)) return undefined
+  const poster = str(v.posterUrl)
+  return {
+    videoUrl: str(v.videoUrl) ?? "",
+    ...(poster ? { posterUrl: poster } : {}),
+    width: num(v.width),
+    height: num(v.height),
+    durationSec: num(v.durationSec),
+    // 0 is a start like any other.
+    ...(typeof v.previewStartSec === "number" ? { previewStartSec: v.previewStartSec } : {}),
+  }
+}
+
 function detailView(d: Rec): Rec {
+  const original = originalView(d.original)
   return {
     ...cardView(d),
     version: num(d.version),
     previewSec: d.previewSec === 4 ? 4 : null,
+    ...(original ? { original } : {}),
     engine: d.engine === "kling-4" ? "kling-4" : "seedance-2-5",
     resolutions: strings(d.resolutions),
     slots: (Array.isArray(d.slots) ? d.slots.filter(isRec) : []).map((s) => {
       const hint = str(s.hint)
+      const hintImage = str(s.hintImageUrl)
       const given = isRec(s.defaults) ? s.defaults : {}
       const listed = strings(s.chips)
       const chips = CHIPS.filter((k) => listed.includes(k))
@@ -167,6 +185,7 @@ function detailView(d: Rec): Rec {
         kind: str(s.kind) ?? "",
         required: s.required === true,
         ...(hint ? { hint } : {}),
+        ...(hintImage ? { hintImageUrl: hintImage } : {}),
         chips,
         ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
       }
@@ -295,8 +314,8 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       {
         title: "Get Trend",
         description:
-          "One trend: its slots (key, label, kind, required, hint, chips the user may set, their defaults), its examples (the result video and the pictures each slot used), " +
-          "previewSec, engine and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "One trend: its original (the clip it recasts; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, chips the user may set, their defaults), " +
+          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

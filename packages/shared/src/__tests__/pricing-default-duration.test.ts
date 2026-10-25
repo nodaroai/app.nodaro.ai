@@ -40,8 +40,6 @@ describe("pricedOutputDurationSec", () => {
     expect(pricedOutputDurationSec("kling", 8)).toBe(10)
     expect(pricedOutputDurationSec("grok-i2v", 8)).toBe(6)
     expect(pricedOutputDurationSec("grok-i2v", 15)).toBe(10)
-    expect(pricedOutputDurationSec("seedance", 6)).toBe(4)
-    expect(pricedOutputDurationSec("seedance", 10)).toBe(8)
   })
 
   it("snapToNearestDuration is the runners' rule: offered values pass, ties go to the earlier entry", () => {

@@ -1,5 +1,5 @@
 {
-  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals while the preview stop rule (PREVIEW_STOP_RULE_ENABLED) is off. A graph whose render is set to Preview (the four podcast templates, decided 2026-10-08) is listed in two parts: `templates` is its preview part (the whole graph at its saved settings, the run estimate of a whole run with the rule off) and `templateFinals` its Render final (the render at Final and every node after it, the run estimate of that Render final). With the rule on, a run stops at the Preview and its estimate leaves out the nodes after the render: `templateRunsWithStopRule` is that run estimate, below the preview part by that tail; the listing and a whole-graph estimate still quote `templates`. The sync writes the four that way only where the rule is on (decided 2026-10-08); where it is off it writes their render at Final, and `templatesSyncedWithoutStopRule` is that graph's one figure: its listing (it has no Render final part), its run estimate and its whole-graph estimate. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts. `graphFinals` is the Render final part of a `graphs` entry that has one: a Tighten Episode set to review first is listed as its first run (up to the preview, plus the fee) and its Render final (the run continued from its render on, no fee), and the server and the editor price that Render final (the node's run-only `useCaseContinue` override) at the same figure. The one-node Tighten Episode template (its node set to review first) sits beside the four in `templates`, `templateFinals` and `templateRunsWithStopRule`: its review is the node's own setting, which the preview stop rule never changes, so the sync writes it as authored and it has no `templatesSyncedWithoutStopRule` entry.",
+  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals while the preview stop rule (PREVIEW_STOP_RULE_ENABLED) is off. A graph whose render is set to Preview (the four podcast templates, decided 2026-10-08) is listed in two parts: `templates` is its preview part (the whole graph at its saved settings, the run estimate of a whole run with the rule off) and `templateFinals` its Render final (the render at Final and every node after it, the run estimate of that Render final). With the rule on, a run stops at the Preview and its estimate leaves out the nodes after the render: `templateRunsWithStopRule` is that run estimate, below the preview part by that tail; the listing and a whole-graph estimate still quote `templates`. The sync writes the four that way only where the rule is on (decided 2026-10-08); where it is off it writes their render at Final, and `templatesSyncedWithoutStopRule` is that graph's one figure: its listing (it has no Render final part), its run estimate and its whole-graph estimate. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts. `graphFinals` is the Render final part of a `graphs` entry that has one: a Tighten Episode set to review first is listed as its first run (up to the preview, plus the fee) and its Render final (the run continued from its render on, no fee), and the server and the editor price that Render final (the node's run-only `useCaseContinue` override) at the same figure. The one-node podcast templates (Tighten Episode, Clip Pack and Trailer, each node set to review first) sit beside the four in `templates`, `templateFinals` and `templateRunsWithStopRule`: a node's review is its own setting, which the preview stop rule never changes, so the sync writes each as authored and none has a `templatesSyncedWithoutStopRule` entry.",
   "aboutPrices": "The base price of every credit id the cases read; the backend half checks each against STATIC_CREDIT_COSTS, the editor half prices from this table alone.",
   "prices": {
     "add-captions:kinetic": 50,
@@ -26,30 +26,38 @@
     "speaker-frames": 2,
     "speaker-view:complex": 12,
     "speaker-view:complex:proxy": 3,
+    "use-case-fee:clip-pack": 10,
+    "use-case-fee:episode-trailer": 10,
     "use-case-fee:tighten-episode": 10
   },
   "templates": {
     "podcast-clip-pack": 1022,
+    "podcast-clip-pack-one-node": 820,
     "podcast-multicam-cut": 962,
     "podcast-tighten-episode": 982,
     "podcast-tighten-episode-one-node": 942,
     "podcast-trailer-formats": 923,
+    "podcast-trailer-formats-one-node": 773,
     "podcast-vertical-speaker-clip": 606
   },
   "templateFinals": {
     "podcast-clip-pack": 350,
+    "podcast-clip-pack-one-node": 592,
     "podcast-multicam-cut": 1810,
     "podcast-tighten-episode": 1850,
     "podcast-tighten-episode-one-node": 1850,
     "podcast-trailer-formats": 170,
+    "podcast-trailer-formats-one-node": 70,
     "podcast-vertical-speaker-clip": 2160
   },
   "templateRunsWithStopRule": {
     "podcast-clip-pack": 772,
+    "podcast-clip-pack-one-node": 820,
     "podcast-multicam-cut": 962,
     "podcast-tighten-episode": 932,
     "podcast-tighten-episode-one-node": 942,
     "podcast-trailer-formats": 763,
+    "podcast-trailer-formats-one-node": 773,
     "podcast-vertical-speaker-clip": 606
   },
   "templatesSyncedWithoutStopRule": {

@@ -172,7 +172,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center gap-2 text-[11.5px] font-semibold text-[var(--meta-ads-muted)]">
                 <span>{choiceLine(picked, chosen.length, t)}</span>
                 {nodeData.keepPicks === true && (
-                  <span className="flex items-center gap-1 rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[11px] font-bold text-[#FF0073]">
+                  <span className="flex items-center gap-1 rounded-full bg-[var(--meta-ads-accent-tint)] px-2 py-0.5 text-[11px] font-bold text-primary-ink">
                     <Lock className="h-3 w-3" />{t("social.keptBadge")}
                   </span>
                 )}

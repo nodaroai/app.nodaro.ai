@@ -359,7 +359,7 @@ function EntityInspector({
               disabled={!enabled || !entity.can.transform}
               labelSuffix={
                 entity.transformOverridden ? (
-                  <span className="text-[11px] text-[#ff0073] shrink-0">{V2_TEXT.overridden}</span>
+                  <span className="text-[11px] text-primary-ink shrink-0">{V2_TEXT.overridden}</span>
                 ) : undefined
               }
               onCommitAxis={(axis: VectorAxis, next: number) =>

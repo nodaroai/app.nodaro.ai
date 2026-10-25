@@ -191,7 +191,7 @@ export function SocialPostCard({
               rel="noopener noreferrer"
               onClick={stop}
               onKeyDown={stop}
-              className={cn("flex items-center gap-1 text-[#FF0073] hover:underline", !onRead && "ms-auto")}
+              className={cn("flex items-center gap-1 text-primary-ink hover:underline", !onRead && "ms-auto")}
             >
               {t("social.openPost")} <ExternalLink className="h-3 w-3" />
             </a>

@@ -188,14 +188,14 @@ export function CinematicAvatarConfig({
             {looks.map((id, i) => (
               <span
                 key={id}
-                className="flex items-center gap-1 rounded-full bg-[#ff0073]/10 border border-[#ff0073]/40 px-2 py-0.5 text-[11px] text-[#ff0073]"
+                className="flex items-center gap-1 rounded-full bg-[#ff0073]/10 border border-[#ff0073]/40 px-2 py-0.5 text-[11px] text-primary-ink"
               >
                 {lookNames[i] ?? id}
                 <button
                   type="button"
                   aria-label={t("cfgshared.removeModel", { name: lookNames[i] ?? id })}
                   onClick={() => handleRemoveLook(id)}
-                  className="hover:text-[#ff0073]/70"
+                  className="hover:text-primary-ink"
                 >
                   <X className="h-3 w-3" />
                 </button>

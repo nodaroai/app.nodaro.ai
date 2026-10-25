@@ -12,7 +12,7 @@
  *   GET    /v1/admin/trends/:id                      the trend, its draft and published data
  *   PATCH  /v1/admin/trends/:id                      slug, tags, badges, sort order
  *   PUT    /v1/admin/trends/:id/draft                save the draft (examples kept)
- *   POST   /v1/admin/trends/:id/media                copy a clip / picture into trend storage
+ *   POST   /v1/admin/trends/:id/media                copy a clip (+ its display copy) / picture into trend storage
  *   POST   /v1/admin/trends/:id/test-runs            run the DRAFT as the admin → 202
  *   GET    /v1/admin/trends/:id/test-runs            the trend's runs by admin accounts
  *   POST   /v1/admin/trends/:id/examples             promote an admin run to an example
@@ -23,6 +23,9 @@
  *   POST   /v1/admin/trends/:id/archive              put it away (admin-trends-lifecycle.ts)
  *   POST   /v1/admin/trends/:id/restore              bring an archived trend back, unpublished
  *   DELETE /v1/admin/trends/:id/test-runs/:jobId     delete an admin's test run and its media
+ *   POST   /v1/admin/trends/:id/face-mask            make the trend's face mask (admin-trends-face-mask.ts) → 202 { jobId, revision }
+ *   POST   /v1/admin/trends/:id/face-mask/approve    approve a finished one: stored on the draft
+ *   DELETE /v1/admin/trends/:id/face-mask            clear the draft's face mask
  *
  * Replies use the platform's `{ data }` envelope; errors `{ error: { code, message, … } }`.
  *
@@ -70,7 +73,7 @@ import {
 import { trendRunRequestSchema, trendVersionDataSchema } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
-import { TrendMediaError, copyToTrendStorage } from "../lib/trends/media.js"
+import { TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
 import { publishBlockers } from "../lib/trends/publish-check.js"
 import { allTagUsage, readTagLabels, saveTagLabels, type TagLabels } from "../lib/trends/tags.js"
 import {
@@ -79,6 +82,7 @@ import {
   engineRequest,
   engineSupports,
   followPreviewMasking,
+  withoutUnsupportedStoredMask,
   isRec,
   jobIdOf,
   listedRunsPage,
@@ -93,6 +97,8 @@ import {
 } from "../lib/trends/run-helpers.js"
 import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
+import { draftFaceMaskState, registerTrendFaceMaskRoutes } from "./admin-trends-face-mask.js"
+import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
 
@@ -161,7 +167,8 @@ const patchBody = z.strictObject({
   badges: z.array(z.enum(["trending", "new"])).max(2).optional(),
   sortOrder: z.int().min(-1_000_000).max(1_000_000).optional(),
 })
-const mediaBody = z.strictObject({ url: z.url({ protocol: /^https?$/ }), kind: z.enum(["source", "reference"]) })
+/** `source`: the clip (and its display copy); `reference` / `hint`: a picture (a fixed reference, a slot's hint picture). */
+const mediaBody = z.strictObject({ url: z.url({ protocol: /^https?$/ }), kind: z.enum(["source", "reference", "hint"]) })
 const exampleBody = z.strictObject({ jobId: z.string().regex(UUID_RE, "Not a job id.") })
 const orderBody = z.strictObject({ order: z.array(z.int().min(0)), revision: revisionSchema })
 const revisionQuery = z.object({ revision: revisionSchema })
@@ -208,7 +215,8 @@ async function loadDraft(
 }
 
 function toListItem(t: TrendRow & { draft: TrendVersionData | null }): AdminTrendListItem {
-  const cover = t.draft?.examples[0]
+  // Example 1, else (a draft with no example yet) the original's display copy.
+  const cover = t.draft?.examples[0] ?? t.draft?.source?.display
   const coverUrl = cover?.posterUrl ?? cover?.videoUrl
   return {
     id: t.id,
@@ -323,6 +331,21 @@ function exampleFor(draft: TrendVersionData, run: RunJobRow, media: CopiedRunMed
  * Save `data` as the draft if it is still at `expectedRevision`, or reply 400
  * when it does not validate. Throws `DraftConflictError` when the draft moved.
  */
+/**
+ * The draft's source as saved: the body's, with the stored display copy kept
+ * when the body names the SAME clip and sends no `display` (an admin tab
+ * opened before the backfill set it, or a builder that predates the field,
+ * would otherwise drop it and block publishing). A different clip never keeps
+ * the old clip's copy. A slot's `hintImageUrl` is NOT carried this way: the
+ * builder removes a hint picture by leaving the key out.
+ */
+function keepDisplayCopy(body: Record<string, unknown>, stored: TrendVersionData): Record<string, unknown> {
+  const source = body.source
+  const kept = stored.source?.display
+  if (!kept || !isRec(source) || Object.hasOwn(source, "display") || source.videoUrl !== stored.source?.videoUrl) return body
+  return { ...body, source: { ...source, display: kept } }
+}
+
 async function saveValidDraft(
   reply: FastifyReply,
   trendId: string,
@@ -347,6 +370,24 @@ function trendRunError(reply: FastifyReply, e: TrendRunError) {
 
 function mediaError(reply: FastifyReply, e: TrendMediaError) {
   return err(reply, 400, e.code, e.message)
+}
+
+/**
+ * The answer to a failed media copy, or null when `e` is not one: a file the
+ * platform refuses is a 400 (ffmpeg's own words logged when it has some); an
+ * ffmpeg or ffprobe the platform killed or could not admit is a 503 (the same
+ * file may pass on a retry), never "unreadable".
+ */
+function mediaFailure(reply: FastifyReply, req: FastifyRequest, e: unknown, trendId: string) {
+  if (e instanceof TrendMediaError) {
+    if (e.cause !== undefined) req.log.warn({ err: e.cause, trendId }, "admin-trends: the media could not be read or re-encoded")
+    return mediaError(reply, e)
+  }
+  if (isTransientMediaFailure(e)) {
+    req.log.warn({ err: e, trendId }, "admin-trends: the media step was stopped, not refused")
+    return err(reply, 503, "media_busy", "The video could not be processed right now. Try again in a moment.")
+  }
+  return null
 }
 
 // ── routes ──────────────────────────────────────────────────────────────────
@@ -454,7 +495,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
           : trend.publishedVersion === trend.draftVersion
             ? draft
             : await getVersion(trend.id, trend.publishedVersion)
-      return { data: { trend, draft, published, revision } }
+      return {
+        data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft) },
+      }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read the trend")
     }
@@ -488,9 +531,17 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const loaded = await loadDraft(req, reply)
       if (!loaded) return reply
       if (loaded.revision !== body.data.revision) return draftConflict(reply)
-      // Examples are written only by the example routes: the body's are
-      // ignored, and the row's own (at the revision the client read) are kept.
-      const data = { ...body.data.data, examples: loaded.draft.examples } as unknown as TrendVersionData
+      // Examples are written only by the example routes, and the face mask
+      // only by the face mask routes: the body's are ignored, and the row's
+      // own (at the revision the client read) are kept.
+      const { faceMask: _mask, faceMaskJob: _job, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
+      const { faceMask, faceMaskJob } = loaded.draft
+      const data = {
+        ...edited,
+        examples: loaded.draft.examples,
+        ...(faceMask ? { faceMask } : {}),
+        ...(faceMaskJob ? { faceMaskJob } : {}),
+      } as unknown as TrendVersionData
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
       if (!saved) return reply
       return { data: saved }
@@ -508,18 +559,19 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
     try {
       if (!(await getTrendById(id))) return notFound(reply)
       const source = body.data.kind === "source"
-      const stored = await copyToTrendStorage(id, body.data.url, source ? "video" : "image", source ? { durationSec: SOURCE_SECONDS } : {})
+      const stored = await copyToTrendStorage(id, body.data.url, source ? "video" : "image", source ? { durationSec: SOURCE_SECONDS, display: true } : {})
       return {
         data: {
           url: stored.url,
           ...(stored.durationSec !== undefined ? { durationSec: stored.durationSec } : {}),
           ...(stored.width !== undefined ? { width: stored.width } : {}),
           ...(stored.height !== undefined ? { height: stored.height } : {}),
+          // The source's display copy: the admin saves it on the draft's `source.display`.
+          ...(stored.display ? { display: stored.display } : {}),
         },
       }
     } catch (e) {
-      if (e instanceof TrendMediaError) return mediaError(reply, e)
-      return unavailableOrInternal(reply, req, e, "Failed to store the media")
+      return mediaFailure(reply, req, e, id) ?? unavailableOrInternal(reply, req, e, "Failed to store the media")
     }
   })
 
@@ -563,6 +615,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         previewJobId: parsed.data.previewJobId,
         log: req.log,
       })
+      withoutUnsupportedStoredMask(composed)
 
       const key = req.headers["idempotency-key"]
       const res = await engineRequest(
@@ -667,8 +720,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       }
       return draftConflict(reply)
     } catch (e) {
-      if (e instanceof TrendMediaError) return mediaError(reply, e)
-      return unavailableOrInternal(reply, req, e, "Failed to add the example")
+      return mediaFailure(reply, req, e, (req.params as { id: string }).id) ?? unavailableOrInternal(reply, req, e, "Failed to add the example")
     }
   })
 
@@ -755,4 +807,5 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   })
 
   registerTrendLifecycleRoutes(app, { findTrendRun })
+  registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

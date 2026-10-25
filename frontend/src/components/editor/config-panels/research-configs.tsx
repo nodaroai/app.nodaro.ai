@@ -108,7 +108,7 @@ export function SocialSearchConfig({ data, onUpdate, sources, fieldMappings, onM
               }}
               className={cn(
                 "flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2 text-[11.5px] font-bold transition-colors",
-                p === platform ? "border-[#FF0073] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]" : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]",
+                p === platform ? "border-[#FF0073] bg-[var(--meta-ads-accent-tint)] text-primary-ink" : "border-[var(--meta-ads-border)] text-[var(--meta-ads-muted)] hover:text-[var(--meta-ads-text)]",
               )}
             >
               {SOCIAL_PLATFORM_META[p].icon("h-4 w-4")}

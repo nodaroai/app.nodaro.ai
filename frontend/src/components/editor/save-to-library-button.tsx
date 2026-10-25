@@ -53,7 +53,7 @@ function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#ff0073]/10 flex items-center justify-center">
-              <BookmarkPlus className="w-4 h-4 text-[#ff0073]" />
+              <BookmarkPlus className="w-4 h-4 text-primary-ink" />
             </div>
             <h2 className="text-base font-semibold">{t("cfgshared.saveLibTitle")}</h2>
           </div>
@@ -244,7 +244,7 @@ export function SaveToLibraryButton({
             ? "bg-green-500/20 text-green-400"
             : saveState === "error"
               ? "bg-red-500/20 text-red-400"
-              : "bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20",
+              : "bg-[#ff0073]/10 text-primary-ink hover:bg-[#ff0073]/20",
           className,
         )}
         onClick={handleClick}

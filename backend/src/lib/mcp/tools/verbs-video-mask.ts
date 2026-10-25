@@ -87,7 +87,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
           .optional()
           .describe(`Detection confidence (default ${L.THRESHOLD_DEFAULT}). Lower finds more — try 0.3 when nothing matches.`),
         provider: z.enum(VIDEO_MASK_PROVIDERS).optional().describe("Segmentation model: sam-3.1 (default) or sam-3 (half the price)."),
-        hold_last_mask: z.boolean().optional().describe("Keep the last mask on frames where the subject is lost (default false)."),
+        hold_last_mask: z.boolean().optional().describe("Keep the last mask on frames where the subject is lost, for up to 1 s (default false)."),
         min_subject_height_pct: z.number().min(L.MIN_SUBJECT_HEIGHT_PCT_MIN).max(L.MIN_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions shorter than this % of the frame height (default 0 = off)."),
         max_subject_height_pct: z.number().min(L.MAX_SUBJECT_HEIGHT_PCT_MIN).max(L.MAX_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions taller than this % of the frame height (default 0 = off)."),
         zone: z
@@ -95,6 +95,13 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
           .optional()
           .describe("Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too)."),
         per_shot: z.boolean().optional().describe("Detect the subject again in every shot after a scene cut (default false)."),
+        redetect_every_sec: z
+          .number()
+          .min(0)
+          .max(L.REDETECT_EVERY_SEC_MAX)
+          .refine((v) => v === 0 || v >= L.REDETECT_EVERY_SEC_MIN, { message: `0 or ${L.REDETECT_EVERY_SEC_MIN}–${L.REDETECT_EVERY_SEC_MAX}` })
+          .optional()
+          .describe(`Also detect the subject again every N s (0 = off, default; or ${L.REDETECT_EVERY_SEC_MIN}–${L.REDETECT_EVERY_SEC_MAX}) — catches someone who appears or turns to camera mid-shot. Slower, same price.`),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -114,6 +121,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         ...(args.max_subject_height_pct !== undefined ? { maxSubjectHeightPct: args.max_subject_height_pct } : {}),
         ...(zone ? { zone } : {}),
         ...(args.per_shot !== undefined ? { perShot: args.per_shot } : {}),
+        ...(args.redetect_every_sec !== undefined ? { redetectEverySec: args.redetect_every_sec } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

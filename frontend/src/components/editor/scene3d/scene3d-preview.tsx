@@ -247,7 +247,7 @@ function Scene3DV1Preview({
   /** "Base pose" / "Keyframe @ N" — so the write is labelled, not guessed. */
   const modeBadge = (mode: PoseEditMode) => (
     <span
-      className={`text-[11px] shrink-0 ${mode === "base" ? "text-muted-foreground" : "text-[#ff0073]"}`}
+      className={`text-[11px] shrink-0 ${mode === "base" ? "text-muted-foreground" : "text-primary-ink"}`}
       title={mode === "base" ? t("cfgext.scene3dModeBaseHint") : t("cfgext.scene3dModeKeyframeHint")}
     >
       {mode === "base" ? t("cfgext.scene3dModeBase") : t("cfgext.scene3dModeKeyframe", { frame })}

@@ -108,11 +108,11 @@ function MentionTextarea({ value, onChange, elements, placeholder, rows, classNa
               onMouseDown={(e) => { e.preventDefault(); insert(el.name) }}
               className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-start transition-colors ${
                 i === selectedIdx
-                  ? "bg-[#ff0073]/10 text-[#ff0073]"
+                  ? "bg-[#ff0073]/10 text-primary-ink"
                   : "hover:bg-muted/50 text-foreground"
               }`}
             >
-              <span className="font-mono text-[#ff0073] text-xs">@</span>
+              <span className="font-mono text-primary-ink text-xs">@</span>
               <span>{el.name}</span>
             </button>
           ))}
@@ -357,7 +357,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
         {/* ═══ Header ═══ */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
           <div className="flex items-center gap-3">
-            <Film className="w-4 h-4 text-[#ff0073]" />
+            <Film className="w-4 h-4 text-primary-ink" />
             <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
               {t("kling3.title")}
             </h2>
@@ -444,7 +444,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                 {status === "running" && (
                   <div className="flex items-center justify-center h-48 rounded-xl bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]">
                     <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="w-8 h-8 animate-spin text-[#ff0073]" />
+                      <Loader2 className="w-8 h-8 animate-spin text-primary-ink" />
                       <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">{t("kling3.generatingVideo")}</span>
                       {data.currentJobProgress != null && data.currentJobProgress > 0 && (
                         <div className="w-32 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -581,7 +581,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       className="w-full p-3 text-sm min-h-[150px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
                     />
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      {t("kling3.mentionTipPre")} <code className="font-mono text-[#ff0073]">@name</code> {t("kling3.mentionTipPost")}
+                      {t("kling3.mentionTipPre")} <code className="font-mono text-primary-ink">@name</code> {t("kling3.mentionTipPost")}
                     </p>
                   </div>
 
@@ -805,7 +805,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         type="button"
                         onClick={handleAddShot}
                         disabled={shots.length >= 6}
-                        className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 text-sm font-medium text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground disabled:hover:bg-transparent flex items-center justify-center gap-2"
+                        className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 text-sm font-medium text-muted-foreground hover:text-primary-ink transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground disabled:hover:bg-transparent flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" /> {t("cfgext.kling3AddShot")} {shots.length < 6 && `(${shots.length}/6)`}
                       </button>
@@ -842,7 +842,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     <div key={i} className="rounded-xl border-2 border-border hover:border-[#ff0073]/30 bg-gradient-to-b from-card to-card/80 p-5 shadow-lg space-y-4 transition-colors">
                       {/* HEADER ROW */}
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl text-[#ff0073] font-black shrink-0">@</span>
+                        <span className="text-2xl text-primary-ink font-black shrink-0">@</span>
                         <input
                           ref={(ref) => { elementNameRefs.current[i] = ref }}
                           type="text"
@@ -877,7 +877,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       <div>
                         <div className="flex items-baseline gap-1 mb-1">
                           <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t("common.description")}</span>
-                          <span className="text-[11px] text-[#ff0073]">*</span>
+                          <span className="text-[11px] text-primary-ink">*</span>
                         </div>
                         <p className="text-[11px] text-muted-foreground mb-1.5 leading-relaxed">
                           {t("kling3.elementDescPre")} <span className="font-mono">@{el.name || t("utilcfg.phParamName")}</span> {t("kling3.elementDescPost")}
@@ -915,7 +915,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                             ))}
                           </div>
                         ) : (
-                          <div className="flex flex-col items-center justify-center h-[100px] rounded-xl border-2 border-dashed border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073]/40">
+                          <div className="flex flex-col items-center justify-center h-[100px] rounded-xl border-2 border-dashed border-[#ff0073]/30 bg-[#ff0073]/5 text-primary-ink">
                             <ImageIcon className="w-8 h-8 mb-1.5" />
                             <span className="text-xs">{t("kling3.dropMedia")}</span>
                           </div>
@@ -926,14 +926,14 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       <div className="flex items-center gap-2.5 relative">
                         <button
                           type="button"
-                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors flex items-center gap-1.5"
+                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-primary-ink transition-colors flex items-center gap-1.5"
                           onClick={() => alert(t("common.comingSoon"))}
                         >
                           <ImageIcon className="w-3.5 h-3.5" /> {t("toolbar.library")}
                         </button>
                         <button
                           type="button"
-                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 flex items-center gap-1.5"
+                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-primary-ink transition-colors disabled:opacity-40 flex items-center gap-1.5"
                           disabled={uploadingIndex === i}
                           onClick={() => fileInputRefs.current[i]?.click()}
                         >
@@ -956,7 +956,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         />
                         <button
                           type="button"
-                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors flex items-center gap-1.5"
+                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-primary-ink transition-colors flex items-center gap-1.5"
                           onClick={() => setWorkflowDropdownIndex(workflowDropdownIndex === i ? null : i)}
                         >
                           <GitBranch className="w-3.5 h-3.5" /> {t("apps.workflow")}
@@ -1012,7 +1012,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     type="button"
                     onClick={handleAddElement}
                     disabled={elements.length >= 5}
-                    className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 text-sm font-medium text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground disabled:hover:bg-transparent flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 text-sm font-medium text-muted-foreground hover:text-primary-ink transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground disabled:hover:bg-transparent flex items-center justify-center gap-2"
                   >
                     <Plus className="w-4 h-4" /> {t("cfgext.kling3AddElement")} {elements.length < 5 && `(${elements.length}/5)`}
                   </button>

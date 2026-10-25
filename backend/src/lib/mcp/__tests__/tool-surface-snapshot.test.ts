@@ -1119,7 +1119,7 @@ const CAST_SWAP_TOOL_BYTES = 3_134
 const LLM_METERED_PRICING_COPY_BYTES = 3_172
 
 // RAISED 2026-10-20 by the UGC quote's estimate flags (metered LLM pricing Task 12): build_ugc_clips'
-// description names a quote line's `estimate: true` and the quote's `totalIsEstimate: true` (show ~N).
+// description names a quote line's `estimate: true` and the quote's `totalIsEstimate: true` (show ≈N).
 // No tool added. Measured by this suite: 481_314 total − 481_290 budget before = 24 B over; the
 // sentence is 127 B (the rest rode the earlier headroom).
 const UGC_QUOTE_ESTIMATE_FLAGS_BYTES = 127
@@ -1211,6 +1211,11 @@ const VIDEO_MASK_MAX_SUBJECT_BYTES = 156
 // the change: 488_293 total − 487_791 = 502 B; the 103 B of headroom carry across.
 const VIDEO_MASK_ZONE_PER_SHOT_BYTES = 502
 
+// RAISED 2026-10-25 by `video_mask` taking `redetect_every_sec` (0 = off or 1–10 s: detect the subject
+// again every that many seconds) — one arg, nothing else; no tool added, so the fixture does NOT move.
+// Measured by this suite with and without the change: 505_594 total − 505_367 = 227 B; the 58 B of headroom carry across.
+const VIDEO_MASK_REDETECT_BYTES = 227
+
 // RAISED 2026-10-21 by `cast_swap` taking `pre_prompt` (instructions placed before the role
 // instructions, mentioning roles as post_prompt does) — one arg, and its `roles` description
 // saying a pre_prompt alone is enough too — and nothing else. No tool was added, so the fixture
@@ -1294,6 +1299,13 @@ const CAST_SWAP_ENGINE_BYTES = 959
 // 235 B at most.
 const USER_REQUEST_ARG_PER_TOOL_BYTES = 235
 const USER_REQUEST_ARG_TOTAL_BYTES = 7_755
+
+// Trends show their original: `get_trend` names the trend's `original` (the clip it recasts, with
+// its preview start), a slot's `hintImageUrl` and that `examples` may be empty; `estimate_trend` /
+// `run_trend` (one shared input shape) say an optional slot left out on a trend with no example
+// stays as in the original, and to leave `example` out there. No tool was added, so the fixture
+// does NOT move. Measured: 505_576 total − 505_352 = 224 B; the 73 B of headroom carry across.
+const TRENDS_ORIGINAL_BYTES = 224
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
@@ -1427,6 +1439,7 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_MIN_SUBJECT_BYTES +
     VIDEO_MASK_MAX_SUBJECT_BYTES +
     VIDEO_MASK_ZONE_PER_SHOT_BYTES +
+    VIDEO_MASK_REDETECT_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +
@@ -1452,7 +1465,8 @@ export const TOOL_WIRE_BUDGET = {
     KLING_4_MODELS_BYTES +
     LIST_JOBS_SOURCES_BYTES +
     CAST_SWAP_ENGINE_BYTES +
-    USER_REQUEST_ARG_TOTAL_BYTES,
+    USER_REQUEST_ARG_TOTAL_BYTES +
+    TRENDS_ORIGINAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

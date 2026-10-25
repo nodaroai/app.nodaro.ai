@@ -731,7 +731,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         workflowId: workflow.id,
         name: workflow.name,
         ...(estimate ? { estimatedCredits: estimate.credits } : {}),
-        // A metered LLM line makes the figure an estimate (`~`, spec §8.5); present only then.
+        // A metered LLM line makes the figure an estimate (`≈`, spec §8.5); present only then.
         ...(estimate?.estimate ? { estimatedCreditsIsEstimate: true } : {}),
         ...(estimatedCreditsUnpriced ? { estimatedCreditsUnpriced } : {}),
         inputs,

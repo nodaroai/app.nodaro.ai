@@ -25,7 +25,7 @@ export const variantToSelection = (v: ModelTreeVariant): ModelSelection => ({
 
 const kindIcon = (k: string) =>
   k === "video" ? <Film className="h-[19px] w-[19px]" /> : k === "audio" ? <Music className="h-[19px] w-[19px]" /> : <ImageIcon className="h-[19px] w-[19px]" />
-const kindColor = (k: string) => (k === "video" ? "text-[#818CF8]" : k === "audio" ? "text-[#34D399]" : "text-[#ff0073]")
+const kindColor = (k: string) => (k === "video" ? "text-[#818CF8]" : k === "audio" ? "text-[#34D399]" : "text-primary-ink")
 const rowCn = (active: boolean) =>
   cn("w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors", active ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]" : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]")
 
@@ -115,7 +115,7 @@ export function ModelsTab({
       <div>
         {mode === "variants" && line && (
           <div className="flex items-center gap-2.5 px-3.5 py-2 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
-            <button type="button" onClick={() => setOpenSeries(null)} className="flex items-center gap-1.5 text-[13px] font-semibold text-[#ff0073]">
+            <button type="button" onClick={() => setOpenSeries(null)} className="flex items-center gap-1.5 text-[13px] font-semibold text-primary-ink">
               <ArrowLeft className={cn("h-4 w-4", isRtl && "rotate-180")} /> {t("addnode.tabModels")}
             </button>
             <span className="text-[13px] font-bold text-[#1E293B] dark:text-white">{line.series}</span>

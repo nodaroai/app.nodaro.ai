@@ -68,7 +68,7 @@ export function CopyToProjectDialog({ open, onOpenChange, workflowId, workflowNa
                   disabled={copying !== null}
                 >
                   {p.isDefault ? (
-                    <Star className="h-3.5 w-3.5 fill-[#ff0073] text-[#ff0073]" aria-hidden />
+                    <Star className="h-3.5 w-3.5 fill-[#ff0073] text-primary-ink" aria-hidden />
                   ) : (
                     <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   )}

@@ -87,7 +87,9 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
+import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -149,6 +151,7 @@ import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pric
 // CREDIT_COSTS are the legacy tables below ∪ every unit's rows and credit id.
 import { UNIT_PRICES } from "../nodes/_generated/prices.js"
 import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
+import { withRunningVideoProvider } from "../../services/workflow-engine/normalize-node-types.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -809,11 +812,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "grok-imagine-video-1.5:13s:720p": 820,
   "grok-imagine-video-1.5:14s:720p": 880,
   "grok-imagine-video-1.5:15s:720p": 950,
-  "seedance": 250,                 // (8s default; actual 3.5 KIE/sec)
-  // Seedance duration-tiered pricing (/sec)
-  "seedance:4s": 40,
-  "seedance:8s": 70,
-  "seedance:12s": 150,            // (actual from audit)
   // ── Seedance 2.0 — per-second billing, resolution × video-ref dimensions ──
   // Base fallback (8s/480p/no-ref)
   "seedance-2": 380,
@@ -2521,7 +2519,7 @@ function meteredScrapeAnalysisOf(node: { type: string; data?: Record<string, unk
  * key a node's run is priced under — its call's key, or a scrape's analysis
  * key — or null when the node bills no metered call. Always null under the
  * rollback (`!llmMeteredPricing()`), when nothing is metered. A node with a
- * key is an ESTIMATE (`~`): charged its actual usage after the run.
+ * key is an ESTIMATE (`≈`): charged its actual usage after the run.
  */
 export function meteredLlmKeyOfNode(node: { type: string; data?: Record<string, unknown> }): string | null {
   // The shape first: the switch is read only for a node that IS metered (as `meteredLlmIdOf`).
@@ -2571,7 +2569,7 @@ export function unpricedMeteredLlmOfRun(
  * Does a run of `nodes` hold a metered LLM call's ESTIMATE — a node it
  * executes (given `runNodeIds`: among those; a use-case node's built chain
  * included, a wired Settings input read) that makes a metered call, so its
- * figure is charged the call's actual usage and shown `~N`? The same
+ * figure is charged the call's actual usage and shown `≈N`? The same
  * predicate every estimate reads (`meteredLlmKeyOfNode`) on the graph walk
  * `unpricedMeteredLlmOfRun` makes. Always false under the rollback.
  *
@@ -4896,7 +4894,7 @@ export interface AppListingEstimate {
   /** The final part's credits per further item (absent when none). */
   readonly finalPerItem?: number
   /** The listing holds a metered LLM call's ESTIMATE (Task 12, R47): charged its
-   *  actual usage, so it is shown `~N`. Absent for a fixed price, and always
+   *  actual usage, so it is shown `≈N`. Absent for a fixed price, and always
    *  under the tier-pricing rollback. Stored as `estimated_credits_is_estimate`. */
   readonly estimate?: true
 }
@@ -4960,6 +4958,23 @@ async function estimateRunGraphCredits(
   /** Told each priced node's figure (the detailed estimate's tally). */
   onNode?: NodeTally,
 ): Promise<number> {
+  return (await estimateRunGraphFigures(nodes, rawEdges, options, onNode)).credits
+}
+
+/** A run's two figures: the price every surface quotes, and what the run holds (its balance check's figure). */
+export interface RunFigures {
+  readonly credits: number
+  /** The price, with each UGC part at what it holds while its clips render (`holdParts`). */
+  readonly hold: number
+}
+
+/** `estimateRunGraphCredits`, with what the run holds beside its price. */
+async function estimateRunGraphFigures(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
+  options: WorkflowEstimateOptions | undefined,
+  onNode?: NodeTally,
+): Promise<RunFigures> {
   // Priced on the graph the run executes: a Teleport pair passes on exactly
   // what entered it (@nodaro/render-rules teleport-bypass.ts).
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
@@ -4972,9 +4987,11 @@ async function estimateRunGraphCredits(
   // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
   // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
   // preview stop rule still sees every wire.
-  const ugc = await ugcPartOf(nodes, edges)
+  // A run of a subset prices only the UGC parts of the nodes it executes.
+  const ugc = await ugcPartOf(nodes, edges, options?.runNodeIds)
   if (onNode) for (const [id, figure] of ugc?.perNode ?? []) onNode(id, figure.credits, figure.estimate)
-  return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip, onNode) + (ugc?.credits ?? 0)
+  const rest = sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip, onNode)
+  return { credits: rest + (ugc?.credits ?? 0), hold: rest + (ugc?.hold ?? 0) }
 }
 
 /** A detailed estimate's tally: one priced node's credits, and whether they are a metered estimate. */
@@ -4983,7 +5000,7 @@ export type NodeTally = (nodeId: string, credits: number, estimate: boolean) => 
 /** One node's line in a detailed estimate. */
 export interface NodeEstimate {
   readonly credits: number
-  /** A metered LLM call's estimate (charged its actual usage after the run): shown `~`. */
+  /** A metered LLM call's estimate (charged its actual usage after the run): shown `≈`. */
   readonly estimate: boolean
 }
 
@@ -4991,7 +5008,7 @@ export interface NodeEstimate {
  * A workflow estimate with its lines (Task 12, spec §8.5): the total
  * (`credits`, always `estimateWorkflowCredits`' figure — the same sum, told
  * each line as it adds it), whether ANY line is a metered LLM estimate
- * (`estimate`, the `~` every surface shows), and each priced node's figure by
+ * (`estimate`, the `≈` every surface shows), and each priced node's figure by
  * id (`perNode`; a use-case node's chain by its steps' ids, its fee under its
  * own id). The total is the metered estimates plus the fixed prices — never a
  * hold or a ceiling. Under the rollback nothing is an estimate.
@@ -5136,7 +5153,7 @@ function sumEstimatedNodes(
  * A Component node whose published price holds a metered LLM call's estimate:
  * the flag the editor stores beside the price it read from the component's
  * listing (`estimatedCreditsIsEstimate`, the listing's R47 flag) — its inner
- * LLM call is charged its actual usage, so the line is `~`. Only while metered
+ * LLM call is charged its actual usage, so the line is `≈`. Only while metered
  * pricing is on (the gate the listing's flag is served under,
  * `listingEstimateFlag`).
  */
@@ -5940,11 +5957,18 @@ export function graphPricingUnits(
 async function ugcPartOf(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-): Promise<{ credits: number; skip: (node: EstimateNode) => boolean; perNode: ReadonlyMap<string, NodeEstimate> } | null> {
+  /** A run of a subset: only the parts of these nodes are priced (`estimateUgcPart`). Absent: the whole graph. */
+  runNodeIds?: ReadonlySet<string>,
+  /** Answers already asked for, by input (`UgcAnswerMemo`): a listing's choices share them. */
+  memo?: UgcAnswerMemo,
+  /** A listing's reading: a failed estimate throws `UgcPartUnpricedError` instead of counting 0. */
+  strict?: boolean,
+): Promise<{ credits: number; hold: number; skip: (node: EstimateNode) => boolean; perNode: ReadonlyMap<string, NodeEstimate> } | null> {
   if (!hasCredits() || !nodes.some((n) => n.type === "ugc-clip")) return null
-  const ugc = await estimateUgcPart(nodes, edges)
+  const ugc = await estimateUgcPart(nodes, edges, runNodeIds, memo, strict)
   return {
     credits: ugc.credits,
+    hold: ugc.hold,
     skip: (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.covered.has(n.id)),
     perNode: ugc.perNode,
   }
@@ -5959,41 +5983,68 @@ async function ugcPartOf(
  * figure (`ugcSumPerNode`). Every other Combine Videos, Video Overlay or Add
  * Captions stays in the per-node sum. A script or creator that hands on what it
  * keeps makes no call and adds nothing.
+ *
+ * A run of a subset (`runNodeIds`: a Render final, a run of named nodes, a
+ * continue-from-failed) prices only the parts of the nodes it executes, read as
+ * the editor's run price reads them (`ugcRunSetVideos`: a script, creator or
+ * clips that already ran and are not re-executed add nothing; each part times
+ * the runs of the node that executes it). `covered` stays every member of every
+ * video: the per-node sum leaves them out either way.
  */
+/**
+ * The estimate's answers already asked for, keyed by the input (its keys sorted): a listing prices
+ * many choices whose UGC videos often share an input, and each is asked once.
+ */
+type UgcAnswerMemo = Map<string, Promise<Awaited<ReturnType<typeof import("../lib/ugc-estimate.js")["estimateUgcRun"]>>>>
+
+const ugcInputKey = (input: object): string => JSON.stringify(input, Object.keys(input).sort())
+
 async function estimateUgcPart(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-): Promise<{ credits: number; covered: ReadonlySet<string>; perNode: ReadonlyMap<string, NodeEstimate> }> {
+  runNodeIds?: ReadonlySet<string>,
+  memo?: UgcAnswerMemo,
+  strict?: boolean,
+): Promise<{ credits: number; hold: number; covered: ReadonlySet<string>; perNode: ReadonlyMap<string, NodeEstimate> }> {
   // The same reading the editor's run price uses.
-  const chains = ugcChains(nodes, edges)
-  const covered = new Set(chains.flatMap((c) => c.members.map((m) => m.id)))
-  const byId = new Map(nodes.flatMap((n) => (n.id !== undefined ? [[n.id, n] as const] : [])))
-  const keeps = (id: string, type: "ugc-script" | "ugc-creator") => ugcKeptOutputs(type, byId.get(id)?.data ?? {}) !== null
+  const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
+  /** The input being asked when the estimate failed: a listing names the choice it stands for. */
+  let asking: UgcEstimateInput | undefined
   try {
     // ee -> ee, dynamic only so that this module's graph does not load the quote module on every import.
     const { estimateUgcRun } = await import("../lib/ugc-estimate.js")
     const { ESTIMATE_CALLER } = await import("../lib/ugc-quote.js")
+    // Each video to price: its estimate's input and the parts it prices.
+    const videos = runNodeIds ? ugcRunSetVideos(nodes, edges, runNodeIds) : ugcGraphVideos(nodes, edges)
     const figures: Array<{ id: string; credits: number }> = []
+    const holdFigures: Array<{ id: string; credits: number }> = []
     // The nodes whose part the answer marks an estimate (`estimateParts`, the quote's own rule — R58:
     // a clip's reading only when the plugin meters it; the creator check whenever it is metered).
     const estimated = new Set<string>()
-    for (const chain of chains) {
-      const members = chain.members.filter(
-        (m) => m.part !== null && !(m.part === "script" && keeps(m.id, "ugc-script")) && !(m.part === "creator" && keeps(m.id, "ugc-creator")),
-      )
-      if (members.length === 0) continue
-      const r = await estimateUgcRun(ESTIMATE_CALLER, ugcChainInput(chain, nodes, edges).input)
-      for (const m of members) {
-        figures.push({ id: m.id, credits: r.parts[m.part!] })
-        // Never under the rollback (no metered key is priced then; the answer says so too).
-        if (r.estimateParts?.includes(m.part!) && llmMeteredPricing()) estimated.add(m.id)
+    for (const video of videos) {
+      const ask = (input: UgcEstimateInput) => {
+        asking = input
+        if (!memo) return estimateUgcRun(ESTIMATE_CALLER, input)
+        const key = ugcInputKey(input)
+        const asked = memo.get(key) ?? estimateUgcRun(ESTIMATE_CALLER, input)
+        memo.set(key, asked)
+        return asked
+      }
+      const r = await ugcVideoEstimate(video.inputs, ask)
+      for (const m of video.parts) {
+        figures.push({ id: m.id, credits: r.parts[m.part] * m.runs })
+        holdFigures.push({ id: m.id, credits: r.holdParts[m.part] * m.runs })
+        // A part that costs something (the editor's rule); never under the rollback (no metered key is priced then; the answer says so too).
+        if (r.parts[m.part] > 0 && r.estimateParts?.includes(m.part) && llmMeteredPricing()) estimated.add(m.id)
       }
     }
     const perNode = new Map([...ugcFiguresPerNode(figures)].map(([id, credits]) => [id, { credits, estimate: estimated.has(id) }] as const))
-    return { credits: ugcSumPerNode(figures), covered, perNode }
+    return { credits: ugcSumPerNode(figures), hold: ugcSumPerNode(holdFigures), covered, perNode }
   } catch (err) {
+    // A listing never prices a video it could not price as free: it is refused, naming the choice.
+    if (strict) throw new UgcPartUnpricedError(asking, { cause: err })
     console.warn("[estimate] UGC estimate unavailable; UGC nodes counted as 0", err instanceof Error ? err.message : err)
-    return { credits: 0, covered, perNode: new Map() }
+    return { credits: 0, hold: 0, covered, perNode: new Map() }
   }
 }
 
@@ -6035,6 +6086,11 @@ function listingEstimate(
   exposedListNodeIds?: ReadonlySet<string>,
   /** A general user's answers (`usecaseViewerForEveryone`): Speaker Map, Speaker Frames. */
   viewer?: UseCaseViewerFlags,
+  /**
+   * What one further item of each exposed List adds to the UGC part (priced through its seam, so
+   * outside the per-node sum `skip` leaves it out of): added to that List's per-item figure.
+   */
+  ugcPerItem?: ReadonlyMap<string, number>,
 ): AppListingEstimate {
   // A use-case node lists as the chain it builds (decided 2026-10-13): the
   // preview part is what its run executes (a review-on node stops at its
@@ -6044,7 +6100,7 @@ function listingEstimate(
   // The expanded graphs below hold no use-case node, so they need no flag.
   const uc = expandUseCaseNodes(nodes, edges, usecaseExpandFlags(viewer))
   if (uc.expanded) {
-    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
+    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds, undefined, ugcPerItem)
     const whole = expandUseCaseNodes(nodes, edges, { chain: "whole", ...usecaseExpandFlags(viewer) })
     const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
     // Each fee counts once per run its node makes (a List's items, Each wires, repeats).
@@ -6069,7 +6125,7 @@ function listingEstimate(
         if (!list || list.type !== "list") continue
         const saved = Math.max(1, listItemCount(list.data))
         const withItems = (count: number) => nodes.map((n) => (n.id === listId ? { ...n, data: withListItemCount(n.data, count) } : n))
-        const steps = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, new Set([listId])).previewPerItem ?? 0
+        const steps = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, new Set([listId]), undefined, ugcPerItem).previewPerItem ?? 0
         previewPerItem = Math.max(previewPerItem, steps + fees(withItems(saved + 1)) - fees(withItems(saved)))
       }
     }
@@ -6098,7 +6154,9 @@ function listingEstimate(
     const one = listingParts(withItems(saved), edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds)
     const two = listingParts(withItems(saved + 1), edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds)
     const ceiling = (fixed: number, perMinute: number) => fixed + perMinute * EDIT_PLAN_MAX_MINUTES
-    previewPerItem = Math.max(previewPerItem, ceiling(two.preview, two.previewPerMinute) - ceiling(one.preview, one.previewPerMinute))
+    // The UGC part is the app run's (the preview part): what one more item adds to it.
+    const ugcStep = ugcPerItem?.get(listId) ?? 0
+    previewPerItem = Math.max(previewPerItem, ceiling(two.preview, two.previewPerMinute) - ceiling(one.preview, one.previewPerMinute) + ugcStep)
     finalPerItem = Math.max(finalPerItem, ceiling(two.final, two.finalPerMinute) - ceiling(one.final, one.finalPerMinute))
   }
   return previewPerItem > 0 || finalPerItem > 0 ? { ...parts, previewPerItem, finalPerItem } : parts
@@ -6262,7 +6320,7 @@ function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>):
 }
 
 export function getNodeModelIdentifier(
-  node: EstimateNode,
+  rawNode: EstimateNode,
   graph: {
     timedCaptionSourceWired?: boolean
     audioSyncSourceCount?: number
@@ -6283,6 +6341,8 @@ export function getNodeModelIdentifier(
     videoRefWired?: boolean
   } = {},
 ): string {
+  // A retired video model is quoted as the model it runs as — what the run reserves.
+  const node = withRunningVideoProvider(rawNode)
   const nodeType = node.type
   const data = node.data ?? {}
 
@@ -6647,7 +6707,7 @@ export function getNodeModelIdentifier(
  * `estimateWorkflowCredits` with its lines (`DetailedWorkflowEstimate`): the
  * same total — the same sum, told each line as it adds it — whether any line
  * is a metered LLM estimate, and each priced node's figure. For a surface that
- * shows the figure `~` (`POST /v1/credits/estimate-workflow`); every other
+ * shows the figure `≈` (`POST /v1/credits/estimate-workflow`); every other
  * caller keeps the number.
  */
 export async function estimateWorkflowCreditsDetailed(
@@ -6677,7 +6737,7 @@ export function estimateWorkflowCredits(
  * `runNodeIds`, priced on `nodes` (the graph the run executes, its overrides
  * applied) — an agent's Render final quote (decided 2026-10-06).
  */
-export function estimateRunSetCredits(
+export async function estimateRunSetCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge>,
   runNodeIds: ReadonlySet<string>,
@@ -6688,8 +6748,24 @@ export function estimateRunSetCredits(
   /** Told each priced node's figure and whether it is a metered estimate (its UGC parts' flags included). */
   onNode?: NodeTally,
 ): Promise<number> {
+  return (await estimateRunSetFigures(nodes, edges, runNodeIds, pricedElsewhereNodeIds, viewer, onNode)).credits
+}
+
+/**
+ * `estimateRunSetCredits`, with what the run holds beside its price: the figure a
+ * balance check of the run compares (a UGC clip is reserved at its hold while it
+ * renders), so a check never passes a run whose reservation would then fail.
+ */
+export function estimateRunSetFigures(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  runNodeIds: ReadonlySet<string>,
+  pricedElsewhereNodeIds?: ReadonlySet<string>,
+  viewer?: UseCaseViewerFlags,
+  onNode?: NodeTally,
+): Promise<RunFigures> {
   // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
-  return estimateRunGraphCredits(nodes, edges, {
+  return estimateRunGraphFigures(nodes, edges, {
     runNodeIds,
     ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
     ...usecaseExpandFlags(viewer),
@@ -6830,7 +6906,7 @@ export async function estimateWorkflowListingCredits(
     const { floor, ceiling } = await estimateWorkflowListingRange(nodes, rawEdges, options)
     return { ...floor, ceiling }
   }
-  return (await listingPricer(nodes, rawEdges, options))(nodes)
+  return (await listingPricer(nodes, rawEdges, options)).saved(nodes)
 }
 
 /** What a listing estimate is asked for (see `estimateWorkflowListingCredits`). */
@@ -6863,14 +6939,19 @@ export type ListingEstimateOptions = {
 
 /**
  * The listing's price table and rules, prepared once (the price table, the
- * probed reference clips, the UGC seam): a function pricing a graph with them.
- * The saved listing prices the saved graph; the range prices each choice.
+ * probed reference clips, the UGC seam): `saved` prices the saved graph (the
+ * listing, the range's floor); `choice` prices one choice's graph for the
+ * range's ceiling, its UGC part asked through the seam for THAT graph (a
+ * script's exposed length or language moves it), every answer asked once.
  */
 async function listingPricer(
   nodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge> | undefined,
   options: ListingEstimateOptions,
-): Promise<(graph: ReadonlyArray<EstimateNode>) => AppListingEstimate> {
+): Promise<{
+  readonly saved: (graph: ReadonlyArray<EstimateNode>) => AppListingEstimate
+  readonly choice: (graph: ReadonlyArray<EstimateNode>) => Promise<AppListingEstimate>
+}> {
   // Priced on the graph the run executes (teleport pairs bypassed), as above.
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
   // An upload the app user replaces (every upload of a template, or of a call
@@ -6880,12 +6961,47 @@ async function listingPricer(
     ? new Set(nodes.flatMap((n) => (n.id && n.type === "upload-video" ? [n.id] : [])))
     : options.replaceableMediaNodeIds
   const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges, replaced) : STATIC_BASE_PRICES
-  // The UGC part is priced through its seam, in the preview part (it is the app run's).
-  const ugc = await ugcPartOf(nodes, edges)
-  return (graph: ReadonlyArray<EstimateNode>): AppListingEstimate => {
-    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, usecaseExpandFlags(options))
+  const memo: UgcAnswerMemo = new Map()
+  // The UGC part of a graph, priced through its seam, in the preview part (it is the app run's), and
+  // for each List the app's user fills, what one further item adds to it (a UGC node it fans out
+  // runs once more), for that List's per-item figure, as a run with more items charges it.
+  const ugcOf = async (graph: ReadonlyArray<EstimateNode>, where: "saved" | "choice") => {
+    try {
+      return await ugcOfGraph(graph)
+    } catch (err) {
+      // The UGC part could not be priced (an estimate that failed, or a failure before any was asked):
+      // the listing is refused, naming the choice — never listed at 0, never a raw error.
+      if (err instanceof UgcPartUnpricedError) throw new UgcListingUnpricedError(where, err.input, { cause: err.cause })
+      throw new UgcListingUnpricedError(where, undefined, { cause: err })
+    }
+  }
+  const ugcOfGraph = async (graph: ReadonlyArray<EstimateNode>) => {
+    const ugc = await ugcPartOf(graph, edges, undefined, memo, true)
+    const perItem = new Map<string, number>()
+    if (ugc && options.publishType !== "template") {
+      for (const listId of options.exposedListNodeIds ?? []) {
+        const list = graph.find((n) => n.id === listId)
+        if (!list || list.type !== "list") continue
+        const saved = Math.max(1, listItemCount(list.data))
+        const withItems = (count: number) => graph.map((n) => (n.id === listId ? { ...n, data: withListItemCount(n.data, count) } : n))
+        const one = await ugcPartOf(withItems(saved), edges, undefined, memo, true)
+        const two = await ugcPartOf(withItems(saved + 1), edges, undefined, memo, true)
+        const step = (two?.credits ?? 0) - (one?.credits ?? 0)
+        if (step > 0) perItem.set(listId, step)
+      }
+    }
+    return { ugc, perItem }
+  }
+  const priceWith = (graph: ReadonlyArray<EstimateNode>, { ugc, perItem }: Awaited<ReturnType<typeof ugcOfGraph>>): AppListingEstimate => {
+    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, usecaseExpandFlags(options), perItem)
     const estimate = listingHoldsMeteredEstimate(graph, edges, usecaseExpandFlags(options), ugc ?? undefined)
     return { ...split, preview: split.preview + (ugc?.credits ?? 0), ...(estimate ? { estimate: true as const } : {}) }
+  }
+  const saved = await ugcOf(nodes, "saved")
+  return {
+    saved: (graph) => priceWith(graph, saved),
+    // A graph with no UGC video asks nothing and prices as before.
+    choice: async (graph) => priceWith(graph, await ugcOf(graph, "choice")),
   }
 }
 
@@ -6907,7 +7023,7 @@ export async function estimateWorkflowListingRange(
 ): Promise<{ floor: AppListingEstimate; ceiling: AppListingEstimate }> {
   const nodes = asSavedGraph(savedNodes)
   const price = await listingPricer(nodes, rawEdges, options)
-  const floor = price(nodes)
-  const ceiling = listingCeiling(nodes, listingFieldDomains(options.snapshotSettings, nodes), floor, price)
+  const floor = price.saved(nodes)
+  const ceiling = await listingCeiling(nodes, listingFieldDomains(options.snapshotSettings, nodes), floor, price.choice)
   return { floor, ceiling }
 }

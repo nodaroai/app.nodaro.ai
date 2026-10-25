@@ -1913,28 +1913,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   },
 
   // ── Bytedance Seedance ──
-  "seedance": {
-    id: "seedance",
-    kind: "video",
-    modes: ["i2v", "t2v"] as const,
-    family: "Bytedance",
-    maker: "bytedance",
-    label: "Seedance 1.5 Pro",
-    series: "Seedance",
-    description: "Bytedance Seedance 1.5 Pro — flexible duration (4/8/12s) with end-frame support.",
-    useCases: ["motion", "narrative"],
-    features: ["end-frame"],
-    durations: [4, 8, 12],
-    defaultDuration: 8,
-    resolutions: ["480p", "720p", "1080p"],
-    pricing: [
-      { identifier: "seedance", credits: 250, note: "8s default" },
-      { identifier: "seedance:4s", credits: 40 },
-      { identifier: "seedance:8s", credits: 70 },
-      { identifier: "seedance:12s", credits: 150 },
-    ],
-    mcpHidden: true,
-  },
+  // `seedance` (Seedance 1.5 Pro) was retired upstream 2026-10-25 — KIE answers
+  // 410. No entry: a stored or sent "seedance" runs as Seedance 2 Mini through
+  // RETIRED_VIDEO_PROVIDERS (model-constants).
   "seedance-2": {
     id: "seedance-2",
     kind: "video",

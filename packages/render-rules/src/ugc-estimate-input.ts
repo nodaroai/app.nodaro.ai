@@ -391,6 +391,8 @@ export interface UgcRunPricedNode {
 
 /** One video a run executes some of. */
 export interface UgcRunChain {
+  /** The video (`ugcChains`) this is the run's part of. */
+  readonly chain: UgcChain
   readonly input: UgcEstimateInput
   readonly lengthUnread: boolean
   readonly screenshotsUnread: boolean
@@ -441,7 +443,7 @@ export function ugcEstimateRunParts(
     }
     if (pricedHere.length === 0) continue
     const { input, lengthUnread, screenshotsUnread } = ugcChainInput(chain, allNodes, edges, { run: { executes } })
-    chains.push({ input, lengthUnread, screenshotsUnread, nodes: pricedHere })
+    chains.push({ chain, input, lengthUnread, screenshotsUnread, nodes: pricedHere })
   }
   return chains.length === 0 ? null : { chains, coveredIds: covered }
 }

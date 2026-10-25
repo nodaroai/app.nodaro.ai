@@ -13,7 +13,7 @@ export const GHOST_BUTTON =
   "transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 
 /** The pink text link ("Browse all 1,000 ›"). */
-export const PINK_LINK = "nodrag nopan text-[11px] text-[#ff0073] hover:underline whitespace-nowrap cursor-pointer"
+export const PINK_LINK = "nodrag nopan text-[11px] text-primary-ink hover:underline whitespace-nowrap cursor-pointer"
 
 /** Field-like surface (script box, upload zone). */
 export const FIELD_SURFACE = "rounded-lg border border-border/60 bg-muted/30"

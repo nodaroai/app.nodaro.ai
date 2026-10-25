@@ -5,6 +5,7 @@ import {
   TrendsResource,
   type TrendCard,
   type TrendDetail,
+  type TrendOriginal,
   type TrendRun,
   type TrendRunRequest,
   type TrendSlotKind,
@@ -52,14 +53,24 @@ const card: TrendCard = {
   isFavorite: false,
 }
 
+const original: TrendOriginal = {
+  videoUrl: "https://cdn.example.com/original.mp4",
+  posterUrl: "https://cdn.example.com/original.png",
+  width: 720,
+  height: 1280,
+  durationSec: 12.04,
+  previewStartSec: 0,
+}
+
 const detail: TrendDetail = {
   ...card,
   version: 3,
   previewSec: 4,
   engine: "seedance-2-5",
   resolutions: ["480p", "720p", "1080p"],
+  original,
   slots: [
-    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
+    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example.com/hint.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
     { key: "place", label: "Place", kind: "location", required: false, chips: [] },
   ],
   examples: [
@@ -171,6 +182,36 @@ describe("trends resource", () => {
     const kling: TrendDetail = { ...detail, engine: "kling-4", resolutions: ["720p", "1080p"] }
     const fetchMock = vi.fn().mockReturnValue(mockOk({ data: kling }))
     await expect(make(fetchMock).trends.get("dance-off")).resolves.toMatchObject({ engine: "kling-4", resolutions: ["720p", "1080p"] })
+  })
+
+  it("get returns the original and a slot's hint picture; a trend with no example has examples [] and its cover is the original", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: detail }))
+    const got = await make(fetchMock).trends.get("dance-off")
+    expect(got.original).toEqual(original)
+    expect(got.slots[0]!.hintImageUrl).toBe("https://cdn.example.com/hint.png")
+
+    const { previewStartSec: _p, posterUrl: _q, ...bare } = original
+    const noExample: TrendDetail = {
+      ...detail,
+      previewSec: null,
+      cover: { videoUrl: bare.videoUrl, width: bare.width, height: bare.height },
+      original: bare,
+      examples: [],
+    }
+    const f2 = vi.fn().mockReturnValueOnce(mockOk({ data: noExample }))
+    await expect(make(f2).trends.get("dance-off")).resolves.toEqual(noExample)
+
+    // An older server, or a version with no display copy, sends no original.
+    const { original: _o, ...older } = detail
+    const olderDetail: TrendDetail = older
+    const f3 = vi.fn().mockReturnValueOnce(mockOk({ data: olderDetail }))
+    expect((await make(f3).trends.get("dance-off")).original).toBeUndefined()
+  })
+
+  it("a run of a trend with no example records example 0", async () => {
+    const none: TrendRun = { ...run, example: 0, slots: [{ ...run.slots[0]! }, { key: "place", label: "Place", kind: "location", images: [], fromExample: false }] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: none }))
+    await expect(make(fetchMock).trends.getRun("job-1")).resolves.toMatchObject({ example: 0 })
   })
 
   it("encodes the slug into the path", async () => {

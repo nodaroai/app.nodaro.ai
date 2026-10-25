@@ -161,7 +161,7 @@ export function ExecutionsTab({ className = "", workflowId, initialExpandedId = 
   if (loading && executions.length === 0) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
-        <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-4" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary-ink mb-4" />
         <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("exec.loading")}</p>
       </div>
     )
@@ -360,7 +360,7 @@ function RecentActivity() {
         <div className="border-t border-gray-100 dark:border-[#2D2D2D]">
           {jobsLoading && jobs.length === 0 ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-[#ff0073]" />
+              <Loader2 className="w-5 h-5 animate-spin text-primary-ink" />
             </div>
           ) : jobs.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-[#94A3B8]">
@@ -460,7 +460,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
       </td>
       {hasCredits() && (
         <td className="px-4 py-2.5">
-          <span className="text-sm text-[#ff0073] font-mono">
+          <span className="text-sm text-primary-ink font-mono">
             {credits > 0 ? (
               <span className="inline-flex items-center gap-1" title={heldNote}>
                 <Coins className="w-3 h-3" />
@@ -597,7 +597,7 @@ function ExecutionRow({
         </td>
         {hasCredits() && (
           <td className="px-4 py-3">
-            <span className="text-sm text-[#ff0073] font-mono">
+            <span className="text-sm text-primary-ink font-mono">
               {exec.totalCreditsUsed > 0 ? (
                 <span className="inline-flex items-center gap-1">
                   <Coins className="w-3 h-3" />
@@ -750,7 +750,7 @@ function ExecutionRow({
                           </td>
                           {hasCredits() && (
                             <td className="px-3 py-1.5">
-                              <span className="text-xs text-[#ff0073] font-mono">
+                              <span className="text-xs text-primary-ink font-mono">
                                 {state.creditsUsed && state.creditsUsed > 0 ? (
                                   <span className="inline-flex items-center gap-0.5">
                                     <Coins className="w-3 h-3" />

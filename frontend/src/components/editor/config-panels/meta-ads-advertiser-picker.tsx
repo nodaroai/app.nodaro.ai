@@ -104,7 +104,7 @@ export function MetaAdsAdvertiserPicker({
         </button>
       </div>
 
-      <p role="status" aria-live="polite" className={cn("text-[11.5px] font-semibold", status === "error" ? "text-[#FF0073]" : "text-[var(--meta-ads-muted)]", status === "idle" && "hidden")}>
+      <p role="status" aria-live="polite" className={cn("text-[11.5px] font-semibold", status === "error" ? "text-primary-ink" : "text-[var(--meta-ads-muted)]", status === "idle" && "hidden")}>
         {status === "searching" && t("cfgext.metaAdsAdvertiserSearching")}
         {status === "error" && (errorText ?? t("cfgext.metaAdsAdvertiserFailed"))}
         {status === "done" && results.length === 0 && t("cfgext.metaAdsAdvertiserNone")}
@@ -138,7 +138,7 @@ function AdvertiserChip({ advertiser, onRemove }: { readonly advertiser: MetaAds
         type="button"
         onClick={onRemove}
         aria-label={`${t("cfgext.metaAdsAdvertiserRemove")} ${advertiser.name}`}
-        className="rounded-full p-0.5 text-[var(--meta-ads-muted)] hover:text-[#FF0073]"
+        className="rounded-full p-0.5 text-[var(--meta-ads-muted)] hover:text-primary-ink"
       >
         <X className="h-3 w-3" aria-hidden />
       </button>
@@ -179,7 +179,7 @@ function AdvertiserRow({
         className={cn(
           "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] font-bold transition-colors",
           added
-            ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-[#FF0073]"
+            ? "border-[var(--meta-ads-accent-border)] bg-[var(--meta-ads-accent-tint)] text-primary-ink"
             : "border-[var(--meta-ads-border)] text-[var(--meta-ads-text-2)] hover:text-[var(--meta-ads-text)] disabled:opacity-40",
         )}
       >

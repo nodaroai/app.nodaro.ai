@@ -24,6 +24,8 @@ on:
       - "frontend/vite.config.ts"
       - "frontend/vitest.config.ts"
       - "frontend/src/lib/edition.ts"
+      - "frontend/src/lib/site-locale.d.ts"
+      - "frontend/src/lib/site-locale-stub.ts"
       - "frontend/Caddyfile"
   push:
     branches: [dev, main]
@@ -36,6 +38,8 @@ on:
       - "frontend/vite.config.ts"
       - "frontend/vitest.config.ts"
       - "frontend/src/lib/edition.ts"
+      - "frontend/src/lib/site-locale.d.ts"
+      - "frontend/src/lib/site-locale-stub.ts"
       - "frontend/Caddyfile"
   workflow_dispatch:
 

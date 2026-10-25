@@ -42,7 +42,7 @@ describe("free-credit video limits — length and resolution", () => {
 
   it("an OMITTED resolution on a model with several is unknown — the provider renders its own default (KIE: 720p)", () => {
     expect(freeVideoRefusal({ provider: "seedance-2-fast", duration: 4 }, ON)).not.toBeNull()
-    expect(freeVideoRefusal({ provider: "seedance", duration: 4 }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider: "seedance-2-mini", duration: 4 }, ON)).not.toBeNull()
   })
 
   it("longer than 4 s, Auto, or above the lowest resolution is refused", () => {

@@ -188,7 +188,7 @@ export default function AdminKieCreditsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="border rounded-lg p-4 bg-card flex items-center gap-3">
           <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
-            <Wallet className="h-5 w-5 text-primary" />
+            <Wallet className="h-5 w-5 text-primary-ink" />
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Current Balance</p>

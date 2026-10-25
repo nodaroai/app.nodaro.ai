@@ -63,7 +63,7 @@ describe("the LLM fields' pricing copy (metered: per token at the model's rate)"
     const quoted = statedPrices().credits("image-to-text:claude-sonnet-5.5")!
     const text = describedBy(llmMcpFields("image-to-text").llmModel)
     expect(text).toContain("Defaults to Claude Sonnet 5.5 (`claude-sonnet-5.5`)")
-    expect(text).toContain(`~${quoted} credits typical on Claude Sonnet 5.5`)
+    expect(text).toContain(`≈${quoted} credits typical on Claude Sonnet 5.5`)
     // Still the same field: every registered id accepted, only pickable ones advertised.
     const listed = toJsonSchemaCompat(z.object(llmMcpFields("image-to-text"))) as { properties?: Record<string, { enum?: string[] }> }
     expect(listed.properties?.llmModel?.enum).toContain("gemini-3.8-flash")

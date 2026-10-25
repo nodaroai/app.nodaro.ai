@@ -22,12 +22,21 @@ import type { Plugin } from "vite"
  * with the flag on and no package is refused: it would ship a flag-on image
  * with no header.
  *
- * Types come from `site-header.d.ts`; `contract/` holds the internal-only
- * check that those types still fit the package.
+ * The same decision serves `virtual:site-locale`: the header's language
+ * cookie, shared by every Nodaro product. It is an id of its own because the
+ * app's locale store reads it at startup, in the main bundle; importing it
+ * from `virtual:site-header` would put the whole header there. Wherever the
+ * header is the stub, so is the locale (`lib/site-locale-stub.ts`: no cookie,
+ * and the app keeps its own storage).
+ *
+ * Types come from `site-header.d.ts` and `lib/site-locale.d.ts`; `contract/`
+ * holds the internal-only check that those types still fit the package.
  */
 
 export const SITE_HEADER_ID = "virtual:site-header"
 const RESOLVED_ID = `\0${SITE_HEADER_ID}`
+export const SITE_LOCALE_ID = "virtual:site-locale"
+const RESOLVED_LOCALE_ID = `\0${SITE_LOCALE_ID}`
 const PACKAGE = "@nodaroai/shell"
 const FLAG = "VITE_SHARED_HEADER"
 
@@ -65,6 +74,8 @@ export interface SiteHeaderModuleOptions {
   readonly root: string
   /** The stub module's absolute path. */
   readonly stubPath: string
+  /** The locale stub's absolute path. */
+  readonly localeStubPath: string
   /** Test seam; defaults to Node resolution from `root`. */
   readonly isInstalled?: (root: string) => boolean
   /** Test seam; defaults to Vite's own `loadEnv` (the process env plus `.env*` files, `VITE_` only). */
@@ -81,6 +92,11 @@ const ADAPTER = [
   `import "${PACKAGE}/shell.css"`,
   `export { NodaroShell, shellTranslator } from "${PACKAGE}"`,
   "export const headerAvailable = true",
+  "",
+].join("\n")
+
+const LOCALE_ADAPTER = [
+  `export { readSavedLocale, saveLocale, watchSavedLocale } from "${PACKAGE}/locale"`,
   "",
 ].join("\n")
 
@@ -107,15 +123,17 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
     },
     resolveId(id, importer) {
       if (id === SITE_HEADER_ID) return decision === "package" ? RESOLVED_ID : options.stubPath
-      // The adapter has no file of its own: resolve its imports from the
+      if (id === SITE_LOCALE_ID) return decision === "package" ? RESOLVED_LOCALE_ID : options.localeStubPath
+      // The adapters have no file of their own: resolve their imports from the
       // frontend directory, as if a file there imported them.
-      if (importer === RESOLVED_ID && id.startsWith(PACKAGE)) {
+      if ((importer === RESOLVED_ID || importer === RESOLVED_LOCALE_ID) && id.startsWith(PACKAGE)) {
         return this.resolve(id, join(options.root, "package.json"), { skipSelf: true })
       }
       return null
     },
     load(id) {
-      return id === RESOLVED_ID ? ADAPTER : null
+      if (id === RESOLVED_ID) return ADAPTER
+      return id === RESOLVED_LOCALE_ID ? LOCALE_ADAPTER : null
     },
   }
 }

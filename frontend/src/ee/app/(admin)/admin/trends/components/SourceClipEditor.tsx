@@ -1,5 +1,7 @@
-// The trend's source clip (4–30 s, never shown to users) and where its 4 s
-// preview starts: scrub the clip, mark the window, play it back.
+// The trend's source clip (4–30 s) and where its 4 s preview starts: scrub the
+// clip, mark the window, play it back. Runs edit the uploaded clip; users see
+// its display copy (a browser-safe MP4 and poster the platform makes when the
+// clip is stored), shown on the trend's page beside the examples.
 
 import { useEffect, useRef, useState } from "react"
 import { Crosshair, Play } from "lucide-react"
@@ -38,6 +40,8 @@ export function SourceClipEditor({ trendId, source, previewStart, onChange }: Pr
         durationSec: stored.durationSec,
         ...(stored.width !== undefined ? { width: stored.width } : {}),
         ...(stored.height !== undefined ? { height: stored.height } : {}),
+        // A new clip never keeps the old clip's copy: only the one made for it.
+        ...(stored.display ? { display: stored.display } : {}),
       }
       onChange({ source: next, previewStart: clampPreview(previewStart, next.durationSec) })
       toast.success(`Source clip set (${formatSeconds(next.durationSec)}). Save the draft to keep it.`)
@@ -114,6 +118,30 @@ export function SourceClipEditor({ trendId, source, previewStart, onChange }: Pr
               </dd>
             </dl>
           </div>
+
+          {source.display ? (
+            <div className="flex items-start gap-3 rounded-md border p-3">
+              <img
+                src={source.display.posterUrl}
+                alt="The original as users see it"
+                className="h-24 w-auto max-w-[40%] shrink-0 rounded object-contain bg-black"
+              />
+              <div className="flex min-w-0 flex-col gap-1 text-xs">
+                <span className="font-medium text-sm">Display copy</span>
+                <span className="text-muted-foreground">
+                  This copy is what users see on the trend's page ({source.display.width}×{source.display.height},{" "}
+                  {formatSeconds(source.display.durationSec)}). Runs use the uploaded clip.
+                </span>
+                <a href={source.display.videoUrl} target="_blank" rel="noopener noreferrer" className="self-start underline">
+                  open the copy
+                </a>
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+              No display copy yet (the copy users see). Upload the clip again to make one: the trend cannot be published without it.
+            </p>
+          )}
 
           <div className="flex flex-col gap-2 rounded-md border p-3">
             <label className="flex min-h-9 items-center gap-2 text-sm">

@@ -153,6 +153,22 @@ describe("media video-mask command", () => {
     })
   })
 
+  it("sends --redetect-every <sec> as redetectEverySec, with or without --per-shot", async () => {
+    mocks.videoMask.mockResolvedValue({ jobId: "j-vm" })
+    await runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--redetect-every", "1", "--json")
+    expect(mocks.videoMask).toHaveBeenLastCalledWith({ videoUrl: "https://x/clip.mp4", prompt: "face", redetectEverySec: 1 })
+    await runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--per-shot", "--redetect-every", "2.5", "--json")
+    expect(mocks.videoMask).toHaveBeenLastCalledWith({ videoUrl: "https://x/clip.mp4", prompt: "face", perShot: true, redetectEverySec: 2.5 })
+    await runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--redetect-every", "0", "--json")
+    expect(mocks.videoMask).toHaveBeenLastCalledWith({ videoUrl: "https://x/clip.mp4", prompt: "face", redetectEverySec: 0 })
+  })
+
+  it.each([["0.5"], ["11"], ["-1"], ["abc"]])("refuses --redetect-every %s before calling the API", async (v) => {
+    await expect(runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--redetect-every", v)).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--redetect-every"))
+    expect(mocks.videoMask).not.toHaveBeenCalled()
+  })
+
   it.each([["10,10,10"], ["10,10,10,50"], ["a,0,0,0"], ["10,-1,0,0"], ["10,,0,0"], [".,0,0,0"], ["1e1,0,0,0"], ["0x1,0,0,0"]])("refuses --zone %s before calling the API", async (zone) => {
     await expect(runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--zone", zone)).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--zone"))
@@ -865,7 +881,7 @@ describe("docs/cli.md covers the media command surface", () => {
     const line = synopsisOf("video-mask") ?? ""
     const sub = mediaCommand().commands.find((c) => c.name() === "video-mask")
     const flags = (sub?.options ?? []).map((o) => o.long).filter((f): f is string => !!f && f !== "--profile")
-    expect(flags).toEqual(expect.arrayContaining(["--per-shot", "--zone"]))
+    expect(flags).toEqual(expect.arrayContaining(["--per-shot", "--zone", "--redetect-every"]))
     for (const flag of flags) expect(line).toContain(`[${flag}`)
   })
 

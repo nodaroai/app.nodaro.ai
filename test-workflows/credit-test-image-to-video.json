@@ -254,7 +254,7 @@
       "position": { "x": 1700, "y": 600 },
       "data": {
         "label": "seedance 4s (4cr)",
-        "provider": "seedance",
+        "provider": "seedance-2-mini",
         "model": "",
         "prompt": "Fluid motion with artistic color grading",
         "duration": 4,
@@ -450,7 +450,7 @@
       "position": { "x": 1100, "y": 1500 },
       "data": {
         "label": "seedance 4s +audio +fixedLens (4cr)",
-        "provider": "seedance",
+        "provider": "seedance-2-mini",
         "model": "",
         "prompt": "Rain falling on leaves with gentle wind sounds",
         "duration": 4,
@@ -613,7 +613,7 @@
       "position": { "x": 1400, "y": 2100 },
       "data": {
         "label": "seedance 8s (7cr)",
-        "provider": "seedance",
+        "provider": "seedance-2-mini",
         "model": "",
         "prompt": "Flowing artistic motion mid-duration",
         "duration": 8,
@@ -630,7 +630,7 @@
       "position": { "x": 1700, "y": 2100 },
       "data": {
         "label": "seedance 12s (11cr)",
-        "provider": "seedance",
+        "provider": "seedance-2-mini",
         "model": "",
         "prompt": "Extended artistic sequence with evolving color",
         "duration": 12,

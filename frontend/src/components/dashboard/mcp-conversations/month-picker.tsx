@@ -99,9 +99,9 @@ export function MonthPicker({ month, counts, onChange, currentMonth }: MonthPick
                   )}
                 >
                   <span className="flex items-center gap-1">
-                    {isNow && <Check className="h-3 w-3 text-[#ff0073]" aria-hidden />}
+                    {isNow && <Check className="h-3 w-3 text-primary-ink" aria-hidden />}
                     {monthLabel(year, m, "short")}
-                    {isNow && <span className="text-[11px] text-[#ff0073]">{t("mcpconv.now")}</span>}
+                    {isNow && <span className="text-[11px] text-primary-ink">{t("mcpconv.now")}</span>}
                   </span>
                   <span className="tabular-nums text-muted-foreground">{formatNumber(count)}</span>
                 </button>

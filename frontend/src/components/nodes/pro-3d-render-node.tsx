@@ -123,7 +123,7 @@ function Pro3DRenderNodeComponent({ id, data, selected }: NodeProps) {
                 exists — the scene is the durable half of the result. */}
             {!isRunning && scenePlan && !activeUrl && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
-                <div className="text-sm font-medium text-[#ff0073]">{t("node.nObjects", { n: objectCount })}</div>
+                <div className="text-sm font-medium text-primary-ink">{t("node.nObjects", { n: objectCount })}</div>
                 <div className="text-[11px] text-muted-foreground">
                   {revision ? t("node.revShort", { rev: revision.slice(0, 6) }) : t("node.sceneReady")}
                 </div>

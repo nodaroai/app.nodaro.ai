@@ -32,7 +32,7 @@ function err(reply: FastifyReply, status: number, code: string, message: string)
 }
 
 /** Best-effort audit: a failed write is logged, never turned into a failed action. */
-async function audit(req: FastifyRequest, action: string, targetType: string, targetId: string, payload: Record<string, unknown>) {
+export async function audit(req: FastifyRequest, action: string, targetType: string, targetId: string, payload: Record<string, unknown>) {
   const { error } = await supabase.from("admin_actions").insert({
     admin_user_id: req.userId,
     action,

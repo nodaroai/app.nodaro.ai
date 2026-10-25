@@ -171,6 +171,40 @@ describe("findSceneCuts — a cut is an isolated spike that does not return", ()
   })
 })
 
+describe("findSceneCuts with isolatedSpikeIsCut (Video Mask) — a missed cut costs more than an extra one", () => {
+  // A trend clip's cut into a keyboard swing (frames 121–124 at 30 fps, scdet's own numbers): the
+  // frame after the cut still moves by 0.73× the cut, so rule 2 reads the cut as a flash.
+  const cutIntoFastMotion = () =>
+    run(4, { 50: { score: 13.58, mafd: 16.29 }, 51: { score: 4.45, mafd: 11.84 }, 52: { score: 3.01, mafd: 3.01 } })
+
+  it("keeps a cut that opens on fast motion, which the proxy's rule loses", () => {
+    expect(findSceneCuts(cutIntoFastMotion())).toEqual([])
+    expect(findSceneCuts(cutIntoFastMotion(), { isolatedSpikeIsCut: true })).toEqual([2])
+  })
+
+  it("keeps the known-cost cut too: a cut followed by a whip pan", () => {
+    const frames = run(4, { 50: { score: 20, mafd: 20 }, 51: { score: 4, mafd: 4 }, 52: { score: 6, mafd: 10 } })
+    expect(findSceneCuts(frames)).toEqual([])
+    expect(findSceneCuts(frames, { isolatedSpikeIsCut: true })).toEqual([2])
+  })
+
+  it("reads a one-frame flash as one cut, at the flash: its jump back scores near 0", () => {
+    const frames = run(4, { 50: { score: 51.3, mafd: 52 }, 51: { score: 0.4, mafd: 51.6 } })
+    expect(findSceneCuts(frames, { isolatedSpikeIsCut: true })).toEqual([2])
+  })
+
+  it("keeps a held flash a flash: its jump in and jump back score alike, so neither is a lone spike", () => {
+    const frames = run(4, { 50: { score: 51.3, mafd: 52 }, 51: { score: 0, mafd: 0.3 }, 52: { score: 51.3, mafd: 51.6 } })
+    expect(findSceneCuts(frames, { isolatedSpikeIsCut: true })).toEqual([])
+  })
+
+  it("still reads a pan or a handheld shake as a plateau, not a cut", () => {
+    const at: Record<number, Partial<SceneFrameScore>> = {}
+    for (let k = 40; k < 90; k++) at[k] = { score: 6.8 - (k % 3) * 0.4, mafd: 7 }
+    expect(findSceneCuts(run(5, at), { isolatedSpikeIsCut: true })).toEqual([])
+  })
+})
+
 describe("segmentCutsToSourceMs", () => {
   it("puts a segment's cut times back on the SOURCE clock: the seek point plus the time from it", () => {
     expect(segmentCutsToSourceMs([1.034367, 3.737067], 10_300)).toEqual([11_334.367, 14_037.067])

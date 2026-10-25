@@ -41,7 +41,7 @@ interface RunNodeButtonProps {
    *  later (Seedance 2.5 HD before a draft is wired). Shown as "from N". */
   creditsFrom?: boolean
   /** `credits` is an ESTIMATE — a metered LLM call, charged its actual usage
-   *  after the run (`useLlmPrice`). Shown with a leading `~`. */
+   *  after the run (`useLlmPrice`). Shown with a leading `≈`. */
   creditsEstimate?: boolean
   isRunning: boolean
   onRun: (nodeId: string) => void

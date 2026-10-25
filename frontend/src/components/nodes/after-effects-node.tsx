@@ -63,7 +63,7 @@ function AfterEffectsNodeComponent({ id, data, selected }: NodeProps) {
         {!isRunning && effectPlan && (
           <div className="flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             <div className="text-center">
-              <div className="text-sm font-medium text-[#ff0073]">
+              <div className="text-sm font-medium text-primary-ink">
                 {t("node.nEffects", { n: effectCount })}
               </div>
               <div className="text-[11px] text-muted-foreground">{nodeData.durationSeconds}s</div>

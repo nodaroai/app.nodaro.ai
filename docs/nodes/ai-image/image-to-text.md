@@ -25,7 +25,7 @@ Describe Image (internally `image-to-text`) analyzes an input image using Claude
 - `text` -- generated text description
 ## Supported Providers
 
-Any vision-capable model from the shared LLM selector; with none chosen the node runs on Claude Sonnet 5.5. A run is charged for the tokens it actually used — the image, the instructions and the description — at the model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical description: ~6 credits<!-- credits: image-to-text:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ~4<!-- credits: image-to-text:gemini-3.6-flash --> on Gemini 3.6 Flash. A failure the provider billed is charged for that usage; one it did not bill is refunded.
+Any vision-capable model from the shared LLM selector; with none chosen the node runs on Claude Sonnet 5.5. A run is charged for the tokens it actually used — the image, the instructions and the description — at the model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical description: ≈6 credits<!-- credits: image-to-text:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ≈4<!-- credits: image-to-text:gemini-3.6-flash --> on Gemini 3.6 Flash. A failure the provider billed is charged for that usage; one it did not bill is refunded.
 
 ## Best Practices
 

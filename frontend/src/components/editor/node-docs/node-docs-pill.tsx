@@ -30,7 +30,7 @@ export function NodeDocsPill({ nodeType, nodeLabel }: { readonly nodeType: strin
           target="_blank"
           rel="noopener"
           aria-label={t("nodeDocs.openDocsAria")}
-          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-[#ff0073]/40 px-2 text-xs font-medium text-[#ff0073] transition-colors hover:bg-[#ff0073]/10"
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-[#ff0073]/40 px-2 text-xs font-medium text-primary-ink transition-colors hover:bg-[#ff0073]/10"
         >
           <CircleHelp className="size-3.5" aria-hidden />
           {t("nodeDocs.docs")}
@@ -50,8 +50,8 @@ export function NodeDocsPill({ nodeType, nodeLabel }: { readonly nodeType: strin
                 target="_blank"
                 rel="noopener"
                 className={cn(
-                  "rounded-md border px-2 py-0.5 text-xs transition-colors hover:border-[#ff0073] hover:text-[#ff0073]",
-                  section === main && "border-[#ff0073] text-[#ff0073]",
+                  "rounded-md border px-2 py-0.5 text-xs transition-colors hover:border-[#ff0073] hover:text-primary-ink",
+                  section === main && "border-[#ff0073] text-primary-ink",
                 )}
               >
                 {t(NODE_DOCS_SECTION_LABELS[section])}
@@ -63,7 +63,7 @@ export function NodeDocsPill({ nodeType, nodeLabel }: { readonly nodeType: strin
           href={docsUrl(nodeType)}
           target="_blank"
           rel="noopener"
-          className="flex items-center justify-between border-t pt-2.5 text-sm font-medium text-[#ff0073] hover:underline"
+          className="flex items-center justify-between border-t pt-2.5 text-sm font-medium text-primary-ink hover:underline"
         >
           {t("nodeDocs.openFullDocs")}
           <ArrowUpRight className="size-3.5" aria-hidden />

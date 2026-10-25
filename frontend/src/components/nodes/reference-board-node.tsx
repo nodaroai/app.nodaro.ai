@@ -327,7 +327,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-1">
-                <Wand2 className="w-3.5 h-3.5 text-[#ff0073] shrink-0" />
+                <Wand2 className="w-3.5 h-3.5 text-primary-ink shrink-0" />
                 <input
                   type="text"
                   value={refineInstruction}

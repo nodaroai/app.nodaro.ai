@@ -4,7 +4,7 @@ import { buildServer, callTool, executeSession, stubRoute } from "../tools/__tes
 
 /**
  * `video_mask` maps its snake_case args onto the route's camelCase body:
- * `per_shot` → `perShot`, `zone.{left,right,top,bottom}_pct` →
+ * `per_shot` → `perShot`, `redetect_every_sec` → `redetectEverySec`, `zone.{left,right,top,bottom}_pct` →
  * `zone.{left,right,top,bottom}Pct`; an arg left out is not sent (the route's
  * default applies), and neither is a zone with no margin (`{}`).
  */
@@ -66,5 +66,31 @@ describe("video_mask per_shot and zone", () => {
     const res = await callTool(server, "video_mask", { ...base, zone: { left_pct: 60 } })
     expect(res.isError).toBe(true)
     expect(received.body).toBeUndefined()
+  })
+})
+
+describe("video_mask redetect_every_sec", () => {
+  it("sends redetectEverySec in the route's name, beside perShot or alone", async () => {
+    for (const args of [{ redetect_every_sec: 1 }, { redetect_every_sec: 2.5, per_shot: true }, { redetect_every_sec: 0 }]) {
+      const { server, received } = setup()
+      const res = await callTool(server, "video_mask", { ...base, ...args })
+      expect(res.isError, JSON.stringify(res.content)).toBeFalsy()
+      expect(received.body).toMatchObject({ redetectEverySec: args.redetect_every_sec })
+    }
+  })
+
+  it("is not sent when left out (the route's default, 0 = off, applies)", async () => {
+    const { server, received } = setup()
+    await callTool(server, "video_mask", base)
+    expect(received.body).not.toHaveProperty("redetectEverySec")
+  })
+
+  it("refuses a value between 0 and 1 s or past 10 s, and dispatches nothing", async () => {
+    for (const v of [0.5, 11, -1]) {
+      const { server, received } = setup()
+      const res = await callTool(server, "video_mask", { ...base, redetect_every_sec: v })
+      expect(res.isError).toBe(true)
+      expect(received.body).toBeUndefined()
+    }
   })
 })

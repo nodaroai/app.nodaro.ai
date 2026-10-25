@@ -41,7 +41,7 @@ export function AiAvatarNewRunToggle({ active, onToggle, disabled = false }: AiA
       className={cn(
         "nodrag h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-[11px] whitespace-nowrap transition-colors [&_svg]:size-3",
         active
-          ? "text-[#ff0073] bg-[#ff0073]/10 hover:bg-[#ff0073]/15 [&_svg]:opacity-100"
+          ? "text-primary-ink bg-[#ff0073]/10 hover:bg-[#ff0073]/15 [&_svg]:opacity-100"
           : "text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10 [&_svg]:opacity-70",
         disabled && "opacity-40 cursor-not-allowed",
       )}

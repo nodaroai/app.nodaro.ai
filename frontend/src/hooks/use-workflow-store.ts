@@ -58,6 +58,7 @@ import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
 import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
@@ -2493,6 +2494,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       migratedNodes = result.nodes
       migratedEdges = result.edges
     }
+    // A retired video model (Seedance 1.5) loads as the model it runs as.
+    migratedNodes = migrateRetiredVideoProviders(migratedNodes)
 
     // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
     // normalize legacy `items` strings. Idempotent; edges unchanged.
@@ -2812,7 +2815,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // normalize legacy `items` strings, exactly as `loadWorkflow` does — a raw
     // `loop` node arriving via realtime would otherwise be mishandled by the
     // now-`list`-only type-sets until a full reload. Idempotent; null/empty-safe.
-    const migrated = migrateListLoopNodes(nodes, edges)
+    const migrated = migrateListLoopNodes(migrateRetiredVideoProviders(nodes), edges)
     // Defense-in-depth: a realtime snapshot (e.g. a Studio write) can carry
     // positionless nodes just like a fresh load. Guarantee finite positions
     // so React Flow doesn't crash reading node.position.x on adoption.

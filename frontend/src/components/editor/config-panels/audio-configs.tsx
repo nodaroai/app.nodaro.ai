@@ -196,14 +196,14 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           <button
             type="button"
             onClick={() => onUpdate({ textSource: "connected" })}
-            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "connected" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}
+            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "connected" ? "border-primary bg-primary/10 text-primary-ink" : "hover:bg-muted"}`}
           >
             {t("audiocfg.fromConnectedNode")}
           </button>
           <button
             type="button"
             onClick={() => onUpdate({ textSource: "direct" })}
-            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "direct" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}
+            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "direct" ? "border-primary bg-primary/10 text-primary-ink" : "hover:bg-muted"}`}
           >
             {t("audiocfg.writeDirectly")}
           </button>

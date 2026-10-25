@@ -139,8 +139,8 @@ export default function TutorialPage() {
   const credits = startCostModel
     ? (startCost ?? 0)
     : (template.estimatedCredits ?? 0)
-  // The listing's figure holds a metered LLM call's estimate (charged its actual usage): `~N` (spec §8.5).
-  const approx = !startCostModel && template.estimatedCreditsIsEstimate === true ? "~" : ""
+  // The listing's figure holds a metered LLM call's estimate (charged its actual usage): `≈N` (spec §8.5).
+  const approx = !startCostModel && template.estimatedCreditsIsEstimate === true ? "≈" : ""
   const costChip = hasCredits() ? (startCostModel ? t("misc.creditsToStart", { credits: formatCreditUnits(credits) }) : `${approx}${formatCreditUnits(credits)}`) : null
 
   const chips = [

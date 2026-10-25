@@ -54,7 +54,7 @@ export function ScheduleWhenItRuns({
           <p className="text-[15px] font-semibold leading-snug text-foreground text-pretty">{describeSchedule(rules, t, locale)}</p>
         </div>
         {timezoneReadable && (
-          <span className="shrink-0 rounded-full bg-[#ff0073]/10 px-2.5 py-1 text-[11px] font-semibold text-[#ff0073]">
+          <span className="shrink-0 rounded-full bg-[#ff0073]/10 px-2.5 py-1 text-[11px] font-semibold text-primary-ink">
             {runsPerDayLabel(preview.perDay, t)}
           </span>
         )}

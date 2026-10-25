@@ -47,7 +47,7 @@ import { MAX_COLUMNS } from "../../lib/listing-max-columns.js"
 import { estimateWorkflowListingCredits, type EstimateEdge, type EstimateNode, type ListingPublishType } from "../billing/credits.js"
 import { usecaseViewerForEveryone } from "../../lib/use-case/inner-availability.js"
 import { loadAvailabilityOverridesForScript } from "../../lib/availability-override.js"
-import { isLlmUnpricedError } from "../../lib/llm-unpriced-refusal.js"
+import { listingRefusalSkip } from "../../lib/listing-refusal.js"
 
 // ---------------------------------------------------------------------------
 // Pure parts (tested in __tests__/backfill-listing-range.test.ts)
@@ -72,15 +72,17 @@ export function templateMaxColumns(ceiling: AppListingSplit): Columns {
 }
 
 /**
- * A row whose graph holds a metered LLM model with no price (R49): its estimate refuses, so it is
+ * A row whose listing is refused rather than priced — a metered LLM model with no price (R49), or a
+ * UGC video whose estimate failed for its saved settings or a choice (`ugc_listing_unpriced`): it is
  * REPORTED and skipped — never written, never stopping the rows after it. Any other failure throws.
  */
 export async function unpricedSkip<T>(price: () => Promise<T>): Promise<{ value: T } | { skipped: string }> {
   try {
     return { value: await price() }
   } catch (err) {
-    if (!isLlmUnpricedError(err)) throw err
-    return { skipped: `llm_model_unpriced: ${err.modelId}` }
+    const skipped = listingRefusalSkip(err)
+    if (skipped === null) throw err
+    return { skipped }
   }
 }
 
@@ -223,7 +225,7 @@ export async function runRangeBackfill(opts: RangeBackfillOptions): Promise<{ ok
 
   const changed = report.filter((r) => r.changed).length
   const skipped = report.filter((r) => r.skipped !== undefined).length
-  if (skipped > 0) console.warn(`[range-backfill] ${skipped} row(s) skipped: a metered LLM model with no price (llm_model_unpriced)`)
+  if (skipped > 0) console.warn(`[range-backfill] ${skipped} row(s) skipped: a metered LLM model with no price (llm_model_unpriced), or a UGC video whose estimate failed (ugc_listing_unpriced)`)
   console.log(`[range-backfill] ${report.length} row(s), ${changed} differ${opts.apply ? `, ${written} written` : " (dry run — nothing written)"}`)
   writeFileSync(opts.report, JSON.stringify({ generatedAt: new Date().toISOString(), apply: opts.apply, rows: report }, null, 2))
   console.log(`[range-backfill] report: ${opts.report}`)

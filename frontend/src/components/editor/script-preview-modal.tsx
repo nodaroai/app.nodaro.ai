@@ -279,7 +279,7 @@ export function ScriptPreviewModal({
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-xs font-semibold text-[#ff0073]">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-primary-ink">
                       <DragHandle />
                       {t("cfgext.sceneNumbered", { index: scene.sceneNumber })}
                     </span>
@@ -652,7 +652,7 @@ export function ScriptPreviewModal({
                                 >
                                   <span className="flex items-center gap-1">
                                     {extractedReferences.some((r) => r.name === char) && (
-                                      <Scissors className="w-2.5 h-2.5 text-primary" />
+                                      <Scissors className="w-2.5 h-2.5 text-primary-ink" />
                                     )}
                                     {(() => {
                                       const def = allCharDefs.find((d) => d.name === char)
@@ -676,7 +676,7 @@ export function ScriptPreviewModal({
                                   {t("scriptprev.noCharacterFound")}{" "}
                                   <button
                                     type="button"
-                                    className="text-[#ff0073] hover:underline"
+                                    className="text-primary-ink hover:underline"
                                     onMouseDown={(e) => {
                                       e.preventDefault()
                                       setCharacterInput({ ...characterInput, [i]: "" })

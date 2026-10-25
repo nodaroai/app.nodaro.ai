@@ -369,7 +369,7 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
 
   const mode = metaAdsNodeMode(nodeData.mode)
   const scrapeCredits = useScrapeNodeCredits(id, "meta-ads-scrape", nodeData)
-  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `~`.
+  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `≈`.
   const analysisCredits = useScrapeAnalysisCredits("meta-ads-scrape", nodeData)
   const credits = analysisCredits?.credits ?? scrapeCredits
   const state = deriveMetaAdsScrapeCardState(nodeData)
@@ -580,7 +580,7 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 <button
                   type="button"
-                  className="nodrag nopan text-[#FF0073] hover:underline"
+                  className="nodrag nopan text-primary-ink hover:underline"
                   onMouseDown={stop}
                   onClick={(e) => {
                     stop(e)

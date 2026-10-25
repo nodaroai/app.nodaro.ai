@@ -1,5 +1,6 @@
 // Admin → Trends → one trend: build its draft (source clip and preview window,
-// slots, fixed references, pre and trend prompts, model, face masking, texts), test
+// slots, fixed references, pre and trend prompts, model, face masking and its
+// stored face mask, texts), test
 // it, promote admin runs to examples, and publish it.
 //
 // Like the rest of the admin trend screens, its text is English only.
@@ -52,6 +53,7 @@ import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
 import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
+import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
@@ -222,7 +224,7 @@ export default function AdminTrendEditorPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
-          <Section title="1. Source clip" description="The clip the trend recasts. Never shown to users.">
+          <Section title="1. Source clip" description="The clip the trend recasts. Shown to users beside the examples.">
             <SourceClipEditor
               trendId={id}
               source={form.source}
@@ -231,7 +233,11 @@ export default function AdminTrendEditorPage() {
             />
           </Section>
           <Section title="2. Slots" description="What a user replaces, in order.">
-            <SlotsEditor slots={form.slots} onChange={(slots) => set({ slots })} />
+            <SlotsEditor
+              trendId={id}
+              slots={form.slots}
+              onChange={(fn) => setForm((f) => (f ? { ...f, slots: fn(f.slots) } : f))}
+            />
           </Section>
           <Section title="3. Fixed references" description="Pictures sent with every run, each with its prompt line. Hidden from users.">
             <ReferencesEditor
@@ -268,6 +274,20 @@ export default function AdminTrendEditorPage() {
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
             <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
+            {(form.faceMasking?.mode ?? "off") !== "off" && (
+              <FaceMaskPanel
+                trendId={id}
+                faceMask={server.draft.faceMask}
+                state={server.faceMaskState}
+                pending={server.faceMaskJob}
+                ready={!!server.draft.source && (server.draft.faceMasking?.mode ?? "off") !== "off"}
+                dirty={dirty}
+                revision={revision}
+                onRevision={setRevision}
+                onReload={() => void reload()}
+                onWriteError={onWriteError}
+              />
+            )}
           </Section>
           <Section title="7. Name, description, tags">
             <TextsEditor trend={server.trend} name={form.name} description={form.description} onChange={(p) => set(p)} />
@@ -291,7 +311,7 @@ export default function AdminTrendEditorPage() {
               }
             />
           </Section>
-          <Section title="Examples" description="Example 1 is the cover.">
+          <Section title="Examples" description="Example 1 is the cover; with none, the original's display copy is.">
             <ExamplesPanel
               examples={server.draft.examples}
               slots={server.draft.slots}

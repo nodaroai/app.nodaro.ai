@@ -3116,7 +3116,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             masks the bare grid for a clean "loading" read. */}
         {isWorkflowLoading && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 pointer-events-none bg-background/70 backdrop-blur-[1px]">
-            <Loader2 className="w-8 h-8 text-[#ff0073] animate-spin" />
+            <Loader2 className="w-8 h-8 text-primary-ink animate-spin" />
             <span className="text-sm text-muted-foreground">{t("canvas.loadingWorkflow")}</span>
           </div>
         )}

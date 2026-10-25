@@ -47,7 +47,7 @@ describe("VideoMaskConfig — hold the last mask", () => {
     render(<VideoMaskConfig data={d as VideoMaskNodeData} onUpdate={onUpdate} {...EXTRA} />)
     const slider = screen.getByLabelText("Ignore subjects smaller than (% of frame height)") as HTMLInputElement
     expect(slider.value).toBe("0")
-    expect(screen.getAllByText("Off")).toHaveLength(2) // both size cuts are off
+    expect(screen.getAllByText("Off")).toHaveLength(3) // both size cuts and re-detection are off
     fireEvent.change(slider, { target: { value: "15" } })
     expect(onUpdate).toHaveBeenCalledWith({ minSubjectHeightPct: 15 })
   })
@@ -101,6 +101,41 @@ describe("VideoMaskConfig — detect again after every cut (perShot)", () => {
     expect(box.checked).toBe(true)
     fireEvent.click(box)
     expect(onUpdateOn).toHaveBeenCalledWith({ perShot: false })
+  })
+})
+
+describe("VideoMaskConfig — detect again every N seconds (redetectEverySec)", () => {
+  const slider = () => screen.getByLabelText("Detect again every (seconds)") as HTMLInputElement
+
+  it("is off (0) for a node that never set it, and says it costs time but not credits", () => {
+    const d: Partial<VideoMaskNodeData> = data()
+    delete d.redetectEverySec
+    render(<VideoMaskConfig data={d as VideoMaskNodeData} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(slider().value).toBe("0")
+    expect(slider().min).toBe("0")
+    expect(slider().max).toBe("10")
+    expect(screen.getByText(/the run takes longer; the price is the same/)).toBeTruthy()
+  })
+
+  it("stores seconds, and 0 as off", () => {
+    const onUpdate = vi.fn()
+    const { unmount } = render(<VideoMaskConfig data={data()} onUpdate={onUpdate} {...EXTRA} />)
+    fireEvent.change(slider(), { target: { value: "1" } })
+    expect(onUpdate).toHaveBeenLastCalledWith({ redetectEverySec: 1 })
+    unmount()
+    const onUpdateOn = vi.fn()
+    render(<VideoMaskConfig data={data({ redetectEverySec: 3 })} onUpdate={onUpdateOn} {...EXTRA} />)
+    fireEvent.change(slider(), { target: { value: "0" } })
+    expect(onUpdateOn).toHaveBeenLastCalledWith({ redetectEverySec: 0 })
+  })
+
+  it("shows the seconds when it is on, read as a run reads them (clamped to 1–10)", () => {
+    const { unmount } = render(<VideoMaskConfig data={data({ redetectEverySec: 2 })} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.getByText("2 s")).toBeTruthy()
+    unmount()
+    render(<VideoMaskConfig data={data({ redetectEverySec: 40 })} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.getByText("10 s")).toBeTruthy()
+    expect(slider().value).toBe("10")
   })
 })
 

@@ -516,38 +516,19 @@ describe("buildVideoCreditModelIdentifier", () => {
     })
   })
 
-  // --- seedance tiers ---
-  describe("seedance duration tiers", () => {
-    it("4s -> :4s", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 4)).toBe("seedance:4s")
-    })
-
-    it("2s falls into 4s tier", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 2)).toBe("seedance:4s")
-    })
-
-    it("8s -> :8s", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 8)).toBe("seedance:8s")
-    })
-
-    it("6s is charged as the 4s the runner renders (nearest offered length, a tie goes shorter)", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 6)).toBe("seedance:4s")
-    })
-
-    it("12s -> :12s", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 12)).toBe("seedance:12s")
-    })
-
-    it("10s is charged as the 8s the runner renders (nearest offered length)", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 10)).toBe("seedance:8s")
-    })
-
-    it("11s is charged as the 12s the runner renders", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 11)).toBe("seedance:12s")
-    })
-
-    it("exceeding max clamps to 12s", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 20)).toBe("seedance:12s")
+  // --- seedance (Seedance 1.5, retired 2026-10-25) ---
+  describe("a retired seedance is priced as the seedance-2-mini it runs as", () => {
+    it.each([
+      [4, undefined],
+      [8, undefined],
+      [12, "720p"],
+      [8, "480p"],
+    ] as const)("%ss %s", (duration, resolution) => {
+      for (const nodeType of ["image-to-video", "text-to-video"] as const) {
+        const asMini = buildVideoCreditModelIdentifier("seedance-2-mini", duration, undefined, nodeType, undefined, resolution)
+        expect(buildVideoCreditModelIdentifier("seedance", duration, undefined, nodeType, undefined, resolution)).toBe(asMini)
+        expect(asMini.startsWith("seedance-2-mini")).toBe(true)
+      }
     })
   })
 

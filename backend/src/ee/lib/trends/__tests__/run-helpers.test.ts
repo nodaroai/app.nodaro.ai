@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const from = vi.fn()
 vi.mock("../../../../lib/supabase.js", () => ({ supabase: { from: (...a: unknown[]) => from(...a) } }))
 
-import { followPreviewMasking } from "../run-helpers.js"
+import { followPreviewMasking, withoutUnsupportedStoredMask } from "../run-helpers.js"
+import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
 import type { ComposedTrendRun } from "../compose.js"
 
 const PREVIEW_JOB = "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10"
@@ -39,5 +40,53 @@ describe("followPreviewMasking", () => {
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(from).not.toHaveBeenCalled()
     expect(c.body.faceMasking).toEqual({ mode: "auto" })
+  })
+})
+
+describe("the stored face mask on the wire", () => {
+  beforeEach(() => {
+    from.mockReset()
+    _resetPluginSupportsForTests()
+  })
+
+  const STORED = { url: "https://cdn.example/trends/t/mask.mp4", frames: 360 }
+  const withStored = (masking: Record<string, unknown>) => {
+    const c = composed(false)
+    c.body.faceMasking = masking as never
+    c.body.storedFaceMask = { ...STORED }
+    return c
+  }
+  /** A completed masked preview of trend "t" by "u", masked with `fill` and `zone`. */
+  function previewJob(stored: Record<string, unknown>) {
+    const row = {
+      id: PREVIEW_JOB,
+      user_id: "u",
+      status: "completed",
+      input_data: { type: "cast-swap", preview: true, trend: { id: "t" }, __faceMasking: stored },
+      output_data: { faceMasking: { applied: true } },
+    }
+    const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }) }
+    from.mockReturnValue(chain)
+  }
+
+  it("is kept for an engine that takes it, and dropped for one that does not", () => {
+    setPluginSupports({ castSwap: { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: [], trendRun: true, storedFaceMask: true } })
+    const kept = withStored({ mode: "always" })
+    withoutUnsupportedStoredMask(kept)
+    expect(kept.body.storedFaceMask).toEqual(STORED)
+
+    setPluginSupports({ castSwap: { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: [], trendRun: true } })
+    const dropped = withStored({ mode: "always" })
+    withoutUnsupportedStoredMask(dropped)
+    expect(dropped.body).not.toHaveProperty("storedFaceMask")
+  })
+
+  it("a full run that follows its masked preview keeps the stored mask (sent as always)", async () => {
+    // The usual Auto trend: fill and zone left out; its preview stored the resolved ones.
+    previewJob({ fill: "blur", zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } })
+    const c = withStored({ mode: "auto", zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } })
+    await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
+    expect(c.body.faceMasking).toMatchObject({ mode: "always", fill: "blur" })
+    expect(c.body.storedFaceMask).toEqual(STORED)
   })
 })

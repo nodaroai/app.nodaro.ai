@@ -1,4 +1,4 @@
-// @registry-enumerates prices the Retry by estimateRunSetCredits over whatever node types the app graph holds, and asks CreditsService for the run's eligibility
+// @registry-enumerates prices the Retry by estimateRunSetFigures over whatever node types the app graph holds, and asks CreditsService for the run's eligibility
 /**
  * POST /v1/app/:slug/runs/:runId/resume — Retry of a FAILED app run, continued
  * from where it stopped (decided 2026-10-18).
@@ -401,7 +401,7 @@ async function resumePrice(input: {
   // Credits are enterprise: loaded only where the edition has them.
   const { appRunResumeCredits } = await import("../ee/lib/app-run-resume-price.js")
   const { UgcEstimateUnavailable } = await import("../ee/lib/ugc-estimate.js")
-  const { checkRunSetCredits, estimateRunSetCredits } = await import("../ee/billing/credits.js")
+  const { checkRunSetCredits, estimateRunSetFigures } = await import("../ee/billing/credits.js")
   const priced = withRunOverrides(input.nodes as Array<SnapshotNode & { type?: string }>, input.effective) as Array<{ id: string; type: string; data?: Record<string, unknown> }>
   const runNodeIds = new Set(input.runSet)
   // A use-case node is priced on the recordings and framing source the runner's run reads, as the Retry runs it (decided 2026-10-19/20).
@@ -421,8 +421,8 @@ async function resumePrice(input: {
   } catch (err) {
     // No UGC pricing on this deployment: the run set as every estimate prices it.
     if (!(err instanceof UgcEstimateUnavailable)) throw err
-    const credits = await (flagged ? estimateRunSetCredits(priced, input.edges, runNodeIds, undefined, viewer) : estimateRunSetCredits(priced, input.edges, runNodeIds))
-    base = { credits, hold: credits, reusedClips: 0 }
+    const figures = await (flagged ? estimateRunSetFigures(priced, input.edges, runNodeIds, undefined, viewer) : estimateRunSetFigures(priced, input.edges, runNodeIds))
+    base = { credits: figures.credits, hold: figures.hold, reusedClips: 0 }
   }
   // The creator's markup, settled by the run once on what it runs (never from the runner who made the app).
   const v = input.version

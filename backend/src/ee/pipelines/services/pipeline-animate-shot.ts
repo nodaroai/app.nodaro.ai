@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
-import { isSeedance2Provider } from "@nodaro/shared/models"
+import { canonicalVideoProvider, isSeedance2Provider } from "@nodaro/shared/models"
 import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 import { pipelineExtendVideo } from "./pipeline-extend-video.js"
@@ -126,7 +126,9 @@ export async function pipelineAnimateShot(
   } = args
 
   const mode = sceneNodeData.shot_input_mode
-  const videoModel = sceneNodeData.video_model
+  // A scene or pipeline pinned to a retired model (Seedance 1.5) runs and is
+  // priced as the model it became.
+  const videoModel = canonicalVideoProvider(sceneNodeData.video_model)
   const duration = Math.max(1, Math.round(shot.duration_seconds))
   const motionPrompt = shot.motion_prompt
   const prompt = shot.visual_keyframe_prompt

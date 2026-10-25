@@ -47,7 +47,7 @@ export interface RunSetPrice {
   readonly unchecked?: UgcPriceState
   /**
    * The figure holds a metered LLM call's ESTIMATE (charged its actual usage after the run) — the
-   * server's own flag, a UGC part's included: shown `~`, with no "unchecked" note.
+   * server's own flag, a UGC part's included: shown `≈`, with no "unchecked" note.
    */
   readonly approx: boolean
   /**

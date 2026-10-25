@@ -83,6 +83,8 @@ const KEPT_JOB_COLUMNS = [
   "usage_log_id",
   // The generation session the job was born in (518): a pointer, not content.
   "session_id",
+  // When the job went to the Trash (561): a lifecycle stamp, not content.
+  "deleted_at",
   // The failure's structured class (376): a fixed code, not the runner's text.
   // The failure lines themselves — `error_message` and the raw `error_detail`
   // — are erased.

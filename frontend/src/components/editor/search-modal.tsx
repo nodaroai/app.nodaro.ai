@@ -324,7 +324,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                             : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]"
                         )}
                       >
-                        <GitBranch className="w-4 h-4 text-[#ff0073]" />
+                        <GitBranch className="w-4 h-4 text-primary-ink" />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">
                             {workflow.name}

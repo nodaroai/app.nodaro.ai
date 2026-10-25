@@ -5,9 +5,13 @@
  * first shot finds no new subject after a hard cut, so every shot is segmented
  * on its own (and a held mask never crosses a cut).
  *
- * The rule is the media proxy's (`media-proxy-cuts.ts`): ffmpeg's `scdet`
- * scores every decoded frame, and `findSceneCuts` keeps the isolated spikes
- * that do not return (a camera flash is not a cut). Its times are seconds from
+ * The rule is the media proxy's (`media-proxy-cuts.ts`) with its escape for
+ * lone spikes (`isolatedSpikeIsCut`): ffmpeg's `scdet` scores every decoded
+ * frame, and `findSceneCuts` keeps the isolated spikes that do not return,
+ * and every lone spike even if it seems to. A missed cut costs a mask more
+ * than an extra one does — a cut that opens on fast motion reads as a flash
+ * without the escape, and the last shot's mask is then held on the new one —
+ * so a one-frame camera flash may start a shot here. Its times are seconds from
  * the first decoded frame's timestamp; they become frame indices here at the
  * clip's constant rate, counted from that first frame (a source sent as it is
  * may start past 0).
@@ -46,8 +50,8 @@ export interface DetectCutFramesOptions {
 /**
  * The frame indices where a new shot starts in the clip at `localPath`, at
  * its constant `frameRate`: one decode (`scdet` on every frame, nothing
- * written but the scores), then the proxy's cut rule. Sorted, never 0; `[]`
- * for a single shot (a flash included).
+ * written but the scores), then the proxy's cut rule with the lone-spike escape.
+ * Sorted, never 0; `[]` for a single shot.
  */
 export async function detectCutFrames(localPath: string, frameRate: string, opts: DetectCutFramesOptions = {}): Promise<number[]> {
   const workDir = await createWorkDir("scene-cuts")
@@ -60,7 +64,7 @@ export async function detectCutFrames(localPath: string, frameRate: string, opts
     )
     const frames = await readSceneScores(createReadStream(scores, "utf8"))
     if (frames.length === 0) return []
-    return cutTimesToFrames(findSceneCuts(frames), frames[0]!.t, frameRate)
+    return cutTimesToFrames(findSceneCuts(frames, { isolatedSpikeIsCut: true }), frames[0]!.t, frameRate)
   } finally {
     await cleanupWorkDir(workDir)
   }

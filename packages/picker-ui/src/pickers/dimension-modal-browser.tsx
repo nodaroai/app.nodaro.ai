@@ -88,7 +88,7 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
           <button
             type="button"
             className={cn(
-              "inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:bg-[#ff0073]/5 hover:border-[#ff0073]/40 hover:text-[#ff0073] transition-colors text-[10px] font-medium px-1.5 py-0.5 text-gray-600 dark:text-[#94A3B8]",
+              "inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:bg-[#ff0073]/5 hover:border-[#ff0073]/40 hover:text-primary-ink transition-colors text-[10px] font-medium px-1.5 py-0.5 text-gray-600 dark:text-[#94A3B8]",
               className,
             )}
           >

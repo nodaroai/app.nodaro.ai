@@ -11,7 +11,7 @@ export interface UseCaseEstimate {
   readonly stepsCredits: number
   readonly feeCredits: number
   readonly totalCredits: number
-  /** A step is a metered LLM call's estimate (spec §8.5), so the total is one (`~`). Absent otherwise. */
+  /** A step is a metered LLM call's estimate (spec §8.5), so the total is one (`≈`). Absent otherwise. */
   readonly estimate?: true
 }
 
