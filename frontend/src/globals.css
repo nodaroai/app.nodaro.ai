@@ -2592,6 +2592,14 @@ html, body {
   letter-spacing: 0.08em !important;
   word-spacing: 0.16em !important;
 }
+/* The shared header's a11y.css spaces every `body *` off canvas pages (0,3,1);
+   this outranks it (0,4,1) so read-only canvases keep their pixel layout too. */
+:root[data-a11y-spacing]:not([data-a11y-canvas]) body .react-flow,
+:root[data-a11y-spacing]:not([data-a11y-canvas]) body .react-flow * {
+  line-height: normal !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
 
 :root[data-a11y-links] a[href] {
   text-decoration: underline !important;

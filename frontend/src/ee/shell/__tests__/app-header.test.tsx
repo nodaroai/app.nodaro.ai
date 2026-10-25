@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, useLocation } from "react-router-dom"
+import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
+import { useSharedHeaderMounted } from "@/lib/shared-header"
 import type { SiteHeaderProps } from "../types"
 
 /**
@@ -46,12 +48,12 @@ function Where() {
   return null
 }
 
-function mount(props: Partial<Parameters<typeof AppHeader>[0]> = {}) {
+function mount(props: Partial<Parameters<typeof AppHeader>[0]> = {}, at = "/projects") {
   const onOpenMenu = vi.fn()
   const onHeaderOverlay = vi.fn()
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter initialEntries={["/projects"]}>
+      <MemoryRouter initialEntries={[at]}>
         <AppHeader compact={false} onOpenMenu={onOpenMenu} onHeaderOverlay={onHeaderOverlay} {...props} />
         <Where />
       </MemoryRouter>
@@ -82,7 +84,39 @@ describe("the app's header mount", () => {
   it("links: the App tab and the account pages are this origin; the others come from the build", () => {
     const { props } = mount()
     expect(props.worldHrefs?.app).toBe(`${window.location.origin}/projects`)
-    expect(props.urls).toEqual({ app: window.location.origin, login: "/login" })
+    expect(props.urls).toEqual({
+      app: window.location.origin,
+      login: "/login",
+      accessibility: `${window.location.origin}/accessibility`,
+    })
+  })
+
+  it("accessibility is the header's: its menu on, its statement link the app's one statement", () => {
+    const { props } = mount()
+    expect("accessibilityMenu" in props).toBe(false)
+    expect(props.accessibilityButton).toBe(true)
+    expect(props.urls?.accessibility).toBe(`${window.location.origin}${ACCESSIBILITY_STATEMENT_PATH}`)
+  })
+
+  it("on a canvas page the corner button is off, as the app's own menu does there", () => {
+    expect(mount({}, "/projects/p1/workflows/w1").props.accessibilityButton).toBe(false)
+    cleanup()
+    expect(mount({}, "/editor/w1").props.accessibilityButton).toBe(false)
+  })
+
+  it("says it is on the page while mounted, so the app's own menu steps aside", () => {
+    const seenMounted: boolean[] = []
+    function Probe() {
+      seenMounted.push(useSharedHeaderMounted())
+      return null
+    }
+    render(<Probe />)
+    expect(seenMounted.at(-1)).toBe(false)
+    mount()
+    expect(seenMounted.at(-1)).toBe(true)
+    cleanup()
+    render(<Probe />)
+    expect(seenMounted.at(-1)).toBe(false)
   })
 
   it("phone layout: compact on editor pages, full elsewhere", () => {

@@ -58,7 +58,13 @@ export interface SiteHeaderProps {
   readonly activeWorld?: SiteWorldId
   readonly worldHrefs?: Partial<Readonly<Record<SiteWorldId, string>>>
   readonly onNavigate?: (href: string) => void
-  readonly urls?: { readonly app?: string; readonly login?: string; readonly home?: string }
+  /** `accessibility`: the one accessibility statement, linked from the header's accessibility menu. */
+  readonly urls?: {
+    readonly app?: string
+    readonly login?: string
+    readonly home?: string
+    readonly accessibility?: string
+  }
   readonly homeUrl?: string
   readonly locale?: string
   readonly phoneBreakpoint?: number
@@ -74,8 +80,8 @@ export interface SiteHeaderProps {
   readonly onAccountPage?: (path: string, page: SiteAccountPage) => void
   /** Rows added to the account menu (the accessibility statement); the function form is handed the menu's close. */
   readonly accountMenuExtras?: ReactNode | ((menu: { readonly close: () => void }) => ReactNode)
-  /** Off: the app still ships its own accessibility menu (its choices are carried over when it adopts the header's). */
-  readonly accessibilityMenu?: boolean
+  /** The accessibility menu's corner button; off on a canvas page (Alt+A still opens the menu). */
+  readonly accessibilityButton?: boolean
   /** The app claims the signup grant on its own boot path. */
   readonly claimSignupGrant?: boolean
   /** One phone row on pages whose height belongs to the app (the editor). */
