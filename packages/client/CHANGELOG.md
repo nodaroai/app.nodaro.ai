@@ -1,5 +1,25 @@
 # @nodaro/sdk
 
+## 2.44.0
+
+### Minor Changes
+
+- 914e157: Cast Swap runs on two engines. `CastSwapParams.engine` (`CastSwapEngine`: `"seedance-2-5" | "kling-4"`; left out = Seedance 2.5, as before) chooses it on `run()` and `estimate()`. Kling 4 renders `"720p"` (its default) or `"1080p"` and has no draft: `draft: true` answers `400 draft_unsupported`, and 480p is refused. Its Full Quality makes a NEW take at 1080p from a completed 720p run's inputs: `CastSwapFullQualityEstimate.kind` (`CastSwapFullQualityKind`: `"same-take" | "new-take"`; absent from an older engine = same take) says which. Trends: `TrendDetail.engine?` (`TrendEngine`; absent = Seedance 2.5) and its `resolutions` (Kling 4: `["720p", "1080p"]`, default first), `TrendRun.engine?` (absent = Seedance 2.5), a Kling 4 720p run's `fullQualityUntil`, and the `draft_unsupported` / `resolution_unsupported` refusals of `estimate()` / `run()`. A Kling 4 quote names its `engine`, prices the take as `breakdown.kling` (in place of `seedance` / `seedanceExpected`), with `expectedCredits` equal to `totalCredits` and `settlesLower: false`; a Kling 4 Full Quality quote has `breakdown.kling` in place of `seedanceHd`. So `CastSwapEstimate.breakdown.seedance` and `CastSwapFullQualityEstimate.breakdown.seedanceHd` are now optional (absent on Kling 4). Kling 4's own refusals: `draft_unsupported`, `resolution_unsupported`, `output_format_unsupported` and `too_many_images` (more than 10 images in a run); its 8,000-character prompt cap answers `prompt_too_long`. `CastSwapParams.klingLength` (`CastSwapKlingLength`: `"cut-end"` — the default — or `"cut-start"`) sets which end of the clip a Kling 4 run cuts to whole seconds; Seedance 2.5 ignores it.
+
+  Release order: the Cast Swap engine that declares `engines` (and reads `klingLength`) must be pinned on an environment BEFORE this platform version is relied on for Kling 4 there. A platform whose engine predates it refuses a Kling 4 trend run (`engine_unsupported`) or MCP `cast_swap` (`engine_unavailable`) instead of letting it run on Seedance.
+
+- 54d4de2: List your MCP conversations — each a flow an assistant built from its steps: `client.workflows.listMcpConversations({ month, sources })` (`GET /v1/mcp-conversations`) and `nodaro workflows mcp-conversations [--month YYYY-MM] [--source claude,chatgpt]`.
+- dc55645: `PickerOption.imageSrcSet`: a picker option pictured by a Nodaro CDN render (on Nodaro Cloud: the look pickers and, new, the music and voice pickers' pictures) also carries its picture at 240, 480, 960 and 1920px wide as an HTML `srcset` value, so a large tile stays sharp.
+
+### Patch Changes
+
+- Updated dependencies [914e157]
+- Updated dependencies [a76b30a]
+- Updated dependencies [dc55645]
+- Updated dependencies [dc55645]
+  - @nodaro/shared@3.41.0
+  - @nodaro/prompts@1.42.0
+
 ## 2.43.0
 
 ### Minor Changes
