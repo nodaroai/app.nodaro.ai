@@ -376,7 +376,7 @@ the range existed carries none until it is republished or backfilled.
 `estimatedCreditsIsEstimate: true` (browse, detail, app page, your own apps
 `/v1/apps/mine`, template gallery and Tutorials) marks a listed price that holds a metered LLM call's estimate —
 its model's typical call, charged its actual usage per token — so show it
-`~N`; it is absent for a fixed price and on a deployment running the
+`≈N`; it is absent for a fixed price and on a deployment running the
 tier-pricing rollback. A publish whose graph names a metered model with no
 price yet is refused `400 validation_error` with `reason: "llm_model_unpriced"`,
 as its run would be ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). A preview picked automatically for an app or a
@@ -511,7 +511,7 @@ The `202` answer of a continue-from-failed names the execution it continued from
 }
 ```
 
-Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `~N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
+Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `≈N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
 
 | Status | `error.code` | When |
 |---|---|---|
@@ -1858,7 +1858,7 @@ not in the route's own response body.
 the LLM caption sub-failed (portrait still set; retry via `llm-caption`).
 
 The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens
-it used, at that model's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical, under
+it used, at that model's rate (≈20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical, under
 `prompt-helper:claude-sonnet-4.6`; [LLM model rates](pricing/llm-models.md)) —
 on `approve-portrait`, on `llm-caption`, and on every location, object and
 creature `approve-main-image` / `llm-caption`. An approval is never refused for
@@ -2080,7 +2080,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `estimate` (`true` when `creditCost` is a metered LLM node's typical call on its default model — charged its actual usage, shown `~N`; Choose Best states its free strategies up to its AI judge's typical call on the default judge, a `"0-N"` range marked `estimate`; absent for a fixed price; a metered LLM node whose default model has no price yet lists `creditCost: "unpriced"` — a run on it is refused `validation_error` with `reason: "llm_model_unpriced"`), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `estimate` (`true` when `creditCost` is a metered LLM node's typical call on its default model — charged its actual usage, shown `≈N`; Choose Best states its free strategies up to its AI judge's typical call on the default judge, a `"0-N"` range marked `estimate`; absent for a fixed price; a metered LLM node whose default model has no price yet lists `creditCost: "unpriced"` — a run on it is refused `validation_error` with `reason: "llm_model_unpriced"`), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -2171,7 +2171,7 @@ server from the edit it samples, so to quote a run before it starts, send the
 workflow to `POST /v1/credits/estimate-workflow` (`{ nodes, edges? }` →
 `{ data: { totalCredits, … } }`; `estimate: true` rides along when a metered LLM
 node is in the total — its model's typical call, charged its actual usage, so
-the total is shown `~N`: the estimates plus the fixed prices, never a hold): it counts the wired edit's frames the way the
+the total is shown `≈N`: the estimates plus the fixed prices, never a hold): it counts the wired edit's frames the way the
 [editor's estimate](./nodes/processing-video/speaker-frames.md#what-the-estimate-shows-before-you-run)
 does. With the block count in hand, `speaker-frames:<N>u` is its exact price,
 and `GET /v1/nodes/speaker-frames` serves the per-block rate as `creditRate`
@@ -2207,11 +2207,11 @@ API — `llmPriceKey(feature, model, reasoningEffort?, advancedMode?)` from
 `@nodaro/shared/llm-models` builds it (for example `llm-chat:gemini-3.6-flash`,
 `describe-to-picker:claude-opus-5.5:direct`). Both endpoints answer it with an
 **estimate**, a typical call of that feature on that model (Generate Text on
-Gemini 3.6 Flash: ~3 credits<!-- credits: llm-chat:gemini-3.6-flash -->), and say so:
+Gemini 3.6 Flash: ≈3 credits<!-- credits: llm-chat:gemini-3.6-flash -->), and say so:
 `POST /v1/credits/model-costs` lists such identifiers in `estimates: string[]`
 (omitted when a batch asks only fixed prices, so a fixed-price batch answers
 exactly as before) and `GET /v1/credits/model-cost` adds `estimate: true` to
-its `data` (that answer is never cached). Show an estimate as `~N`. A model
+its `data` (that answer is never cached). Show an estimate as `≈N`. A model
 with no rate on the lane it would be served on cannot be run: the batch lists
 its key in `errors`, with `errorCodes: { "<key>": { code: "llm_model_unpriced",
 message } }`, and the run itself is refused `400 validation_error` with
@@ -3123,11 +3123,11 @@ hold is reserved — each batch's first attempt at the model's output cap — an
 a balance below it is refused (`402`, "Needs up to N credits"). What the server
 quotes beforehand (`POST /v1/credits/model-costs`, listed under `estimates`):
 
-- no `llmModel` (Gemini 3.8 Flash at Auto) → `text-to-picker:gemini-3.8-flash`, ~16 credits<!-- credits: text-to-picker:gemini-3.8-flash -->;
-- `llmModel: "claude-sonnet-5.5"` → ~53 credits<!-- credits: text-to-picker:claude-sonnet-5.5 -->;
+- no `llmModel` (Gemini 3.8 Flash at Auto) → `text-to-picker:gemini-3.8-flash`, ≈16 credits<!-- credits: text-to-picker:gemini-3.8-flash -->;
+- `llmModel: "claude-sonnet-5.5"` → ≈53 credits<!-- credits: text-to-picker:claude-sonnet-5.5 -->;
 - `llmModel: "claude-opus-5.5"` with no effort (it runs at `"high"` on
-  Anthropic's own API) → `text-to-picker:claude-opus-5.5:direct`, ~262 credits<!-- credits: text-to-picker:claude-opus-5.5:direct -->;
-- `llmModel: "claude-fable-5"` (offered on this route) → ~262 credits<!-- credits: text-to-picker:claude-fable-5 -->.
+  Anthropic's own API) → `text-to-picker:claude-opus-5.5:direct`, ≈262 credits<!-- credits: text-to-picker:claude-opus-5.5:direct -->;
+- `llmModel: "claude-fable-5"` (offered on this route) → ≈262 credits<!-- credits: text-to-picker:claude-fable-5 -->.
 
 Every batch the provider billed is charged, a failed one included; a run
 whose batches the provider did not bill is refunded.
@@ -3156,9 +3156,9 @@ model's rate on the lane that served it ([LLM model rates](pricing/llm-models.md
 the same rule as [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost).
 The hold is the first attempt at the model's output cap; a balance below it is
 refused (`402`, "Needs up to N credits"). What the server quotes beforehand for
-a typical call: ~18 credits<!-- credits: llm-structured:gemini-3.6-flash --> on the default, Gemini 3.6 Flash;
-~31<!-- credits: llm-structured:claude-sonnet-5.5 --> on Claude Sonnet 5.5; ~62<!-- credits: llm-structured:claude-opus-5.5 --> on Claude Opus 5.5 with no effort;
-~154<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5, which this route offers. A failure the
+a typical call: ≈18 credits<!-- credits: llm-structured:gemini-3.6-flash --> on the default, Gemini 3.6 Flash;
+≈31<!-- credits: llm-structured:claude-sonnet-5.5 --> on Claude Sonnet 5.5; ≈62<!-- credits: llm-structured:claude-opus-5.5 --> on Claude Opus 5.5 with no effort;
+≈154<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5, which this route offers. A failure the
 provider billed (an answer that never validated after its retries, a refusal,
 an answer cut off at the cap) is charged for that usage and the error says how
 much; one it did not bill is refunded. It is
@@ -4100,12 +4100,12 @@ authenticated caller.
 Both forms answer `lines` (each with an English `label`, its `credits` and a stable `key`; a clip
 line also its number `n` and its `seconds`; a line that holds a metered LLM call — a creator check,
 a clip's frame check while the UGC plugin meters it — is marked `"estimate": true`: charged its
-actual usage, show it `~N`), `expected` (what the video is expected to cost),
+actual usage, show it `≈N`), `expected` (what the video is expected to cost),
 `ceiling` (what it holds while its clips render: each clip at twice its price), `parts` (the
 expected credits per part of the video: `script`, `creator`, `clip`, `cards`, `join`, `overlay`
 and `captions`, adding up to `expected`) and `holdParts` (what each part holds; they add up to
 the ticket form's `ceiling`). `estimateParts` (present only when one is) lists the parts whose figure
-holds such an estimate, so a price that counts one of those parts is shown `~N`; the editor's Execute
+holds such an estimate, so a price that counts one of those parts is shown `≈N`; the editor's Execute
 and Run from here buttons and the server's own workflow estimate read it. The estimate also answers `range` (what it is expected to cost at
 0.8× and 1.2× the length) and `worstCase` (what it holds at the longer length; its `holdParts`
 add up to it), and, when the server supplies all three, `limits`: the script's line limits in
@@ -4518,7 +4518,7 @@ pipeline starts with empty chat history per chat-enabled stage.
 AI assistance for writing prompts for generation nodes. One endpoint, three
 actions — discriminated by the `action` field. Each call is charged for the
 tokens it used at the model's rate on the lane that served it (a hold first,
-then the real charge; ~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on the default Gemini 3.6 Flash —
+then the real charge; ≈4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on the default Gemini 3.6 Flash —
 [LLM model rates](pricing/llm-models.md)); a refusal the provider billed is
 charged for that usage.
 

@@ -10,7 +10,7 @@
  *    again." (TA15 a: a repeat re-bills every kept clip);
  *  - the gate's reason (nothing kept, the rule's issues, a newer run) or, while
  *    a run holds the review, "Rendering final… clip 3 of 6 · edits locked";
- *  - Close and Render final · {n} clips · ~{credits}, behind the gate
+ *  - Close and Render final · {n} clips · ≈{credits}, behind the gate
  *    (`reviewGate`) as the cut review's are, and only where Render final can
  *    go ahead (`canRenderFinal`: a use-case node's only on a Preview its own
  *    run made). A clip set's review offers no

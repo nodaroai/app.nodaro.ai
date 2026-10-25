@@ -2,7 +2,7 @@
  * The listing's estimate flag (migration 553, metered LLM pricing Task 12 /
  * R47): `estimated_credits_is_estimate` on `published_apps` and
  * `workflow_templates` — the stored price holds a metered LLM call's estimate
- * (charged its actual usage), so a card shows it `~N`.
+ * (charged its actual usage), so a card shows it `≈N`.
  *
  * Staging runs dev against the SHARED database and migrations apply only at the
  * dev→main promotion, so for that window the column does not exist and a
@@ -10,7 +10,7 @@
  * (`listing-max-columns.ts`, `listing-per-minute-columns.ts`): on an error
  * naming it as missing it is remembered as absent for `ESTIMATE_FLAG_ABSENT_TTL_MS`,
  * a read retries without it and a write is retried without it — dropped: the
- * price is still true, the card simply shows no `~` in that window.
+ * price is still true, the card simply shows no `≈` in that window.
  * Composes with the other helpers: pass their read or write as `build`/`write`.
  */
 import { llmMeteredPricing } from "./config.js"

@@ -233,10 +233,10 @@ export function PromptHelperDialog({
     }
   }
 
-  // The model's estimate while metered pricing is on (shown `~N`), else the
+  // The model's estimate while metered pricing is on (shown `≈N`), else the
   // tier price, exactly as before (`useLlmPrice`).
   const { credits: creditCost, estimate: creditEstimate } = useLlmNodeCredits("prompt-helper", { llmModel, reasoningEffort }, 1)
-  const creditLabel = creditCost === undefined ? "" : `${creditEstimate ? "~" : ""}${formatCreditUnits(creditCost)}`
+  const creditLabel = creditCost === undefined ? "" : `${creditEstimate ? "≈" : ""}${formatCreditUnits(creditCost)}`
 
   // -- Phase 1: Analyze --
   async function handleAnalyze() {

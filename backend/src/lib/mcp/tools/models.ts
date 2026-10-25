@@ -180,7 +180,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
           .optional()
           .describe(
             "Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API), e.g. `llm-chat:claude-sonnet-5.5`. " +
-              "Answers `{ prices: { <id>: { credits, estimate? } | { error } } }`; `estimate`: charged actual usage, show `~N`.",
+              "Answers `{ prices: { <id>: { credits, estimate? } | { error } } }`; `estimate`: charged actual usage, show `≈N`.",
           ),
       },
       annotations: { readOnlyHint: true },

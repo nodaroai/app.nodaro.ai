@@ -41,14 +41,14 @@ If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provid
 
 One vision call per run, however many pickers you wire, charged for the tokens it actually used — the analyzer's prompt (the legend of every connected picker's catalog, plus your guidance), the photo, and the answer — at the selected model's rate on the lane that served it. Every model's rate is in [LLM model rates](../../pricing/llm-models.md); the call is charged the same way as [Generate Text](../ai-text/llm-chat.md#credit-pricing), hold first, then the real charge.
 
-The Run button shows `~N`, an estimate of a typical read (more connected pickers means a longer legend, so a larger figure):
+The Run button shows `≈N`, an estimate of a typical read (more connected pickers means a longer legend, so a larger figure):
 
-- An untouched node (Gemini 3.8 Flash, Effort Auto) → `describe-to-picker:gemini-3.8-flash` → **~6 credits<!-- credits: describe-to-picker:gemini-3.8-flash -->**
-- Claude Sonnet 5.5 at Effort Auto → `describe-to-picker:claude-sonnet-5.5` → **~19 credits<!-- credits: describe-to-picker:claude-sonnet-5.5 -->**
-- Claude Opus 5 at Effort Auto → `describe-to-picker:claude-opus-5` → **~48 credits<!-- credits: describe-to-picker:claude-opus-5 -->**
-- Claude Opus 5.5 (Effort High by default, or Low) → runs on Anthropic's own API → `describe-to-picker:claude-opus-5.5:direct` → **~94 credits<!-- credits: describe-to-picker:claude-opus-5.5:direct -->**
-- Claude Fable 5 at Effort Auto → `describe-to-picker:claude-fable-5` → **~94 credits<!-- credits: describe-to-picker:claude-fable-5 -->**; with an effort it runs on Anthropic's own API → **~235 credits<!-- credits: describe-to-picker:claude-fable-5:direct -->**
-- Gemini 4 Argon at any effort → `describe-to-picker:gemini-4-argon:direct` → **~94 credits<!-- credits: describe-to-picker:gemini-4-argon:direct -->** (it always runs on Google's own API)
+- An untouched node (Gemini 3.8 Flash, Effort Auto) → `describe-to-picker:gemini-3.8-flash` → **≈6 credits<!-- credits: describe-to-picker:gemini-3.8-flash -->**
+- Claude Sonnet 5.5 at Effort Auto → `describe-to-picker:claude-sonnet-5.5` → **≈19 credits<!-- credits: describe-to-picker:claude-sonnet-5.5 -->**
+- Claude Opus 5 at Effort Auto → `describe-to-picker:claude-opus-5` → **≈48 credits<!-- credits: describe-to-picker:claude-opus-5 -->**
+- Claude Opus 5.5 (Effort High by default, or Low) → runs on Anthropic's own API → `describe-to-picker:claude-opus-5.5:direct` → **≈94 credits<!-- credits: describe-to-picker:claude-opus-5.5:direct -->**
+- Claude Fable 5 at Effort Auto → `describe-to-picker:claude-fable-5` → **≈94 credits<!-- credits: describe-to-picker:claude-fable-5 -->**; with an effort it runs on Anthropic's own API → **≈235 credits<!-- credits: describe-to-picker:claude-fable-5:direct -->**
+- Gemini 4 Argon at any effort → `describe-to-picker:gemini-4-argon:direct` → **≈94 credits<!-- credits: describe-to-picker:gemini-4-argon:direct -->** (it always runs on Google's own API)
 
 `POST /v1/credits/model-costs` answers these keys (`llmPriceKey("describe-to-picker", model, effort, advancedMode)` from `@nodaro/shared/llm-models` builds one). A call runs on the provider's own API when Advanced mode is on, or when a Claude model carries any effort (Claude's reasoning effort only takes effect on Anthropic's own API). Claude Opus 5.5 carries High by default, so every Opus 5.5 read started from the editor runs there; over the API, `reasoningEffort: "none"` on Opus 5.5 clamps to no effort and runs on the aggregator.
 

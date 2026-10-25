@@ -146,15 +146,15 @@ The composable `items` output is the recommended path for automated workflows; t
 
 A run is charged for the tokens it actually used — its prompt (instructions, user input and references) and its answer — at the selected model's rate, on the lane that served it. Every model's rate, in credits per million input and output tokens, is in [LLM model rates](../../pricing/llm-models.md).
 
-**Before the run** the Run button shows `~N`, an estimate of a typical call on the selected model, for example:
+**Before the run** the Run button shows `≈N`, an estimate of a typical call on the selected model, for example:
 
 | Model | Typical run |
 |-------|-------------|
-| GPT-6 Luna | ~2 credits<!-- credits: llm-chat:gpt-6-luna --> |
-| Gemini 3.6 Flash (default) | ~3 credits<!-- credits: llm-chat:gemini-3.6-flash --> |
-| Claude Sonnet 5.5 | ~4 credits<!-- credits: llm-chat:claude-sonnet-5.5 --> |
-| Claude Opus 5.5 | ~6 credits<!-- credits: llm-chat:claude-opus-5.5 --> |
-| Claude Fable 5 | ~14 credits<!-- credits: llm-chat:claude-fable-5 --> |
+| GPT-6 Luna | ≈2 credits<!-- credits: llm-chat:gpt-6-luna --> |
+| Gemini 3.6 Flash (default) | ≈3 credits<!-- credits: llm-chat:gemini-3.6-flash --> |
+| Claude Sonnet 5.5 | ≈4 credits<!-- credits: llm-chat:claude-sonnet-5.5 --> |
+| Claude Opus 5.5 | ≈6 credits<!-- credits: llm-chat:claude-opus-5.5 --> |
+| Claude Fable 5 | ≈14 credits<!-- credits: llm-chat:claude-fable-5 --> |
 
 `POST /v1/credits/model-costs` answers the same estimate for `llm-chat:<model>` (`llm-chat:<model>:direct` when the call runs on the provider's own API — `llmPriceKey` in `@nodaro/shared/llm-models` builds the key), and lists it under `estimates`.
 
@@ -195,7 +195,7 @@ own API, at that lane's rate (see [Credit pricing](#credit-pricing)).
 - If a run fails with *The answer was cut off*, ask for a shorter answer in the instructions, lower **Effort**, or raise Max Tokens.
 - If a run fails with *Content policy violation*, the provider's safety or recitation filter withheld the answer (on a Gemini model running on Google's own API this includes a reply stopped for reciting existing text). Nothing is saved, the run is charged only for what the provider billed for the refused request (nothing when it billed nothing), and it is not retried on another model — rephrase the request, or ask for an original answer rather than reproduced text.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
-- Pick the cheapest model that meets your quality bar — an economy model (Gemini 3.6 Flash, ~3 cr<!-- credits: llm-chat:gemini-3.6-flash -->) is plenty for rewriting and captioning; reserve a premium one (Claude Opus 5.5, ~6 cr<!-- credits: llm-chat:claude-opus-5.5 -->) for complex reasoning. A long prompt or a long answer costs more on any model.
+- Pick the cheapest model that meets your quality bar — an economy model (Gemini 3.6 Flash, ≈3 cr<!-- credits: llm-chat:gemini-3.6-flash -->) is plenty for rewriting and captioning; reserve a premium one (Claude Opus 5.5, ≈6 cr<!-- credits: llm-chat:claude-opus-5.5 -->) for complex reasoning. A long prompt or a long answer costs more on any model.
 - To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.8 Flash and Gemini 4 Argon are image-only for now).
 
 ## Common Use Cases

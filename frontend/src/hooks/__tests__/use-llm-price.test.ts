@@ -3,7 +3,7 @@
  *
  * The hook asks the batch for BOTH the metered price key and today's tier id
  * in one request. Only the server decides which applies: a key it marks in
- * `estimates` is shown `~N`; a key it reports `missing` (the tier-pricing
+ * `estimates` is shown `≈N`; a key it reports `missing` (the tier-pricing
  * rollback) leaves the tier price, shown exactly as before.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
@@ -65,7 +65,7 @@ describe("useLlmPrice", () => {
     expect(result.current).toEqual({ credits: 6, estimate: true, loading: false })
   })
 
-  it("rollback: the key comes back `missing`, so the tier price shows with no ~", async () => {
+  it("rollback: the key comes back `missing`, so the tier price shows with no ≈", async () => {
     api.answer = { data: { [TIER]: 3 }, missing: [KEY] }
     const { result } = renderHook(() => useLlmPrice("llm-chat", "claude-opus-5.5"))
     await waitFor(() => expect(result.current.credits).toBe(3))
@@ -103,23 +103,23 @@ describe("useLlmPrice", () => {
 describe("formatCreditsSuffix", () => {
   const t = (key: Parameters<typeof tx>[0], vars?: Record<string, string | number>) => tx(key, vars)
 
-  it("an estimate reads (~N CR), a fixed price (N CR)", () => {
-    expect(formatCreditsSuffix(t, 6, true)).toBe("(~6 CR)")
+  it("an estimate reads (≈N CR), a fixed price (N CR)", () => {
+    expect(formatCreditsSuffix(t, 6, true)).toBe("(≈6 CR)")
     expect(formatCreditsSuffix(t, 6, false)).toBe("(6 CR)")
   })
 
   it("he locale renders the deployment unit, not 'CR'", () => {
     useLocaleStore.setState({ locale: "he" })
     const s = formatCreditsSuffix(t, 6, true)
-    expect(s).toContain("~6")
+    expect(s).toContain("≈6")
     expect(s).toContain(tx("credits.unitShort"))
     expect(s).not.toContain("CR")
   })
 })
 
 describe("llmPickerPriceLabel", () => {
-  it("labels an estimate `~N CR`", () => {
-    expect(llmPickerPriceLabel({ credits: 6, estimate: true, loading: false }, "CR")).toBe("~6 CR")
+  it("labels an estimate `≈N CR`", () => {
+    expect(llmPickerPriceLabel({ credits: 6, estimate: true, loading: false }, "CR")).toBe("≈6 CR")
   })
 
   it("shows nothing for a price that is not an estimate (rollback: no prices in the picker)", () => {

@@ -255,7 +255,7 @@ function toCamelCase(row: Record<string, unknown>) {
     estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
     // "Up to" (decided 2026-10-14): present only when a choice the template's user has can cost more.
     ...storedTemplateRange(row as Record<string, number | null>),
-    // The listed price holds a metered LLM estimate (`~N`, only while metered pricing is on).
+    // The listed price holds a metered LLM estimate (`≈N`, only while metered pricing is on).
     ...listingEstimateFlag(row),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
@@ -284,7 +284,7 @@ function toBrowseCard(row: Record<string, unknown>) {
     estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
     // "Up to" (decided 2026-10-14): present only when a choice the template's user has can cost more.
     ...storedTemplateRange(row as Record<string, number | null>),
-    // The listed price holds a metered LLM estimate: the card shows it `~N` (only while metered pricing is on).
+    // The listed price holds a metered LLM estimate: the card shows it `≈N` (only while metered pricing is on).
     ...listingEstimateFlag(row),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
@@ -716,7 +716,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         node_count: nodeCount,
         complexity,
         estimated_credits: estimatedCredits,
-        // The listed price holds a metered LLM estimate (shown `~N`, Task 12 / R47).
+        // The listed price holds a metered LLM estimate (shown `≈N`, Task 12 / R47).
         ...estimateFlagColumn(listing),
         estimated_per_minute_credits: estimatedPerMinuteCredits,
         ...maxColumns,
@@ -814,7 +814,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           node_count: nodeCount,
           complexity,
           estimated_credits: estimatedCredits,
-          // The listed price holds a metered LLM estimate (shown `~N`, Task 12 / R47).
+          // The listed price holds a metered LLM estimate (shown `≈N`, Task 12 / R47).
           ...estimateFlagColumn(listing),
           estimated_per_minute_credits: estimatedPerMinuteCredits,
           ...maxColumns,

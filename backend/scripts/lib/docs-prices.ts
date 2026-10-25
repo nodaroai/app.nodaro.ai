@@ -30,9 +30,9 @@
  * what one unit — or that many units — adds to a charge before its total is
  * rounded up: a per-unit rate, or an add-on folded into another price.
  * `credits: n/a` marks a number that is not a price at all (a balance, a grant,
- * a cap the user sets). A figure written as approximate (`~`, `≈`) needs no
+ * a cap the user sets). A figure written as approximate (`≈`, `≈`) needs no
  * annotation — but one that carries an annotation is still checked, so an
- * estimate (`~6 credits<!-- credits: llm-chat:gemini-3.6-flash -->`, a
+ * estimate (`≈6 credits<!-- credits: llm-chat:gemini-3.6-flash -->`, a
  * metered LLM price key) stays the estimate the server quotes.
  *
  * `credits-llm-rate:` states a metered LLM figure, priced from the per-model

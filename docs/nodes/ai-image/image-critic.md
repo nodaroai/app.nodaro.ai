@@ -46,9 +46,9 @@ Any vision-capable LLM configured in the editor. The default is Claude Sonnet 5.
 
 | Model | Typical call |
 |-------|-------------|
-| Gemini 3.6 Flash | ~4<!-- credits: image-critic:gemini-3.6-flash --> |
-| Claude Sonnet 5.5 (default) | ~6<!-- credits: image-critic:claude-sonnet-5.5 --> |
-| Claude Opus 5.5 | ~11<!-- credits: image-critic:claude-opus-5.5 --> |
+| Gemini 3.6 Flash | ≈4<!-- credits: image-critic:gemini-3.6-flash --> |
+| Claude Sonnet 5.5 (default) | ≈6<!-- credits: image-critic:claude-sonnet-5.5 --> |
+| Claude Opus 5.5 | ≈11<!-- credits: image-critic:claude-opus-5.5 --> |
 
 A critique the provider billed but that came back unusable (an answer that is not valid JSON) is charged for that usage, and the error says how much; a failure it did not bill is refunded.
 

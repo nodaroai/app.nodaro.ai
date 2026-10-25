@@ -16,7 +16,7 @@ import type { Edit3DSceneData } from "@/types/nodes"
 function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as Edit3DSceneData
-  // An instruction edit is a metered 3d-scene call (`~N`); a deterministic edit (`operations`)
+  // An instruction edit is a metered 3d-scene call (`≈N`); a deterministic edit (`operations`)
   // reaches no model and is priced at its own row (`3d-scene-ops`), as the server prices it.
   const llm = useLlmNodePrice({ type: "edit-3d-scene", data: nodeData }, 30)
   const opsCredits = useModelCredits("3d-scene-ops", 0)

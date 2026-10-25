@@ -985,7 +985,7 @@ with the review applied.
 `estimateRenderFinal` quotes it first and creates nothing: the nodes it will run,
 the override it runs with, its estimated credits (`estimatedCreditsIsEstimate:
 true` when the run executes an LLM node, which is charged its actual usage — show
-it `~N`), whether the payer can cover them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
+it `≈N`), whether the payer can cover them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
 workspace budget or a deployment's operator pays). The figures are `null` in an
 edition without credits.
 
@@ -1483,8 +1483,8 @@ Structured LLM output: your system prompt and JSON Schema in, a validated
 object out. Billed under `llm-structured` for the tokens the call used, at the
 model's rate on the lane that served it (see
 [Structured LLM output](api-integration.md#structured-llm-output-any-schema) and
-[LLM model rates](pricing/llm-models.md)): a typical call is ~18 credits<!-- credits: llm-structured:gemini-3.6-flash -->
-on the default Gemini 3.6 Flash and ~154 credits<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5,
+[LLM model rates](pricing/llm-models.md)): a typical call is ≈18 credits<!-- credits: llm-structured:gemini-3.6-flash -->
+on the default Gemini 3.6 Flash and ≈154 credits<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5,
 which is offered. A failure the provider billed is charged for that usage.
 
 #### `structured(input)`
@@ -4729,7 +4729,7 @@ run(input: ReduceInput): Promise<ReduceResult>
 
 | Strategy | Config shape |
 |----------|--------------|
-| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model; the judge's call is charged per token at that model's rate, ~6 credits<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5 ([LLM model rates](./pricing/llm-models.md)) |
+| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model; the judge's call is charged per token at that model's rate, ≈6 credits<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5 ([LLM model rates](./pricing/llm-models.md)) |
 | `concat` | `{ separator?: string }` (default `"\n\n"`) |
 | `first-non-empty` | `{}` |
 | `count` | `{}` |
@@ -4771,7 +4771,7 @@ credits surface as `InsufficientCreditsError`.
 AI prompt assistance for generation nodes. All three methods delegate to
 `POST /v1/prompt-helper/wizard` (see
 [API Integration §12](./api-integration.md#15-prompt-wizard)). Each call
-is charged for the tokens it used at the model's rate (~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on
+is charged for the tokens it used at the model's rate (≈4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on
 the default Gemini 3.6 Flash; [LLM model rates](pricing/llm-models.md)).
 
 All three inputs also accept optional `llmModel`, `reasoningEffort`, `advancedMode`, `temperature` and `maxTokens` fields
@@ -4861,7 +4861,7 @@ absent on an app published before the range existed until its next publish.
 Templates carry `maxEstimatedCredits` / `maxEstimatedPerMinuteCredits` the same
 way. `estimatedCreditsIsEstimate: true` (apps, templates, tutorials) marks a
 listed price that holds a metered LLM call's estimate — charged its actual usage
-per token — so show it `~N`; it is absent for a fixed price.
+per token — so show it `≈N`; it is absent for a fixed price.
 
 ```ts
 const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
@@ -6614,7 +6614,7 @@ the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
 | `data` | `Record<string, number>` | Priced identifier → credit cost. |
 | `missing` | `string[]` | Identifiers with no pricing row (render `'—'`). |
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
-| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `~N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
+| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `≈N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
 | `errorCodes` | `Record<string, { code, message }>?` | Why each identifier in `errors` has no price — today `llm_model_unpriced`: a model with no rate on the lane it would be served on (it cannot be run). Omitted when `errors` is empty. |
 
 ```ts
@@ -6631,7 +6631,7 @@ import { llmPriceKey } from "@nodaro/shared/llm-models"
 
 const key = llmPriceKey("llm-chat", "claude-fable-5") // "llm-chat:claude-fable-5"
 const { data, estimates } = await client.credits.modelCosts([key])
-const shown = estimates?.includes(key) ? `~${data[key]}` : String(data[key])
+const shown = estimates?.includes(key) ? `≈${data[key]}` : String(data[key])
 ```
 
 `GET /v1/credits/model-cost?model=<id>` answers one identifier as
@@ -7567,7 +7567,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature for the tokens its batches used, at the model's rate on the lane that served each ([LLM model rates](pricing/llm-models.md); a default run reads every picker's catalog). A typical run: ~16 credits<!-- credits: text-to-picker:gemini-3.8-flash --> on the default, ~53<!-- credits: text-to-picker:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ~262<!-- credits: text-to-picker:claude-opus-5.5:direct --> on Claude Opus 5.5. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the aggregator. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API; any other model with no effort keeps Auto. Claude Fable 5 is offered. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature for the tokens its batches used, at the model's rate on the lane that served each ([LLM model rates](pricing/llm-models.md); a default run reads every picker's catalog). A typical run: ≈16 credits<!-- credits: text-to-picker:gemini-3.8-flash --> on the default, ≈53<!-- credits: text-to-picker:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ≈262<!-- credits: text-to-picker:claude-opus-5.5:direct --> on Claude Opus 5.5. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the aggregator. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API; any other model with no effort keeps Auto. Claude Fable 5 is offered. |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —

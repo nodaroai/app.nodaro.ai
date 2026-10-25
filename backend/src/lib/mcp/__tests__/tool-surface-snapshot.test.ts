@@ -1119,7 +1119,7 @@ const CAST_SWAP_TOOL_BYTES = 3_134
 const LLM_METERED_PRICING_COPY_BYTES = 3_172
 
 // RAISED 2026-10-20 by the UGC quote's estimate flags (metered LLM pricing Task 12): build_ugc_clips'
-// description names a quote line's `estimate: true` and the quote's `totalIsEstimate: true` (show ~N).
+// description names a quote line's `estimate: true` and the quote's `totalIsEstimate: true` (show ≈N).
 // No tool added. Measured by this suite: 481_314 total − 481_290 budget before = 24 B over; the
 // sentence is 127 B (the rest rode the earlier headroom).
 const UGC_QUOTE_ESTIMATE_FLAGS_BYTES = 127

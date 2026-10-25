@@ -187,7 +187,7 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
 nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
 #   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
-#   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ~N;
+#   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ≈N;
 #   every model's per-token rate is in docs/pricing/llm-models.md. An id with no price prints "-" and why
 
 # Billing — plans and prices, your subscription (buying and changing plans stay in the app)

@@ -21,7 +21,7 @@ const LEGIT_LATIN_HE: readonly string[] = [
   // Format-only: punctuation wrapping two interpolated values ("({n} {u})"),
   // no prose to translate. Both dicts carry it byte-identical by design.
   "node.creditsSuffix",
-  // Its estimate twin ("(~{n} {u})", spec §8.5): format-only too; `~` is a
+  // Its estimate twin ("(≈{n} {u})", spec §8.5): format-only too; `≈` is a
   // symbol, never a translated word.
   "node.creditsSuffixApprox",
   // Nothing else: every other node.* value carries Hebrew. Brand names

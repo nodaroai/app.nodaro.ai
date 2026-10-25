@@ -37,7 +37,7 @@ import type { TextPromptData } from "@/types/nodes"
 
 /** The "Run from here" price: the run's own estimate of everything downstream
  *  (useRunFromHerePrice), mounted only while the button shows. A figure that
- *  is an estimate reads `~N`, as the Execute button's does: a UGC part whose
+ *  is an estimate reads `≈N`, as the Execute button's does: a UGC part whose
  *  server figure is not in, or not checked (the hover says why), or a metered
  *  LLM call charged its actual usage. A node the server refuses to price
  *  (`llm_model_unpriced`) leaves the figure out: it says "not priced yet" instead,

@@ -365,7 +365,7 @@ describe("POST /v1/workflows/:id/render-final/estimate", () => {
     expect(mocks.queueAdd).not.toHaveBeenCalled()
   })
 
-  it("flags the figure an estimate exactly when an LLM node the run executes is metered (`~N`), asked on the run's own set", async () => {
+  it("flags the figure an estimate exactly when an LLM node the run executes is metered (`≈N`), asked on the run's own set", async () => {
     useGraph(FIXTURE.cases["multicam"]!)
     mocks.loadSource.mockResolvedValue(source())
     const fixed = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })

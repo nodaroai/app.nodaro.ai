@@ -230,8 +230,8 @@ function CompactFlowCard({
           {flow.estimatedCredits > 0 && (
             <span className="flex items-center gap-1">
               <Coins className="h-2.5 w-2.5" />
-              {/* A metered LLM call's estimate (charged its actual usage) reads `~N` (spec §8.5). */}
-              {flow.estimatedCreditsIsEstimate === true ? "~" : ""}
+              {/* A metered LLM call's estimate (charged its actual usage) reads `≈N` (spec §8.5). */}
+              {flow.estimatedCreditsIsEstimate === true ? "≈" : ""}
               {flow.estimatedCredits}
               {(flow.estimatedPerMinuteCredits ?? 0) > 0 && ` ${t("credits.plusPerMinute", { n: flow.estimatedPerMinuteCredits ?? 0 })}`}
             </span>

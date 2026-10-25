@@ -44,12 +44,12 @@ describe("renderCreditCostLine", () => {
     expect(renderCreditCostLine(filled!.type)).toContain(`\`${charged}\``)
   })
 
-  it("a metered LLM node states its default model's estimate as one (`~N typical`), never its tier band", () => {
+  it("a metered LLM node states its default model's estimate as one (`≈N typical`), never its tier band", () => {
     const key = llmPriceKey("llm-chat", LLM_FEATURE_DEFAULTS["llm-chat"])
     const estimate = hostedStatedPrices().credits(key)
     expect(estimate).toBeGreaterThan(0)
     const line = renderCreditCostLine("llm-chat")
-    expect(line).toContain(`\`~${estimate}\` typical on Nodaro Cloud`)
+    expect(line).toContain(`\`≈${estimate}\` typical on Nodaro Cloud`)
     expect(line).not.toContain("charged on Nodaro Cloud")
   })
 
@@ -61,11 +61,11 @@ describe("renderCreditCostLine", () => {
     expect(renderCreditCostLine("video-composer")).toContain("model=scene-graph-ai:<model id>")
   })
 
-  it("Choose Best states its free strategies up to its AI judge's default-model estimate (`~0-N`), never the judge's tier band", () => {
+  it("Choose Best states its free strategies up to its AI judge's default-model estimate (`≈0-N`), never the judge's tier band", () => {
     const judge = hostedStatedPrices().credits(llmPriceKey("reduce:pick-best-llm", LLM_FEATURE_DEFAULTS["pick-best-llm"]))
     expect(judge).toBeGreaterThan(0)
     const line = renderCreditCostLine("reduce")
-    expect(line).toContain(`\`~0-${judge}\` typical on Nodaro Cloud`)
+    expect(line).toContain(`\`≈0-${judge}\` typical on Nodaro Cloud`)
     expect(line).toContain("model=reduce:pick-best-llm:<model id>")
   })
 
@@ -77,7 +77,7 @@ describe("renderCreditCostLine", () => {
     try {
       expect(statedPrices().credits(key)).toBeUndefined()
       expect(hostedStatedPrices().credits(key)).toBeGreaterThan(0)
-      expect(renderCreditCostLine("image-to-text")).toContain(`\`~${hostedStatedPrices().credits(key)}\``)
+      expect(renderCreditCostLine("image-to-text")).toContain(`\`≈${hostedStatedPrices().credits(key)}\``)
     } finally {
       setLlmMeteredSchemaReadyForTesting(undefined)
     }

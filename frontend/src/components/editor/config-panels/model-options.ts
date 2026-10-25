@@ -328,7 +328,7 @@ export function formatPerSecondCreditBadge(credits15s: number): string | undefin
   if (!hasCredits()) return undefined
   if (!(credits15s > 0)) return undefined
   // credit-gated: unreachable without credits — the guard above returns first.
-  return `~${creditUnits(Math.max(1, Math.round(credits15s / 15)))} ${creditUnitLabel()}/s`
+  return `≈${creditUnits(Math.max(1, Math.round(credits15s / 15)))} ${creditUnitLabel()}/s`
 }
 
 // =============================================================================

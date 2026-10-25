@@ -97,7 +97,7 @@ export function isRenderFinalRefusal(value: unknown): value is RenderFinalRefusa
 /** What a Render final will be charged, and whether its payer can cover it. */
 export interface RenderFinalCredits {
   readonly estimatedCredits: number
-  /** `estimatedCredits` includes a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent for a fixed price. */
+  /** `estimatedCredits` includes a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent for a fixed price. */
   readonly estimate?: true
   readonly sufficient: boolean
   /** What the payer can spend; `null` when it is not the caller's to see (a deployment payer) or not what pays (a workspace budget). */
@@ -154,7 +154,7 @@ export async function renderFinalCredits(input: {
       (_nodeId, credits, estimate) => lines.push({ credits, estimate }),
     )) + [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
   // An LLM node the run executes is charged its actual usage after it — as is a UGC part its
-  // quote flags (the creator check): the figure is an estimate (`~N`).
+  // quote flags (the creator check): the figure is an estimate (`≈N`).
   const estimate = runHoldsMeteredLlmEstimate(
     priced as unknown as Parameters<typeof runHoldsMeteredLlmEstimate>[0],
     input.edges as unknown as Parameters<typeof runHoldsMeteredLlmEstimate>[1],
@@ -170,7 +170,7 @@ export async function renderFinalCredits(input: {
   const sufficient = check.sufficient || estimatedCredits <= 0
   return {
     estimatedCredits,
-    // An LLM node in the run is charged its actual usage: the figure is an estimate (`~N`).
+    // An LLM node in the run is charged its actual usage: the figure is an estimate (`≈N`).
     ...(estimate ? { estimate: true as const } : {}),
     sufficient,
     available: check.available,

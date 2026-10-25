@@ -212,7 +212,7 @@ export interface RenderFinalQuote {
   estimatedCredits: number | null
   /**
    * Present (`true`) when `estimatedCredits` includes an LLM node's estimate:
-   * an LLM call is charged its actual usage after it runs, so show `~N`.
+   * an LLM call is charged its actual usage after it runs, so show `≈N`.
    * Absent for a fixed price.
    */
   estimatedCreditsIsEstimate?: true

@@ -240,7 +240,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       errorCodes: zOpenApi.record(zOpenApi.string(), zOpenApi.object({ code: zOpenApi.literal("llm_model_unpriced"), message: zOpenApi.string() })).optional()
         .describe("Why each identifier in `errors` has no price. Omitted when `errors` is empty."),
       estimates: zOpenApi.array(zOpenApi.string()).optional()
-        .describe("The identifiers in `data` whose figure is an estimate (a metered LLM price key, `<feature>:<model>[:direct]`) — show it as `~N`. Omitted when there are none."),
+        .describe("The identifiers in `data` whose figure is an estimate (a metered LLM price key, `<feature>:<model>[:direct]`) — show it as `≈N`. Omitted when there are none."),
     }) } } } },
   })
   /**
@@ -702,7 +702,7 @@ export async function creditsRoutes(app: FastifyInstance) {
         : await estimateWorkflowCreditsDetailed(nodes, edges)
       const totalCredits = detailed.credits
       // A metered LLM line makes the total an ESTIMATE (spec §8.5: the
-      // metered estimates plus the fixed prices, shown `~`). Present only
+      // metered estimates plus the fixed prices, shown `≈`). Present only
       // then — a fixed-only answer, and every answer under the rollback, is
       // byte-identical to before.
       const estimate = detailed.estimate ? { estimate: true as const } : {}

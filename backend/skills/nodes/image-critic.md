@@ -9,7 +9,7 @@ generated_from: 9ae3392be
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-critic`
 **Category:** ai
-**Credit cost:** `~6` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=image-critic:<model id>` (MCP: `list_models` with `priceIds: ["image-critic:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `≈6` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=image-critic:<model id>` (MCP: `list_models` with `priceIds: ["image-critic:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`, `reference`, `prompt`
 **Outputs (source handles):** `approved`, `rejected`
 

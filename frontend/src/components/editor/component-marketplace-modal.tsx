@@ -53,7 +53,7 @@ export interface ComponentSelection {
   creatorName: string
   creatorId: string
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's estimate (the listing's flag): the node shows `~N`. */
+  /** `estimatedCredits` holds a metered LLM call's estimate (the listing's flag): the node shows `≈N`. */
   estimatedCreditsIsEstimate: boolean
 }
 
@@ -216,7 +216,7 @@ function ComponentListItem({
       </div>
       {card.estimatedCredits > 0 && (
         <span className="text-[11px] text-purple-400 font-medium flex items-center gap-0.5 flex-shrink-0">
-          <Coins className="w-2.5 h-2.5" />{card.estimatedCreditsIsEstimate === true ? "~" : ""}{card.estimatedCredits}
+          <Coins className="w-2.5 h-2.5" />{card.estimatedCreditsIsEstimate === true ? "≈" : ""}{card.estimatedCredits}
           {(card.perMinuteCredits ?? 0) > 0 && ` ${t("credits.plusPerMinute", { n: card.perMinuteCredits ?? 0 })}`}
           {(card.perItemCredits ?? 0) > 0 && ` ${t("credits.plusPerItem", { n: card.perItemCredits ?? 0 })}`}
         </span>

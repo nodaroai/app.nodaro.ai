@@ -73,7 +73,7 @@ export interface UgcRunFigure {
   readonly estimate: UgcRunFigureSource
   /**
    * The figure holds a metered LLM call's ESTIMATE (charged its actual usage after the run): shown
-   * `~`. With the server's answers: a node priced at a part the server marks an estimate
+   * `≈`. With the server's answers: a node priced at a part the server marks an estimate
    * (`estimateParts`), or any other node's own line; without them, the editor's own lines.
    */
   readonly approx: boolean
@@ -241,7 +241,7 @@ export function ugcRunCredits(
   const prices = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.figures.parts[p.part] * p.runs })))
   const holds = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.figures.holdParts[p.part] * p.runs })))
   const total = (figures: ReadonlyMap<string, number>) => [...figures.values()].reduce((sum, c) => sum + c, 0)
-  // `~` exactly when the server's figure is one: a priced node's part it marks an estimate, or another node's own line.
+  // `≈` exactly when the server's figure is one: a priced node's part it marks an estimate, or another node's own line.
   const approx =
     linesHoldEstimate(lines.filter((line) => !ugc.coveredIds.has(line.nodeId))) ||
     priced.some((p) => p.figures.parts[p.part] > 0 && p.figures.estimateParts.includes(p.part))

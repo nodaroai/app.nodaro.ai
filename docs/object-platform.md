@@ -723,7 +723,7 @@ generation routes:
   table.
 - `POST /v1/objects/:id/approve-main-image` — the approval itself is free; its vision
   caption (Claude Sonnet 4.6) is charged for the tokens it used, at that model's
-  rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](./pricing/llm-models.md)). An
+  rate (≈20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](./pricing/llm-models.md)). An
   approval is never refused for credits: with too little balance for the
   caption, the image is still approved, the caption is skipped
   (`canonical_description` stays empty) and `llm-caption` writes it later.

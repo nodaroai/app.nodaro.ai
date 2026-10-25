@@ -2521,7 +2521,7 @@ function meteredScrapeAnalysisOf(node: { type: string; data?: Record<string, unk
  * key a node's run is priced under — its call's key, or a scrape's analysis
  * key — or null when the node bills no metered call. Always null under the
  * rollback (`!llmMeteredPricing()`), when nothing is metered. A node with a
- * key is an ESTIMATE (`~`): charged its actual usage after the run.
+ * key is an ESTIMATE (`≈`): charged its actual usage after the run.
  */
 export function meteredLlmKeyOfNode(node: { type: string; data?: Record<string, unknown> }): string | null {
   // The shape first: the switch is read only for a node that IS metered (as `meteredLlmIdOf`).
@@ -2571,7 +2571,7 @@ export function unpricedMeteredLlmOfRun(
  * Does a run of `nodes` hold a metered LLM call's ESTIMATE — a node it
  * executes (given `runNodeIds`: among those; a use-case node's built chain
  * included, a wired Settings input read) that makes a metered call, so its
- * figure is charged the call's actual usage and shown `~N`? The same
+ * figure is charged the call's actual usage and shown `≈N`? The same
  * predicate every estimate reads (`meteredLlmKeyOfNode`) on the graph walk
  * `unpricedMeteredLlmOfRun` makes. Always false under the rollback.
  *
@@ -4896,7 +4896,7 @@ export interface AppListingEstimate {
   /** The final part's credits per further item (absent when none). */
   readonly finalPerItem?: number
   /** The listing holds a metered LLM call's ESTIMATE (Task 12, R47): charged its
-   *  actual usage, so it is shown `~N`. Absent for a fixed price, and always
+   *  actual usage, so it is shown `≈N`. Absent for a fixed price, and always
    *  under the tier-pricing rollback. Stored as `estimated_credits_is_estimate`. */
   readonly estimate?: true
 }
@@ -4983,7 +4983,7 @@ export type NodeTally = (nodeId: string, credits: number, estimate: boolean) => 
 /** One node's line in a detailed estimate. */
 export interface NodeEstimate {
   readonly credits: number
-  /** A metered LLM call's estimate (charged its actual usage after the run): shown `~`. */
+  /** A metered LLM call's estimate (charged its actual usage after the run): shown `≈`. */
   readonly estimate: boolean
 }
 
@@ -4991,7 +4991,7 @@ export interface NodeEstimate {
  * A workflow estimate with its lines (Task 12, spec §8.5): the total
  * (`credits`, always `estimateWorkflowCredits`' figure — the same sum, told
  * each line as it adds it), whether ANY line is a metered LLM estimate
- * (`estimate`, the `~` every surface shows), and each priced node's figure by
+ * (`estimate`, the `≈` every surface shows), and each priced node's figure by
  * id (`perNode`; a use-case node's chain by its steps' ids, its fee under its
  * own id). The total is the metered estimates plus the fixed prices — never a
  * hold or a ceiling. Under the rollback nothing is an estimate.
@@ -5136,7 +5136,7 @@ function sumEstimatedNodes(
  * A Component node whose published price holds a metered LLM call's estimate:
  * the flag the editor stores beside the price it read from the component's
  * listing (`estimatedCreditsIsEstimate`, the listing's R47 flag) — its inner
- * LLM call is charged its actual usage, so the line is `~`. Only while metered
+ * LLM call is charged its actual usage, so the line is `≈`. Only while metered
  * pricing is on (the gate the listing's flag is served under,
  * `listingEstimateFlag`).
  */
@@ -6647,7 +6647,7 @@ export function getNodeModelIdentifier(
  * `estimateWorkflowCredits` with its lines (`DetailedWorkflowEstimate`): the
  * same total — the same sum, told each line as it adds it — whether any line
  * is a metered LLM estimate, and each priced node's figure. For a surface that
- * shows the figure `~` (`POST /v1/credits/estimate-workflow`); every other
+ * shows the figure `≈` (`POST /v1/credits/estimate-workflow`); every other
  * caller keeps the number.
  */
 export async function estimateWorkflowCreditsDetailed(

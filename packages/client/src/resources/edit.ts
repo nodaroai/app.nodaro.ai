@@ -336,7 +336,7 @@ export interface UseCaseEstimate {
   /** The per-run fee. */
   feeCredits: number
   /** A step is a metered LLM call's ESTIMATE (charged its actual usage), so the
-   *  total is one: show it `~N`. Absent for a fixed figure. */
+   *  total is one: show it `≈N`. Absent for a fixed figure. */
   estimate?: true
   /** The recording's length, in seconds. */
   durationSec: number | null

@@ -20,7 +20,7 @@ The Generate Script node uses Gemini Flash to produce a structured, multi-scene 
 
 ## Credit pricing
 
-A run is one LLM call, charged for the tokens it actually used — the topic, style guide and tone, and the script it writes — at the model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](llm-chat.md#credit-pricing). The Run button shows an estimate of a typical script: ~4 credits<!-- credits: generate-script:gemini-3.6-flash --> on Gemini 3.6 Flash (the default), ~6<!-- credits: generate-script:claude-sonnet-5.5 --> on Claude Sonnet 5.5; more scenes or a longer target length write more and cost more. A script the provider billed that could not be read back as scenes is charged for that usage; a failure it did not bill is refunded.
+A run is one LLM call, charged for the tokens it actually used — the topic, style guide and tone, and the script it writes — at the model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](llm-chat.md#credit-pricing). The Run button shows an estimate of a typical script: ≈4 credits<!-- credits: generate-script:gemini-3.6-flash --> on Gemini 3.6 Flash (the default), ≈6<!-- credits: generate-script:claude-sonnet-5.5 --> on Claude Sonnet 5.5; more scenes or a longer target length write more and cost more. A script the provider billed that could not be read back as scenes is charged for that usage; a failure it did not bill is refunded.
 
 ## Inputs & Outputs
 

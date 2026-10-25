@@ -1,6 +1,6 @@
 /**
  * The price of an LLM call as a surface shows it: the server's ESTIMATE for
- * the model (shown `~N`) while metered pricing is on, else today's tier price.
+ * the model (shown `≈N`) while metered pricing is on, else today's tier price.
  *
  * Both ids (`llmPriceIds`) go out in ONE batch; the server alone decides which
  * applies — it marks the metered key in `estimates`, or reports it `missing`
@@ -22,7 +22,7 @@ import { isModelEstimate, isModelRefused, isModelUnpriced, prefetchModelCreditCo
 export interface LlmPrice {
   /** The figure to show; undefined while loading, without credits, or when the server refuses the model. */
   readonly credits: number | undefined
-  /** `credits` is an estimate (show `~`). */
+  /** `credits` is an estimate (show `≈`). */
   readonly estimate: boolean
   readonly loading: boolean
   /** The server refuses to price this model (`llm_model_unpriced`): a run would be refused. */
@@ -93,7 +93,7 @@ export function useLlmPrice(
 type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string
 
 /**
- * A Run button's price suffix — `(~6 CR)` for an estimate, `(6 CR)` for a
+ * A Run button's price suffix — `(≈6 CR)` for an estimate, `(6 CR)` for a
  * fixed price — in the deployment's display unit.
  */
 export function formatCreditsSuffix(t: Translate, credits: number, estimate: boolean): string {
@@ -169,14 +169,14 @@ export function useLlmModelPrices(
 }
 
 /**
- * A picker row's price — `~27 CR` — shown ONLY for a figure the server
+ * A picker row's price — `≈27 CR` — shown ONLY for a figure the server
  * returned as an estimate (D7): under the tier-pricing rollback no model has
  * one, so the picker shows no prices, exactly as before. `unitLabel` is the
  * locale's short unit (`t("credits.unitShort")`).
  */
 export function llmPickerPriceLabel(price: LlmPrice | undefined, unitLabel: string): string | undefined {
   if (!price || !price.estimate || price.credits === undefined) return undefined
-  return `~${formatCreditUnits(price.credits, { label: unitLabel })}`
+  return `≈${formatCreditUnits(price.credits, { label: unitLabel })}`
 }
 
 /** The vendor's API costs over the usual lane: what the Effort and Advanced notes say. */

@@ -508,7 +508,7 @@ generation routes:
   motion clip. Provider defaults to `kling` (303 credits<!-- credits: kling:10s --> / 10-second clip; `kling:5s` = 152<!-- credits: kling:5s -->).
 - `POST /v1/characters/:id/approve-portrait` — the approval itself is free; its vision
   caption (Claude Sonnet 4.6) is charged for the tokens it used, at that model's
-  rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](./pricing/llm-models.md)). An
+  rate (≈20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](./pricing/llm-models.md)). An
   approval is never refused for credits: with too little balance for the
   caption, the image is still approved, the caption is skipped
   (`canonical_description` stays empty) and `llm-caption` writes it later.

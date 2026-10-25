@@ -292,7 +292,7 @@ function AppRenderFinalAction({
     )
   }
   // The question states the price as the button did: an estimate (a figure not the server's checked
-  // one, or a metered LLM call's) is `~N`, a run holding a node the server refuses to price says it is
+  // one, or a metered LLM call's) is `≈N`, a run holding a node the server refuses to price says it is
   // not priced yet (run-price.ts) — with the reason under it, where a title would never show.
   const price = unchecked || approx || unpriced
     ? `${t("renderFinal.action")}${runPriceSuffix(t, credits, unchecked, { approx, ...(unpriced ? { unpriced } : {}) })}`

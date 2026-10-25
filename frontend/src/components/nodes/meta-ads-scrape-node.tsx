@@ -369,7 +369,7 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
 
   const mode = metaAdsNodeMode(nodeData.mode)
   const scrapeCredits = useScrapeNodeCredits(id, "meta-ads-scrape", nodeData)
-  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `~`.
+  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `≈`.
   const analysisCredits = useScrapeAnalysisCredits("meta-ads-scrape", nodeData)
   const credits = analysisCredits?.credits ?? scrapeCredits
   const state = deriveMetaAdsScrapeCardState(nodeData)

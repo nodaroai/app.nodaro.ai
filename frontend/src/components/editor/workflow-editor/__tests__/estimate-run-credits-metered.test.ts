@@ -4,11 +4,11 @@
  * - The run asks the price batch for BOTH of the node's ids (the metered key
  *   and today's tier id) in the one request, so the server's answer decides.
  * - Once the server has marked the key an estimate, the node is priced at it,
- *   its line is an estimate, and so is the run's total (Execute workflow `~`)
+ *   its line is an estimate, and so is the run's total (Execute workflow `≈`)
  *   — total = the estimates + the fixed prices.
  * - Under the rollback the key is `missing`: the node is priced at its tier
  *   id, exactly as before, and nothing is an estimate.
- * - The app runner's Run label reads the same figure, `~` included.
+ * - The app runner's Run label reads the same figure, `≈` included.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
@@ -61,7 +61,7 @@ describe("whole-run estimate with a metered LLM node", () => {
     expect(runModelIds([llm], [llm], [])).toEqual(expect.arrayContaining([KEY, TIER]))
   })
 
-  it("Execute workflow shows ~ when any node is metered; total = estimates + fixed", () => {
+  it("Execute workflow shows ≈ when any node is metered; total = estimates + fixed", () => {
     cache({ [KEY]: 6, [TIER]: 3, [IMAGE_ID]: 44 })
     rememberEstimateModels([KEY])
     const nodes = [llm, image]
@@ -117,7 +117,7 @@ describe("whole-run estimate with a metered LLM node", () => {
     expect(ugcRunCredits([image], [llm, image], [], getCachedModelCredits, () => undefined).unpriced).toBeUndefined()
   })
 
-  it("a Component whose listing holds an LLM estimate (its stored flag) makes its line and the run ~ — while metered", () => {
+  it("a Component whose listing holds an LLM estimate (its stored flag) makes its line and the run ≈ — while metered", () => {
     const comp = n("comp", "component", { appSlug: "x", estimatedCredits: 40, estimatedCreditsIsEstimate: true })
     cache({ [IMAGE_ID]: 44 })
     // The flag asks for the mode probe, so the editor learns the server's pricing mode.
@@ -166,7 +166,7 @@ describe("whole-run estimate with a Choose Best AI judge", () => {
     expect(llmNodePriceIds(concat)).toBeUndefined()
   })
 
-  it("metered: the judge is in Execute's total and makes it ~", () => {
+  it("metered: the judge is in Execute's total and makes it ≈", () => {
     cache({ [judgeIds.key]: 7, [judgeIds.tierId]: 25, [IMAGE_ID]: 44 })
     rememberEstimateModels([judgeIds.key])
     const nodes = [judge, image]
@@ -193,7 +193,7 @@ describe("whole-run estimate with a Choose Best AI judge", () => {
 })
 
 describe("app runner", () => {
-  it("app-runner Run label reads the live estimate with ~; a settled (non-estimate) figure has none", () => {
+  it("app-runner Run label reads the live estimate with ≈; a settled (non-estimate) figure has none", () => {
     cache({ [KEY]: 6, [TIER]: 3, [IMAGE_ID]: 44 })
     rememberEstimateModels([KEY])
     const live = computeLiveRunEstimate({ nodes: [llm, image], edges: [] }, getCachedModelCredits)
@@ -205,9 +205,9 @@ describe("app runner", () => {
       pending: false,
       plusPerMinute: (m) => `+ ${m}/min`,
     })
-    expect(label(true)).toBe(" (~50 CR)")
+    expect(label(true)).toBe(" (≈50 CR)")
     // A fixed run, or a settled figure (a slot's credits used is the run's
-    // actual charge), carries no ~.
+    // actual charge), carries no ≈.
     expect(label(false)).toBe(" (50 CR)")
   })
 })
@@ -244,7 +244,7 @@ describe("I6: the editor prices as the server does", () => {
       expect(runModelIds([ads], [ads], [])).toEqual(expect.arrayContaining([parts.fixedId, quoteId]))
     })
 
-    it("metered: fixed + the analysis quote, exactly as the server estimates it, an estimate (`~`)", () => {
+    it("metered: fixed + the analysis quote, exactly as the server estimates it, an estimate (`≈`)", () => {
       // 23, not 10 × a rounded per-call figure: the server rounds and marks up the items once.
       cache({ [parts.fixedId]: 22, [quoteId]: 23, [getModelIdentifier(ads, [], [ads])]: 99 })
       rememberEstimateModels([quoteId])

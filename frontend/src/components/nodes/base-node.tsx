@@ -47,7 +47,7 @@ interface BaseNodeProps {
   readonly icon: ReactNode
   readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "script" | "i2v" | "component"
   readonly credits?: number
-  /** `credits` is an estimate (a metered LLM call, charged its actual usage): shown `~`. */
+  /** `credits` is an estimate (a metered LLM call, charged its actual usage): shown `≈`. */
   readonly creditsEstimate?: boolean
   /** A price that is a RANGE — a speech node whose text arrives at run time:
    *  from the floor up to the ceiling it runs at. Shown instead of `credits`
@@ -838,7 +838,7 @@ function BaseNodeComponent({
               (category === "ai" || category === "scene" || category === "script" || category === "i2v")
                 ? "text-white/70 dark:text-[#ff0073]"
                 : "text-[#64748B] dark:text-[#ff0073]"
-            )}>{creditsEstimate ? "~" : ""}{credits}cr</span>
+            )}>{creditsEstimate ? "≈" : ""}{credits}cr</span>
           )}
           {/* A ranged price (speech priced by length, text arriving at run
               time): from the floor up to the ceiling the run reserves. */}

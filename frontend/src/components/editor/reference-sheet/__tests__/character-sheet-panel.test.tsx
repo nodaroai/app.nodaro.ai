@@ -69,8 +69,8 @@ describe("CharacterSheetPanel cost readouts", () => {
 
     renderPanel()
 
-    expect(screen.getByText(`Reuses 0 existing · ${missing} missing → Prepare ~${missing * 15} cr · Compose 40 cr`)).toBeTruthy()
-    expect(screen.getByText(`${missing} to generate → ~${missing * 15 + 40} cr`)).toBeTruthy()
+    expect(screen.getByText(`Reuses 0 existing · ${missing} missing → Prepare ≈${missing * 15} cr · Compose 40 cr`)).toBeTruthy()
+    expect(screen.getByText(`${missing} to generate → ≈${missing * 15 + 40} cr`)).toBeTruthy()
   })
 
   it("shows no price until both live prices have loaded", () => {

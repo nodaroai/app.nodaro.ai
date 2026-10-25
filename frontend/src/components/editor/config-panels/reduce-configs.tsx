@@ -48,7 +48,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   // The AI judge's price follows the chosen model's tier; the option row
   // shows the price for the model currently picked on this node.
   const judgeModel = typeof data.strategyConfig?.llmModel === "string" ? data.strategyConfig.llmModel : undefined
-  // The judge's metered estimate (`reduce:pick-best-llm:<model>`), shown `~N`
+  // The judge's metered estimate (`reduce:pick-best-llm:<model>`), shown `≈N`
   // while metered pricing is on; under the rollback the row prices its tier
   // id exactly as before.
   const judgePrice = useLlmPrice("reduce:pick-best-llm", judgeModel)

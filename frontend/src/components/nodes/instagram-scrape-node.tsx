@@ -228,7 +228,7 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
 
   const mode = instagramScrapeMode(nodeData.mode)
   const scrapeCredits = useScrapeNodeCredits(id, "instagram-scrape", nodeData)
-  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `~`.
+  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `≈`.
   const analysisCredits = useScrapeAnalysisCredits("instagram-scrape", nodeData)
   const credits = analysisCredits?.credits ?? scrapeCredits
   const state = deriveInstagramScrapeCardState(nodeData)

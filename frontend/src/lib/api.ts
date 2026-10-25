@@ -737,7 +737,7 @@ export interface UgcTicketQuoteRequest {
 export interface UgcTicketQuote extends UgcClipsQuote {
   readonly parts: Readonly<Record<UgcEstimatePart, number>>
   readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
-  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `~`. Absent: none. */
+  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `≈`. Absent: none. */
   readonly estimateParts?: readonly UgcEstimatePart[]
 }
 
@@ -774,7 +774,7 @@ export interface UgcRunEstimate {
   readonly parts: Readonly<Record<UgcEstimatePart, number>>
   /** What each part holds while the clips render (each clip at the server's multiple of its price, at the longest length); they add up to `worstCase`. */
   readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
-  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `~`. Absent: none. */
+  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `≈`. Absent: none. */
   readonly estimateParts?: readonly UgcEstimatePart[]
   /**
    * The plan's line limits, in characters — the opening line's, a beat line's, the closing
@@ -7437,7 +7437,7 @@ export interface BatchModelCreditCosts {
   missing: string[]
   /** The ids whose figure is an ESTIMATE — a metered LLM call's price key
    *  (`llmPriceKey`), charged its actual usage after the run. Shown with a
-   *  leading `~`. Absent when the server sent none (no metered key asked, or
+   *  leading `≈`. Absent when the server sent none (no metered key asked, or
    *  metered pricing rolled back — then those keys are in `missing`). */
   estimates?: string[]
   /** Why a metered key cannot be priced (`llm_model_unpriced`): the run would
@@ -8679,7 +8679,7 @@ export async function getSharedWorkflow(token: string): Promise<{
   edges: unknown[]
   isOwner: boolean
   estimatedCost?: number
-  /** `estimatedCost` holds a metered LLM estimate (show it `~`); absent for a fixed figure. */
+  /** `estimatedCost` holds a metered LLM estimate (show it `≈`); absent for a fixed figure. */
   estimatedCostIsEstimate?: boolean
   /**
    * The workflow holds a metered LLM model with no price (R51): the page renders with `estimatedCost`
@@ -9273,7 +9273,7 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the app is given (decided 2026-10-07):
    *  the price is `estimatedCredits` plus this per minute. 0 or absent: none. */
@@ -9338,7 +9338,7 @@ export interface AppBrowseCard {
   iconUrl: string | null
   estimatedCredits: number
   /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual
-   *  usage after the run): the card shows it `~N` (spec §8.5). Supplied by the
+   *  usage after the run): the card shows it `≈N` (spec §8.5). Supplied by the
    *  listing's price (Task 12); absent: a fixed price, shown as before. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the app is given; 0 or absent: none. */
@@ -10112,7 +10112,7 @@ export interface WorkflowTemplate {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
@@ -10144,7 +10144,7 @@ export interface TemplateBrowseCard {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
@@ -10437,7 +10437,7 @@ export interface FlowTutorialItem {
   previewMediaType: "image" | "video" | null
   complexity: "simple" | "intermediate" | "advanced"
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `≈N`. Absent: a fixed price. */
   estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given; 0 or absent: none. */
   estimatedPerMinuteCredits?: number

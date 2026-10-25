@@ -265,7 +265,7 @@ describe("a published listing is priced on what its runners run", () => {
 })
 
 // A clip's frame reading and the creator check are billed metered (owner decision D15): while metered
-// pricing is on, the parts holding them are estimates (`~`) — the total is the same sum either way.
+// pricing is on, the parts holding them are estimates (`≈`) — the total is the same sum either way.
 describe("the UGC part's estimate flag (metered LLM pricing, Task 12)", () => {
   it("metered: the clip and creator parts are estimates, the listing too; rollback: nothing is", async () => {
     const { setLlmMeteredSchemaReadyForTesting } = await import("../../../lib/llm-metered-schema-gate.js")
@@ -304,11 +304,11 @@ describe("the UGC part's estimate flag (metered LLM pricing, Task 12)", () => {
   })
 })
 
-// A Render final quote's `~` (render-final-run.ts): `runHoldsMeteredLlmEstimate` reads the run's own
+// A Render final quote's `≈` (render-final-run.ts): `runHoldsMeteredLlmEstimate` reads the run's own
 // lines, so a UGC part its quote flags — the creator check — makes the quote an estimate, exactly as
 // the run estimate's `perNode` reads it (`estimateUgcPart`), from the same answer: one quote, not two.
-describe("a Render final quote of a UGC graph: `~` from the UGC parts its quote flags", () => {
-  it("the creator check (flagged in fixed reading mode) marks it `~`; no flagged part, or the rollback, does not", async () => {
+describe("a Render final quote of a UGC graph: `≈` from the UGC parts its quote flags", () => {
+  it("the creator check (flagged in fixed reading mode) marks it `≈`; no flagged part, or the rollback, does not", async () => {
     const { setLlmMeteredSchemaReadyForTesting } = await import("../../../lib/llm-metered-schema-gate.js")
     const { config } = await import("../../../lib/config.js")
     const { runHoldsMeteredLlmEstimate, estimateRunSetCredits } = await import("../credits.js")

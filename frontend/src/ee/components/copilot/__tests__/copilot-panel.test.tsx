@@ -178,7 +178,7 @@ describe("the empty rail", () => {
   it("states what this MESSAGE can cost before the user commits to sending it", () => {
     renderPanel()
     // A ceiling, not a price — the tooltip carries the rest of that sentence.
-    expect(screen.getByText(/up to ~900 CR/)).toBeInTheDocument()
+    expect(screen.getByText(/up to ≈900 CR/)).toBeInTheDocument()
     expect(screen.getByTitle(/billed for what the assistant actually uses/i)).toBeInTheDocument()
   })
 

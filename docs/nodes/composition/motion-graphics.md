@@ -65,12 +65,12 @@ The Run button shows an estimate of a typical run:
 
 | Engine | Model | Typical run |
 |--------|-------|-------------|
-| Classic (elements) | Gemini 3.6 Flash | ~4<!-- credits: motion-graphics:gemini-3.6-flash --> |
-| Classic (elements) | Claude Sonnet 5.5 (default) | ~6<!-- credits: motion-graphics:claude-sonnet-5.5 --> |
-| Classic (elements) | Claude Opus 5.5 | ~11<!-- credits: motion-graphics:claude-opus-5.5 --> |
-| Lottie | Gemini 3.6 Flash | ~4<!-- credits: motion-graphics-lottie:gemini-3.6-flash --> |
-| Lottie | Claude Sonnet 5.5 (default) | ~6<!-- credits: motion-graphics-lottie:claude-sonnet-5.5 --> |
-| Lottie | Claude Opus 5.5 | ~11<!-- credits: motion-graphics-lottie:claude-opus-5.5 --> |
+| Classic (elements) | Gemini 3.6 Flash | ≈4<!-- credits: motion-graphics:gemini-3.6-flash --> |
+| Classic (elements) | Claude Sonnet 5.5 (default) | ≈6<!-- credits: motion-graphics:claude-sonnet-5.5 --> |
+| Classic (elements) | Claude Opus 5.5 | ≈11<!-- credits: motion-graphics:claude-opus-5.5 --> |
+| Lottie | Gemini 3.6 Flash | ≈4<!-- credits: motion-graphics-lottie:gemini-3.6-flash --> |
+| Lottie | Claude Sonnet 5.5 (default) | ≈6<!-- credits: motion-graphics-lottie:claude-sonnet-5.5 --> |
+| Lottie | Claude Opus 5.5 | ≈11<!-- credits: motion-graphics-lottie:claude-opus-5.5 --> |
 
 **Lottie runs usually cost more than the estimate.** A Lottie author call writes a much larger payload than the Classic engine's elements DSL, so it uses more output tokens on the same model; and when the first animation fails validation the engine asks the model once more to repair it, and that repair call is charged too.
 

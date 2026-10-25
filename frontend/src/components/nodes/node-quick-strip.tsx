@@ -25,7 +25,7 @@ export const QuickStripOpenChangeContext = createContext<((open: boolean) => voi
 interface NodeQuickStripProps {
   readonly nodeId: string
   readonly credits?: number
-  /** `credits` is an estimate (a metered LLM call): the Run button shows `~`. */
+  /** `credits` is an estimate (a metered LLM call): the Run button shows `≈`. */
   readonly creditsEstimate?: boolean
   readonly disabled?: boolean
   readonly disabledReason?: string

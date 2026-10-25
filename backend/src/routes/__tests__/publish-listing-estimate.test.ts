@@ -357,7 +357,7 @@ describe("the listing's estimate flag stored at publish", () => {
   })
 })
 
-// R47: the readers serve the stored flag — the marketplace card and the template gallery show `~N` —
+// R47: the readers serve the stored flag — the marketplace card and the template gallery show `≈N` —
 // only while metered pricing is on; under the rollback the answer is as before.
 describe("the listing's estimate flag served to the cards", () => {
   const APP_ROW = { id: APP_ID, slug: "cut-app", name: "Cut", estimated_credits: 280, estimated_credits_is_estimate: true }

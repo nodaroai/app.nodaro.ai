@@ -380,13 +380,13 @@ describe("runConfirmText — a continuation", () => {
   })
 })
 
-// Task 13 (spec §8.5): a metered LLM node's line is its server estimate — `~N`;
+// Task 13 (spec §8.5): a metered LLM node's line is its server estimate — `≈N`;
 // every other line stays a plain figure.
 describe("RunConfirmBreakdown — a metered LLM line", () => {
-  it("writes the estimate ~N and leaves fixed lines as they are", () => {
+  it("writes the estimate ≈N and leaves fixed lines as they are", () => {
     const chat = line("chat", "Generate Text", 6, { estimate: true })
     render(<RunConfirmBreakdown info={info({ lines: [CAP, chat], estimatedCredits: 56 })} />)
-    expect(screen.getByText("~6")).toBeTruthy()
+    expect(screen.getByText("≈6")).toBeTruthy()
     expect(screen.getByText("50")).toBeTruthy()
   })
 })

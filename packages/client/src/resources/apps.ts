@@ -18,7 +18,7 @@ export interface PublishedApp {
   /** The listed price per run; when `perMinuteCredits` is above 0, its fixed part. */
   estimatedCredits?: number | null
   /** The listed price holds a metered LLM call's ESTIMATE (its model's typical
-   *  call, charged its actual usage per token): show it `~N`. Absent for a
+   *  call, charged its actual usage per token): show it `≈N`. Absent for a
    *  fixed price, and on a deployment running the tier-pricing rollback. */
   estimatedCreditsIsEstimate?: true
   /**

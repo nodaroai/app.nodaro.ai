@@ -7067,7 +7067,7 @@ export type ComponentNodeData = {
   creatorName: string
   creatorId: string
   estimatedCredits: number
-  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (the listing's flag, charged its actual usage): shown `~N`. */
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (the listing's flag, charged its actual usage): shown `≈N`. */
   estimatedCreditsIsEstimate?: boolean
   executionStatus: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

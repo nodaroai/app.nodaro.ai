@@ -6,7 +6,7 @@ import { setLlmMeteredSchemaReadyForTesting } from "../../../lib/llm-metered-sch
 const llm = { id: "l", type: "llm-chat", data: { prompt: "hi" } }
 const image = { id: "i", type: "generate-image", data: { provider: "z-image" } }
 
-describe("runHoldsMeteredLlmEstimate (a Render final quote's `~`)", () => {
+describe("runHoldsMeteredLlmEstimate (a Render final quote's `≈`)", () => {
   it("true exactly when a node the run executes makes a metered LLM call", () => {
     setLlmMeteredSchemaReadyForTesting(true)
     try {

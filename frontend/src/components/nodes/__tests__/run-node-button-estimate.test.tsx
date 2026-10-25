@@ -1,8 +1,8 @@
 /**
  * A metered LLM node's Run button (Task 13, spec §8.5, D7): the server's
- * estimate for the node's model shows as `Run (~6 CR)`; under the tier-pricing
+ * estimate for the node's model shows as `Run (≈6 CR)`; under the tier-pricing
  * rollback the server answers the metered key `missing` and the button shows
- * today's tier price with no `~`, exactly as before.
+ * today's tier price with no `≈`, exactly as before.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
@@ -64,24 +64,24 @@ afterEach(() => {
 })
 
 describe("Run button price for a metered LLM node", () => {
-  it("Run button shows ~ for a metered node", async () => {
+  it("Run button shows ≈ for a metered node", async () => {
     api.answer = { data: { [KEY]: 6, [TIER]: 3 }, missing: [], estimates: [KEY] }
     render(<LlmRun />)
-    await waitFor(() => expect(screen.getByRole("button")).toHaveTextContent("Run(~6 CR)"))
+    await waitFor(() => expect(screen.getByRole("button")).toHaveTextContent("Run(≈6 CR)"))
   })
 
-  it("Run button shows today's price without ~ under rollback (key missing)", async () => {
+  it("Run button shows today's price without ≈ under rollback (key missing)", async () => {
     api.answer = { data: { [TIER]: 3 }, missing: [KEY] }
     render(<LlmRun />)
     await waitFor(() => expect(screen.getByRole("button")).toHaveTextContent("Run(3 CR)"))
-    expect(screen.getByRole("button").textContent).not.toContain("~")
+    expect(screen.getByRole("button").textContent).not.toContain("≈")
   })
 
   it("he locale renders the deployment unit, not 'CR'", async () => {
     useLocaleStore.setState({ locale: "he" })
     api.answer = { data: { [KEY]: 6, [TIER]: 3 }, missing: [], estimates: [KEY] }
     render(<LlmRun />)
-    await waitFor(() => expect(screen.getByRole("button").textContent).toContain("~6"))
+    await waitFor(() => expect(screen.getByRole("button").textContent).toContain("≈6"))
     expect(screen.getByRole("button").textContent).toContain("קר׳")
     expect(screen.getByRole("button").textContent).not.toContain("CR")
   })

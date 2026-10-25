@@ -180,7 +180,7 @@ export function MobileAppShell({
   )
   const liveBaseEstimate = liveFigure.total
   // The live figure holds a metered LLM call's estimate: the Run label reads
-  // `~N` (spec §8.5), marked up or not. Until the live figure is in, the
+  // `≈N` (spec §8.5), marked up or not. Until the live figure is in, the
   // seeded server figure says itself whether it is one (`estimatedCostIsEstimate`, Task 12).
   const seededIsEstimate = usePresentationStore((s) => s.estimatedCostIsEstimate)
   const estimateIsApprox = liveBaseEstimate > 0 ? liveFigure.estimate : seededIsEstimate

@@ -62,13 +62,13 @@ beforeEach(() => {
 })
 
 describe("quick strip LLM model prices", () => {
-  it("lists each model's ~estimate, priced at the node's own feature", async () => {
+  it("lists each model's ≈estimate, priced at the node's own feature", async () => {
     const opusKey = llmPriceKey("qa-check", OPUS)
     api.answer = { data: { [opusKey]: 6 }, missing: [], estimates: [opusKey] }
     render(<QuickConfigSelect nodeId="n1" control={modelControl} value={GROK} data={{ llmModel: GROK }} />)
-    await waitFor(() => expect(screen.getByTestId(`quick-llm-price-${OPUS}`)).toHaveTextContent("~6 CR"))
+    await waitFor(() => expect(screen.getByTestId(`quick-llm-price-${OPUS}`)).toHaveTextContent("≈6 CR"))
     expect(api.calls).toHaveLength(1)
-    expect(screen.getByTestId(`item-${OPUS}`)).toHaveTextContent("~6 CR")
+    expect(screen.getByTestId(`item-${OPUS}`)).toHaveTextContent("≈6 CR")
   })
 
   it("shows no prices when no estimate comes back (rollback)", async () => {

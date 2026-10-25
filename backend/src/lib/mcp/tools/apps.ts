@@ -127,7 +127,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           }
         }
         // `estimated_credits_is_estimate: true` when the listed price holds a metered LLM estimate
-        // (shown `~N`) — only while metered pricing is on; absent otherwise.
+        // (shown `≈N`) — only while metered pricing is on; absent otherwise.
         const rows = (data ?? []).map((row) => {
           const { [LISTING_ESTIMATE_FLAG_COLUMN]: _stored, ...rest } = withListedRangeSnake(row)
           return listingEstimateFlag(row).estimatedCreditsIsEstimate ? { ...rest, [LISTING_ESTIMATE_FLAG_COLUMN]: true } : rest

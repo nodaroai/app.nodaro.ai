@@ -259,7 +259,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       edges: workflow.edges,
       isOwner,
       ...(estimate ? { estimatedCost: estimate.credits } : {}),
-      // A metered LLM line makes the figure an estimate (`~`, spec §8.5); present only then.
+      // A metered LLM line makes the figure an estimate (`≈`, spec §8.5); present only then.
       ...(estimate?.estimate ? { estimatedCostIsEstimate: true } : {}),
       ...(estimatedCostUnpriced ? { estimatedCostUnpriced } : {}),
       presentationSettings: presentationSettings ?? { runTarget: "workflow" },

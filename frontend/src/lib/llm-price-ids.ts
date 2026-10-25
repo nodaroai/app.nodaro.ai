@@ -50,7 +50,7 @@ export function llmModelFor(feature: string, modelId: string | undefined): strin
  * A feature still billed at its tier row while metered pricing is on
  * (`TIER_BILLED_LLM_FEATURES`, `@nodaro/render-rules` — Workflow Copilot,
  * Content Recipe / Ideas) has no metered key: both ids are its tier id, so no
- * surface ever asks for, or shows, a per-model `~N` for it.
+ * surface ever asks for, or shows, a per-model `≈N` for it.
  */
 export function llmPriceIds(
   feature: string,
@@ -190,7 +190,7 @@ export interface ScrapeAnalysisPriceIds {
  * analysis model's price key — by the server's own rule
  * (`scrapeAnalysisPriceParts`). Undefined for a scrape without analysis and
  * every other node. While the server answers the key as an estimate, the run
- * is priced fixed + items × that estimate (`~`); otherwise at its tier id.
+ * is priced fixed + items × that estimate (`≈`); otherwise at its tier id.
  */
 export function scrapeAnalysisPriceIds(node: LlmNodeLike): ScrapeAnalysisPriceIds | undefined {
   const parts = scrapeAnalysisPriceParts({ type: node.type, data: node.data as Record<string, unknown> })

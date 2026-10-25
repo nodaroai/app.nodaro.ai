@@ -64,7 +64,7 @@ export const LLM_MCP_FIELDS = {
 /**
  * {@link LLM_MCP_FIELDS} for a tool fronting a metered LLM `feature`: its
  * `llmModel` names the feature's default model and what a typical call on it
- * is charged (`~N`, an estimate — the call is charged per token).
+ * is charged (`≈N`, an estimate — the call is charged per token).
  */
 export function llmMcpFields(feature: MeteredLlmFeature): typeof LLM_MCP_FIELDS {
   const defaultModel = llmFeatureDefaultModel(feature)

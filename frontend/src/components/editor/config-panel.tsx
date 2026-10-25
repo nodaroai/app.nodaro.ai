@@ -881,7 +881,7 @@ export function ConfigPanel() {
   const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
   // A metered LLM node: its two price ids in one batch (the metered key and the
   // tier id). Subscribing re-renders the panel when the answer lands, so the
-  // Run button below re-reads `getModelIdentifier` — the key, shown `~N`, once
+  // Run button below re-reads `getModelIdentifier` — the key, shown `≈N`, once
   // the server marked it an estimate; the tier id under the rollback.
   const _llmPriceIdsList = useMemo(() => {
     const ids = displayNode ? llmNodePriceIds(displayNode) : undefined

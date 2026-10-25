@@ -30,11 +30,11 @@ export function ModelSelectOption({
    *  the same marketing copy in two places. */
   tooltip?: string
   /** Opt-in: this provider bills per second (per-second lip-sync). Show a
-   *  "~N CR/s" rate (from the `:15s` bucket ÷15) instead of the bare ceiling,
+   *  "≈N CR/s" rate (from the `:15s` bucket ÷15) instead of the bare ceiling,
    *  which would otherwise read as an alarming flat price. */
   perSecond?: boolean
   /** A badge the caller priced itself, shown instead of this row's own price
-   *  (a Choose Best judge's metered estimate, `~N CR`). Unset: priced as above. */
+   *  (a Choose Best judge's metered estimate, `≈N CR`). Unset: priced as above. */
   badge?: string
 }) {
   // Both hooks run unconditionally (Rules of Hooks). When not per-second the

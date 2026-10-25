@@ -231,7 +231,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     useState<number>(0);
   const [workflowCreditEstimateVersion, setWorkflowCreditEstimateVersion] = useState<number | null>(null);
   // The figure holds a metered LLM call's ESTIMATE (any metered node in the
-  // run): the Execute button reads `~N` (spec §8.5).
+  // run): the Execute button reads `≈N` (spec §8.5).
   const [workflowCreditEstimateIsApprox, setWorkflowCreditEstimateIsApprox] = useState(false);
   // A node of the run is a metered LLM call the server refuses to price: the
   // figure leaves it out (and the run would be refused), so the badge says
@@ -567,7 +567,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         ? ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf, ugcAnswers.ticketAnswerOf)
         : null;
       setWorkflowCreditEstimate(figure ? figure.credits : total);
-      // `~` exactly when the server's figure is an estimate: with a UGC part, the server's own part
+      // `≈` exactly when the server's figure is an estimate: with a UGC part, the server's own part
       // flags (`estimateParts`) folded with every other node's line; otherwise the lines alone.
       setWorkflowCreditEstimateIsApprox(figure ? figure.approx : estimate);
       setWorkflowCreditUnpriced(figure ? figure.unpriced : unpriced);
@@ -1605,7 +1605,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   )}
                   {hasCredits() && !estimateLoading && !workflowCreditUnpriced && workflowCreditEstimate > 0 && (
                     <span className="ms-2 opacity-80" title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}>
-                      {/* `~` before every estimate, the one convention of every run price
+                      {/* `≈` before every estimate, the one convention of every run price
                           (Run from here, Run up to here): a UGC figure the server has not
                           checked (the hover says why), or a run holding a metered LLM node. */}
                       {formatCreditsSuffix(t, workflowCreditEstimate, ugcPriceState !== undefined || workflowCreditEstimateIsApprox)}

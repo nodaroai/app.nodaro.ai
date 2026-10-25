@@ -20,7 +20,7 @@ export interface TutorialTemplateDoc {
    *  then the fixed part. Absent → 0, no per-minute part. */
   estimatedPerMinuteCredits?: number
   /** The listing holds a metered LLM call's estimate (Task 12 / R47): the
-   *  template card shows `estimatedCredits` as `~N` while metered pricing is
+   *  template card shows `estimatedCredits` as `≈N` while metered pricing is
    *  on. Held to the listing estimator's own flag by
    *  `template-listing-prices.test.ts`. Absent → a fixed price. */
   estimatedCreditsIsEstimate?: boolean

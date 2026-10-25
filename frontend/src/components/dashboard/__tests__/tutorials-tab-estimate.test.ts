@@ -1,6 +1,6 @@
 /**
  * A tutorial's listed figure holding a metered LLM call's estimate (`estimatedCreditsIsEstimate`,
- * Task 12) keeps its `~` when the card hands the tutorial to the template preview modal.
+ * Task 12) keeps its `≈` when the card hands the tutorial to the template preview modal.
  */
 import { describe, it, expect } from "vitest"
 import { flowToTemplateBrowseCard } from "../tutorials-tab"

@@ -70,7 +70,7 @@ Examples:
   cmd
     .command("cost <ids...>")
     .description(
-      "credits each identifier is charged — a model id, a credit id, or a metered LLM price key (<feature>:<model>[:direct]); an estimate prints as ~N",
+      "credits each identifier is charged — a model id, a credit id, or a metered LLM price key (<feature>:<model>[:direct]); an estimate prints as ≈N",
     )
     .option("--profile <name>")
     .option("--json")
@@ -79,7 +79,7 @@ Examples:
       `
 A metered LLM price key (llmPriceKey from @nodaro/shared/llm-models) is
 charged for the tokens the call actually uses, so its figure is an estimate of
-a typical call and prints as ~N. Every model's per-token rate:
+a typical call and prints as ≈N. Every model's per-token rate:
 docs/pricing/llm-models.md.
 
 Examples:
@@ -105,7 +105,7 @@ Examples:
 }
 
 /**
- * One row per asked identifier, in the order asked: `~N` for an estimate (a
+ * One row per asked identifier, in the order asked: `≈N` for an estimate (a
  * metered LLM price key), `N` for a fixed price, `-` with the reason when the
  * server priced nothing for it.
  */
@@ -117,7 +117,7 @@ export function costRows(ids: string[], result: ModelCostsResult): Array<Record<
     const credits = result.data[id]
     if (typeof credits === "number") {
       const estimate = estimates.has(id)
-      return { id, credits: estimate ? `~${credits}` : String(credits), note: estimate ? "estimate: charged per token used" : "" }
+      return { id, credits: estimate ? `≈${credits}` : String(credits), note: estimate ? "estimate: charged per token used" : "" }
     }
     if (errors.has(id)) return { id, credits: "-", note: terminalSafe(result.errorCodes?.[id]?.message ?? "could not be priced") }
     if (missing.has(id)) return { id, credits: "-", note: "no price on this server" }

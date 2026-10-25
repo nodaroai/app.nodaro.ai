@@ -37,7 +37,7 @@ interface PresentationState {
 
   // Presentation config (from workflow settings)
   estimatedCost: number
-  /** The seeded `estimatedCost` holds a metered LLM estimate (charged its actual usage): shown `~` until the live figure is in. */
+  /** The seeded `estimatedCost` holds a metered LLM estimate (charged its actual usage): shown `≈` until the live figure is in. */
   estimatedCostIsEstimate: boolean
   /** The server could not price the run (a metered LLM model with no price, R51): no figure, and why. Null otherwise. */
   estimatedCostUnpriced: { modelId: string; message: string } | null

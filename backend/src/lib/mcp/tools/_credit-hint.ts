@@ -82,10 +82,10 @@ export function llmFeatureDefaultModel(feature: MeteredLlmFeature): string {
 const LLM_RATES_PAGE = "docs/pricing/llm-models.md"
 
 /**
- * The estimate hint for a METERED LLM call: `"~N credits typical on <Model>"`
+ * The estimate hint for a METERED LLM call: `"≈N credits typical on <Model>"`
  * — what the server quotes before a run of `feature` on `modelId` (its
  * metered price key, `llmPriceKey`; `POST /v1/credits/model-costs` answers it
- * live), the `~N` the Run button shows. A metered call is charged per token at
+ * live), the `≈N` the Run button shows. A metered call is charged per token at
  * the model's rate, never a fixed price, so the figure is always written as
  * approximate; it still carries its price key when rendering the docs, so the
  * docs test holds it to the server's estimate.
@@ -101,7 +101,7 @@ export function estimateHint(feature: MeteredLlmFeature, modelId: string = llmFe
   try {
     const key = llmPriceKey(feature, modelId)
     const credits = statedPrices().credits(key)
-    if (credits !== undefined) return `~${stated(credits, key)} credits typical on ${name}`
+    if (credits !== undefined) return `≈${stated(credits, key)} credits typical on ${name}`
   } catch {
     // fall through to the figure-free hint
   }

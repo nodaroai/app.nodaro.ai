@@ -89,7 +89,7 @@ export interface NodeDescriptor {
    *  it is meaningful on Cloud only). */
   creditCost?: number | string
   /** `creditCost` is an ESTIMATE: a metered LLM node's typical call on its
-   *  default model, charged its actual usage after the run (shown `~N`).
+   *  default model, charged its actual usage after the run (shown `≈N`).
    *  Absent for a fixed price, and under the tier-pricing rollback. A metered
    *  LLM node whose default model has no price yet lists `creditCost:
    *  "unpriced"` (a run on it is refused `llm_model_unpriced`). */
