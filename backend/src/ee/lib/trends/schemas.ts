@@ -178,6 +178,19 @@ const trendFaceMaskJobSchema = z.strictObject({
   startedAt: z.string().min(1),
 })
 
+/** The most upscales a draft keeps in the making at once (the source and its examples together). */
+export const MAX_UPSCALE_JOBS = 20
+
+/** An upscale in the making (`TrendUpscaleJob`): written by the upscale routes only. */
+const trendUpscaleJobSchema = z.strictObject({
+  jobId: z.string().min(1),
+  target: z.enum(["source", "example"]),
+  fromUrl: httpUrl,
+  startedAt: z.string().min(1),
+  applying: z.strictObject({ startedAt: z.string().min(1), by: z.string().min(1) }).optional(),
+  error: z.strictObject({ code: z.string().min(1).max(100), message: z.string().max(1000), at: z.string().min(1) }).optional(),
+})
+
 /**
  * A trend version's engine: its own, else `"seedance-2-5"` (the engine of
  * every version saved before the choice, and of a version that names none).
@@ -223,6 +236,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     faceMasking: faceMaskingSchema.optional(),
     faceMask: trendFaceMaskSchema.optional(),
     faceMaskJob: trendFaceMaskJobSchema.optional(),
+    upscaleJobs: z.array(trendUpscaleJobSchema).max(MAX_UPSCALE_JOBS).optional(),
     // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
     // names none is kept without the key, so re-saving an old draft is no change.
     // Nodaro Motion's public ids are taken too and stored as the internal id

@@ -26,6 +26,9 @@
  *   POST   /v1/admin/trends/:id/face-mask            make the trend's face mask (admin-trends-face-mask.ts) → 202 { jobId, revision }
  *   POST   /v1/admin/trends/:id/face-mask/approve    approve a finished one: stored on the draft
  *   DELETE /v1/admin/trends/:id/face-mask            clear the draft's face mask
+ *   POST   /v1/admin/trends/:id/upscale              upscale the source or an example to 1080p (admin-trends-upscale.ts) → 202
+ *   POST   /v1/admin/trends/:id/upscale/apply        use a finished upscale (in the background) → 202: replaces that video on the draft
+ *   DELETE /v1/admin/trends/:id/upscale/:jobId       discard an upscale in the making
  *
  * Replies use the platform's `{ data }` envelope; errors `{ error: { code, message, … } }`.
  *
@@ -73,7 +76,7 @@ import {
 import { trendRunRequestSchema, trendVersionDataSchema } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
-import { TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
+import { TREND_SOURCE_SECONDS, TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
 import { publishBlockers } from "../lib/trends/publish-check.js"
 import { allTagUsage, readTagLabels, saveTagLabels, type TagLabels } from "../lib/trends/tags.js"
 import {
@@ -99,6 +102,8 @@ import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/typ
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
 import { draftFaceMaskState, registerTrendFaceMaskRoutes } from "./admin-trends-face-mask.js"
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
+import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
+import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
 
@@ -138,8 +143,6 @@ const slugSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "A slug is 1–64 of a–z, 0–9 and -, starting with a letter or digit.")
   .refine((s) => !RESERVED_SLUGS.has(s), "\"runs\" and \"tags\" cannot be slugs.")
-/** A trend's source clip: 4–30 s. */
-const SOURCE_SECONDS = { min: 4, max: 30 }
 /** How many of a trend's runs the test list shows. */
 const TEST_RUNS_LIMIT = 50
 /** Media copied at once while promoting an example. */
@@ -496,7 +499,8 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
             ? draft
             : await getVersion(trend.id, trend.publishedVersion)
       return {
-        data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft) },
+        data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft),
+          upscaleJobs: pendingUpscaleJobs(draft) },
       }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read the trend")
@@ -531,16 +535,18 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const loaded = await loadDraft(req, reply)
       if (!loaded) return reply
       if (loaded.revision !== body.data.revision) return draftConflict(reply)
-      // Examples are written only by the example routes, and the face mask
-      // only by the face mask routes: the body's are ignored, and the row's
-      // own (at the revision the client read) are kept.
-      const { faceMask: _mask, faceMaskJob: _job, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
-      const { faceMask, faceMaskJob } = loaded.draft
+      // Examples are written only by the example routes, the face mask only
+      // by the face mask routes and the upscales in the making only by the
+      // upscale routes: the body's are ignored, and the row's own (at the
+      // revision the client read) are kept.
+      const { faceMask: _mask, faceMaskJob: _job, upscaleJobs: _upscales, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
+      const { faceMask, faceMaskJob, upscaleJobs } = loaded.draft
       const data = {
         ...edited,
         examples: loaded.draft.examples,
         ...(faceMask ? { faceMask } : {}),
         ...(faceMaskJob ? { faceMaskJob } : {}),
+        ...(upscaleJobs ? { upscaleJobs } : {}),
       } as unknown as TrendVersionData
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
       if (!saved) return reply
@@ -559,7 +565,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
     try {
       if (!(await getTrendById(id))) return notFound(reply)
       const source = body.data.kind === "source"
-      const stored = await copyToTrendStorage(id, body.data.url, source ? "video" : "image", source ? { durationSec: SOURCE_SECONDS, display: true } : {})
+      const stored = await copyToTrendStorage(id, body.data.url, source ? "video" : "image", source ? { durationSec: TREND_SOURCE_SECONDS, display: true } : {})
       return {
         data: {
           url: stored.url,
@@ -808,4 +814,5 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
 
   registerTrendLifecycleRoutes(app, { findTrendRun })
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
+  registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

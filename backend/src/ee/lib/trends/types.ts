@@ -9,7 +9,7 @@
  *
  * HIDDEN: the uploaded `source` clip (its `videoUrl`, length and size),
  * `TrendSlot.roleName`, `references`, `trendPrompt`, `prePrompt`,
- * `faceMasking`, `faceMask`, `faceMaskJob` and `klingLength` never leave the server — public responses
+ * `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs` and `klingLength` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -104,6 +104,30 @@ export interface TrendFaceMaskJob {
   startedAt: string
 }
 
+/**
+ * HIDDEN. An upscale to 1080p in the making: a Topaz `video-upscale` job of
+ * the admin who started it, for the source clip or one example, named by the
+ * video it was made FROM (`fromUrl`: the source's `videoUrl` or the
+ * example's, each a file of its own) so a reorder or a removal never points
+ * it at another example. "Use it" applies it while that video is still the
+ * target's; applying (or discarding) clears it. Written only by the upscale
+ * routes; a draft save keeps the stored ones.
+ */
+export interface TrendUpscaleJob {
+  jobId: string
+  target: "source" | "example"
+  fromUrl: string
+  startedAt: string
+  /**
+   * "Use it" is being carried out in the background (the resize and the
+   * store): since when, and by whom. One older than `UPSCALE_APPLY_STALE_MS`
+   * (a server restart) may be tried again.
+   */
+  applying?: { startedAt: string; by: string }
+  /** The last "Use it" failed: why. Cleared by the next try. */
+  error?: { code: string; message: string; at: string }
+}
+
 /** A promoted example run: its result video and the pictures used per slot. */
 export interface TrendExample {
   videoUrl: string
@@ -159,6 +183,8 @@ export interface TrendVersionData {
   faceMask?: TrendFaceMask
   /** HIDDEN. The face mask job started last and not approved yet (see `TrendFaceMaskJob`). */
   faceMaskJob?: TrendFaceMaskJob
+  /** HIDDEN. The upscales started and not applied or discarded yet (see `TrendUpscaleJob`). */
+  upscaleJobs?: TrendUpscaleJob[]
   /**
    * The video engine every run of this trend uses; the person running it
    * never chooses. Absent = `"seedance-2-5"` (every version saved before the

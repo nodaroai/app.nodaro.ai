@@ -11189,6 +11189,15 @@ export interface AdminTrendData {
   faceMask?: AdminTrendFaceMask
   /** The face mask job started last and not approved yet (hidden; written only by the face mask routes). */
   faceMaskJob?: { jobId: string; settingsKey: string; startedAt: string }
+  /** The upscales to 1080p in the making (hidden; written only by the upscale routes, kept by a draft save). */
+  upscaleJobs?: Array<{
+    jobId: string
+    target: "source" | "example"
+    fromUrl: string
+    startedAt: string
+    applying?: { startedAt: string; by: string }
+    error?: { code: string; message: string; at: string }
+  }>
   /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
   engine?: AdminTrendEngine
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
@@ -11251,6 +11260,26 @@ export interface AdminTrendDetail {
   faceMaskState?: AdminTrendFaceMaskState
   /** The face mask being made; `current` = started for the draft's current source and settings. */
   faceMaskJob?: AdminTrendPendingFaceMaskJob | null
+  /** The upscales to 1080p in the making (absent from an older server). */
+  upscaleJobs?: AdminTrendPendingUpscale[]
+}
+
+/**
+ * An upscale to 1080p in the making, named by the video it was made from:
+ * `current` = that video is still the source's (or an example's: `index` is
+ * where that example is now), so it can be used. `applying`: "Use it" is
+ * running on the server (`stale`: for so long it may be tried again);
+ * `error`: the last "Use it" failed, and why.
+ */
+export interface AdminTrendPendingUpscale {
+  jobId: string
+  target: "source" | "example"
+  fromUrl: string
+  startedAt: string
+  current: boolean
+  index?: number
+  applying?: { startedAt: string; stale: boolean }
+  error?: { code: string; message: string }
 }
 
 export interface AdminTrendPendingFaceMaskJob {
@@ -11636,6 +11665,81 @@ export interface AdminTrendFaceMaskJob {
 
 export async function fetchAdminTrendFaceMaskJob(jobId: string): Promise<AdminTrendFaceMaskJob> {
   return (await apiRequest<{ data: AdminTrendFaceMaskJob }>(`/v1/jobs/${encodeURIComponent(jobId)}`, "apiErr.loadTrends")).data
+}
+
+/** What an upscale is for: the source clip, or the example at `index`. */
+export type AdminTrendUpscaleTarget = { target: "source" } | { target: "example"; index: number }
+
+/**
+ * Upscale the saved draft's source clip or one example to 1080p (Topaz, billed to the admin), at
+ * `revision`. Follow the job, then use it. It returns the job and the draft's new revision (the job is
+ * recorded on the draft; `recorded: false` when it could not be, and it can still be used);
+ * `draftMoved`: another write landed meanwhile, so the screen reloads the trend. (The return type is
+ * spelt out: a paid call is one whose declared return type names `jobId`, paid-run-mark-guard.)
+ */
+export async function startAdminTrendUpscale(
+  id: string,
+  target: AdminTrendUpscaleTarget,
+  revision: string,
+  /** One per click: a repeat of the same click is never paid for twice. */
+  idempotencyKey: string,
+): Promise<{ jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean }> {
+  return (
+    await apiJson<{ data: { jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean } }>(`${trendPath(id)}/upscale`, {
+      label: "apiErr.saveTrend",
+      body: { ...target, revision },
+      idempotencyKey,
+    })
+  ).data
+}
+
+/**
+ * What "Use it" answers: at once (202) with the draft's new revision and the
+ * upscale marked `applying` (the server puts it in the draft in the
+ * background; read the trend until its record is gone or carries an error),
+ * or (`applied: true`) when it was in the draft already.
+ */
+export interface TrendUpscaleWrite extends TrendDraftWrite {
+  jobId?: string
+  applying?: boolean
+  applied?: boolean
+  target?: "source" | "example"
+  index?: number
+  upscaleJobs: AdminTrendPendingUpscale[]
+}
+
+/** Use a finished upscale: its video, at 1080p, replaces the source clip's or the example's on the draft (in the background). */
+export async function applyAdminTrendUpscale(id: string, jobId: string, revision: string): Promise<TrendUpscaleWrite> {
+  return (
+    await apiRequest<{ data: TrendUpscaleWrite }>(`${trendPath(id)}/upscale/apply`, "apiErr.saveTrend", {
+      method: "POST",
+      body: { jobId, revision },
+    })
+  ).data
+}
+
+/** Discard an upscale in the making at `revision` (the job itself stays in the admin's library). */
+export async function discardAdminTrendUpscale(id: string, jobId: string, revision: string): Promise<TrendDraftWrite & { upscaleJobs: AdminTrendPendingUpscale[] }> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite & { upscaleJobs: AdminTrendPendingUpscale[] } }>(
+      `${trendPath(id)}/upscale/${encodeURIComponent(jobId)}?revision=${encodeURIComponent(revision)}`,
+      "apiErr.saveTrend",
+      { method: "DELETE" },
+    )
+  ).data
+}
+
+/** An upscale job as the trend screen follows it (`GET /v1/jobs/:id`, the admin's own job). */
+export interface AdminTrendUpscaleJob {
+  id: string
+  status: string
+  progress?: number | null
+  error_message?: string | null
+  output_data?: { videoUrl?: string | null; thumbnailUrl?: string | null; [key: string]: unknown } | null
+}
+
+export async function fetchAdminTrendUpscaleJob(jobId: string): Promise<AdminTrendUpscaleJob> {
+  return (await apiRequest<{ data: AdminTrendUpscaleJob }>(`/v1/jobs/${encodeURIComponent(jobId)}`, "apiErr.loadTrends")).data
 }
 
 export async function fetchTrendEngineEnvironments(): Promise<TrendEngineEnvironment[]> {

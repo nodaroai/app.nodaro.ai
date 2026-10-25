@@ -436,6 +436,7 @@ export const queryKeys = {
     trendTestRuns: (id: string) => ["admin", "trends", "one", id, "test-runs"] as const,
     trendRunPrompt: (jobId: string) => ["admin", "trends", "run-prompt", jobId] as const,
     trendFaceMaskJob: (jobId: string) => ["admin", "trends", "face-mask-job", jobId] as const,
+    trendUpscaleJob: (jobId: string) => ["admin", "trends", "upscale-job", jobId] as const,
     trendEngineEnvironments: () => ["admin", "trends", "engine-environments"] as const,
     /** Admin → Nodaro Motion: the face masking per engine. */
     nodaroMotionMasking: () => ["admin", "nodaro-motion", "masking"] as const,

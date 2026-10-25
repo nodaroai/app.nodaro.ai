@@ -471,3 +471,16 @@ export function describeFaceMaskOutOfDate(r: { why: string; env?: string }): str
 export function formatSeconds(s: number): string {
   return `${s.toFixed(1)} s`
 }
+
+/** The short side of a video upscaled to 1080p (the server resizes Topaz's 2x to it). */
+export const UPSCALE_SHORT_SIDE = 1080
+
+/**
+ * Whether a video of this size is offered an upscale to 1080p: its short side
+ * is under 1080 (the server's own rule; it refuses the rest). An unknown size
+ * is offered one.
+ */
+export function needsUpscale(width: number | undefined, height: number | undefined): boolean {
+  if (!width || !height) return true
+  return Math.min(width, height) < UPSCALE_SHORT_SIDE
+}

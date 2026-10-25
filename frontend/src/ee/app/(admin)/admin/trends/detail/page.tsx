@@ -1,7 +1,8 @@
 // Admin → Trends → one trend: build its draft (source clip and preview window,
 // slots, fixed references, pre and trend prompts, model, face masking and its
 // stored face mask, texts), test
-// it, promote admin runs to examples, and publish it.
+// it, promote admin runs to examples, upscale the source clip and the
+// examples to 1080p, and publish it.
 //
 // Like the rest of the admin trend screens, its text is English only.
 //
@@ -58,6 +59,7 @@ import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
 import { PublishBar } from "../components/PublishBar"
+import { StaleUpscales, UpscalePanel, type UpscaleApplied } from "../components/UpscalePanel"
 
 const CONFLICT_MESSAGE = "This trend changed elsewhere — reloaded."
 
@@ -152,23 +154,57 @@ export default function AdminTrendEditorPage() {
     )
   }
 
+  /**
+   * After a server-side write this screen's revision does not guard (a
+   * promotion, an upscale used: the server applies it to whatever the draft
+   * is by then). Adopt the new revision only if the rest of the draft is
+   * still what this screen last loaded or saved; else, with no unsaved edits,
+   * take the server's draft (an upscaled source clip is in the form); else
+   * warn: the held revision is stale, so a save reloads instead of silently
+   * putting the old values back. The hook has already refetched the trend
+   * (it stays pending until then), so the cache is that read.
+   */
+  const adoptServerDraft = (changedElsewhere: string) => {
+    const fresh = queryClient.getQueryData<AdminTrendDetail>(queryKeys.admin.trend(id))
+    if (!fresh) return
+    if (snapshot(toForm(fresh.draft)) === latest.current.baseline) setRevision(fresh.revision)
+    else if (!latest.current.dirty) load(fresh)
+    else toast.warning(changedElsewhere)
+  }
+
   const onPromote = (jobId: string) => {
     promote.mutate(jobId, {
       onSuccess: (w) => {
         toast.success(`Added as example ${w.index + 1}`)
-        // A promotion is not guarded by our revision (the server appends to
-        // whatever the draft is by then). Adopt the new revision only if the
-        // rest of the draft is still what this screen last loaded or saved;
-        // otherwise someone else edited it too. The hook has already refetched
-        // the trend (it stays pending until then), so the cache is that read.
-        const fresh = queryClient.getQueryData<AdminTrendDetail>(queryKeys.admin.trend(id))
-        if (!fresh) return
-        if (snapshot(toForm(fresh.draft)) === latest.current.baseline) setRevision(fresh.revision)
-        else if (!latest.current.dirty) load(fresh)
-        else toast.warning("This draft was also changed elsewhere; saving will reload it.")
+        adoptServerDraft("This draft was also changed elsewhere; saving will reload it.")
       },
       onError: onWriteError,
     })
+  }
+
+  const onUpscaleApplied = (w: UpscaleApplied) => {
+    toast.success(w.target === "source" ? "Source clip upscaled to 1080p" : `Example ${(w.index ?? 0) + 1} upscaled to 1080p`)
+    adoptServerDraft(
+      w.target === "source"
+        ? "The source clip was upscaled while you edited; saving will reload the draft."
+        : "This draft was also changed elsewhere; saving will reload it.",
+    )
+  }
+
+  const upscales = server.upscaleJobs ?? []
+  const savedSource = server.draft.source
+  const sourceUpscale =
+    upscales.find((u) => u.target === "source" && u.current) ?? upscales.filter((u) => u.target === "source").at(-1)
+  const upscaleProps = {
+    trendId: id,
+    recorded: new Set(upscales.map((u) => u.jobId)),
+    revision,
+    onRevision: setRevision,
+    onReload: () => void reload(),
+    onApplied: onUpscaleApplied,
+    // The server wrote the failure on the record (the rest unchanged): its revision is the one to hold.
+    onServerWrite: () => adoptServerDraft("This draft was also changed elsewhere; saving will reload it."),
+    onWriteError,
   }
 
   const onPublish = () => {
@@ -231,6 +267,20 @@ export default function AdminTrendEditorPage() {
               previewStart={form.previewStart}
               onChange={(next) => set(next)}
             />
+            {savedSource && (
+              <UpscalePanel
+                {...upscaleProps}
+                target={{ target: "source" }}
+                video={{
+                  url: savedSource.videoUrl,
+                  width: savedSource.width ?? savedSource.display?.width,
+                  height: savedSource.height ?? savedSource.display?.height,
+                }}
+                pending={sourceUpscale}
+                waitFor={dirty ? "Save first: the upscale is made from the saved source clip, and using it replaces it." : undefined}
+                faceMaskStored={!!server.draft.faceMask}
+              />
+            )}
           </Section>
           <Section title="2. Slots" description="What a user replaces, in order.">
             <SlotsEditor
@@ -318,6 +368,23 @@ export default function AdminTrendEditorPage() {
               busy={exampleBusy}
               onReorder={(order) =>
                 reorder.mutate({ order, revision }, { onSuccess: (w) => setRevision(w.revision), onError: onWriteError })
+              }
+              renderUpscale={(ex, i) => (
+                <UpscalePanel
+                  {...upscaleProps}
+                  target={{ target: "example", index: i }}
+                  video={{ url: ex.videoUrl, width: ex.width, height: ex.height }}
+                  pending={upscales.find((u) => u.target === "example" && u.current && u.index === i)}
+                />
+              )}
+              footer={
+                <StaleUpscales
+                  trendId={id}
+                  stale={upscales.filter((u) => u.target === "example" && !u.current)}
+                  revision={revision}
+                  onRevision={setRevision}
+                  onWriteError={onWriteError}
+                />
               }
               onRemove={(index) =>
                 removeExample.mutate(

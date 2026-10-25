@@ -1001,6 +1001,21 @@ describe("trend face masking and pre prompt", () => {
     expectNoHidden(res.body)
   })
 
+  it("an upscale in the making a version carries never reaches a public reply or the engine", async () => {
+    const upscale = { jobId: "HIDDEN-UPSCALE-JOB", target: "example" as const, fromUrl: "https://cdn.example/trends/t1/HIDDEN-UPSCALE-FROM.mp4", startedAt: "2026-10-25T10:00:00.000Z" }
+    mem.trends[0]!.versions[2] = { ...versionData(), upscaleJobs: [upscale] }
+    const page = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    const list = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    for (const res of [page, list]) {
+      expect(res.statusCode).toBe(200)
+      expect(res.body).not.toContain("HIDDEN-UPSCALE")
+      expect(res.body).not.toContain("upscaleJobs")
+    }
+    const ran = await run(RUN_BODY, "runs")
+    expect(ran.statusCode).toBeLessThan(300)
+    expect(JSON.stringify(engine.calls)).not.toContain("HIDDEN-UPSCALE")
+  })
+
   it("a stored face mask made from the trend's settings rides estimate and run, and never a public reply", async () => {
     const data = versionData()
     const mask = {
