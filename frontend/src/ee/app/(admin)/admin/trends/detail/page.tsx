@@ -1,5 +1,6 @@
 // Admin → Trends → one trend: build its draft (source clip and preview window,
-// slots, fixed references, pre and trend prompts, model, face masking, texts), test
+// slots, fixed references, pre and trend prompts, model, face masking and its
+// stored face mask, texts), test
 // it, promote admin runs to examples, and publish it.
 //
 // Like the rest of the admin trend screens, its text is English only.
@@ -52,6 +53,7 @@ import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
 import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
+import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
@@ -272,6 +274,20 @@ export default function AdminTrendEditorPage() {
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
             <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
+            {(form.faceMasking?.mode ?? "off") !== "off" && (
+              <FaceMaskPanel
+                trendId={id}
+                faceMask={server.draft.faceMask}
+                state={server.faceMaskState}
+                pending={server.faceMaskJob}
+                ready={!!server.draft.source && (server.draft.faceMasking?.mode ?? "off") !== "off"}
+                dirty={dirty}
+                revision={revision}
+                onRevision={setRevision}
+                onReload={() => void reload()}
+                onWriteError={onWriteError}
+              />
+            )}
           </Section>
           <Section title="7. Name, description, tags">
             <TextsEditor trend={server.trend} name={form.name} description={form.description} onChange={(p) => set(p)} />

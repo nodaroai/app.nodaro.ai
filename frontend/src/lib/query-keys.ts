@@ -435,6 +435,7 @@ export const queryKeys = {
     trend: (id: string) => ["admin", "trends", "one", id] as const,
     trendTestRuns: (id: string) => ["admin", "trends", "one", id, "test-runs"] as const,
     trendRunPrompt: (jobId: string) => ["admin", "trends", "run-prompt", jobId] as const,
+    trendFaceMaskJob: (jobId: string) => ["admin", "trends", "face-mask-job", jobId] as const,
     trendEngineEnvironments: () => ["admin", "trends", "engine-environments"] as const,
   },
 

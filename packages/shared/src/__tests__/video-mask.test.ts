@@ -5,6 +5,7 @@ import {
   VIDEO_MASK_DEFAULTS,
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
+  VIDEO_MASK_RECIPE,
   resolveVideoMaskProvider,
   resolveVideoMaskRedetectSec,
   resolveVideoMaskZone,
@@ -123,5 +124,12 @@ describe("Mask Composite units", () => {
   it("an unknown length counts the 300 s cap (an upper bound); past the cap clamps", () => {
     expect(maskCompositeUnits(undefined)).toBe(60)
     expect(maskCompositeUnits(900)).toBe(60)
+  })
+})
+
+describe("VIDEO_MASK_RECIPE", () => {
+  it("names the algorithm that makes today's masks (the lone-spike cut rule and the 1 s hold cap)", () => {
+    expect(VIDEO_MASK_RECIPE).toBe("2026-10-25")
+    expect(VIDEO_MASK_LIMITS.HOLD_MAX_SEC).toBe(1)
   })
 })

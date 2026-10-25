@@ -61,6 +61,8 @@ const mem = vi.hoisted(() => ({
   warns: [] as unknown[][],
   /** The store fails as on a database without migration 549's tables. */
   missingTables: false,
+  /** This many draft saves lose to a concurrent write (DraftConflictError), as if someone always saved first. */
+  conflictSaves: 0,
 }))
 
 vi.mock("../../lib/trends/store.js", async (importOriginal) => {
@@ -121,6 +123,10 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
       return strip(t)
     },
     saveDraft: async (id: string, data: TrendVersionData, opts: { expectedRevision?: string } = {}) => {
+      if (mem.conflictSaves > 0) {
+        mem.conflictSaves -= 1
+        throw new actual.DraftConflictError(id)
+      }
       const t = find(id)
       const cur = t.versions[t.draftVersion]!
       if (opts.expectedRevision !== undefined && rev(cur) !== opts.expectedRevision) throw new actual.DraftConflictError(id)
@@ -251,6 +257,9 @@ import { trendRoutes } from "../trends.js"
 import { resolveRequestOrigin } from "../../../lib/client-origin-scope.js"
 import { resolveRequestSession } from "../../../lib/generation-session-scope.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
+import { withResolvedZone } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
+import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
 
@@ -261,6 +270,7 @@ const SECRET = "0".repeat(64) // src/test/setup.ts
 const T1 = "00000000-0000-4000-8000-0000000000a1"
 const RUN = "00000000-0000-4000-8000-0000000000b1"
 const CHILD = "00000000-0000-4000-8000-0000000000c1"
+const FACE_MASK_JOB = "00000000-0000-4000-8000-0000000000f1"
 
 const CAST_SWAP_ALL = {
   roleKinds: ["person", "location", "product", "pet"] as Array<"person" | "location" | "product" | "pet">,
@@ -366,6 +376,8 @@ const world = {
 
 const engine = {
   calls: [] as Array<{ url: string; headers: Record<string, unknown>; body: Record<string, unknown>; stamps?: { origin: string | null; sessionId: string | null } }>,
+  /** Called once while the face mask route answers: a hook for "meanwhile, someone else wrote". */
+  onFaceMask: null as null | (() => void),
 }
 
 function respondTrendTags(q: RecordedQuery): QueryResult {
@@ -383,8 +395,25 @@ function respondTrendTags(q: RecordedQuery): QueryResult {
   return { data: [...world.tagLabels].map(([tag, labels]) => ({ tag, labels })), error: null }
 }
 
+/** `admin_actions`: a read answers the rows this test's own inserts wrote, filtered as asked. */
+function respondAdminActions(q: RecordedQuery): QueryResult {
+  if (q.ops.some((op) => op.m === "insert")) return { data: null, error: null }
+  const rows = db.log
+    .filter((r) => r.table === "admin_actions")
+    .flatMap((r) => r.ops.filter((op) => op.m === "insert").map((op) => op.a[0] as Record<string, unknown>))
+  const matches = rows.filter((row) =>
+    q.ops.every((op) => {
+      if (op.m === "eq") return row[op.a[0] as string] === op.a[1]
+      if (op.m === "filter" && op.a[0] === "payload->>jobId") return (row.payload as { jobId?: unknown })?.jobId === op.a[2]
+      return true
+    }),
+  )
+  return { data: matches.map((row) => ({ payload: row.payload })), error: null }
+}
+
 function respond(q: RecordedQuery): QueryResult {
   if (q.table === "trend_tags") return respondTrendTags(q)
+  if (q.table === "admin_actions") return respondAdminActions(q)
   // The tag usage reads go to the trends table itself (the store is in memory).
   if (q.table === "trends") return { data: mem.trends.map((t) => ({ status: t.status, tags: t.tags })), error: null }
   if (q.table === "engine_environments") {
@@ -444,10 +473,12 @@ beforeEach(async () => {
   mem.probeFails = null
   mem.warns = []
   mem.missingTables = false
+  mem.conflictSaves = 0
   world.jobs = new Map()
   world.tagLabels = new Map()
   world.envs = [envRow("production"), envRow("staging")]
   engine.calls = []
+  engine.onFaceMask = null
   runDelete.calls = []
   runDelete.inFlight = false
   _resetPluginSupportsForTests()
@@ -474,6 +505,15 @@ beforeEach(async () => {
       stamps: { origin: resolveRequestOrigin(req), sessionId: await resolveRequestSession(req) },
     })
     return reply.status(202).send({ jobId: RUN })
+  })
+  // The plugin's face mask route: internal only, as the plugin answers it.
+  app.post("/v1/cast-swap/face-mask", async (req, reply) => {
+    if (req.authKind !== "internal") return reply.status(403).send({ error: { code: "forbidden", message: "Internal only" } })
+    engine.calls.push({ url: "/v1/cast-swap/face-mask", headers: { ...req.headers }, body: req.body as Record<string, unknown> })
+    const hook = engine.onFaceMask
+    engine.onFaceMask = null
+    hook?.()
+    return reply.status(202).send({ data: { jobId: FACE_MASK_JOB } })
   })
   await app.register(trendRoutes)
   await app.register(adminTrendsRoutes)
@@ -1090,8 +1130,11 @@ describe("POST /:id/publish — engine check", () => {
     const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
     expect(res.statusCode).toBe(409)
     expect(reasonsOf(res)).toEqual([
+      { code: "face_mask_missing", message: expect.any(String) },
       { code: "engine_unsupported", env: "staging", need: "faceMasking" },
+      { code: "engine_unsupported", env: "staging", need: "storedFaceMask" },
       { code: "engine_unsupported", env: "production", need: "faceMasking" },
+      { code: "engine_unsupported", env: "production", need: "storedFaceMask" },
     ])
     expect(mem.trends[0]!.status).toBe("draft")
 
@@ -1527,6 +1570,9 @@ describe("access", () => {
     ["POST", `/v1/admin/trends/${T1}/archive`],
     ["POST", `/v1/admin/trends/${T1}/restore`],
     ["DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`],
+    ["POST", `/v1/admin/trends/${T1}/face-mask`, { revision: "rev-1" }],
+    ["POST", `/v1/admin/trends/${T1}/face-mask/approve`, { jobId: RUN, revision: "rev-1" }],
+    ["DELETE", `/v1/admin/trends/${T1}/face-mask?revision=rev-1`],
   ]
 
   it("every route is 401 without a user and 403 for a non-admin, and does nothing", async () => {
@@ -1628,5 +1674,294 @@ describe("deleting a test run", () => {
     const res = await call("DELETE", `/v1/admin/trends/${T1}/test-runs/${RUN}`)
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("run_in_progress")
+  })
+})
+
+// ── the stored face mask ───────────────────────────────────────────────────
+
+describe("the stored face mask", () => {
+  const MASKING = { mode: "always" as const, threshold: 0.4 }
+  const MASKED = "https://out.example/face-mask.mp4"
+  const FM_SUPPORTS = { ...CAST_SWAP_ALL, storedFaceMask: true, faceMaskRecipe: "1" }
+  const KEY = () => faceMaskSettingsKey(draftData({ faceMasking: MASKING }))!
+  const audits = () =>
+    db.log.filter((q) => q.table === "admin_actions").map((q) => q.ops.find((op) => op.m === "insert")!.a[0] as Record<string, unknown>)
+
+  /** The engine's job. Its input carries the setting as the ENGINE stored it: defaults filled in. */
+  function fmJob(over: Record<string, unknown> = {}, input: Record<string, unknown> = {}, output: Record<string, unknown> = {}) {
+    return {
+      id: FACE_MASK_JOB,
+      user_id: ADMIN,
+      status: "completed",
+      input_data: {
+        type: "cast-swap-face-mask",
+        videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+        faceMasking: { ...withResolvedZone(MASKING), fill: "blur", minFaceHeightPct: 15, maxFaceHeightPct: 0, blurStrengthPct: 2 },
+        ...input,
+      },
+      output_data: {
+        maskedUrl: MASKED,
+        frames: 360,
+        recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" },
+        stats: { shots: 3, heldFrames: 12, coverage: 0.031 },
+        ...output,
+      },
+      ...over,
+    }
+  }
+  const pendingJob = (over: Record<string, unknown> = {}) => ({ jobId: FACE_MASK_JOB, settingsKey: KEY(), startedAt: "2026-10-25T09:00:00.000Z", ...over })
+  /** A masked draft whose face mask job was started (and recorded) for these settings. */
+  const making = (over: Partial<TrendVersionData> = {}) => draftData({ faceMasking: MASKING, faceMaskJob: pendingJob(), ...over })
+
+  function supportStored(on = true) {
+    setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], storedFaceMask: on } })
+  }
+
+  beforeEach(() => {
+    supportStored()
+    world.envs = [envRow("production", FM_SUPPORTS), envRow("staging", FM_SUPPORTS)]
+  })
+
+  async function approve(over: Record<string, unknown> = {}) {
+    return call("POST", `/v1/admin/trends/${T1}/face-mask/approve`, { jobId: FACE_MASK_JOB, revision: await revisionOf(), ...over })
+  }
+
+  describe("making one", () => {
+    it("asks the engine, as the admin, for the saved draft's source and settings, records the job on the draft, and audits it", async () => {
+      seed({}, draftData({ faceMasking: MASKING }))
+      const revision = await revisionOf()
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision })
+      expect(res.statusCode).toBe(202)
+      const draft = mem.trends[0]!.versions[1]!
+      expect(res.json()).toEqual({ data: { jobId: FACE_MASK_JOB, version: 1, revision: draft.revision, recorded: true, draftMoved: false } })
+      expect(draft.data.faceMaskJob).toEqual({ jobId: FACE_MASK_JOB, settingsKey: KEY(), startedAt: expect.any(String) })
+      expect(engine.calls).toHaveLength(1)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone(MASKING) })
+      expect(engine.calls[0]!.headers["x-internal-user-id"]).toBe(ADMIN)
+      expect(audits()).toEqual([
+        expect.objectContaining({ admin_user_id: ADMIN, action: "make_trend_face_mask", target_id: T1, payload: { slug: "neon-dance", jobId: FACE_MASK_JOB, settingsKey: KEY() } }),
+      ])
+      const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
+      expect(detail.faceMaskJob).toEqual({ jobId: FACE_MASK_JOB, startedAt: expect.any(String), current: true })
+    })
+
+    it("refuses a stale revision before the engine is asked (nothing is paid for)", async () => {
+      seed({}, draftData({ faceMasking: MASKING }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: "rev-stale" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("draft_conflict")
+      expect(engine.calls).toEqual([])
+    })
+
+    it("still records the paid job when another write lands meanwhile, keeping that write, and says the draft moved", async () => {
+      seed({}, draftData({ faceMasking: MASKING }))
+      const revision = await revisionOf()
+      engine.onFaceMask = () => {
+        const v = mem.trends[0]!.versions[1]!
+        v.revision = "rev-elsewhere"
+        v.data = { ...v.data, trendPrompt: "edited elsewhere" }
+      }
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision })
+      expect(res.statusCode).toBe(202)
+      expect(res.json().data).toMatchObject({ jobId: FACE_MASK_JOB, draftMoved: true })
+      const data = mem.trends[0]!.versions[1]!.data
+      expect(data.trendPrompt).toBe("edited elsewhere")
+      expect(data.faceMaskJob).toMatchObject({ jobId: FACE_MASK_JOB, settingsKey: KEY() })
+    })
+
+    it("refuses, before the engine is asked, a draft that could not record the job", async () => {
+      // A stored draft the schema no longer accepts (an unknown key): its save would fail after the job is paid for.
+      seed({}, { ...draftData({ faceMasking: MASKING }), legacyField: true } as unknown as TrendVersionData)
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(engine.calls).toEqual([])
+    })
+
+    it("when the job can never be recorded, says so, and the job is still approvable from its audited start", async () => {
+      seed({}, draftData({ faceMasking: MASKING }))
+      const revision = await revisionOf()
+      mem.conflictSaves = 100
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision })
+      expect(res.statusCode).toBe(202)
+      expect(res.json()).toEqual({ data: { jobId: FACE_MASK_JOB, recorded: false, draftMoved: true } })
+      expect(mem.conflictSaves).toBe(100 - 6)
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob).toBeUndefined()
+
+      mem.conflictSaves = 0
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const approved = await approve()
+      expect(approved.statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ jobId: FACE_MASK_JOB, settingsKey: KEY() })
+
+      // Another admin's audited start is not the caller's: refused.
+      mem.trends = []
+      seed({}, draftData({ faceMasking: MASKING }))
+      const other = await call("POST", `/v1/admin/trends/${T1}/face-mask/approve`, { jobId: FACE_MASK_JOB, revision: await revisionOf() }, ADMIN2)
+      expect(other.json().error.code).toBe("not_pending_face_mask")
+    })
+
+    it("refuses a trend that does not mask, one with no source clip, and an engine that makes no stored masks", async () => {
+      seed({}, draftData({ faceMasking: { mode: "off" } }))
+      const start = async () => call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect((await start()).json().error.code).toBe("face_masking_off")
+      mem.trends = []
+      seed({}, draftData({ source: null, faceMasking: MASKING }))
+      expect((await start()).json().error.code).toBe("source_missing")
+      mem.trends = []
+      seed({}, draftData({ faceMasking: MASKING }))
+      supportStored(false)
+      const res = await start()
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error.code).toBe("engine_unsupported")
+      expect(engine.calls).toEqual([])
+    })
+  })
+
+  describe("approving one", () => {
+    it("takes the draft's pending job (whatever defaults the engine filled into its copy), stores the clip and clears the pending job", async () => {
+      seed({}, making())
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const res = await approve()
+      expect(res.statusCode).toBe(200)
+      const data = mem.trends[0]!.versions[1]!.data
+      expect(data.faceMaskJob).toBeUndefined()
+      expect(data.faceMask).toEqual({
+        url: expect.stringMatching(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]+\\.mp4$`)),
+        frames: 360,
+        recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" },
+        settingsKey: KEY(),
+        jobId: FACE_MASK_JOB,
+        // A stat the engine left out is 0.
+        stats: { shots: 3, heldFrames: 12, coverage: 0.031, droppedRegions: 0 },
+        approvedAt: expect.any(String),
+        approvedBy: ADMIN,
+      })
+      expect(mem.uploads).toEqual([expect.objectContaining({ contentType: "video/mp4" })])
+      expect(res.json().data).toMatchObject({ faceMask: data.faceMask, faceMaskState: { status: "approved", reasons: [] } })
+      expect(res.json().data.revision).toBe(mem.trends[0]!.versions[1]!.revision)
+      expect(audits()).toEqual([expect.objectContaining({ action: "approve_trend_face_mask", target_id: T1 })])
+      const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
+      expect(detail.faceMaskState).toEqual({ status: "approved", reasons: [] })
+      expect(detail.faceMaskJob).toBeNull()
+    })
+
+    it.each([
+      ["a job that is not the draft's pending one", making({ faceMaskJob: pendingJob({ jobId: RUN }) }), fmJob(), 409, "not_pending_face_mask"],
+      ["a draft with no pending job", draftData({ faceMasking: MASKING }), fmJob(), 409, "not_pending_face_mask"],
+      ["a job started for settings changed since", making({ faceMasking: { ...MASKING, threshold: 0.6 } }), fmJob(), 409, "face_mask_settings_changed"],
+      ["a job started for another source clip", making({ faceMaskJob: pendingJob({ settingsKey: "v2:other" }) }), fmJob(), 409, "face_mask_settings_changed"],
+      ["another user's job", making(), fmJob({ user_id: ADMIN2 }), 404, "not_found"],
+      ["a job of another type", making(), fmJob({}, { type: "video-mask" }), 409, "not_a_face_mask"],
+      ["a job still running", making(), fmJob({ status: "processing" }), 409, "not_completed"],
+      ["a job that found no face", making(), fmJob({}, {}, { maskedUrl: null, reason: "no_faces" }), 409, "no_mask"],
+      ["a job with no frame count", making(), fmJob({}, {}, { frames: 0 }), 409, "no_mask"],
+      ["a mask under an older Video Mask recipe", making(), fmJob({}, {}, { recipe: { core: "2026-01-01", plugin: "1" } }), 409, "face_mask_out_of_date"],
+      ["a mask with no Video Mask recipe", making(), fmJob({}, {}, { recipe: { core: null, plugin: "1" } }), 409, "face_mask_out_of_date"],
+      ["a mask under another engine recipe than an environment's", making(), fmJob({}, {}, { recipe: { core: VIDEO_MASK_RECIPE, plugin: "0" } }), 409, "face_mask_out_of_date"],
+    ])("refuses %s, storing nothing", async (_what, data, job, status, code) => {
+      seed({}, data as TrendVersionData)
+      world.jobs.set(FACE_MASK_JOB, job as Record<string, unknown>)
+      const res = await approve()
+      expect(res.statusCode).toBe(status)
+      expect(res.json().error.code).toBe(code)
+      expect(mem.uploads).toEqual([])
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toBeUndefined()
+    })
+
+    it("refuses a stale revision with draft_conflict before reading the job", async () => {
+      seed({}, making())
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const res = await approve({ revision: "rev-stale" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("draft_conflict")
+      expect(mem.uploads).toEqual([])
+    })
+
+    it("a pending job made from older settings reads as not current", async () => {
+      seed({}, making({ faceMasking: { ...MASKING, threshold: 0.6 } }))
+      expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskJob).toMatchObject({ jobId: FACE_MASK_JOB, current: false })
+    })
+  })
+
+  describe("on the draft", () => {
+    async function approved() {
+      seed({}, making({ examples: [EXAMPLE] }))
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      expect((await approve()).statusCode).toBe(200)
+      return mem.trends[0]!.versions[1]!.data.faceMask!
+    }
+
+    it("a draft save keeps the stored mask and the pending job, and ignores ones sent in the body", async () => {
+      const mask = await approved()
+      mem.trends[0]!.versions[1]!.data.faceMaskJob = pendingJob()
+      const { faceMask: _f, ...edited } = draftData({ faceMasking: MASKING, trendPrompt: "edited" })
+      let res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: edited, revision: await revisionOf() })
+      expect(res.statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toEqual(mask)
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob).toEqual(pendingJob())
+      res = await call("PUT", `/v1/admin/trends/${T1}/draft`, {
+        data: { ...edited, faceMask: { ...mask, url: "https://evil.example/x.mp4" }, faceMaskJob: pendingJob({ jobId: RUN }) },
+        revision: await revisionOf(),
+      })
+      expect(res.statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toEqual(mask)
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob).toEqual(pendingJob())
+    })
+
+    it("stays approved when only the mode changes (always and auto mask the same clip)", async () => {
+      await approved()
+      await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData({ faceMasking: { ...MASKING, mode: "auto" } }), revision: await revisionOf() })
+      expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
+    })
+
+    it("is out of date once the settings change, Video Mask's recipe moves, or an environment's engine recipe does", async () => {
+      const mask = await approved()
+      const state = async () => (await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskState
+      await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData({ faceMasking: { ...MASKING, threshold: 0.6 } }), revision: await revisionOf() })
+      expect(await state()).toEqual({ status: "out_of_date", reasons: [{ why: "settings" }] })
+
+      mem.trends[0]!.versions[1]!.data = { ...draftData({ faceMasking: MASKING }), faceMask: { ...mask, recipe: { core: "2026-01-01", plugin: "1" } } }
+      world.envs = [envRow("production", { ...FM_SUPPORTS, faceMaskRecipe: "2" }), envRow("staging", FM_SUPPORTS)]
+      expect(await state()).toEqual({ status: "out_of_date", reasons: [{ why: "core_recipe" }, { why: "plugin_recipe", env: "production" }] })
+    })
+
+    it("publishing a masked trend needs its mask approved and up to date", async () => {
+      await approved()
+      expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+
+      mem.trends = []
+      seed({}, draftData({ faceMasking: MASKING, examples: [EXAMPLE] }))
+      let res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+      expect(reasonsOf(res)).toEqual([{ code: "face_mask_missing", message: expect.any(String) }])
+
+      mem.trends = []
+      await approved()
+      world.envs = [envRow("production", { ...FM_SUPPORTS, faceMaskRecipe: "2" }), envRow("staging", FM_SUPPORTS)]
+      res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+      expect(reasonsOf(res)).toEqual([{ code: "face_mask_out_of_date", why: "plugin_recipe", env: "production", message: expect.any(String) }])
+    })
+
+    it("a test run sends the stored mask, and not to an engine that does not take one", async () => {
+      const mask = await approved()
+      const body = { slots: { lead: { images: ["https://u.example/me.png"] } } }
+      expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, body)).statusCode).toBe(202)
+      expect(engine.calls.at(-1)!.body.storedFaceMask).toEqual({ url: mask.url, frames: 360 })
+
+      supportStored(false)
+      expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, body)).statusCode).toBe(202)
+      expect(engine.calls.at(-1)!.body).not.toHaveProperty("storedFaceMask")
+      expect(engine.calls.at(-1)!.body.faceMasking).toEqual(withResolvedZone(MASKING))
+    })
+
+    it("clearing removes the pointer (never the file), guarded on the revision, and is audited", async () => {
+      await approved()
+      expect((await call("DELETE", `/v1/admin/trends/${T1}/face-mask?revision=rev-stale`)).json().error.code).toBe("draft_conflict")
+      const res = await call("DELETE", `/v1/admin/trends/${T1}/face-mask?revision=${await revisionOf()}`)
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.faceMaskState).toEqual({ status: "none", reasons: [] })
+      expect(mem.trends[0]!.versions[1]!.data).not.toHaveProperty("faceMask")
+      expect(audits().map((a) => a.action)).toEqual(["approve_trend_face_mask", "clear_trend_face_mask"])
+    })
   })
 })

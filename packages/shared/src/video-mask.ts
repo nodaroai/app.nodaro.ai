@@ -141,6 +141,21 @@ export const VIDEO_MASK_LIMITS = {
   REDETECT_EVERY_SEC_STEP: 1,
 } as const
 
+/**
+ * The version of what a Video Mask run's mask looks like for a given clip and
+ * settings: every finished `video-mask` job reports it as `output_data.recipe`.
+ * A mask stored ahead of time and reused (a trend's approved face mask) is
+ * held to it, and reads as out of date once it changes.
+ *
+ * BUMP IT (to the date of the change) whenever the algorithm changes the mask
+ * a run produces from the same clip and settings: the cut rule (`perShot`),
+ * the hold (`holdLastMask`, `HOLD_*`), the size and zone filters, the
+ * rendering. Never for a change that leaves every mask the same (pricing,
+ * limits on what is accepted, messages). `"2026-10-25"`: the lone-spike cut
+ * rule and the 1 s hold cap.
+ */
+export const VIDEO_MASK_RECIPE = "2026-10-25"
+
 const VIDEO_MASK_BUCKETS_SEC = [5, 10, 15, 30, 60, 90, 120, 180, 240, 300] as const
 
 /** Every price row a provider can be charged from, smallest first. */

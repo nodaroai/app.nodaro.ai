@@ -82,6 +82,7 @@ import { mcpInject } from "../../../lib/mcp/internal-request.js"
 import { newSession } from "../../../lib/mcp/session.js"
 import type { Scope } from "../../../lib/scopes.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
+import { faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
 
@@ -969,6 +970,40 @@ describe("trend face masking and pre prompt", () => {
     expect(display).not.toContain(PRE)
     expect(display).not.toContain("faceMasking")
     expectNoHidden(res.body)
+  })
+
+  it("a stored face mask made from the trend's settings rides estimate and run, and never a public reply", async () => {
+    const data = versionData()
+    const mask = {
+      url: "https://cdn.example/trends/t1/HIDDEN-MASK.mp4",
+      frames: 360,
+      recipe: { core: "2026-10-25", plugin: "1" },
+      settingsKey: faceMaskSettingsKey(data)!,
+      jobId: "HIDDEN-MASK-JOB",
+      stats: { shots: 1, heldFrames: 0, coverage: 0.01, droppedRegions: 0 },
+      approvedAt: "2026-10-25T10:00:00.000Z",
+      approvedBy: "admin",
+    }
+    mem.trends[0]!.versions[2] = { ...data, faceMask: mask }
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], storedFaceMask: true } })
+    for (const path of ["estimate", "runs"]) {
+      engine.calls = []
+      const res = await run(RUN_BODY, path)
+      expect(res.statusCode, path).toBeLessThan(300)
+      expect(engine.calls[0]!.body.storedFaceMask, path).toEqual({ url: mask.url, frames: 360 })
+      expect(res.body).not.toContain("HIDDEN-MASK")
+    }
+    const page = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(page.body).not.toContain("HIDDEN-MASK")
+    expect(page.body).not.toContain("faceMask")
+
+    // An engine that does not take one: the run masks per run, and the quote says so.
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+    for (const path of ["estimate", "runs"]) {
+      engine.calls = []
+      await run(RUN_BODY, path)
+      expect(engine.calls[0]!.body, path).not.toHaveProperty("storedFaceMask")
+    }
   })
 
   it("masking off sends no faceMasking key, and needs no masking engine", async () => {

@@ -455,7 +455,9 @@ export class MediaResource {
    * `height`, `frames`, `coverage` (the fraction of pixels selected, rounded
    * to 4 decimals) and `kept` (any region left on any frame: false only when
    * the size / zone filters left an empty mask — read it rather than
-   * `coverage`, which a few pixels round to 0). Feed the mask to
+   * `coverage`, which a few pixels round to 0), and `recipe` (the version of
+   * the masking algorithm that made it, `VIDEO_MASK_RECIPE`: it changes
+   * whenever the same clip and settings would give a different mask). Feed the mask to
    * {@link MediaResource.maskComposite}.
    *
    * `holdLastMask: true` keeps the last mask on frames where the subject is

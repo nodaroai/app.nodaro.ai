@@ -68,6 +68,7 @@ vi.mock("@/workers/shared.js", () => ({
 
 import { gzipSync } from "node:zlib"
 import { videoMaskHandlers } from "../video-mask.js"
+import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 
 const ctx = { jobId: "00000000-0000-4000-8000-0000000000aa", jobUserId: "user1", usageLogId: "ul1", shouldWatermark: true }
 const job = (data: Record<string, unknown>) => ({ data: { jobId: ctx.jobId, ...data }, updateProgress: vi.fn() }) as never
@@ -92,7 +93,7 @@ describe("video-mask handler — one request", () => {
     expect(mocks.uploadFileToR2).toHaveBeenCalledTimes(1)
     expect(mocks.uploadFileToR2).toHaveBeenCalledWith("/tmp/vm/mask.mp4", ctx.jobId, "video", "user1")
     expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, {
-      output_data: { videoUrl: `https://r2/videos/${ctx.jobId}.mp4`, thumbnailUrl: "https://r2/thumb.webp", width: 640, height: 360, frames: 90, chunks: 1, shots: 1, coverage: 0.25, kept: true },
+      output_data: { videoUrl: `https://r2/videos/${ctx.jobId}.mp4`, thumbnailUrl: "https://r2/thumb.webp", width: 640, height: 360, frames: 90, chunks: 1, shots: 1, coverage: 0.25, kept: true, recipe: VIDEO_MASK_RECIPE },
       provider: "sam-3.1",
       provider_cost: 0.03,
     })

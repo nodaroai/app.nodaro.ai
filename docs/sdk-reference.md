@@ -2282,6 +2282,7 @@ interface TrendEstimate {
   holdCredits: number                // what is reserved when it starts
   breakdown: Record<string, number>  // the parts of the quote (with maskingCredits, `masking` is listed but not in the totals)
   maskingCredits?: number            // charged only if the clip is refused and the run retries with the faces masked
+                                     // (0 on a trend whose face mask was approved ahead of time: it masks nothing per run)
 }
 
 interface TrendRun {

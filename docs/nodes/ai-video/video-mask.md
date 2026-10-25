@@ -33,6 +33,8 @@ The mask is an ordinary video, so it connects anywhere a video does. Its main pa
 **Outputs:**
 - `video` (labelled **Mask**) -- the mask video (H.264 MP4). White = the subject.
 
+The finished job also reports `recipe`: the version of the masking algorithm that made the mask. It changes whenever the same clip and settings would give a different mask (a new cut rule or hold, for example), so a mask kept for reuse can tell it is out of date.
+
 ## Limits
 
 - Clips up to **5 minutes at 30 fps**. A faster clip counts proportionally longer — a 60 fps clip is measured at twice its length, so up to 2½ minutes of it — because the model works frame by frame.

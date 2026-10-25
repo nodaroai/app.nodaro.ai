@@ -18,8 +18,15 @@
  * (mode not "off"), a trend pre prompt when it has one, the trend's video
  * engine when it is not Seedance 2.5 (the engine's `engines`), every
  * resolution that engine offers (Seedance 2.5: 480p, 720p and 1080p; Kling 4:
- * 720p and 1080p), Full Quality and trend runs. An environment with no
- * recorded row is unknown, which blocks like an unsupported one.
+ * 720p and 1080p), Full Quality and trend runs, and stored face masks when
+ * it masks (`storedFaceMask`). An environment with no recorded row is
+ * unknown, which blocks like an unsupported one.
+ *
+ * A masked trend also needs an approved face mask that is up to date
+ * (`faceMaskState`, face-mask.ts): none is `face_mask_missing`; one made from
+ * other settings or a source clip since changed, under another Video Mask
+ * recipe, or under another engine recipe than an environment's, is
+ * `face_mask_out_of_date` (one reason each).
  */
 import type { EngineEnvironment } from "../engine-environments.js"
 import { faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
@@ -33,6 +40,7 @@ import {
 import { castSwapImagesSent } from "@nodaro/render-rules"
 import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
 import { promptBudget, TREND_DETAILS_MAX } from "./prompt-budget.js"
+import { faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
 export interface PublishBlocker {
@@ -46,10 +54,12 @@ export interface PublishBlocker {
     | "engine_unknown"
     | "engine_unsupported"
     | "too_many_images"
+    | "face_mask_missing"
+    | "face_mask_out_of_date"
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -57,8 +67,16 @@ export interface PublishBlocker {
   example?: number
   /** The slot keys an example has no pictures for, for `example_slots_incomplete`. */
   slots?: string[]
-  /** What is wrong, for `invalid_data`, `prompt_budget` and `too_many_images`. */
+  /** What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images` and the face mask codes. */
   message?: string
+  /** Why the face mask is out of date: "settings", "core_recipe" or "plugin_recipe" (with `env`). */
+  why?: FaceMaskOutOfDate["why"]
+}
+
+const OUT_OF_DATE_MESSAGES: Readonly<Record<FaceMaskOutOfDate["why"], string>> = {
+  settings: "The source clip or the face masking settings changed since the face mask was made. Make it again.",
+  core_recipe: "Video Mask changed since the face mask was made. Make it again.",
+  plugin_recipe: "This environment's Cast Swap engine masks faces differently since the face mask was made. Make it again.",
 }
 
 const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
@@ -74,7 +92,7 @@ function needsOf(data: TrendVersionData): string[] {
     "trendRun",
     ...kinds,
     ...(data.references.length > 0 ? ["fixedReferences"] : []),
-    ...(faceMaskingOn(data.faceMasking) ? ["faceMasking"] : []),
+    ...(faceMaskingOn(data.faceMasking) ? ["faceMasking", "storedFaceMask"] : []),
     ...(data.prePrompt ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? [engine] : []),
@@ -91,6 +109,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === "fullQuality") return cs.fullQuality !== true
     if (need === "fixedReferences") return cs.fixedReferences !== true
     if (need === "faceMasking") return cs.faceMasking !== true
+    if (need === "storedFaceMask") return cs.storedFaceMask !== true
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)
@@ -148,6 +167,16 @@ export function publishBlockers(
       code: "too_many_images",
       message: `A run can send ${images} images (1 per person, pet or product slot, prepared; 3 per location slot; plus the fixed references); Kling 4 takes at most ${CAST_SWAP_KLING_MAX_IMAGES}.`,
     })
+  }
+
+  if (faceMaskingOn(data.faceMasking)) {
+    const mask = faceMaskState(data, environments, required)
+    if (mask.status === "none") {
+      out.push({ code: "face_mask_missing", message: "This trend masks faces: make its face mask and approve it." })
+    }
+    for (const r of mask.reasons) {
+      out.push({ code: "face_mask_out_of_date", why: r.why, ...(r.why === "plugin_recipe" ? { env: r.env } : {}), message: OUT_OF_DATE_MESSAGES[r.why] })
+    }
   }
 
   const needs = needsOf(data)

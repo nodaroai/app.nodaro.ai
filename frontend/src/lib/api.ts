@@ -11132,6 +11132,35 @@ export interface AdminTrendFaceMasking {
   threshold?: number
 }
 
+/** A trend's approved face mask: its whole source clip, masked once and stored in trend storage. */
+export interface AdminTrendFaceMask {
+  url: string
+  frames: number
+  recipe: { core: string | null; plugin: string }
+  settingsKey: string
+  jobId: string
+  stats: AdminTrendFaceMaskStats
+  approvedAt: string
+  approvedBy: string
+}
+
+export interface AdminTrendFaceMaskStats {
+  shots: number
+  heldFrames: number
+  /** The share of the picture covered, 0–1. */
+  coverage: number
+  droppedRegions: number
+}
+
+/** Why a stored face mask is out of date. */
+export type AdminTrendFaceMaskOutOfDate = { why: "settings" } | { why: "core_recipe" } | { why: "plugin_recipe"; env: string }
+
+/** The draft's face mask, as the server judges it: none, approved and up to date, or out of date (with why). */
+export interface AdminTrendFaceMaskState {
+  status: "none" | "approved" | "out_of_date"
+  reasons: AdminTrendFaceMaskOutOfDate[]
+}
+
 export interface AdminTrendData {
   name: TrendLocalizedText
   description?: TrendLocalizedText
@@ -11144,6 +11173,10 @@ export interface AdminTrendData {
   /** Placed at the start of every run's prompt (hidden from users). */
   prePrompt?: string
   faceMasking?: AdminTrendFaceMasking
+  /** The approved face mask (hidden; written only by the face mask routes, kept by a draft save). */
+  faceMask?: AdminTrendFaceMask
+  /** The face mask job started last and not approved yet (hidden; written only by the face mask routes). */
+  faceMaskJob?: { jobId: string; settingsKey: string; startedAt: string }
   /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
   engine?: AdminTrendEngine
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
@@ -11195,6 +11228,16 @@ export interface AdminTrendDetail {
   published: AdminTrendData | null
   /** The draft's revision: sent back on every draft write; a stale one is a 409 `draft_conflict`. */
   revision: string
+  /** The draft's face mask state (absent from an older server). */
+  faceMaskState?: AdminTrendFaceMaskState
+  /** The face mask being made; `current` = started for the draft's current source and settings. */
+  faceMaskJob?: AdminTrendPendingFaceMaskJob | null
+}
+
+export interface AdminTrendPendingFaceMaskJob {
+  jobId: string
+  startedAt: string
+  current: boolean
 }
 
 /** What a draft write returns. */
@@ -11263,6 +11306,8 @@ export interface TrendEngineEnvironment {
       fullQuality?: boolean
       resolutions?: TrendResolution[]
       trendRun?: boolean
+      storedFaceMask?: boolean
+      faceMaskRecipe?: string
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11276,6 +11321,8 @@ export interface TrendPublishBlocker {
   example?: number
   slots?: string[]
   message?: string
+  /** `face_mask_out_of_date`: why. */
+  why?: AdminTrendFaceMaskOutOfDate["why"]
 }
 
 /** `POST /v1/admin/trends/:id/publish` refused: every reason, to list on the screen. */
@@ -11470,6 +11517,72 @@ export async function deleteAdminTrendTestRun(id: string, jobId: string): Promis
       { method: "DELETE" },
     )
   ).data
+}
+
+/**
+ * Mask the saved draft's whole source clip once (billed to the admin), at `revision`. Follow the job,
+ * then approve it. It returns the job and the draft's new revision (the job is recorded on the draft;
+ * `recorded: false` when it could not be, and the job is still approvable); `draftMoved`: another
+ * write landed meanwhile, so the screen reloads the trend. (The return type is
+ * spelt out: a paid call is one whose declared return type names `jobId`, paid-run-mark-guard.)
+ */
+export async function startAdminTrendFaceMask(
+  id: string,
+  revision: string,
+): Promise<{ jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean }> {
+  return (
+    await apiRequest<{ data: { jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean } }>(
+      `${trendPath(id)}/face-mask`,
+      "apiErr.saveTrend",
+      { method: "POST", body: { revision } },
+    )
+  ).data
+}
+
+/** What approving or clearing the face mask returns: the draft's new revision and its face mask state. */
+export interface TrendFaceMaskWrite extends TrendDraftWrite {
+  faceMask?: AdminTrendFaceMask
+  faceMaskState: AdminTrendFaceMaskState
+}
+
+/** Store a finished face mask job's clip on the draft at `revision`. */
+export async function approveAdminTrendFaceMask(id: string, jobId: string, revision: string): Promise<TrendFaceMaskWrite> {
+  return (
+    await apiRequest<{ data: TrendFaceMaskWrite }>(`${trendPath(id)}/face-mask/approve`, "apiErr.saveTrend", {
+      method: "POST",
+      body: { jobId, revision },
+    })
+  ).data
+}
+
+/** Clear the draft's face mask at `revision`. */
+export async function clearAdminTrendFaceMask(id: string, revision: string): Promise<TrendFaceMaskWrite> {
+  return (
+    await apiRequest<{ data: TrendFaceMaskWrite }>(
+      `${trendPath(id)}/face-mask?revision=${encodeURIComponent(revision)}`,
+      "apiErr.saveTrend",
+      { method: "DELETE" },
+    )
+  ).data
+}
+
+/** A face mask job as the trend screen follows it (`GET /v1/jobs/:id`, the admin's own job). */
+export interface AdminTrendFaceMaskJob {
+  id: string
+  status: string
+  progress?: number | null
+  error_message?: string | null
+  output_data?: {
+    maskedUrl?: string | null
+    reason?: string
+    frames?: number
+    stats?: Partial<AdminTrendFaceMaskStats>
+    [key: string]: unknown
+  } | null
+}
+
+export async function fetchAdminTrendFaceMaskJob(jobId: string): Promise<AdminTrendFaceMaskJob> {
+  return (await apiRequest<{ data: AdminTrendFaceMaskJob }>(`/v1/jobs/${encodeURIComponent(jobId)}`, "apiErr.loadTrends")).data
 }
 
 export async function fetchTrendEngineEnvironments(): Promise<TrendEngineEnvironment[]> {

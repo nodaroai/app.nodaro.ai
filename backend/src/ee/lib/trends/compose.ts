@@ -19,6 +19,13 @@
  * HIDDEN data (source, roleName, references, trendPrompt, prePrompt,
  * faceMasking) goes only into the engine's own fields, never into `display`.
  *
+ * A masked trend whose approved face mask was made from these exact settings
+ * (`storedFaceMaskFor`, face-mask.ts) also sends `storedFaceMask: { url,
+ * frames }`: the engine cuts and pads that masked clip like the source and
+ * masks nothing per run. Out of date or absent, the key is left out and the
+ * run masks per run. (An engine that does not take it gets the body without
+ * it: `withoutUnsupportedStoredMask`, run-helpers.ts.)
+ *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
@@ -36,6 +43,7 @@ import { castSwapImagesSent } from "@nodaro/render-rules"
 import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
+import { storedFaceMaskFor } from "./face-mask.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
@@ -109,6 +117,8 @@ export interface TrendRunBody {
   prePrompt?: string
   postPrompt?: string
   faceMasking?: FaceMasking
+  /** The trend's approved face mask, while it matches the masking sent (never without `faceMasking`). */
+  storedFaceMask?: { url: string; frames: number }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
@@ -279,6 +289,7 @@ export function composeTrendRun(
   }
 
   const masking = faceMaskingOn(data.faceMasking) ? data.faceMasking : undefined
+  const stored = masking ? storedFaceMaskFor(data) : undefined
   const engine = engineOf(data)
   const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
   if (req.draft === true && !castSwapEngineHasDraft(engine)) {
@@ -326,6 +337,7 @@ export function composeTrendRun(
     // the margins the trend means. A run that follows its masked preview takes the preview's
     // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
     ...(masking ? { faceMasking: withResolvedZone(structuredClone(masking)) } : {}),
+    ...(stored ? { storedFaceMask: stored } : {}),
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),

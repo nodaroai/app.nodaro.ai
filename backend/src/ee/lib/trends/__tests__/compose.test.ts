@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest"
 import { CAST_SWAP_POST_PROMPT_MAX, composeTrendRun, TrendRunError } from "../compose.js"
 import { trendRunRequestSchema, trendVersionDataSchema, MAX_TREND_IMAGES } from "../schemas.js"
 import type { TrendRunRequest, TrendSlot, TrendVersionData } from "../types.js"
+import { faceMaskSettingsKey } from "../face-mask.js"
+import { withResolvedZone } from "../../../../lib/cast-swap-face-masking.js"
 
 const img = (n: string) => `https://cdn.example.com/${n}.jpg`
 
@@ -588,5 +590,42 @@ describe("composeTrendRun — chips shown to the person", () => {
   it("a slot without `chips` shows them all: every chip of its kind may be sent", () => {
     const { body } = composeTrendRun(trend(), req({ slots: { lead: { images: [img("me")], body: "new", outfit: "original", hair: "new" } } }))
     expect(roleChips(body, 0)).toEqual({ body: "new", outfit: "original", hair: "new" })
+  })
+})
+
+describe("composeTrendRun — the stored face mask", () => {
+  const MASKING = { mode: "always" as const, threshold: 0.4 }
+  const data = version({ faceMasking: MASKING })
+  const faceMask = {
+    url: "https://cdn.example.com/trends/t-1/mask.mp4",
+    frames: 360,
+    recipe: { core: "2026-10-25", plugin: "1" },
+    settingsKey: faceMaskSettingsKey(data)!,
+    jobId: "fm-1",
+    stats: { shots: 1, heldFrames: 0, coverage: 0.01, droppedRegions: 0 },
+    approvedAt: "2026-10-25T10:00:00.000Z",
+    approvedBy: "admin",
+  }
+
+  it("sends it beside the masking when it was made from these settings", () => {
+    const { body } = composeTrendRun(trend({ ...data, faceMask }), req())
+    expect(body.storedFaceMask).toEqual({ url: faceMask.url, frames: 360 })
+    expect(body.faceMasking).toEqual(withResolvedZone(MASKING))
+    // A preview cuts it like the source: the same stored mask.
+    expect(composeTrendRun(trend({ ...data, faceMask }), req({ preview: true })).body.storedFaceMask).toEqual({ url: faceMask.url, frames: 360 })
+  })
+
+  it("leaves it out when it is out of date or the trend no longer masks (the run masks per run)", () => {
+    const changed = composeTrendRun(trend({ ...data, faceMasking: { ...MASKING, threshold: 0.6 }, faceMask }), req()).body
+    expect(changed).not.toHaveProperty("storedFaceMask")
+    expect(changed.faceMasking).toMatchObject({ threshold: 0.6 })
+    const off = composeTrendRun(trend({ ...data, faceMasking: { mode: "off" }, faceMask }), req()).body
+    expect(off).not.toHaveProperty("storedFaceMask")
+    expect(off).not.toHaveProperty("faceMasking")
+  })
+
+  it("a version with a stored mask still validates", () => {
+    expect(trendVersionDataSchema.safeParse({ ...data, faceMask }).success).toBe(true)
+    expect(trendVersionDataSchema.safeParse({ ...data, faceMask: { ...faceMask, extra: 1 } }).success).toBe(false)
   })
 })

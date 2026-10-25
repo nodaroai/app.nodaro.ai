@@ -24,7 +24,7 @@
 
 import { dirname, join } from "node:path"
 import { gzipSync, gunzipSync } from "node:zlib"
-import { maskCompositeEffectiveAudioSource, maskCompositeUsesForeground, resolveMaskCompositeSettings, resolveVideoMaskProvider, resolveVideoMaskRedetectSec, VIDEO_MASK_LIMITS } from "@nodaro/shared/media"
+import { maskCompositeEffectiveAudioSource, maskCompositeUsesForeground, resolveMaskCompositeSettings, resolveVideoMaskProvider, resolveVideoMaskRedetectSec, VIDEO_MASK_LIMITS, VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { listObjectsByPrefixWithMeta, readR2ObjectBuffer, uploadFileToR2 } from "../../lib/storage.js"
 import { jobScratchPrefix, uploadJobScratchBuffer, uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -312,6 +312,8 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         ...(held ? { heldFrames: held.heldFrames } : {}),
         // Size and zone together (a region dropped by both counts once).
         ...(filtered ? { droppedRegions: filtered.droppedRegions } : {}),
+        // What made this mask: a mask stored and reused later is out of date once it changes.
+        recipe: VIDEO_MASK_RECIPE,
       },
       provider: model,
       provider_cost: cost,
