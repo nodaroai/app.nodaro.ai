@@ -1,5 +1,23 @@
 # @nodaro/sdk
 
+## 2.45.0
+
+### Minor Changes
+
+- 12f9aac: Trends show their original. `TrendDetail.original?` (`TrendOriginal`: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`) is the clip every run of the trend starts from, as you may show it: a browser-safe (H.264 MP4) copy, with where the 4-second preview starts when the trend offers one (`0` included). It is absent only on a version without a display copy (and from an older server). `TrendDetailSlot.hintImageUrl?` is a picture of who or what the slot is in the original, for an empty slot; a run never sends it. A trend may now be published with no example: its `examples` is `[]` and its card's `cover` is the original's copy (`TrendCard.cover` is the first example, else the original). On such a trend, leave `TrendRunRequest.example` out (sending one answers `400 example_out_of_range`): an optional slot left out then stays as in the original (no pictures, `fromExample: false`), and the run records `TrendRun.example` `0` ("no example"; never show it as "Example 0").
+
+### Patch Changes
+
+- 906b8ed: Estimated credit figures are marked `≈N` (was `~N`) in `nodaro nodes list`, `nodaro models cost` and `nodaro workflows` output, matching the editor and the apps. The SDK's doc comments for estimate fields say `≈N` too; no type or behaviour changes.
+- 7c5daf4: `RenderFinalQuote` gains `holdCredits`: what the run holds while it renders (a UGC clip at its hold), never below `estimatedCredits`. `sufficient` is checked against it, and a refused `renderFinal` names it as `InsufficientCreditsError.required`.
+- 14402d5: Video Mask: `holdLastMask` / `--hold-last-mask` now say the mask is held for at most 1 second.
+- 1999c19: Video Mask re-detection: `nodaro media video-mask --redetect-every <sec>` (0 = off, or 1–10) sends `redetectEverySec`, and `client.media.videoMask` documents it — the subject is detected again every that many seconds, so someone who walks in or turns to the camera mid-shot is masked. Slower; same price.
+- Updated dependencies [2c92a8c]
+- Updated dependencies [14402d5]
+- Updated dependencies [1999c19]
+  - @nodaro/shared@3.42.0
+  - @nodaro/prompts@1.42.1
+
 ## 2.44.0
 
 ### Minor Changes

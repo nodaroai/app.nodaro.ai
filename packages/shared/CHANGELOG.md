@@ -1,5 +1,13 @@
 # @nodaro/shared
 
+## 3.42.0
+
+### Minor Changes
+
+- 2c92a8c: `seedance` (Seedance 1.5 Pro) is retired: the provider stopped serving the model on 2026-10-25. It leaves the model catalog, `IMAGE_TO_VIDEO_PROVIDERS` / `TEXT_TO_VIDEO_PROVIDERS` / `VIDEO_GEN_PROVIDERS`, `OBJECT_MOTION_PROVIDERS` (where `seedance-2-mini` takes its place), the duration and audio tables, `PIPELINE_PINNABLE_VIDEO_MODELS` and the prompt-wizard descriptions. New `RETIRED_VIDEO_PROVIDERS` + `canonicalVideoProvider()` map a retired id to the model it now runs as (`seedance` → `seedance-2-mini`), and `resolveVideoProviderForMode` applies it, so a saved or sent `seedance` keeps working. The CLI's `objects motion --provider` offers `seedance-2-mini` instead of `seedance`. Code that names the literal `"seedance"` as one of those lists' member types (`ObjectMotionProvider`, `TextToVideoProvider`, `VideoGenProvider`, `PipelinePinnableVideoModel`) no longer compiles: pass it through `canonicalVideoProvider` or use `seedance-2-mini`.
+- 14402d5: `VIDEO_MASK_LIMITS.HOLD_MAX_SEC` (1): Video Mask's `holdLastMask` holds a mask for at most one second of frames.
+- 1999c19: Video Mask `redetectEverySec`: `VIDEO_MASK_LIMITS.REDETECT_EVERY_SEC_MIN` / `_MAX` / `_STEP` (1 / 10 / 1), `VIDEO_MASK_DEFAULTS.redetectEverySec` (0 = off), `resolveVideoMaskRedetectSec`, and the optional `redetectEverySec` on `VideoMaskRequest` — detect the subject again every N seconds (the clip, or each shot with `perShot`, is sent in pieces of at most that length), so a subject that appears mid-shot is masked. Not a cut: `holdLastMask` holds across these boundaries. Slower; same price.
+
 ## 3.41.0
 
 ### Minor Changes

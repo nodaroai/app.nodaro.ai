@@ -1,5 +1,30 @@
 # @nodaro/cli
 
+## 1.40.0
+
+### Minor Changes
+
+- 1999c19: Video Mask re-detection: `nodaro media video-mask --redetect-every <sec>` (0 = off, or 1–10) sends `redetectEverySec`, and `client.media.videoMask` documents it — the subject is detected again every that many seconds, so someone who walks in or turns to the camera mid-shot is masked. Slower; same price.
+
+### Patch Changes
+
+- 906b8ed: Estimated credit figures are marked `≈N` (was `~N`) in `nodaro nodes list`, `nodaro models cost` and `nodaro workflows` output, matching the editor and the apps. The SDK's doc comments for estimate fields say `≈N` too; no type or behaviour changes.
+- 7c5daf4: `nodaro workflows render-final --estimate`: a quote the balance does not cover names what the run holds while it renders when that is more than its price.
+- 2c92a8c: `seedance` (Seedance 1.5 Pro) is retired: the provider stopped serving the model on 2026-10-25. It leaves the model catalog, `IMAGE_TO_VIDEO_PROVIDERS` / `TEXT_TO_VIDEO_PROVIDERS` / `VIDEO_GEN_PROVIDERS`, `OBJECT_MOTION_PROVIDERS` (where `seedance-2-mini` takes its place), the duration and audio tables, `PIPELINE_PINNABLE_VIDEO_MODELS` and the prompt-wizard descriptions. New `RETIRED_VIDEO_PROVIDERS` + `canonicalVideoProvider()` map a retired id to the model it now runs as (`seedance` → `seedance-2-mini`), and `resolveVideoProviderForMode` applies it, so a saved or sent `seedance` keeps working. The CLI's `objects motion --provider` offers `seedance-2-mini` instead of `seedance`. Code that names the literal `"seedance"` as one of those lists' member types (`ObjectMotionProvider`, `TextToVideoProvider`, `VideoGenProvider`, `PipelinePinnableVideoModel`) no longer compiles: pass it through `canonicalVideoProvider` or use `seedance-2-mini`.
+- 12f9aac: `nodaro trends get` names the trend's original among what it shows (the page now carries `original`, and a slot's `hintImageUrl`), and `--example` says to leave it out on a trend with no example, whose empty optional slots stay as in the original.
+- 14402d5: Video Mask: `holdLastMask` / `--hold-last-mask` now say the mask is held for at most 1 second.
+- Updated dependencies [906b8ed]
+- Updated dependencies [7c5daf4]
+- Updated dependencies [2c92a8c]
+- Updated dependencies [12f9aac]
+- Updated dependencies [14402d5]
+- Updated dependencies [14402d5]
+- Updated dependencies [1999c19]
+- Updated dependencies [1999c19]
+  - @nodaro/sdk@2.45.0
+  - @nodaro/shared@3.42.0
+  - @nodaro/prompts@1.42.1
+
 ## 1.39.0
 
 ### Minor Changes
