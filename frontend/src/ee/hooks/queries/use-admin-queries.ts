@@ -28,6 +28,9 @@ import {
   removeAdminTrendExample,
   publishAdminTrend,
   unpublishAdminTrend,
+  archiveAdminTrend,
+  restoreAdminTrend,
+  deleteAdminTrendTestRun,
   fetchTrendEngineEnvironments,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
@@ -1670,6 +1673,33 @@ export function useUnpublishTrend(id: string) {
     onError: handledByScreen,
     mutationFn: () => unpublishAdminTrend(id),
     onSuccess: () => invalidate(id),
+  })
+}
+
+export function useArchiveTrend(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: () => archiveAdminTrend(id),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function useRestoreTrend(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: () => restoreAdminTrend(id),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function useDeleteTrendTestRun(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (jobId: string) => deleteAdminTrendTestRun(id, jobId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.trendTestRuns(id) }),
   })
 }
 

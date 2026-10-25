@@ -11266,6 +11266,7 @@ export const ja: ChromeDict = {
   "apiErr.updateTutorialFlag": "チュートリアルフラグを更新できませんでした",
   "apiErr.loadTrends": "トレンドを読み込めませんでした",
   "apiErr.saveTrend": "トレンドを保存できませんでした",
+  "apiErr.deleteTrendRun": "実行を削除できませんでした",
   "apiErr.updateTemplateListing": "テンプレートを更新できませんでした",
   "apiErr.estimateVideoCredits": "動画のクレジットを見積もれませんでした",
   "apiErr.loadCredentials": "認証情報を読み込めませんでした",

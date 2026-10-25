@@ -11266,6 +11266,7 @@ export const ko: ChromeDict = {
   "apiErr.updateTutorialFlag": "튜토리얼 플래그를 업데이트하지 못했습니다",
   "apiErr.loadTrends": "트렌드를 불러오지 못했습니다",
   "apiErr.saveTrend": "트렌드를 저장하지 못했습니다",
+  "apiErr.deleteTrendRun": "실행을 삭제하지 못했습니다",
   "apiErr.updateTemplateListing": "템플릿을 업데이트하지 못했습니다",
   "apiErr.estimateVideoCredits": "동영상 예상 크레딧을 계산하지 못했습니다",
   "apiErr.loadCredentials": "자격 증명을 불러오지 못했습니다",

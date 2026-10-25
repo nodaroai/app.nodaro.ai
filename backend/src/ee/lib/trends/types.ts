@@ -104,7 +104,8 @@ export interface TrendVersionData {
   examples: TrendExample[]
 }
 
-export type TrendStatus = "draft" | "published" | "unpublished"
+/** `archived`: put away by an admin — off the catalog, kept with its runs (migration 559). */
+export type TrendStatus = "draft" | "published" | "unpublished" | "archived"
 export type TrendBadge = "trending" | "new"
 
 export interface TrendRow {

@@ -11138,7 +11138,8 @@ export type AdminTrendKlingLength = "cut-end" | "cut-start"
 /** Cast Swap's video engines: Seedance 2.5 (480p draft, 720p, 1080p) or Kling 4 (720p, 1080p; no draft). */
 export type AdminTrendEngine = "seedance-2-5" | "kling-4"
 
-export type TrendStatus = "draft" | "published" | "unpublished"
+/** `archived`: put away by an admin — off the catalog, kept with its runs. */
+export type TrendStatus = "draft" | "published" | "unpublished" | "archived"
 export type TrendBadge = "trending" | "new"
 
 export interface AdminTrendRow {
@@ -11410,6 +11411,35 @@ export async function publishAdminTrend(id: string, revision?: string): Promise<
 
 export async function unpublishAdminTrend(id: string): Promise<AdminTrendRow> {
   return (await apiRequest<{ data: AdminTrendRow }>(`${trendPath(id)}/unpublish`, "apiErr.saveTrend", { method: "POST" })).data
+}
+
+/** Put a trend away: off the catalog, kept with its versions and runs. */
+export async function archiveAdminTrend(id: string): Promise<AdminTrendRow> {
+  return (await apiRequest<{ data: AdminTrendRow }>(`${trendPath(id)}/archive`, "apiErr.saveTrend", { method: "POST" })).data
+}
+
+/** Bring an archived trend back, unpublished (a draft when it was never published). */
+export async function restoreAdminTrend(id: string): Promise<AdminTrendRow> {
+  return (await apiRequest<{ data: AdminTrendRow }>(`${trendPath(id)}/restore`, "apiErr.saveTrend", { method: "POST" })).data
+}
+
+/** What deleting a test run removed. */
+export interface AdminTrendRunDeleteResult {
+  deleted: boolean
+  libraryRows: number
+  filesDeleted: number
+  filesKept: number
+}
+
+/** Delete an admin's test run of trend `id`, with its media. 409 `run_in_progress` while it runs. */
+export async function deleteAdminTrendTestRun(id: string, jobId: string): Promise<AdminTrendRunDeleteResult> {
+  return (
+    await apiRequest<{ data: AdminTrendRunDeleteResult }>(
+      `${trendPath(id)}/test-runs/${encodeURIComponent(jobId)}`,
+      "apiErr.deleteTrendRun",
+      { method: "DELETE" },
+    )
+  ).data
 }
 
 export async function fetchTrendEngineEnvironments(): Promise<TrendEngineEnvironment[]> {

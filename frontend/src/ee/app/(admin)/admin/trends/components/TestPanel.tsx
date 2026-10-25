@@ -5,9 +5,14 @@
 // any one's composed engine prompt can be opened (admins only, never users).
 // Every chip of every slot can be set here, the ones hidden from people too,
 // so each variant can be tried before choosing what people see.
+//
+// "Copy inputs" fills the form with a run's pictures, chips, preview,
+// resolution, draft and details, to make another run close to it — the run is
+// started with Run test as always, against the saved draft. "Delete" removes a
+// run and its media after a confirmation (not while it is running).
 
-import { useState } from "react"
-import { Eye, Loader2, Play, Sparkles, X } from "lucide-react"
+import { useRef, useState } from "react"
+import { Copy, Eye, Loader2, Play, Sparkles, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +29,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -32,6 +38,7 @@ import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineHasDraft } from "@nodaro
 import type { AdminTrendEngine, AdminTrendRun, AdminTrendSlot, TrendChipKey, TrendChoice, TrendResolution, TrendTestRunRequest } from "@/lib/api"
 import {
   isTrendRunInFlight,
+  useDeleteTrendTestRun,
   useStartTrendTestRun,
   useTrendRunPrompt,
   useTrendTestRuns,
@@ -76,6 +83,47 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
   const draftable = hasDraft && resolution === "480p"
   const [details, setDetails] = useState("")
   const [promptOf, setPromptOf] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<AdminTrendRun | null>(null)
+  const remove = useDeleteTrendTestRun(trendId)
+  const formTop = useRef<HTMLDivElement>(null)
+
+  /** The form set to `r`'s inputs, by slot key; a slot it filled from an example stays empty. */
+  const copyInputs = (r: AdminTrendRun) => {
+    const bySlot = new Map(r.slots.map((x) => [x.key, x]))
+    const nextImages: Record<string, string[]> = {}
+    const nextChips: Record<string, ChipChoices> = {}
+    for (const s of slots) {
+      const used = bySlot.get(s.key)
+      if (!used) continue
+      if (!used.fromExample && used.images.length > 0) nextImages[s.key] = used.images.slice(0, MAX_IMAGES_PER_SLOT)
+      const set = Object.fromEntries(CHIPS_BY_KIND[s.kind].filter((c) => used[c]).map((c) => [c, used[c]])) as ChipChoices
+      if (Object.keys(set).length > 0) nextChips[s.key] = set
+    }
+    setImages(nextImages)
+    setChips(nextChips)
+    setPreview(r.preview)
+    if ((resolutions as readonly string[]).includes(r.resolution)) setResolution(r.resolution as TrendResolution)
+    setDraft(r.draft)
+    setDetails(r.details ?? "")
+    const gone = r.slots.filter((x) => !slots.some((s) => s.key === x.key)).map((x) => x.label || x.key)
+    toast.success(
+      gone.length > 0
+        ? `Inputs copied. Not in the saved draft any more: ${gone.join(", ")}.`
+        : "Inputs copied. Change what you want, then Run test.",
+    )
+    formTop.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const confirmDelete = () => {
+    if (!deleting) return
+    remove.mutate(deleting.jobId, {
+      onSuccess: () => {
+        toast.success("Run deleted")
+        setDeleting(null)
+      },
+      onError: (err: Error) => toast.error(err.message),
+    })
+  }
 
   const add = (key: string, urls: string[]) =>
     setImages((m) => ({ ...m, [key]: [...(m[key] ?? []), ...urls].slice(0, MAX_IMAGES_PER_SLOT) }))
@@ -129,7 +177,7 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={formTop} className="flex scroll-mt-4 flex-col gap-4">
       {slots.length === 0 ? (
         <p className="text-sm text-muted-foreground">Save a draft with slots to test it.</p>
       ) : (
@@ -271,6 +319,8 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
                 promoting={promotingId === r.jobId}
                 onPromote={() => onPromote(r.jobId)}
                 onShowPrompt={() => setPromptOf(r.jobId)}
+                onCopyInputs={() => copyInputs(r)}
+                onDelete={() => setDeleting(r)}
               />
             ))}
           </ul>
@@ -278,6 +328,25 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
       </div>
 
       <PromptDialog jobId={promptOf} onClose={() => setPromptOf(null)} />
+      <Dialog open={deleting !== null} onOpenChange={(o) => !o && !remove.isPending && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this run?</DialogTitle>
+            <DialogDescription>
+              The run and its video and pictures are deleted for good. An example made from it stays: examples are copies.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="min-h-9" disabled={remove.isPending} onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" className="min-h-9" disabled={remove.isPending} onClick={confirmDelete}>
+              {remove.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -287,12 +356,17 @@ function RunCard({
   promoting,
   onPromote,
   onShowPrompt,
+  onCopyInputs,
+  onDelete,
 }: {
   readonly run: AdminTrendRun
   readonly promoting: boolean
   readonly onPromote: () => void
   readonly onShowPrompt: () => void
+  readonly onCopyInputs: () => void
+  readonly onDelete: () => void
 }) {
+  const inFlight = isTrendRunInFlight(run)
   const why = run.status !== "completed"
     ? "Only a finished run can be an example."
     : run.preview
@@ -364,6 +438,20 @@ function RunCard({
           </Button>
           <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onShowPrompt}>
             <Eye className="mr-1 h-4 w-4" /> Show prompt
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onCopyInputs}>
+            <Copy className="mr-1 h-4 w-4" /> Copy inputs
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="min-h-9 text-destructive"
+            disabled={inFlight}
+            title={inFlight ? "Wait for it to finish to delete it." : undefined}
+            onClick={onDelete}
+          >
+            <Trash2 className="mr-1 h-4 w-4" /> Delete
           </Button>
           {why && run.status === "completed" && <span className="text-muted-foreground">{why}</span>}
         </div>

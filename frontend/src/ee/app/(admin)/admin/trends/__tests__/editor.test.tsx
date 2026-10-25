@@ -474,6 +474,85 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(screen.getAllByTitle(/^Full Quality version of run/)).toHaveLength(1)
   })
 
+  it("Copy inputs fills the test form with a run's pictures, chips and details, and Run test sends them", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots: [slot({ chips: ["outfit"] })] }) } })
+    routes[`GET ${BASE}/test-runs`] = () => ({
+      body: {
+        data: [
+          run({
+            details: "slower, please",
+            slots: [
+              { key: "dancer", label: "Dancer", kind: "person", images: ["https://cdn.test/me.png"], fromExample: false, hair: "original" },
+              { key: "gone", label: "Removed slot", kind: "person", images: ["https://cdn.test/x.png"], fromExample: false },
+            ],
+          }),
+        ],
+      },
+    })
+    routes[`POST ${BASE}/test-runs`] = () => ({ status: 202, body: { data: { jobId: RUN_ID } } })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /copy inputs/i }))
+    expect(screen.getByRole("combobox", { name: "Test dancer Hair" })).toHaveTextContent("Keep original")
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Removed slot"))
+    await user.click(screen.getByRole("button", { name: /run test/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/test-runs`)).toHaveLength(1))
+    expect(sentTo(`POST ${BASE}/test-runs`)[0]).toMatchObject({
+      slots: { dancer: { images: ["https://cdn.test/me.png"], hair: "original" } },
+      details: "slower, please",
+      resolution: "480p",
+    })
+  })
+
+  it("Copy inputs leaves a slot the run filled from an example empty", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}/test-runs`] = () => ({
+      body: { data: [run({ slots: [{ key: "dancer", label: "Dancer", kind: "person", images: ["https://cdn.test/ex.png"], fromExample: true }] })] },
+    })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /copy inputs/i }))
+    expect(screen.queryByAltText("dancer picture 1")).not.toBeInTheDocument()
+  })
+
+  it("deletes a run after confirming, and not while it runs", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}/test-runs`] = () => ({ body: { data: [run(), run({ jobId: "running-1", status: "processing", progress: 10 })] } })
+    routes[`DELETE ${BASE}/test-runs/${RUN_ID}`] = () => ({ body: { data: { deleted: true, libraryRows: 1, filesDeleted: 2, filesKept: 0 } } })
+    renderEditor()
+    const deletes = await screen.findAllByRole("button", { name: /^delete$/i })
+    expect(deletes).toHaveLength(2)
+    expect(deletes[1]).toBeDisabled()
+    await user.click(deletes[0]!)
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText(/examples are copies/i)).toBeInTheDocument()
+    expect(sentTo(`DELETE ${BASE}/test-runs/${RUN_ID}`)).toHaveLength(0)
+    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }))
+    await waitFor(() => expect(sentTo(`DELETE ${BASE}/test-runs/${RUN_ID}`)).toHaveLength(1))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Run deleted"))
+  })
+
+  it("archives a trend from the publish bar", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/archive`] = () => ({ body: { data: { ...detail().trend, status: "archived" } } })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /^archive$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/archive`)).toHaveLength(1))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Archived"))
+  })
+
+  it("an archived trend can't be published until restored", async () => {
+    const user = userEvent.setup()
+    const archived = detail()
+    archived.trend = { ...archived.trend, status: "archived", publishedVersion: 1 }
+    routes[`GET ${BASE}`] = () => ({ body: { data: archived } })
+    routes[`POST ${BASE}/restore`] = () => ({ body: { data: { ...archived.trend, status: "unpublished" } } })
+    renderEditor()
+    expect(await screen.findByRole("button", { name: /^publish$/i })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: /^archive$/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /^restore$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/restore`)).toHaveLength(1))
+  })
+
   it("shows a run's engine prompt", async () => {
     const user = userEvent.setup()
     routes[`GET /v1/admin/trends/test-runs/${RUN_ID}/prompt`] = () => ({ body: { data: { prompt: "Replace {role:1} with…" } } })
