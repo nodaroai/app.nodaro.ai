@@ -75,7 +75,8 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`reference_order\`
 - \`palette_id\`
 - \`moodboard_id\`
-- \`subject\`",
+- \`subject\`
+- \`user_request\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
 **Credit cost:** \`3-682\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
@@ -287,7 +288,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`reference_video_captions\`
 - \`reference_audio_urls\`
 - \`character_references\`
-- \`keep_original_sound\`",
+- \`keep_original_sound\`
+- \`user_request\`",
   "node-data-shape": "**Type:** \`generate-video\`
 **Category:** ai
 **Credit cost:** \`11-9405\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
@@ -765,7 +767,8 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`auto_loop_trim\`
 - \`connected_references\`
 - \`described_references\`
-- \`reference_order\`",
+- \`reference_order\`
+- \`user_request\`",
   "node-data-shape": "**Type:** \`image-to-video\`
 **Category:** ai
 **Credit cost:** \`33-9405\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.

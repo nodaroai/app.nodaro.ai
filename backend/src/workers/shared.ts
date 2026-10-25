@@ -332,7 +332,7 @@ export async function markJobCompletedDetailed(
   // below is then exactly what ran before.
   if (hasCredits()) {
     const atomic = await completeJobAndSettle(jobId, completion)
-    if (atomic !== "unavailable") return atomic
+    if (atomic !== "unavailable") return afterCompletion(jobId, atomic)
   }
   // CAS on LIVE statuses (audit H3) — not .neq("cancelled"): the old guard
   // let a slow finalizer flip a FAILED row (already exhaustion-refunded)
@@ -355,7 +355,20 @@ export async function markJobCompletedDetailed(
     return "lost_race"
   }
   await settleManagedJobOnCompletion(jobId, (data[0] as { usage_log_id?: string | null }).usage_log_id)
-  return "completed"
+  return afterCompletion(jobId, "completed")
+}
+
+/**
+ * After a completion: an MCP conversation node waiting on this job gets its
+ * result (lib/mcp/flows/hydrate.ts). Not awaited and never throws, so the
+ * completion and its settlement are exactly as they were; a dynamic import, so
+ * this module's graph (and every worker suite that mocks it) is unchanged.
+ */
+function afterCompletion<T extends MarkJobCompletedOutcome | "completed" | "lost_race">(jobId: string, outcome: T): T {
+  if (outcome === "completed") {
+    void import("../lib/mcp/flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
+  }
+  return outcome
 }
 
 /** What `public.complete_job_and_settle` answers (migrations 513, 514). */

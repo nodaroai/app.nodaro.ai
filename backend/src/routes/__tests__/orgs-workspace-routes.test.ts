@@ -142,11 +142,12 @@ afterEach(async () => {
 // Chain builders. Each returns the spies the assertions need.
 // ---------------------------------------------------------------------------
 
-/** `.select().eq(user_id).<workspace filter>.is(parent).order().limit()` */
+/** `.select().eq(user_id).<workspace filter>.is(parent).is(mcp hub).order().limit()` */
 function workflowListChain(rows: unknown[] = []) {
   const limit = vi.fn().mockResolvedValue({ data: rows, error: null })
   const order = vi.fn().mockReturnValue({ limit })
-  const isParent = vi.fn().mockReturnValue({ order })
+  const isHub = vi.fn().mockReturnValue({ order })
+  const isParent = vi.fn().mockReturnValue({ is: isHub })
   const wsIs = vi.fn().mockReturnValue({ is: isParent })
   const wsEq = vi.fn().mockReturnValue({ is: isParent })
   const userEq = vi.fn().mockReturnValue({ is: wsIs, eq: wsEq })

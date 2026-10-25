@@ -180,6 +180,7 @@ Needs `workflows:execute`.
 | `described_references[].name` | string | yes | At most 80 characters. |
 | `described_references[].description` | string | yes | At most 2000 characters. |
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 
 ## `apply_audio_fx`
 
@@ -1122,6 +1123,7 @@ Needs `workflows:execute`.
 | `palette_id` | string |  | Palette id (list_palettes): its colours steer the image. At most 36 characters. |
 | `moodboard_id` | string |  | Moodboard id (list_moodboards): description joins the prompt, images go as style references. At most 36 characters. |
 | `subject` | object (map of string or string[] or number) |  | Who is in the shot as catalog ids, { field: id \| [ids] }: person / styling fields, heldProp, material, animal (get_picker_catalog). |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 
 ## `generate_location`
 
@@ -1404,6 +1406,7 @@ Needs `workflows:execute`.
 | `character_references[].name` | string |  |  |
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
 | `keep_original_sound` | boolean |  | kling-4: keep reference videos' own sound. |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 
 ## `get_app_inputs`
 
@@ -1721,6 +1724,7 @@ Needs `workflows:execute`.
 | `negative_prompt` | string |  | At most 5000 characters. |
 | `seed` | integer |  | At least 0. |
 | `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 
 ## `image_to_text`
 
@@ -2191,6 +2195,7 @@ Needs `workflows:execute`.
 | `structured.lens.focalLength` | string |  |  |
 | `structured.lens.aperture` | string |  |  |
 | `structured.mood` | string |  |  |
+| `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 
 ## `modify_video`
 

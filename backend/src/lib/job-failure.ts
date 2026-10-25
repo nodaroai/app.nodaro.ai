@@ -109,7 +109,11 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
     console.error(`[job-failure] failed to mark job ${jobId} failed:`, error.message)
     return "error"
   }
-  return Array.isArray(data) && data.length > 0 ? "flipped" : "missed"
+  if (!(Array.isArray(data) && data.length > 0)) return "missed"
+  // An MCP conversation node waiting on this job shows the failure
+  // (lib/mcp/flows/hydrate.ts). Not awaited and never throws.
+  void import("./mcp/flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
+  return "flipped"
 }
 
 /**

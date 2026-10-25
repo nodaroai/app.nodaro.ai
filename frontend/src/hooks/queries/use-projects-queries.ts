@@ -196,6 +196,8 @@ export function useProjectData(projectId: string | undefined) {
           .from("workflows")
           .select("id, project_id, folder_id, name, created_at, updated_at")
           .eq("project_id", projectId!)
+          // A month's MCP conversation hub is a container: never a card to open or delete.
+          .is("settings->mcpHub", null)
           .order("created_at", { ascending: false }),
       ])
       if (foldersRes.error) throw foldersRes.error

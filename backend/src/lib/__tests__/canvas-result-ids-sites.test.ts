@@ -50,6 +50,7 @@ const RESOLVES: ReadonlyMap<string, string> = new Map([
  *  hand out an immutable snapshot resolved when it was taken. */
 const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["ee/copilot/abandoned-sweep.ts::workflows", "only asks whether an abandoned copilot graph is empty"],
+  ["lib/mcp/flows/workflow-delta.ts::workflows", "an MCP conversation's own writer: an id-keyed delta that adds a node or lands one job's result and writes no other node back; it hands no saved result to a client or an engine"],
   ["ee/copilot/tools/edit-workflow.ts::workflows", "the copilot edits configuration; its graph view drops generated output (EXECUTION_DATA_KEYS) and the write carries results back as stored"],
   ["ee/copilot/tools/get-graph.ts::workflows", "projectData / summarizeData drop generated output (EXECUTION_DATA_KEYS) before the model sees the graph"],
   ["ee/copilot/tools/run-and-execution.ts::workflows", "reads one node's type and config to describe a run proposal"],

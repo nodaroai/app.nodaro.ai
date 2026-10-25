@@ -177,6 +177,8 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           .from("workflows")
           .select(`${WORKFLOW_META_COLS}, cover_node_types`)
           .eq("project_id", projectId)
+          // A month's MCP conversation hub is a container: never a card to open or delete.
+          .is("settings->mcpHub", null)
           .order("created_at", { ascending: false }),
       ])
 
@@ -197,6 +199,8 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           .from("workflows")
           .select(WORKFLOW_META_COLS)
           .eq("project_id", projectId)
+          // A month's MCP conversation hub is a container: never a card to open or delete.
+          .is("settings->mcpHub", null)
           .order("created_at", { ascending: false })
         if (retry.error) {
           set({ error: retry.error.message, loading: false })

@@ -60,6 +60,7 @@ export function useWorkflowSearch(search: string, projectMap: Map<string, string
           .from("workflows")
           .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
           .ilike("name", `%${search}%`)
+          .is("settings->mcpHub", null)
           .order("updated_at", { ascending: false })
           .limit(20)
         query = workspaceId

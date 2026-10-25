@@ -103,7 +103,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
       dbQuery = dbQuery.is("workspace_id", null)
     }
 
-    dbQuery = dbQuery.is("parent_workflow_id", null).limit(200)
+    dbQuery = dbQuery.is("parent_workflow_id", null).is("settings->mcpHub", null).limit(200)
 
     if (projectId) {
       dbQuery = dbQuery.eq("project_id", projectId)

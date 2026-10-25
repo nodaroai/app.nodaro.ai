@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { buildMcpServer } from "../lib/mcp/server.js"
 import { handleMcpRequest } from "../lib/mcp/fastify-adapter.js"
-import { attachUserRequestProbe, userRequestProbeFor } from "../lib/mcp/session-probe.js"
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { conversationIdentityFromHeaders } from "../lib/mcp/flows/conversation-key.js"
 import { config } from "../lib/config.js"
 import { mcpBaseUrl } from "../lib/deployment-urls.js"
 import type { Scope } from "../lib/scopes.js"
@@ -89,10 +88,8 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
       scopes,
       clientName,
       fastify: app,
-      // Conversation-boundary experiment, for listed accounts only (session-probe.ts).
-      ...(userRequestProbeFor(req.userId)
-        ? { beforeRegister: (s: McpServer) => attachUserRequestProbe(s, (obj, msg) => req.log.info(obj, msg)) }
-        : {}),
+      // Which chat this call belongs to, so it lands in that conversation's flow.
+      conversation: conversationIdentityFromHeaders(req.headers, clientName),
     })
     await handleMcpRequest(server, req, reply)
   })

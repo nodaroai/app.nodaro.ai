@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import Fastify from "fastify"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { handleMcpRequest } from "../fastify-adapter.js"
@@ -6,7 +6,7 @@ import { handleMcpRequest } from "../fastify-adapter.js"
 function app() {
   const fastify = Fastify()
   fastify.post("/mcp", async (req, reply) => {
-    const server = new McpServer({ name: "probe-test", version: "1.0.0" }, { capabilities: { tools: {} } })
+    const server = new McpServer({ name: "session-id-test", version: "1.0.0" }, { capabilities: { tools: {} } })
     server.registerTool("ping", { description: "ping" }, async () => ({ content: [{ type: "text", text: "pong" }] }))
     await handleMcpRequest(server, req, reply)
   })
@@ -18,22 +18,11 @@ const INIT = {
   jsonrpc: "2.0",
   id: 1,
   method: "initialize",
-  params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "probe", version: "0" } },
+  params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "session-id", version: "0" } },
 }
 
-describe("handleMcpRequest with the session probe", () => {
-  afterEach(() => {
-    delete process.env.MCP_SESSION_PROBE
-  })
-
-  it("issues no session id while the probe is off", async () => {
-    const res = await app().inject({ method: "POST", url: "/mcp", headers: HEADERS, payload: INIT })
-    expect(res.statusCode).toBe(200)
-    expect(res.headers["mcp-session-id"]).toBeUndefined()
-  })
-
-  it("issues one on initialize, and a later request carrying it is still served statelessly", async () => {
-    process.env.MCP_SESSION_PROBE = "true"
+describe("handleMcpRequest session ids", () => {
+  it("issues a session id on initialize, and a later request carrying it is still served statelessly", async () => {
     const a = app()
     const init = await a.inject({ method: "POST", url: "/mcp", headers: HEADERS, payload: INIT })
     expect(init.statusCode).toBe(200)

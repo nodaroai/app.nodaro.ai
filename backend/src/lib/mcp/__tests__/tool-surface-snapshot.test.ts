@@ -1285,8 +1285,18 @@ const LIST_JOBS_SOURCES_BYTES = 188
 // total − 496_638 = 959 B; the 73 B of headroom carry across.
 const CAST_SWAP_ENGINE_BYTES = 959
 
+// MCP conversations as flows: the five verbs whose calls become conversation nodes
+// (flows/user-request.ts USER_REQUEST_TOOLS) take an optional `user_request` (the user's
+// own words). The list is now measured as a public /mcp client receives it, with a
+// conversation on the session. No tool was added, so the fixture does NOT move.
+// Measured: +115 B on each of generate_image, modify_image, image_to_image,
+// generate_video and animate_image; 497_279 total − 496_704 = 575 B. generate_image
+// (9_222 B) and generate_video (9_202 B) pass the per-tool figure by 115 B at most.
+const USER_REQUEST_ARG_PER_TOOL_BYTES = 115
+const USER_REQUEST_ARG_TOTAL_BYTES = 575
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1441,12 +1451,15 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_DEFAULT_ZONE_BYTES +
     KLING_4_MODELS_BYTES +
     LIST_JOBS_SOURCES_BYTES +
-    CAST_SWAP_ENGINE_BYTES,
+    CAST_SWAP_ENGINE_BYTES +
+    USER_REQUEST_ARG_TOTAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
 async function list(scopes: Scope[]): Promise<ToolDef[]> {
-  const server = await buildMcpServer({ userId: "u1", scopes, clientName: "Claude", fastify: Fastify() })
+  // As a public client receives it: /mcp sessions carry a conversation, so the
+  // mapped verbs take `user_request` (flows/user-request.ts).
+  const server = await buildMcpServer({ userId: "u1", scopes, clientName: "Claude", fastify: Fastify(), conversation: { client: "claude", key: null } })
   const inner = (server as unknown as {
     server: { _requestHandlers: Map<string, (r: unknown, e: unknown) => Promise<{ tools: ToolDef[] }>> }
   }).server

@@ -261,6 +261,8 @@ export function registerWorkflows({
           )
           .eq("user_id", session.userId)
           .eq("project_id", mcpProjectId)
+          // A month's conversation hub (flows/conversation-store.ts) is a container, not a flow.
+          .is("settings->mcpHub", null)
           .order("created_at", { ascending: false })
           .limit(limit)
         if (!args.include_sub_workflows) {
@@ -519,13 +521,18 @@ export function registerWorkflows({
         const mcpProjectId = await ensureMcpProject(session)
         const { data: existing, error: lookupError } = await supabase
           .from("workflows")
-          .select("id, project_id")
+          .select("id, project_id, hub:settings->mcpHub")
           .eq("id", args.workflow_id)
           .eq("user_id", session.userId)
           .maybeSingle()
         if (lookupError) return err(`Error: ${lookupError.message}`)
         if (!existing || (existing as Record<string, unknown>).project_id !== mcpProjectId) {
           return err(`Workflow not found ${projectNoun}`)
+        }
+        // A month's hub holds every conversation of that month: deleting it would
+        // delete them all. Delete a conversation itself instead.
+        if ((existing as Record<string, unknown>).hub) {
+          return err("That is the month's container of MCP conversations; delete a single conversation instead.")
         }
         const { error } = await supabase
           .from("workflows")

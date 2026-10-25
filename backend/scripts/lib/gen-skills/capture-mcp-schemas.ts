@@ -69,6 +69,9 @@ export async function captureMcpToolSchemas(
       scopes: scopes as never,
       clientName: "gen-skills",
       fastify: stubFastify,
+      // As a public /mcp client sees the tools: with a conversation, the verbs whose
+      // calls become conversation nodes take `user_request` (flows/user-request.ts).
+      conversation: { client: "other", key: null },
     })
   } finally {
     McpServer.prototype.registerTool = original

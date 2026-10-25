@@ -261,6 +261,9 @@ describe("useProjectData", () => {
     const mockWorkflows = [
       { id: "w1", project_id: "proj-1", folder_id: null, name: "Workflow 1", created_at: "2026-01-01", updated_at: "2026-01-02" },
     ]
+    const mockWorkflowsIs = vi.fn().mockReturnValue({
+      order: vi.fn().mockResolvedValue({ data: mockWorkflows, error: null }),
+    })
     const mockFrom = vi.fn().mockImplementation((table: string) => {
       if (table === "folders") {
         return {
@@ -273,9 +276,7 @@ describe("useProjectData", () => {
       }
       return {
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: mockWorkflows, error: null }),
-          }),
+          eq: vi.fn().mockReturnValue({ is: mockWorkflowsIs }),
         }),
       }
     })
@@ -290,6 +291,8 @@ describe("useProjectData", () => {
       folders: [{ id: "f1", projectId: "proj-1", name: "Folder 1", createdAt: "2026-01-01" }],
       workflowMetas: [{ id: "w1", projectId: "proj-1", folderId: null, name: "Workflow 1", createdAt: "2026-01-01", updatedAt: "2026-01-02" }],
     })
+    // A month's MCP conversation hub is never a card on the project page.
+    expect(mockWorkflowsIs).toHaveBeenCalledWith("settings->mcpHub", null)
   })
 
   it("queryFn throws when folders query errors", async () => {
@@ -306,7 +309,9 @@ describe("useProjectData", () => {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            is: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
           }),
         }),
       }

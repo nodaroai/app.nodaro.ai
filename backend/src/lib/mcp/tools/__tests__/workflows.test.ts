@@ -123,7 +123,9 @@ describe("list_workflows tool", () => {
     const result = await callTool(server, "list_workflows", { include_sub_workflows: true })
     expect(result.isError).toBeUndefined()
     const isMock = builder.is as ReturnType<typeof vi.fn>
-    expect(isMock).not.toHaveBeenCalled()
+    expect(isMock).not.toHaveBeenCalledWith("parent_workflow_id", null)
+    // The month hubs of MCP conversations are never listed, sub-workflows or not.
+    expect(isMock).toHaveBeenCalledWith("settings->mcpHub", null)
   })
 })
 

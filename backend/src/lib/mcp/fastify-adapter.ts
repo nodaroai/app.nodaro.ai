@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { probeSessionId, probeSnapshot, sessionProbeEnabled } from "./session-probe.js"
+import { randomUUID } from "node:crypto"
 
 /**
  * Bridges Fastify's request/reply pair to the SDK's StreamableHTTPServerTransport.
@@ -57,17 +57,16 @@ export async function handleMcpRequest(
     // Logging is best-effort.
   }
 
-  // Conversation-boundary experiment (session-probe.ts), off unless
-  // MCP_SESSION_PROBE is set: issue a session id on initialize and log what
-  // each request carries that might identify its conversation.
-  if (sessionProbeEnabled()) {
-    try {
-      const body = request.body as Record<string, unknown> | undefined
-      if (body?.method === "initialize") reply.raw.setHeader("mcp-session-id", probeSessionId())
-      request.log.info({ probe: probeSnapshot(request.headers, request.body) }, "[mcp] session probe")
-    } catch {
-      // The probe never affects serving the request.
-    }
+  // Every initialize gets a session id, which the client echoes on each later
+  // request. The transport stays stateless and never validates it (the SDK's
+  // validateSession returns early with no sessionIdGenerator): it is only a
+  // label, and for Claude Code the one that tells its conversations apart
+  // (flows/conversation-key.ts). Without it, Claude Code sends nothing.
+  try {
+    const body = request.body as Record<string, unknown> | undefined
+    if (body?.method === "initialize") reply.raw.setHeader("mcp-session-id", randomUUID())
+  } catch {
+    // Labelling never affects serving the request.
   }
 
   try {
