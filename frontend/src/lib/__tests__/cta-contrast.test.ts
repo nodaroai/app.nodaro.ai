@@ -41,13 +41,30 @@ describe("CTA pink", () => {
     expect(contrastWithWhite("#ff0073")).toBeLessThan(4.5)
   })
 
+  const valuesOf = (token: string) =>
+    [...css.matchAll(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})`, "g"))].map((m) => m[1]!.toLowerCase())
+
   for (const token of ["--cta", "--cta-hover"]) {
     it(`${token} gives white text at least 4.5:1 in both themes`, () => {
-      const values = [...css.matchAll(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})`, "g"))].map((m) => m[1]!)
+      const values = valuesOf(token)
       expect(values.length).toBe(2)
       for (const hex of values) expect(contrastWithWhite(hex)).toBeGreaterThanOrEqual(4.5)
     })
   }
+
+  it("is the pair every Nodaro product shares: #e0006f, hover #c90060 (decided 2026-10-25)", () => {
+    expect(valuesOf("--cta")).toEqual(["#e0006f", "#e0006f"])
+    expect(valuesOf("--cta-hover")).toEqual(["#c90060", "#c90060"])
+    expect(contrastWithWhite("#e0006f")).toBeCloseTo(4.77, 2)
+    expect(contrastWithWhite("#c90060")).toBeCloseTo(5.75, 2)
+  })
+
+  it("the hover is darker than the fill, never lighter, so the hover passes too", () => {
+    expect(luminance("#c90060")).toBeLessThan(luminance("#e0006f"))
+    for (const [fill, hover] of valuesOf("--cta").map((f, i) => [f, valuesOf("--cta-hover")[i]!] as const)) {
+      expect(luminance(hover)).toBeLessThan(luminance(fill))
+    }
+  })
 
   it("no class list puts white text on a brand-pink fill", () => {
     // Every "…" and '…' string is its own class list, the branches of a ternary
