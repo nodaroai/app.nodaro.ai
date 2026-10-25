@@ -9,14 +9,27 @@ vi.mock("../hydrate.js", () => ({ hydrateFlowNodeForJob: hydrate }))
 type Build = (flow: { nodes: Record<string, unknown>[]; settings: Record<string, unknown> }) => Record<string, unknown> | null
 const deltas: Array<Record<string, unknown> | null> = []
 let stored: { nodes: Record<string, unknown>[]; settings: Record<string, unknown> } = { nodes: [], settings: {} }
+const deletes: Array<Record<string, unknown>> = []
+vi.mock("../../../supabase.js", () => {
+  const chain = (filters: Record<string, unknown>) => ({
+    eq: (col: string, val: unknown) => {
+      const next = { ...filters, [col]: val }
+      if (col === "version") deletes.push(next)
+      return chain(next)
+    },
+  })
+  return { supabase: { from: () => ({ delete: () => chain({}) }) } }
+})
+vi.mock("../import-inputs.js", () => ({ importOutsideImages: vi.fn(async () => new Map()) }))
 vi.mock("../workflow-delta.js", () => ({
+  loadFlow: vi.fn(async () => ({ id: "wf-1", version: 1, ...stored })),
   applyFlowDelta: vi.fn(async (_id: string, _user: string, build: Build) => {
     deltas.push(build(stored))
     return true
   }),
 }))
 
-const { prepareFlowNode, commitFlowNode, flowJobFields, flowLinkText } = await import("../record.js")
+const { prepareFlowNode, commitFlowNode, abandonFlowNode, flowJobFields, flowLinkText } = await import("../record.js")
 const { newSession } = await import("../../session.js")
 
 const BODY = { prompt: "two dolphins", provider: "nano-banana-pro", aspectRatio: "16:9", mcp_client: "Claude Code", userId: "u1" }
@@ -50,7 +63,7 @@ describe("prepareFlowNode", () => {
     expect(resolveConversation).toHaveBeenCalledWith(expect.anything(), { client: "claude-code", key: "s-1" }, expect.any(Date), {
       firstRequest: "make me two dolphins",
       prompt: "two dolphins",
-    })
+    }, undefined)
   })
 
   it("does nothing outside a /mcp conversation (the in-app Copilot), for an unmapped call, or when the user turned it off", async () => {
@@ -82,7 +95,7 @@ describe("commitFlowNode", () => {
       prompt: "two dolphins",
       executionStatus: "running",
       currentJobId: "job-1",
-      mcpProvenance: { tool: "generate_image", client: "claude-code", clientName: "Claude Code", userRequest: "make me two dolphins", jobId: "job-1" },
+      mcpProvenance: { tool: "generate_image", outputKey: "generatedImageUrl", client: "claude-code", clientName: "Claude Code", userRequest: "make me two dolphins", jobId: "job-1" },
     })
     expect(delta.settings.mcpConversation).toMatchObject({ key: "s-1", firstRequest: "make me two dolphins" })
     expect(delta.settings.mcpConversation.lastActivityAt).not.toBe("t0")
@@ -95,5 +108,24 @@ describe("commitFlowNode", () => {
     const prepared = (await prepareFlowNode(session(), "/v1/generate-image", BODY))!
     await commitFlowNode(prepared, "job-1")
     expect(deltas[0]).toBeNull()
+  })
+})
+
+describe("abandonFlowNode", () => {
+  it("removes a conversation created for a refused call, at the version it read", async () => {
+    deletes.length = 0
+    const prepared = (await prepareFlowNode(session(), "/v1/generate-image", BODY))!
+    await abandonFlowNode(prepared, () => undefined, 0)
+    expect(deletes).toEqual([{ id: "wf-1", user_id: "u1", version: 1 }])
+  })
+
+  it("keeps a conversation that already holds a step, or that the call did not create", async () => {
+    deletes.length = 0
+    stored = { ...stored, nodes: [{ id: "n", data: {} }] }
+    await abandonFlowNode((await prepareFlowNode(session(), "/v1/generate-image", BODY))!, () => undefined, 0)
+    stored = { ...stored, nodes: [] }
+    resolveConversation.mockResolvedValueOnce({ workflowId: "wf-1", hubId: "hub-1", isNew: false })
+    await abandonFlowNode((await prepareFlowNode(session(), "/v1/generate-image", BODY))!, () => undefined, 0)
+    expect(deletes).toEqual([])
   })
 })

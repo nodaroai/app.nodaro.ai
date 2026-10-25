@@ -1,7 +1,7 @@
 ---
 node_type: text-to-audio
-generated_at: 2026-10-14T00:02:32.345Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:38.193Z
+generated_from: db68a9ee4
 ---
 
 # Text to Audio
@@ -57,6 +57,8 @@ generated_from: b83a9467d
 - `duration`
 - `loop`
 - `prompt_influence`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

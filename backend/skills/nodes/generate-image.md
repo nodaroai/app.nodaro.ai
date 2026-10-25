@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-10-24T22:28:06.428Z
-generated_from: b9f9a7b82
+generated_at: 2026-10-24T23:37:37.851Z
+generated_from: db68a9ee4
 ---
 
 # generate-image
@@ -105,6 +105,7 @@ generated_from: b9f9a7b82
 - `moodboard_id`
 - `subject`
 - `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

@@ -51,6 +51,8 @@ const RESOLVES: ReadonlyMap<string, string> = new Map([
  *  hand out an immutable snapshot resolved when it was taken. */
 const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["ee/copilot/abandoned-sweep.ts::workflows", "only asks whether an abandoned copilot graph is empty"],
+  ["lib/mcp/flows/conversation-store.ts::workflows", "counts a conversation's steps (the 50-step cap) and checks a race loser is still empty; it hands no saved result to a client or an engine"],
+  ["lib/mcp/flows/history.ts::workflows", "reads only which jobs the conversations already hold (mcpProvenance.jobId), so the one-off history filing never files one twice"],
   ["lib/mcp/flows/workflow-delta.ts::workflows", "an MCP conversation's own writer: an id-keyed delta that adds a node or lands one job's result and writes no other node back; it hands no saved result to a client or an engine"],
   ["ee/copilot/tools/edit-workflow.ts::workflows", "the copilot edits configuration; its graph view drops generated output (EXECUTION_DATA_KEYS) and the write carries results back as stored"],
   ["ee/copilot/tools/get-graph.ts::workflows", "projectData / summarizeData drop generated output (EXECUTION_DATA_KEYS) before the model sees the graph"],

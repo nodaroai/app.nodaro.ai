@@ -1285,15 +1285,15 @@ const LIST_JOBS_SOURCES_BYTES = 188
 // total − 496_638 = 959 B; the 73 B of headroom carry across.
 const CAST_SWAP_ENGINE_BYTES = 959
 
-// MCP conversations as flows: the five verbs whose calls become conversation nodes
-// (flows/user-request.ts USER_REQUEST_TOOLS) take an optional `user_request` (the user's
-// own words). The list is now measured as a public /mcp client receives it, with a
-// conversation on the session. No tool was added, so the fixture does NOT move.
-// Measured: +115 B on each of generate_image, modify_image, image_to_image,
-// generate_video and animate_image; 497_279 total − 496_704 = 575 B. generate_image
-// (9_222 B) and generate_video (9_202 B) pass the per-tool figure by 115 B at most.
-const USER_REQUEST_ARG_PER_TOOL_BYTES = 115
-const USER_REQUEST_ARG_TOTAL_BYTES = 575
+// MCP conversations as flows: the verbs whose calls become conversation nodes (FLOW_TOOLS, the
+// route mappers in flows/mappers/) take an optional `user_request` (the user's own words, 115 B)
+// and `flow_id` ("new" or a flow to continue, 120 B). The list is measured as a public /mcp
+// client receives it, with a conversation on the session. No tool was added, so the fixture does
+// NOT move. Measured: +235 B on each of the 33 flow tools; 505_353 total − 497_598 = 7_755 B.
+// The largest, generate_image (9_342 B) and generate_video (9_322 B), pass the per-tool figure by
+// 235 B at most.
+const USER_REQUEST_ARG_PER_TOOL_BYTES = 235
+const USER_REQUEST_ARG_TOTAL_BYTES = 7_755
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,

@@ -3,12 +3,22 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { conversationIdentityFromHeaders } from "../conversation-key.js"
 import { conversationName, monthKey } from "../conversation-store.js"
-import { flowNodeId, jobIdOfMediaUrl, placeFlowNode, workflowIdOfFlowNode } from "../flow-graph.js"
+import { flowNodeId, jobIdOfMediaUrl, outputHandleOf, placeFlowNode, workflowIdOfFlowNode } from "../flow-graph.js"
 import { hydratedNodeData } from "../hydrate.js"
 import { attachUserRequest } from "../user-request.js"
 import { flowNodeFor } from "../node-mappers.js"
 import { newSession } from "../../session.js"
 import { createMcpInvoker } from "../../invoke.js"
+
+/** The tool each test route is called by. */
+const TOOL: Record<string, string> = {
+  "/v1/generate-image": "generate_image",
+  "/v1/image-to-image": "modify_image",
+  "/v1/generate-video": "animate_image",
+  "/v1/text-to-video": "generate_video",
+}
+const nodeFor = (route: string, body: unknown) => flowNodeFor(route, body, TOOL[route] ?? "generate_image")
+
 
 describe("conversationIdentityFromHeaders (what the 2026-10-24 measurement found)", () => {
   it("ChatGPT: x-openai-session is the chat", () => {
@@ -60,7 +70,7 @@ describe("placeFlowNode", () => {
       id: "a", type: "generate-image", position: { x: 520, y: 80 },
       data: { generatedResults: [{ url: IMG, jobId: "11111111-2222-3333-4444-555555555555" }] },
     }
-    const spec = flowNodeFor("/v1/generate-video", { imageUrl: IMG, prompt: "jump", provider: "grok-i2v" })!
+    const spec = nodeFor("/v1/generate-video", { imageUrl: IMG, prompt: "jump", provider: "grok-i2v" })!
     const placed = placeFlowNode([earlier], "b", spec, spec.data as Record<string, unknown>)
     expect(placed.upsertNodes.map((n) => n.id)).toEqual(["b"])
     expect(placed.upsertEdges).toEqual([
@@ -70,17 +80,19 @@ describe("placeFlowNode", () => {
   })
 
   it("makes an upload node for an input the flow does not hold, and reuses it", () => {
-    const spec = flowNodeFor("/v1/image-to-image", { imageUrl: IMG, prompt: "night", provider: "nano-banana-edit" })!
+    const spec = nodeFor("/v1/image-to-image", { imageUrl: IMG, prompt: "night", provider: "nano-banana-edit" })!
     const first = placeFlowNode([], "m1", spec, spec.data as Record<string, unknown>)
     const upload = first.upsertNodes.find((n) => n.type === "upload-image")!
-    expect(upload.data).toMatchObject({ url: IMG, assetId: "11111111-2222-3333-4444-555555555555" })
+    expect(upload.data).toMatchObject({ url: IMG })
+    // A job id is not an asset id: an upload node of a Nodaro result carries its URL only.
+    expect(upload.data).not.toHaveProperty("assetId")
     const second = placeFlowNode(first.upsertNodes, "m2", spec, spec.data as Record<string, unknown>)
     expect(second.upsertNodes.map((n) => n.id)).toEqual(["m2"])
     expect(second.upsertEdges[0].source).toBe(upload.id)
   })
 
   it("never overwrites a node the user changed: a taken id gets a fresh one", () => {
-    const spec = flowNodeFor("/v1/image-to-image", { imageUrl: IMG, prompt: "night", provider: "nano-banana-edit" })!
+    const spec = nodeFor("/v1/image-to-image", { imageUrl: IMG, prompt: "night", provider: "nano-banana-edit" })!
     const first = placeFlowNode([], "m1", spec, spec.data as Record<string, unknown>)
     const upload = first.upsertNodes.find((n) => n.type === "upload-image")!
     const edited = { ...upload, data: { ...upload.data, url: "https://media.nodaro.ai/uploads/other.png", r2Url: "x", generatedResults: [] } }
@@ -95,6 +107,13 @@ describe("placeFlowNode", () => {
     expect(workflowIdOfFlowNode(flowNodeId(wf, "abc123def456"))).toBe(wf)
     expect(workflowIdOfFlowNode("node_123")).toBeNull()
     expect(workflowIdOfFlowNode(null)).toBeNull()
+  })
+
+  it("wires a node with several outputs from the one for the media kind", () => {
+    expect(outputHandleOf("pitch-tempo", "video")).toBe("video-out")
+    expect(outputHandleOf("voice-changer", "video")).toBe("video")
+    expect(outputHandleOf("voice-changer", "audio")).toBe("audio")
+    expect(outputHandleOf("generate-image", "image")).toBe("image")
   })
 
   it("reads the job id out of a Nodaro media URL", () => {

@@ -19,7 +19,7 @@ import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { validateModelInput } from "@nodaro/shared/model-catalog"
 import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
-import { commitFlowNode, flowJobFields, flowLinkText, prepareFlowNode } from "../flows/record.js"
+import { abandonFlowNode, commitFlowNode, flowJobFields, flowLinkText, prepareFlowNode } from "../flows/record.js"
 
 /**
  * Path-1 structured-field input shared by the image AND video generation
@@ -489,11 +489,15 @@ export async function dispatchJob(
     headers: idempotencyHeaders(opts.clientRequestId),
   })
   if (res.statusCode >= 400) {
+    if (flow) void abandonFlowNode(flow)
     const text = opts.formatRefusal?.(res.statusCode, res.body)
     return text ? { content: [{ type: "text" as const, text }], isError: true as const } : errorResult(res.statusCode, res.body)
   }
   const jobId = parseJobId(res.body)
-  if (!jobId) return parseFailure(res.body)
+  if (!jobId) {
+    if (flow) void abandonFlowNode(flow)
+    return parseFailure(res.body)
+  }
   const result = jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
   const notes = opts.surfaceWarnings ? routeWarnings(res.body).map((n) => `Note: ${n}`) : []
   if (flow && (await commitFlowNode(flow, jobId))) notes.push(flowLinkText(flow))

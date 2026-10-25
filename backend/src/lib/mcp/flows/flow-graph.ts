@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { NODE_HANDLES } from "../generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import type { FlowMediaKind, FlowNodeInput, FlowNodeSpec } from "./node-mappers.js"
 
 /**
@@ -59,15 +59,21 @@ function asNode(value: Record<string, unknown>): GraphNode | null {
 /** Does this node hold the media at `url` (as a result, its current job, or an upload)? */
 function nodeHolds(node: GraphNode, url: string, jobId: string | null): boolean {
   const data = node.data ?? {}
-  if (data.url === url || data.r2Url === url) return true
+  if (data.url === url || data.r2Url === url || data.externalUrl === url) return true
   if (jobId && data.currentJobId === jobId) return true
   const results = Array.isArray(data.generatedResults) ? (data.generatedResults as Array<Record<string, unknown>>) : []
   return results.some((r) => r.url === url || (jobId !== null && r.jobId === jobId))
 }
 
-/** The output handle a node of `type` sends its media on. */
-export function outputHandleOf(type: string | undefined): string {
-  return (type && NODE_HANDLES[type]?.outputs[0]) || "out"
+/**
+ * The output handle a node of `type` sends `kind` media on: the one named for
+ * that kind when the node has several (Voice Changer's `audio` / `video`,
+ * Pitch & Tempo's `audio-out` / `video-out`), else its first.
+ */
+export function outputHandleOf(type: string | undefined, kind?: FlowMediaKind): string {
+  const outputs = (type && ALL_NODE_HANDLES[type]?.outputs) || []
+  const named = kind ? outputs.find((h) => h === kind || h === `${kind}-out`) : undefined
+  return named ?? outputs[0] ?? "out"
 }
 
 function inputNodeId(url: string): string {
@@ -82,6 +88,24 @@ function edgeId(source: string, sourceHandle: string, target: string, targetHand
 function nextColumnX(nodes: readonly GraphNode[]): number {
   const xs = nodes.map((n) => n.position?.x).filter((x): x is number => typeof x === "number")
   return xs.length === 0 ? ORIGIN.x + COLUMN_WIDTH : Math.max(...xs) + COLUMN_WIDTH
+}
+
+/** An input the writer stored in the user's files first (an outside image): what the upload node shows. */
+export interface ImportedInput {
+  readonly url: string
+  readonly assetId: string | null
+  readonly thumbnailUrl: string | null
+}
+
+/** The call's inputs the flow does not hold yet: each becomes an upload node. */
+export function inputsToCreate(existing: ReadonlyArray<Record<string, unknown>>, spec: FlowNodeSpec): FlowNodeInput[] {
+  const nodes = existing.map(asNode).filter((n): n is GraphNode => n !== null)
+  const seen = new Set<string>()
+  return spec.inputs.filter((input) => {
+    if (seen.has(input.url)) return false
+    seen.add(input.url)
+    return !nodes.some((n) => nodeHolds(n, input.url, jobIdOfMediaUrl(input.url)))
+  })
 }
 
 export interface PlacedFlowNode {
@@ -100,6 +124,7 @@ export function placeFlowNode(
   nodeId: string,
   spec: FlowNodeSpec,
   data: Record<string, unknown>,
+  imported: ReadonlyMap<string, ImportedInput> = new Map(),
 ): PlacedFlowNode {
   const nodes = existing.map(asNode).filter((n): n is GraphNode => n !== null)
   const x = nextColumnX(nodes)
@@ -111,12 +136,12 @@ export function placeFlowNode(
     const key = `${input.url}\u0000${input.targetHandle}`
     if (seen.has(key)) continue
     seen.add(key)
-    const source = sourceFor(nodes, upsertNodes, input, { x: x - COLUMN_WIDTH, y: ORIGIN.y + inputRow * ROW_HEIGHT })
+    const source = sourceFor(nodes, upsertNodes, input, { x: x - COLUMN_WIDTH, y: ORIGIN.y + inputRow * ROW_HEIGHT }, imported.get(input.url))
     if (source.created) {
       upsertNodes.push(source.node)
       inputRow += 1
     }
-    const sourceHandle = outputHandleOf(source.node.type)
+    const sourceHandle = outputHandleOf(source.node.type, input.kind)
     upsertEdges.push({
       id: edgeId(source.node.id, sourceHandle, nodeId, input.targetHandle),
       source: source.node.id,
@@ -134,6 +159,7 @@ function sourceFor(
   pending: readonly GraphNode[],
   input: FlowNodeInput,
   position: { x: number; y: number },
+  imported?: ImportedInput,
 ): { node: GraphNode; created: boolean } {
   const jobId = jobIdOfMediaUrl(input.url)
   const held = [...pending, ...nodes].find((n) => nodeHolds(n, input.url, jobId))
@@ -153,10 +179,13 @@ function sourceFor(
       position,
       data: {
         label: input.kind === "image" ? "Image" : input.kind === "video" ? "Video" : "Audio",
-        url: input.url,
-        r2Url: input.url,
-        ...(input.kind === "image" ? { thumbnailUrl: input.url } : {}),
-        ...(jobId ? { assetId: jobId } : {}),
+        url: imported?.url ?? input.url,
+        r2Url: imported?.url ?? input.url,
+        ...(input.kind === "image" ? { thumbnailUrl: imported?.thumbnailUrl ?? imported?.url ?? input.url } : {}),
+        // An outside image was stored in the user's files first: the flow keeps
+        // working when the original link dies, and remembers where it came from.
+        ...(imported ? { externalUrl: input.url } : {}),
+        ...(imported?.assetId ? { assetId: imported.assetId } : {}),
       },
     },
   }

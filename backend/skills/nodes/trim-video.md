@@ -1,7 +1,7 @@
 ---
 node_type: trim-video
-generated_at: 2026-10-14T00:02:35.657Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.296Z
+generated_from: db68a9ee4
 ---
 
 # trim-video
@@ -61,6 +61,8 @@ generated_from: b83a9467d
 - `smart_loop_cut`
 - `smart_loop_cut_lookback`
 - `silent`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

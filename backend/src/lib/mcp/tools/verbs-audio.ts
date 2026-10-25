@@ -8,10 +8,7 @@ import { creditHint } from "./_credit-hint.js"
 import { DUCK_DEFAULT_AMOUNT, DUCK_DEFAULTS } from "../../mix-audio-duck.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import {
-  parseJobId,
   errorResult,
-  parseFailure,
-  jobResultWithWidget,
   dispatchJob,
   JOB_OUTPUT_SCHEMA,
   uiMeta,
@@ -2010,22 +2007,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await mcpInject(fastify, session, {
-        method: "POST",
-        url: "/v1/trim-audio",
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
       const promptHint =
         args.start_time !== undefined || args.end_time !== undefined
           ? `trim ${args.start_time ?? 0}s → ${args.end_time ?? "end"}`
           : "extract audio"
-      return jobResultWithWidget({
-        jobId,
+      return dispatchJob(fastify, session, {
+        url: "/v1/trim-audio",
+        payload,
         label: "trim audio",
-        session,
         widgetKind: "audio",
         widgetData: { prompt: promptHint, model: "trim-audio" },
       })

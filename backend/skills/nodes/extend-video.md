@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-10-14T00:02:36.965Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.706Z
+generated_from: db68a9ee4
 ---
 
 # Extend Video
@@ -77,6 +77,8 @@ generated_from: b83a9467d
 - `generate_audio`
 - `reference_image_urls`
 - `seed`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

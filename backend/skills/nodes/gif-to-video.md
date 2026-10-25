@@ -1,7 +1,7 @@
 ---
 node_type: gif-to-video
-generated_at: 2026-10-14T00:02:36.346Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.524Z
+generated_from: db68a9ee4
 ---
 
 # Gif to Video
@@ -78,6 +78,8 @@ Levers:
 - `target_duration`
 - `interpolate`
 - `alpha_background`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

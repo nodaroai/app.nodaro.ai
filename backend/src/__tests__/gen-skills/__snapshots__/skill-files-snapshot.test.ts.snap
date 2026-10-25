@@ -76,7 +76,8 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`palette_id\`
 - \`moodboard_id\`
 - \`subject\`
-- \`user_request\`",
+- \`user_request\`
+- \`flow_id\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
 **Credit cost:** \`3-682\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
@@ -191,7 +192,9 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 - \`genre\`
 - \`mood\`
 - \`reference_audio_url\`
-- \`reference_audio_asset_id\`",
+- \`reference_audio_asset_id\`
+- \`user_request\`
+- \`flow_id\`",
   "node-data-shape": "**Type:** \`generate-music\`
 **Category:** ai
 **Credit cost:** \`198\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
@@ -289,7 +292,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`reference_audio_urls\`
 - \`character_references\`
 - \`keep_original_sound\`
-- \`user_request\`",
+- \`user_request\`
+- \`flow_id\`",
   "node-data-shape": "**Type:** \`generate-video\`
 **Category:** ai
 **Credit cost:** \`11-9405\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
@@ -768,7 +772,8 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`connected_references\`
 - \`described_references\`
 - \`reference_order\`
-- \`user_request\`",
+- \`user_request\`
+- \`flow_id\`",
   "node-data-shape": "**Type:** \`image-to-video\`
 **Category:** ai
 **Credit cost:** \`33-9405\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
@@ -1233,7 +1238,9 @@ exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match sna
 - \`trim_end_frames\`
 - \`smart_loop_cut\`
 - \`smart_loop_cut_lookback\`
-- \`silent\`",
+- \`silent\`
+- \`user_request\`
+- \`flow_id\`",
   "node-data-shape": "**Type:** \`trim-video\`
 **Category:** processing
 **Credit cost:** \`11\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.

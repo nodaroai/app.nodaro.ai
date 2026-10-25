@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-10-14T00:02:36.881Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.679Z
+generated_from: db68a9ee4
 ---
 
 # Upscale Video
@@ -58,6 +58,8 @@ generated_from: b83a9467d
 - `task_id`
 - `source_job_id`
 - `kie_task_id`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

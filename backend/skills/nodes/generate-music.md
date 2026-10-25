@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-10-14T00:02:32.191Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:38.180Z
+generated_from: db68a9ee4
 ---
 
 # generate-music
@@ -73,6 +73,8 @@ generated_from: b83a9467d
 - `mood`
 - `reference_audio_url`
 - `reference_audio_asset_id`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

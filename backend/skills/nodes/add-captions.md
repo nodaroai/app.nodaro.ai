@@ -1,7 +1,7 @@
 ---
 node_type: add-captions
-generated_at: 2026-10-14T00:02:34.891Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:39.072Z
+generated_from: db68a9ee4
 ---
 
 # Add Captions
@@ -160,6 +160,8 @@ The intro carries its own words. The body names none, so it takes the shared `ca
 - `animate`
 - `max_words_per_line`
 - `segments`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

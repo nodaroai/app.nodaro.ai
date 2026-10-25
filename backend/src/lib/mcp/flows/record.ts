@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto"
+import { supabase } from "../../supabase.js"
 import type { McpSession } from "../session.js"
 import { mcpFlowsEnabled } from "../user-preferences.js"
 import { workflowEditorUrl } from "../../deployment-urls.js"
-import { flowNodeFor, type FlowNodeSpec } from "./node-mappers.js"
+import { flowNodeFor, type FlowNodeSpec, type FlowOutputKey } from "./node-mappers.js"
 import { resolveConversation, type McpConversationSettings } from "./conversation-store.js"
-import { applyFlowDelta } from "./workflow-delta.js"
-import { flowNodeId, placeFlowNode } from "./flow-graph.js"
+import { applyFlowDelta, loadFlow } from "./workflow-delta.js"
+import { flowNodeId, inputsToCreate, placeFlowNode } from "./flow-graph.js"
+import { importOutsideImages } from "./import-inputs.js"
 import { hydrateFlowNodeForJob } from "./hydrate.js"
-import { USER_REQUEST_TOOLS } from "./user-request.js"
 
 /**
  * An MCP conversation becomes a flow: each call a verb makes to a mapped
@@ -29,11 +30,15 @@ export interface PreparedFlowNode {
   readonly client: string
   readonly clientName: string
   readonly userRequest: string | undefined
+  /** The conversation was created for this call (so it is removed again if the call is refused). */
+  readonly conversationIsNew: boolean
 }
 
 /** What `/mcp` writes into the node, for "Where it came from". */
 export interface McpProvenance {
   readonly tool?: string
+  /** The node-data field its result lands in (read when the job finishes). */
+  readonly outputKey?: FlowOutputKey
   readonly client: string
   readonly clientName: string
   readonly userRequest?: string
@@ -60,17 +65,16 @@ export async function prepareFlowNode(
 ): Promise<PreparedFlowNode | null> {
   const identity = session.conversation
   if (!identity) return null
-  // Only the tools that take `user_request` make nodes, so a node always had the
-  // chance to carry the user's words (one list, user-request.ts).
-  if (!session.currentTool || !USER_REQUEST_TOOLS.has(session.currentTool)) return null
-  const spec = flowNodeFor(route, payload)
+  // Keyed by the tool too: only the tools that take `user_request` make nodes,
+  // so a node always had the chance to carry the user's words.
+  const spec = flowNodeFor(route, payload, session.currentTool)
   if (!spec) return null
   try {
     if (!(await mcpFlowsEnabled(session.userId))) return null
     const conversation = await resolveConversation(session, identity, new Date(), {
       firstRequest: session.userRequest,
       prompt: spec.prompt,
-    })
+    }, session.flowRequest)
     return {
       userId: session.userId,
       workflowId: conversation.workflowId,
@@ -80,6 +84,7 @@ export async function prepareFlowNode(
       client: identity.client,
       clientName: session.clientName,
       userRequest: session.userRequest,
+      conversationIsNew: conversation.isNew,
     }
   } catch (err) {
     log("could not resolve the conversation", err)
@@ -106,6 +111,7 @@ export async function commitFlowNode(prepared: PreparedFlowNode, jobId: string, 
     const at = new Date().toISOString()
     const provenance: McpProvenance = {
       ...(prepared.tool ? { tool: prepared.tool } : {}),
+      outputKey: prepared.spec.outputKey,
       client: prepared.client,
       clientName: prepared.clientName,
       ...(prepared.userRequest ? { userRequest: prepared.userRequest } : {}),
@@ -118,12 +124,16 @@ export async function commitFlowNode(prepared: PreparedFlowNode, jobId: string, 
       currentJobId: jobId,
       mcpProvenance: provenance,
     }
+    // Outside images the flow does not hold yet are stored in the user's files
+    // first (before the delta: an import is a network call, the delta a retry loop).
+    const current = await loadFlow(prepared.workflowId, prepared.userId)
+    const imported = current ? await importOutsideImages(prepared.userId, inputsToCreate(current.nodes, prepared.spec)) : new Map()
     const landed = await applyFlowDelta(prepared.workflowId, prepared.userId, (flow) => {
       // A client retry with the same retry token gets the same job back: one node per job.
       if (flow.nodes.some((n) => ((n.data as Record<string, unknown> | undefined)?.mcpProvenance as McpProvenance | undefined)?.jobId === jobId)) {
         return null
       }
-      const placed = placeFlowNode(flow.nodes, prepared.nodeId, prepared.spec, data)
+      const placed = placeFlowNode(flow.nodes, prepared.nodeId, prepared.spec, data, imported)
       const conversation = flow.settings.mcpConversation as McpConversationSettings | undefined
       return {
         upsertNodes: placed.upsertNodes,
@@ -153,7 +163,35 @@ export async function commitFlowNode(prepared: PreparedFlowNode, jobId: string, 
   }
 }
 
+/**
+ * The call was refused (402, a validation error…): a conversation created for
+ * it alone is removed again, so a refused first call leaves no empty flow. One
+ * that holds a step stays. The check waits {@link ABANDON_DELAY_MS} first: a
+ * call sent beside this one may have joined the conversation already and not
+ * written its step yet. Not awaited by the caller.
+ */
+export async function abandonFlowNode(prepared: PreparedFlowNode, log: Log = defaultLog, delayMs: number = ABANDON_DELAY_MS): Promise<void> {
+  if (!prepared.conversationIsNew) return
+  if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs).unref?.())
+  try {
+    const flow = await loadFlow(prepared.workflowId, prepared.userId)
+    if (!flow || flow.nodes.length > 0) return
+    // Only the version read: a step another call wrote in between keeps it.
+    await supabase.from("workflows").delete().eq("id", prepared.workflowId).eq("user_id", prepared.userId).eq("version", flow.version)
+  } catch (err) {
+    log("could not remove an empty conversation", err)
+  }
+}
+
+/** How long a refused call's new conversation is kept before it is checked for steps. */
+export const ABANDON_DELAY_MS = 60_000
+
 /** The line the assistant can quote: where the user sees this call as a node. */
 export function flowLinkText(prepared: PreparedFlowNode): string {
-  return `This step was added to the conversation's flow in Nodaro — open it in the editor: ${workflowEditorUrl(prepared.workflowId)} (flow id ${prepared.workflowId}).`
+  // The flow is the source of truth: the user may pick another result or change
+  // a setting there, and the next step should build on that, not on memory.
+  return (
+    `This step was added to the conversation's flow in Nodaro — open it in the editor: ${workflowEditorUrl(prepared.workflowId)} (flow id ${prepared.workflowId}). ` +
+    `If the user changed the flow there, read it with get_workflow_json before the next step and build on the result selected in each node.`
+  )
 }

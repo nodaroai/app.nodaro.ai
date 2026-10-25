@@ -1,7 +1,7 @@
 ---
 node_type: suno-generate
-generated_at: 2026-10-14T00:02:32.385Z
-generated_from: b83a9467d
+generated_at: 2026-10-24T23:37:38.225Z
+generated_from: db68a9ee4
 ---
 
 # Suno Create Music
@@ -79,6 +79,8 @@ generated_from: b83a9467d
 - `weirdness`
 - `audio_weight`
 - `duration`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

@@ -1,7 +1,7 @@
 ---
 node_type: audio-isolation
-generated_at: 2026-10-14T06:31:30.153Z
-generated_from: 0c2e65dcc
+generated_at: 2026-10-24T23:37:38.494Z
+generated_from: db68a9ee4
 ---
 
 # Voice Extractor
@@ -47,6 +47,8 @@ generated_from: 0c2e65dcc
 **Input parameters:**
 - `audio_url`
 - `audio_asset_id`
+- `user_request`
+- `flow_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

@@ -1,6 +1,7 @@
 import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
+import { FLOW_TOOLS } from "./node-mappers.js"
 
 /**
  * The user's own words, from the assistant.
@@ -19,14 +20,8 @@ import type { McpSession } from "../session.js"
  * therefore treats it as optional.
  */
 
-/** The tools whose calls become conversation nodes (`node-mappers.ts`). */
-export const USER_REQUEST_TOOLS: ReadonlySet<string> = new Set([
-  "generate_image",
-  "modify_image",
-  "image_to_image",
-  "animate_image",
-  "generate_video",
-])
+/** The tools whose calls become conversation nodes: derived from the mappers (`node-mappers.ts`). */
+export const USER_REQUEST_TOOLS: ReadonlySet<string> = FLOW_TOOLS
 
 /** Longest request kept. */
 export const USER_REQUEST_MAX = 4000
@@ -34,6 +29,18 @@ export const USER_REQUEST_MAX = 4000
 export const USER_REQUEST_DESCRIPTION = "The user's latest message to you, word for word."
 
 const USER_REQUEST_SCHEMA = z.string().max(USER_REQUEST_MAX).optional().describe(USER_REQUEST_DESCRIPTION)
+
+export const FLOW_ID_DESCRIPTION = '"new" starts a flow; a flow id from a result continues it.'
+
+/**
+ * `flow_id`: "new", or a conversation's workflow id. Checked here rather than
+ * as a schema pattern: the pattern would ride every tool list on every
+ * client, and a value that is neither is simply ignored (the step joins this
+ * chat's flow), never a refused call.
+ */
+const FLOW_ID_SCHEMA = z.string().max(36).optional().describe(FLOW_ID_DESCRIPTION)
+
+const FLOW_ID = /^(new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
 
 type ToolCallback = (...args: unknown[]) => unknown
 
@@ -60,14 +67,15 @@ export function attachUserRequest(server: McpServer, session: McpSession, tools:
     }
     const hadArgs = shape !== undefined
     const wrapped: ToolCallback = (args, extra) => {
-      const { user_request: userRequest, ...rest } = (args ?? {}) as Record<string, unknown>
+      const { user_request: userRequest, flow_id: flowId, ...rest } = (args ?? {}) as Record<string, unknown>
       session.currentTool = name
+      session.flowRequest = typeof flowId === "string" && FLOW_ID.test(flowId.trim()) ? flowId.trim().toLowerCase() : undefined
       const text = typeof userRequest === "string" ? userRequest.trim() : ""
       session.userRequest = text ? text : undefined
       // A tool with no arguments is called with `extra` alone, as the SDK would have.
       return hadArgs ? cb(rest, extra) : cb(extra)
     }
-    return original(name, { ...config, inputSchema: { ...(shape ?? {}), user_request: USER_REQUEST_SCHEMA } }, wrapped)
+    return original(name, { ...config, inputSchema: { ...(shape ?? {}), user_request: USER_REQUEST_SCHEMA, flow_id: FLOW_ID_SCHEMA } }, wrapped)
   }
   ;(server as unknown as { registerTool: typeof patched }).registerTool = patched
 }

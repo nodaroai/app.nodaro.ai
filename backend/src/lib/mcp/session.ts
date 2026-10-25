@@ -80,6 +80,8 @@ export interface McpSession {
   userRequest?: string
   /** The tool this request is calling, set by the same wrapper. */
   currentTool?: string
+  /** The call's `flow_id`: "new", or the conversation to continue (same wrapper). */
+  flowRequest?: string
 }
 
 export function newSession(opts: {
