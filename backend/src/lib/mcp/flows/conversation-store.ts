@@ -40,6 +40,12 @@ export interface McpConversationSettings {
   readonly continuedFrom?: string
   /** "request": started by a call's `flow_id: "new"`, not by the chat's first call. */
   readonly startedBy?: "request"
+  /**
+   * Steps an assistant made, counted again from the nodes at every step's
+   * write, so the node cap is checked without reading the graph. Absent on
+   * conversations written before the count (their nodes are read instead).
+   */
+  readonly steps?: number
 }
 
 export interface ResolvedConversation {
@@ -199,17 +205,26 @@ function raceWinner(rows: readonly ConversationRow[], startedAt: string, kind: "
   return sorted[0] ?? null
 }
 
-/** How many steps (nodes an assistant made) a conversation holds. */
-async function stepCount(userId: string, workflowId: string): Promise<number> {
+/** How many steps (nodes an assistant made) these nodes hold. */
+export function countSteps(nodes: ReadonlyArray<Record<string, unknown>>): number {
+  return nodes.filter((n) => {
+    const data = n?.data as Record<string, unknown> | undefined
+    return !!data && typeof data.mcpProvenance === "object" && data.mcpProvenance !== null
+  }).length
+}
+
+/** How many steps a conversation holds: its stored count, else (an older row) its nodes. */
+async function stepCount(userId: string, row: ConversationRow): Promise<number> {
+  const stored = row.settings?.mcpConversation?.steps
+  if (typeof stored === "number" && Number.isFinite(stored)) return stored
   const { data, error } = await supabase
     .from("workflows")
     .select("nodes")
-    .eq("id", workflowId)
+    .eq("id", row.id)
     .eq("user_id", userId)
     .maybeSingle()
   if (error) throw new Error(`MCP conversation lookup failed: ${error.message}`)
-  const nodes = Array.isArray(data?.nodes) ? (data.nodes as Array<{ data?: Record<string, unknown> }>) : []
-  return nodes.filter((n) => n?.data && typeof n.data.mcpProvenance === "object").length
+  return countSteps(Array.isArray(data?.nodes) ? (data.nodes as Record<string, unknown>[]) : [])
 }
 
 /** The newest part continuing `workflowId`, or null when nothing continues it. */
@@ -332,7 +347,7 @@ export async function resolveConversation(
     // A full conversation continues in its newest part; a new part only when none has room.
     let part = found
     for (let hop = 0; hop < MAX_PART_HOPS; hop++) {
-      if ((await stepCount(session.userId, part.id)) < CONVERSATION_NODE_CAP) {
+      if ((await stepCount(session.userId, part)) < CONVERSATION_NODE_CAP) {
         return { workflowId: part.id, hubId: part.parent_workflow_id, isNew: false }
       }
       const later = await nextPart(session.userId, projectId, part.id)

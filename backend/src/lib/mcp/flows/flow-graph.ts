@@ -56,13 +56,22 @@ function asNode(value: Record<string, unknown>): GraphNode | null {
   return typeof value.id === "string" ? (value as GraphNode) : null
 }
 
-/** Does this node hold the media at `url` (as a result, its current job, or an upload)? */
-function nodeHolds(node: GraphNode, url: string, jobId: string | null): boolean {
+/**
+ * Does this node send the media at `url` downstream: its upload, the job it is
+ * running, or its selected result? A take the node holds but does not send
+ * (an earlier result, another take) is not its output: a wire from the node
+ * would carry the selected one instead, and two takes of one node used
+ * together would collapse into one wire.
+ */
+function nodeOutputs(node: GraphNode, url: string, jobId: string | null): boolean {
   const data = node.data ?? {}
   if (data.url === url || data.r2Url === url || data.externalUrl === url) return true
   if (jobId && data.currentJobId === jobId) return true
   const results = Array.isArray(data.generatedResults) ? (data.generatedResults as Array<Record<string, unknown>>) : []
-  return results.some((r) => r.url === url || (jobId !== null && r.jobId === jobId))
+  // Newest take first, selected by index (0 when unset), as every reader of a node reads it.
+  const selected = results[typeof data.activeResultIndex === "number" ? data.activeResultIndex : 0]
+  if (!selected) return false
+  return selected.url === url || (jobId !== null && selected.jobId === jobId)
 }
 
 /**
@@ -104,8 +113,43 @@ export function inputsToCreate(existing: ReadonlyArray<Record<string, unknown>>,
   return spec.inputs.filter((input) => {
     if (seen.has(input.url)) return false
     seen.add(input.url)
-    return !nodes.some((n) => nodeHolds(n, input.url, jobIdOfMediaUrl(input.url)))
+    return !nodes.some((n) => nodeOutputs(n, input.url, jobIdOfMediaUrl(input.url)))
   })
+}
+
+/** What an upload node shows for an input stored in the user's files. */
+function importedFields(kind: FlowMediaKind, original: string, imported: ImportedInput): Record<string, unknown> {
+  return {
+    url: imported.url,
+    r2Url: imported.url,
+    ...(kind === "image" ? { thumbnailUrl: imported.thumbnailUrl ?? imported.url } : {}),
+    // The flow keeps working when the original link dies, and remembers where it came from.
+    externalUrl: original,
+    ...(imported.assetId ? { assetId: imported.assetId } : {}),
+  }
+}
+
+/**
+ * The upload nodes still showing an outside link that has since been stored
+ * in the user's files, pointed at the stored copy. A node the user changed
+ * meanwhile (another file in it) no longer shows the link and is left alone.
+ */
+export function relinkImported(
+  existing: ReadonlyArray<Record<string, unknown>>,
+  imported: ReadonlyMap<string, ImportedInput>,
+): GraphNode[] {
+  const uploads = new Set(Object.values(UPLOAD_TYPE))
+  return existing
+    .map(asNode)
+    .filter((n): n is GraphNode => n !== null && uploads.has(n.type ?? ""))
+    .flatMap((node) => {
+      const data = node.data ?? {}
+      const original = typeof data.url === "string" ? data.url : null
+      const stored = original && !data.externalUrl ? imported.get(original) : undefined
+      if (!original || !stored) return []
+      const kind = (Object.entries(UPLOAD_TYPE).find(([, t]) => t === node.type)?.[0] ?? "image") as FlowMediaKind
+      return [{ ...node, data: { ...data, ...importedFields(kind, original, stored) } }]
+    })
 }
 
 export interface PlacedFlowNode {
@@ -162,7 +206,7 @@ function sourceFor(
   imported?: ImportedInput,
 ): { node: GraphNode; created: boolean } {
   const jobId = jobIdOfMediaUrl(input.url)
-  const held = [...pending, ...nodes].find((n) => nodeHolds(n, input.url, jobId))
+  const held = [...pending, ...nodes].find((n) => nodeOutputs(n, input.url, jobId))
   if (held) return { node: held, created: false }
   const type = UPLOAD_TYPE[input.kind]
   // The URL's id may already be taken by a node the user changed since (another
@@ -179,13 +223,9 @@ function sourceFor(
       position,
       data: {
         label: input.kind === "image" ? "Image" : input.kind === "video" ? "Video" : "Audio",
-        url: imported?.url ?? input.url,
-        r2Url: imported?.url ?? input.url,
-        ...(input.kind === "image" ? { thumbnailUrl: imported?.thumbnailUrl ?? imported?.url ?? input.url } : {}),
-        // An outside image was stored in the user's files first: the flow keeps
-        // working when the original link dies, and remembers where it came from.
-        ...(imported ? { externalUrl: input.url } : {}),
-        ...(imported?.assetId ? { assetId: imported.assetId } : {}),
+        ...(imported
+          ? importedFields(input.kind, input.url, imported)
+          : { url: input.url, r2Url: input.url, ...(input.kind === "image" ? { thumbnailUrl: input.url } : {}) }),
       },
     },
   }

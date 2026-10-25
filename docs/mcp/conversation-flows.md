@@ -34,9 +34,11 @@ Its result is still saved in your library and listed under **Recent from MCP**. 
 (scripts, analyses, 3D, studio productions) stay there too.
 
 Inputs the flow did not make (an upload, or an image from another conversation) appear as
-an **Upload** node wired into the step that used them. An image from outside Nodaro (a link
-to another site) is first stored in your files, so the flow keeps working if the link stops
-working; the node remembers the original link.
+an **Upload** node wired into the step that used them. A result an earlier step made is wired
+from that step when it is the result the step shows; another take of it gets its own Upload
+node, so the wire always carries the image that was used. An image from outside Nodaro (a link
+to another site) is stored in your files right after the step is added, so the flow keeps
+working if the link stops working; the node remembers the original link.
 
 ## One conversation, one flow
 
@@ -104,8 +106,8 @@ Open the home screen and pick **MCP Conversations** in the "Jump back in" row:
   - Delete.
 
 **Deleting a conversation** deletes its flow. The images and videos the assistant made stay in
-your library and under **Recent from MCP**; results of runs you started in the editor are deleted
-with the flow, as for any flow.
+your library and under **Recent from MCP**. Results of runs you started in the editor inside the
+conversation are deleted with the flow and cannot be restored; the delete dialog warns about it.
 
 In the editor, a conversation's canvas says which assistant is building it and links
 back to MCP Conversations. Each node an assistant made shows **Where it came from**

@@ -222,7 +222,7 @@ export async function applyHistory(userId: string, plan: HistoryPlan): Promise<{
       name: conv.name,
       nodes,
       edges,
-      settings: { mcpConversation: { ...settings, imported: true } },
+      settings: { mcpConversation: { ...settings, steps: conv.steps.length, imported: true } },
     })
     if (error) throw new Error(`Creating a conversation failed: ${error.message}`)
   }

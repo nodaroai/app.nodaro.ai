@@ -191,6 +191,7 @@ export function McpConversationsView({ search = "" }: McpConversationsViewProps)
         onClose={() => setDeleteTarget(null)}
         title={t("mcpconv.deleteTitle")}
         description={t("mcpconv.deleteDesc")}
+        warning={t("mcpconv.deleteWarning")}
         onConfirm={async () => {
           if (!deleteTarget) return
           await deleteWorkflow(deleteTarget.id)

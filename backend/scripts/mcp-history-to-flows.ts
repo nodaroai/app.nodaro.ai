@@ -42,7 +42,12 @@ async function main(): Promise<void> {
   process.stdout.write(`Written: ${done.conversations} conversations, ${done.steps} nodes.\n`)
 }
 
-main().catch((err) => {
-  process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-  process.exit(1)
-})
+// Exit explicitly: the writers' imports open connections (the queue's Redis)
+// that would keep the process alive after the work is done.
+main().then(
+  () => process.exit(0),
+  (err) => {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
+    process.exit(1)
+  },
+)

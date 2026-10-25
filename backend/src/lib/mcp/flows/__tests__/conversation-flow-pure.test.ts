@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { conversationIdentityFromHeaders } from "../conversation-key.js"
 import { conversationName, monthKey } from "../conversation-store.js"
-import { flowNodeId, jobIdOfMediaUrl, outputHandleOf, placeFlowNode, workflowIdOfFlowNode } from "../flow-graph.js"
+import { flowNodeId, jobIdOfMediaUrl, outputHandleOf, placeFlowNode, relinkImported, workflowIdOfFlowNode } from "../flow-graph.js"
 import { hydratedNodeData } from "../hydrate.js"
 import { attachUserRequest } from "../user-request.js"
 import { flowNodeFor } from "../node-mappers.js"
@@ -16,6 +16,7 @@ const TOOL: Record<string, string> = {
   "/v1/image-to-image": "modify_image",
   "/v1/generate-video": "animate_image",
   "/v1/text-to-video": "generate_video",
+  "/v1/image-collage": "image_collage",
 }
 const nodeFor = (route: string, body: unknown) => flowNodeFor(route, body, TOOL[route] ?? "generate_image")
 
@@ -77,6 +78,46 @@ describe("placeFlowNode", () => {
       { id: "e-a-image-b-startFrame", source: "a", sourceHandle: "image", target: "b", targetHandle: "startFrame" },
     ])
     expect(placed.upsertNodes[0].position).toEqual({ x: 960, y: 80 })
+  })
+
+  it("wires a take the node does not send from its own node, so two takes are two wires", () => {
+    const IMG2 = "https://media.nodaro.ai/images/99999999-2222-3333-4444-555555555555.png"
+    const earlier = {
+      id: "a", type: "generate-image", position: { x: 520, y: 80 },
+      data: { activeResultIndex: 1, generatedResults: [{ url: IMG, jobId: "11111111-2222-3333-4444-555555555555" }, { url: IMG2, jobId: "99999999-2222-3333-4444-555555555555" }] },
+    }
+    const spec = nodeFor("/v1/image-collage", { imageUrls: [IMG, IMG2] })!
+    const placed = placeFlowNode([earlier], "b", spec, spec.data as Record<string, unknown>)
+    // The selected take comes from the node; the other one gets its own upload node.
+    const sources = placed.upsertEdges.map((e) => e.source)
+    expect(new Set(sources).size).toBe(placed.upsertEdges.length)
+    expect(sources).toContain("a")
+    const upload = placed.upsertNodes.find((n) => n.type === "upload-image")!
+    expect(upload.data).toMatchObject({ url: IMG })
+  })
+
+  it("reads a node with no selected index as sending its newest take (the first)", () => {
+    const IMG2 = "https://media.nodaro.ai/images/99999999-2222-3333-4444-555555555555.png"
+    const earlier = {
+      id: "a", type: "generate-image", position: { x: 520, y: 80 },
+      data: { generatedResults: [{ url: IMG2 }, { url: IMG }] },
+    }
+    const newest = nodeFor("/v1/generate-video", { imageUrl: IMG2, prompt: "jump", provider: "grok-i2v" })!
+    expect(placeFlowNode([earlier], "b", newest, newest.data as Record<string, unknown>).upsertEdges[0].source).toBe("a")
+    const oldest = nodeFor("/v1/generate-video", { imageUrl: IMG, prompt: "jump", provider: "grok-i2v" })!
+    expect(placeFlowNode([earlier], "c", oldest, oldest.data as Record<string, unknown>).upsertEdges[0].source).not.toBe("a")
+  })
+
+  it("points an upload node still showing an outside link at its stored copy, and leaves a changed one", () => {
+    const outside = "https://example.com/cat.png"
+    const spec = nodeFor("/v1/image-to-image", { imageUrl: outside, prompt: "night", provider: "nano-banana-edit" })!
+    const { upsertNodes } = placeFlowNode([], "m1", spec, spec.data as Record<string, unknown>)
+    const stored = new Map([[outside, { url: "https://media.nodaro.ai/uploads/cat.png", assetId: "asset-1", thumbnailUrl: null }]])
+    const relinked = relinkImported(upsertNodes, stored)
+    expect(relinked).toHaveLength(1)
+    expect(relinked[0].data).toMatchObject({ url: "https://media.nodaro.ai/uploads/cat.png", r2Url: "https://media.nodaro.ai/uploads/cat.png", externalUrl: outside, assetId: "asset-1" })
+    const changed = upsertNodes.map((n) => (n.type === "upload-image" ? { ...n, data: { ...n.data, url: "https://media.nodaro.ai/uploads/dog.png" } } : n))
+    expect(relinkImported(changed, stored)).toEqual([])
   })
 
   it("makes an upload node for an input the flow does not hold, and reuses it", () => {

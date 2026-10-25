@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const prefs = { enabled: true }
 vi.mock("../../user-preferences.js", () => ({ mcpFlowsEnabled: vi.fn(async () => prefs.enabled) }))
 const resolveConversation = vi.fn(async () => ({ workflowId: "wf-1", hubId: "hub-1", isNew: true }))
-vi.mock("../conversation-store.js", () => ({ resolveConversation }))
+vi.mock("../conversation-store.js", async (importOriginal) => ({ ...(await importOriginal<object>()), resolveConversation }))
 const hydrate = vi.fn(async () => undefined)
 vi.mock("../hydrate.js", () => ({ hydrateFlowNodeForJob: hydrate }))
 type Build = (flow: { nodes: Record<string, unknown>[]; settings: Record<string, unknown> }) => Record<string, unknown> | null
@@ -20,7 +20,8 @@ vi.mock("../../../supabase.js", () => {
   })
   return { supabase: { from: () => ({ delete: () => chain({}) }) } }
 })
-vi.mock("../import-inputs.js", () => ({ importOutsideImages: vi.fn(async () => new Map()) }))
+const importOutsideImages = vi.fn(async (_user: string, _inputs: unknown[]) => new Map<string, unknown>())
+vi.mock("../import-inputs.js", () => ({ importOutsideImages }))
 vi.mock("../workflow-delta.js", () => ({
   loadFlow: vi.fn(async () => ({ id: "wf-1", version: 1, ...stored })),
   applyFlowDelta: vi.fn(async (_id: string, _user: string, build: Build) => {
@@ -52,6 +53,7 @@ beforeEach(() => {
   stored = { nodes: [], settings: { mcpConversation: { client: "claude-code", clientName: "Claude Code", key: "s-1", startedAt: "t0", lastActivityAt: "t0" } } }
   resolveConversation.mockClear()
   hydrate.mockClear()
+  importOutsideImages.mockClear()
 })
 
 describe("prepareFlowNode", () => {
@@ -97,10 +99,42 @@ describe("commitFlowNode", () => {
       currentJobId: "job-1",
       mcpProvenance: { tool: "generate_image", outputKey: "generatedImageUrl", client: "claude-code", clientName: "Claude Code", userRequest: "make me two dolphins", jobId: "job-1" },
     })
-    expect(delta.settings.mcpConversation).toMatchObject({ key: "s-1", firstRequest: "make me two dolphins" })
+    expect(delta.settings.mcpConversation).toMatchObject({ key: "s-1", firstRequest: "make me two dolphins", steps: 1 })
     expect(delta.settings.mcpConversation.lastActivityAt).not.toBe("t0")
     expect(hydrate).toHaveBeenCalledWith("job-1")
     expect(flowLinkText(prepared)).toContain("wf-1")
+  })
+
+  it("counts the steps from the nodes it writes into", async () => {
+    stored = { ...stored, nodes: [{ id: "a", data: { mcpProvenance: { jobId: "j0" } } }, { id: "mine", data: {} }] }
+    const prepared = (await prepareFlowNode(session(), "/v1/generate-image", BODY))!
+    await commitFlowNode(prepared, "job-2")
+    expect((deltas[0] as { settings: { mcpConversation: { steps: number } } }).settings.mcpConversation.steps).toBe(2)
+  })
+
+  it("answers before an outside image is stored, then points its upload node at the stored copy", async () => {
+    const outside = "https://example.com/cat.png"
+    let release: () => void = () => {}
+    importOutsideImages.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        release = () => resolve(new Map([[outside, { url: "https://media.nodaro.ai/uploads/cat.png", assetId: "asset-1", thumbnailUrl: null }]]))
+      }),
+    )
+    const s = session()
+    s.currentTool = "image_to_image"
+    const prepared = (await prepareFlowNode(s, "/v1/image-to-image", { imageUrl: outside, prompt: "night", provider: "nano-banana-edit", userId: "u1" }))!
+    expect(await commitFlowNode(prepared, "job-3")).toBe(true)
+    // The node is written with the link the call used; the import has not finished.
+    const first = deltas[0] as { upsertNodes: Array<{ id: string; type: string; data: Record<string, unknown> }> }
+    const upload = first.upsertNodes.find((n) => n.type === "upload-image")!
+    expect(upload.data).toMatchObject({ url: outside })
+    expect(deltas).toHaveLength(1)
+    stored = { ...stored, nodes: first.upsertNodes }
+    release()
+    await vi.waitFor(() => expect(deltas).toHaveLength(2))
+    const second = deltas[1] as { upsertNodes: Array<{ id: string; data: Record<string, unknown> }> }
+    expect(second.upsertNodes).toHaveLength(1)
+    expect(second.upsertNodes[0]).toMatchObject({ id: upload.id, data: { url: "https://media.nodaro.ai/uploads/cat.png", externalUrl: outside, assetId: "asset-1" } })
   })
 
   it("adds no second node for the same job (a client retry)", async () => {

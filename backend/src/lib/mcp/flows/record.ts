@@ -3,10 +3,10 @@ import { supabase } from "../../supabase.js"
 import type { McpSession } from "../session.js"
 import { mcpFlowsEnabled } from "../user-preferences.js"
 import { workflowEditorUrl } from "../../deployment-urls.js"
-import { flowNodeFor, type FlowNodeSpec, type FlowOutputKey } from "./node-mappers.js"
-import { resolveConversation, type McpConversationSettings } from "./conversation-store.js"
+import { flowNodeFor, type FlowNodeInput, type FlowNodeSpec, type FlowOutputKey } from "./node-mappers.js"
+import { countSteps, resolveConversation, type McpConversationSettings } from "./conversation-store.js"
 import { applyFlowDelta, loadFlow } from "./workflow-delta.js"
-import { flowNodeId, inputsToCreate, placeFlowNode } from "./flow-graph.js"
+import { flowNodeId, inputsToCreate, placeFlowNode, relinkImported } from "./flow-graph.js"
 import { importOutsideImages } from "./import-inputs.js"
 import { hydrateFlowNodeForJob } from "./hydrate.js"
 
@@ -124,16 +124,19 @@ export async function commitFlowNode(prepared: PreparedFlowNode, jobId: string, 
       currentJobId: jobId,
       mcpProvenance: provenance,
     }
-    // Outside images the flow does not hold yet are stored in the user's files
-    // first (before the delta: an import is a network call, the delta a retry loop).
-    const current = await loadFlow(prepared.workflowId, prepared.userId)
-    const imported = current ? await importOutsideImages(prepared.userId, inputsToCreate(current.nodes, prepared.spec)) : new Map()
+    // Inputs the flow does not send yet: they become upload nodes, showing the
+    // link the call used. Outside ones are stored in the user's files after the
+    // reply (`storeOutsideInputs`), so an import never holds up the answer.
+    let created: FlowNodeInput[] = []
     const landed = await applyFlowDelta(prepared.workflowId, prepared.userId, (flow) => {
+      // Decided again on every attempt: only the attempt that writes creates anything.
+      created = []
       // A client retry with the same retry token gets the same job back: one node per job.
       if (flow.nodes.some((n) => ((n.data as Record<string, unknown> | undefined)?.mcpProvenance as McpProvenance | undefined)?.jobId === jobId)) {
         return null
       }
-      const placed = placeFlowNode(flow.nodes, prepared.nodeId, prepared.spec, data, imported)
+      created = inputsToCreate(flow.nodes, prepared.spec)
+      const placed = placeFlowNode(flow.nodes, prepared.nodeId, prepared.spec, data)
       const conversation = flow.settings.mcpConversation as McpConversationSettings | undefined
       return {
         upsertNodes: placed.upsertNodes,
@@ -144,6 +147,7 @@ export async function commitFlowNode(prepared: PreparedFlowNode, jobId: string, 
                 mcpConversation: {
                   ...conversation,
                   lastActivityAt: at,
+                  steps: countSteps(flow.nodes) + 1,
                   ...(!conversation.firstRequest && prepared.userRequest ? { firstRequest: prepared.userRequest } : {}),
                 },
               },
@@ -156,10 +160,30 @@ export async function commitFlowNode(prepared: PreparedFlowNode, jobId: string, 
       return false
     }
     await hydrateFlowNodeForJob(jobId)
+    if (created.length > 0) void storeOutsideInputs(prepared, created, log)
     return true
   } catch (err) {
     log("could not write the node", err)
     return false
+  }
+}
+
+/**
+ * Store the outside images a step's new upload nodes show in the user's
+ * files, then point those nodes at the stored copies. Runs after the reply;
+ * a failed import leaves the node on the link it was. Not awaited by the caller.
+ */
+export async function storeOutsideInputs(prepared: PreparedFlowNode, inputs: readonly FlowNodeInput[], log: Log = defaultLog): Promise<void> {
+  try {
+    const imported = await importOutsideImages(prepared.userId, inputs)
+    if (imported.size === 0) return
+    const landed = await applyFlowDelta(prepared.workflowId, prepared.userId, (flow) => {
+      const relinked = relinkImported(flow.nodes, imported)
+      return relinked.length > 0 ? { upsertNodes: relinked } : null
+    })
+    if (!landed) log(`could not point the upload nodes of ${prepared.nodeId} at their stored copies`)
+  } catch (err) {
+    log("could not store the outside images", err)
   }
 }
 

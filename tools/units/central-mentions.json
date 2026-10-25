@@ -4,6 +4,9 @@
     "backend/src/lib/mcp/tools/verbs-speaker-map.ts": {
       "speaker-map": "the MCP verb speaker_map is Speaker Map's own public per-node interface (its deny check and price sentence name the node it serves); deriving it would still pick the node out by name (decided 2026-10-18)"
     },
+    "backend/src/lib/mcp/flows/mappers/video.ts": {
+      "gif-to-video": "the MCP conversation flow turns a gif_to_video call into the node that reproduces it: the mapper is bespoke to this node (its fields, the defaults its Run needs), and naming the node it writes is its job; deriving it would still pick the node out by name (decided 2026-10-25)"
+    },
     "frontend/src/lib/target-handle-availability.ts": {
       "speaker-map": "Camera Switch's Speaker map input exists for Speaker Map's result alone, so the editor withholds that pip while Speaker Map is withheld from the viewer (read through isNodeUnavailable); no manifest field yet says which node another node's input exists for, so the pairing is named here (decided 2026-10-19)"
     },
