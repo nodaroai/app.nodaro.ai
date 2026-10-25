@@ -30,7 +30,13 @@ const TEMPLATES_DIR = join(HERE, "..", "templates")
 /** The hand-built chains, each with one Apply EDL. */
 const MULTI_NODE_SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
 /** The one-node twins: the same use case as one use-case node set to review first. */
-const ONE_NODE_SLUGS = ["podcast-tighten-episode-one-node"] as const
+const ONE_NODE_SLUGS = ["podcast-tighten-episode-one-node", "podcast-clip-pack-one-node", "podcast-trailer-formats-one-node"] as const
+/** Each twin's use-case node type. */
+const ONE_NODE_TYPE: Record<(typeof ONE_NODE_SLUGS)[number], string> = {
+  "podcast-tighten-episode-one-node": "tighten-episode",
+  "podcast-clip-pack-one-node": "clip-pack",
+  "podcast-trailer-formats-one-node": "episode-trailer",
+}
 /** The hand-built chains that render through Speaker View instead of Apply EDL. */
 const SPEAKER_VIEW_SLUGS = ["podcast-vertical-speaker-clip"] as const
 const SLUGS = [...MULTI_NODE_SLUGS, ...ONE_NODE_SLUGS, ...SPEAKER_VIEW_SLUGS] as const
@@ -265,7 +271,7 @@ describe("podcast editing templates — structural validity", () => {
       for (const slug of ONE_NODE_SLUGS) {
         const t = await loadTemplate(slug)
         expect((t.nodes as Node[]).some((n) => n.type === "apply-edl"), slug).toBe(false)
-        const node = only(t.nodes as Node[], "tighten-episode")
+        const node = only(t.nodes as Node[], ONE_NODE_TYPE[slug])
         expect((node.data as { reviewBeforeRender?: boolean }).reviewBeforeRender, slug).toBe(true)
       }
       for (const slug of SPEAKER_VIEW_SLUGS) {
@@ -533,6 +539,110 @@ describe("podcast editing templates — structural validity", () => {
       const multi = await Promise.all(MULTI_NODE_SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
       expect((await loadTemplate(SLUG)).tutorialSortOrder).toBeGreaterThan(Math.max(...multi))
     })
+  })
+
+  describe("Clip Pack in One Node", () => {
+    const SLUG = "podcast-clip-pack-one-node"
+
+    it("is one Clip Pack node set to review first, fed the recording on its media input", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = (t.nodes as Node[]).filter((n) => n.type !== "sticky-note")
+      expect(nodes.map((n) => n.type).sort()).toEqual(["clip-pack", "upload-video"])
+      const recording = nodes.find((n) => n.type === "upload-video")!
+      const pack = nodes.find((n) => n.type === "clip-pack")!
+      // The node's defaults, written out, but set to review first as its
+      // hand-built twin is: 8 clips of about 60 seconds, framed 9:16 Stacked,
+      // captioned in Karaoke.
+      expect(pack.data).toEqual({
+        label: "Clip Pack",
+        count: 8,
+        targetDurationSec: 60,
+        framing: { aspect: "9:16", layout: "stacked", switchType: "pan", emphasisStyle: "scale" },
+        captions: true,
+        captionStyle: "karaoke",
+        reviewBeforeRender: true,
+        planTier: "standard",
+        instructions: "",
+        fieldMappings: {},
+        executionStatus: "idle",
+      })
+      expect(recording.data).toEqual({ label: "Episode Recording", assetId: "", url: "" })
+      expect((t.edges as Edge[]).map((e) => [e.source, e.sourceHandle, e.target, e.targetHandle])).toEqual([
+        [recording.id, "video", pack.id, "media"],
+      ])
+    })
+
+    it("names the node's review setting and the step-by-step version", async () => {
+      const t = await loadTemplate(SLUG)
+      const notes = (t.nodes as Node[]).filter((n) => n.type === "sticky-note").map((n) => String((n.data as { text?: unknown }).text ?? ""))
+      expect(notes.some((text) => /Review before render/.test(text) && /Render final/.test(text)), "a note names the review setting").toBe(true)
+      expect(notes.some((text) => /node by node/.test(text)), "a note points at the step-by-step template").toBe(true)
+      // The node's review is its own setting: no rule-off listing.
+      expect(t.withoutPreviewStopRule).toBeUndefined()
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      expect(t.providersUsed ?? []).toEqual([])
+    })
+  })
+
+  describe("Trailer + Formats in One Node", () => {
+    const SLUG = "podcast-trailer-formats-one-node"
+
+    it("is one Trailer node set to review first, fed the recording on its media input, its intro card unwired", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = (t.nodes as Node[]).filter((n) => n.type !== "sticky-note")
+      expect(nodes.map((n) => n.type).sort()).toEqual(["episode-trailer", "upload-video"])
+      const recording = nodes.find((n) => n.type === "upload-video")!
+      const trailer = nodes.find((n) => n.type === "episode-trailer")!
+      // The node's defaults, written out, but set to review first as its
+      // hand-built twin is: the three Instagram formats.
+      expect(trailer.data).toEqual({
+        label: "Trailer",
+        formats: ["9:16", "1:1", "4:5"],
+        reviewBeforeRender: true,
+        planTier: "standard",
+        instructions: "",
+        fieldMappings: {},
+        executionStatus: "idle",
+      })
+      expect(recording.data).toEqual({ label: "Episode Recording", assetId: "", url: "" })
+      // One wire, the recording into `media`; nothing wired into `introCard`
+      // (a wire to an empty upload would price the Combine Videos a run skips).
+      expect((t.edges as Edge[]).map((e) => [e.source, e.sourceHandle, e.target, e.targetHandle])).toEqual([
+        [recording.id, "video", trailer.id, "media"],
+      ])
+    })
+
+    it("names the node's review setting, its Intro card input and the step-by-step version", async () => {
+      const t = await loadTemplate(SLUG)
+      const notes = (t.nodes as Node[]).filter((n) => n.type === "sticky-note").map((n) => String((n.data as { text?: unknown }).text ?? ""))
+      expect(notes.some((text) => /Review before render/.test(text) && /Render final/.test(text)), "a note names the review setting").toBe(true)
+      expect(notes.some((text) => /Intro card input/.test(text)), "a note says to connect an intro card").toBe(true)
+      expect(notes.some((text) => /node by node/.test(text)), "a note points at the step-by-step template").toBe(true)
+      expect(t.withoutPreviewStopRule).toBeUndefined()
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      expect(t.providersUsed ?? []).toEqual([])
+    })
+  })
+
+  it("lists the one-node twins after the hand-built podcast templates, in their order", async () => {
+    const multi = await Promise.all(MULTI_NODE_SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
+    const twins = await Promise.all(ONE_NODE_SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
+    expect(Math.min(...twins)).toBeGreaterThan(Math.max(...multi))
+    expect(twins).toEqual([...twins].sort((a, b) => a - b))
+    for (const slug of ONE_NODE_SLUGS) {
+      const t = await loadTemplate(slug)
+      expect(t.tutorialCategorySlug, slug).toBe((await loadTemplate(slug.replace(/-one-node$/, ""))).tutorialCategorySlug)
+    }
   })
 
   // The listing price of every built-in template (these included) is pinned

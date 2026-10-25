@@ -14,7 +14,7 @@ Clip Pack takes one recording (or, with [several cameras](#several-cameras), the
 - **Every clip is tried.** A clip that cannot be rendered is skipped, and the pack keeps the others (see [If a run fails](#if-a-run-fails)).
 - **Each clip is captioned on its own transcription**, so the captions follow the clip's own words.
 
-The **Clip Pack** template in the template marketplace is the same chain built by hand, without framing, ready to fill (see [Edit Plan](./edit-plan.md)). Use it, or the individual nodes, when you need more control over a step.
+The **Clip Pack** template in the template marketplace is the same chain built by hand, without framing, ready to fill (see [Edit Plan](./edit-plan.md)). Use it, or the individual nodes, when you need more control over a step. The **Clip Pack in One Node** template is this node instead, wired to a recording with [Review before render](#review-before-render) on, 8 clips of about 60 seconds framed 9:16 Stacked and karaoke captions: a run stops at a preview of each clip, and **Render final** renders the clips you keep at full quality.
 
 ## Inputs
 

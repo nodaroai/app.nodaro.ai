@@ -14,7 +14,7 @@ Trailer takes one recording and returns its trailer in every format you chose. I
 - **The moments are joined with the plan's own short crossfades.** There is no setting for the joins.
 - **Every format is padded, never cropped.** Each format fits the whole picture into its shape, with bars where the shapes differ: a centre crop of a two-person shot would cut a speaker off.
 
-The **Trailer + Formats** template in the template marketplace is the same chain built by hand, ready to fill (see [Edit Plan](./edit-plan.md)). Use it, or the individual nodes, when you need more control over a step.
+The **Trailer + Formats** template in the template marketplace is the same chain built by hand, ready to fill (see [Edit Plan](./edit-plan.md)). Use it, or the individual nodes, when you need more control over a step. The **Trailer + Formats in One Node** template is this node instead, wired to a recording with [Review before render](#review-before-render) on and the 9:16, 1:1 and 4:5 formats, its **Intro card** left for you to connect: a run stops at a preview of the trailer, and **Render final** renders it at full quality in every format.
 
 ## Inputs
 

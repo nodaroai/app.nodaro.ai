@@ -58,16 +58,18 @@ describe("which built-in templates the gate flips", () => {
   })
 })
 
-// The one-node Tighten Episode template reviews first too, through its node's
-// own Review before render, not a render's Quality. A review-on run stops at
-// its preview whatever the preview stop rule says, so the
-// gate leaves the template as authored in both states and it carries no
-// rule-off listing.
-describe("the one-node Tighten Episode template", () => {
-  const file = "podcast-tighten-episode-one-node.json"
-  it("reviews through its node, which the gate does not flip", () => {
+// The one-node podcast templates review first too, through their node's own
+// Review before render, not a render's Quality. A review-on run stops at its
+// preview whatever the preview stop rule says, so the gate leaves each as
+// authored in both states and none carries a rule-off listing.
+describe("the one-node podcast templates", () => {
+  it.each([
+    ["podcast-tighten-episode-one-node.json", "tighten-episode"],
+    ["podcast-clip-pack-one-node.json", "clip-pack"],
+    ["podcast-trailer-formats-one-node.json", "episode-trailer"],
+  ])("%s reviews through its node, which the gate does not flip", (file, type) => {
     const doc = load(file)
-    const node = (doc.nodes as Node[]).find((n) => n.type === "tighten-episode")
+    const node = (doc.nodes as Node[]).find((n) => n.type === type)
     expect(node?.data?.reviewBeforeRender).toBe(true)
     expect(gated).not.toContain(file)
     expect(doc.withoutPreviewStopRule).toBeUndefined()
