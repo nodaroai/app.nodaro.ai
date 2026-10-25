@@ -1,5 +1,25 @@
 # @nodaro/cli
 
+## 1.39.0
+
+### Minor Changes
+
+- 54d4de2: List your MCP conversations — each a flow an assistant built from its steps: `client.workflows.listMcpConversations({ month, sources })` (`GET /v1/mcp-conversations`) and `nodaro workflows mcp-conversations [--month YYYY-MM] [--source claude,chatgpt]`.
+
+### Patch Changes
+
+- 914e157: `nodaro cast-swap full-quality estimate` says whether the Full Quality is the same take at 1080p or, for a Kling 4 run at 720p, a new take, and lists every part of the quote. `nodaro trends get` shows the trend's engine; `--resolution` takes one the trend offers (default its first: 480p, or 720p on a Kling 4 trend, which has no draft).
+- Updated dependencies [914e157]
+- Updated dependencies [914e157]
+- Updated dependencies [54d4de2]
+- Updated dependencies [a76b30a]
+- Updated dependencies [dc55645]
+- Updated dependencies [dc55645]
+- Updated dependencies [dc55645]
+  - @nodaro/sdk@2.44.0
+  - @nodaro/shared@3.41.0
+  - @nodaro/prompts@1.42.0
+
 ## 1.38.0
 
 ### Minor Changes
