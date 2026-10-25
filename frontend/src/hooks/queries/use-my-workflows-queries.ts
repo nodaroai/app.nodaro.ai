@@ -205,6 +205,9 @@ export function useMyWorkflows(scope: MyWorkflowsScope = "all") {
           .select(cols)
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
+          // A month's MCP hub (`settings.mcpHub`) holds that month's conversations
+          // and has its own tab (MCP Conversations): it is not a flow to open here.
+          .is("settings->mcpHub", null)
         if (!showClientApps) q = q.is("app_slug", null)
         // BOTH halves. `user_id` alone spills class work into the personal
         // tab the moment someone joins one; inside a class it STAYS, because

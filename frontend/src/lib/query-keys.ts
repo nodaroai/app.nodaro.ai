@@ -201,6 +201,13 @@ export const queryKeys = {
     mcpRecent: (userId: string) => ["jobs", "mcp-recent", userId] as const,
   },
 
+  /** The MCP Conversations tab: one month of the caller's conversations, per source filter. */
+  mcpConversations: {
+    all: ["mcp-conversations"] as const,
+    list: (userId: string, month: string, sources: string) =>
+      ["mcp-conversations", userId, month, sources] as const,
+  },
+
   // Projects
   // `workspaceId` is a REQUIRED first argument on every list below, and there
   // is deliberately no default.

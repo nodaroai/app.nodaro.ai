@@ -1119,6 +1119,24 @@ Workflows other people shared with you — grants on work that is **not** in a
 workspace you belong to (workspace work already appears in that workspace's own
 lists). Each carries the `grantedRole` you hold.
 
+#### `listMcpConversations(params?)`
+
+```ts
+listMcpConversations(params?: { month?: string; sources?: string[] }): Promise<McpConversationList>
+```
+
+Your MCP conversations of one month (`GET /v1/mcp-conversations`), newest first: each
+is a flow an assistant built from its steps. `month` is `"YYYY-MM"` (default: the latest
+month that has conversations); `sources` keeps only some sources (`"claude"`,
+`"claude-code"`, `"chatgpt"`, …). The answer carries `month`, `months` (every month with
+conversations and its count), `sources` (the month's sources, with the connections each
+folds in) and `data` (`McpConversation[]`). A conversation is a workflow: open it with
+`get(conversation.id)`.
+
+```ts
+const { data, months } = await client.workflows.listMcpConversations({ month: "2026-10", sources: ["claude-code"] })
+```
+
 #### `collaborators`
 
 The people a workflow is shared with, reached as `client.workflows.collaborators`:

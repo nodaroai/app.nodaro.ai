@@ -68,6 +68,8 @@ interface ProjectsState {
   readonly moveWorkflow: (id: string, folderId: string | null) => Promise<void>
   readonly moveWorkflowToProject: (id: string, targetProjectId: string) => Promise<void>
   readonly duplicateWorkflow: (id: string) => Promise<WorkflowMeta | null>
+  /** A standalone copy in another project; the original stays where it is. */
+  readonly copyWorkflowToProject: (id: string, targetProjectId: string) => Promise<WorkflowMeta | null>
   readonly createWorkflowWithContent: (
     projectId: string,
     content: { name: string; nodes: unknown[]; edges: unknown[]; settings: Record<string, unknown> },
@@ -479,6 +481,41 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       const wf: WorkflowMeta = { ...toWorkflowMeta(data), nodeTypes: nodeTypesOf(original.nodes) }
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      return wf
+    } catch {
+      return null
+    }
+  },
+
+  copyWorkflowToProject: async (id, targetProjectId) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const content = await readWorkflowContent(id, "name, nodes, edges, settings")
+      if (!content) return null
+      const original = content.row
+      // A copy is a plain flow: the markers that made the original an MCP
+      // conversation (or a month's hub) stay with the original, so the
+      // assistant never adds its next step to the copy. The nodes keep their
+      // "Where it came from" (mcpProvenance).
+      const { mcpConversation: _conversation, mcpHub: _hub, ...settings } = (original.settings ?? {}) as Record<string, unknown>
+      const { data, error } = await supabase
+        .from("workflows")
+        .insert({
+          project_id: targetProjectId,
+          user_id: user.id,
+          name: `${original.name} (Copy)`,
+          nodes: original.nodes as Json,
+          edges: original.edges as Json,
+          settings: settings as Json,
+        })
+        .select(WORKFLOW_META_COLS)
+        .single()
+      if (error || !data) return null
+      const wf: WorkflowMeta = { ...toWorkflowMeta(data), nodeTypes: nodeTypesOf(original.nodes) }
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all })
       return wf
     } catch {
       return null

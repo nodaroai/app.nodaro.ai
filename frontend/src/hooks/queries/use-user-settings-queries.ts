@@ -24,6 +24,8 @@ interface UserSettings {
   variableDisplayMode: VariableDisplayMode
   /** What double-clicking a canvas node does. */
   nodeDoubleClickAction: NodeDoubleClickAction
+  /** MCP conversations become flows on the canvas (on unless turned off). */
+  mcpFlowsEnabled: boolean
 }
 
 async function fetchUserSettings(userId: string): Promise<UserSettings> {
@@ -44,6 +46,7 @@ async function fetchUserSettings(userId: string): Promise<UserSettings> {
     showMostUsedNodes: data.showMostUsedNodes ?? false,
     variableDisplayMode: data.variableDisplayMode ?? "raw",
     nodeDoubleClickAction: data.nodeDoubleClickAction ?? DEFAULT_NODE_DOUBLE_CLICK_ACTION,
+    mcpFlowsEnabled: data.mcpPreferences?.flows?.enabled !== false,
   }
 }
 
@@ -65,6 +68,26 @@ export function useUpdatePublicOutputsMutation() {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ userId, publicOutputs }),
+      })
+      if (!res.ok) throw new Error("Failed to update settings")
+      return res.json()
+    },
+    onSuccess: (_data, { userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })
+    },
+  })
+}
+
+/** Turn "MCP conversations become flows" on or off (`mcpPreferences.flows.enabled`). */
+export function useUpdateMcpFlowsMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      const authHeaders = await getAuthHeaders()
+      const res = await fetch(`/v1/user/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ userId, mcpPreferences: { flows: { enabled } } }),
       })
       if (!res.ok) throw new Error("Failed to update settings")
       return res.json()

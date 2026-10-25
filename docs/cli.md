@@ -152,6 +152,8 @@ nodaro workflows render-final <id> --from <executionId> [--render <nodeId>] [--e
 nodaro workflows share <id> [--visibility workspace|private] [--json]
 nodaro workflows move <id> --project <projectId> [--json]
 nodaro workflows shared-with-me [--json]
+nodaro workflows mcp-conversations [--month YYYY-MM] [--source claude,claude-code,chatgpt] [--json]
+#   your MCP conversations of one month, each a flow an assistant built (default: the latest month that has any)
 nodaro workflows collaborators list <id> [--json]
 nodaro workflows collaborators add <id> (--user <userId> | --email <email>) --role viewer|editor [--json]
 nodaro workflows collaborators update <id> <userId> --role viewer|editor [--json]

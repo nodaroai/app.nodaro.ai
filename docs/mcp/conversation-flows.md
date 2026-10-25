@@ -54,13 +54,53 @@ the connector refreshes it.
 
 ## Where the flows are
 
-Conversation flows live in your **mcp** project, grouped by month: one item per month,
-holding that month's conversations. A conversation belongs to the month it started in.
+Open the home screen and pick **MCP Conversations** in the "Jump back in" row:
+
+- **Month and year.** One month at a time. The arrows switch the year; the month menu
+  marks the current month and shows how many conversations each month has (a past month with
+  none cannot be picked). A conversation belongs to the month it started in.
+- **Source.** Keep only some assistants: Claude, Claude Code, ChatGPT, Codex, Cursor and
+  any other client you connected. Connections of one product are counted together
+  ("Claude Code (nodaro)" and "Claude Code (staging)" are one Claude Code); hover a
+  source to see them apart.
+- **Each card:**
+  - the assistant and when the conversation started;
+  - its name, and how many nodes it has of each kind;
+  - the credits it used;
+  - a cover: one you set in the editor, or else its latest result;
+  - a highlight while the conversation is still receiving steps.
+- **The card menu:**
+  - Open.
+  - Export JSON (a template, as the editor exports it).
+  - Copy to project…: a standalone copy in a project you pick. The conversation stays
+    where it is, and the copy keeps each node's "Where it came from".
+  - Rename.
+  - Use the latest result as cover, when you set one.
+  - Delete.
+
+**Deleting a conversation** deletes its flow. The images and videos the assistant made stay in
+your library and under **Recent from MCP**; results of runs you started in the editor are deleted
+with the flow, as for any flow.
+
+In the editor, a conversation's canvas says which assistant is building it and links
+back to MCP Conversations. Each node an assistant made shows **Where it came from**
+first in its settings: your request, the assistant, and under Details the tool it
+called and when. Steps the assistant adds while you have the flow open appear on the
+canvas by themselves; with unsaved edits, the editor tells you the flow changed
+elsewhere instead of replacing your work.
+
+Conversations are also listed programmatically:
+- REST: `GET /v1/mcp-conversations?month=YYYY-MM&sources=claude,chatgpt`
+- SDK: `client.workflows.listMcpConversations({ month, sources })`
+- CLI: `nodaro workflows mcp-conversations --month YYYY-MM --source claude`
+
+Each conversation is a workflow in your **mcp** project, filed under a hub workflow for
+its month; the hubs do not appear in your workflow lists.
 
 ## Turning it off
 
-The feature is on by default. To turn it off, save this setting (the in-app switch
-arrives with the conversations screen):
+Use the **Turn my conversations into flows** switch on the MCP Conversations tab. The
+same setting is available through the API:
 
 ```http
 PATCH /v1/user/settings
@@ -68,4 +108,4 @@ PATCH /v1/user/settings
 ```
 
 With it off, MCP jobs run exactly as before and appear only in your library and under
-**Recent from MCP**. Send `true` to turn it back on.
+**Recent from MCP**. Turn it back on (or send `true`) to resume.

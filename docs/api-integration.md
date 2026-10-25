@@ -576,6 +576,44 @@ All responses use the same envelope: success returns the payload directly
 
 The full route handler is at `backend/src/routes/api-tokens.ts`.
 
+### MCP conversations
+
+```
+GET /v1/mcp-conversations?month=2026-10&sources=claude,chatgpt
+```
+
+Your MCP conversations of one month, newest first. Each is a flow an assistant built
+from its steps (see [Your MCP conversations become flows](mcp/conversation-flows.md)).
+Authorized by `workflows:read`.
+
+| Query | Meaning |
+|---|---|
+| `month` | `YYYY-MM`. Default: the latest month that has conversations. |
+| `sources` | Comma-separated sources to keep: `claude`, `claude-code`, `chatgpt`, or another client's name in lower case. Default: every source. |
+
+The answer:
+
+- `month`: the month listed.
+- `months`: every month that has conversations, newest first, with its count.
+- `sources`: the listed month's sources with their counts. A source folds the
+  connections of one product together ("Claude Code (nodaro)" and "Claude Code
+  (staging)" are one `claude-code` source); `connections` lists them.
+- `data`: the conversations. Each one has:
+  - `id` and `projectId`: a conversation is a workflow. Open, rename, export, copy or
+    delete it with the workflow routes.
+  - `name`, `client`, `clientLabel` and `clientName`.
+  - `startedAt`, `lastActivityAt`, and `live`: true while its last step is under 30
+    minutes old.
+  - `firstRequest`: your first request, when the assistant passed it.
+  - `nodeCount` and `counts` (`image`, `video`, `audio`).
+  - `credits`: charged for its jobs; `null` where credits are not billed.
+  - `cover`: `{ url, kind, setByUser }`, the cover you set or else the latest result.
+
+Deleting a conversation (`DELETE /v1/workflows/:id`) deletes its flow. The jobs the assistant
+made are not filed in the workflow, so their images and videos stay in your library; runs
+started in the editor are deleted with it, as for any workflow. A month's hub cannot be deleted
+(409 `mcp_hub`). A personal API key limited to some workflows cannot list conversations (403).
+
 ### Moving a workflow between projects
 
 ```

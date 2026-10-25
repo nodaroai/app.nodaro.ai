@@ -481,6 +481,38 @@ export function workflowsCommand(): Command {
       }
     })
 
+  cmd
+    .command("mcp-conversations")
+    .description("list your MCP conversations of one month — each a flow an assistant built")
+    .option("--month <YYYY-MM>", "the month to list (default: the latest month that has conversations)")
+    .option("--source <list>", "only these sources, comma-separated (claude, claude-code, chatgpt, ...)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (opts: { month?: string; source?: string } & GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const sources = opts.source?.split(",").map((s) => s.trim()).filter(Boolean)
+        const result = await client.workflows.listMcpConversations({ month: opts.month, sources })
+        if (opts.json) {
+          emit(result, opts)
+          return
+        }
+        table(
+          result.data.map((c) => ({
+            id: c.id,
+            name: c.name,
+            source: c.clientLabel,
+            nodes: c.nodeCount,
+            credits: c.credits ?? "",
+            startedAt: c.startedAt,
+          })),
+          ["id", "name", "source", "nodes", "credits", "startedAt"],
+        )
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   cmd.addCommand(collaboratorsCommand())
 
   return cmd

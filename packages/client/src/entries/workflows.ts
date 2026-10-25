@@ -32,3 +32,5 @@ export type {
 } from "../resources/workflows.js"
 
 export type { Collaborator, AddCollaboratorInput, SharedWorkflow, DroppedCollaborator } from "../resources/workflows.js"
+
+export type { McpConversation, ListMcpConversationsParams, McpConversationList } from "../resources/workflows.js"

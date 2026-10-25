@@ -38,6 +38,7 @@ const NODE_TABLES: Readonly<Record<string, RegExp>> = {
 const RESOLVES: ReadonlyMap<string, string> = new Map([
   ["lib/workflow-route-access.ts::workflows", "the REST by-id loader: GET /v1/workflows/:id, export, and every route that loads a workflow by id"],
   ["lib/mcp/tools/_workflow-access.ts::workflows", "the MCP by-id loader: get_workflow_json, export_workflow"],
+  ["lib/mcp/flows/conversation-list.ts::workflows", "the MCP Conversations list: each conversation's cover and job ids"],
   ["routes/workflows.ts::workflows", "PATCH save and its answer, the move answer, the public share read"],
   ["routes/presentation.ts::workflows", "the shared presentation a viewer opens"],
   ["routes/published-apps.ts::workflows", "publishing: the app snapshot is taken from the resolved graph"],

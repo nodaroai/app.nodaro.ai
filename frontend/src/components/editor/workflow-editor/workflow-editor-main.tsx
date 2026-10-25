@@ -36,6 +36,7 @@ import { followTriggeredRun, paintEndedTriggeredRun } from "./follow-triggered-r
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
 import { SubWorkflowBreadcrumb } from "../sub-workflow-breadcrumb";
+import { McpConversationBanner } from "../mcp-conversation-banner";
 import { useSubWorkflowStack } from "@/hooks/use-sub-workflow-stack";
 import { jumpToBreadcrumb, jumpToBreadcrumbRoot } from "@/lib/sub-workflow-navigation";
 import { Button } from "@/components/ui/button";
@@ -1363,6 +1364,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
+
+      <McpConversationBanner workflowId={workflowId ?? ""} />
 
       {subWfStack.length > 0 && subWfRootFrame && (
         <SubWorkflowBreadcrumb

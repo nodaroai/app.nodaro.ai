@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { FlagshipApps } from "@/components/dashboard/flagship-apps"
 import { ImportJsonButton } from "@/components/dashboard/home/import-json-button"
 import { McpRecentJobs } from "@/components/dashboard/mcp-recent-jobs"
+import { McpConversationsView } from "@/components/dashboard/mcp-conversations/mcp-conversations-view"
 import { MyWorkflowsView } from "@/components/dashboard/my-workflows-view"
 import { ProjectsGridView } from "@/components/dashboard/projects-grid-view"
 import { StudioWorkflowsView } from "@/components/dashboard/studio-workflows-view"
@@ -17,15 +18,26 @@ import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useT } from "@/lib/i18n"
 import { useSharedHeaderActive } from "@/lib/shared-header"
 import { surfaceTabs, surfacePlatformLinks } from "@/lib/surface-selectors"
+import type { DashboardTabKey } from "@/lib/surface-profile"
 import { SectionTitle, SegmentedControl, ThemeSwitch, type SegmentOption } from "./home-section"
 import { NODARO_APPS_KEY } from "./home-tabs"
 import { WelcomeOfferBannerSlot } from "./welcome-offer-banner-slot"
 
-type WorkspaceTab = "workflows" | "projects" | "studio" | "mcp"
+type WorkspaceTab = "workflows" | "projects" | "studio" | "mcp" | "mcpConversations"
 
 // `mcp`: the flows an MCP client (Claude, Cursor, ...) created in the
 // auto-managed "mcp" project — split out so they stop crowding the personal list.
-const WORKSPACE_TABS = ["workflows", "projects", "studio", "mcp"] as const satisfies readonly WorkspaceTab[]
+// `mcpConversations`: each MCP conversation as a flow its assistant built, by month.
+const WORKSPACE_TABS = ["workflows", "projects", "studio", "mcp", "mcpConversations"] as const satisfies readonly WorkspaceTab[]
+/** The surface-profile key each list answers to: the conversations follow the MCP lists. */
+const SURFACE_KEY = {
+  workflows: "workflows",
+  projects: "projects",
+  studio: "studio",
+  mcp: "mcp",
+  mcpConversations: "mcp",
+} as const satisfies Record<WorkspaceTab, DashboardTabKey>
+const SURFACE_TAB_KEYS = ["workflows", "projects", "studio", "mcp"] as const satisfies readonly DashboardTabKey[]
 const WORKSPACE_TAB_STORAGE_KEY = "nodaro-dashboard-workspace-tab"
 
 function isWorkspaceTab(value: string | null): value is WorkspaceTab {
@@ -90,8 +102,8 @@ export function ContinueTab({
   // naming NO list falls back to all four (S4) so the section can never go
   // blank, and a stored/URL choice the profile has since hidden falls back to
   // the first visible list.
-  const allowed = surfaceTabs(WORKSPACE_TABS)
-  const narrowed = WORKSPACE_TABS.filter((tab) => allowed.includes(tab))
+  const allowed = surfaceTabs(SURFACE_TAB_KEYS)
+  const narrowed = WORKSPACE_TABS.filter((tab) => allowed.includes(SURFACE_KEY[tab]))
   const visibleTabs: readonly WorkspaceTab[] = narrowed.length ? narrowed : WORKSPACE_TABS
   const activeTab: WorkspaceTab = visibleTabs.includes(workspaceTab) ? workspaceTab : (visibleTabs[0] ?? "workflows")
   const labels: Record<WorkspaceTab, string> = {
@@ -99,6 +111,7 @@ export function ContinueTab({
     projects: t("dash.myProjects"),
     studio: t("dash.studioWorkflows"),
     mcp: t("dash.mcpWorkflows"),
+    mcpConversations: t("dash.mcpConversations"),
   }
   const options: readonly SegmentOption<WorkspaceTab>[] = visibleTabs.map((value) => ({ value, label: labels[value] }))
 
@@ -210,6 +223,7 @@ export function ContinueTab({
               <McpRecentJobs search={search} />
             </>
           )}
+          {activeTab === "mcpConversations" && <McpConversationsView search={search} />}
         </div>
       </section>
     </>
