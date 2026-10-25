@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { planHistory, type HistoryJob } from "../history.js"
 
 const IMG = "https://cdn.nodaro.ai/images/aaaaaaaa-0000-0000-0000-000000000001.png"
+const VID = "https://cdn.nodaro.ai/videos/bbbbbbbb-0000-0000-0000-000000000002.mp4"
 
 function job(id: string, at: string, overrides: Partial<HistoryJob> = {}): HistoryJob {
   return {
@@ -61,5 +62,37 @@ describe("planHistory", () => {
     const [step] = plan.conversations[0].steps
     expect(step.spec.type).toBe("generate-video")
     expect(step.thumbnailUrl).toBe("https://cdn.nodaro.ai/t.jpg")
+  })
+
+  it("reads a video job's references from the prompt and list the route stored, and skips its clip probe", () => {
+    const ref = { id: "style-key", source: "manual", defaultName: "Style Key", url: IMG, description: "the style" }
+    const plan = planHistory([
+      job("t1", "2026-10-03T00:00:00Z", {
+        input_data: {
+          type: "text-to-video", provider: "seedance-2", duration: 5, userPrompt: "p",
+          prompt: "a robot waves.\nthe style (@image_1).", referenceImageUrls: [IMG], connectedReferences: [ref],
+        },
+        output_data: { videoUrl: "https://cdn.nodaro.ai/videos/t1.mp4" },
+      }),
+      job("t2", "2026-10-03T00:01:00Z", {
+        input_data: { type: "text-to-video", provider: "seedance-2", duration: 5, prompt: "p", referenceVideoUrls: [VID], refVideoDurationsSec: [4.2] },
+        output_data: { videoUrl: "https://cdn.nodaro.ai/videos/t2.mp4" },
+      }),
+    ])
+    expect(plan.skipped).toEqual({})
+    const [withRef, withClip] = plan.conversations[0].steps
+    expect(withRef.spec.data.prompt).toBe("a robot waves.\nthe style (@image_1).")
+    expect(withRef.spec.inputs.map((i) => [i.url, i.targetHandle])).toEqual([[IMG, "imageReferences"]])
+    expect(withRef.spec.data).not.toHaveProperty("connectedReferences")
+    expect(withClip.spec.inputs.map((i) => [i.url, i.targetHandle])).toEqual([[VID, "videoReferences"]])
+  })
+
+  it("still refuses references on a job type whose route does not store them folded in", () => {
+    const plan = planHistory([
+      job("g1", "2026-10-03T00:00:00Z", {
+        input_data: { type: "generate-image", prompt: "p", provider: "nano-banana-pro", connectedReferences: [{ id: "a", source: "manual", defaultName: "A", url: IMG }] },
+      }),
+    ])
+    expect(plan.skipped).toEqual({ "generate-image: the node cannot reproduce it": 1 })
   })
 })

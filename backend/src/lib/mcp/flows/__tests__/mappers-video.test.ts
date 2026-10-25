@@ -18,6 +18,7 @@ const TOOL: Record<string, string> = {
   "/v1/lip-sync": "lip_sync",
   "/v1/gif-to-video": "gif_to_video",
   "/v1/video-to-video": "modify_video",
+  "/v1/generate-video": "animate_image",
 }
 
 const TRANSPORT = { mcp_client: "Claude", userId: "u1" }
@@ -45,6 +46,18 @@ const wires = (route: string, body: Record<string, unknown>) =>
   nodeFor(route, body)?.inputs.map((i) => [i.url, i.kind, i.targetHandle])
 
 describe("a mapped video node re-runs the call it was made from", () => {
+  it("animate_image with Loop trim: the node keeps it and its run sends it", () => {
+    const loopTrim = { enabled: true, framesToTest: 8, quality: "precise" }
+    const body = { imageUrl: IMAGE, prompt: "a slow turn", provider: "veo3.1", duration: 8, loopTrim }
+    expect(nodeFor("/v1/generate-video", body)?.data.loopTrim).toEqual(loopTrim)
+    expect(run("/v1/generate-video", body, { imageUrl: IMAGE })).toMatchObject({ loopTrim })
+    // A malformed one is dropped rather than written into the node.
+    expect(nodeFor("/v1/generate-video", { ...body, loopTrim: { framesToTest: 8 } })?.data.loopTrim).toBeUndefined()
+    expect(nodeFor("/v1/generate-video", { ...body, loopTrim: { enabled: false, quality: "fast", framesToTest: 65 } })?.data.loopTrim).toEqual({ enabled: false })
+    // The text-to-video route drops a Loop trim, so a call carrying one makes no node there.
+    expect(flowNodeFor("/v1/text-to-video", { ...TRANSPORT, prompt: "p", provider: "veo3.1", loopTrim }, "generate_video")).toBeNull()
+  })
+
   it("extend_video, Seedance 2: the video by URL", () => {
     const body = { videoUrl: VIDEO, prompt: "the car drives off", provider: "seedance-2-extend", duration: 8, resolution: "720p", generateAudio: true }
     expect(wires("/v1/extend-video", body)).toEqual([[VIDEO, "video", "video"]])

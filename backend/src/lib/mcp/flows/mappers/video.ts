@@ -1,12 +1,14 @@
 import { isSeedanceVideoEditProvider } from "@nodaro/shared/models"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMapper, type RouteMappers } from "./kit.js"
 
-const generateVideo = (tools: readonly string[]): RouteMapper => ({
+/** `loopTrim`: the route takes a Loop trim (the text-to-video route drops one, so its node must not keep it). */
+const generateVideo = (tools: readonly string[], { loopTrim = false } = {}): RouteMapper => ({
   tools,
   fields: new Set([
     "prompt", "provider", "duration", "aspectRatio", "resolution", "sound", "generateAudio",
     "negativePrompt", "seed", "draft", "keepOriginalSound",
     "imageUrl", "endFrameUrl", "referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls",
+    ...(loopTrim ? ["loopTrim"] : []),
   ]),
   map(body) {
     const provider = str(body.provider)
@@ -38,11 +40,28 @@ const generateVideo = (tools: readonly string[]): RouteMapper => ({
         seed: num(body.seed),
         draft: body.draft === true ? true : undefined,
         keepOriginalSound: bool(body.keepOriginalSound),
+        loopTrim: loopTrimOf(body.loopTrim),
         fieldMappings: {},
       }),
     }
   },
 })
+
+/** The node's Loop trim (the smart-loop-cut after the generation), as the route takes it. */
+function loopTrimOf(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Body
+  const enabled = bool(record.enabled)
+  if (enabled === undefined) return undefined
+  const quality = str(record.quality)
+  const frames = num(record.framesToTest)
+  return defined({
+    enabled,
+    // The route's range: a whole number of frames, 1 to 64.
+    framesToTest: frames !== undefined && Number.isInteger(frames) && frames >= 1 && frames <= 64 ? frames : undefined,
+    quality: quality === "lossless" || quality === "precise" ? quality : undefined,
+  })
+}
 
 /** A node whose one input is the video it works on (handle `handle`), and whose result is a video. */
 function videoNode(type: string, handle: string, videoUrl: string, data: Record<string, unknown>, prompt?: string): FlowNodeSpec {
@@ -407,7 +426,7 @@ const videoToVideo: RouteMapper = {
 
 /** Video routes whose calls become nodes. Both video lanes are one Generate Video node. */
 export const VIDEO_ROUTE_MAPPERS: RouteMappers = {
-  "/v1/generate-video": generateVideo(["animate_image", "generate_video"]),
+  "/v1/generate-video": generateVideo(["animate_image", "generate_video"], { loopTrim: true }),
   "/v1/text-to-video": generateVideo(["generate_video"]),
   "/v1/extend-video": extendVideo,
   "/v1/video-upscale": videoUpscale,
