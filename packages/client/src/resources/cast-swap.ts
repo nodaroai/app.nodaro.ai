@@ -197,6 +197,12 @@ export interface CastSwapFaceMaskingZone {
  */
 export interface CastSwapFaceMasking {
   mode: "off" | "always" | "auto"
+  /**
+   * What a mask covers: `"head"` (default) the whole head, hair included, and
+   * people seen from behind or turned away, with a bigger mask; `"face"` the
+   * face only, so the hair (and a person turned away) stays visible.
+   */
+  target?: "face" | "head"
   /** What covers a masked face: `"blur"` (default) or `"depth"` (a depth-color view of it). */
   fill?: "blur" | "depth"
   /** Mask only faces at least this % of the frame's height, 0–100. Default 15. */

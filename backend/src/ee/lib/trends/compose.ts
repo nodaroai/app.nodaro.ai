@@ -40,7 +40,7 @@ import {
   castSwapEngineHasDraft,
 } from "@nodaro/shared/models"
 import { castSwapImagesSent } from "@nodaro/render-rules"
-import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskTargetOf, faceMaskingOn, withResolvedZone, type FaceMasking, type FaceMaskingTarget } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
 import { storedFaceMaskFor } from "./face-mask.js"
@@ -137,6 +137,8 @@ export interface ComposedTrendRun {
     roleKinds: Set<TrendSlotKind>
     fixedReferences: boolean
     faceMasking: boolean
+    /** What the masks cover (left out = the head), or null when the trend does not mask. */
+    faceMaskTarget: FaceMaskingTarget | null
     trendPrePrompt: boolean
     /** The trend's video engine (Seedance 2.5 when it names none). */
     engine: CastSwapEngine
@@ -355,6 +357,7 @@ export function composeTrendRun(
       roleKinds: new Set(data.slots.map((s) => s.kind)),
       fixedReferences: data.references.length > 0,
       faceMasking: masking !== undefined,
+      faceMaskTarget: masking ? faceMaskTargetOf(masking) : null,
       trendPrePrompt: !!data.prePrompt,
       engine,
     },

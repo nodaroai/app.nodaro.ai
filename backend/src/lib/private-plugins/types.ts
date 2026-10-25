@@ -3364,6 +3364,12 @@ export interface PluginSupports {
    * - `faceMaskRecipe`: the version of the engine's own masking parameters
    *   (`maskClip`); a stored face mask made under another is out of date.
    *   Additive-optional: read only with `storedFaceMask`.
+   * - `faceMaskTargets`: what a run's (and a stored face mask's)
+   *   `faceMasking.target` may name: `"head"` (the whole head, hair and people
+   *   seen from behind included) and/or `"face"` (the face only).
+   *   Additive-optional: absent ⇒ `["head"]`, what every 0.392.0 engine does
+   *   (it strips a `target` it does not know), so a trend that masks `"face"`
+   *   is held back from publishing and running there (`faceMaskTargetsOf`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3379,6 +3385,7 @@ export interface PluginSupports {
     readonly engines?: readonly ("seedance-2-5" | "kling-4")[]
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string
+    readonly faceMaskTargets?: readonly ("face" | "head")[]
   }
 }
 

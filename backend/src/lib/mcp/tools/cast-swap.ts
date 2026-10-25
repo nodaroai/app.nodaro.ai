@@ -34,6 +34,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
 import { loadedEngineRuns } from "../../cast-swap-engines.js"
+import { loadedEngineMasksTarget } from "../../cast-swap-face-masking.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -62,6 +63,7 @@ interface CastSwapQuote {
 /** `face_masking` as the tool takes it (snake_case). */
 interface FaceMaskingArgs {
   mode: "off" | "always" | "auto"
+  target?: "face" | "head"
   fill?: "blur" | "depth"
   min_face_height_pct?: number
   max_face_height_pct?: number
@@ -72,9 +74,10 @@ interface FaceMaskingArgs {
 
 /** `face_masking` → the route's `faceMasking`, only the keys given (the route fills the defaults). */
 function faceMaskingBody(fm: FaceMaskingArgs) {
-  const { mode, fill, min_face_height_pct, max_face_height_pct, zone, blur_strength_pct, threshold } = fm
+  const { mode, target, fill, min_face_height_pct, max_face_height_pct, zone, blur_strength_pct, threshold } = fm
   return {
     mode,
+    ...(target !== undefined ? { target } : {}),
     ...(fill !== undefined ? { fill } : {}),
     ...(min_face_height_pct !== undefined ? { minFaceHeightPct: min_face_height_pct } : {}),
     ...(max_face_height_pct !== undefined ? { maxFaceHeightPct: max_face_height_pct } : {}),
@@ -203,6 +206,10 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
             mode: z
               .enum(["off", "always", "auto"])
               .describe('Mask the faces in the clip before the video model: "off", "always", or "auto" = only on a retry after the model refuses the clip.'),
+            target: z
+              .enum(["face", "head"])
+              .optional()
+              .describe('Default "head": hides hair and people seen from behind too. "face": the face only, hair stays visible.'),
             fill: z.enum(["blur", "depth"]).optional().describe('Default "blur".'),
             min_face_height_pct: z.number().min(0).max(100).optional().describe("Mask faces at least this % of frame height. Default 15."),
             max_face_height_pct: z.number().min(0).max(100).optional().describe("And at most this %; default 0 = no limit."),
@@ -237,6 +244,14 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         return errorResult(
           503,
           JSON.stringify({ error: { code: "engine_unavailable", message: `This deployment's Cast Swap cannot run on ${args.engine} yet.` } }),
+        )
+      }
+      // Likewise a `target` it does not know: it would strip it and mask heads.
+      const target = args.face_masking?.target
+      if (target !== undefined && args.face_masking?.mode !== "off" && !loadedEngineMasksTarget(target)) {
+        return errorResult(
+          503,
+          JSON.stringify({ error: { code: "face_mask_target_unavailable", message: `This deployment's Cast Swap cannot mask the ${target} alone yet.` } }),
         )
       }
       const payload = {

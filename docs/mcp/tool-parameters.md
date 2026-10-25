@@ -422,6 +422,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
 | `face_masking` | object |  | Default off. |
 | `face_masking.mode` | string | yes | Mask the faces in the clip before the video model: "off", "always", or "auto" = only on a retry after the model refuses the clip. One of `off`, `always`, `auto`. |
+| `face_masking.target` | string |  | Default "head": hides hair and people seen from behind too. "face": the face only, hair stays visible. One of `face`, `head`. |
 | `face_masking.fill` | string |  | Default "blur". One of `blur`, `depth`. |
 | `face_masking.min_face_height_pct` | number |  | Mask faces at least this % of frame height. Default 15. From 0 to 100. |
 | `face_masking.max_face_height_pct` | number |  | And at most this %; default 0 = no limit. From 0 to 100. |

@@ -2020,6 +2020,8 @@ interface CastSwapParams {
 
 interface CastSwapFaceMasking {
   mode: "off" | "always" | "auto" // off = as if left out; auto = only on a retry after the clip is refused
+  target?: "face" | "head"        // what a mask covers; default "head" (hair and people seen from
+                                  // behind too); "face" = the face only, the hair stays visible
   fill?: "blur" | "depth"         // what covers a masked face; default "blur"
   minFaceHeightPct?: number       // 0..100, default 15: mask faces at least this % of the frame height
   maxFaceHeightPct?: number       // 0..100, default 0 (no limit); when > 0, ≥ minFaceHeightPct
@@ -2096,7 +2098,10 @@ timing. `"always"` masks them before the first attempt (its credits are
 the video model refuses the source clip, retries once with the faces masked
 (any other failure is not retried; the extra credits, charged only then, are
 `maskingCredits`, not in `totalCredits`, and `run()` needs credits for both).
-`fill` is `"blur"` (default) or `"depth"` (a depth-color view of the face); the
+`target` is what a mask covers: `"head"` (default) the whole head, hair
+included, and people seen from behind or turned away, with a bigger mask;
+`"face"` the face only, leaving the hair visible. `fill` is `"blur"` (default)
+or `"depth"` (a depth-color view of the face); the
 size, `zone` and `threshold` settings choose which faces are masked (`zone`
 left out leaves 10 % margins at the left and right; `null` or all 0 = no
 margins). A

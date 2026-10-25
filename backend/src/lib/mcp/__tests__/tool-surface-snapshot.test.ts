@@ -1307,6 +1307,12 @@ const USER_REQUEST_ARG_TOTAL_BYTES = 7_755
 // does NOT move. Measured: 505_576 total − 505_352 = 224 B; the 73 B of headroom carry across.
 const TRENDS_ORIGINAL_BYTES = 224
 
+// RAISED 2026-10-25 by Cast Swap's face mask target and nothing else: `cast_swap`'s
+// `face_masking` takes `target` ("face" | "head", default "head") with a one-clause description of
+// each. No tool was added, so the fixture does NOT move. Measured by this suite: 505_985 total −
+// 505_812 = 173 B; the 64 B of headroom carry across.
+const FACE_MASK_TARGET_BYTES = 173
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1466,7 +1472,8 @@ export const TOOL_WIRE_BUDGET = {
     LIST_JOBS_SOURCES_BYTES +
     CAST_SWAP_ENGINE_BYTES +
     USER_REQUEST_ARG_TOTAL_BYTES +
-    TRENDS_ORIGINAL_BYTES,
+    TRENDS_ORIGINAL_BYTES +
+    FACE_MASK_TARGET_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

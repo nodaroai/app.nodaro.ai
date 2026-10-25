@@ -1816,6 +1816,31 @@ describe("the stored face mask", () => {
       expect(res.json().error.code).toBe("engine_unsupported")
       expect(engine.calls).toEqual([])
     })
+
+    it("sends the target, and refuses a face-only mask on an engine that would strip it and mask heads", async () => {
+      const FACE = { ...MASKING, target: "face" as const }
+      seed({}, draftData({ faceMasking: FACE }))
+      // This engine declares no `faceMaskTargets`: it masks heads only.
+      const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(held.statusCode).toBe(503)
+      expect(held.json().error.code).toBe("engine_unsupported")
+      expect(engine.calls).toEqual([])
+
+      setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], faceMaskTargets: ["face", "head"] } })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone(FACE) })
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: FACE })))
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).not.toBe(KEY())
+    })
+
+    it("makes a head mask (the default, named or not) on an engine that declares no targets", async () => {
+      seed({}, draftData({ faceMasking: { ...MASKING, target: "head" } }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      // Head named is the same mask as head left out: the same settings key.
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(KEY())
+    })
   })
 
   describe("approving one", () => {

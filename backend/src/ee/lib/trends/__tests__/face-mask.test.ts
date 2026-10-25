@@ -96,6 +96,28 @@ describe("faceMaskSettingsKey", () => {
     expect(key.startsWith("v2:")).toBe(true)
   })
 
+  it("hashes as before the target existed when the masks cover heads (left out or named), so approved masks stay valid", () => {
+    // Pinned literals: the keys of every mask approved before `target` (all heads). A change here
+    // makes every approved mask out of date; that is a decision, never a refactor.
+    const PINNED = "v2:30fe1719eed0a90b8414b6daa6687eec33939a17d106d8bdd5ec2b1b278f8e07"
+    expect(faceMaskSettingsKeyOf(SRC, MASKING)).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "head" })).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, withResolvedZone({ ...MASKING, target: "head" }))).toBe(PINNED)
+    const NO_MARGINS = "v2:b2684dd62a46298a370db5b03d244da8a6e5c246e98727217377415a3886dfc5"
+    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null })).toBe(NO_MARGINS)
+    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null, target: "head" })).toBe(NO_MARGINS)
+  })
+
+  it("changes between face and head: a mask of heads is out of date for a trend that masks faces, and back", () => {
+    const head = faceMaskSettingsKeyOf(SRC, MASKING)
+    const face = faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "face" })
+    expect(face).not.toBe(head)
+    expect(face.startsWith("v2:")).toBe(true)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, mode: "auto", target: "face" })).toBe(face)
+    expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, target: "face" } }), ENVS, REQUIRED).reasons).toEqual([{ why: "settings" }])
+    expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, target: "head" } }), ENVS, REQUIRED).status).toBe("approved")
+  })
+
   it("is null with no source clip or no masking", () => {
     expect(faceMaskSettingsKey(data({ source: null }))).toBeNull()
     expect(faceMaskSettingsKey(data({ faceMasking: { mode: "off" } }))).toBeNull()
@@ -163,6 +185,25 @@ describe("publishBlockers — a masked trend", () => {
     expect(publishBlockers(data({ faceMask: mask() }), [env("staging"), env("production", { ...ALL, storedFaceMask: undefined })], REQUIRED)).toEqual([
       { code: "engine_unsupported", env: "production", need: "storedFaceMask" },
     ])
+  })
+
+  it("needs every environment's engine to mask the face alone when the trend's masks cover the face only", () => {
+    const FACE = { ...MASKING, target: "face" as const }
+    const faceMask = mask({ settingsKey: faceMaskSettingsKey(data({ faceMasking: FACE }))! })
+    const FACE_ENGINE = { ...ALL, faceMaskTargets: ["face", "head"] }
+    expect(publishBlockers(data({ faceMasking: FACE, faceMask }), [env("staging", FACE_ENGINE), env("production", FACE_ENGINE)], REQUIRED)).toEqual([])
+    // An engine that declares no targets masks heads (it strips the target): held back.
+    expect(publishBlockers(data({ faceMasking: FACE, faceMask }), [env("staging", FACE_ENGINE), env("production")], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: "faceMaskTarget:face" },
+    ])
+    expect(publishBlockers(data({ faceMasking: FACE, faceMask }), [env("staging", FACE_ENGINE), env("production", { ...ALL, faceMaskTargets: ["head"] })], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: "faceMaskTarget:face" },
+    ])
+  })
+
+  it("needs no target of a head trend (the default, named or not), nor of a trend that does not mask", () => {
+    expect(publishBlockers(data({ faceMasking: { ...MASKING, target: "head" }, faceMask: mask() }), ENVS, REQUIRED)).toEqual([])
+    expect(publishBlockers(data({ faceMasking: { mode: "off", target: "face" } }), ENVS, REQUIRED)).toEqual([])
   })
 
   it("needs no mask when the trend does not mask", () => {

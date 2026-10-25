@@ -7,6 +7,8 @@
 // Margins: left out, the engine leaves 10 % at the left and right (shown as
 // placeholders); the first margin typed writes the whole default zone with it,
 // so what is saved is what the fields show; "No margins" saves `zone: null`.
+// Covers: the whole head (the default: also hides the hair and people seen from
+// behind) or the face alone (the hair stays visible); shown as Head when left out.
 
 import { useId } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -22,6 +24,7 @@ import type {
   AdminTrendFaceMasking,
   AdminTrendFaceMaskingFill,
   AdminTrendFaceMaskingMode,
+  AdminTrendFaceMaskingTarget,
   AdminTrendFaceMaskingZone,
 } from "@/lib/api"
 import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
@@ -34,6 +37,11 @@ const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hi
     label: "Auto",
     hint: "Only when the video model refuses the clip: one retry with the faces covered, charged only then. A full run whose preview needed it is covered from the start.",
   },
+]
+
+const TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: string; hint: string }> = [
+  { value: "head", label: "Head (default)", hint: "Covers the whole head: also hides the hair and people seen from behind (a bigger mask)." },
+  { value: "face", label: "Face", hint: "Covers the face only: the hair stays visible, and people turned away are not covered." },
 ]
 
 const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> = [
@@ -77,10 +85,15 @@ export function FaceMaskingEditor({ value, onChange }: Props) {
   // A fill left out is the engine's default. The blur strength belongs to the blur fill only: hidden
   // otherwise, and then neither checked nor saved (`maskingUsesBlur`), so it never holds Save.
   const fill = value?.fill ?? FACE_MASKING_DEFAULTS.fill
+  // A target left out is the engine's default (the head), shown as such.
+  const target = value?.target ?? FACE_MASKING_DEFAULTS.target
+  const targetHint = TARGETS.find((t) => t.value === target)?.hint
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
   const hintId = `${id}-hint`
+  const targetId = `${id}-target`
+  const targetHintId = `${id}-target-hint`
   const noMarginsId = `${id}-no-margins`
 
   return (
@@ -131,6 +144,28 @@ export function FaceMaskingEditor({ value, onChange }: Props) {
 
       {mode !== "off" && (
         <>
+          <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
+            <label htmlFor={targetId} className="font-medium">
+              Covers
+            </label>
+            <Select value={target} onValueChange={(t) => set({ target: t as AdminTrendFaceMaskingTarget })}>
+              <SelectTrigger id={targetId} className="h-9" aria-describedby={targetHint ? targetHintId : undefined}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TARGETS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {targetHint && (
+              <span id={targetHintId} className="text-xs text-muted-foreground">
+                {targetHint}
+              </span>
+            )}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <NumberField
               label="Smallest face height (%)"

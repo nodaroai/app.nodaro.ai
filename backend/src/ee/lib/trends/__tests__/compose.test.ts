@@ -416,6 +416,7 @@ describe("composeTrendRun — display and needs", () => {
       roleKinds: new Set(["person", "location"]),
       fixedReferences: true,
       faceMasking: false,
+      faceMaskTarget: null,
       trendPrePrompt: false,
       engine: "seedance-2-5",
     })
@@ -488,6 +489,19 @@ describe("composeTrendRun — face masking and pre prompt", () => {
     // The preview of the same trend sends the same margins as its full run.
     const preview = composeTrendRun(trend(version({ faceMasking: { mode: "auto" } })), req({ preview: true })).body
     expect(preview.faceMasking?.zone).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
+  })
+
+  it("passes the target through as the trend stores it, and needs what the masks cover (left out = the head)", () => {
+    const face = composeTrendRun(trend(version({ faceMasking: { mode: "always", target: "face" } })), req())
+    expect(face.body.faceMasking).toMatchObject({ mode: "always", target: "face" })
+    expect(face.needs.faceMaskTarget).toBe("face")
+    const head = composeTrendRun(trend(version({ faceMasking: { mode: "auto", target: "head" } })), req())
+    expect(head.body.faceMasking).toMatchObject({ target: "head" })
+    expect(head.needs.faceMaskTarget).toBe("head")
+    const leftOut = composeTrendRun(trend(version({ faceMasking: { mode: "auto" } })), req())
+    expect(leftOut.body.faceMasking).not.toHaveProperty("target")
+    expect(leftOut.needs.faceMaskTarget).toBe("head")
+    expect(composeTrendRun(trend(version({ faceMasking: { mode: "off", target: "face" } })), req()).needs.faceMaskTarget).toBeNull()
   })
 
   it("never writes the default zone into the trend's own setting", () => {

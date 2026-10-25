@@ -11101,6 +11101,8 @@ export interface AdminTrendSource {
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
 export type AdminTrendFaceMaskingFill = "blur" | "depth"
+/** What a mask covers: "head" (the default; hair and people seen from behind too) or "face" (the face only). */
+export type AdminTrendFaceMaskingTarget = "face" | "head"
 
 /** Frame margins (0–49 % each); a face centred in one is not masked. */
 export interface AdminTrendFaceMaskingZone {
@@ -11116,6 +11118,8 @@ export interface AdminTrendFaceMaskingZone {
  */
 export interface AdminTrendFaceMasking {
   mode: AdminTrendFaceMaskingMode
+  /** Left out = "head" (the engine's default). */
+  target?: AdminTrendFaceMaskingTarget
   fill?: AdminTrendFaceMaskingFill
   /** 0–100 % of the frame's height; default 15. */
   minFaceHeightPct?: number
@@ -11308,6 +11312,7 @@ export interface TrendEngineEnvironment {
       trendRun?: boolean
       storedFaceMask?: boolean
       faceMaskRecipe?: string
+      faceMaskTargets?: AdminTrendFaceMaskingTarget[]
     }
   } & Record<string, unknown>
   updatedAt: string

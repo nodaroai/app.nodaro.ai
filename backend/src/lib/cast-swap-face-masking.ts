@@ -12,10 +12,18 @@
  * default is filled in only when a run is composed (`withResolvedZone`).
  */
 import { z } from "zod"
-import { CAST_SWAP_FACE_MASKING_BOUNDS, CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
+import {
+  CAST_SWAP_FACE_MASKING_BOUNDS,
+  CAST_SWAP_FACE_MASKING_DEFAULTS,
+  CAST_SWAP_FACE_MASK_TARGETS,
+  type CastSwapFaceMaskTarget,
+} from "@nodaro/shared/models"
+import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export type FaceMaskingMode = "off" | "always" | "auto"
 export type FaceMaskingFill = "blur" | "depth"
+/** What a mask covers: `"head"` (default: hair and people seen from behind too) or `"face"` (the hair stays visible). */
+export type FaceMaskingTarget = CastSwapFaceMaskTarget
 
 export interface FaceMaskingZone {
   leftPct?: number
@@ -26,6 +34,12 @@ export interface FaceMaskingZone {
 
 export interface FaceMasking {
   mode: FaceMaskingMode
+  /**
+   * What a mask covers. Left out = `"head"` (`CAST_SWAP_FACE_MASKING_DEFAULTS.target`):
+   * the whole head, hair included, and people seen from behind or turned away;
+   * `"face"` covers the face only and leaves the hair visible.
+   */
+  target?: FaceMaskingTarget
   fill?: FaceMaskingFill
   /** Mask only faces at least this % of the frame's height (0–100). */
   minFaceHeightPct?: number
@@ -61,6 +75,7 @@ export const faceMaskingZoneSchema: z.ZodType<FaceMaskingZone> = z.strictObject(
 export const faceMaskingSchema: z.ZodType<FaceMasking> = z
   .strictObject({
     mode: z.enum(["off", "always", "auto"]),
+    target: z.enum(CAST_SWAP_FACE_MASK_TARGETS).optional(),
     fill: z.enum(["blur", "depth"]).optional(),
     minFaceHeightPct: pct.optional(),
     maxFaceHeightPct: pct.optional(),
@@ -79,6 +94,29 @@ export const faceMaskingSchema: z.ZodType<FaceMasking> = z
 /** Whether this setting masks anything at all (absent or "off" = today's pipeline). */
 export function faceMaskingOn(m: FaceMasking | undefined): m is FaceMasking {
   return !!m && m.mode !== "off"
+}
+
+/** What this setting's mask covers, its default resolved (left out = the whole head). */
+export function faceMaskTargetOf(m: Pick<FaceMasking, "target">): FaceMaskingTarget {
+  return m.target ?? CAST_SWAP_FACE_MASKING_DEFAULTS.target
+}
+
+/**
+ * What a (loaded or recorded) Cast Swap engine's masks can cover. One that
+ * predates the choice (`castSwap.faceMaskTargets` absent) masks heads alone,
+ * as every 0.392.0 engine does, and drops a `target` it does not know (its
+ * schema strips unknown keys), so a setting naming another target must be
+ * held back rather than sent, or it would silently mask heads.
+ */
+export function faceMaskTargetsOf(
+  cs: { readonly faceMaskTargets?: readonly FaceMaskingTarget[] } | undefined,
+): readonly FaceMaskingTarget[] {
+  return cs?.faceMaskTargets ?? [CAST_SWAP_FACE_MASKING_DEFAULTS.target]
+}
+
+/** Whether this process's Cast Swap engine masks `target` (`faceMaskTargetsOf` its declaration). */
+export function loadedEngineMasksTarget(target: FaceMaskingTarget): boolean {
+  return faceMaskTargetsOf(getPluginSupports().castSwap).includes(target)
 }
 
 /** The margins a face masking setting that leaves `zone` out gets (10 % at the left and right). */

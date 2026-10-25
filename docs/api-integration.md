@@ -4213,13 +4213,17 @@ whose picture could not be made. Locations are not prepared.
 **Face masking.** `faceMasking` covers the faces in the source clip before the
 video model sees it; their movement and lip timing stay, and the rest of the
 clip is sent as it is. It is
-`{ mode, fill?, minFaceHeightPct?, maxFaceHeightPct?, zone?, blurStrengthPct?, threshold? }`:
+`{ mode, target?, fill?, minFaceHeightPct?, maxFaceHeightPct?, zone?, blurStrengthPct?, threshold? }`:
 
 - `mode`: `"off"` (the same as leaving `faceMasking` out: the clip is sent as
   it is), `"always"` (the faces are masked before the first attempt) or
   `"auto"` (the run starts unmasked and, only if the video model refuses the
   source clip, is retried once with the faces masked; any other failure is not
   retried).
+- `target`: what a mask covers — `"head"` (the default: the whole head, hair
+  included, and people seen from behind or turned away, with a bigger mask)
+  or `"face"` (the face only; the hair, and a person turned away, stay
+  visible).
 - `fill`: what covers a masked face — `"blur"` (the default) or `"depth"` (a
   depth-color view of it).
 - Which faces are masked: `minFaceHeightPct` (0–100, default 15) and
