@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.44.0
+
+### Minor Changes
+
+- 6f9d4f8: Cast Swap face masking chooses what a mask covers: `faceMasking.target`, `"head"` (the default: the whole head, hair included, and people seen from behind) or `"face"` (the face only; the hair stays visible).
+
+  `@nodaro/shared/models`: `CAST_SWAP_FACE_MASK_TARGETS` (`["face", "head"]`), the `CastSwapFaceMaskTarget` type, and `CAST_SWAP_FACE_MASKING_DEFAULTS.target` (`"head"`).
+
+  `@nodaro/sdk`: `CastSwapFaceMasking.target`.
+
+- 84ee89f: Topaz video upscale target: `TOPAZ_VIDEO_RESOLUTIONS` (720p / 1080p / 4k, the frame's short side), the 15–60 fps range and `resolveTopazVideoTarget`, which maps the legacy 1×/2×/4× factor over the source's size. The `topaz-video` catalog entry is priced per Topaz unit (`topaz-video:per-unit`, metered).
+
 ## 3.43.0
 
 ### Minor Changes
