@@ -39,7 +39,10 @@ function addRunFlags(cmd: Command): Command {
       "a slot's chip: make it anew from your pictures or keep the clip's, e.g. person.outfit=original (repeatable; only the chips `trends get` lists for the slot)",
       collectVariadic,
     )
-    .option("--example <n>", "1-based example whose pictures fill the optional slots you leave empty (default 1)")
+    .option(
+      "--example <n>",
+      "1-based example whose pictures fill the optional slots you leave empty (default 1); leave it out on a trend with no example, whose empty optional slots stay as in the original",
+    )
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")
     .addOption(
@@ -178,7 +181,7 @@ export function trendsCommand(): Command {
 
   cmd
     .command("get <slug>")
-    .description("a trend's page: its slots, examples, preview, engine and resolutions")
+    .description("a trend's page: its original, slots, examples, preview, engine and resolutions")
     .option("--locale <locale>", "language of names and descriptions")
     .option("--profile <name>")
     .option("--json")

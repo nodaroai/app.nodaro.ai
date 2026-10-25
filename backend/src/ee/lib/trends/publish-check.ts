@@ -7,8 +7,10 @@
  * (every slot filled, a prepared person, pet or product as one picture, a
  * location's 3, plus the fixed references).
  *
- * The draft needs a source clip, at least one required slot, at least one
- * example, pictures for every slot in every example, valid data
+ * The draft needs a source clip with its display copy (`source.display`, made
+ * at upload: the trend's page shows it as the original), at least one
+ * required slot, pictures for every slot in every example (a trend may have
+ * no example at all: it shows only its original), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
  * the user's details (`promptBudget`). And the Cast Swap engine of EVERY
  * environment in `TREND_PUBLISH_ENVIRONMENTS` must support it: the slot kinds
@@ -36,8 +38,8 @@ import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData }
 export interface PublishBlocker {
   code:
     | "source_missing"
+    | "source_display_missing"
     | "no_required_slot"
-    | "no_example"
     | "example_slots_incomplete"
     | "invalid_data"
     | "prompt_budget"
@@ -111,8 +113,8 @@ export function publishBlockers(
 ): PublishBlocker[] {
   const out: PublishBlocker[] = []
   if (!data.source) out.push({ code: "source_missing" })
+  else if (!data.source.display) out.push({ code: "source_display_missing" })
   if (!data.slots.some((s) => s.required)) out.push({ code: "no_required_slot" })
-  if (data.examples.length === 0) out.push({ code: "no_example" })
   data.examples.forEach((ex, i) => {
     const missing = data.slots
       .filter((s) => !(Object.hasOwn(ex.slots, s.key) && (ex.slots[s.key]?.length ?? 0) > 0))

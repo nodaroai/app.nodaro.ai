@@ -211,6 +211,49 @@ describe("trendVersionDataSchema", () => {
   })
 })
 
+describe("trendVersionDataSchema — the source's display copy and the slot hint picture", () => {
+  const SRC = "https://cdn.example.com/trends/t/src.mov"
+  const DISPLAY = {
+    videoUrl: "https://cdn.example.com/trends/t/display.mp4",
+    posterUrl: "https://cdn.example.com/trends/t/poster.png",
+    width: 720,
+    height: 1280,
+    durationSec: 30.04,
+  }
+  const source = (display?: unknown) => ({ videoUrl: SRC, durationSec: 30, width: 1280, height: 720, ...(display !== undefined ? { display } : {}) })
+
+  it("accepts a source with its display copy, and one without (a draft saved before it)", () => {
+    const r = trendVersionDataSchema.safeParse(data({ source: source(DISPLAY) }))
+    expect(r.success).toBe(true)
+    expect(r.data?.source?.display).toEqual(DISPLAY)
+    expect(trendVersionDataSchema.safeParse(data({ source: source() })).success).toBe(true)
+  })
+
+  it("needs every display field, as http(s), and nothing else", () => {
+    const { posterUrl: _p, ...noPoster } = DISPLAY
+    expect(trendVersionDataSchema.safeParse(data({ source: source(noPoster) })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ source: source({ ...DISPLAY, videoUrl: "ftp://x/a.mp4" }) })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ source: source({ ...DISPLAY, width: 0 }) })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ source: source({ ...DISPLAY, extra: 1 }) })).success).toBe(false)
+  })
+
+  it("refuses a display copy that is the uploaded source itself (the original shown is always its own file)", () => {
+    const r = trendVersionDataSchema.safeParse(data({ source: source({ ...DISPLAY, videoUrl: SRC }) }))
+    expect(r.success).toBe(false)
+    expect(messages(r).join(" ")).toMatch(/display copy/)
+  })
+
+  it("accepts an http(s) hint picture on any slot kind and refuses another scheme", () => {
+    for (const kind of ["person", "pet", "product", "location"] as const) {
+      const r = trendVersionDataSchema.safeParse(data({ slots: [slot("one", kind, { hintImageUrl: IMG })] }))
+      expect(r.success, kind).toBe(true)
+      expect(r.data?.slots[0]?.hintImageUrl).toBe(IMG)
+    }
+    expect(trendVersionDataSchema.safeParse(data({ slots: [slot("one", "person", { hintImageUrl: "ftp://x" })] })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ slots: [slot("one", "person", { hintImageUrl: "" })] })).success).toBe(false)
+  })
+})
+
 describe("maxImagesOf", () => {
   it("is 3 per slot plus every reference image", () => {
     const d = trendVersionDataSchema.parse(data({ references: [{ images: [IMG, IMG], line: "x" }] })) as TrendVersionData

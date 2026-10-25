@@ -11046,6 +11046,8 @@ export interface AdminTrendSlot {
   kind: TrendSlotKind
   required: boolean
   hint?: TrendLocalizedText
+  /** A picture of who (or what) this slot replaces, in trend storage (`/media` kind `hint`). Shown with the slot; never sent with a run. */
+  hintImageUrl?: string
   /** Who this is in the source clip (hidden from users). */
   roleName: string
   /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
@@ -11073,11 +11075,26 @@ export interface AdminTrendExample {
   sourceJobId: string
 }
 
+/**
+ * The source clip as users see it: a browser-safe MP4 re-encoded from the
+ * upload into its own file, with a poster (made by `/media` kind `source`).
+ * Width, height and length are the copy's. Runs never read it.
+ */
+export interface AdminTrendSourceDisplay {
+  videoUrl: string
+  posterUrl: string
+  width: number
+  height: number
+  durationSec: number
+}
+
 export interface AdminTrendSource {
   videoUrl: string
   durationSec: number
   width?: number
   height?: number
+  /** Absent on a clip stored before display copies existed: such a draft cannot publish (`source_display_missing`). */
+  display?: AdminTrendSourceDisplay
 }
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
@@ -11332,13 +11349,24 @@ export async function saveAdminTrendDraft(
   ).data
 }
 
-/** Copy a URL (an upload, a library asset) into the trend's own storage. */
+export type AdminTrendMediaKind = "source" | "reference" | "hint"
+
+/** What `/media` stored: a source clip also has its length, size and display copy. */
+export interface AdminTrendStoredMedia {
+  url: string
+  durationSec?: number
+  width?: number
+  height?: number
+  display?: AdminTrendSourceDisplay
+}
+
+/** Copy a URL (an upload, a library asset) into the trend's own storage: the source clip, a reference or a slot's hint picture. */
 export async function storeAdminTrendMedia(
   id: string,
-  input: { url: string; kind: "source" | "reference" },
-): Promise<{ url: string; durationSec?: number; width?: number; height?: number }> {
+  input: { url: string; kind: AdminTrendMediaKind },
+): Promise<AdminTrendStoredMedia> {
   return (
-    await apiRequest<{ data: { url: string; durationSec?: number; width?: number; height?: number } }>(
+    await apiRequest<{ data: AdminTrendStoredMedia }>(
       `${trendPath(id)}/media`,
       "apiErr.saveTrend",
       { method: "POST", body: input },

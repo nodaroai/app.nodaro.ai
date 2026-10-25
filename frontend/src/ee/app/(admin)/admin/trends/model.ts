@@ -205,13 +205,18 @@ function cleanText(t: TrendLocalizedText): TrendLocalizedText {
   return out
 }
 
+/** The source as saved; its display copy (what users see) is kept field by field, as the server's strict schema takes it. */
 function cleanSource(s: AdminTrendData["source"]): AdminTrendData["source"] {
   if (!s) return null
+  const d = s.display
   return {
     videoUrl: s.videoUrl,
     durationSec: s.durationSec,
     ...(s.width !== undefined ? { width: s.width } : {}),
     ...(s.height !== undefined ? { height: s.height } : {}),
+    ...(d
+      ? { display: { videoUrl: d.videoUrl, posterUrl: d.posterUrl, width: d.width, height: d.height, durationSec: d.durationSec } }
+      : {}),
   }
 }
 
@@ -226,6 +231,7 @@ function cleanSlot(s: FormSlot): AdminTrendSlot {
     roleName: s.roleName.trim(),
   }
   if (hasAnyText(s.hint)) out.hint = cleanText(s.hint!)
+  if (s.hintImageUrl) out.hintImageUrl = s.hintImageUrl
   const defaults: Partial<Record<TrendChipKey, TrendChoice>> = {}
   for (const chip of CHIPS_BY_KIND[s.kind]) {
     const v = s.defaults?.[chip]
@@ -423,8 +429,8 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return "No source clip yet."
     case "no_required_slot":
       return "At least one slot must be required."
-    case "no_example":
-      return "Add at least one example."
+    case "source_display_missing":
+      return "The source clip has no display copy (the copy users see). Upload the clip again to make one."
     case "example_slots_incomplete":
       return `Example ${r.example ?? "?"} has no pictures for: ${(r.slots ?? []).join(", ")}.`
     case "invalid_data":

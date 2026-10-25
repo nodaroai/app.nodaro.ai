@@ -5,6 +5,6 @@
     "declaration": false,
     "incremental": false
   },
-  "include": ["src/resources/__tests__/cast-swap.test.ts"],
+  "include": ["src/resources/__tests__/cast-swap.test.ts", "src/resources/__tests__/trends.test.ts"],
   "exclude": []
 }

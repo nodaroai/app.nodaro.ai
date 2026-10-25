@@ -1295,6 +1295,13 @@ const CAST_SWAP_ENGINE_BYTES = 959
 const USER_REQUEST_ARG_PER_TOOL_BYTES = 235
 const USER_REQUEST_ARG_TOTAL_BYTES = 7_755
 
+// Trends show their original: `get_trend` names the trend's `original` (the clip it recasts, with
+// its preview start), a slot's `hintImageUrl` and that `examples` may be empty; `estimate_trend` /
+// `run_trend` (one shared input shape) say an optional slot left out on a trend with no example
+// stays as in the original, and to leave `example` out there. No tool was added, so the fixture
+// does NOT move. Measured: 505_576 total − 505_352 = 224 B; the 73 B of headroom carry across.
+const TRENDS_ORIGINAL_BYTES = 224
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1452,7 +1459,8 @@ export const TOOL_WIRE_BUDGET = {
     KLING_4_MODELS_BYTES +
     LIST_JOBS_SOURCES_BYTES +
     CAST_SWAP_ENGINE_BYTES +
-    USER_REQUEST_ARG_TOTAL_BYTES,
+    USER_REQUEST_ARG_TOTAL_BYTES +
+    TRENDS_ORIGINAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -10,8 +10,10 @@
  *   trend's pre prompt and face masking (top-level fields; the engine refuses
  *   either inside `display`);
  * - `display`: the public record of the run (English labels, the user's own
- *   pictures, the example's pictures for empty optional slots, the chips and
- *   the user's raw details), also carried in `body.trendRun.display`;
+ *   pictures, the example's pictures for empty optional slots — none on a
+ *   trend with no example, whose empty optional slots stay as in the
+ *   original — the chips and the user's raw details), also carried in
+ *   `body.trendRun.display`;
  * - `needs`: what the engine must support for this run.
  *
  * HIDDEN data (source, roleName, references, trendPrompt, prePrompt,
@@ -83,13 +85,17 @@ export interface TrendRunDisplaySlot extends Chips {
   label: string
   kind: TrendSlotKind
   images: string[]
-  /** True when the slot was left empty and the example's pictures filled it. */
+  /**
+   * True when the slot was left empty and the example's pictures filled it.
+   * False with no pictures: left empty on a trend with no example, so it
+   * stays as in the original.
+   */
   fromExample: boolean
 }
 
 export interface TrendRunDisplay {
   trend: { id: string; slug: string; version: number; /** English. */ name: string }
-  /** 1-based example used for empty optional slots. */
+  /** 1-based example used for empty optional slots; 0 = the trend had no example (none was used). */
   example: number
   slots: TrendRunDisplaySlot[]
   /** The user's own details, as sent (`{slot:<key>}` mentions unmapped). */
@@ -210,11 +216,15 @@ export function composeTrendRun(
     }
   }
 
-  const example = req.example ?? 1
+  // A trend may have no example (only its original). Leaving `example` out
+  // then means "no example": an empty optional slot is sent with no pictures,
+  // so the original's person stays (the engine keeps a role with none as in
+  // the clip), and the run records example 0. With examples, an empty
+  // optional slot takes the chosen example's pictures (Example 1 by default).
+  const noExample = req.example === undefined && data.examples.length === 0
+  const example = noExample ? 0 : (req.example ?? 1)
   const exampleInRange = Number.isInteger(example) && example >= 1 && example <= data.examples.length
-  // An explicit example must exist. The default (Example 1) is only needed
-  // when an optional slot is left empty, so a draft with no examples yet can
-  // still be test-run with every slot filled.
+  // An explicit example must exist, on a trend with none too.
   if (req.example !== undefined && !exampleInRange) {
     throw new TrendRunError("example_out_of_range", `This trend has no example ${req.example}.`)
   }
@@ -230,7 +240,11 @@ export function composeTrendRun(
       images = [...own]
     } else if (slot.required) {
       throw new TrendRunError("missing_slot", `"${pickText(slot.label, "en")}" needs a picture.`, slot.key)
+    } else if (noExample) {
+      images = []
     } else {
+      // Unreachable today (an out-of-range example is refused above, and no example is `noExample`):
+      // kept so the index below can never read past `examples`.
       if (!exampleInRange) throw new TrendRunError("example_out_of_range", `This trend has no example ${example}.`)
       const fill = data.examples[example - 1]!.slots
       const picked = Object.hasOwn(fill, slot.key) ? fill[slot.key] : undefined

@@ -7,10 +7,13 @@
  * (`trend_versions`) is a full `TrendVersionData` snapshot. Users only ever
  * see a trend's published version.
  *
- * HIDDEN: `source`, `TrendSlot.roleName`, `references`, `trendPrompt`,
- * `prePrompt`, `faceMasking` and `klingLength` never leave the server — public responses are
- * built from the other fields. `engine` is public: the trend's page names it
- * and offers its resolutions.
+ * HIDDEN: the uploaded `source` clip (its `videoUrl`, length and size),
+ * `TrendSlot.roleName`, `references`, `trendPrompt`, `prePrompt`,
+ * `faceMasking` and `klingLength` never leave the server — public responses
+ * are built from the other fields. The source's display copy
+ * (`source.display`, a browser-safe re-encode in its own file) is public: the
+ * trend's page shows it as the original. `engine` is public: the trend's page
+ * names it and offers its resolutions.
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
@@ -40,6 +43,12 @@ interface TrendSlotBase {
   label: LocalizedText
   required: boolean
   hint?: LocalizedText
+  /**
+   * A picture of who (or what) this slot replaces, e.g. a frame of that actor
+   * from the original; in trend storage. Optional; shown with the slot, never
+   * sent with a run.
+   */
+  hintImageUrl?: string
   /** HIDDEN. Who this is in the source clip, e.g. "the woman on the left" (1–200). */
   roleName: string
 }
@@ -70,11 +79,31 @@ export interface TrendExample {
   sourceJobId: string
 }
 
+/**
+ * The source clip as it is SHOWN: an H.264 / yuv420p / AAC MP4 (faststart)
+ * re-encoded from the upload into its OWN file under `trends/<id>/`, even when
+ * the upload is already H.264, plus a poster frame. Width, height and length
+ * are the copy's (rotation applied, so a portrait phone clip reads portrait).
+ * Runs never read it: they edit the uploaded `source.videoUrl`.
+ */
+export interface TrendSourceDisplay {
+  videoUrl: string
+  posterUrl: string
+  width: number
+  height: number
+  durationSec: number
+}
+
 export interface TrendVersionData {
   name: LocalizedText
   description?: LocalizedText
-  /** HIDDEN. The clip the trend recasts (4–30 s); null while the draft has none. */
-  source: { videoUrl: string; durationSec: number; width?: number; height?: number } | null
+  /**
+   * The clip the trend recasts (4–30 s); null while the draft has none. Its
+   * `videoUrl`, length and size are HIDDEN; `display` is its public copy,
+   * made when it is uploaded (absent on a version saved before that; such a
+   * draft cannot publish: `source_display_missing`).
+   */
+  source: { videoUrl: string; durationSec: number; width?: number; height?: number; display?: TrendSourceDisplay } | null
   /** Where the 4 s preview starts; null = no preview offered. */
   previewStart: number | null
   slots: TrendSlot[]

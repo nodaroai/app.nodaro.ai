@@ -8,16 +8,22 @@
  *   - a version row that was ever published (`published_at` set) is never
  *     written again: saving a trend whose draft IS its published version
  *     writes version + 1 and moves the draft pointer (copy-on-write), and every
- *     data write is guarded on `published_at IS NULL`;
+ *     data write is guarded on `published_at IS NULL`. The ONE exception is
+ *     {@link attachDisplayCopy} (trends "show the original", S7): it adds
+ *     `data.source.display` — derived display media a run never reads — to a
+ *     version that lacks it, published or not, and leaves every other byte of
+ *     `data`, the `revision` and `published_at` as they were ("byte" as JSONB
+ *     keeps it: key order, whitespace and number spelling are Postgres's);
  *   - unpublishing keeps `published_version`, so the next save still copies;
- *   - every write of a version's data gives it a new `revision`, so a write or
- *     publish conditioned on the revision the caller read fails when it moved;
+ *   - every write of a version's data gives it a new `revision` (except
+ *     `attachDisplayCopy`, above), so a write or publish conditioned on the
+ *     revision the caller read fails when it moved;
  *   - every write to `trends` sets `updated_at`.
  */
 import { randomUUID } from "node:crypto"
 import { supabase } from "../../../lib/supabase.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import type { TrendBadge, TrendRow, TrendStatus, TrendVersionData } from "./types.js"
+import type { TrendBadge, TrendRow, TrendSourceDisplay, TrendStatus, TrendVersionData } from "./types.js"
 
 const TREND_COLS = "id, slug, status, tags, badges, sort_order, draft_version, published_version, created_at, updated_at"
 
@@ -414,6 +420,133 @@ export async function restore(trendId: string): Promise<void> {
     .eq("id", trendId)
     .eq("status", "archived")
   if (error) fail(`restore trend ${trendId}`, error)
+}
+
+// ── Display copies (S7 backfill) ──────────────────────────────────────────
+
+export type DisplayAttachConflict = "source_changed" | "source_removed" | "version_missing" | "concurrent_write"
+
+const CONFLICT_TEXT: Record<DisplayAttachConflict, string> = {
+  source_changed: "its source clip changed since the copy was made",
+  source_removed: "its source clip was removed since the copy was made",
+  version_missing: "the version is gone (its trend was deleted?)",
+  concurrent_write: "it kept changing while the display copy was attached",
+}
+
+/** The row moved under a display copy (its source replaced or removed, the row gone, or it kept being written). Nothing was written. */
+export class DisplayAttachConflictError extends Error {
+  constructor(readonly trendId: string, readonly version: number, readonly reason: DisplayAttachConflict) {
+    super(`Trend ${trendId} version ${version}: ${CONFLICT_TEXT[reason]}.`)
+    this.name = "DisplayAttachConflictError"
+  }
+}
+
+/**
+ * Attach `display` as `data.source.display` of one version row — published or
+ * draft — where it has none: the documented exception to "a published version
+ * is never written" (header), because it only adds derived display media and
+ * never changes what a run uses. `"already"` when the row has one (nothing is
+ * written, the existing copy wins).
+ *
+ * PostgREST cannot set one JSON key, so the row is read and its whole `data`
+ * written back, `{ ...data, source: { ...source, display } }` and nothing else.
+ * The write is a compare-and-set on what was read: `revision` unchanged (every
+ * other data write sets a new one, so an admin save in between makes it match
+ * nothing) and `data->source->>display` still absent (two backfills at once:
+ * the second matches nothing). It sets neither `revision` nor `published_at`,
+ * so a publish checked against the revision an admin read still goes through.
+ * A write that matched nothing is re-read and retried; `sourceVideoUrl` (the
+ * clip the copy was made from) refuses a row whose source was replaced since.
+ */
+export async function attachDisplayCopy(
+  trendId: string,
+  version: number,
+  display: TrendSourceDisplay,
+  opts: { sourceVideoUrl?: string } = {},
+): Promise<"set" | "already"> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const { data: row, error } = await supabase
+      .from("trend_versions")
+      .select("data, revision")
+      .eq("trend_id", trendId)
+      .eq("version", version)
+      .maybeSingle()
+    if (error) fail(`read trend ${trendId} version ${version}`, error)
+    if (!row) throw new DisplayAttachConflictError(trendId, version, "version_missing")
+    const { data, revision } = row as { data: TrendVersionData; revision: string }
+    const source = data.source
+    if (!source) throw new DisplayAttachConflictError(trendId, version, "source_removed")
+    if (source.display) return "already"
+    if (opts.sourceVideoUrl !== undefined && source.videoUrl !== opts.sourceVideoUrl) {
+      throw new DisplayAttachConflictError(trendId, version, "source_changed")
+    }
+    if (display.videoUrl === source.videoUrl) {
+      throw new Error(`Trend ${trendId} version ${version}: the display copy must be its own file, never the source clip.`)
+    }
+    if (![display.videoUrl, display.posterUrl].every((u) => /^https?:\/\//i.test(u))) {
+      throw new Error(`Trend ${trendId} version ${version}: the display copy's addresses must be http(s) (is R2_PUBLIC_URL set?).`)
+    }
+
+    const next: TrendVersionData = { ...data, source: { ...source, display } }
+    const { data: written, error: writeError } = await supabase
+      .from("trend_versions")
+      .update({ data: next })
+      .eq("trend_id", trendId)
+      .eq("version", version)
+      .eq("revision", revision)
+      .is("data->source->>display", null)
+      .select("version")
+    if (writeError) fail(`attach a display copy to trend ${trendId} version ${version}`, writeError)
+    if ((written ?? []).length > 0) return "set"
+  }
+  throw new DisplayAttachConflictError(trendId, version, "concurrent_write")
+}
+
+/** A version with a source clip and no `display` (`slug` null: no trend row found; `published`: `published_at` set). */
+export interface VersionLackingDisplay { trendId: string; slug: string | null; version: number; published: boolean; sourceVideoUrl: string }
+
+const LACKING_PAGE = 500
+
+/**
+ * Every version row with a source clip and no display copy, published or
+ * draft (a draft without one cannot publish either), in (trend, version)
+ * order, all pages read before it returns. The database filters by JSON path
+ * (`->>`, so a JSON `null` source counts as none); the rows are checked again
+ * here.
+ */
+export async function listVersionsLackingDisplay(): Promise<VersionLackingDisplay[]> {
+  const rows: Array<{ trend_id: string; version: number; published_at: string | null; source: TrendVersionData["source"] }> = []
+  for (let from = 0; ; from += LACKING_PAGE) {
+    const { data, error } = await supabase
+      .from("trend_versions")
+      .select("trend_id, version, published_at, source:data->source")
+      .not("data->>source", "is", null)
+      .is("data->source->>display", null)
+      .order("trend_id", { ascending: true })
+      .order("version", { ascending: true })
+      .range(from, from + LACKING_PAGE - 1)
+    if (error) fail("list trend versions lacking a display copy", error)
+    const page = (data ?? []) as typeof rows
+    rows.push(...page)
+    if (page.length < LACKING_PAGE) break
+  }
+  const lacking = rows.filter((r) => r.source && typeof r.source.videoUrl === "string" && !r.source.display)
+  if (lacking.length === 0) return []
+
+  const slugs = new Map<string, string>()
+  const ids = [...new Set(lacking.map((r) => r.trend_id))]
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase.from("trends").select("id, slug").in("id", ids.slice(i, i + 100))
+    if (error) fail("read trend slugs", error)
+    for (const t of (data ?? []) as Array<{ id: string; slug: string }>) slugs.set(t.id, t.slug)
+  }
+  return lacking.map((r) => ({
+    trendId: r.trend_id,
+    slug: slugs.get(r.trend_id) ?? null,
+    version: r.version,
+    published: r.published_at !== null,
+    sourceVideoUrl: r.source!.videoUrl,
+  }))
 }
 
 // ── Admin writes ──────────────────────────────────────────────────────────

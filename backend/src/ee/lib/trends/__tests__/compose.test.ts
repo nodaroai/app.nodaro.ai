@@ -112,10 +112,36 @@ describe("composeTrendRun — slots", () => {
     const all = { lead: { images: [img("a")] }, friend: { images: [img("b")] }, place: { images: [img("c")] } }
     const { display } = composeTrendRun(trend(version({ examples: [] })), req({ slots: all }))
     expect(display.slots.every((s) => !s.fromExample)).toBe(true)
+    // No example to name: the run records 0 ("no example").
+    expect(display.example).toBe(0)
   })
 
-  it("rejects a version with no examples when an optional slot needs one", () => {
-    expect(codeOf(() => composeTrendRun(trend(version({ examples: [] })), req())).code).toBe("example_out_of_range")
+  it("runs a version with no examples with an empty optional slot kept as in the original (no pictures, example 0)", () => {
+    const { body, display } = composeTrendRun(trend(version({ examples: [] })), req())
+    expect(display.example).toBe(0)
+    expect(display.slots.map((s) => [s.key, s.images, s.fromExample])).toEqual([
+      ["lead", [img("me")], false],
+      ["friend", [], false],
+      ["place", [], false],
+    ])
+    const roles = body.roles as Array<{ kind: string; name: string; images: string[] }>
+    expect(roles.map((r) => [r.kind, r.name, r.images])).toEqual([
+      ["person", "the woman on the left", [img("me")]],
+      ["person", "the man on the right", []],
+      ["location", "the dance floor", []],
+    ])
+    expect(body.trendRun.display.example).toBe(0)
+  })
+
+  it("still records the example it used when the version has examples", () => {
+    const all = { lead: { images: [img("a")] }, friend: { images: [img("b")] }, place: { images: [img("c")] } }
+    expect(composeTrendRun(trend(), req({ slots: all })).display.example).toBe(1)
+  })
+
+  it("an empty optional slot on a no-example Kling 4 trend counts no pictures toward its cap", () => {
+    const data = version({ examples: [], references: [], engine: "kling-4" })
+    const { display } = composeTrendRun(trend(data), req())
+    expect(display.slots.map((s) => s.images.length)).toEqual([1, 0, 0])
   })
 
   it("names an empty optional slot the example has no pictures for", () => {

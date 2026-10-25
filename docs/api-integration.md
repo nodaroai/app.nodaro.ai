@@ -4362,7 +4362,7 @@ an unknown slug is a `404` on every route.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length, `engine` and `resolutions`). `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, chips, defaults? }`: `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
@@ -4379,7 +4379,9 @@ The estimate and run body is
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
-  example `example` (1-based, default 1). The chips are the ones the slot's
+  example `example` (1-based, default 1). On a trend with no example, leave
+  `example` out: an optional slot left out then stays as in the original, and
+  the run records `example: 0`. The chips are the ones the slot's
   `chips` lists (of its kind's own: a person `body` / `outfit` / `hair`, a pet
   `body` / `coat`, a product `shape` / `finish`, a location none), each
   `"new"` (from your pictures) or `"original"` (as in the clip). A chip the
@@ -4426,7 +4428,7 @@ anything is charged:
 | `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Kling 4 trend). |
 | `400` | `too_many_images` | A Kling 4 trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
-| `400` | `example_out_of_range` | `example` names an example the trend does not have, or an optional slot is left empty and the trend has no example (1, by default) to fill it. |
+| `400` | `example_out_of_range` | `example` names an example the trend does not have (any `example` on a trend with none). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
 | `400` | `invalid_slot_mention` | `details` mentions `{slot:<key>}` with a key the trend does not have. |
 | `400` | `prompt_too_long` | `details` is too long for this trend; shorten it. |

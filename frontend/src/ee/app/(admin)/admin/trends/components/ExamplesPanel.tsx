@@ -1,6 +1,7 @@
 // The draft's examples: runs promoted with their own copies of the video and
-// the pictures per slot. Example 1 is the cover. Reorder (up / down) and
-// remove; each write carries the draft's revision.
+// the pictures per slot. Example 1 is the cover; with none, the original's
+// display copy is (a trend may publish with no example). Reorder (up / down)
+// and remove; each write carries the draft's revision.
 
 import { useState } from "react"
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react"
@@ -41,7 +42,7 @@ export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove }: Pr
   if (examples.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No examples yet. Run a full-length test below and choose "Use as example". A trend needs one to be published.
+        No examples yet. Optional: with none, the trend shows only its original. To add one, run a full-length test below and choose "Use as example".
       </p>
     )
   }

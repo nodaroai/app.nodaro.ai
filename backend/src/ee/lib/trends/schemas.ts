@@ -113,6 +113,7 @@ const slotBase = {
   label: localizedText(100),
   required: z.boolean(),
   hint: localizedText(500).optional(),
+  hintImageUrl: httpUrl.optional(),
   roleName: z.string().min(1).max(200),
 }
 
@@ -180,6 +181,16 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
         durationSec: z.number().min(4).max(30),
         width: z.int().positive().optional(),
         height: z.int().positive().optional(),
+        // The re-encoded copy can run a frame past the source's 30 s: any length.
+        display: z
+          .strictObject({
+            videoUrl: httpUrl,
+            posterUrl: httpUrl,
+            width: z.int().positive(),
+            height: z.int().positive(),
+            durationSec: z.number().positive(),
+          })
+          .optional(),
       })
       .nullable(),
     previewStart: z.number().min(0).nullable(),
@@ -205,6 +216,10 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     for (const kind of Object.keys(SLOT_CAPS) as TrendSlotKind[]) {
       const n = d.slots.filter((s) => s.kind === kind).length
       if (n > SLOT_CAPS[kind]) ctx.addIssue({ code: "custom", path: ["slots"], message: `At most ${SLOT_CAPS[kind]} ${kind} slots.` })
+    }
+
+    if (d.source?.display && d.source.display.videoUrl === d.source.videoUrl) {
+      ctx.addIssue({ code: "custom", path: ["source", "display", "videoUrl"], message: "The display copy must be its own file, never the uploaded clip." })
     }
 
     if (d.source && d.previewStart !== null && d.previewStart + PREVIEW_SECONDS > d.source.durationSec) {

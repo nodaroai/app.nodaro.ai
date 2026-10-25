@@ -26,8 +26,8 @@ import type { CastSwapEngine } from "./cast-swap.js"
  *   `invalid_choice` (a chip the slot's kind does not take),
  *   `chip_not_offered` (a chip of the kind that the slot's
  *   {@link TrendDetailSlot.chips} does not list: the trend fixes it),
- *   `example_out_of_range` (`example` names none, or an optional slot is left
- *   empty and the trend has no example to fill it), `preview_unavailable` (the trend offers no
+ *   `example_out_of_range` (`example` names no example of the trend, or is
+ *   sent at all on a trend with none), `preview_unavailable` (the trend offers no
  *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
  *   slot), `prompt_too_long` (shorten `details`), `draft_unsupported`
  *   (`draft: true` on a trend whose `engine` has no draft: Kling 4),
@@ -109,7 +109,10 @@ export interface TrendCard {
   tags: string[]
   /** e.g. `"trending"`, `"new"`. */
   badges: string[]
-  /** The trend's first example (never the clip it recasts). */
+  /**
+   * The trend's first example, else (a trend with no example) its original's
+   * display copy, as {@link TrendDetail.original}.
+   */
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
   /** How many slots of each kind the trend has. */
   needs: Record<TrendSlotKind, number>
@@ -124,9 +127,18 @@ export interface TrendDetailSlot {
   key: string
   label: string
   kind: TrendSlotKind
-  /** A required slot needs pictures; an optional one left empty takes the chosen example's. */
+  /**
+   * A required slot needs pictures; an optional one left empty takes the
+   * chosen example's, or, on a trend with no example, stays as in the original.
+   */
   required: boolean
   hint?: string
+  /**
+   * A picture showing who or what this slot is in the original (e.g. a frame
+   * of that actor), when the trend has one. Show it on an empty slot; a run
+   * never sends it.
+   */
+  hintImageUrl?: string
   /**
    * The chips you may set on this slot, in its kind's order; `[]` = none (show
    * no chips row). A chip of the kind that is not listed is fixed by the
@@ -147,12 +159,37 @@ export interface TrendExample {
   slots: Record<string, string[]>
 }
 
+/**
+ * The clip a trend recasts, as you may show it: a browser-safe copy (H.264
+ * MP4) of the clip every run starts from. Its fields parallel
+ * {@link TrendExample}'s.
+ */
+export interface TrendOriginal {
+  videoUrl: string
+  posterUrl?: string
+  width: number
+  height: number
+  /** The copy's length, in seconds. */
+  durationSec: number
+  /**
+   * Where the 4-second preview starts in the clip, in seconds (`0` included),
+   * when the trend offers one ({@link TrendDetail.previewSec} is `4`); absent
+   * otherwise.
+   */
+  previewStartSec?: number
+}
+
 /** A trend's page (`get()`). */
 export interface TrendDetail extends TrendCard {
   /** The published version this page shows. */
   version: number
   /** `4` when the trend offers a 4-second preview run, else `null`. */
   previewSec: 4 | null
+  /**
+   * The original clip every run starts from, to show beside the examples.
+   * Absent only on a version without a display copy (and from an older server).
+   */
+  original?: TrendOriginal
   /** The video engine every run of this trend uses. Absent (an older server) = `"seedance-2-5"`. */
   engine?: TrendEngine
   /**
@@ -162,6 +199,7 @@ export interface TrendDetail extends TrendCard {
    */
   resolutions: TrendResolution[]
   slots: TrendDetailSlot[]
+  /** Finished runs to show beside the original; may be empty (a trend with only its original). */
   examples: TrendExample[]
 }
 
@@ -174,10 +212,15 @@ export interface TrendRunSlot extends TrendChips {
 export interface TrendRunRequest {
   /**
    * Slot key → what you put in it. Every required slot needs pictures; an
-   * optional slot left out takes the chosen example's. 1–3 pictures per slot.
+   * optional slot left out takes the chosen example's, or, on a trend with no
+   * example, stays as in the original. 1–3 pictures per slot.
    */
   slots: Record<string, TrendRunSlot>
-  /** 1-based example whose pictures fill the optional slots you leave empty. Default 1. */
+  /**
+   * 1-based example whose pictures fill the optional slots you leave empty.
+   * Default 1. Leave it out on a trend with no examples: sending one there
+   * answers 400 `example_out_of_range` (and `0` is a `validation_error`).
+   */
   example?: number
   /** Your own words, at most 1,000 characters. Mention a slot as `{slot:<key>}`. */
   details?: string
@@ -255,7 +298,11 @@ export interface TrendRunDisplaySlot extends TrendChips {
   label: string
   kind: TrendSlotKind
   images: string[]
-  /** `true` when the slot was left empty and the example's pictures filled it. */
+  /**
+   * `true` when the slot was left empty and the example's pictures filled it.
+   * `false` with no `images`: left empty on a trend with no example, so it
+   * stayed as in the original.
+   */
   fromExample: boolean
 }
 
@@ -283,7 +330,10 @@ export interface TrendRun {
   completedAt: string | null
   /** The trend and version it ran (name in English). */
   trend: { id: string; slug: string; version: number; name: string }
-  /** The 1-based example used for empty optional slots. */
+  /**
+   * The 1-based example used for empty optional slots; `0` = the trend had no
+   * example (none was used: never show it as "Example 0").
+   */
   example: number
   slots: TrendRunDisplaySlot[]
   details?: string

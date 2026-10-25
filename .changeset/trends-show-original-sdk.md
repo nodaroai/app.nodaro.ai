@@ -1,0 +1,5 @@
+---
+"@nodaro/sdk": minor
+---
+
+Trends show their original. `TrendDetail.original?` (`TrendOriginal`: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`) is the clip every run of the trend starts from, as you may show it: a browser-safe (H.264 MP4) copy, with where the 4-second preview starts when the trend offers one (`0` included). It is absent only on a version without a display copy (and from an older server). `TrendDetailSlot.hintImageUrl?` is a picture of who or what the slot is in the original, for an empty slot; a run never sends it. A trend may now be published with no example: its `examples` is `[]` and its card's `cover` is the original's copy (`TrendCard.cover` is the first example, else the original). On such a trend, leave `TrendRunRequest.example` out (sending one answers `400 example_out_of_range`): an optional slot left out then stays as in the original (no pictures, `fromExample: false`), and the run records `TrendRun.example` `0` ("no example"; never show it as "Example 0").

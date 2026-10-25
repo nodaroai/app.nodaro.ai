@@ -222,7 +222,7 @@ export default function AdminTrendEditorPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
-          <Section title="1. Source clip" description="The clip the trend recasts. Never shown to users.">
+          <Section title="1. Source clip" description="The clip the trend recasts. Shown to users beside the examples.">
             <SourceClipEditor
               trendId={id}
               source={form.source}
@@ -231,7 +231,11 @@ export default function AdminTrendEditorPage() {
             />
           </Section>
           <Section title="2. Slots" description="What a user replaces, in order.">
-            <SlotsEditor slots={form.slots} onChange={(slots) => set({ slots })} />
+            <SlotsEditor
+              trendId={id}
+              slots={form.slots}
+              onChange={(fn) => setForm((f) => (f ? { ...f, slots: fn(f.slots) } : f))}
+            />
           </Section>
           <Section title="3. Fixed references" description="Pictures sent with every run, each with its prompt line. Hidden from users.">
             <ReferencesEditor
@@ -291,7 +295,7 @@ export default function AdminTrendEditorPage() {
               }
             />
           </Section>
-          <Section title="Examples" description="Example 1 is the cover.">
+          <Section title="Examples" description="Example 1 is the cover; with none, the original's display copy is.">
             <ExamplesPanel
               examples={server.draft.examples}
               slots={server.draft.slots}

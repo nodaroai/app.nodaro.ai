@@ -3,8 +3,13 @@
 // its label and hint are per language; its roleName (hidden) names who it is
 // in the source clip; a person / pet / product carries its kind's default chips,
 // each shown to people (they may change it) or hidden (fixed at its value).
+// A slot may carry a hint picture (e.g. a frame of that actor from the
+// original), copied into the trend's storage as it is added; shown with the
+// slot, never sent with a run.
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react"
+import { useState } from "react"
+import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -16,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { TrendChipKey, TrendChoice, TrendSlotKind } from "@/lib/api"
+import { useTrendMedia } from "@/ee/hooks/queries/use-admin-queries"
 import {
   CHIPS_BY_KIND,
   CHIP_LABELS,
@@ -29,6 +35,8 @@ import {
   type FormSlot,
 } from "../model"
 import { LocalizedField } from "./LocalizedField"
+import { MediaPicker } from "./MediaPicker"
+import { uploadLocalFile } from "./uploads"
 
 const KIND_LABELS: Readonly<Record<TrendSlotKind, string>> = {
   person: "Person",
@@ -49,20 +57,25 @@ function fixedLabel(v: TrendChoice | undefined): string {
 }
 
 interface Props {
+  readonly trendId: string
   readonly slots: FormSlot[]
-  readonly onChange: (slots: FormSlot[]) => void
+  /** Functional: a hint picture arrives asynchronously, after other edits may have landed. */
+  readonly onChange: (fn: (slots: FormSlot[]) => FormSlot[]) => void
 }
 
-export function SlotsEditor({ slots, onChange }: Props) {
-  const update = (i: number, next: FormSlot) => onChange(slots.map((s, j) => (j === i ? next : s)))
-  const move = (i: number, by: -1 | 1) => {
-    const j = i + by
-    if (j < 0 || j >= slots.length) return
-    const next = [...slots]
-    ;[next[i], next[j]] = [next[j]!, next[i]!]
-    onChange(next)
-  }
-  const remove = (i: number) => onChange(slots.filter((_, j) => j !== i))
+export function SlotsEditor({ trendId, slots, onChange }: Props) {
+  // By uid, on the slots as they are when the change lands (never the ones this render saw).
+  const update = (uid: string, fn: (s: FormSlot) => FormSlot) => onChange((ss) => ss.map((s) => (s.uid === uid ? fn(s) : s)))
+  const move = (uid: string, by: -1 | 1) =>
+    onChange((ss) => {
+      const i = ss.findIndex((s) => s.uid === uid)
+      const j = i + by
+      if (i < 0 || j < 0 || j >= ss.length) return ss
+      const next = [...ss]
+      ;[next[i], next[j]] = [next[j]!, next[i]!]
+      return next
+    })
+  const remove = (uid: string) => onChange((ss) => ss.filter((s) => s.uid !== uid))
   const countOf = (kind: TrendSlotKind) => slots.filter((s) => s.kind === kind).length
 
   return (
@@ -71,13 +84,15 @@ export function SlotsEditor({ slots, onChange }: Props) {
       {slots.map((s, i) => (
         <SlotCard
           key={s.uid}
+          trendId={trendId}
           slot={s}
           index={i}
           count={slots.length}
           kindFull={(k) => k !== s.kind && countOf(k) >= SLOT_CAPS[k]}
-          onChange={(next) => update(i, next)}
-          onMove={(by) => move(i, by)}
-          onRemove={() => remove(i)}
+          onChange={(next) => update(s.uid, () => next)}
+          onHintImage={(url) => update(s.uid, (x) => withHintImage(x, url))}
+          onMove={(by) => move(s.uid, by)}
+          onRemove={() => remove(s.uid)}
         />
       ))}
       <div className="flex flex-wrap gap-2">
@@ -89,7 +104,7 @@ export function SlotsEditor({ slots, onChange }: Props) {
             size="sm"
             className="min-h-9"
             disabled={countOf(k) >= SLOT_CAPS[k]}
-            onClick={() => onChange([...slots, newSlot(k, slots)])}
+            onClick={() => onChange((ss) => [...ss, newSlot(k, ss)])}
           >
             <Plus className="mr-1 h-4 w-4" /> {KIND_LABELS[k]}
           </Button>
@@ -99,17 +114,27 @@ export function SlotsEditor({ slots, onChange }: Props) {
   )
 }
 
+/** The slot with this hint picture, or with none (`undefined`: the key is removed, never saved empty). */
+function withHintImage(s: FormSlot, url: string | undefined): FormSlot {
+  const rest: FormSlot = { ...s }
+  delete rest.hintImageUrl
+  return url ? { ...rest, hintImageUrl: url } : rest
+}
+
 interface CardProps {
+  readonly trendId: string
   readonly slot: FormSlot
   readonly index: number
   readonly count: number
   readonly kindFull: (k: TrendSlotKind) => boolean
   readonly onChange: (s: FormSlot) => void
+  /** Applied to the slot as it is when the picture lands. */
+  readonly onHintImage: (url: string | undefined) => void
   readonly onMove: (by: -1 | 1) => void
   readonly onRemove: () => void
 }
 
-function SlotCard({ slot, index, count, kindFull, onChange, onMove, onRemove }: CardProps) {
+function SlotCard({ trendId, slot, index, count, kindFull, onChange, onHintImage, onMove, onRemove }: CardProps) {
   const n = index + 1
   const keyOk = SLOT_KEY_RE.test(slot.key)
   const setChip = (chip: TrendChipKey, v: TrendChoice | "default") => {
@@ -181,6 +206,7 @@ function SlotCard({ slot, index, count, kindFull, onChange, onMove, onRemove }: 
         maxLength={500}
         onChange={(hint) => onChange({ ...slot, hint })}
       />
+      <HintPicture trendId={trendId} n={n} url={slot.hintImageUrl} onChange={onHintImage} />
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">Role name</span>
@@ -232,6 +258,69 @@ function SlotCard({ slot, index, count, kindFull, onChange, onMove, onRemove }: 
             })}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+interface HintProps {
+  readonly trendId: string
+  readonly n: number
+  readonly url: string | undefined
+  readonly onChange: (url: string | undefined) => void
+}
+
+/** The slot's optional hint picture: added (uploaded or pasted, then copied into trend storage) or removed. */
+function HintPicture({ trendId, n, url, onChange }: HintProps) {
+  const media = useTrendMedia(trendId)
+  const [uploading, setUploading] = useState(false)
+
+  const store = async (from: string) => {
+    try {
+      onChange((await media.mutateAsync({ url: from, kind: "hint" })).url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not store the picture")
+    }
+  }
+  const fromFile = async (file: File) => {
+    setUploading(true)
+    try {
+      await store(await uploadLocalFile(file))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div role="group" aria-label={`Slot ${n} hint picture`} className="flex flex-col gap-1 text-sm">
+      <span className="font-medium">
+        Hint picture <span className="font-normal text-muted-foreground">(optional)</span>
+      </span>
+      <span className="text-xs text-muted-foreground">
+        Who this slot replaces, e.g. a frame of that actor from the original. Shown to people with the slot; never sent with a run.
+      </span>
+      {url ? (
+        <div className="relative self-start">
+          <img src={url} alt={`Slot ${n} hint picture`} className="h-20 w-20 rounded object-cover" />
+          <button
+            type="button"
+            aria-label={`Remove slot ${n} hint picture`}
+            className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border bg-background shadow"
+            onClick={() => onChange(undefined)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <MediaPicker
+          accept="image/*"
+          uploadLabel="Add hint picture"
+          busy={uploading || media.isPending}
+          onFiles={(files) => void fromFile(files[0]!)}
+          onUrl={(u) => void store(u)}
+        />
       )}
     </div>
   )

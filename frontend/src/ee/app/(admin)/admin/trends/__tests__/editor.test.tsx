@@ -686,3 +686,125 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     })
   })
 })
+
+describe("the original's display copy and a slot's hint picture", { timeout: 20_000 }, () => {
+  const DISPLAY = {
+    videoUrl: "https://cdn.test/trends/a1/display.mp4",
+    posterUrl: "https://cdn.test/trends/a1/poster.png",
+    width: 720,
+    height: 1280,
+    durationSec: 12.04,
+  }
+  const HINT = "https://cdn.test/trends/a1/hint.png"
+  const saved = () => sentTo(`PUT ${BASE}/draft`) as Array<{ data: { source: Record<string, unknown>; slots: AdminTrendSlot[] } }>
+
+  it("keeps the source's display copy and a slot's hint picture through a save, and loads them as no change", async () => {
+    const user = userEvent.setup()
+    const source = { ...detail().draft.source!, display: DISPLAY }
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { source, slots: [slot({ hintImageUrl: HINT })] }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+
+    const roleName = await screen.findByLabelText(/role name/i)
+    expect(screen.queryByText("Unsaved changes.")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+    expect(screen.getByRole("img", { name: "Slot 1 hint picture" })).toHaveAttribute("src", HINT)
+    expect(screen.getByRole("img", { name: "The original as users see it" })).toHaveAttribute("src", DISPLAY.posterUrl)
+
+    await user.type(roleName, "!")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(saved()).toHaveLength(1))
+    expect(saved()[0]!.data.source).toEqual(source)
+    expect(saved()[0]!.data.slots).toEqual([{ ...slot({ hintImageUrl: HINT }), roleName: "the woman on the left!" }])
+  })
+
+  it("adds a hint picture to a slot (copied into trend storage as a hint), saves it, and ✕ removes it", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/media`] = () => ({ body: { data: { url: HINT } } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+
+    const group = await screen.findByRole("group", { name: "Slot 1 hint picture" })
+    await user.type(within(group).getByLabelText("Add hint picture: URL"), "https://u.example/actor.png{Enter}")
+    await waitFor(() => expect(sentTo(`POST ${BASE}/media`)).toEqual([{ url: "https://u.example/actor.png", kind: "hint" }]))
+    expect(await screen.findByRole("img", { name: "Slot 1 hint picture" })).toHaveAttribute("src", HINT)
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(saved()).toHaveLength(1))
+    expect(saved()[0]!.data.slots[0]!.hintImageUrl).toBe(HINT)
+
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 2, revision: "rev-3" } } })
+    await user.click(screen.getByRole("button", { name: "Remove slot 1 hint picture" }))
+    expect(screen.queryByRole("img", { name: "Slot 1 hint picture" })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(saved()).toHaveLength(2))
+    expect(saved()[1]!.data.slots[0]).not.toHaveProperty("hintImageUrl")
+  })
+
+  it("keeps an edit made to the slot while its hint picture is being stored", async () => {
+    const user = userEvent.setup()
+    let release!: () => void
+    const held = new Promise<void>((r) => (release = r))
+    routes[`POST ${BASE}/media`] = async () => {
+      await held
+      return { body: { data: { url: HINT } } }
+    }
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+
+    const group = await screen.findByRole("group", { name: "Slot 1 hint picture" })
+    await user.type(within(group).getByLabelText("Add hint picture: URL"), "https://u.example/actor.png{Enter}")
+    await waitFor(() => expect(sentTo(`POST ${BASE}/media`)).toHaveLength(1))
+    await user.type(screen.getByLabelText(/role name/i), "!")
+    release()
+    expect(await screen.findByRole("img", { name: "Slot 1 hint picture" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(saved()).toHaveLength(1))
+    expect(saved()[0]!.data.slots[0]).toMatchObject({ roleName: "the woman on the left!", hintImageUrl: HINT })
+  })
+
+  it("a source clip stored with its display copy shows the copy's poster and saves it", async () => {
+    const user = userEvent.setup()
+    const NEW = "https://cdn.test/trends/a1/new-src.mov"
+    routes[`POST ${BASE}/media`] = () => ({ body: { data: { url: NEW, durationSec: 10, width: 1080, height: 1920, display: DISPLAY } } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+
+    expect(await screen.findByText(/no display copy yet/i)).toBeInTheDocument()
+    await user.type(screen.getByLabelText("Replace clip: URL"), "https://u.example/clip.mov{Enter}")
+    await waitFor(() => expect(sentTo(`POST ${BASE}/media`)).toEqual([{ url: "https://u.example/clip.mov", kind: "source" }]))
+    expect(await screen.findByRole("img", { name: "The original as users see it" })).toHaveAttribute("src", DISPLAY.posterUrl)
+    expect(screen.getByText(/this copy is what users see/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no display copy yet/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(saved()).toHaveLength(1))
+    expect(saved()[0]!.data.source).toEqual({ videoUrl: NEW, durationSec: 10, width: 1080, height: 1920, display: DISPLAY })
+  })
+
+  it("says the source section is shown to users", async () => {
+    renderEditor()
+    expect(await screen.findByText("The clip the trend recasts. Shown to users beside the examples.")).toBeInTheDocument()
+    expect(screen.queryByText(/never shown to users/i)).not.toBeInTheDocument()
+  })
+
+  it("says examples are optional (with none, the trend shows only its original) and what the cover is", async () => {
+    renderEditor()
+    expect(
+      await screen.findByText(/^No examples yet\. Optional: with none, the trend shows only its original\./),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/needs one to be published/i)).not.toBeInTheDocument()
+    expect(screen.getByText("Example 1 is the cover; with none, the original's display copy is.")).toBeInTheDocument()
+  })
+
+  it("a publish refused for a missing display copy says to upload the clip again", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/publish`] = () => ({
+      status: 409,
+      body: { error: { code: "publish_blocked", message: "This trend cannot be published yet.", reasons: [{ code: "source_display_missing" }] } },
+    })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /^publish$/i }))
+    const reasons = await screen.findByRole("list", { name: /why it can't be published/i })
+    expect(within(reasons).getByText(/upload the clip again/i)).toBeInTheDocument()
+  })
+})

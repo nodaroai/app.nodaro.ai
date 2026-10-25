@@ -2225,7 +2225,7 @@ interface ListTrendsParams {
 interface TrendCard {
   id: string; slug: string; name: string; description?: string
   tags: string[]; badges: string[]
-  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example
+  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example, else the original's display copy
   needs: Record<TrendSlotKind, number>   // slots of each kind
   durationSec: number
   isFavorite: boolean
@@ -2236,19 +2236,28 @@ interface TrendDetail extends TrendCard {
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
   engine?: "seedance-2-5" | "kling-4"  // TrendEngine: the video model every run uses (the trend's choice); absent = seedance-2-5
   resolutions: ("480p" | "720p" | "1080p")[] // default first: seedance-2-5 ["480p" (draft), "720p", "1080p"], kling-4 ["720p", "1080p"]
+  original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy
   slots: TrendDetailSlot[]
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []
+}
+
+// A browser-safe copy (H.264 MP4) of the clip the trend recasts
+interface TrendOriginal {
+  videoUrl: string; posterUrl?: string; width: number; height: number
+  durationSec: number                    // the copy's length
+  previewStartSec?: number               // where the 4 s preview starts (0 included), when previewSec is 4
 }
 
 interface TrendDetailSlot {
   key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
+  hintImageUrl?: string                  // a picture of who or what the slot is in the original (never sent by a run)
   chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
   defaults?: TrendChips                  // the starting value of those chips
 }
 
 interface TrendRunRequest {
   slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + the slot's `chips`
-  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1
+  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1; leave it out on a trend with no examples
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
@@ -2271,7 +2280,7 @@ interface TrendRun {
   error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | cancelled | failed
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
-  example: number
+  example: number                    // 1-based; 0 = the trend had no example (none was used)
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean
@@ -2310,7 +2319,10 @@ else your profile's language, else English).
 A required slot left empty is refused with `400 missing_slot`; an optional one
 left out takes the chosen example's pictures (`fromExample: true` on the run),
 or is refused with `missing_slot` when that example has none for it
-(`example_out_of_range` when the trend has no such example).
+(`example_out_of_range` when the trend has no such example). On a trend with
+no example, leave `example` out: an optional slot left out then stays as in
+the original (no pictures, `fromExample: false`) and the run records
+`example: 0`.
 `estimate()` and `run()` answer `400` before charging for `missing_slot`,
 `unknown_slot`, `invalid_choice` (a chip the slot's kind does not take),
 `chip_not_offered` (a chip of the kind that the slot's `chips` does not list:

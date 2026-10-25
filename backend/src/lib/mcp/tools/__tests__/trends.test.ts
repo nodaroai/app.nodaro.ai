@@ -81,9 +81,17 @@ const DETAIL = {
   engine: "seedance-2-5",
   resolutions: ["480p", "720p", "1080p"],
   slots: [
-    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
+    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example/hint-lead.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
     { key: "partner", label: "Partner", kind: "person", required: false, chips: [] },
   ],
+  original: {
+    videoUrl: "https://cdn.example/original.mp4",
+    posterUrl: "https://cdn.example/original.png",
+    width: 720,
+    height: 1280,
+    durationSec: 8.04,
+    previewStartSec: 2,
+  },
   examples: [
     {
       videoUrl: "https://cdn.example/ex1.mp4",
@@ -184,6 +192,32 @@ describe("get_trend", () => {
     for (const hidden of ["source.mp4", "secret", "the woman in red", "j-src", "roleName", "trendPrompt"]) {
       expect(text).not.toContain(hidden)
     }
+  })
+
+  it("hands back the original (preview start 0 included); a trend without one has none, and a trend with no example has examples []", async () => {
+    const at0 = { ...DETAIL, original: { ...DETAIL.original, previewStartSec: 0 } }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: at0 } } })
+    expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({
+      original: { previewStartSec: 0 },
+    })
+
+    const { original: _o, ...older } = DETAIL
+    const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: older } } })
+    expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).not.toHaveProperty("original")
+
+    const { previewStartSec: _p, ...noPreview } = DETAIL.original
+    const bare = { ...DETAIL, previewSec: null, original: noPreview, examples: [] }
+    const { fastify: f3 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: bare } } })
+    const view = (await callTool(serverWith(f3), "get_trend", { slug: "dance-off" })).structuredContent as Record<string, unknown>
+    expect(view.original).toEqual(noPreview)
+    expect(view.examples).toEqual([])
+  })
+
+  it("hands back only the original's public fields", async () => {
+    const leaky = { ...DETAIL, original: { ...DETAIL.original, sourceUrl: "https://cdn.example/source.mp4", jobId: "j-src" } }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: leaky } } })
+    const res = await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })
+    expect((res.structuredContent as Record<string, unknown>).original).toEqual(DETAIL.original)
   })
 
   it("lists only a slot's shown chips, and the defaults of those only", async () => {

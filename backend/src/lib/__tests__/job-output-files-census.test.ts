@@ -109,6 +109,10 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "ee/pipelines/services/pipeline-extract-beat-grid.ts :: r2Key": `${UPLOAD} (the trimmed pipeline music asset)`,
   "ee/lib/trends/media.ts :: trendMediaKey(trendId, sniffed.ext) → url":
     `${NOT_A_JOB} (a trend's catalog media, \`trends/<trendId>/<uuid>.<ext>\`: the trend owns it, never a job — an example keeps its own copy so a deleted job never breaks a trend)`,
+  'ee/lib/trends/media.ts :: trendMediaKey(trendId, "mp4") → videoUrl':
+    `${NOT_A_JOB} (a trend source clip's display copy, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
+  'ee/lib/trends/media.ts :: trendMediaKey(trendId, "png") → posterUrl':
+    `${NOT_A_JOB} (the display copy's poster, \`trends/<trendId>/<uuid>.png\`: the trend owns it, never a job)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
   "lib/media-import.ts :: r2Key": UPLOAD,
   "lib/media-import.ts :: thumbKey": UPLOAD,

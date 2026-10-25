@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { Command } from "commander"
-import { info, success, dim, emit } from "../../output.js"
+import { info, success, dim, emit, detail } from "../../output.js"
 import { trendsCommand } from "../trends.js"
 
 const mocks = {
@@ -57,6 +57,23 @@ describe("trends command", () => {
     await runCmd("trends", "get", "dance", "--locale", "he", "--json")
     expect(mocks.get).toHaveBeenCalledWith("dance", { locale: "he" })
     expect(emit).toHaveBeenCalledWith({ slug: "dance" }, expect.objectContaining({ json: true }))
+  })
+
+  it("get prints the whole page, the original included", async () => {
+    const page = { slug: "dance", original: { videoUrl: "https://cdn/o.mp4", width: 720, height: 1280, durationSec: 8 }, examples: [] }
+    mocks.get.mockResolvedValueOnce(page)
+    await runCmd("trends", "get", "dance")
+    expect(detail).toHaveBeenCalledWith(page)
+  })
+
+  it("the help says what get shows and what --example does on a trend with no example", () => {
+    const cmd = trendsCommand()
+    const sub = (name: string) => cmd.commands.find((c) => c.name() === name)!
+    expect(sub("get").description()).toMatch(/original/)
+    for (const name of ["estimate", "run"]) {
+      const example = sub(name).options.find((o) => o.long === "--example")!
+      expect(example.description).toMatch(/no example/)
+    }
   })
 
   it("--slot key=url,url parses into the slot's images", async () => {

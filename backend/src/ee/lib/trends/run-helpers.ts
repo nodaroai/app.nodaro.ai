@@ -46,6 +46,7 @@ export interface TrendRun {
   createdAt: string
   completedAt: string | null
   trend: TrendRunDisplay["trend"]
+  /** 1-based example used for empty optional slots; 0 = the trend had no example. */
   example: number
   slots: TrendRunDisplay["slots"]
   details?: string

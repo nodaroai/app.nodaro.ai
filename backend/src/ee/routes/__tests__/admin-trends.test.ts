@@ -51,6 +51,14 @@ const mem = vi.hoisted(() => ({
   uploads: [] as Array<{ key: string; contentType: string }>,
   downloads: new Map<string, string>(),
   durations: new Map<string, number>(),
+  /** Every ffmpeg run's arguments (the source's display copy is the only one). */
+  ffmpegRuns: [] as string[][],
+  /** When set, the next ffmpeg run fails with it. */
+  ffmpegFails: null as null | Error,
+  /** When set, the next ffprobe of a video fails with it. */
+  probeFails: null as null | Error,
+  /** Every `req.log.warn` the routes write: [object, message]. */
+  warns: [] as unknown[][],
   /** The store fails as on a database without migration 549's tables. */
   missingTables: false,
 }))
@@ -190,7 +198,16 @@ vi.mock("../../../lib/storage.js", async (importOriginal) => {
       mem.uploads.push({ key, contentType })
       return `https://cdn.test/${key}`
     },
+    uploadBufferToR2: async (_buffer: Buffer, key: string, contentType: string) => {
+      mem.uploads.push({ key, contentType })
+      return `https://cdn.test/${key}`
+    },
   }
+})
+
+vi.mock("../../../utils/thumbnail.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../utils/thumbnail.js")>()
+  return { ...actual, thumbnailFromLocalVideo: async () => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) }
 })
 
 vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
@@ -206,13 +223,28 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
       else if (url.endsWith(".png")) await writeFile(dest, PNG)
       else await writeFile(dest, "not media at all")
     },
-    probeVideoSource: async (path: string) => ({
-      width: 720,
-      height: 1280,
-      durationSeconds: mem.durations.get(mem.downloads.get(path) ?? "") ?? 12,
-    }),
+    // The display copy's re-encode: writes a stand-in file where ffmpeg would.
+    runFfmpeg: async (args: readonly string[]) => {
+      mem.ffmpegRuns.push([...args])
+      const fail = mem.ffmpegFails
+      mem.ffmpegFails = null
+      if (fail) throw fail
+      await writeFile(args.at(-1)!, MP4)
+      return ""
+    },
+    probeVideoSource: async (path: string) => {
+      const fail = mem.probeFails
+      mem.probeFails = null
+      if (fail) throw fail
+      return probed(path)
+    },
   }
 })
+
+/** What the stubbed ffprobe reads: 720×1280, the length set for the downloaded URL (else 12 s). */
+function probed(path: string) {
+  return { width: 720, height: 1280, durationSeconds: mem.durations.get(mem.downloads.get(path) ?? "") ?? 12 }
+}
 
 import { adminTrendsRoutes } from "../admin-trends.js"
 import { trendRoutes } from "../trends.js"
@@ -240,10 +272,19 @@ const CAST_SWAP_ALL = {
   trendPrePrompt: true,
 }
 
+/** The source's browser-safe copy, as the source upload makes it. */
+const DISPLAY = {
+  videoUrl: `https://cdn.test/trends/${T1}/display.mp4`,
+  posterUrl: `https://cdn.test/trends/${T1}/display.png`,
+  width: 720,
+  height: 1280,
+  durationSec: 12,
+}
+
 function draftData(over: Partial<TrendVersionData> = {}): TrendVersionData {
   return {
     name: { en: "Neon Dance" },
-    source: { videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, durationSec: 12, width: 720, height: 1280 },
+    source: { videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, durationSec: 12, width: 720, height: 1280, display: DISPLAY },
     previewStart: 2,
     slots: [
       { key: "lead", label: { en: "Lead dancer" }, kind: "person", required: true, roleName: "the woman on the left" },
@@ -398,6 +439,10 @@ beforeEach(async () => {
   mem.uploads = []
   mem.downloads = new Map()
   mem.durations = new Map()
+  mem.ffmpegRuns = []
+  mem.ffmpegFails = null
+  mem.probeFails = null
+  mem.warns = []
   mem.missingTables = false
   world.jobs = new Map()
   world.tagLabels = new Map()
@@ -409,6 +454,9 @@ beforeEach(async () => {
   setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
 
   app = Fastify({ logger: false })
+  app.addHook("onRequest", async (req) => {
+    req.log = Object.assign(Object.create(req.log), { warn: (...a: unknown[]) => void mem.warns.push(a) })
+  })
   app.addHook("preHandler", async (req) => {
     if (req.headers["x-internal-orchestrator-secret"] === SECRET) {
       req.authKind = "internal"
@@ -469,7 +517,27 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(blocked.statusCode).toBe(409)
     expect(blocked.json().error.code).toBe("publish_blocked")
     const codes = reasonsOf(blocked).map((r) => (r as { code: string }).code)
-    expect(codes).toEqual(expect.arrayContaining(["source_missing", "no_required_slot", "no_example"]))
+    expect(codes).toEqual(expect.arrayContaining(["source_missing", "no_required_slot"]))
+    // A trend may publish with no example (S10): only its original.
+    expect(codes).not.toContain("no_example")
+    // No source at all is `source_missing` alone, never also "its display copy is missing".
+    expect(codes).not.toContain("source_display_missing")
+    expect(mem.trends[0]!.status).toBe("draft")
+  })
+
+  it("a draft with a source and its display copy but no example publishes (S10)", async () => {
+    seed()
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
+  })
+
+  it("a source with no display copy is a source_display_missing blocker, and nothing is published", async () => {
+    const { display: _d, ...bare } = draftData().source!
+    seed({}, draftData({ source: bare, examples: [EXAMPLE] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    expect(reasonsOf(res)).toEqual([{ code: "source_display_missing" }])
     expect(mem.trends[0]!.status).toBe("draft")
   })
 
@@ -562,6 +630,34 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(v2.json().data).toMatchObject({ name: "Neon Dance II", version: 2 })
   })
 
+  it("a save naming the SAME clip without its display copy keeps the stored one (an older tab, a builder before the field)", async () => {
+    seed()
+    const { display: _d, ...bare } = draftData().source!
+    const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source: bare, name: { en: "Renamed" } }, revision: await revisionOf() })
+    expect(res.statusCode).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.source).toEqual({ ...bare, display: DISPLAY })
+    expect(mem.trends[0]!.versions[1]!.data.name.en).toBe("Renamed")
+    // ...so it still publishes.
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+  })
+
+  it("a save naming ANOTHER clip never keeps the old clip's display copy", async () => {
+    seed()
+    const source = { videoUrl: `https://cdn.test/trends/${T1}/other.mp4`, durationSec: 10, width: 720, height: 1280 }
+    const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source }, revision: await revisionOf() })
+    expect(res.statusCode).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.source).toEqual(source)
+    expect(reasonsOf(await call("POST", `/v1/admin/trends/${T1}/publish`))).toEqual([{ code: "source_display_missing" }])
+  })
+
+  it("a save whose slot leaves out its hint picture removes it (that is how the builder removes one: never carried over)", async () => {
+    const [lead, dog] = draftData().slots
+    seed({}, draftData({ slots: [{ ...lead!, hintImageUrl: `https://cdn.test/trends/${T1}/hint.png` }, dog!] }))
+    const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), slots: [lead!, dog!] }, revision: await revisionOf() })
+    expect(res.statusCode).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.slots[0]).not.toHaveProperty("hintImageUrl")
+  })
+
   it("an invalid draft is a 400 and is not saved", async () => {
     seed()
     const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source: { videoUrl: "https://x.example/a.mp4", durationSec: 3 } }, revision: await revisionOf() })
@@ -613,6 +709,16 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
   })
 })
 
+describe("the admin list's cover", () => {
+  it("is the original's display poster when the draft has no example yet, and absent with neither", async () => {
+    seed({}, draftData({ examples: [] }))
+    expect((await call("GET", "/v1/admin/trends")).json().data[0].coverUrl).toBe(DISPLAY.posterUrl)
+    mem.trends.length = 0
+    seed({}, draftData({ examples: [], source: { videoUrl: `https://cdn.test/trends/${T1}/source.mp4`, durationSec: 12 } }))
+    expect((await call("GET", "/v1/admin/trends")).json().data[0]).not.toHaveProperty("coverUrl")
+  })
+})
+
 describe("before migration 549 reaches the database", () => {
   it("the admin list answers 503 not_available, not 500", async () => {
     mem.missingTables = true
@@ -653,6 +759,67 @@ describe("POST /:id/media", () => {
     expect(url).toMatch(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.mp4$`))
     expect({ durationSec, width, height }).toEqual({ durationSec: 12, width: 720, height: 1280 })
     expect(mem.uploads[0]).toMatchObject({ contentType: "video/mp4" })
+  })
+
+  it("a source clip also gets its display copy and poster: NEW files under the trend's key, never the upload (S7)", async () => {
+    seed()
+    const res = await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/clip.mp4", kind: "source" })
+    expect(res.statusCode).toBe(200)
+    const { url, display } = res.json().data
+    const key = (ext: string) => new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.${ext}$`)
+    expect(display).toEqual({
+      videoUrl: expect.stringMatching(key("mp4")),
+      posterUrl: expect.stringMatching(key("png")),
+      width: 720,
+      height: 1280,
+      durationSec: 12,
+    })
+    expect(display.videoUrl).not.toBe(url)
+    // One re-encode with the browser-safe args (pinned in lib/trends/__tests__/media.test.ts).
+    expect(mem.ffmpegRuns).toHaveLength(1)
+    expect(mem.ffmpegRuns[0]!.join(" ")).toContain("-c:v libx264")
+    expect(mem.uploads.map((u) => u.contentType).sort()).toEqual(["image/png", "video/mp4", "video/mp4"])
+  })
+
+  it("a clip ffmpeg cannot re-encode is a 400 media_unreadable, its cause logged, and nothing is stored", async () => {
+    seed()
+    const cause = Object.assign(new Error("ffmpeg failed: moov atom not found"), { killed: false, timedOut: false })
+    mem.ffmpegFails = cause
+    const res = await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/clip.mp4", kind: "source" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("media_unreadable")
+    expect(mem.uploads).toEqual([])
+    expect(mem.warns).toContainEqual([expect.objectContaining({ err: cause, trendId: T1 }), expect.any(String)])
+  })
+
+  it("an ffmpeg the platform killed (its time budget, the slot's backstop) is a 503 media_busy, never media_unreadable", async () => {
+    seed()
+    for (const flags of [{ killed: true, timedOut: true }, { killed: true, timedOut: false }]) {
+      mem.ffmpegFails = Object.assign(new Error("ffmpeg held its ffmpeg slot past 635 s; the slot was released"), flags)
+      const res = await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/clip.mp4", kind: "source" })
+      expect(res.statusCode, JSON.stringify(flags)).toBe(503)
+      expect(res.json().error.code).toBe("media_busy")
+    }
+    expect(mem.uploads).toEqual([])
+  })
+
+  it("a source clip out of range makes no display copy either", async () => {
+    seed()
+    mem.durations.set("https://u.example/short.mp4", 3)
+    expect((await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/short.mp4", kind: "source" })).statusCode).toBe(400)
+    expect(mem.ffmpegRuns).toEqual([])
+  })
+
+  it("a slot's hint picture is stored like a reference: a picture, named by its bytes, with no display copy", async () => {
+    seed()
+    const ok = await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/hint.png", kind: "hint" })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json().data.url).toMatch(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.png$`))
+    expect(ok.json().data).not.toHaveProperty("display")
+    expect(mem.uploads).toEqual([{ key: expect.stringMatching(/\.png$/), contentType: "image/png" }])
+    const video = await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/clip.mp4", kind: "hint" })
+    expect(video.json().error.code).toBe("unsupported_media")
+    expect(mem.ffmpegRuns).toEqual([])
   })
 
   it("a reference must be a picture, named by its bytes", async () => {
@@ -715,6 +882,18 @@ describe("POST /:id/examples (D16)", () => {
     expect(JSON.stringify(example)).not.toContain("out.example")
     expect(JSON.stringify(example)).not.toContain("u.example")
     expect(example).toMatchObject({ width: 720, height: 1280, durationSec: 12, sourceJobId: RUN })
+    // An example's video is copied as it is: only the source gets a display copy.
+    expect(mem.ffmpegRuns).toEqual([])
+  })
+
+  it("an ffprobe the platform killed while copying the run's video is a 503 media_busy, not media_unreadable", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, ADMIN2))
+    mem.probeFails = Object.assign(new Error("ffprobe timed out"), { killed: true, timedOut: true })
+    const res = await call("POST", `/v1/admin/trends/${T1}/examples`, { jobId: RUN })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("media_busy")
+    expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
   })
 
   it("reorders (a permutation of indexes) and removes examples", async () => {

@@ -35,6 +35,7 @@ import {
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
   type AdminTrendData,
+  type AdminTrendMediaKind,
   type AdminTrendRun,
   type TrendBadge,
   type TrendLocalizedText,
@@ -1599,7 +1600,7 @@ export function useSaveTrendTagLabels() {
 export function useTrendMedia(id: string) {
   return useMutation({
     onError: handledByScreen,
-    mutationFn: (input: { url: string; kind: "source" | "reference" }) => storeAdminTrendMedia(id, input),
+    mutationFn: (input: { url: string; kind: AdminTrendMediaKind }) => storeAdminTrendMedia(id, input),
   })
 }
 
