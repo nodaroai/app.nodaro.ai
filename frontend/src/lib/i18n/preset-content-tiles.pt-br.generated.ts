@@ -47,6 +47,10 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
     name: "Modelo vs modelo",
     description: "Comparando dois modelos de imagem ou vídeo. 'Qual é melhor?'",
   },
+  "generate-image/thumb-node-diagram": {
+    name: "Diagrama de nós",
+    description: "Canais de automação e agentes de IA: uma pessoa no centro de um fluxo limpo.",
+  },
   "generate-image/thumb-finance-shock": {
     name: "Choque financeiro",
     description: "Canais de finanças e cripto. Número de perda ou ganho, cabeça nas mãos.",
@@ -86,6 +90,14 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
   "generate-image/thumb-stage-talk": {
     name: "Palestra no palco",
     description: "Palestrantes e fundadores de SaaS repostando talks.",
+  },
+  "generate-image/thumb-screen-portals": {
+    name: "Portais de tela",
+    description: "Criadores de anúncios: telas de celular flutuam em volta de um apresentador surpreso.",
+  },
+  "generate-image/thumb-copy-me-arrow": {
+    name: "Seta da transformação",
+    description: "Canais de empreendedorismo: da silhueta anônima à fundadora confiante, uma seta amarela.",
   },
   "generate-image/thumb-challenge-timer": {
     name: "Desafio com cronômetro",
@@ -138,6 +150,10 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
   "generate-image/thumb-food-feast": {
     name: "Banquete",
     description: "Vloggers de comida e receitas. Comida de perto, cara de fome, um preço.",
+  },
+  "generate-image/thumb-vlog-bright": {
+    name: "Vlog ensolarado",
+    description: "Vlogs de viagem e lifestyle: rua ensolarada, sorriso grande, letras pintadas à mão.",
   },
   "generate-image/thumb-science-explainer": {
     name: "Explicação científica",
@@ -199,6 +215,10 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
     name: "Certo e errado",
     description: "Canais de como fazer: faça isso, não aquilo.",
   },
+  "generate-image/thumb-playful-cast": {
+    name: "Elenco divertido",
+    description: "Criadores de animação e infantil: apresentador cercado de companheiros 3D originais.",
+  },
   "generate-image/thumb-pets": {
     name: "Pets",
     description: "Canais de pets e histórias de resgate.",
@@ -210,6 +230,18 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
   "generate-image/thumb-parenting": {
     name: "Parentalidade",
     description: "Criadores de família. Pai ou mãe + criança, caos relatável.",
+  },
+  "generate-image/thumb-swiss-collage": {
+    name: "Colagem suíça",
+    description: "Designers e marcas: colagem de impressão com retrato recortado e tipografia gigante.",
+  },
+  "generate-image/thumb-editorial-type": {
+    name: "Tipografia editorial",
+    description: "Moda e cultura: um rosto através de uma palavra monumental, contenção de cartaz.",
+  },
+  "generate-image/thumb-reel-cover-bold": {
+    name: "Duas palavras na névoa",
+    description: "Canais de motivação: duas palavras monumentais na névoa e uma figura minúscula.",
   },
   "generate-image/short-pov-hook": {
     name: "Gancho POV",
@@ -466,6 +498,10 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
   "generate-image/merch-standalone-print-art": {
     name: "Arte de estampa isolada",
     description: "Print on demand: só a arte frontal, sem camiseta, em fundo branco.",
+  },
+  "generate-image/layout-visionary-magazine-cover": {
+    name: "Capa de revista",
+    description: "Fundadores e marcas pessoais: capa de revista de moda vertical com título e matéria de capa.",
   },
   "generate-image/merch-sticker-sheet": {
     name: "Cartela de adesivos",

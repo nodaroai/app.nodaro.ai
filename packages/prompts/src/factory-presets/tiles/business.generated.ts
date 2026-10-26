@@ -214,6 +214,21 @@ export const TILES_BUSINESS: readonly FactoryPreset[] = [
     },
   },
   {
+    id: "generate-image/layout-visionary-magazine-cover",
+    name: "Visionary Magazine Cover",
+    description: "Founders, coaches and personal brands: a 9:16 fashion-magazine cover with masthead, kicker and cover story.",
+    group: "Business",
+    section: "Covers & print",
+    platforms: ["Print"],
+    data: {
+      provider: "gpt-image-2",
+      resolution: "1K",
+      aspectRatio: "9:16",
+      prompt: "An original ultra-premium entrepreneurial fashion magazine cover, art-directed like an influential global independent style magazine. A confident fictional male entrepreneur in his early 30s lounges diagonally across an unusual distressed CAMOUFLAGE FABRIC sofa, effortless power and playful understatement. His styling is meticulously specific: crisp pure white T-shirt, relaxed open flowing black designer cardigan, premium relaxed dark-blue denim, vivid scarlet RED canvas high-top sneakers as a single commanding fashion accent, discreet refined luxury watch, clean natural skin, stylish slightly messy dark hair. Camera is deliberately DUTCH-TILTED 12 degrees and close: expressive model and sofa form a kinetic lower-left to upper-right diagonal, but all magazine typography remains LEVEL and perfectly legible. Refined industrial loft with textured gray concrete wall, oversized window off-frame casting dramatic geometric bands of late-afternoon light, subtle depth haze. Authentic 85mm f/1.4 full-frame editorial photography aesthetic, very shallow depth of field, razor-sharp subject eyes and fabrics, softly receding background, natural skin pores, rich deep blacks, realistic folds and worn camouflage texture, impeccable studio-quality lighting and cinematic color grading. Design as a real exquisitely typeset printed magazine cover, NOT a thumbnail, not a collage, not a generic poster. Large custom high-contrast editorial serif MASTHEAD across the very top: EXACT TEXT \"{TEXT || THE VISIONARY}\". A smaller vivid red editorial kicker at upper left: EXACT TEXT \"{TEXT2 || THE NEW RULES}\". Place a crisp clean elegant bold cover story in uncluttered negative space beside the model: EXACT TEXT \"{TEXT3 || BUILT DIFFERENT}\". Under it in small but readable restrained sans-serif: EXACT TEXT \"{TEXT4 || An interview about ideas, risk & reinvention}\". At lower corner: a convincing tiny generic BARCODE graphic plus \"VOL. 01\" and \"2026\". Hierarchy: masthead > model > headline > secondary lines, careful breathing room, strong legibility, beautiful editorial details, sophisticated typographic kerning. Every visible word must be exact; avoid filler gibberish and extra fake stories. No real magazine brand, no celebrity, no third-party logos, no watermarks, no other title. Strong distinctive aspiration, elegant rather than flashy.",
+      negativePrompt: "extra text, distorted face, incorrect anatomy, duplicate limbs, erroneous letters, imitation of existing magazine brands, watermarks, overprocessed waxy skin",
+    },
+  },
+  {
     id: "generate-image/merch-sticker-sheet",
     name: "Sticker Sheet",
     description: "Sticker sellers and brands: die-cut sticker sheet.",
