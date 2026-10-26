@@ -449,6 +449,20 @@ const HANDLE_LABELS_KO: Record<string, string> = {
 }
 
 const PRESET_GROUPS_KO: Record<string, string> = {
+  // Create Image tiles (tools/preset-tiles/ledger.json)
+  "YouTube": "유튜브",
+  "Shorts · TikTok": "쇼츠 · 틱톡",
+  "Social & Ads": "소셜 및 광고",
+  "Business": "비즈니스",
+  "Life & Events": "일상과 이벤트",
+  "Layout": "레이아웃",
+  "Text": "텍스트",
+  "Business & Marketing": "비즈니스 및 마케팅",
+  "Personal Photos": "개인 사진",
+  "Products & Fashion": "제품 및 패션",
+  "Content & Creative": "콘텐츠 및 크리에이티브",
+  "Home & Spaces": "집과 공간",
+  "Family & Events": "가족 및 이벤트",
   "Accessibility & SEO": "접근성 및 SEO",
   "Advertising & Hype": "광고 및 하이텐션",
   "Ambiences (loopable)": "환경음(루프 가능)",

@@ -4603,7 +4603,16 @@ factory catalog it reads as anyone can.
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
-A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, data, minReferences, needsImage, previewUrl }`.
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, section?, platforms?, data, minReferences, needsImage, previewUrl }`.
+
+**Where a preset is filed — `group`, `section`, `platforms`.** `group` is the folder
+(the Create Image tiles' groups are the everyday ones: YouTube, Shorts · TikTok, Social &
+Ads, Business, Life & Events, Layout, Text). `section`, when present, is a sub-heading inside
+the group — a YouTube topic such as `"Finance & Crypto"`, or `"Instagram feed"`. `platforms`,
+when present, is where the result is meant to be posted, most fitting first
+(`["TikTok", "Reels", "Shorts"]`, `["LinkedIn"]`, `["Print", "Etsy"]`). Both are left out
+on a preset that has neither (a look, a layout, a studio folder), so group and filter by them
+only when they are there.
 
 **Photos a preset works from — `minReferences` / `needsImage`.** `minReferences`
 is how many connected reference images the preset works from (0 = none), and

@@ -20,6 +20,19 @@ the same idea**:
 
 | Folder | Examples |
 |--------|----------|
+| **YouTube** | 52 thumbnails filed by topic (*AI & Tech*, *Finance & Crypto*, *Business & Creators*, *Gaming & Challenges*, *Health, Fitness & Beauty*, *Food & Travel*, *Experts & Teachers*, *News & Investigation*, *Talk, Podcast & Music*, *Entertainment & Reactions*, *Family, Pets & Sports*) — Finance Shock, Crypto Pump, AI Tool Reveal, New Model Drop, Coding Tutorial, Course Launch, Before/After, Versus Battle, Tier List, True Crime Board… each with an example picture; the on-image headline is a `{TEXT || …}` slot whose default is the headline the picture shows |
+| **Shorts · TikTok** | 10 vertical (9:16) covers — POV Hook, Storytime, 5AM Routine, 3 Steps, Quick Recipe, GRWM, Side Income, AI Free Tool, Dance Trend, Fitness Daily |
+| **Social & Ads** | Posts (Old vs New, Big Caption, Carousel Cover, Quote Card, Hiring, Employee Spotlight), Instagram feed, Stories, WhatsApp status, X, Pinterest pins (2:3), Facebook covers, LinkedIn posts, Ads & promos (restaurant, salon, gym, clinic, real estate, Facebook lead, App Store), Profiles & banners (LinkedIn, Twitch, podcast, Spotify) |
+| **Business** | E-commerce (Amazon hero, lifestyle, infographic, Etsy, ghost mannequin, sale badge), Work & marketing (report cover, email header, landing hero), Education (slide title, worksheet header, flashcard), Merch (t-shirt, sticker sheet, mug) |
+| **Life & Events** | Invitations and cards (wedding, birthday, club flyer, conference, holiday, baby), Personal (birthday card, pet portrait, holiday card, phone wallpaper, meme, dating profile), Sports (match day, player card), Community (fundraiser, menu board) |
+| **Layout** | Storyboard ×6, Production Storyboard, Multi-Shot 2×2, 2×2 Grid, Headless Sheet, Sprite Sheet, Props Sheet, Comic Page |
+| **Text** | 45 type styles — Neon Sign, Gold Foil, Chrome Y2K, Graffiti Drip, Carved Wood, Glitch, Fire Embers, Ice, Holographic, Typewriter, Wedding Script, Indie Title Card… the word shown is the `{TEXT}` slot |
+| **Business & Marketing** | 30 finished small-business assets — Brand Identity Starter, Salon Opening Campaign, Restaurant Menu Design, Flash Sale Advertising, Property Listing Cover, Hiring Poster, Spa Gift Certificate, Trade Show Booth, Coffee Shop Menu Board, Storefront Sign Mockup… |
+| **Personal Photos** *(connect your photo)* | 20 edits of your own picture — Old Family Photo Restoration, Black and White Colorization, Scratch Removal, Photo Background Change, Corporate Headshot Upgrade, Try a New Haircut / Hair Color, Tattoo Design Preview, Fine Art Pet Portrait, Cartoon Avatar, Virtual Outfit Preview… |
+| **Products & Fashion** *(most connect a product photo)* | 20 — Phone Photo to Hero Product, Clean White Packshot, Luxury Perfume Campaign, Skincare Water Splash, Jewelry Gemstone Macro, Coffee Packaging Concept, Virtual Fashion Model, Four-Product Catalog Grid, Product Rotation Sheet… |
+| **Content & Creative** | 20 — Indie Music Album Cover, Thriller Book Jacket, Science Fiction Movie Poster, YouTube Channel Banner, Podcast Cover Artwork, RPG Character Concept Sheet, Four-Panel Comic Story, Educational Infographic, Music Festival Poster, Travel Magazine Cover… |
+| **Home & Spaces** *(connect a photo of the room)* | 15 — Scandinavian Living Room Redesign, Contemporary Kitchen Renovation, Japandi Bedroom, Spa Bathroom, Work-From-Home Office, Nursery, Balcony Garden, Backyard Landscape, Exterior Paint Options, Place a Sofa in Your Room… |
+| **Family & Events** | 15 — Elegant Wedding Invitation, Kids Birthday Invitation, Bar Mitzvah Invitation, Baby Shower, Save the Date, Family Movie Poster Portrait, Newborn Announcement, Rosh Hashanah Greeting, Ramadan Greeting, Memorial Tribute Card… |
 | **Reference Sheet** *(connect a photo)* | **Character Board**, **Pose Board**, **Location Board**, **Product Board**, **Outfit Board**, **Scene Board**, **Creature Board**, **Vehicle Board**, **Food Board**, **Mascot Board**, **Pet Board**, **Skin Detail Sheet** — dense multi-panel reference sheets generated from one connected photo; reuse the board as a reference in later generations for consistency |
 | **Cast & Consistency** *(connect photos)* | **Character Reference Grid** (clean 4-angle identity grid, no decorations), **Cast Mega Grid** (one labeled sheet for 2–4 connected characters), **Cast Scene** (stage the cast referencing them by name) — sterile neutral-background grids built to be fed back as identity references |
 | **Edit by Name** *(two-step recipe)* | **Label Elements** (returns the connected photo with numbered callout labels) → **Apply Named Edit** (edit elements by their label name; labels removed from the result) |
@@ -37,6 +50,15 @@ the same idea**:
 | **Icons, Game Assets & Textures** | Game Icon, Seamless Texture / Pattern, Emoji Set, Pixel Sprite |
 | **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day, Sports Jersey Portrait |
 | **Realism & Authentic** | Unretouched Portrait, Phone Selfie, Candid Phone Snapshot, Mirror Selfie, Creator at Home · Waist-Up, Webcam / Video-Call Frame, Macro Skin Study, Product in Hand — everyday, unretouched looks: real skin texture, deep focus and plain colour instead of a polished studio finish |
+
+The thirteen groups at the top of the table are the **Create Image tiles**: each preset carries the
+exact prompt that rendered its example picture (GPT Image 2.5 Flare or GPT Image 2, 1K), so an unedited run makes
+a picture like the one shown, and a filled `{TEXT}` slot carries your own headline — a headline of
+several lines opens one slot per line (`{TEXT}`, `{TEXT2}`, `{TEXT3}`), each defaulting to the line
+the picture shows, while labels, buttons and badges in the design stay as they are. Over the API
+each of these also states `section` (its sub-heading, such as a YouTube topic) and `platforms`
+(where the result is meant to be posted, most fitting first) — see
+[Programmatic access](#programmatic-access-api--sdk--cli).
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
 for logos and thumbnails) — for boards and grids those defaults are backed by a head-to-head
@@ -374,6 +396,10 @@ catalog needs no auth at all, so an app can show it to visitors before they sign
   `delete_node_preset` and `favorite_node_preset` for agents that manage presets.
 
 A preset's `data` is captured node config — apply it by merging `data` into a node when you build a
-workflow. Every preset also says how many connected photos it works from — `minReferences`, with
+workflow. A factory preset may also carry `section` (its sub-heading inside the group — a YouTube
+topic such as `"Finance & Crypto"`, or `"Instagram feed"`) and `platforms` (where the result is meant
+to be posted, most fitting first: `["TikTok", "Reels", "Shorts"]`); both are absent on a preset that
+has neither, so a client groups and filters by them only when they are there. Every preset also says
+how many connected photos it works from — `minReferences`, with
 `needsImage` true when it is at least one (Reference Sheet, Portrait Transformations, Edits and any
 template using `{image:N}`) — and carries a `previewUrl`: an example picture, or `null`.

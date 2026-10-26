@@ -1,6 +1,7 @@
 import type { FactoryPreset } from "./types.js"
 import { stylizedSubjectFor, editsFor } from "./shared-image.js"
 import { NEUTRAL_PERSON, REALISM_FINISH, REALISM_SKIN, realismEmptyHands, realismViewpoint } from "../realism-wording.js"
+import { GENERATE_IMAGE_TILE_PRESETS } from "./tiles/index.generated.js"
 
 /** Joins the sentences of one prompt with single spaces. */
 const sentences = (...parts: string[]): string => parts.join(" ")
@@ -1846,4 +1847,11 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       prompt: sentences("{subject || An adult woman in her thirties} holds {image:1:product} at chest height toward the viewer, label facing out, {setting || in a bright room at home}.", REALISM_FINISH),
     },
   },
+  // ── Create Image tiles (tools.nodaro.ai "Choose image preset") ──────────────
+  // One tab per group (YouTube, Shorts · TikTok, Social & Ads, Business, Life &
+  // Events, Layout, Text); each preset's prompt is the one that rendered its tile
+  // picture, with the on-image headline as a {TEXT || …} slot. Generated from
+  // tools/preset-tiles/ledger.json — edit the ledger, then run its build. Last,
+  // so the editor's folders and the API listing keep their order before them.
+  ...GENERATE_IMAGE_TILE_PRESETS,
 ]

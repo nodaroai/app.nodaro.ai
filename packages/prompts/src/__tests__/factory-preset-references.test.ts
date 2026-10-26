@@ -147,6 +147,10 @@ describe("factory presets — declared reference counts", () => {
   const MIXED_GROUPS: Readonly<Record<string, string>> = {
     "generate-image/Realism & Authentic":
       "text-only realism shots beside two that put the user's own photo in the frame ({image:1:person}, {image:1:product})",
+    "generate-image/Products & Fashion":
+      "Create Image use cases: most restage the person's own product photo (minReferences 1), three design from words (coffee packaging, flat lay, food package)",
+    "generate-image/Family & Events":
+      "Create Image use cases: invitations and greetings from words beside six cards made from the person's own photo (minReferences 1)",
   }
 
   it("every group is all photo-based or all text-only, except the listed mixed groups", () => {

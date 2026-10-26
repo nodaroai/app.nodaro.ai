@@ -23,6 +23,11 @@ import { LABELS_KO } from "./labels.ko"
 import { PRESET_CONTENT_KO } from "./preset-content.ko"
 import { LABELS_PT_BR } from "./labels.pt-br"
 import { PRESET_CONTENT_PT_BR } from "./preset-content.pt-br"
+// The Create Image tiles' copy, generated from tools/preset-tiles/ledger.json (its build writes these four files).
+import { PRESET_TILES_HE } from "./preset-content-tiles.he.generated"
+import { PRESET_TILES_JA } from "./preset-content-tiles.ja.generated"
+import { PRESET_TILES_KO } from "./preset-content-tiles.ko.generated"
+import { PRESET_TILES_PT_BR } from "./preset-content-tiles.pt-br.generated"
 import { translate, type MessageKey } from "./index"
 import { UNIT_LABELS } from "@/nodes/_generated/labels"
 import { unitNodeLabels } from "@/lib/unit-compose"
@@ -185,7 +190,12 @@ export function useLocalizeOptionLabel(): (label: string) => string {
  * Partial per locale — a preset with no entry falls back to the catalog's
  * English, so upstream additions never render blank.
  */
-export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = { he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA, ko: PRESET_CONTENT_KO, "pt-BR": PRESET_CONTENT_PT_BR }
+export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = {
+  he: { ...PRESET_CONTENT_HE, ...PRESET_TILES_HE },
+  ja: { ...PRESET_CONTENT_JA, ...PRESET_TILES_JA },
+  ko: { ...PRESET_CONTENT_KO, ...PRESET_TILES_KO },
+  "pt-BR": { ...PRESET_CONTENT_PT_BR, ...PRESET_TILES_PT_BR },
+}
 
 /** Hook: returns a preset-copy resolver bound to the current locale.
  *  Stable across renders (memoized on locale) so callers can list it in
