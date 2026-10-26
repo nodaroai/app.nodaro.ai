@@ -111,24 +111,7 @@ export function registerSessionItemRoutes(app: FastifyInstance): void {
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     const last = rows[rows.length - 1]
     return {
-      data: rows.flatMap((r) => {
-        const job = Array.isArray(r.job) ? r.job[0] : r.job
-        if (!job) return []
-        // A child job is shown only through its parent: never in a non-admin's
-        // feed, however it got there (CHILD_JOB_COLUMN).
-        if (!isAdmin && (job as unknown as Record<string, unknown>)[CHILD_JOB_COLUMN] != null) return []
-        const fromId = r.imported_from_session_id
-        return [{
-          jobId: r.job_id,
-          addedAt: r.added_at,
-          removedAt: r.removed_at,
-          imported: r.kind === "imported",
-          importedFrom: r.kind === "imported" && fromId
-            ? { sessionId: fromId, title: titles.data.get(fromId) ?? null }
-            : null,
-          job: sanitizeJobForPublic(job, isAdmin),
-        }]
-      }),
+      data: rows.flatMap((r) => feedItemOf(r, titles.data, isAdmin)),
       next: rows.length === limit && last
         ? encodeCursor({ at: (removed ? last.removed_at : last.added_at) ?? last.added_at, id: last.job_id })
         : null,
@@ -171,34 +154,9 @@ export function registerSessionItemRoutes(app: FastifyInstance): void {
     const owned = (jobs ?? []) as Array<{ id: string; session_id: string | null }>
     if (owned.length !== ids.length) return notFound(reply, "One or more jobs not found")
 
-    const targetId = found.data.id
-    // A removed link comes back where it was (its kind, origin and place in
-    // the feed kept) — importing an item from the session's own Trash is a
-    // restore.
-    const { data: revived, error: reviveError } = await supabase
-      .from("session_items")
-      .update({ removed_at: null })
-      .eq("session_id", targetId)
-      .eq("user_id", req.userId)
-      .in("job_id", ids)
-      .not("removed_at", "is", null)
-      .select("job_id")
-    if (reviveError) return sendInternalError(reply, req, reviveError, "Failed to import items")
-    const rows = owned.map((j) => ({
-      session_id: targetId,
-      user_id: req.userId,
-      job_id: j.id,
-      kind: "imported",
-      imported_from_session_id: j.session_id && j.session_id !== targetId ? j.session_id : null,
-    }))
-    // Already in the session (born there, imported before, or just revived): left as it is.
-    const { data: inserted, error } = await supabase
-      .from("session_items")
-      .upsert(rows, { onConflict: "session_id,job_id", ignoreDuplicates: true })
-      .select("job_id")
-    if (error) return sendInternalError(reply, req, error, "Failed to import items")
-    const imported = (revived ?? []).length + (inserted ?? []).length
-    return reply.status(201).send({ data: { imported, requested: ids.length } })
+    const linked = await linkJobs(found.data.id, req.userId, owned)
+    if (linked.error) return sendInternalError(reply, req, linked.error, "Failed to import items")
+    return reply.status(201).send({ data: { imported: linked.imported, requested: ids.length } })
   })
 
   // Remove one item from this session: its link goes to the session's Trash
@@ -304,6 +262,61 @@ export function registerSessionItemRoutes(app: FastifyInstance): void {
     if (typeof result.moved !== "number") return sendInternalError(reply, req, new Error("Malformed move response"), "Failed to move items")
     return { data: { moved: result.moved } }
   })
+}
+
+/** One feed row as the API answers it, or none: a row whose job did not
+ *  come back, or a child job for a non-admin (it is shown only through its
+ *  parent, however it got into the session — CHILD_JOB_COLUMN). */
+function feedItemOf(r: FeedRow, titles: ReadonlyMap<string, string | null>, isAdmin: boolean) {
+  const job = Array.isArray(r.job) ? r.job[0] : r.job
+  if (!job) return []
+  if (!isAdmin && (job as unknown as Record<string, unknown>)[CHILD_JOB_COLUMN] != null) return []
+  const fromId = r.imported_from_session_id
+  return [{
+    jobId: r.job_id,
+    addedAt: r.added_at,
+    removedAt: r.removed_at,
+    imported: r.kind === "imported",
+    importedFrom: r.kind === "imported" && fromId ? { sessionId: fromId, title: titles.get(fromId) ?? null } : null,
+    job: sanitizeJobForPublic(job, isAdmin),
+  }]
+}
+
+/**
+ * Link the caller's own (already checked) jobs into a session. A removed link
+ * comes back where it was — its kind, origin and place in the feed kept — so
+ * importing an item from the session's own Trash is a restore; a link already
+ * live is left as it is. Answers how many links were revived or added.
+ */
+async function linkJobs(
+  sessionId: string,
+  userId: string,
+  jobs: ReadonlyArray<{ id: string; session_id: string | null }>,
+): Promise<{ imported: number; error: unknown }> {
+  const ids = jobs.map((j) => j.id)
+  const { data: revived, error: reviveError } = await supabase
+    .from("session_items")
+    .update({ removed_at: null })
+    .eq("session_id", sessionId)
+    .eq("user_id", userId)
+    .in("job_id", ids)
+    .not("removed_at", "is", null)
+    .select("job_id")
+  if (reviveError) return { imported: 0, error: reviveError }
+  const rows = jobs.map((j) => ({
+    session_id: sessionId,
+    user_id: userId,
+    job_id: j.id,
+    kind: "imported",
+    imported_from_session_id: j.session_id && j.session_id !== sessionId ? j.session_id : null,
+  }))
+  // Already in the session (born there, imported before, or just revived): left as it is.
+  const { data: inserted, error } = await supabase
+    .from("session_items")
+    .upsert(rows, { onConflict: "session_id,job_id", ignoreDuplicates: true })
+    .select("job_id")
+  if (error) return { imported: 0, error }
+  return { imported: (revived ?? []).length + (inserted ?? []).length, error: null }
 }
 
 /** Titles of the sessions a page's imported items came from — the caller's

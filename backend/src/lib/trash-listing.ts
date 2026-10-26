@@ -97,6 +97,23 @@ export async function listTrash<J = Record<string, unknown>>(
   const rows = (data ?? []) as TrashRow[]
   if (rows.length === 0) return { data: [], next: null, error: null }
 
+  const hydrated = await hydrateTrashRows<J>(rows, q.userId)
+  if (hydrated.error) return { data: [], next: null, error: hydrated.error }
+  const last = rows[rows.length - 1]!
+  return {
+    data: hydrated.entries,
+    next: rows.length === q.limit ? encodeTrashCursor({ at: last.at, key: last.sort_key }) : null,
+    error: null,
+  }
+}
+
+/** A page of Trash rows as entries: each row's job and session, read as the
+ *  owner's own in one read per table. A row whose job or session is gone
+ *  (purged, deleted meanwhile) is left out. */
+async function hydrateTrashRows<J>(
+  rows: readonly TrashRow[],
+  userId: string,
+): Promise<{ entries: TrashEntry<J>[]; error: unknown }> {
   const jobIds = [...new Set(rows.map((r) => r.job_id))]
   const sessionIds = [...new Set(rows.flatMap((r) => (r.session_id ? [r.session_id] : [])))]
   const [jobs, sessions] = await Promise.all([
@@ -105,7 +122,7 @@ export async function listTrash<J = Record<string, unknown>>(
       // trash-read: the Trash listing reads deleted jobs on purpose.
       .select(`${SESSION_FEED_JOB_COLS}, ${TRASHED_JOB_COLUMN}`)
       .in("id", jobIds)
-      .eq("user_id", q.userId)
+      .eq("user_id", userId)
       .is(CHILD_JOB_COLUMN, null),
     sessionIds.length === 0
       ? Promise.resolve({ data: [], error: null })
@@ -113,10 +130,10 @@ export async function listTrash<J = Record<string, unknown>>(
           .from("generation_sessions")
           .select("id, title, project_id")
           .in("id", sessionIds)
-          .eq("user_id", q.userId),
+          .eq("user_id", userId),
   ])
-  if (jobs.error) return { data: [], next: null, error: jobs.error }
-  if (sessions.error) return { data: [], next: null, error: sessions.error }
+  if (jobs.error) return { entries: [], error: jobs.error }
+  if (sessions.error) return { entries: [], error: sessions.error }
   const jobOf = new Map(((jobs.data ?? []) as unknown as Array<Record<string, unknown>>).map((j) => [j.id as string, j as J]))
   const sessionOf = new Map(
     ((sessions.data ?? []) as Array<{ id: string; title: string | null; project_id: string | null }>).map((s) => [
@@ -132,10 +149,5 @@ export async function listTrash<J = Record<string, unknown>>(
     const session = r.session_id ? sessionOf.get(r.session_id) : undefined
     return session ? [{ kind: "removed", removedAt: r.at, session, job }] : []
   })
-  const last = rows[rows.length - 1]!
-  return {
-    data: entries,
-    next: rows.length === q.limit ? encodeTrashCursor({ at: last.at, key: last.sort_key }) : null,
-    error: null,
-  }
+  return { entries, error: null }
 }
