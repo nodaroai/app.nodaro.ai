@@ -6,11 +6,24 @@
 # This job runs the SAME script, scripts/check-private-markers.sh, on every PR
 # into dev and main. A hit names only `marker #N` and the offending files —
 # marker values are never printed.
+#
+# A second step reads the PR's COMMITS rather than its tree
+# (tools/check-history-surface.mjs): the lines each adds, the paths it writes,
+# its message, and the PR title (the squash commit's subject), against the
+# marker and symbol lists and the public-surface categories. The mirror
+# publishes history, so a line added and later removed still goes public.
+# `edited` re-runs it on a retitle.
 name: private-marker-check
 on:
   pull_request:
     branches: [dev, main]
-  workflow_dispatch: {}
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      range:
+        description: "rev-list arguments for the history check (e.g. origin/dev~50..origin/dev); empty skips it"
+        required: false
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -39,6 +52,8 @@ jobs:
           # manual run, the chosen ref.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          # The history check needs the base branch and every commit since it.
+          fetch-depth: 0
       - uses: actions/checkout@v4
         if: env.FROM_FORK != 'true'
         with:
@@ -48,7 +63,10 @@ jobs:
           # untracked subdirectory, so the scan below never sees it.
           ref: ${{ github.base_ref || github.ref_name }}
           path: .gate-base
-          sparse-checkout: scripts/check-private-markers.sh
+          sparse-checkout: |
+            scripts/check-private-markers.sh
+            tools/check-history-surface.mjs
+            tools/check-public-surface.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Check tracked files for private markers
@@ -70,3 +88,37 @@ jobs:
             gate=scripts/check-private-markers.sh
           fi
           bash "$gate"
+      - uses: actions/setup-node@v4
+        if: env.FROM_FORK != 'true'
+        with:
+          node-version: 22
+      - name: Check every commit this PR adds, and its title, for never-public content
+        if: env.FROM_FORK != 'true'
+        env:
+          PRIVATE_LEAK_MARKERS: ${{ secrets.PRIVATE_LEAK_MARKERS }}
+          MIRROR_REQUIRE_MARKERS: "1"
+          PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
+          PRIVATE_LEAK_REQUIRE_SYMBOLS: "1"
+          HISTORY_CHECKS: surface,internal-docs,markers,symbols
+          # Via env, never inline ${{ }} in the script: the title and the range
+          # are user-controlled input (script-injection surface).
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.base_ref }}
+          RANGE: ${{ inputs.range }}
+        # Same base-branch-first rule as the tree gate above.
+        run: |
+          gate=.gate-base/tools/check-history-surface.mjs
+          if [ ! -f "$gate" ] && [ -f tools/check-history-surface.mjs ]; then
+            echo "::notice title=History check::The base branch has no copy of the gate yet, so this PR's copy runs once."
+            gate=tools/check-history-surface.mjs
+          fi
+          if [ -n "$BASE" ]; then
+            git rev-parse --verify --quiet "origin/$BASE^{commit}" > /dev/null
+            revs=("origin/$BASE..HEAD")
+          elif [ -n "$RANGE" ]; then
+            read -ra revs <<< "$RANGE"
+          else
+            echo "(no PR base and no range input — the history check is skipped)"
+            exit 0
+          fi
+          node "$gate" "${revs[@]}"

@@ -2,17 +2,19 @@
 # Proves the repo's gitleaks config still catches a secret where an allowlist
 # could hide one: plants a freshly generated, key-shaped fake token in files at
 # the paths our allowlists and docs live on, scans them with .gitleaks.toml, and
-# fails unless every planted file is flagged. A placeholder control
+# fails unless every planted file is flagged — and a commit message carrying
+# one, which only the history gate reads. A placeholder control
 # (`Bearer YOUR_TOKEN`) must stay unflagged, so the allowlists still work.
 #
 # Why: a `paths` + `regexes` allowlist skips whole files in gitleaks 8.30.1. One
 # such entry (`.*\.md$` + `Authorization:`) hid every secret in every markdown
 # file from both the PR scan and the mirror gate, unnoticed (2026-10-26).
 #
-# Usage: tools/gitleaks-canary.sh   (from the repo root; needs gitleaks on PATH)
+# Usage: tools/gitleaks-canary.sh   (from the repo root; needs gitleaks and node on PATH)
 set -euo pipefail
 
-CONFIG="$(pwd)/.gitleaks.toml"
+ROOT="$(pwd)"
+CONFIG="$ROOT/.gitleaks.toml"
 [ -f "$CONFIG" ] || { echo "run from the repo root (no .gitleaks.toml here)" >&2; exit 2; }
 command -v gitleaks >/dev/null || { echo "gitleaks is not installed" >&2; exit 2; }
 
@@ -69,6 +71,35 @@ if grep -qxF "$rel" <<<"$FLAGGED"; then
   fail=1
 else
   echo "ok    placeholder passes: $rel"
+fi
+
+# A secret in a commit MESSAGE. `gitleaks detect` reads diffs and never
+# messages, which the mirror publishes too; tools/check-history-surface.mjs
+# pipes them through `gitleaks stdin` with this config. The commit carrying the
+# token must be named, the placeholder message must not.
+REPO="$WORK/repo"
+git init -q -b main "$REPO"
+gitc() { git -C "$REPO" -c user.name=canary -c user.email=canary@example.test "$@"; }
+gitc commit -q --allow-empty -m "seed"
+gitc commit -q --allow-empty -m "carry" -m "$(printf 'token = "%s"' "$(fake_token)")"
+gitc commit -q --allow-empty -m "placeholder" -m 'curl -H "Authorization: Bearer YOUR_TOKEN" https://api.example.test'
+cp "$CONFIG" "$REPO/.gitleaks.toml"
+carry=$(git -C "$REPO" rev-parse HEAD~1)
+placeholder=$(git -C "$REPO" rev-parse HEAD)
+rc=0
+out=$(cd "$REPO" && HISTORY_CHECKS=secrets HISTORY_REQUIRE_GITLEAKS=1 \
+  node "$ROOT/tools/check-history-surface.mjs" HEAD~2..HEAD 2>&1) || rc=$?
+if [ "$rc" = 1 ] && grep -qF "$carry :message" <<<"$out"; then
+  echo "ok    flagged: a token in a commit message"
+else
+  echo "MISS  not flagged: a token in a commit message (exit $rc)"
+  fail=1
+fi
+if grep -qF "$placeholder" <<<"$out"; then
+  echo "MISS  placeholder flagged: a YOUR_TOKEN commit message"
+  fail=1
+else
+  echo "ok    placeholder passes: a YOUR_TOKEN commit message"
 fi
 
 [ "$fail" = 0 ] && echo "gitleaks canary: config catches every planted secret" || exit 1
