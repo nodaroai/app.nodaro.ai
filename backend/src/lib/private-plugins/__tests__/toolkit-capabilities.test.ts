@@ -43,6 +43,14 @@ describe("tk.capabilities", () => {
     expect(typeof tk.settings?.nodaroMotionMasking).toBe("function")
   })
 
+  it("advertises tk.http.quoteSeedanceRefVideo, and has it", () => {
+    // An older host has no such member: the Cast Swap plugin derives its
+    // Seedance hold itself unless this is true.
+    const tk = buildToolkit()
+    expect(tk.capabilities?.seedanceRefVideoQuote).toBe(true)
+    expect(typeof tk.http.quoteSeedanceRefVideo).toBe("function")
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

@@ -32,8 +32,12 @@ export async function measureSeedance2RefVideoBaseCredits(args: {
   referenceVideoUrls: unknown
   refVideoDurationsSec?: unknown
   /** The REQUESTED duration. Only Auto (-1) matters here: with no reference
-   *  video wired it is the one other run reserved at a worst case. */
+   *  video wired it is the one other run reserved at a worst case; with one,
+   *  the hold was sized from the source clip, and a delivered clip past it is
+   *  charged at the hold and alerted. */
   duration?: unknown
+  /** The job being settled — named by the over-the-hold alert. */
+  jobId?: string
 }): Promise<number | undefined> {
   if (!hasCredits()) return undefined
   const { provider, referenceVideoUrls } = args
@@ -66,6 +70,8 @@ export async function measureSeedance2RefVideoBaseCredits(args: {
       outputUrl: args.outputUrl,
       referenceVideoUrls,
       ...(Array.isArray(args.refVideoDurationsSec) ? { durationsSec: args.refVideoDurationsSec } : {}),
+      requestedDuration: args.duration,
+      ...(args.jobId ? { jobId: args.jobId } : {}),
     })
   } catch (err) {
     console.warn(`[billing] could not measure the delivered Seedance reference run; committing the reservation:`, err)

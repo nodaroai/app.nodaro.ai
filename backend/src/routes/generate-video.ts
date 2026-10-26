@@ -73,7 +73,9 @@ export const generateVideoBody = z.object({
   generateAudio: z.boolean().optional(),
   // Seconds, or VIDEO_DURATION_AUTO (-1): the model picks the length. Only the
   // providers that accept it send it on (`supportsAutoVideoDuration`); pricing
-  // reserves the model's longest clip and settles on the delivered one.
+  // reserves the model's longest clip (with a measured reference clip: that
+  // clip rounded up plus a second, `seedance2RefVideoHeldOutputSec`) and
+  // settles on the delivered one.
   duration: z.union([z.literal(VIDEO_DURATION_AUTO), z.number().int().min(1).max(60)]).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
@@ -806,7 +808,7 @@ export const generateVideoPricing: RoutePricing = {
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
         req.refVideoDurationsSec = durationsSec
         await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
-        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec })
+        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, requestedDuration: b.duration, durationsSec })
       }
       // MiniMax Hailuo 3 bills unit×(input+output) for reference-video runs
       // AND surcharges input images beyond the first 5 (11 KIE cr each).

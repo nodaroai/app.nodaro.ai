@@ -1007,8 +1007,10 @@ request on an LTX 2.3 model renders and bills 6 s.
 `duration: -1` means **Auto** on the models that support it (the Seedance 2
 family — `autoDuration: true` in `GET /v1/models`): the model picks the clip
 length, which is the source clip's length when it edits a reference video. An
-Auto run reserves credits for the model's longest clip and is refunded down to
-the length actually delivered. On any other model `-1` is ignored and the model
+Auto run reserves credits for the model's longest clip — or, with measured
+reference videos, for the first clip's length rounded up to a whole second plus
+one second (never above the longest clip) — and is refunded down to the length
+actually delivered. On any other model `-1` is ignored and the model
 renders its default duration.
 
 ## 4e. Generation sessions
@@ -3839,7 +3841,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 |---|---|---|
 | `provider` | string | A Seedance 2 model or `kling-4`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0). |
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
-| `duration` | number? | Output seconds; `-1` = Auto (priced at the model's longest clip, as the run reserves it). Omitted = the model's default. |
+| `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the first clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
 | `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
@@ -3863,7 +3865,7 @@ The response is `{ "data": { identifier, reserve, expected?, adjustments, warnin
 |---|---|
 | `identifier` | The credit id the run is charged under. |
 | `reserve` | Credits the run holds when it starts. |
-| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
+| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit; for an Auto-duration run with every clip measured, input seconds plus the first clip's length rounded up to a whole second plus one second); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
 | `adjustments` | `{ code, message, credits? }` — why the price is what it is: `ref_video_length` (priced by the clips' lengths), `extra_reference_images` (MiniMax Hailuo 3 images past the first 5), `auto_duration`, `loop_trim_addon` / `voiced_audio_addon` (with their credits), `params_adjusted` (a resolution or ratio snapped to one the model offers). |
 | `warnings` | `{ code, message }` — `settles_to_actual` (the run is charged for what was generated and the rest of `reserve` is refunded), `ref_video_unmeasured` (a clip could not be measured and is priced as the longest the model accepts). |
 

@@ -20,8 +20,9 @@ import { seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
  * Seedance reference-video runs in the server's workflow estimates (the run
  * estimate and the published-app listing).
  *
- * Such a run is billed `unit × (Σ clips + max(output, longest clip))`, so the
- * estimate prices it through the reservation's own quote arithmetic
+ * Such a run is held at `unit × (Σ clips + held output)`
+ * (`seedance2RefVideoHeldOutputSec`), so the estimate prices it through the
+ * reservation's own quote arithmetic
  * (`seedance2RefVideoQuote`, the one `POST /v1/credits/seedance-ref-estimate`
  * uses), from the clips' probed lengths:
  *

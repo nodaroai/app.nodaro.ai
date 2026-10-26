@@ -4,7 +4,7 @@ import { VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
 /**
  * The server's workflow estimates — the run estimate and the published-app
  * listing — price a Seedance run with reference video(s) the way the run
- * reserves it: `unit × (Σ clips + max(output, longest clip))`, through the same
+ * reserves it: `unit × (Σ clips + held output)`, through the same
  * quote arithmetic as `POST /v1/credits/seedance-ref-estimate`.
  *
  * A clip whose file the estimate knows (an upload the run sends as it is) is
@@ -41,6 +41,7 @@ vi.mock("../../../lib/config.js", async (importOriginal) => ({
 import { CreditsService, estimateWorkflowListingCredits, STATIC_CREDIT_COSTS } from "../credits.js"
 import { seedance2RefVideoChargedQuote } from "../seedance2-ref-video-quote.js"
 import { __forgetRefVideoClipLengths } from "../seedance-ref-video-estimate.js"
+import { applyServiceMarkup } from "../service-margin.js"
 
 const CLIP = "https://cdn.example/clip-10.mp4"
 const upload = { id: "clip", type: "upload-video", data: { url: CLIP } }
@@ -68,6 +69,14 @@ describe("server run estimate — Seedance reference-video runs", () => {
   it("Video to Video's Seedance edit lane: the source clip at Auto", async () => {
     const total = await CreditsService.estimateWorkflowCredits([upload, v2v], [wire("v2v", "video")])
     expect(total).toBe(await quote({ duration: -1, durationsSec: [10.04] }))
+  })
+
+  it("an Auto Generate Video edit of a 4.1 s upload @720p: held at the clip + 6 s, the run's own reservation (40% markup on ceil(95 × 10.1) = 960)", async () => {
+    probe.durations.set(CLIP, 4.1)
+    const auto = { ...gv, data: { ...gv.data, duration: -1 } }
+    const total = await CreditsService.estimateWorkflowCredits([upload, auto], [wire("gv", "videoReferences")])
+    expect(total).toBe(await quote({ duration: -1, durationsSec: [4.1] }))
+    expect(total).toBe(applyServiceMarkup(960, settings.value as never, "seedance-2-5:30s:720p-ref"))
   })
 
   it("probes a URL once, then serves it from the cache", async () => {

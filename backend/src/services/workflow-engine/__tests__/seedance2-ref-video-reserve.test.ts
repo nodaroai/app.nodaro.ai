@@ -459,6 +459,24 @@ describe("node-executor — reference-video duration gate (Task 14)", () => {
     )
   })
 
+  it("an Auto (edit-shape) node hands its requested -1 to the hold rule, so the hold follows the source clip", async () => {
+    setBuiltPayload(
+      {
+        provider: "seedance-2-5",
+        resolution: "720p",
+        duration: -1,
+        referenceVideoUrls: ["https://ref.mp4"],
+      },
+      "seedance-2-5:30s:720p-ref",
+    )
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(
+      /reservation-sentinel|Credit reservation failed/,
+    )
+    expect(mockSeedance2FromDurations).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "seedance-2-5", outputDurationSec: 30, requestedDuration: -1, durationsSec: [6] }),
+    )
+  })
+
   it("a provider with no declared bound is never CHECKED by the gate, but the reservation probes it once and carries the probe on the job", async () => {
     // seedance-2 has no VIDEO_REF_VIDEO_DURATION_LIMITS row: the gate returns
     // immediately (no bound to enforce). The reservation is still scaled by

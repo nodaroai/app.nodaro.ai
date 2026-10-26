@@ -75,12 +75,23 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it("an Auto edit of a probed clip: unit × (clip + the model's longest clip), exact", async () => {
+  it("an Auto edit of a probed clip: unit × (clip + the clip rounded up plus a second), exact", async () => {
     const res = await post({ provider: "seedance-2-5", resolution: "720p", duration: VIDEO_DURATION_AUTO, referenceVideoUrls: [CLIP_10] })
     expect(res.statusCode).toBe(200)
-    const expected = Math.ceil(perSec("720p") * (10.04 + 30))
+    // 10.04 s → 11 s, + 1 s margin = 12 s held out (not the model's 30 s).
+    const expected = Math.ceil(perSec("720p") * (10.04 + 12))
     expect(res.json().data).toEqual({ credits: expected, min: expected, exact: true })
     expect(probe.calls).toEqual([CLIP_10])
+  })
+
+  it("an Auto run with a clip not produced yet: the worst case (the model's longest clip) as credits, the shortest clip's hold as min", async () => {
+    const res = await post({ provider: "seedance-2-5", resolution: "720p", duration: VIDEO_DURATION_AUTO, referenceVideoUrls: [], unknownReferenceVideos: 1 })
+    const { minSec, maxSec } = VIDEO_REF_VIDEO_DURATION_LIMITS["seedance-2-5"]!
+    expect(res.json().data).toEqual({
+      credits: Math.ceil(perSec("720p") * (maxSec + 30)),
+      min: Math.ceil(perSec("720p") * (minSec + Math.ceil(minSec) + 1)),
+      exact: false,
+    })
   })
 
   it("an 8 s run with a 10 s clip bills the output at the longer of the two", async () => {
@@ -91,7 +102,7 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
   it("equals the reservation's own arithmetic, markup applied once at the run's identifier", async () => {
     settings.value = { cost_markup_percent: 40 }
     const res = await post({ provider: "seedance-2-5", resolution: "1080p", duration: 8, referenceVideoUrls: [CLIP_4, CLIP_10] })
-    const base = seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, durationsSec: [4, 10.04] })
+    const base = seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [4, 10.04] })
     expect(res.json().data.credits).toBe(applyServiceMarkup(base, settings.value as never, "seedance-2-5:8s:1080p-ref"))
   })
 
