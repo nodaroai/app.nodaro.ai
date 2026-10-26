@@ -31,9 +31,16 @@ import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { faceMaskTargetsOf, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError } from "./store.js"
-import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
+import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
+import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
-import { CAST_SWAP_ENGINES, CAST_SWAP_ENGINE_WHEN_OMITTED } from "@nodaro/shared/models"
+import {
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  castSwapEngineFrom,
+  nodaroMotionEngineName,
+  nodaroMotionEngineOf,
+  type NodaroMotionEngine,
+} from "@nodaro/shared/models"
 import type { CastSwapEngine, Choice, TrendSlotKind } from "./types.js"
 
 // ── the public run shape (mirrored by the SDK) ──────────────────────────────
@@ -53,8 +60,14 @@ export interface TrendRun {
   preview: boolean
   resolution: string
   draft: boolean
-  /** The video engine the run was made on (Seedance 2.5 for every run before the choice). */
-  engine: CastSwapEngine
+  /**
+   * The engine the run was made on, by its public id: `"motion-pro"` (every
+   * run before the choice) or `"motion-lite"`. A job stores either vocabulary
+   * (an engine that knows the public ids records those).
+   */
+  engine: NodaroMotionEngine
+  /** Its name: "Nodaro Motion Pro" or "Nodaro Motion Lite". */
+  engineName: string
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
@@ -80,9 +93,13 @@ const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
 /** A completed draft run (or Kling 4 run at 720p) can be redone in Full Quality for this long. */
 const FULL_QUALITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
-/** A run's engine, from its stored input: Seedance 2.5 when it names none (every run before the choice). */
+/**
+ * A run's engine (internal id), from its stored input in either vocabulary (an
+ * engine that knows Nodaro Motion's public ids records those): Seedance 2.5
+ * when it names none (every run before the choice) or names no engine.
+ */
 export function runEngineOf(input: Rec): CastSwapEngine {
-  return CAST_SWAP_ENGINES.find((e) => e === input.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
+  return castSwapEngineFrom(input.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
 }
 
 /**
@@ -223,7 +240,8 @@ export function toTrendRun(
     preview: input.preview === true,
     resolution: str(input.resolution) ?? "480p",
     draft,
-    engine: runEngineOf(input),
+    engine: nodaroMotionEngineOf(runEngineOf(input)),
+    engineName: nodaroMotionEngineName(runEngineOf(input)),
     videoUrl: row.status === "completed" ? videoUrl : null,
     posterUrl: row.status === "completed" ? posterUrl : null,
     creditsCharged: creditsChargedOf(row.usage_log_id, credits, row.id, sideCharges),
@@ -377,7 +395,8 @@ export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
  * what the engine gets, not a separate flag): the request's `previewJobId`
  * is read, and when it is the caller's own completed preview run of THIS
  * trend (`input_data.trend.id`, not a Full Quality job) whose output says the
- * faces were masked (`output_data.faceMasking.applied === true`), the run is
+ * faces were masked (`output_data.privacy.applied === true`, or the old
+ * `faceMasking`), the run is
  * sent with `mode: "always"` and the trend's other masking settings, so it
  * does not first try unmasked what the preview already showed is refused.
  * When the trend leaves `fill` out, the run takes the fill the preview was
@@ -424,8 +443,8 @@ export async function followPreviewMasking(
   const input = isRec(row.input_data) ? row.input_data : null
   if (!input || input.type !== "cast-swap" || input.preview !== true || input.fullQualityOf != null) return
   if (!isRec(input.trend) || input.trend.id !== opts.trendId) return
-  const output = isRec(row.output_data) ? row.output_data : null
-  if (!output || !isRec(output.faceMasking) || output.faceMasking.applied !== true) return
+  // `privacy`, else the old `faceMasking` (an engine before 0.394.0).
+  if (privacyOutcomeOf(row.output_data)?.applied !== true) return
   const previewFill = isRec(input.__faceMasking) ? input.__faceMasking.fill : undefined
   const fill = masking.fill ?? (previewFill === "blur" || previewFill === "depth" ? previewFill : undefined)
   const zone = composed.maskingZoneLeftOut ? previewZone(input.__faceMasking) : undefined
@@ -507,7 +526,8 @@ export async function engineRequest(
         ...(webFreeMode ? { "x-web-free-mode": "true" } : {}),
         "content-type": "application/json",
       },
-      payload,
+      // A Lite trend's length fit, under the key this environment's engine takes.
+      payload: withWireLengthKey(payload),
     }),
   )
 }
@@ -536,7 +556,7 @@ export function relay(reply: FastifyReply, res: { statusCode: number; body: stri
   if (isRec(body) && isRec(body.error)) return reply.status(res.statusCode).send(body)
   return reply
     .status(res.statusCode >= 500 ? res.statusCode : 502)
-    .send({ error: { code: "engine_error", message: "Cast Swap answered unexpectedly." } })
+    .send({ error: { code: "engine_error", message: "Nodaro Motion answered unexpectedly." } })
 }
 
 /**
@@ -604,7 +624,7 @@ export function publicRefusal(reply: FastifyReply, res: { statusCode: number; bo
   if (status === 503 && code === "estimate_unavailable") {
     return send(503, "estimate_unavailable", "The price can't be quoted right now. Try again shortly.")
   }
-  return send(502, "engine_error", "Cast Swap answered unexpectedly.")
+  return send(502, "engine_error", "Nodaro Motion answered unexpectedly.")
 }
 
 /**

@@ -11254,6 +11254,8 @@ export const ko: ChromeDict = {
   "apiErr.listTemplates": "템플릿 목록을 가져오지 못했습니다",
   "apiErr.updateTutorialFlag": "튜토리얼 플래그를 업데이트하지 못했습니다",
   "apiErr.loadTrends": "트렌드를 불러오지 못했습니다",
+  "apiErr.loadNodaroMotion": "Nodaro Motion 설정을 불러오지 못했습니다",
+  "apiErr.saveNodaroMotion": "Nodaro Motion 설정을 저장하지 못했습니다",
   "apiErr.saveTrend": "트렌드를 저장하지 못했습니다",
   "apiErr.deleteTrendRun": "실행을 삭제하지 못했습니다",
   "apiErr.updateTemplateListing": "템플릿을 업데이트하지 못했습니다",

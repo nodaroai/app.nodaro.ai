@@ -425,6 +425,14 @@ describe("trendVersionDataSchema — engine", () => {
     }
   })
 
+  it("takes Nodaro Motion's public ids too, and stores the internal id each names", () => {
+    for (const [engine, stored] of [["motion-pro", "seedance-2-5"], ["motion-lite", "kling-4"]] as const) {
+      const r = trendVersionDataSchema.safeParse(data({ engine }))
+      expect(r.success, engine).toBe(true)
+      expect(r.data?.engine).toBe(stored)
+    }
+  })
+
   it("leaves a version with no engine without the key, read as Seedance 2.5", () => {
     const r = trendVersionDataSchema.safeParse(data())
     expect(r.success).toBe(true)

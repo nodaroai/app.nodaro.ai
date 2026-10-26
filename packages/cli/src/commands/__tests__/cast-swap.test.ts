@@ -53,18 +53,23 @@ describe("cast-swap full-quality", () => {
     expect(vi.mocked(dim).mock.calls.flat().join("\n")).toContain("2026-10-28T10:00:00.000Z")
   })
 
-  it("estimate --json emits the quote as it came", async () => {
+  it("estimate --json emits the quote with its parts' neutral names (an older engine's old ones renamed)", async () => {
     mocks.fullQualityEstimate.mockResolvedValueOnce(QUOTE)
     await runCmd("cast-swap", "full-quality", "estimate", "draft-1", "--json")
-    expect(emit).toHaveBeenCalledWith(QUOTE, expect.objectContaining({ json: true }))
+    expect(emit).toHaveBeenCalledWith({ ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } })
+    await runCmd("cast-swap", "full-quality", "estimate", "draft-1", "--json")
+    expect(emit).toHaveBeenLastCalledWith({ ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
   })
 
-  it("estimate says a Kling 4 run's Full Quality is a new take, and lists every part", async () => {
+  it("estimate says a Nodaro Motion Lite run's Full Quality is a new take, and lists every part by its label, never a vendor name", async () => {
     mocks.fullQualityEstimate.mockResolvedValueOnce({ kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380 }, availableUntil: "2026-10-28T10:00:00.000Z" })
     await runCmd("cast-swap", "full-quality", "estimate", "run-720")
     const out = vi.mocked(dim).mock.calls.flat().join("\n")
     expect(out).toMatch(/new take/i)
-    expect(out).toContain("kling: 380")
+    expect(out).toContain("video: 380")
+    expect(out).toContain("Nodaro Motion: 40")
+    expect(out).not.toMatch(/kling|seedance/i)
     expect(out).not.toMatch(/reuse/i)
   })
 
@@ -77,7 +82,10 @@ describe("cast-swap full-quality", () => {
   it("estimate says when an earlier render is reused", async () => {
     mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 5, breakdown: { castSwap: 5, seedanceHd: 0 } })
     await runCmd("cast-swap", "full-quality", "estimate", "draft-1")
-    expect(vi.mocked(dim).mock.calls.flat().join("\n")).toMatch(/reuse/i)
+    const out = vi.mocked(dim).mock.calls.flat().join("\n")
+    expect(out).toMatch(/reuse/i)
+    expect(out).toContain("1080p render: 0")
+    expect(out).not.toMatch(/seedance/i)
   })
 
   it("estimate takes no --session: refused before anything is sent", async () => {

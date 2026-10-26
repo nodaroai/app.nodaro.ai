@@ -60,9 +60,14 @@ interface Props {
   /** As stored; undefined = the draft has none (off). */
   readonly value: AdminTrendFaceMasking | undefined
   readonly onChange: (next: AdminTrendFaceMasking | undefined) => void
+  /**
+   * The line under Auto, where it differs from a trend's (Admin → Nodaro
+   * Motion: a direct run has no preview that carries over).
+   */
+  readonly autoHint?: string
 }
 
-export function FaceMaskingEditor({ value, onChange }: Props) {
+export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
   const mode = value?.mode ?? "off"
   // A key set to undefined (a field emptied, "No margins" unticked) is removed, never kept as
   // `key: undefined`, so the draft holds only what is set.
@@ -81,7 +86,7 @@ export function FaceMaskingEditor({ value, onChange }: Props) {
     if (m === "off" && (!value || Object.keys(definedOnly(value)).length === 1)) onChange(undefined)
     else set({ mode: m })
   }
-  const hint = MODES.find((m) => m.value === mode)?.hint
+  const hint = mode === "auto" && autoHint ? autoHint : MODES.find((m) => m.value === mode)?.hint
   // A fill left out is the engine's default. The blur strength belongs to the blur fill only: hidden
   // otherwise, and then neither checked nor saved (`maskingUsesBlur`), so it never holds Save.
   const fill = value?.fill ?? FACE_MASKING_DEFAULTS.fill

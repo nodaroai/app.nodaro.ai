@@ -11554,6 +11554,8 @@ export const en = {
   "apiErr.listTemplates": "Failed to list templates",
   "apiErr.updateTutorialFlag": "Failed to update tutorial flag",
   "apiErr.loadTrends": "Failed to load trends",
+  "apiErr.loadNodaroMotion": "Failed to load the Nodaro Motion settings",
+  "apiErr.saveNodaroMotion": "Failed to save the Nodaro Motion settings",
   "apiErr.saveTrend": "Failed to save the trend",
   "apiErr.deleteTrendRun": "Failed to delete the run",
   "apiErr.updateTemplateListing": "Failed to update the template",

@@ -1,5 +1,5 @@
 /**
- * `@nodaro/sdk/cast-swap` — the `castSwap` resource and its types.
+ * `@nodaro/sdk/cast-swap` — the `castSwap` resource (Nodaro Motion) and its types.
  *
  * One of the package's subpath entries (see `src/index.ts`). The root
  * re-exports every entry, so each name here is also importable from
@@ -8,7 +8,9 @@
 export {
   CastSwapResource,
   type CastSwapEngine,
+  type CastSwapEngineLegacyId,
   type CastSwapKlingLength,
+  type CastSwapMotionLength,
   type CastSwapTraitSource,
   type CastSwapRolePreviewSettings,
   type CastSwapPersonRole,

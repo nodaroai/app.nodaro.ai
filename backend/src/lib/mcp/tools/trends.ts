@@ -1,6 +1,6 @@
 /**
  * MCP trend verbs — the agent's face of `/v1/trends` (ee/routes/trends.ts): a
- * trend is a ready-made Cast Swap recipe, a short clip whose slots (people,
+ * trend is a ready-made Nodaro Motion recipe, a short clip whose slots (people,
  * pets, products, the place) the user fills with their own pictures.
  *
  *   list_trends     GET  /v1/trends                 jobs:read
@@ -18,7 +18,7 @@
  * so a field a route might add later does not reach the agent by accident.
  * The route is the authority on every rule (required slots, chips per kind,
  * image caps, the resolutions the trend's engine offers, draft only at 480p
- * on Seedance 2.5); this file maps snake_case to its body.
+ * on Nodaro Motion Pro); this file maps snake_case to its body.
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — off-cloud the
  * routes are not served and a call answers `not_available`.
@@ -26,7 +26,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import {
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  castSwapEngineFrom,
+  nodaroMotionEngineName,
+  nodaroMotionEngineOf,
+  type NodaroMotionEngine,
+} from "@nodaro/shared/models"
 import type { McpSession } from "../session.js"
+import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
@@ -84,7 +92,7 @@ export const trendRunShape = {
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
-  draft: z.boolean().optional().describe("Default true; only at 480p (a kling-4 trend has none)."),
+  draft: z.boolean().optional().describe("Default true; only at 480p (a motion-lite trend has none)."),
   preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
@@ -163,6 +171,12 @@ function originalView(v: unknown): Rec | undefined {
   }
 }
 
+/** The trend's engine by its public id and name: Nodaro Motion Pro when the route names none it knows. */
+function engineView(v: unknown): { engine: NodaroMotionEngine; engineName: string } {
+  const engine = castSwapEngineFrom(v) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
+  return { engine: nodaroMotionEngineOf(engine), engineName: nodaroMotionEngineName(engine) }
+}
+
 function detailView(d: Rec): Rec {
   const original = originalView(d.original)
   return {
@@ -170,7 +184,8 @@ function detailView(d: Rec): Rec {
     version: num(d.version),
     previewSec: d.previewSec === 4 ? 4 : null,
     ...(original ? { original } : {}),
-    engine: d.engine === "kling-4" ? "kling-4" : "seedance-2-5",
+    // The public id, whichever vocabulary the route answered in (an older server: the internal one).
+    ...engineView(d.engine),
     resolutions: strings(d.resolutions),
     slots: (Array.isArray(d.slots) ? d.slots.filter(isRec) : []).map((s) => {
       const hint = str(s.hint)
@@ -215,24 +230,27 @@ interface TrendQuote {
   expectedCredits: number
   holdCredits: number
   breakdown: Rec
-  /** Only if the clip is refused and the run is retried with the faces masked; not in the two above. */
-  maskingCredits?: number
+  /** Only if the clip is refused and the run is retried; not in the two above. */
+  privacyCredits?: number
 }
 
 function quoteOf(body: string): TrendQuote | null {
   const q = dataOf(body)
   if (!isRec(q) || typeof q.expectedCredits !== "number" || typeof q.holdCredits !== "number") return null
-  const breakdown = isRec(q.breakdown)
-    ? Object.fromEntries(Object.entries(q.breakdown).filter(([, v]) => typeof v === "number" && Number.isFinite(v)))
-    : {}
-  const masking = typeof q.maskingCredits === "number" && Number.isFinite(q.maskingCredits) ? { maskingCredits: q.maskingCredits } : {}
-  return { expectedCredits: q.expectedCredits, holdCredits: q.holdCredits, breakdown, ...masking }
+  // The neutral key names only (an older server answers the old ones).
+  const privacyCredits = privacyCreditsOf(q)
+  return {
+    expectedCredits: q.expectedCredits,
+    holdCredits: q.holdCredits,
+    breakdown: neutralBreakdown(q.breakdown),
+    ...(privacyCredits !== undefined ? { privacyCredits } : {}),
+  }
 }
 
 function quoteSentence(q: TrendQuote, preview: boolean | undefined): string {
   const held = q.holdCredits !== q.expectedCredits ? ` (up to ${q.holdCredits} held while it runs)` : ""
   const masking =
-    q.maskingCredits !== undefined ? ` Plus ${q.maskingCredits} only if the clip is refused and the run retries with faces masked.` : ""
+    q.privacyCredits !== undefined && q.privacyCredits > 0 ? ` Plus ${q.privacyCredits} only if the clip is refused and the run is retried.` : ""
   return `This trend ${preview ? "preview " : ""}run costs about ${q.expectedCredits} credits${held}.${masking}`
 }
 
@@ -315,7 +333,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
         title: "Get Trend",
         description:
           "One trend: its original (the clip it recasts; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, chips the user may set, their defaults), " +
-          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"motion-pro\" or \"motion-lite\") with its engineName and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

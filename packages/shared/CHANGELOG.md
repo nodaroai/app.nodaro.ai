@@ -1,5 +1,25 @@
 # @nodaro/shared
 
+## 3.44.0
+
+### Minor Changes
+
+- 6f9d4f8: Cast Swap face masking (admin-set) chooses what a mask covers: `faceMasking.target`, `"head"` (the default: the whole head, hair included, and people seen from behind) or `"face"` (the face only; the hair stays visible).
+
+  `@nodaro/shared/models`: `CAST_SWAP_FACE_MASK_TARGETS` (`["face", "head"]`), the `CastSwapFaceMaskTarget` type, and `CAST_SWAP_FACE_MASKING_DEFAULTS.target` (`"head"`).
+
+- 0c8270a: Cast Swap is now **Nodaro Motion**, with two engines: **Nodaro Motion Pro** (`"motion-pro"`) and **Nodaro Motion Lite** (`"motion-lite"`). Face masking is set by Nodaro per engine; a run no longer sets it.
+
+  `@nodaro/shared/models`: `NODARO_MOTION_ENGINES`, `NodaroMotionEngine`, `NODARO_MOTION_ENGINE_NAMES`, `CAST_SWAP_ENGINE_OF_NODARO_MOTION` / `NODARO_MOTION_ENGINE_OF_CAST_SWAP`, `nodaroMotionEngineOf`, `nodaroMotionEngineName`, `castSwapEngineFrom` (reads either id) and `CAST_SWAP_ENGINE_IDS_ACCEPTED`.
+
+  `@nodaro/sdk`: `CastSwapEngine` is now `"motion-pro" | "motion-lite"`, the id every response names (a trend's `engine`, a trend run's `engine`, a quote's `engine`), with `engineName` beside it on trends and trend runs. A request still takes the old ids (`CastSwapEngineLegacyId`, deprecated). `CastSwapParams.faceMasking` and `CastSwapFaceMasking` are deprecated: the server accepts and ignores them. TypeScript code that compares a response's `engine` with `"seedance-2-5"` or `"kling-4"` must compare with the new ids.
+
+  Quote and completion keys get neutral names: `breakdown.motion` (was `seedance` / `kling`), `breakdown.motionExpected` (was `seedanceExpected`), `breakdown.motionHd` (was `seedanceHd`), `breakdown.privacy` (was `masking`), `privacyCredits` (was `maskingCredits`) and the completion's `privacy` (was `faceMasking`). A Lite run's length fit is `motionLength` (`CastSwapMotionLength`; `klingLength` / `CastSwapKlingLength` still accepted, deprecated). `@nodaro/sdk` types the new names (`maskingCredits` stays, deprecated, for an older server).
+
+  `@nodaro/cli`: help text says Nodaro Motion; quotes list their parts by label, and its `--json` answers the neutral names (an older server's old ones renamed).
+
+- 84ee89f: Topaz video upscale target: `TOPAZ_VIDEO_RESOLUTIONS` (720p / 1080p / 4k, the frame's short side), the 15–60 fps range and `resolveTopazVideoTarget`, which maps the legacy 1×/2×/4× factor over the source's size. The `topaz-video` catalog entry is priced per Topaz unit (`topaz-video:per-unit`, metered).
+
 ## 3.43.0
 
 ### Minor Changes

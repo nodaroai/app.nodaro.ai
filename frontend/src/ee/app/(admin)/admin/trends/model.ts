@@ -180,8 +180,8 @@ export function maskingUsesBlur(m: Pick<AdminTrendFaceMasking, "fill">): boolean
   return (m.fill ?? FACE_MASKING_DEFAULTS.fill) === "blur"
 }
 
-/** The setting as saved: the mode, then only the keys that are set (the engine fills the rest). */
-function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
+/** The setting as saved: the mode, then only the keys that are set (the engine fills the rest). Also Admin → Nodaro Motion's. */
+export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
   const zone = cleanZone(m.zone)
   const num = (v: number | undefined) => typeof v === "number" && Number.isFinite(v)
   return {
@@ -370,7 +370,7 @@ export function formIssues(form: TrendForm): string[] {
   }
   if (form.prePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
   else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
-    const on = form.engine === "kling-4" ? " on Kling 4" : ""
+    const on = form.engine === "kling-4" ? " on Nodaro Motion Lite (Kling 4)" : ""
     out.push(`Pre and trend prompts: at most ${Math.max(0, budget.promptsMax)} characters together${on}, to leave room for the engine's text and the user's details.`)
   }
   if (form.faceMasking) out.push(...maskingIssues(form.faceMasking))
@@ -382,7 +382,7 @@ export function formIssues(form: TrendForm): string[] {
   if (images > most) {
     out.push(
       form.engine === "kling-4"
-        ? `${images} images: at most ${most} on Kling 4 (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
+        ? `${images} images: at most ${most} on Nodaro Motion Lite (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
         : `${images} images: at most ${most} (3 per slot plus the reference pictures).`,
     )
   }
@@ -390,7 +390,8 @@ export function formIssues(form: TrendForm): string[] {
 }
 
 /** What the server would refuse in a face masking setting, as sentences. */
-function maskingIssues(m: AdminTrendFaceMasking): string[] {
+/** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Nodaro Motion's. */
+export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   const out: string[] = []
   const outside = (v: number | undefined, [lo, hi]: readonly [number, number]) => v !== undefined && !(v >= lo && v <= hi)
   const range = ([lo, hi]: readonly [number, number]) => `${lo}–${hi}`
@@ -419,7 +420,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   storedFaceMask: "stored face masks",
   "faceMaskTarget:face": "face-only masks",
   trendPrePrompt: "pre prompts",
-  "kling-4": "Kling 4",
+  "kling-4": "Nodaro Motion Lite (Kling 4)",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
   castSwap: "Cast Swap",
@@ -469,4 +470,17 @@ export function describeFaceMaskOutOfDate(r: { why: string; env?: string }): str
 
 export function formatSeconds(s: number): string {
   return `${s.toFixed(1)} s`
+}
+
+/** The short side of a video upscaled to 1080p (the server resizes Topaz's 2x to it). */
+export const UPSCALE_SHORT_SIDE = 1080
+
+/**
+ * Whether a video of this size is offered an upscale to 1080p: its short side
+ * is under 1080 (the server's own rule; it refuses the rest). An unknown size
+ * is offered one.
+ */
+export function needsUpscale(width: number | undefined, height: number | undefined): boolean {
+  if (!width || !height) return true
+  return Math.min(width, height) < UPSCALE_SHORT_SIDE
 }

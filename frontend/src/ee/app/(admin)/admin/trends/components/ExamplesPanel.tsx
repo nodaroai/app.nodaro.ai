@@ -1,9 +1,10 @@
 // The draft's examples: runs promoted with their own copies of the video and
 // the pictures per slot. Example 1 is the cover; with none, the original's
 // display copy is (a trend may publish with no example). Reorder (up / down)
-// and remove; each write carries the draft's revision.
+// and remove; each write carries the draft's revision. Each example made
+// below 1080p can be upscaled to it (`renderUpscale`, the UpscalePanel).
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -26,9 +27,13 @@ interface Props {
   /** `order` lists the current indexes in their new order. */
   readonly onReorder: (order: number[]) => void
   readonly onRemove: (index: number) => void
+  /** What each example card shows to upscale its video (its index today). */
+  readonly renderUpscale?: (example: AdminTrendExample, index: number) => ReactNode
+  /** Shown under the list: the upscales whose example is gone. */
+  readonly footer?: ReactNode
 }
 
-export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove }: Props) {
+export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove, renderUpscale, footer }: Props) {
   const [removing, setRemoving] = useState<number | null>(null)
   const labelOf = (key: string) => slots.find((s) => s.key === key)?.label.en || key
 
@@ -41,9 +46,12 @@ export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove }: Pr
 
   if (examples.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No examples yet. Optional: with none, the trend shows only its original. To add one, run a full-length test below and choose "Use as example".
-      </p>
+      <>
+        <p className="text-sm text-muted-foreground">
+          No examples yet. Optional: with none, the trend shows only its original. To add one, run a full-length test below and choose "Use as example".
+        </p>
+        {footer}
+      </>
     )
   }
 
@@ -113,11 +121,13 @@ export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove }: Pr
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+                {renderUpscale?.(ex, i)}
               </div>
             </li>
           )
         })}
       </ol>
+      {footer}
 
       <AlertDialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>

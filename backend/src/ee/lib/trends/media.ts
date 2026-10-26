@@ -15,17 +15,30 @@
  * The source clip also gets a DISPLAY copy (`makeDisplayCopy`): a browser-safe
  * re-encode and a poster, each a new file of its own, which the trend's page
  * shows as the original. Runs keep editing the uploaded clip.
+ *
+ * An admin's upscale of the source clip or of an example (`storeUpscaledVideo`)
+ * is resized to 1080p here and stored the same way.
  */
 import { randomUUID } from "node:crypto"
 import { mkdtemp, open, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { BROWSER_SAFE_VIDEO_ARGS, downloadFile, probeVideoSource, runFfmpeg, withFfmpegSlot } from "../../../providers/video/ffmpeg-utils.js"
+import {
+  BROWSER_SAFE_VIDEO_ARGS,
+  COMBINE_DELIVERY_CRF,
+  downloadFile,
+  hasAudioStream,
+  probeVideoSource,
+  probeVideoStream,
+  runFfmpeg,
+  withFfmpegSlot,
+} from "../../../providers/video/ffmpeg-utils.js"
 import { uploadBufferToR2, uploadFileWithKeyToR2 } from "../../../lib/storage.js"
 import { imageDimensionsOf } from "../../../lib/image-dimensions.js"
 import { reencodePeakMemoryMiB } from "../../../providers/video/video-file-stages.js"
 import { thumbnailFromLocalVideo } from "../../../utils/thumbnail.js"
 import type { TrendSourceDisplay } from "./types.js"
+import { UPSCALE_SHORT_SIDE, upscaleTargetSize } from "./upscale.js"
 
 export type TrendMediaKind = "video" | "image"
 
@@ -160,6 +173,9 @@ export async function makeDisplayCopy(
   }
 }
 
+/** A trend's source clip: 4–30 s. */
+export const TREND_SOURCE_SECONDS = { min: 4, max: 30 } as const
+
 /**
  * Copy `sourceUrl` into the trend's storage. `expect` is what it must be; for
  * a video, `durationSec` (inclusive) bounds its length, checked BEFORE the
@@ -173,50 +189,248 @@ export async function copyToTrendStorage(
   trendId: string,
   sourceUrl: string,
   expect: TrendMediaKind,
-  opts: { durationSec?: { min: number; max: number }; display?: boolean } = {},
+  opts: StoreOptions = {},
 ): Promise<StoredTrendMedia> {
   const dir = await mkdtemp(join(tmpdir(), "trend-media-"))
   const file = join(dir, "media")
   try {
+    await fetchTo(sourceUrl, file, expect)
+    return await storeLocalTrendMedia(trendId, file, expect, opts)
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
+export interface StoreOptions {
+  durationSec?: { min: number; max: number }
+  display?: boolean
+}
+
+/** Download `url` to `file`, within the kind's size; `TrendMediaError("download_failed")` otherwise. */
+async function fetchTo(url: string, file: string, kind: TrendMediaKind): Promise<void> {
+  try {
+    await downloadFile(url, file, { maxBytes: TREND_MEDIA_MAX_BYTES[kind] })
+  } catch (e) {
+    throw new TrendMediaError("download_failed", `Could not fetch the file: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+/**
+ * Store the local `file` in the trend's storage, as `copyToTrendStorage`
+ * stores a downloaded one (the same checks, measures and display copy): what
+ * a new source clip goes through, however it was made. The file is only read.
+ */
+export async function storeLocalTrendMedia(
+  trendId: string,
+  file: string,
+  expect: TrendMediaKind,
+  opts: StoreOptions = {},
+): Promise<StoredTrendMedia> {
+  const sniffed = sniffMedia(await readHead(file))
+  if (!sniffed || sniffed.kind !== expect) {
+    throw new TrendMediaError(
+      "unsupported_media",
+      expect === "video" ? "Not a video this platform stores (MP4, MOV or WebM)." : "Not a picture this platform stores (PNG, JPEG, WebP or GIF).",
+    )
+  }
+
+  let measured: Omit<StoredTrendMedia, "url" | "kind"> = {}
+  if (expect === "video") {
+    let probe: Awaited<ReturnType<typeof probeVideoSource>>
     try {
-      await downloadFile(sourceUrl, file, { maxBytes: TREND_MEDIA_MAX_BYTES[expect] })
+      probe = await probeVideoSource(file)
     } catch (e) {
-      throw new TrendMediaError("download_failed", `Could not fetch the file: ${e instanceof Error ? e.message : String(e)}`)
+      if (isTransientMediaFailure(e)) throw e
+      throw new TrendMediaError("media_unreadable", "Could not read the video's size and length.", { cause: e })
+    }
+    const range = opts.durationSec
+    if (range && (probe.durationSeconds < range.min || probe.durationSeconds > range.max)) {
+      throw new TrendMediaError(
+        "clip_out_of_range",
+        `The clip is ${probe.durationSeconds.toFixed(1)} s; it must be ${range.min}–${range.max} s.`,
+      )
+    }
+    measured = { width: probe.width, height: probe.height, durationSec: probe.durationSeconds }
+    if (opts.display) measured.display = await makeDisplayCopy(trendId, file, { canvas: { width: probe.width, height: probe.height } })
+  } else {
+    const dims = await imageDimensionsOf(file)
+    if (dims) measured = { width: dims.width, height: dims.height }
+  }
+
+  const url = await uploadFileWithKeyToR2(file, trendMediaKey(trendId, sniffed.ext), sniffed.contentType)
+  return { url, kind: expect, ...measured }
+}
+
+/** A video upscaled to 1080p and stored in the trend's storage, measured there. */
+export interface StoredUpscale {
+  url: string
+  width: number
+  height: number
+  durationSec: number
+  /** An example's fresh poster (its first frame). */
+  posterUrl?: string
+  /** The source clip's fresh display copy. */
+  display?: TrendSourceDisplay
+}
+
+/** The ffmpeg arguments that resize `input` to `size` (short side 1080), the sound taken from `soundFrom`. */
+export function upscaleResizeArgs(input: string, soundFrom: string, size: { width: number; height: number }, maxSec: number, audio: "copy" | "aac", out: string): string[] {
+  const short = Math.min(size.width, size.height)
+  const long = Math.max(size.width, size.height)
+  // Picked by the DECODED frame's orientation, not the probed one: ffmpeg applies a
+  // rotation tag as it decodes, so a rotated clip's frame is the other way up.
+  const w = `'if(lte(iw,ih),${short},${long})'`
+  const h = `'if(lte(iw,ih),${long},${short})'`
+  return [
+    "-y", "-i", input, "-i", soundFrom,
+    // The upscaled picture, and the sound of the clip it was made from: Topaz may drop it.
+    "-map", "0:v:0", "-map", "1:a:0?",
+    "-vf", `scale=${w}:${h}:flags=lanczos,setsar=1`,
+    // Never longer than the clip it replaces (a source clip has a 30 s ceiling).
+    "-t", maxSec.toFixed(3),
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", COMBINE_DELIVERY_CRF, "-movflags", "+faststart",
+    ...(audio === "copy" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "192k"]),
+    out,
+  ]
+}
+
+/** How far past the original's length an upscale may run and still be stored as it is (about a frame). */
+const UPSCALE_LENGTH_SLACK_SEC = 0.05
+
+/**
+ * Whether an ffmpeg failure is the MP4 refusing to carry the copied SOUND
+ * (stream #1: the picture is #0) as it is — the one failure the AAC re-encode
+ * cures. Anything else is not retried.
+ */
+export function isAudioCopyFailure(e: unknown): boolean {
+  return e instanceof Error && /Could not find tag for codec \S+ in stream #1\b/.test(e.message)
+}
+
+const sameWayRound = (a: { width: number; height: number }, b: { width: number; height: number }) =>
+  a.width === a.height || b.width === b.height || a.width > a.height === b.width > b.height
+
+/**
+ * Whether Topaz's output can be stored as it is, with no re-encode: exactly
+ * 1080 on its short side with even sides, the same way round as the original
+ * is shown (when that is known), no longer than the original, browser-safe
+ * H.264 / yuv420p, and carrying sound whenever the original has some.
+ */
+async function storableAsIs(
+  up: string,
+  original: string,
+  probe: { width: number; height: number; durationSeconds: number },
+  args: { durationSec: number; shownAs?: { width: number; height: number } },
+): Promise<boolean> {
+  if (Math.min(probe.width, probe.height) !== UPSCALE_SHORT_SIDE || probe.width % 2 !== 0 || probe.height % 2 !== 0) return false
+  if (args.shownAs && !sameWayRound(args.shownAs, probe)) return false
+  if (probe.durationSeconds > args.durationSec + UPSCALE_LENGTH_SLACK_SEC) return false
+  try {
+    const stream = await probeVideoStream(up)
+    if (stream.codec !== "h264" || stream.pixFmt !== "yuv420p") return false
+    return (await hasAudioStream(up)) || !(await hasAudioStream(original))
+  } catch (e) {
+    if (isTransientMediaFailure(e)) throw e
+    // Unreadable as it is: the resize reads it again, and refuses it if it must.
+    return false
+  }
+}
+
+/**
+ * Store a Topaz upscale (`upscaledUrl`, asked for at 1080p) of `originalUrl`
+ * as 1080p. When Topaz's output already is exactly that (`storableAsIs`) it
+ * is stored as it is; otherwise it is resized so its short side is exactly
+ * `UPSCALE_SHORT_SIDE` (aspect kept, even sides; `upscaleTargetSize`), no
+ * longer than `durationSec`, with the ORIGINAL's sound copied (re-encoded to
+ * AAC only when the MP4 cannot hold it as it is). Then:
+ *   - `asSource`: stored exactly as a new source clip is (`storeLocalTrendMedia`
+ *     with the source's length range and a new display copy);
+ *   - otherwise (an example): stored with a fresh poster, its first frame.
+ * `shownAs` is the original's size as it is SHOWN (a rotation applied: the
+ * source's display copy, an example's own size), when known: an upscale that
+ * comes out the other way round (Topaz dropping a phone clip's rotation tag)
+ * is refused rather than stored sideways.
+ * Throws `TrendMediaError` for a file that cannot be fetched or resized, or
+ * that does not come out at 1080p the right way round, before anything is
+ * stored; a launch the platform killed or could not admit, and a storage
+ * failure, are thrown as they are.
+ */
+export async function storeUpscaledVideo(
+  trendId: string,
+  args: { upscaledUrl: string; originalUrl: string; durationSec: number; asSource: boolean; shownAs?: { width: number; height: number } },
+): Promise<StoredUpscale> {
+  const dir = await mkdtemp(join(tmpdir(), "trend-upscale-"))
+  const up = join(dir, "upscaled")
+  const original = join(dir, "original")
+  const resized = join(dir, "1080p.mp4")
+  try {
+    await fetchTo(args.upscaledUrl, up, "video")
+    await fetchTo(args.originalUrl, original, "video")
+    let probe: Awaited<ReturnType<typeof probeVideoSource>>
+    try {
+      probe = await probeVideoSource(up)
+    } catch (e) {
+      if (isTransientMediaFailure(e)) throw e
+      throw new TrendMediaError("media_unreadable", "Could not read the upscaled video's size.", { cause: e })
     }
 
-    const sniffed = sniffMedia(await readHead(file))
-    if (!sniffed || sniffed.kind !== expect) {
+    let out = up
+    let made: { width: number; height: number; durationSeconds: number } = probe
+    if (!(await storableAsIs(up, original, probe, args))) {
+      out = resized
+      const size = upscaleTargetSize(probe.width, probe.height)
+      // Admitted at the larger of the two canvases: the decode of the upscale, or the encode at 1080p.
+      const canvas = probe.width * probe.height >= size.width * size.height ? { width: probe.width, height: probe.height } : size
+      const launch = { peakMemoryMiB: reencodePeakMemoryMiB(canvas) }
+      try {
+        try {
+          await runFfmpeg(upscaleResizeArgs(up, original, size, args.durationSec, "copy", out), undefined, launch)
+        } catch (e) {
+          // Only a sound the MP4 cannot carry as it is (ADPCM from a MOV, say) is encoded to AAC instead.
+          if (!isAudioCopyFailure(e)) throw e
+          await runFfmpeg(upscaleResizeArgs(up, original, size, args.durationSec, "aac", out), undefined, launch)
+        }
+      } catch (e) {
+        if (isTransientMediaFailure(e)) throw e
+        throw new TrendMediaError("media_unreadable", "Could not resize the upscaled video to 1080p.", { cause: e })
+      }
+      // Checked before anything is stored. The resize applied any rotation, so its size is the shown one.
+      try {
+        made = await probeVideoSource(out)
+      } catch (e) {
+        if (isTransientMediaFailure(e)) throw e
+        throw new TrendMediaError("media_unreadable", "Could not read the resized video's size.", { cause: e })
+      }
+    }
+    if (Math.min(made.width, made.height) !== UPSCALE_SHORT_SIDE) {
+      throw new TrendMediaError("media_unreadable", `The upscaled video came out at ${made.width}×${made.height}, not 1080p.`)
+    }
+    const shown = args.shownAs
+    if (shown && !sameWayRound(shown, made)) {
       throw new TrendMediaError(
-        "unsupported_media",
-        expect === "video" ? "Not a video this platform stores (MP4, MOV or WebM)." : "Not a picture this platform stores (PNG, JPEG, WebP or GIF).",
+        "media_unreadable",
+        `The upscaled video came out ${made.width > made.height ? "landscape" : "portrait"} (${made.width}×${made.height}), but the original is shown ${shown.width > shown.height ? "landscape" : "portrait"}: the upscale lost its rotation.`,
       )
     }
 
-    let measured: Omit<StoredTrendMedia, "url" | "kind"> = {}
-    if (expect === "video") {
-      let probe: Awaited<ReturnType<typeof probeVideoSource>>
+    let posterUrl: string | undefined
+    if (!args.asSource) {
+      let poster: Buffer
       try {
-        probe = await probeVideoSource(file)
+        poster = await withFfmpegSlot(() => thumbnailFromLocalVideo(out), POSTER_SLOT)
       } catch (e) {
         if (isTransientMediaFailure(e)) throw e
-        throw new TrendMediaError("media_unreadable", "Could not read the video's size and length.", { cause: e })
+        throw new TrendMediaError("media_unreadable", "Could not make a poster of the upscaled video.", { cause: e })
       }
-      const range = opts.durationSec
-      if (range && (probe.durationSeconds < range.min || probe.durationSeconds > range.max)) {
-        throw new TrendMediaError(
-          "clip_out_of_range",
-          `The clip is ${probe.durationSeconds.toFixed(1)} s; it must be ${range.min}–${range.max} s.`,
-        )
-      }
-      measured = { width: probe.width, height: probe.height, durationSec: probe.durationSeconds }
-      if (opts.display) measured.display = await makeDisplayCopy(trendId, file, { canvas: { width: probe.width, height: probe.height } })
-    } else {
-      const dims = await imageDimensionsOf(file)
-      if (dims) measured = { width: dims.width, height: dims.height }
+      posterUrl = await uploadBufferToR2(poster, trendMediaKey(trendId, "png"), "image/png")
     }
-
-    const url = await uploadFileWithKeyToR2(file, trendMediaKey(trendId, sniffed.ext), sniffed.contentType)
-    return { url, kind: expect, ...measured }
+    const stored = await storeLocalTrendMedia(
+      trendId,
+      out,
+      "video",
+      args.asSource ? { durationSec: TREND_SOURCE_SECONDS, display: true } : {},
+    )
+    const { width = made.width, height = made.height, durationSec = made.durationSeconds } = stored
+    return { url: stored.url, width, height, durationSec, ...(posterUrl ? { posterUrl } : {}), ...(stored.display ? { display: stored.display } : {}) }
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined)
   }

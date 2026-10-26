@@ -397,7 +397,7 @@ function RunCard({
             {run.resolution}
             {run.draft ? " draft" : ""}
           </span>
-          {run.engine === "kling-4" && <span>Kling 4</span>}
+          {(run.engine === "motion-lite" || run.engine === "kling-4") && <span>{run.engineName ?? "Nodaro Motion Lite"} (Kling 4)</span>}
           {run.fullQualityOf && (
             <Badge variant="secondary" title={`Full Quality version of run ${run.fullQualityOf}`}>
               Full Quality

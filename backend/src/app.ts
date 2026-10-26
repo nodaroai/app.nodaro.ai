@@ -170,6 +170,7 @@ import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
 import { trendRoutes } from "./ee/routes/trends.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
+import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -716,6 +717,8 @@ export async function buildApp() {
   if (hasCredits()) await app.register(trendRoutes)
   // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
   if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
+// Nodaro Motion (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
+if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
   // The Users page's linked-account marking rides on the same clusters RPC.

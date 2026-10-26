@@ -86,6 +86,67 @@ export type CastSwapEngine = (typeof CAST_SWAP_ENGINES)[number]
 export const CAST_SWAP_ENGINE_WHEN_OMITTED: CastSwapEngine = "seedance-2-5"
 
 /**
+ * Nodaro Motion — what people see of Cast Swap. Its two engines' PUBLIC ids,
+ * the only ones documented and returned (a trend's `engine`, a run record, a
+ * quote): `"motion-pro"` (Nodaro Motion Pro) and `"motion-lite"` (Nodaro
+ * Motion Lite).
+ *
+ * `CAST_SWAP_ENGINES` stays the INTERNAL vocabulary: what a stored trend
+ * version names, and what the platform sends the Cast Swap engine (which takes
+ * both). A public id is mapped to it at every boundary that reads one
+ * (`castSwapEngineFrom`), and back at every boundary a person reads
+ * (`nodaroMotionEngineOf`).
+ */
+export const NODARO_MOTION_ENGINES = ["motion-pro", "motion-lite"] as const
+
+export type NodaroMotionEngine = (typeof NODARO_MOTION_ENGINES)[number]
+
+/** Each public engine's name, as people read it. */
+export const NODARO_MOTION_ENGINE_NAMES = {
+  "motion-pro": "Nodaro Motion Pro",
+  "motion-lite": "Nodaro Motion Lite",
+} as const satisfies Record<NodaroMotionEngine, string>
+
+/** The internal engine each public id runs on (and the inverse, below). */
+export const CAST_SWAP_ENGINE_OF_NODARO_MOTION = {
+  "motion-pro": "seedance-2-5",
+  "motion-lite": "kling-4",
+} as const satisfies Record<NodaroMotionEngine, CastSwapEngine>
+
+/** The public id of each internal engine. */
+export const NODARO_MOTION_ENGINE_OF_CAST_SWAP = {
+  "seedance-2-5": "motion-pro",
+  "kling-4": "motion-lite",
+} as const satisfies Record<CastSwapEngine, NodaroMotionEngine>
+
+/** The public id of an internal engine. */
+export function nodaroMotionEngineOf(engine: CastSwapEngine): NodaroMotionEngine {
+  return NODARO_MOTION_ENGINE_OF_CAST_SWAP[engine]
+}
+
+/** The name people read for an internal engine ("Nodaro Motion Pro" / "Nodaro Motion Lite"). */
+export function nodaroMotionEngineName(engine: CastSwapEngine): string {
+  return NODARO_MOTION_ENGINE_NAMES[nodaroMotionEngineOf(engine)]
+}
+
+/**
+ * The internal engine a value names, in either vocabulary: a public id
+ * (`"motion-pro"`, `"motion-lite"`) or an internal one (`"seedance-2-5"`,
+ * `"kling-4"`, still accepted from older clients and stored data). Undefined
+ * for anything else.
+ */
+export function castSwapEngineFrom(value: unknown): CastSwapEngine | undefined {
+  if (typeof value !== "string") return undefined
+  if (Object.hasOwn(CAST_SWAP_ENGINE_OF_NODARO_MOTION, value)) {
+    return CAST_SWAP_ENGINE_OF_NODARO_MOTION[value as NodaroMotionEngine]
+  }
+  return (CAST_SWAP_ENGINES as readonly string[]).includes(value) ? (value as CastSwapEngine) : undefined
+}
+
+/** Every engine id a request may name: the public ids, then the internal ones (still accepted, never documented). */
+export const CAST_SWAP_ENGINE_IDS_ACCEPTED = [...NODARO_MOTION_ENGINES, ...CAST_SWAP_ENGINES] as const
+
+/**
  * The resolutions each engine renders, the default first. Seedance 2.5's 480p
  * is its draft (`draft` is 480p only); Kling 4 has no draft and no 480p.
  */

@@ -1598,7 +1598,7 @@ Or, on a deployment that registers a job policy, a rejection by that policy:
 ```
 
 Or, when the job ran out of credits partway — a step that reserves its own
-credits (for example the video a Cast Swap or trend run dispatches) was
+credits (for example the video a Nodaro Motion or trend run dispatches) was
 refused:
 
 ```json
@@ -4184,18 +4184,19 @@ before anything runs or is billed. What a published UGC video carries,
 and the photo an app set to My photo needs, are in
 [UGC videos in a published app or template](#ugc-videos-in-a-published-app-or-template).
 
-## 13f. Cast Swap (Cloud edition)
+## 13f. Nodaro Motion (Cloud edition)
 
-Cast Swap replaces the people, pets, products and/or the location in a short
-video with your own reference images, keeping its motion, framing, timing and
-sound: the clip's audio is kept, and the result is the clip's length. Both
-routes are served by the Nodaro Cloud plugin and answer 404 on self-hosted
-installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
+Nodaro Motion replaces the people, pets, products and/or the location in a
+short video with your own reference images, keeping its motion, framing,
+timing and sound: the clip's audio is kept, and the result is the clip's
+length. Its routes keep their original path, `/v1/cast-swap`. Both are
+served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
+(SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
 [`cast_swap`](./mcp/tools.md) verb).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, expectedCredits, breakdown: { castSwap, seedance, seedanceExpected, references, masking? }, maskingCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. On Kling 4 it also names `engine: "kling-4"`, the take is `breakdown.kling` (in place of `seedance` and `seedanceExpected`), `expectedCredits` equals `totalCredits` and `settlesLower` is `false`: Kling renders exactly the length asked for. |
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4212,29 +4213,34 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `resolution` (`"480p"` — the default —
-`"720p"` or `"1080p"`; on Kling 4 `"720p"` — its default — or `"1080p"`),
-`draft` (on by default at 480p, off above it; `true` above 480p is refused,
-and Kling 4 has no draft), `prepareReferences` (default `true`, see below), `faceMasking` (off by
-default, see below), `sessionId` and `origin`.
+`"720p"` or `"1080p"`; on Nodaro Motion Lite `"720p"` — its default — or
+`"1080p"`), `draft` (on by default at 480p, off above it; `true` above 480p is
+refused, and Nodaro Motion Lite has no draft), `prepareReferences` (default
+`true`, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
 
-**Engines.** `engine` chooses the video model: `"seedance-2-5"` (the default,
-when `engine` is left out, so callers that predate it keep what they had) or
-`"kling-4"`. Seedance 2.5 renders 480p (a draft by default), 720p or 1080p,
-and its Full Quality re-renders a draft's own take at 1080p. Kling 4 makes a
-new take guided by the clip and your images: it renders 720p (the default) or
-1080p, with no draft (`draft: true` answers `400 draft_unsupported`, and 480p
-is refused). Kling renders whole seconds, so the clip is cut to whole
-seconds: `klingLength` says where — `"cut-end"` (the default: the fraction
-of a second at its end is dropped) or `"cut-start"` (at its start); Seedance
-2.5 ignores it. A preview is still 4 s from `previewStart`, and its Full Quality
-makes a new take at 1080p from a completed 720p run's inputs (see
+**Engines.** `engine` chooses the engine: `"motion-pro"` (Nodaro Motion Pro,
+the default when `engine` is left out) or `"motion-lite"` (Nodaro Motion
+Lite). Pro renders 480p (a draft by default), 720p or 1080p, and its Full
+Quality re-renders a draft's own take at 1080p. Lite makes a new take guided
+by the clip and your images: it renders 720p (the default) or 1080p, with no
+draft (`draft: true` answers `400 draft_unsupported`, and 480p is refused).
+Lite renders whole seconds, so the clip is cut to whole seconds:
+`motionLength` says where — `"cut-end"` (the default: the fraction of a second
+at its end is dropped) or `"cut-start"` (at its start); Pro ignores it. A
+preview is still 4 s from `previewStart`, and Lite's Full Quality makes a new
+take at 1080p from a completed 720p run's inputs (see
 [Full Quality](#full-quality)). The job records its engine in
-`input_data.engine`, and a completed job's output in its `engine`. The engine's
-own limits apply (Kling 4 takes fewer images per run than the 30 Cast Swap
+`input_data.engine`, and a completed job's output in its `engine`. Each
+engine's own limits apply (Lite takes fewer images per run than the 30 Pro
 allows), and the route refuses what it cannot run.
+
+**Preparing the clip.** How the source clip is prepared for the video model —
+for one, whether faces are hidden first, and whether a clip the model refuses
+is retried once — is set by Nodaro for each engine. A run cannot change it:
+a `faceMasking` field sent by an older client is accepted and ignored.
 
 **Fixed references.** `references` (at most 5) are things the video should
 show that no role replaces, each `{ images, line }`: 1–3 images of ONE thing
@@ -4251,65 +4257,27 @@ credits (`breakdown.references`), charged when it runs, even if the video then
 fails; it adds about a minute, and falls back to your own images for a role
 whose picture could not be made. Locations are not prepared.
 
-**Face masking.** `faceMasking` covers the faces in the source clip before the
-video model sees it; their movement and lip timing stay, and the rest of the
-clip is sent as it is. It is
-`{ mode, target?, fill?, minFaceHeightPct?, maxFaceHeightPct?, zone?, blurStrengthPct?, threshold? }`:
-
-- `mode`: `"off"` (the same as leaving `faceMasking` out: the clip is sent as
-  it is), `"always"` (the faces are masked before the first attempt) or
-  `"auto"` (the run starts unmasked and, only if the video model refuses the
-  source clip, is retried once with the faces masked; any other failure is not
-  retried).
-- `target`: what a mask covers — `"head"` (the default: the whole head, hair
-  included, and people seen from behind or turned away, with a bigger mask)
-  or `"face"` (the face only; the hair, and a person turned away, stay
-  visible).
-- `fill`: what covers a masked face — `"blur"` (the default) or `"depth"` (a
-  depth-color view of it).
-- Which faces are masked: `minFaceHeightPct` (0–100, default 15) and
-  `maxFaceHeightPct` (0–100, default 0 = no limit; when above 0 it must be at
-  least `minFaceHeightPct`) keep faces by their height as a % of the frame's;
-  `zone` (`{ leftPct, rightPct, topPct, bottomPct }`, each 0–49 % of the frame)
-  leaves out a face whose centre lies in one of those margins. Left out, it is
-  `{ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }`, so people at the
-  left and right edges of the frame are not masked; a margin left out of a
-  zone that is given is 0; `zone: null`, or all four margins 0, means no
-  margins;
-  `threshold` (0.05–0.95, default 0.5) is how sure the face finder must be —
-  lower finds more faces.
-- `blurStrengthPct` (0.1–5 % of the frame's width, default 2): how strong the
-  blur is, with `fill: "blur"`.
-
-A completed job's output carries `faceMasking: { applied, reason }`: `applied`
-is whether the video was made from the masked clip, and `reason` says why —
-`"always"` (masked before the first attempt), `"input_refused"` (`auto`
-retried with the faces masked after the source clip was refused), `"no_faces"`
-(no face was left to mask after the filters: an `always` run continues
-unmasked, while an `auto` run fails with the original refusal instead) or
-`"off"`.
-
 The quote names two totals. `totalCredits` is what is held when the run
-starts: `breakdown.castSwap` (the run itself) + `breakdown.seedance` (what the
-video model it calls holds) + `breakdown.references` (the reference
-preparation; 0 when it is off or there is nothing to prepare), plus
-`breakdown.masking` (masking the faces) with `faceMasking.mode` `"always"`.
-`expectedCredits` is the charge the run is expected to come to: the same sum
-with `breakdown.seedanceExpected` (what the video model is expected to be
-charged) in place of `breakdown.seedance`. The video's length is left to the
-model (Auto), so the video model is held at its longest output but is expected
-to be charged for about the clip in and as much out: `seedanceExpected` is
-never above `seedance`, and `expectedCredits` never above `totalCredits`. The
-run is charged what it actually costs. An older Cast Swap engine leaves out
-`expectedCredits` and `seedanceExpected`; read `totalCredits` then.
-With `"auto"` the masking is in neither total: `maskingCredits` is the
-extra charged only if the masked retry runs, and starting the run needs
-credits for both the hold and it. `breakdown.masking` is present with
-`"auto"` too (equal to `maskingCredits`) but is not added to either total.
-So the breakdown always sums to more than either total: `seedance` and
-`seedanceExpected` are alternatives, and `"auto"` masking is outside both.
-`settlesLower: true` (every run today) means the final charge is expected to
-come out lower than `totalCredits`, at about `expectedCredits`.
+starts; `expectedCredits` is the charge the run is expected to come to, never
+above `totalCredits`. On Nodaro Motion Pro the video's length is left to the
+model (Auto), so the video is held at its longest output but is expected to
+be charged for about the clip in and as much out; `settlesLower: true` says
+so (the final charge is expected to come out lower than `totalCredits`, at
+about `expectedCredits`). On Nodaro Motion Lite the two totals are equal and
+`settlesLower` is `false`: Lite renders exactly the length asked for. The run
+is charged what it actually costs. `breakdown` names the quote's parts, for
+display only: `castSwap` (the run itself), `references` (the reference
+preparation, 0 when it is off or there is nothing to prepare), `motion` (what
+the video holds; on Lite what it costs), `motionExpected` (what the video is
+expected to be charged, never above `motion`; Pro only) and `privacy`
+(preparing the clip, when the engine's setting does: in both totals when it
+always runs, in neither when it is the retry below). `motion` and
+`motionExpected` are alternatives, so read the totals, never the sum. When
+the engine's setting retries a refused clip, `privacyCredits` is the extra
+charged only if that retry runs: it is in neither total, and starting the
+run needs credits for both the hold and it. `engine` is the engine the quote
+is for. A completed job's output carries `privacy: { applied, reason }`:
+whether the video was made from the prepared clip, and why.
 
 **Repeats.** Send the same `Idempotency-Key` (8–200 characters) when you
 retry a run. A repeat within the credit guard's dedup window (about 10 s)
@@ -4322,52 +4290,54 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, or a `faceMasking` setting out of range (including a `maxFaceHeightPct` above 0 and below `minFaceHeightPct`). Also an invalid `origin`. |
-| `400` | `draft_unsupported` | `draft: true` with `engine: "kling-4"`, which has no draft. |
-| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "kling-4"`. |
-| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "kling-4"` (only a Seedance edit can be one). |
-| `400` | `too_many_images` | More than 10 images in a `engine: "kling-4"` run, across every role and fixed reference. |
+| `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, Also an invalid `origin`. |
+| `400` | `draft_unsupported` | `draft: true` with `engine: "motion-lite"`, which has no draft. |
+| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "motion-lite"`. |
+| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "motion-lite"` (only a Nodaro Motion Pro edit can be one). |
+| `400` | `too_many_images` | More than 10 images in an `engine: "motion-lite"` run, across every role and fixed reference. |
 | `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
-| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the model's limit (Kling 4's is 8,000 characters). |
+| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Lite's is 8,000 characters). |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with face masking `"auto"`, the quote plus `maskingCredits`). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
 | `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/cast-swap` only). |
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
-| `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
-| `503` | `estimate_unavailable` | The video model's price cannot be quoted right now (`/estimate` only); try again shortly. |
+| `503` | `host_too_old` | This platform version cannot run Nodaro Motion (both routes). |
+| `503` | `estimate_unavailable` | The price cannot be quoted right now (`/estimate` only); try again shortly. |
 
 ### Full Quality
 
 A finished run can be finished at Full Quality, at 1080p, fitted to the clip
 and given its original audio back, as a new job linked to it:
 
-- a Seedance 2.5 DRAFT run (a Cast Swap run made as a draft, or a trend run
-  whose default is a draft): the same take re-rendered at 1080p;
-- a Kling 4 run at 720p: a NEW take at 1080p from the run's own inputs (for a
-  trend run, recomposed from the trend version it ran on). Kling cannot redo a
-  take sharper, so it will not match the 720p run frame for frame.
+- a Nodaro Motion Pro DRAFT run (a Nodaro Motion run made as a draft, or a
+  trend run whose default is a draft): the same take re-rendered at 1080p;
+- a Nodaro Motion Lite run at 720p: a NEW take at 1080p from the run's own
+  inputs (for a trend run, recomposed from the trend version it ran on). Lite
+  cannot redo a take sharper, so it will not match the 720p run frame for
+  frame.
 
 The run itself stays either way. The quote's `kind` says which it is
-(`"same-take"` or `"new-take"`; an older Cast Swap engine leaves it out: a
-same take). It is available for 7 days after the run completed
+(`"same-take"` or `"new-take"`; an older server leaves it out: a same
+take). It is available for 7 days after the run completed
 (SDK: [`client.castSwap.fullQuality`](./sdk-reference.md#clientcastswap),
 MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 `nodaro cast-swap full-quality estimate|run`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown: { castSwap, seedanceHd } (a new take: { castSwap, kling }), availableUntil }`. |
+| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil }`. |
 | `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
-`:jobId` is the draft's (or Kling 4 720p run's) job id. The quote is `totalCredits` =
-`breakdown.castSwap` (the Full Quality job's own steps) +
-`breakdown.seedanceHd` (the 1080p render). `seedanceHd` is 0 when an earlier
+`:jobId` is the draft's (or Nodaro Motion Lite 720p run's) job id. The quote
+is `totalCredits`: `breakdown.castSwap` (the Full Quality job's own steps)
+plus `breakdown.motionHd` (a same take: the 1080p render of the draft's take)
+or `breakdown.motion` (Lite's new take). `motionHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only
 the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
 the price depends on the draft. The quote does not look for a Full Quality
@@ -4387,9 +4357,9 @@ Refusals, all before anything is charged (bodies are
 |---|---|---|
 | `401` | `unauthorized` | No authenticated user. |
 | `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
-| `404` | `not_found` | Not your job, or not a Cast Swap run; also a `sessionId` you may not use (start only). |
+| `404` | `not_found` | Not your job, or not a Nodaro Motion run; also a `sessionId` you may not use (start only). |
 | `409` | `not_completed` | The run has not finished. |
-| `409` | `not_a_draft` | The run is neither a Seedance 2.5 draft nor a Kling 4 run at 720p. |
+| `409` | `not_a_draft` | The run is neither a Nodaro Motion Pro draft nor a Nodaro Motion Lite run at 720p. |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
@@ -4400,7 +4370,7 @@ Refusals, all before anything is charged (bodies are
 
 ## 13g. Trends (Cloud edition)
 
-A trend is a ready-made [Cast Swap](#13f-cast-swap-cloud-edition) recipe: a
+A trend is a ready-made [Nodaro Motion](#13f-nodaro-motion-cloud-edition) recipe: a
 short clip with slots (the people, pets, products and place you can replace).
 Fill its slots with your own pictures and run it to get the clip back with
 them in it. The routes are part of Nodaro Cloud and answer 404 on self-hosted
@@ -4413,8 +4383,8 @@ an unknown slug is a `404` on every route.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the video model every run of the trend uses (`"seedance-2-5"` or `"kling-4"`; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Seedance 2.5 (480p is the draft), `["720p", "1080p"]` on Kling 4 (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
-A trend whose face mask was made and approved ahead of time (the same mask for every run) masks nothing per run: its quote carries no masking charge (`maskingCredits` is 0), and the run is charged the same. | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the engine every run of the trend uses (`"motion-pro"` or `"motion-lite"`, with its name in `engineName`: "Nodaro Motion Pro" or "Nodaro Motion Lite"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Pro (480p is the draft), `["720p", "1080p"]` on Nodaro Motion Lite (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
 | `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
@@ -4442,10 +4412,10 @@ The estimate and run body is
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
 - `resolution`: one of the trend's `resolutions`, default its first
-  (`"480p"`, or `"720p"` on a Kling 4 trend); another is a `400`
+  (`"480p"`, or `"720p"` on a Nodaro Motion Lite trend); another is a `400`
   `resolution_unsupported`. `draft` (default `true`) is only available at 480p
-  on a Seedance 2.5 trend; `draft: true` on a Kling 4 trend is a `400`
-  `draft_unsupported`.
+  on a Nodaro Motion Pro trend; `draft: true` on a Nodaro Motion Lite trend is
+  a `400` `draft_unsupported`.
 - `sessionId`: one of your generation sessions. Accepted (one you may not
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
@@ -4456,9 +4426,9 @@ The estimate and run body is
   from. Not a slug is a `400` `validation_error`. Without it the run has no
   origin.
 - `previewJobId` (a uuid): on a full run, the `jobId` of your own completed
-  preview run of this trend. When the preview showed the clip needs its faces
-  masked, the full run masks them from the start (and the quote says so)
-  instead of first trying without. Any other job (not yours, another trend's,
+  preview run of this trend. When the preview showed the clip needs the
+  trend's retry, the full run is made that way from the start (and the quote
+  says so) instead of first trying without. Any other job (not yours, another trend's,
   not a preview, not finished) is ignored, without an error.
 
 An OAuth app needs `jobs:read` to read, `workflows:execute` to estimate or
@@ -4475,9 +4445,9 @@ anything is charged:
 | `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
-| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Kling 4). |
-| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Kling 4 trend). |
-| `400` | `too_many_images` | A Kling 4 trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
+| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Lite). |
+| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Lite trend). |
+| `400` | `too_many_images` | A Nodaro Motion Lite trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend does not have (any `example` on a trend with none). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
@@ -4486,12 +4456,12 @@ anything is charged:
 | `400` | `validation_error` | (`/runs`) The `Idempotency-Key` is not 8–200 characters. |
 | `401` | `unauthorized` | No authenticated user. |
 | `404` | `not_found` | The trend is not published, or `sessionId` names a session you may not use (`/runs` only). |
-| `502` | `engine_error` | The video engine answered unexpectedly (estimate and run). |
+| `502` | `engine_error` | Nodaro Motion answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |
 | `503` | `trend_unavailable` | The trend cannot be run right now. |
 | `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`). |
 
-When the video engine refuses an estimate or a run, the trend routes answer
+When Nodaro Motion refuses an estimate or a run, the trend routes answer
 with their OWN codes and fixed messages; the engine's message and any
 `issues` are never passed on (they would describe the trend's hidden recipe):
 
@@ -4518,11 +4488,12 @@ else `cancelled` or `failed`. The message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
 
-Each run carries its `engine`. A completed Seedance 2.5 draft, or a completed
-Kling 4 run at 720p, has `fullQualityUntil` (the end of its 7 days) and can be
-finished at [Full Quality](#full-quality); on Kling 4 that is a new take.
+Each run carries its `engine` (`"motion-pro"` or `"motion-lite"`) and
+`engineName`. A completed Nodaro Motion Pro draft, or a completed Nodaro
+Motion Lite run at 720p, has `fullQualityUntil` (the end of its 7 days) and
+can be finished at [Full Quality](#full-quality); on Lite that is a new take.
 
-A Full Quality version of a draft run (or of a Kling 4 720p run) is a run of its own in
+A Full Quality version of a draft run (or of a Nodaro Motion Lite 720p run) is a run of its own in
 `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
 `status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
 `draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any

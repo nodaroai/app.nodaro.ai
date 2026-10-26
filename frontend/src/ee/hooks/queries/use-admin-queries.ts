@@ -15,6 +15,8 @@ import {
   updateAdminNodeDefault,
   deleteAdminNodeDefault,
   fetchAdminTrends,
+  fetchNodaroMotionMasking,
+  saveNodaroMotionMasking,
   createAdminTrend,
   fetchAdminTrend,
   patchAdminTrend,
@@ -36,6 +38,11 @@ import {
   approveAdminTrendFaceMask,
   clearAdminTrendFaceMask,
   fetchAdminTrendFaceMaskJob,
+  startAdminTrendUpscale,
+  applyAdminTrendUpscale,
+  discardAdminTrendUpscale,
+  fetchAdminTrendUpscaleJob,
+  type AdminTrendUpscaleTarget,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
   type AdminTrendData,
@@ -1514,6 +1521,23 @@ export function isDraftConflict(err: unknown): boolean {
   return err instanceof Error && (err as { code?: unknown }).code === "draft_conflict"
 }
 
+export function useNodaroMotionMasking() {
+  return useQuery({
+    queryKey: queryKeys.admin.nodaroMotionMasking(),
+    queryFn: fetchNodaroMotionMasking,
+    enabled: hasAdmin(),
+    staleTime: 30_000,
+  })
+}
+
+export function useSaveNodaroMotionMasking() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: saveNodaroMotionMasking,
+    onSuccess: (view) => queryClient.setQueryData(queryKeys.admin.nodaroMotionMasking(), view),
+  })
+}
+
 export function useAdminTrends() {
   return useQuery({
     queryKey: queryKeys.admin.trends(),
@@ -1523,6 +1547,9 @@ export function useAdminTrends() {
   })
 }
 
+/** How often the trend is read while an upscale is being put in its draft on the server. */
+export const TREND_UPSCALE_APPLY_POLL_MS = 2_000
+
 export function useAdminTrend(id: string) {
   return useQuery({
     queryKey: queryKeys.admin.trend(id),
@@ -1530,6 +1557,8 @@ export function useAdminTrend(id: string) {
     enabled: hasAdmin() && id.length > 0,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    // "Use it" on an upscale runs on the server: read the trend until it is done (or failed).
+    refetchInterval: (q) => (q.state.data?.upscaleJobs?.some((u) => u.applying && !u.applying.stale) ? TREND_UPSCALE_APPLY_POLL_MS : false),
   })
 }
 
@@ -1747,6 +1776,50 @@ export function useClearTrendFaceMask(id: string) {
   return useMutation({
     onError: handledByScreen,
     mutationFn: (revision: string) => clearAdminTrendFaceMask(id, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Upscale the saved draft's source clip or one example to 1080p (the admin pays); follow it with `useTrendUpscaleJob`. */
+export function useStartTrendUpscale(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ target, revision, idempotencyKey }: { target: AdminTrendUpscaleTarget; revision: string; idempotencyKey: string }) =>
+      startAdminTrendUpscale(id, target, revision, idempotencyKey),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Follow an upscale job until it ends (every 5 s while it runs). */
+export function useTrendUpscaleJob(jobId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.admin.trendUpscaleJob(jobId ?? ""),
+    queryFn: () => fetchAdminTrendUpscaleJob(jobId!),
+    enabled: hasAdmin() && !!jobId,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status
+      return status === "completed" || status === "failed" || status === "cancelled" ? false : 5_000
+    },
+  })
+}
+
+/** Use a finished upscale at `revision` (the server finishes it in the background); stays pending until the trend is read again. */
+export function useApplyTrendUpscale(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => applyAdminTrendUpscale(id, jobId, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Discard an upscale in the making at `revision`. */
+export function useDiscardTrendUpscale(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => discardAdminTrendUpscale(id, jobId, revision),
     onSuccess: () => invalidate(id),
   })
 }

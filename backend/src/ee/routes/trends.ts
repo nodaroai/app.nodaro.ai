@@ -33,7 +33,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE } from "@nodaro/shared/models"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, nodaroMotionEngineName, nodaroMotionEngineOf, type NodaroMotionEngine } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -53,6 +53,7 @@ import {
 } from "../lib/trends/store.js"
 import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
+import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quote.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import {
@@ -72,7 +73,6 @@ import {
   type RunJobRow,
 } from "../lib/trends/run-helpers.js"
 import type {
-  CastSwapEngine,
   Choice,
   TrendResolution,
   TrendRow,
@@ -128,12 +128,17 @@ export interface TrendDetail extends TrendCard {
   previewSec: 4 | null
   /** Absent only on a version whose source has no display copy (none can publish since). */
   original?: TrendOriginal
-  /** The video engine every run of this trend uses (the person never chooses it). */
-  engine: CastSwapEngine
+  /**
+   * The engine every run of this trend uses, by its public id (the person
+   * never chooses it): `"motion-pro"` or `"motion-lite"`.
+   */
+  engine: NodaroMotionEngine
+  /** Its name: "Nodaro Motion Pro" or "Nodaro Motion Lite". */
+  engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:
-   * Seedance 2.5 `["480p", "720p", "1080p"]` (480p is the draft), Kling 4
-   * `["720p", "1080p"]` (no draft).
+   * Nodaro Motion Pro `["480p", "720p", "1080p"]` (480p is the draft),
+   * Nodaro Motion Lite `["720p", "1080p"]` (no draft).
    */
   resolutions: TrendResolution[]
   /**
@@ -303,7 +308,8 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     version,
     previewSec: data.previewStart === null ? null : PREVIEW_SEC,
     ...(original ? { original } : {}),
-    engine: engineOf(data),
+    engine: nodaroMotionEngineOf(engineOf(data)),
+    engineName: nodaroMotionEngineName(engineOf(data)),
     resolutions: [...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engineOf(data)]],
     slots: data.slots.map((s) => {
       const hint = pickText(s.hint, locale)
@@ -342,14 +348,6 @@ async function findPublished(slug: string): Promise<{ row: TrendRow; version: nu
 }
 
 // ── runs ────────────────────────────────────────────────────────────────────
-
-/** The quote's breakdown: only its own entries whose values are finite numbers. */
-function numericEntries(v: unknown): Record<string, number> {
-  if (!isRec(v)) return {}
-  return Object.fromEntries(
-    Object.entries(v).filter((e): e is [string, number] => typeof e[1] === "number" && Number.isFinite(e[1])),
-  )
-}
 
 /** The Cast Swap route's own Idempotency-Key bounds, checked before dispatch (its refusal is not passed on). */
 const IDEMPOTENCY_KEY_MIN = 8
@@ -582,17 +580,18 @@ export async function trendRoutes(app: FastifyInstance) {
         const parsed = parseJson(res.body)
         const quote = isRec(parsed) && isRec(parsed.data) ? parsed.data : parsed
         if (!isRec(quote) || typeof quote.totalCredits !== "number") {
-          return err(reply, 502, "engine_error", "Cast Swap answered unexpectedly.")
+          return err(reply, 502, "engine_error", "Nodaro Motion answered unexpectedly.")
         }
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : quote.totalCredits
-        const masking = quote.maskingCredits
+        // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
+        const privacyCredits = privacyCreditsOf(quote)
         return {
           data: {
             expectedCredits: expected,
             holdCredits: quote.totalCredits,
-            breakdown: numericEntries(quote.breakdown),
-            // Face masking "auto": charged only if the masked retry runs (not in the hold).
-            ...(typeof masking === "number" && Number.isFinite(masking) ? { maskingCredits: masking } : {}),
+            breakdown: neutralBreakdown(quote.breakdown),
+            // A retry of a refused clip: charged only if it runs (not in the hold).
+            ...(privacyCredits !== undefined ? { privacyCredits } : {}),
           },
         }
       } catch (e) {
@@ -643,7 +642,7 @@ export async function trendRoutes(app: FastifyInstance) {
         )
         if (res.statusCode < 200 || res.statusCode >= 300) return publicRefusal(reply, res)
         const jobId = jobIdOf(res.body)
-        if (!jobId) return err(reply, 502, "engine_error", "Cast Swap did not return a job id.")
+        if (!jobId) return err(reply, 502, "engine_error", "Nodaro Motion did not return a job id.")
         return reply.status(202).send({ data: { jobId } })
       } catch (e) {
         return unavailableOrInternal(reply, req, e, "Failed to start the trend run")

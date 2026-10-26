@@ -57,13 +57,13 @@ describe("the stored face mask on the wire", () => {
     return c
   }
   /** A completed masked preview of trend "t" by "u", masked with `fill` and `zone`. */
-  function previewJob(stored: Record<string, unknown>) {
+  function previewJob(stored: Record<string, unknown>, output: Record<string, unknown> = { faceMasking: { applied: true } }) {
     const row = {
       id: PREVIEW_JOB,
       user_id: "u",
       status: "completed",
       input_data: { type: "cast-swap", preview: true, trend: { id: "t" }, __faceMasking: stored },
-      output_data: { faceMasking: { applied: true } },
+      output_data: output,
     }
     const chain = { select: () => chain, eq: () => chain, is: () => chain, maybeSingle: async () => ({ data: row, error: null }) }
     from.mockReturnValue(chain)
@@ -88,6 +88,20 @@ describe("the stored face mask on the wire", () => {
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(c.body.faceMasking).toMatchObject({ mode: "always", fill: "blur" })
     expect(c.body.storedFaceMask).toEqual(STORED)
+  })
+
+  it("reads the preview's outcome from the completion's `privacy` (0.394.0+), else its old `faceMasking`", async () => {
+    for (const output of [{ privacy: { applied: true } }, { privacy: { applied: true }, faceMasking: { applied: true } }, { faceMasking: { applied: true } }]) {
+      previewJob({ fill: "blur" }, output)
+      const c = withStored({ mode: "auto" })
+      await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
+      expect(c.body.faceMasking, JSON.stringify(output)).toMatchObject({ mode: "always" })
+    }
+    // `privacy` wins: a preview it says was not masked is not followed.
+    previewJob({ fill: "blur" }, { privacy: { applied: false }, faceMasking: { applied: true } })
+    const c = withStored({ mode: "auto" })
+    await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
+    expect(c.body.faceMasking).toMatchObject({ mode: "auto" })
   })
 
   it("a full run that follows its masked preview keeps the trend's target", async () => {

@@ -1,9 +1,10 @@
 import type { NodaroClientCore } from "../core.js"
 
 /**
- * Cast Swap — replace the people, pets, products and/or the location in a
- * short video with your own references, keeping its motion, framing, timing
- * and sound (the clip's audio is kept, and the result is the clip's length).
+ * Nodaro Motion (the `castSwap` resource; routes `/v1/cast-swap`) — replace
+ * the people, pets, products and/or the location in a short video with your
+ * own references, keeping its motion, framing, timing and sound (the clip's
+ * audio is kept, and the result is the clip's length).
  *
  * Before the video, each person, pet and product role's photos are turned
  * into one clean reference picture by an image model. This costs extra
@@ -12,11 +13,16 @@ import type { NodaroClientCore } from "../core.js"
  * photos if it fails, and is turned off with `prepareReferences: false`.
  * Locations are not prepared.
  *
- * Engines: a run is made on Seedance 2.5 (`engine` left out, or
- * `"seedance-2-5"`) or Kling 4 (`"kling-4"`). Kling 4 renders 720p (its
- * default) or 1080p and has no draft; it makes a new take guided by the clip
- * and pictures, so its Full Quality is a new take at 1080p rather than the
- * same take re-rendered (`CastSwapFullQualityEstimate.kind`).
+ * Engines: a run is made on Nodaro Motion Pro (`engine` left out, or
+ * `"motion-pro"`) or Nodaro Motion Lite (`"motion-lite"`). Lite renders 720p
+ * (its default) or 1080p and has no draft; it makes a new take guided by the
+ * clip and pictures, so its Full Quality is a new take at 1080p rather than
+ * the same take re-rendered (`CastSwapFullQualityEstimate.kind`).
+ *
+ * How the clip is prepared for the video model (for one, whether faces are
+ * hidden first, and whether a refused clip is retried) is set by Nodaro for
+ * each engine; a run cannot change it. `faceMasking` is no longer read
+ * (deprecated: accepted and ignored).
  *
  * Cloud edition only: `/v1/cast-swap` is served by the cloud plugin and 404s
  * on self-hosted installs. `run()` answers 202 with a job id; follow it with
@@ -32,42 +38,54 @@ import type { NodaroClientCore } from "../core.js"
  * anything is charged: 400 `validation_error` (the body: no role with images,
  * no reference and no `prePrompt` or `postPrompt`, more roles of a kind
  * than allowed, more than 30 images in all, `draft: true` above 480p, a
- * `prePrompt` or `postPrompt` over 4,000 characters, a `faceMasking` setting
- * out of range); on Kling 4, `draft_unsupported` (`draft: true`),
- * `resolution_unsupported` (480p), `output_format_unsupported` (a MOV edit
- * output) and `too_many_images` (more than 10 images in the run, across every
- * role and fixed reference); `raw_reference_token` (also in a reference's `line`),
+ * `prePrompt` or `postPrompt` over 4,000 characters); on Nodaro Motion Lite,
+ * `draft_unsupported` (`draft: true`), `resolution_unsupported` (480p),
+ * `output_format_unsupported` (a MOV edit output) and `too_many_images` (more
+ * than 10 images in the run, across every role and fixed reference);
+ * `raw_reference_token` (also in a reference's `line`),
  * `invalid_role_mention` (also any `{role:N}` in a reference's `line`),
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
  * `preview_out_of_range`, `no_roles_in_preview` (a preview with every role
  * `inPreview: false`, always refused even with a prompt, or with no role kept
  * in it that has images and no `prePrompt` or `postPrompt`), `prompt_too_long`
  * (the prompt would build too long: a `{role:N}` reads as the role's name when
- * it sends no images; Kling 4's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
+ * it sends no images; Nodaro Motion Lite's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
  * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
  * only).
  */
 
 /**
- * The video engine a Cast Swap run is made on. Left out = `"seedance-2-5"`.
+ * The engine a Nodaro Motion run is made on, by its public id. Left out =
+ * `"motion-pro"`.
  *
- * - `"seedance-2-5"`: 480p (the default, a draft unless `draft: false`), 720p
- *   or 1080p; Full Quality re-renders a draft's own take at 1080p.
- * - `"kling-4"`: 720p (the default) or 1080p, never a draft (`draft: true`
- *   answers 400 `draft_unsupported`); Full Quality makes a new take at 1080p
- *   from a completed 720p run's inputs. A preview is still 4 s from
- *   `previewStart`.
+ * - `"motion-pro"` (Nodaro Motion Pro): 480p (the default, a draft unless
+ *   `draft: false`), 720p or 1080p; Full Quality re-renders a draft's own take
+ *   at 1080p.
+ * - `"motion-lite"` (Nodaro Motion Lite): 720p (the default) or 1080p, never a
+ *   draft (`draft: true` answers 400 `draft_unsupported`); Full Quality makes a
+ *   new take at 1080p from a completed 720p run's inputs. A preview is still
+ *   4 s from `previewStart`.
  */
-export type CastSwapEngine = "seedance-2-5" | "kling-4"
+export type CastSwapEngine = "motion-pro" | "motion-lite"
 
 /**
- * Where a Kling 4 run cuts the clip to whole seconds (Kling renders whole
- * seconds; asked for more than the clip, it would stretch the motion):
+ * The engine ids an older client sent (`"seedance-2-5"` = `"motion-pro"`,
+ * `"kling-4"` = `"motion-lite"`). Still accepted in a request; never returned.
+ * @deprecated use {@link CastSwapEngine}.
+ */
+export type CastSwapEngineLegacyId = "seedance-2-5" | "kling-4"
+
+/**
+ * Where a Nodaro Motion Lite run cuts the clip to whole seconds (Lite renders
+ * whole seconds; asked for more than the clip, it would stretch the motion):
  * - `"cut-end"` (the default): drop the fraction of a second at its end;
  * - `"cut-start"`: drop it at its start.
  */
-export type CastSwapKlingLength = "cut-end" | "cut-start"
+export type CastSwapMotionLength = "cut-end" | "cut-start"
+
+/** @deprecated use {@link CastSwapMotionLength}. */
+export type CastSwapKlingLength = CastSwapMotionLength
 
 /** Whether a swapped subject takes this trait from the references (`"new"`) or keeps the video's (`"original"`). */
 export type CastSwapTraitSource = "new" | "original"
@@ -159,69 +177,27 @@ export interface CastSwapReference {
 }
 
 /**
- * Margins of the frame, each 0–49 %: a face whose centre lies in a margin is
- * not masked, so only faces inside the inner rectangle are. A margin left out
- * of a zone that is given is 0. (A `zone` left out altogether is 10 % at the
- * left and right: see `CastSwapFaceMasking.zone`.)
+ * @deprecated Nodaro sets this per engine; a run's `faceMasking` is ignored.
  */
 export interface CastSwapFaceMaskingZone {
-  /** % of the frame's width from the left edge. Default 0 in a zone that is given. */
   leftPct?: number
-  /** % of the frame's width from the right edge. Default 0 in a zone that is given. */
   rightPct?: number
-  /** % of the frame's height from the top edge. Default 0. */
   topPct?: number
-  /** % of the frame's height from the bottom edge. Default 0. */
   bottomPct?: number
 }
 
 /**
- * Face masking: the faces in the source clip are covered before the video
- * model sees it, keeping their movement and lip timing while the rest of the
- * clip is sent as it is.
- *
- * - `"off"` (the same as leaving `faceMasking` out): the clip is sent as it is.
- * - `"always"`: the faces are masked before the first attempt. Its credits are
- *   in the quote (`breakdown.masking`, counted in `totalCredits`).
- * - `"auto"`: the run starts unmasked; only if the video model refuses the
- *   source clip is it retried once with the faces masked. Any other failure is
- *   not retried. The extra credits, charged only when that retry runs, are the
- *   estimate's `maskingCredits` (not in `totalCredits`).
- *
- * A completed job's output carries `faceMasking: { applied, reason }`:
- * `applied` is whether the video was made from the masked clip, and `reason`
- * is `"always"` (masked before the first attempt), `"input_refused"` (`auto`
- * retried after the source clip was refused), `"no_faces"` (no face was left
- * to mask after the filters: an `always` run continues unmasked; an `auto`
- * run fails with the original refusal instead) or `"off"`.
+ * @deprecated Nodaro sets how the clip is prepared for the video model, per
+ * engine; a run cannot change it. A `faceMasking` sent is accepted and
+ * ignored (no error), so older code keeps working unchanged.
  */
 export interface CastSwapFaceMasking {
   mode: "off" | "always" | "auto"
-  /**
-   * What a mask covers: `"head"` (default) the whole head, hair included, and
-   * people seen from behind or turned away, with a bigger mask; `"face"` the
-   * face only, so the hair (and a person turned away) stays visible.
-   */
-  target?: "face" | "head"
-  /** What covers a masked face: `"blur"` (default) or `"depth"` (a depth-color view of it). */
   fill?: "blur" | "depth"
-  /** Mask only faces at least this % of the frame's height, 0–100. Default 15. */
   minFaceHeightPct?: number
-  /**
-   * Mask only faces at most this % of the frame's height, 0–100. Default 0 (no
-   * limit). When above 0 it must be at least `minFaceHeightPct` (else 400).
-   */
   maxFaceHeightPct?: number
-  /**
-   * Leave out faces near the edges of the frame. Default (left out):
-   * `{ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }`, so people at the
-   * left and right edges are not masked. `null`, or all four margins 0, means
-   * no margins.
-   */
   zone?: CastSwapFaceMaskingZone | null
-  /** The blur's strength, 0.1–5 % of the frame's width (`fill: "blur"`). Default 2. */
   blurStrengthPct?: number
-  /** How sure the face finder must be, 0.05–0.95: lower finds more faces. Default 0.5. */
   threshold?: number
 }
 
@@ -265,27 +241,30 @@ export interface CastSwapParams {
   /** Where the preview starts, in seconds. Default 0. */
   previewStart?: number
   /**
-   * The video engine (see {@link CastSwapEngine}). Default `"seedance-2-5"`.
-   * The job records it in `input_data.engine`, and a completed job's output
-   * in its `engine`. A Cast Swap engine older than Kling 4 support ignores
-   * the field and runs Seedance 2.5: a Kling 4 quote names `engine:
-   * "kling-4"`, so check the estimate's `engine` before running.
+   * The engine (see {@link CastSwapEngine}). Default `"motion-pro"`. The job
+   * records it in `input_data.engine`, and a completed job's output in its
+   * `engine`. The ids an older client sent ({@link CastSwapEngineLegacyId})
+   * are still accepted.
    */
-  engine?: CastSwapEngine
+  engine?: CastSwapEngine | CastSwapEngineLegacyId
   /**
-   * Kling 4 only (Seedance 2.5 ignores it): which end of the clip is cut to
-   * whole seconds (see {@link CastSwapKlingLength}). Default `"cut-end"`.
+   * Nodaro Motion Lite only (Pro ignores it): which end of the clip is cut to
+   * whole seconds (see {@link CastSwapMotionLength}). Default `"cut-end"`.
    */
+  motionLength?: CastSwapMotionLength
+  /** @deprecated use {@link motionLength} (still accepted). */
   klingLength?: CastSwapKlingLength
   /**
-   * The output resolution. Seedance 2.5: `"480p"` (default), `"720p"` or
-   * `"1080p"`. Kling 4: `"720p"` (default) or `"1080p"`; `"480p"` answers 400.
+   * The output resolution. Nodaro Motion Pro: `"480p"` (default), `"720p"` or
+   * `"1080p"`. Nodaro Motion Lite: `"720p"` (default) or `"1080p"`; `"480p"`
+   * answers 400.
    */
   resolution?: "480p" | "720p" | "1080p"
   /**
-   * Render as a draft (Seedance 2.5 only). Defaults to `true` at 480p and
+   * Render as a draft (Nodaro Motion Pro only). Defaults to `true` at 480p and
    * `false` above it; `true` with `"720p"` or `"1080p"` answers 400 (draft is
-   * 480p only). Kling 4 has no draft: `true` answers 400 `draft_unsupported`.
+   * 480p only). Nodaro Motion Lite has no draft: `true` answers 400
+   * `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -295,7 +274,11 @@ export interface CastSwapParams {
    * Default `true`.
    */
   prepareReferences?: boolean
-  /** Mask the faces in the source clip (see {@link CastSwapFaceMasking}). Default: off. */
+  /**
+   * Ignored: Nodaro sets how the clip is prepared, per engine. Accepted (no
+   * error) so older code keeps working.
+   * @deprecated leave it out.
+   */
   faceMasking?: CastSwapFaceMasking
   /**
    * `"draft"` means 480p draft.
@@ -311,64 +294,52 @@ export interface CastSwapParams {
 /** What a run would cost, in credits. */
 export interface CastSwapEstimate {
   /**
-   * The engine the run would use. Sent by an engine that knows Kling 4 on a
-   * Kling 4 quote (`"kling-4"`); absent = Seedance 2.5.
+   * The engine the run would use, by its public id (absent from an older
+   * server = `"motion-pro"`).
    */
   engine?: CastSwapEngine
   /**
-   * What is held when the run starts: `breakdown.castSwap +
-   * breakdown.seedance + breakdown.references` (on Kling 4,
-   * `breakdown.kling` in place of `breakdown.seedance`), plus
-   * `breakdown.masking` with face masking `"always"`. The run is charged what it actually costs, which
-   * is expected to be `expectedCredits`.
+   * What is held when the run starts. The run is charged what it actually
+   * costs, which is expected to be `expectedCredits`.
    */
   totalCredits: number
   /**
-   * The charge the run is expected to come to: `breakdown.castSwap +
-   * breakdown.seedanceExpected + breakdown.references`, plus
-   * `breakdown.masking` with face masking `"always"` (the hold, with the video
-   * model's expected charge in place of its hold). Never above `totalCredits`.
-   * With `"auto"` the masking is in neither total (see `maskingCredits`).
-   * `totalCredits` is what is held when the run starts; the run is charged
-   * what it actually costs.
-   *
-   * Absent from an older Cast Swap engine: read `totalCredits` then. On
-   * Kling 4 it equals `totalCredits` (Kling renders exactly the length asked
-   * for, so the hold is what it settles at).
+   * The charge the run is expected to come to. Never above `totalCredits`
+   * (on Nodaro Motion Lite it equals it: Lite renders exactly the length
+   * asked for, so the hold is what it settles at). Absent from an older
+   * server: read `totalCredits` then.
    */
   expectedCredits?: number
   /**
-   * The parts of the quote:
+   * The parts of the quote, by name, for display only:
    * - `castSwap`: the run itself;
-   * - `seedance`: what the video model it calls holds (the video's length is
-   *   left to the model, so it is held at the model's longest output);
-   * - `seedanceExpected`: what the video model is expected to be charged (the
-   *   clip in and about as much out), never above `seedance`. It takes
-   *   `seedance`'s place in `expectedCredits`; it is not added to it. Absent
-   *   from an older Cast Swap engine, like `expectedCredits`;
-   * - `kling`: Kling 4 only, in place of `seedance` and `seedanceExpected`:
-   *   what the Kling take costs (held and charged alike);
    * - `references`: preparing the reference pictures (0 when
    *   `prepareReferences` is off or there is nothing to prepare);
-   * - `masking`: masking the faces, present only when `faceMasking` is on.
-   *   With `"always"` it is in both totals; with `"auto"` it equals
-   *   `maskingCredits` and is in neither.
+   * - `motion`: what the video holds (on Nodaro Motion Lite, what it costs);
+   * - `motionExpected`: what the video is expected to be charged, never above
+   *   `motion` (Nodaro Motion Pro);
+   * - `privacy`: preparing the clip, when the engine's setting does. In both
+   *   totals when it always runs; outside both when it is the retry
+   *   (`privacyCredits`).
    *
-   * So the parts sum to more than either total: `seedance` and
-   * `seedanceExpected` are alternatives, and `"auto"` masking is outside both.
+   * `motion` and `motionExpected` are alternatives, so the parts sum to more
+   * than either total: read `totalCredits` and `expectedCredits`, never the
+   * sum. Other parts may appear.
    */
-  breakdown: { castSwap: number; seedance?: number; references: number; seedanceExpected?: number; kling?: number; masking?: number }
+  breakdown: { castSwap: number; references: number; motion?: number; motionExpected?: number; privacy?: number } & Record<string, number>
   /**
-   * Face masking `"auto"` only: the extra credits charged if the source clip
-   * is refused and the run is retried with the faces masked. Not in
-   * `totalCredits` or `expectedCredits`; `run()` needs credits for both the
-   * hold and this (else 402).
+   * The extra credits charged only if the video model refuses the clip and
+   * the run is retried (Nodaro's setting for the engine decides whether it
+   * does). Not in `totalCredits` or `expectedCredits`; `run()` needs credits
+   * for both the hold and this (else 402).
    */
+  privacyCredits?: number
+  /** @deprecated read {@link privacyCredits} (an older server answered this name). */
   maskingCredits?: number
   /**
-   * `true` when the video is made at Auto length (every Seedance 2.5 run): the
-   * final charge is expected to come out lower than `totalCredits`, at about
-   * `expectedCredits`. `false` on Kling 4.
+   * `true` when the video is made at Auto length (every Nodaro Motion Pro
+   * run): the final charge is expected to come out lower than `totalCredits`,
+   * at about `expectedCredits`. `false` on Nodaro Motion Lite.
    */
   settlesLower: boolean
 }
@@ -387,8 +358,8 @@ export interface CastSwapRunOptions {
 }
 
 /**
- * What a Full Quality version would be: `"same-take"` re-renders a Seedance
- * 2.5 draft's own take at 1080p; `"new-take"` makes a new Kling 4 take at
+ * What a Full Quality version would be: `"same-take"` re-renders a Nodaro
+ * Motion Pro draft's own take at 1080p; `"new-take"` makes a new Nodaro Motion Lite take at
  * 1080p from a 720p run's inputs (it will not match the 720p run frame for
  * frame). The 720p run or draft stays either way.
  */
@@ -396,24 +367,24 @@ export type CastSwapFullQualityKind = "same-take" | "new-take"
 
 /**
  * What a Full Quality version of a run would cost
- * (`POST /v1/cast-swap/:jobId/full-quality/estimate`): a Seedance 2.5 draft,
- * or a completed Kling 4 run at 720p.
+ * (`POST /v1/cast-swap/:jobId/full-quality/estimate`): a Nodaro Motion Pro
+ * draft, or a completed Nodaro Motion Lite run at 720p.
  */
 export interface CastSwapFullQualityEstimate {
   /**
    * Which Full Quality this is ({@link CastSwapFullQualityKind}), so it can
-   * be worded right. Absent from an older Cast Swap engine: `"same-take"`.
+   * be worded right. Absent from an older server: `"same-take"`.
    */
   kind?: CastSwapFullQualityKind
-  /** The quote in credits: `breakdown.castSwap` + `breakdown.seedanceHd` (same take) or `breakdown.kling` (new take). */
+  /** The quote in credits: `breakdown.castSwap` plus the 1080p render (same take) or the new take. */
   totalCredits: number
   /**
-   * `castSwap`: the Full Quality job's own steps; `seedanceHd` (a same take):
-   * the 1080p render of the draft's take (0 when an earlier try of this draft
-   * already finished that render, which is then reused); `kling` (a new take,
-   * in place of `seedanceHd`): the new Kling 4 take at 1080p.
+   * The parts of the quote, by name, for display only: `castSwap` (the Full
+   * Quality job's own steps), and `motionHd` (a same take: the 1080p render,
+   * 0 when an earlier try of this draft already finished that render, which
+   * is then reused) or `motion` (a new take).
    */
-  breakdown: { castSwap: number; seedanceHd?: number; kling?: number }
+  breakdown: { castSwap: number; motionHd?: number; motion?: number } & Record<string, number>
   /** ISO time until which the run can be finished at Full Quality (7 days after it completed). */
   availableUntil: string
 }
@@ -435,11 +406,11 @@ export interface CastSwapFullQualityResult {
  * The `code` of a Full Quality refusal (`NodaroError.code`), all before
  * anything is charged:
  * - `unauthorized` (401): no authenticated user;
- * - `not_found` (404): not your job, or not a Cast Swap run; also a
+ * - `not_found` (404): not your job, or not a Nodaro Motion run; also a
  *   `sessionId` you may not use;
  * - `not_completed` (409): the run has not finished;
- * - `not_a_draft` (409): the run is neither a Seedance 2.5 draft nor a
- *   Kling 4 run at 720p (a Kling 4 run at 1080p is already Full Quality);
+ * - `not_a_draft` (409): the run is neither a Nodaro Motion Pro draft nor a
+ *   Nodaro Motion Lite run at 720p (a Lite run at 1080p is already Full Quality);
  * - `draft_expired` (410): more than 7 days after the draft completed, or
  *   the draft can no longer be finished at Full Quality;
  * - `full_quality_pending` (409, `details.retryable: true`): not final — an
@@ -480,7 +451,7 @@ export class CastSwapResource {
   constructor(private client: NodaroClientCore) {}
 
   /**
-   * Start a Cast Swap run (`POST /v1/cast-swap`, 202 `{ jobId }`). Returns the
+   * Start a Nodaro Motion run (`POST /v1/cast-swap`, 202 `{ jobId }`). Returns the
    * job to follow. With `options.idempotencyKey` (sent as the
    * `Idempotency-Key` header; 8–200 characters, else 400) a repeat with the
    * same key within about 10 s answers 200 `{ jobId, deduped: true }`, a later
@@ -501,8 +472,8 @@ export class CastSwapResource {
   /**
    * Quote finishing a run at Full Quality (`POST
    * /v1/cast-swap/:jobId/full-quality/estimate`); spends nothing. `jobId` is a
-   * finished Seedance 2.5 DRAFT run, or a finished Kling 4 run at 720p (a Cast
-   * Swap or trend run); the quote's `kind` says whether it is the same take
+   * finished Nodaro Motion Pro DRAFT run, or a finished Nodaro Motion Lite
+   * run at 720p (a Nodaro Motion or trend run); the quote's `kind` says whether it is the same take
    * re-rendered or a new take. The quote
    * does not look for a Full Quality already running: when one is,
    * {@link fullQuality} answers it (`existing: true`) and charges nothing.
@@ -515,7 +486,7 @@ export class CastSwapResource {
   /**
    * Finish a run at Full Quality (`POST /v1/cast-swap/:jobId/full-quality`):
    * at 1080p, with the clip's audio, as a new job linked to the run — a
-   * Seedance 2.5 draft's own take re-rendered, or a new Kling 4 take from a
+   * Nodaro Motion Pro draft's own take re-rendered, or a new Nodaro Motion Lite take from a
    * 720p run's inputs (the quote's `kind`). SPENDS CREDITS: quote it first with
    * {@link fullQualityEstimate}. Answers 202 `{ jobId }`, or 200
    * `{ jobId, existing: true }` when this run's Full Quality is already

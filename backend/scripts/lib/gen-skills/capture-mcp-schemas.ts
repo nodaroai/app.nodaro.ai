@@ -32,6 +32,18 @@ const DEFAULT_CAPTURE_SCOPES = [
 ] as const
 
 /**
+ * A tool's listed fields: its raw shape, or the shape of the object schema it
+ * declares instead (a loose object, `cast_swap`, so an older client's unlisted
+ * arguments still reach its handler). Either way only the listed keys.
+ */
+function shapeOf(schema: unknown): Record<string, unknown> {
+  if (!schema) return {}
+  const shape = (schema as { shape?: unknown; _zod?: unknown }).shape
+  if ((schema as { _zod?: unknown })._zod && shape && typeof shape === "object") return shape as Record<string, unknown>
+  return schema as Record<string, unknown>
+}
+
+/**
  * Capture every registered MCP tool's name + schemas. `scopes` defaults to the
  * set gen-skills uses; pass a wider set (e.g. the full ALL_SCOPES) to capture
  * scope-gated tools like `list_node_presets` for invariant tests.
@@ -51,7 +63,7 @@ export async function captureMcpToolSchemas(
   ) {
     captured.push({
       name,
-      inputSchema: (config.inputSchema ?? {}) as Record<string, unknown>,
+      inputSchema: shapeOf(config.inputSchema),
       config,
     })
     return original.call(this, name, config, handler as never)

@@ -1573,6 +1573,9 @@ describe("access", () => {
     ["POST", `/v1/admin/trends/${T1}/face-mask`, { revision: "rev-1" }],
     ["POST", `/v1/admin/trends/${T1}/face-mask/approve`, { jobId: RUN, revision: "rev-1" }],
     ["DELETE", `/v1/admin/trends/${T1}/face-mask?revision=rev-1`],
+    ["POST", `/v1/admin/trends/${T1}/upscale`, { target: "source", revision: "rev-1" }],
+    ["POST", `/v1/admin/trends/${T1}/upscale/apply`, { jobId: RUN, revision: "rev-1" }],
+    ["DELETE", `/v1/admin/trends/${T1}/upscale/${RUN}?revision=rev-1`],
   ]
 
   it("every route is 401 without a user and 403 for a non-admin, and does nothing", async () => {

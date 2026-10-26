@@ -76,6 +76,27 @@ describe("trends command", () => {
     }
   })
 
+  it("estimate lists the quote's parts by their labels, never a vendor name", async () => {
+    mocks.estimate.mockResolvedValueOnce({ expectedCredits: 31, holdCredits: 40, breakdown: { castSwap: 5, seedance: 32, seedanceExpected: 23, references: 3, other: 1 } })
+    await runCmd("trends", "estimate", "dance", "--slot", "person=https://a")
+    const out = vi.mocked(dim).mock.calls.flat().join("\n")
+    expect(out).toContain("Nodaro Motion: 5")
+    expect(out).toContain("video: 32")
+    expect(out).toContain("video, expected: 23")
+    expect(out).toContain("reference pictures: 3")
+    expect(out).toContain("other: 1")
+    expect(out).not.toMatch(/seedance|kling/i)
+  })
+
+  it("estimate --json answers privacyCredits and the neutral part names, reading an older server's old ones", async () => {
+    mocks.estimate.mockResolvedValueOnce({ expectedCredits: 40, holdCredits: 40, breakdown: { castSwap: 5, seedance: 35, masking: 6 }, maskingCredits: 6 })
+    await runCmd("trends", "estimate", "dance", "--slot", "person=https://a", "--json")
+    expect(emit).toHaveBeenCalledWith(
+      { expectedCredits: 40, holdCredits: 40, breakdown: { castSwap: 5, motion: 35, privacy: 6 }, privacyCredits: 6 },
+      expect.objectContaining({ json: true }),
+    )
+  })
+
   it("--slot key=url,url parses into the slot's images", async () => {
     mocks.estimate.mockResolvedValueOnce({ expectedCredits: 40, holdCredits: 40, breakdown: {} })
     await runCmd("trends", "estimate", "dance", "--slot", "person=https://a,https://b")

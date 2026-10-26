@@ -118,7 +118,9 @@ describe("castSwap resource", () => {
     expect(JSON.parse(init.body)).toEqual(v1)
   })
 
-  it("run posts faceMasking unchanged, every setting included", async () => {
+  // faceMasking is deprecated and ignored by the server (Nodaro sets it per engine); the SDK
+  // still types and sends it as given, so older code compiles and runs unchanged.
+  it("still sends a deprecated faceMasking as given (the server ignores it)", async () => {
     const faceMasking: CastSwapFaceMasking = {
       mode: "auto",
       fill: "depth",
@@ -154,18 +156,18 @@ describe("castSwap resource", () => {
     expect([minimal, zoneOnly, noMargins, noMode, badMode, badFill]).toHaveLength(6)
   })
 
-  it("run and estimate post engine unchanged, Kling 4 at 720p with no draft", async () => {
-    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-k" }, 202)).mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: { castSwap: 1, seedance: 0, references: 0 }, settlesLower: false }))
+  it("run and estimate post engine unchanged, Nodaro Motion Lite at 720p with no draft", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-k" }, 202)).mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: { castSwap: 1, motion: 0, references: 0 }, settlesLower: false }))
     const client = make(fetchMock)
-    const kling: CastSwapParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "kling-4", resolution: "720p", draft: false, klingLength: "cut-start" }
-    await client.castSwap.run(kling)
-    await client.castSwap.estimate(kling)
+    const lite: CastSwapParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "motion-lite", resolution: "720p", draft: false, motionLength: "cut-start" }
+    await client.castSwap.run(lite)
+    await client.castSwap.estimate(lite)
     for (const call of fetchMock.mock.calls) {
-      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false, klingLength: "cut-start" })
+      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "motion-lite", resolution: "720p", draft: false, motionLength: "cut-start" })
     }
   })
 
-  it("leaves engine out of the body when it is not given (the route runs Seedance 2.5)", async () => {
+  it("leaves engine out of the body when it is not given (the route runs Nodaro Motion Pro)", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-s" }, 202))
     const client = make(fetchMock)
     await client.castSwap.run(params)
@@ -173,39 +175,45 @@ describe("castSwap resource", () => {
   })
 
   it("types engine and the Full Quality kind: only the documented values", () => {
-    const engines: CastSwapEngine[] = ["seedance-2-5", "kling-4"]
+    const engines: CastSwapEngine[] = ["motion-pro", "motion-lite"]
     // @ts-expect-error — not an engine
     const badEngine: CastSwapEngine = "kling-3"
+    // @ts-expect-error — an old id is not a public engine (it is never returned)
+    const oldId: CastSwapEngine = "kling-4"
+    // …but a request still takes it (deprecated).
+    const legacy: CastSwapParams["engine"][] = ["seedance-2-5", "kling-4", "motion-pro"]
     // @ts-expect-error — not a length fit ("pad" would stretch the motion)
-    const badLength: CastSwapParams["klingLength"] = "pad"
+    const badLength: CastSwapParams["motionLength"] = "pad"
     const kinds: CastSwapFullQualityKind[] = ["same-take", "new-take"]
     // @ts-expect-error — not a kind
     const badKind: CastSwapFullQualityKind = "remaster"
     // kind is optional: an older engine answers none (a same take).
-    const older: CastSwapFullQualityEstimate = { totalCredits: 1, breakdown: { castSwap: 1, seedanceHd: 0 }, availableUntil: "x" }
-    expect([engines, badEngine, badLength, kinds, badKind, older]).toHaveLength(6)
+    const older: CastSwapFullQualityEstimate = { totalCredits: 1, breakdown: { castSwap: 1, motionHd: 0 }, availableUntil: "x" }
+    expect([engines, badEngine, oldId, legacy, badLength, kinds, badKind, older]).toHaveLength(8)
   })
 
-  it("estimate passes the masking credits through", async () => {
+  it("estimate passes the privacy credits and the neutral breakdown through", async () => {
     const estimate: CastSwapEstimate = {
+      engine: "motion-pro",
       totalCredits: 15,
-      breakdown: { castSwap: 5, seedance: 7, references: 3, masking: 2 },
-      maskingCredits: 2,
+      breakdown: { castSwap: 5, motion: 7, references: 3, privacy: 2 },
+      privacyCredits: 2,
       settlesLower: false,
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
     const client = make(fetchMock)
 
-    const out = await client.castSwap.estimate({ ...params, faceMasking: { mode: "auto" } })
-    expect(out.maskingCredits).toBe(2)
-    expect(out.breakdown.masking).toBe(2)
+    const out = await client.castSwap.estimate(params)
+    expect(out.privacyCredits).toBe(2)
+    expect(out.breakdown.privacy).toBe(2)
+    expect(out.breakdown.motion).toBe(7)
   })
 
   it("estimate passes the expected charge through beside the hold", async () => {
     const estimate: CastSwapEstimate = {
       totalCredits: 40,
       expectedCredits: 31,
-      breakdown: { castSwap: 5, seedance: 32, seedanceExpected: 23, references: 3 },
+      breakdown: { castSwap: 5, motion: 32, motionExpected: 23, references: 3 },
       settlesLower: true,
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
@@ -214,13 +222,13 @@ describe("castSwap resource", () => {
     const out = await client.castSwap.estimate(params)
     expect(out).toEqual(estimate)
     expect(out.expectedCredits).toBe(31)
-    expect(out.breakdown.seedanceExpected).toBe(23)
+    expect(out.breakdown.motionExpected).toBe(23)
     // The expected charge is the hold with the video model's expected charge in place of its hold.
-    expect(out.totalCredits - out.breakdown.seedance! + out.breakdown.seedanceExpected!).toBe(out.expectedCredits)
+    expect(out.totalCredits - out.breakdown.motion! + out.breakdown.motionExpected!).toBe(out.expectedCredits)
   })
 
   it("estimate posts to /v1/cast-swap/estimate", async () => {
-    const estimate = { totalCredits: 15, breakdown: { castSwap: 5, seedance: 7, references: 3 }, settlesLower: true }
+    const estimate = { totalCredits: 15, breakdown: { castSwap: 5, motion: 7, references: 3 }, settlesLower: true }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
     const client = make(fetchMock)
 
@@ -254,7 +262,7 @@ describe("castSwap resource", () => {
   it("fullQualityEstimate posts to the draft's /full-quality/estimate", async () => {
     const quote: CastSwapFullQualityEstimate = {
       totalCredits: 12,
-      breakdown: { castSwap: 5, seedanceHd: 7 },
+      breakdown: { castSwap: 5, motionHd: 7 },
       availableUntil: "2026-10-28T10:00:00.000Z",
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote))

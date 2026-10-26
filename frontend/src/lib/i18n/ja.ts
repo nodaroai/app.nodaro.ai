@@ -11254,6 +11254,8 @@ export const ja: ChromeDict = {
   "apiErr.listTemplates": "テンプレートの一覧を取得できませんでした",
   "apiErr.updateTutorialFlag": "チュートリアルフラグを更新できませんでした",
   "apiErr.loadTrends": "トレンドを読み込めませんでした",
+  "apiErr.loadNodaroMotion": "Nodaro Motion の設定を読み込めませんでした",
+  "apiErr.saveNodaroMotion": "Nodaro Motion の設定を保存できませんでした",
   "apiErr.saveTrend": "トレンドを保存できませんでした",
   "apiErr.deleteTrendRun": "実行を削除できませんでした",
   "apiErr.updateTemplateListing": "テンプレートを更新できませんでした",

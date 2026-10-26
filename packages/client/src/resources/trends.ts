@@ -2,7 +2,7 @@ import type { NodaroClientCore } from "../core.js"
 import type { CastSwapEngine } from "./cast-swap.js"
 
 /**
- * Trends — ready-made Cast Swap recipes. A trend is a short clip with slots
+ * Trends — ready-made Nodaro Motion recipes. A trend is a short clip with slots
  * (the people, pets, products and place you can replace); fill its slots with
  * your own pictures and run it to get the clip back with them in it.
  *
@@ -30,9 +30,9 @@ import type { CastSwapEngine } from "./cast-swap.js"
  *   sent at all on a trend with none), `preview_unavailable` (the trend offers no
  *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
  *   slot), `prompt_too_long` (shorten `details`), `draft_unsupported`
- *   (`draft: true` on a trend whose `engine` has no draft: Kling 4),
+ *   (`draft: true` on a trend whose `engine` has no draft: Nodaro Motion Lite),
  *   `resolution_unsupported` (a `resolution` not in the trend's
- *   `resolutions`), `too_many_images` (a Kling 4 trend's run would send more
+ *   `resolutions`), `too_many_images` (a Nodaro Motion Lite trend's run would send more
  *   than 10 pictures: send fewer per slot). The slot errors carry the
  *   slot's key as `slot` (in `NodaroError.details`), and `chip_not_offered`
  *   the chip as `chip` too.
@@ -95,8 +95,9 @@ export type TrendChipKey = keyof TrendChips
 export type TrendResolution = "480p" | "720p" | "1080p"
 
 /**
- * The video engine a trend runs on ({@link CastSwapEngine}): the trend
- * chooses it, never the person running it.
+ * The engine a trend runs on, by its public id ({@link CastSwapEngine}):
+ * `"motion-pro"` (Nodaro Motion Pro) or `"motion-lite"` (Nodaro Motion Lite).
+ * The trend chooses it, never the person running it.
  */
 export type TrendEngine = CastSwapEngine
 
@@ -190,12 +191,14 @@ export interface TrendDetail extends TrendCard {
    * Absent only on a version without a display copy (and from an older server).
    */
   original?: TrendOriginal
-  /** The video engine every run of this trend uses. Absent (an older server) = `"seedance-2-5"`. */
+  /** The engine every run of this trend uses. Absent (an older server) = `"motion-pro"`. */
   engine?: TrendEngine
+  /** Its name to show: "Nodaro Motion Pro" or "Nodaro Motion Lite". Absent from an older server. */
+  engineName?: string
   /**
-   * The resolutions a run may ask for, the default first. Seedance 2.5:
+   * The resolutions a run may ask for, the default first. Nodaro Motion Pro:
    * `["480p", "720p", "1080p"]`, where 480p is a draft (show it as one);
-   * Kling 4: `["720p", "1080p"]`, no draft. Offer exactly these.
+   * Nodaro Motion Lite: `["720p", "1080p"]`, no draft. Offer exactly these.
    */
   resolutions: TrendResolution[]
   slots: TrendDetailSlot[]
@@ -228,13 +231,13 @@ export interface TrendRunRequest {
   preview?: boolean
   /**
    * One of the trend's {@link TrendDetail.resolutions}; default its first
-   * (`"480p"` on Seedance 2.5, `"720p"` on Kling 4). Another answers 400
+   * (`"480p"` on Nodaro Motion Pro, `"720p"` on Nodaro Motion Lite). Another answers 400
    * `resolution_unsupported`.
    */
   resolution?: TrendResolution
   /**
-   * A draft run, only at 480p on a Seedance 2.5 trend. Default `true` at
-   * 480p. `true` on a Kling 4 trend answers 400 `draft_unsupported`.
+   * A draft run, only at 480p on a Nodaro Motion Pro trend. Default `true` at
+   * 480p. `true` on a Nodaro Motion Lite trend answers 400 `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -246,9 +249,9 @@ export interface TrendRunRequest {
   projectId?: string
   /**
    * A full run's own preview: the `jobId` of a completed preview run of this
-   * trend that you started. When the trend masks faces only as needed and that
-   * preview needed it, the full run masks them from the start (the quote
-   * includes it). Any other job is ignored, without an error. Must be a uuid
+   * trend that you started. When that preview needed the trend's retry (the
+   * clip refused at first), the full run is made that way from the start (the
+   * quote includes it). Any other job is ignored, without an error. Must be a uuid
    * (else 400 `validation_error`).
    */
   previewJobId?: string
@@ -270,15 +273,19 @@ export interface TrendEstimate {
   /** What is reserved when the run starts; the run is charged what it actually costs. */
   holdCredits: number
   /**
-   * The parts of the quote, by name. With `maskingCredits`, `masking` is
-   * listed here too but is not part of `holdCredits` or `expectedCredits`.
+   * The parts of the quote, by name, for display only: some are alternatives
+   * or sit outside the totals (`privacy`, the retry's, beside
+   * `privacyCredits`), so read `expectedCredits` and `holdCredits`, never
+   * their sum.
    */
   breakdown: Record<string, number>
   /**
-   * Only for a trend that masks faces only as needed: the extra credits
-   * charged if the video model refuses the clip and the run is retried with
-   * the faces masked. Not included in `expectedCredits` or `holdCredits`.
+   * Only on a trend that retries a clip the video model refuses: the extra
+   * credits charged if that retry runs. Not included in `expectedCredits` or
+   * `holdCredits`. 0 (or absent) when there is nothing extra to charge.
    */
+  privacyCredits?: number
+  /** @deprecated read {@link privacyCredits} (an older server answered this name). */
   maskingCredits?: number
 }
 
@@ -340,16 +347,18 @@ export interface TrendRun {
   preview: boolean
   resolution: string
   draft: boolean
-  /** The video engine the run was made on. Absent (an older server) = `"seedance-2-5"`. */
+  /** The engine the run was made on. Absent (an older server) = `"motion-pro"`. */
   engine?: TrendEngine
+  /** Its name to show: "Nodaro Motion Pro" or "Nodaro Motion Lite". Absent from an older server. */
+  engineName?: string
   /** The result, once completed. */
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
-  /** A Full Quality version: the job id of the run (a draft, or a Kling 4 720p run) it was made from. `null` for any other run. */
+  /** A Full Quality version: the job id of the run (a draft, or a Nodaro Motion Lite 720p run) it was made from. `null` for any other run. */
   fullQualityOf: string | null
   /**
-   * A draft's (or Kling 4 720p run's) newest Full Quality try, if one was started: a pointer only,
+   * A draft's (or Nodaro Motion Lite 720p run's) newest Full Quality try, if one was started: a pointer only,
    * to know an upgrade exists and how it is going. Its video and charge are on
    * that run, listed on its own (its `fullQualityOf` is this run's `jobId`) —
    * read it there (`getRun(fullQuality.jobId)`). Older tries of the draft (a
@@ -358,8 +367,8 @@ export interface TrendRun {
    */
   fullQuality: { jobId: string; status: string } | null
   /**
-   * Until when a completed run can be redone in Full Quality — a Seedance 2.5
-   * draft (the same take at 1080p) or a Kling 4 run at 720p (a new take at
+   * Until when a completed run can be redone in Full Quality — a Nodaro Motion
+   * Pro draft (the same take at 1080p) or a Nodaro Motion Lite run at 720p (a new take at
    * 1080p); `null` otherwise.
    */
   fullQualityUntil: string | null

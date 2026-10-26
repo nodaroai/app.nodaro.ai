@@ -11464,6 +11464,8 @@ export const he: ChromeDict = {
   "apiErr.listTemplates": "טעינת רשימת התבניות נכשלה",
   "apiErr.updateTutorialFlag": "עדכון סימון המדריך נכשל",
   "apiErr.loadTrends": "טעינת הטרנדים נכשלה",
+  "apiErr.loadNodaroMotion": "טעינת ההגדרות של Nodaro Motion נכשלה",
+  "apiErr.saveNodaroMotion": "שמירת ההגדרות של Nodaro Motion נכשלה",
   "apiErr.saveTrend": "שמירת הטרנד נכשלה",
   "apiErr.deleteTrendRun": "מחיקת ההרצה נכשלה",
   "apiErr.updateTemplateListing": "עדכון התבנית נכשל",

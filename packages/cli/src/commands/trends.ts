@@ -3,6 +3,7 @@ import type { TrendChips, TrendResolution, TrendRunRequest, TrendRunSlot } from 
 import { buildClient, handleError } from "../client.js"
 import { detail, dim, emit, info, success, table, terminalSafe, type OutputOpts } from "../output.js"
 import { collectVariadic } from "../util.js"
+import { neutralQuote, quotePartLabel } from "../quote-parts.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -46,9 +47,9 @@ function addRunFlags(cmd: Command): Command {
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")
     .addOption(
-      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Kling 4 trend").choices([...RESOLUTIONS]),
+      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Motion Lite trend").choices([...RESOLUTIONS]),
     )
-    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there; a Kling 4 trend has none)")
+    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there; a Nodaro Motion Lite trend has none)")
 }
 
 function checkSlotKey(flag: string, spec: string, key: string): void {
@@ -129,7 +130,7 @@ function buildRequest(flags: RunFlags): TrendRunRequest {
 
 export function trendsCommand(): Command {
   const cmd = new Command("trends").description(
-    "trends — ready-made Cast Swap recipes: browse, quote, run with your own pictures, favorite (Cloud edition)",
+    "trends — ready-made Nodaro Motion recipes: browse, quote, run with your own pictures, favorite (Cloud edition)",
   )
 
   cmd
@@ -205,7 +206,7 @@ export function trendsCommand(): Command {
     .action(async (slug: string, opts: RunFlags & GlobalOpts) => {
       try {
         const request = buildRequest(opts)
-        const quote = await buildClient(opts.profile).trends.estimate(slug, request)
+        const quote = neutralQuote(await buildClient(opts.profile).trends.estimate(slug, request))
         if (opts.json) {
           emit(quote, opts)
           return
@@ -214,7 +215,7 @@ export function trendsCommand(): Command {
           `about ${quote.expectedCredits} credits` +
             (quote.holdCredits !== quote.expectedCredits ? ` (up to ${quote.holdCredits} held while it runs)` : ""),
         )
-        for (const [part, credits] of Object.entries(quote.breakdown)) dim(`  ${terminalSafe(part)}: ${credits}`)
+        for (const [part, credits] of Object.entries(quote.breakdown)) dim(`  ${terminalSafe(quotePartLabel(part))}: ${credits}`)
       } catch (err) {
         handleError(err)
       }
