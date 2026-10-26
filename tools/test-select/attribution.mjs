@@ -25,7 +25,10 @@ export function buildAttributionComment({ sha, before, runUrl, failed, flaky = {
   const batch = merges.length > 1
   const cause = batch ? `one of these ${merges.length} merges is the likely cause` : "this merge is the likely cause"
   const covered = batch
-    ? ["This run covered every merge since the last finished one:", ...merges.map((m) => `- \`${short(m.sha)}\`${m.pr ? ` #${m.pr}` : ""}`), ""]
+    ? [
+        "This run covered every merge since the last finished one:", ...merges.map((m) => `- \`${short(m.sha)}\`${m.pr ? ` #${m.pr}` : ""}`), "",
+        "When the last finished run passed and a file failed again when re-run alone, the Dev Failure Bisect workflow re-runs it at merges in this batch and comments on the PR whose merge broke it.", "",
+      ]
     : []
   const listOf = (byProject) => Object.entries(byProject ?? {})
     .flatMap(([project, files]) => (files ?? []).map((f) => `- ${project}: \`${f}\``))

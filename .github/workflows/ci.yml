@@ -18,8 +18,10 @@ on:
 # and only the NEWEST pending one, dropping the pending runs in between. On dev
 # a burst of merges is therefore covered by one or two full runs instead of
 # one each (decided 2026-10-26: per-commit runs queued for hours on the pool);
-# a red run covers the merges since the last finished one, and Attribute Dev
-# Failure comments on each of them. Cancelling the run in
+# a red run covers the merges since the last finished one: Attribute Dev
+# Failure comments on each of them, and dev-failure-bisect.yml re-runs the
+# failing files at merges in the batch to name the one that broke them.
+# Cancelling the run in
 # progress instead would starve dev of any green run during a busy evening.
 # main's migrate job must always complete, so it never cancels either.
 concurrency:

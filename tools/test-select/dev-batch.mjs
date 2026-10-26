@@ -33,7 +33,10 @@ export function prOf(gh, repo, sha) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { GITHUB_SHA: sha, GITHUB_REPOSITORY: repo } = process.env
+  // DEV_SHA: the dev commit whose run failed, when this runs outside that run
+  // (dev-failure-bisect.yml, where GITHUB_SHA is the default branch's).
+  const repo = process.env.GITHUB_REPOSITORY
+  const sha = process.env.DEV_SHA || process.env.GITHUB_SHA
   const gh = (...args) => execFileSync("gh", ["api", ...args], { encoding: "utf8" }).trim()
   const firstParents = execFileSync("git", ["rev-list", "--first-parent", `--max-count=${MAX_BATCH + 1}`, sha], { encoding: "utf8" }).split("\n").filter(Boolean)
   const { last, lastState, batch } = findBatch({ sha, repo, firstParents, gh })
