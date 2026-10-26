@@ -181,6 +181,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "providers/kie/video.ts :: \"lip-sync-trimmed\"": "KIE lip-sync's trimmed audio: the KIE video provider runs only inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"motion-trimmed\"": "KIE motion control's trimmed video: inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"provider-converted\"": "KIE's format-converted input frames (both conversions): inside a video-worker job (the running job's id)",
+  "providers/kie/reference-video-size.ts :: \"provider-shrunk\"": "a Kling 4 reference video shrunk to the provider's size limit: called from the KIE video provider, inside a video-worker job (the running job's id)",
   "workers/handlers/heygen-avatar-audio-cap.ts :: \"ai-avatar-audio-cap\"": "HeyGen's capped audio: `jobId` is the avatar handler's `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-tail\"": "a Seedance extend's source tail: `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-last-frame\"": "a Seedance extend's last frame: `ctx.jobId`",

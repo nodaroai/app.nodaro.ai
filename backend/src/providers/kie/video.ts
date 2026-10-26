@@ -56,6 +56,7 @@ import {
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
+import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
 import { join } from "node:path"
@@ -1679,12 +1680,21 @@ async function runKling4(
   const normList = (v: unknown): Promise<string[]> | undefined =>
     Array.isArray(v) ? Promise.all((v as string[]).map(norm)) : undefined
   const one = (v: unknown): Promise<string> | undefined => (typeof v === "string" ? norm(v) : undefined)
-  const [imageUrls, keyframeUrls, firstFrame, lastFrame] = await Promise.all([
+  // Reference videos too: Kling fails an over-size clip (not its shape) with a
+  // bare "Generation failed" after accepting the task (reference-video-size.ts).
+  const videoList = (v: unknown): Promise<string[]> | undefined =>
+    Array.isArray(v)
+      ? Promise.all((v as string[]).map((u) =>
+        ensureVideoFitsSize(u, KLING_4_REF_VIDEO_LIMIT, "Video generation", logLabel)))
+      : undefined
+  const [imageUrls, keyframeUrls, firstFrame, lastFrame, videoUrls] = await Promise.all([
     normList(input.image_urls),
     normList(input.keyframe_urls),
     one(input.first_frame_url),
     one(input.last_frame_url),
+    videoList(input.video_urls),
   ])
+  if (videoUrls) input.video_urls = videoUrls
   if (imageUrls) input.image_urls = imageUrls
   if (keyframeUrls) input.keyframe_urls = keyframeUrls
   if (firstFrame) input.first_frame_url = firstFrame

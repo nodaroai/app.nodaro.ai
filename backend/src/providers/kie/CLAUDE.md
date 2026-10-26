@@ -244,6 +244,16 @@ afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
   (`placeFramesAfterReferences`). `keep_original_sound` is sent only with
   `video_urls`. 15 materials in all (images + videos + subjects + voices) —
   `lib/kling4-inputs.ts` refuses more before the reservation.
+- **Reference videos are shrunk to fit `KLING_4_REF_VIDEO_LIMIT`** — a long
+  side of 2048 px AND no more pixels than 1920×1080, shape kept
+  (`reference-video-size.ts`, called from `runKling4`). KIE ACCEPTS an
+  over-size clip and fails the task ~40 s later with a bare `[400] Generation
+  failed. Please try again later.` — measured 2026-10-26 on one body, only the
+  clip changed: 2568×1080 failed, 2048×862 and 1920×1080 rendered. Those runs
+  cannot tell a long-side limit from a pixel-count one, so the clip is kept
+  inside both sizes that rendered (4K 16:9 → 1920×1080); widen only with a
+  probe. The docs state no pixel limit. Length is untouched, so the
+  reference-video billing is unchanged.
 - Keyframes: `first_frame_url` / `keyframe_urls` (Image References, in order,
   max 8) / `last_frame_url`; total frames capped by duration
   (`kling4KeyframeFrameCap`: 3s → 4 … 9s or longer → 10 — live 422 "duration 3s
