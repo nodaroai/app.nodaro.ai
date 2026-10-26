@@ -2086,8 +2086,8 @@ interface CastSwapEstimate {
   engine?: CastSwapEngine // the engine quoted
   totalCredits: number    // held when the run starts
   expectedCredits?: number // what it is expected to be charged; never above totalCredits
-  breakdown: { castSwap: number; references: number; motion?: number; motionExpected?: number; privacy?: number } & Record<string, number>
-                          // the parts, for display only: castSwap (the run itself), references (preparing
+  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number } & Record<string, number>
+                          // the parts, for display only: base (the run itself), references (preparing
                           // the reference pictures; 0 when off), motion (what the video holds), motionExpected
                           // (what it is expected to be charged; Pro), privacy (preparing the clip) — motion and
                           // motionExpected are alternatives, so read the totals, never the sum
@@ -2097,9 +2097,9 @@ interface CastSwapEstimate {
 
 interface CastSwapFullQualityEstimate {
   kind?: "same-take" | "new-take" // CastSwapFullQualityKind; absent from an older server = "same-take"
-  totalCredits: number // castSwap + the render
-  breakdown: { castSwap: number; motionHd?: number; motion?: number } & Record<string, number>
-                       // castSwap: the Full Quality job's own steps; motionHd: a same take's 1080p
+  totalCredits: number // base + the render
+  breakdown: { base?: number; motionHd?: number; motion?: number } & Record<string, number>
+                       // base: the Full Quality job's own steps; motionHd: a same take's 1080p
                        // render, 0 when an earlier try's render is reused; motion: a new take
   availableUntil: string // ISO time: 7 days after the run completed
 }
@@ -2208,7 +2208,7 @@ not match the 720p run frame for frame; the 720p run stays). The quote's
 `kind` (`CastSwapFullQualityKind`: `"same-take"` or `"new-take"`) says which,
 so a client can word it. It spends credits; quote it first with
 `fullQualityEstimate(jobId)` (free), whose `totalCredits` is
-`breakdown.castSwap` plus `breakdown.motionHd` (a same take; 0 when an
+`breakdown.base` plus `breakdown.motionHd` (a same take; 0 when an
 earlier failed try of this draft already finished the 1080p render, which is
 then reused) or `breakdown.motion` (a new take). One Full Quality per draft: a repeat answers the same job with
 `existing: true` and charges nothing; the server keys it by the draft, so no

@@ -4266,7 +4266,7 @@ so (the final charge is expected to come out lower than `totalCredits`, at
 about `expectedCredits`). On Nodaro Motion Lite the two totals are equal and
 `settlesLower` is `false`: Lite renders exactly the length asked for. The run
 is charged what it actually costs. `breakdown` names the quote's parts, for
-display only: `castSwap` (the run itself), `references` (the reference
+display only: `base` (the run itself), `references` (the reference
 preparation, 0 when it is off or there is nothing to prepare), `motion` (what
 the video holds; on Lite what it costs), `motionExpected` (what the video is
 expected to be charged, never above `motion`; Pro only) and `privacy`
@@ -4335,7 +4335,7 @@ MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 | `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
 `:jobId` is the draft's (or Nodaro Motion Lite 720p run's) job id. The quote
-is `totalCredits`: `breakdown.castSwap` (the Full Quality job's own steps)
+is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
 plus `breakdown.motionHd` (a same take: the 1080p render of the draft's take)
 or `breakdown.motion` (Lite's new take). `motionHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only

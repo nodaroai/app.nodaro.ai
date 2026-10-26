@@ -192,11 +192,34 @@ describe("castSwap resource", () => {
     expect([engines, badEngine, oldId, legacy, badLength, kinds, badKind, older]).toHaveLength(8)
   })
 
+  it("types the base fee as base, with castSwap (an older server's name) still accepted", async () => {
+    // castSwap only (a server before Cast Swap 0.396.0), both (0.396.0), base only (0.397.0).
+    const quotes: CastSwapEstimate[] = [
+      { totalCredits: 12, breakdown: { castSwap: 5, references: 0, motion: 7 }, settlesLower: false },
+      { totalCredits: 12, breakdown: { base: 5, castSwap: 5, references: 0, motion: 7 }, settlesLower: false },
+      { totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false },
+    ]
+    const fq: CastSwapFullQualityEstimate[] = [
+      { totalCredits: 12, breakdown: { castSwap: 5, motionHd: 7 }, availableUntil: "x" },
+      { totalCredits: 12, breakdown: { base: 5, castSwap: 5, motionHd: 7 }, availableUntil: "x" },
+      { totalCredits: 12, breakdown: { base: 5, motionHd: 7 }, availableUntil: "x" },
+    ]
+    for (const q of [...quotes, ...fq]) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk(q))
+      const client = make(fetchMock)
+      const out = "settlesLower" in q ? await client.castSwap.estimate(params) : await client.castSwap.fullQualityEstimate("draft-1")
+      // The SDK passes the quote through unchanged; a reader takes base, else castSwap.
+      expect(out).toEqual(q)
+      const base: number | undefined = out.breakdown.base ?? out.breakdown.castSwap
+      expect(base).toBe(5)
+    }
+  })
+
   it("estimate passes the privacy credits and the neutral breakdown through", async () => {
     const estimate: CastSwapEstimate = {
       engine: "motion-pro",
       totalCredits: 15,
-      breakdown: { castSwap: 5, motion: 7, references: 3, privacy: 2 },
+      breakdown: { base: 5, motion: 7, references: 3, privacy: 2 },
       privacyCredits: 2,
       settlesLower: false,
     }
@@ -213,7 +236,7 @@ describe("castSwap resource", () => {
     const estimate: CastSwapEstimate = {
       totalCredits: 40,
       expectedCredits: 31,
-      breakdown: { castSwap: 5, motion: 32, motionExpected: 23, references: 3 },
+      breakdown: { base: 5, motion: 32, motionExpected: 23, references: 3 },
       settlesLower: true,
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))

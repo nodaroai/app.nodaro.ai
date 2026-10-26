@@ -82,7 +82,7 @@ function serverWith(fastify: FastifyInstance, scopes: Scope[] = ["workflows:exec
   return server
 }
 
-const QUOTE = { totalCredits: 12, breakdown: { castSwap: 5, motionHd: 7 }, availableUntil: "2026-10-28T10:00:00.000Z" }
+const QUOTE = { totalCredits: 12, breakdown: { base: 5, motionHd: 7 }, availableUntil: "2026-10-28T10:00:00.000Z" }
 /** The same quote from an engine before 0.394.0 (the old key names), answered by the neutral ones. */
 const OLD_QUOTE = { ...QUOTE, breakdown: { castSwap: 5, seedanceHd: 7 } }
 const EST_URL = "/v1/cast-swap/draft-1/full-quality/estimate"
@@ -108,12 +108,34 @@ describe("estimate_full_quality", () => {
     expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance/i)
   })
 
+  it("reads the base fee from base, else castSwap (0.396.0 sends both, 0.397.0 base only), and answers base only", async () => {
+    const bodies = [
+      { ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } }, // castSwap only (before 0.396.0)
+      { ...QUOTE, breakdown: { base: 5, motionHd: 7 } }, // base only (0.397.0)
+      { ...QUOTE, breakdown: { base: 5, castSwap: 99, motionHd: 7 } }, // both (0.396.0): base wins
+    ]
+    for (const body of bodies) {
+      const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body } })
+      const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
+      expect(res.isError).toBeFalsy()
+      expect(res.structuredContent).toEqual(QUOTE)
+      expect(JSON.stringify(res.structuredContent)).not.toContain("castSwap")
+    }
+  })
+
+  it("cannot read a quote with no base fee under either name", async () => {
+    const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: { ...QUOTE, breakdown: { motionHd: 7 } } } })
+    const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toMatch(/could not be read/i)
+  })
+
   it("words a Nodaro Motion Lite new take as one, and passes its kind and every numeric part through", async () => {
     const newTake = { kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380, note: "x" }, availableUntil: "2026-10-28T10:00:00.000Z" }
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: newTake } })
     const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
     expect(res.isError).toBeFalsy()
-    expect(res.structuredContent).toEqual({ ...newTake, breakdown: { castSwap: 40, motion: 380 } })
+    expect(res.structuredContent).toEqual({ ...newTake, breakdown: { base: 40, motion: 380 } })
     expect(res.content[0]!.text).toMatch(/new take/i)
     expect(res.content[0]!.text).toContain("420 credits")
     expect(res.content[0]!.text).not.toMatch(/reuse/i)
@@ -129,7 +151,7 @@ describe("estimate_full_quality", () => {
   })
 
   it("says when an earlier 1080p render is reused", async () => {
-    const reused = { ...QUOTE, totalCredits: 5, breakdown: { castSwap: 5, motionHd: 0 } }
+    const reused = { ...QUOTE, totalCredits: 5, breakdown: { base: 5, motionHd: 0 } }
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: reused } })
     const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
     expect(res.content[0]!.text).toMatch(/reuse/i)

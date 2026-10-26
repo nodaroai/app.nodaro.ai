@@ -841,7 +841,7 @@ describe("POST /v1/trends/:slug/estimate", () => {
   it("posts the composed body to the Cast Swap estimate and maps hold and expected", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: RUN_BODY })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: { expectedCredits: 120, holdCredits: 120, breakdown: { castSwap: 40, motion: 80 } } })
+    expect(res.json()).toEqual({ data: { expectedCredits: 120, holdCredits: 120, breakdown: { base: 40, motion: 80 } } })
     expect(engine.calls[0]!.url).toBe("/v1/cast-swap/estimate")
     expect(engine.calls[0]!.headers["x-internal-user-id"]).toBe(USER)
     expect(engine.calls[0]!.body.videoUrl).toBe(SOURCE)
@@ -860,7 +860,7 @@ describe("POST /v1/trends/:slug/estimate", () => {
       breakdown: { castSwap: 40, seedance: 80, note: PROMPT, nested: { x: 1 }, nothing: null, text: "12" },
     }
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: RUN_BODY })
-    expect(res.json().data.breakdown).toEqual({ castSwap: 40, motion: 80 })
+    expect(res.json().data.breakdown).toEqual({ base: 40, motion: 80 })
     expectNoHidden(res.body)
   })
 
@@ -1247,7 +1247,7 @@ describe("trend face masking and pre prompt", () => {
   })
 
   it("the estimate answers the engine's privacy credits and parts by their neutral names, whichever names the engine sent", async () => {
-    const answered = { expectedCredits: 120, holdCredits: 120, breakdown: { castSwap: 40, motion: 80, privacy: 30 }, privacyCredits: 30 }
+    const answered = { expectedCredits: 120, holdCredits: 120, breakdown: { base: 40, motion: 80, privacy: 30 }, privacyCredits: 30 }
     for (const body of [
       // An engine before 0.394.0: the old names only.
       { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80, masking: 30 }, maskingCredits: 30 },
@@ -1255,11 +1255,15 @@ describe("trend face masking and pre prompt", () => {
       { totalCredits: 120, breakdown: { castSwap: 40, seedance: 99, motion: 80, masking: 9, privacy: 30 }, maskingCredits: 9, privacyCredits: 30 },
       // 0.395.0: the new ones only.
       { totalCredits: 120, breakdown: { castSwap: 40, motion: 80, privacy: 30 }, privacyCredits: 30 },
+      // 0.396.0: base beside castSwap (base wins).
+      { totalCredits: 120, breakdown: { castSwap: 99, base: 40, motion: 80, privacy: 30 }, privacyCredits: 30 },
+      // 0.397.0: base only.
+      { totalCredits: 120, breakdown: { base: 40, motion: 80, privacy: 30 }, privacyCredits: 30 },
     ]) {
       engine.estimateBody = body
       const res = await run(RUN_BODY, "estimate")
       expect(res.json().data).toEqual(answered)
-      expect(res.body).not.toMatch(/seedance|kling|masking/i)
+      expect(res.body).not.toMatch(/seedance|kling|masking|castSwap/i)
     }
     engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80 }, privacyCredits: "30" }
     const bad = await run(RUN_BODY, "estimate")
