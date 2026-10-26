@@ -134,13 +134,15 @@ Because the lane *is* a Seedance reference-video run, it is billed exactly like
 one on Generate Video: the price of `clip_seconds + delivered_seconds` seconds
 on the `-ref` ladder for the chosen resolution, as one charge rounded up.
 
-Duration is `Auto`, so the run is **reserved at the model's longest clip (30 s)**
-and **refunded down to the length actually delivered** — which, for an edit, is
-the source clip's own length. Extra reference clips add their seconds to the
-input side; the output is still the source clip's length, even when an extra
-clip is longer (a quote's `expected` says so; the reservation still covers the
-longest clip). Your balance must cover the reservation for the
-run to start.
+Duration is `Auto`, so an edit renders the source clip's own length. Once the
+source clip is measured, the run is **reserved for that clip's length rounded up
+to a whole second, plus one second** (never more than the model's longest clip,
+30 s), and **refunded down to the length actually delivered**. Extra reference
+clips add their seconds to the input side; the output is still the source
+clip's length, even when an extra clip is longer. A clip that cannot be
+measured is reserved at the worst case instead: the model's longest clip out,
+and the per-clip cap in. Your balance must cover the reservation for the run to
+start.
 
 The node's price and its Run button show **exactly that reservation**: the
 editor asks the server to measure the source clip and price it the way the run

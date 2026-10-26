@@ -5,6 +5,8 @@ import { hasCredits } from "../../lib/config.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { supabase } from "../../lib/supabase.js"
 import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX } from "../../lib/usage-transactions.js"
+import { SUMMARY_BUCKETS, USAGE_SUMMARY_MAX_DAYS, usageSummaryFor } from "../billing/usage-summary.js"
+import { CREDIT_HISTORY_PAGE_MAX, HISTORY_KINDS, MODEL_FILTER, exportCreditHistory, listCreditHistory } from "../../lib/credit-history.js"
 
 // The allowlist and the usage rows' projection live in core (lib/usage-transactions.ts)
 // so the MCP `credit_transactions` tool lists the same rows this route does.
@@ -125,5 +127,112 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
     }
     const { items, nextCursor } = listed
     return reply.send({ data: items, nextCursor })
+  })
+
+  // A timestamp, or a date alone: `2026-10-01` is that whole UTC day (its start as `from`, its end as `to`).
+  const dayOrInstant = z.union([z.string().datetime({ offset: true }), z.string().date()])
+  const summaryQuery = z.object({
+    from: dayOrInstant.optional(),
+    to: dayOrInstant.optional(),
+    bucket: z.enum(SUMMARY_BUCKETS).default("day"),
+  })
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const instantOf = (value: string, edge: "start" | "end") =>
+    /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T${edge === "start" ? "00:00:00.000" : "23:59:59.999"}Z`) : new Date(value)
+
+  // The period's usage summed the way a billing screen draws it: totals, by
+  // model, by category, over time, by session and by workflow. The last 30
+  // days unless `from` / `to` say otherwise; a period of at most a year.
+  // ee/billing/usage-summary.ts. Under a deployment payer the totals are the
+  // payer's own (what it bought and spent), so its relay credential is
+  // refused like on every balance read (payer-balance-guard.ts).
+  app.get("/v1/credits/usage-summary", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
+    const parsed = summaryQuery.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid query" },
+      })
+    }
+    const to = parsed.data.to ? instantOf(parsed.data.to, "end") : new Date()
+    const from = parsed.data.from ? instantOf(parsed.data.from, "start") : new Date(to.getTime() - 30 * DAY_MS)
+    if (from.getTime() > to.getTime()) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "from must not be after to" } })
+    }
+    if (to.getTime() - from.getTime() > USAGE_SUMMARY_MAX_DAYS * DAY_MS) {
+      return reply.status(400).send({ error: { code: "validation_error", message: `The period is at most ${USAGE_SUMMARY_MAX_DAYS} days` } })
+    }
+
+    const report = (table: string, message: string) => req.log.error({ table, message }, "credits/usage-summary side read failed")
+    const summary = await usageSummaryFor(req.userId, { from: from.toISOString(), to: to.toISOString(), bucket: parsed.data.bucket }, report)
+    if ("error" in summary) {
+      req.log.error({ err: summary.error }, "credits/usage-summary lookup failed")
+      return reply.status(500).send({ error: { code: "internal_error", message: "Lookup failed" } })
+    }
+    return reply.send({ data: summary })
+  })
+
+  const historyQuery = z.object({
+    limit: z.coerce.number().int().min(1).max(CREDIT_HISTORY_PAGE_MAX).default(50),
+    cursor: z.string().max(80).optional(),
+    kind: z.enum(HISTORY_KINDS).optional(),
+    model: z.string().regex(MODEL_FILTER, "model is a model identifier").optional(),
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+    q: z.string().min(1).max(120).optional(),
+    format: z.enum(["json", "csv"]).default("json"),
+  })
+
+  // Every movement of the person's balance, newest first — runs, purchases,
+  // grants, refunds, adjustments, expiries — with the balance after each one;
+  // a job's reserve row carries its model, charge and job. `format=csv` is
+  // the whole filtered history as a file (no paging). lib/credit-history.ts.
+  // Every row carries a balance, so the payer's relay credential is refused
+  // like on every balance read (payer-balance-guard.ts).
+  app.get("/v1/credits/history", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
+    const parsed = historyQuery.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid query",
+        },
+      })
+    }
+    const { limit, cursor, format, ...filters } = parsed.data
+    const report = (table: string, message: string) => req.log.error({ table, message }, "credits/history enrichment read failed")
+
+    if (format === "csv") {
+      const exported = await exportCreditHistory(req.userId, filters, report)
+      if ("error" in exported) {
+        req.log.error({ err: exported.error }, "credits/history export failed")
+        return reply.status(500).send({ error: { code: "internal_error", message: "Lookup failed" } })
+      }
+      return reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", 'attachment; filename="credit-history.csv"')
+        .send(exported.csv)
+    }
+
+    const listed = await listCreditHistory(req.userId, filters, { limit, cursor }, report)
+    if ("badCursor" in listed) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "cursor is not one this route gave" } })
+    }
+    if ("error" in listed) {
+      req.log.error({ err: listed.error }, "credits/history lookup failed")
+      return reply.status(500).send({ error: { code: "internal_error", message: "Lookup failed" } })
+    }
+    return reply.send({ data: listed.items, nextCursor: listed.nextCursor })
   })
 }

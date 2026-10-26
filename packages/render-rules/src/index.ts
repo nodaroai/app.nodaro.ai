@@ -782,6 +782,14 @@ export {
 } from "./trend-prompts"
 export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS } from "./face-mask-marks"
 export type { CastSwapFaceMaskMarkLabel, FaceMaskMark, MaskEraseBox } from "./face-mask-marks"
+export {
+  TREND_CROP_DEFAULT_POSITION,
+  TREND_CROP_TOLERANCE,
+  trendCropAspectFor,
+  trendCropCut,
+  trendCropTargetSize,
+  type TrendCropAspect,
+} from "./trend-source-crop"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

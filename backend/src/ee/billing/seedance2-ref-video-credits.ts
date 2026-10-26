@@ -1,5 +1,12 @@
-import { MODEL_CATALOG, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_VIDEO_DURATION_LIMITS, VIDEO_REF_RATE_PROVIDERS, isKling4Provider, normalizeKling4Resolution } from "@nodaro/shared/models"
+import { MODEL_CATALOG, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS, VIDEO_DURATION_AUTO, isAutoVideoDuration } from "@nodaro/shared/model-catalog"
+import {
+  VIDEO_REF_VIDEO_DURATION_LIMITS,
+  VIDEO_REF_RATE_PROVIDERS,
+  isKling4Provider,
+  normalizeKling4Resolution,
+  pricedOutputDurationSec,
+  supportsAutoVideoDuration,
+} from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 // The probe lives in CORE (lib/ref-video-probe.ts) because the routes' duration
@@ -127,38 +134,89 @@ function billedInputSeconds(provider: string, durationsSec: readonly unknown[]):
 }
 
 /**
- * BASE credits a RESERVATION must hold for a reference-video run, from
- * ALREADY-PROBED durations — the worst case the run can bill, so we can only
- * ever OVER-reserve, never under-reserve (the refund-only `commit_credits`
- * constraint). Callers that hold a probe result (the routes' duration pre-check
- * stashes one on the request) price through here instead of running a second
- * uncached ffprobe per clip.
+ * The seconds of margin an Auto-duration edit's hold adds over its source
+ * clip, after rounding the clip up to a whole second.
+ */
+export const SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC = 1
+
+/**
+ * The OUTPUT seconds a reference-video run's hold covers — the ONE rule the
+ * reservation, every quote of it and the settlement's over-run check read:
  *
- * Two worst-case rules, both here and nowhere else:
- *  - an unusable probe (NaN/<=0) counts as the provider's per-clip cap
- *    ({@link refVideoWorstCaseSecFor});
- *  - the OUTPUT is billed at the longer of the requested duration and the
- *    longest reference clip. Seedance decides from the prompt whether a run
+ *  - AUTO duration (the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE`) with every
+ *    reference clip measured, on a model whose output follows its clip
+ *    (Seedance): the edit renders its SOURCE clip's length — the first clip,
+ *    `@video_1` — so the hold is that clip rounded up to a whole second plus
+ *    {@link SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC}, never above the model's
+ *    longest clip. Any further clips are references: they count on the input
+ *    side only.
+ *  - Otherwise the longer of the priced output (`outputDurationSec`, from
+ *    `pricedOutputDurationSec` — Auto = the model's longest clip) and the
+ *    longest reference clip: Seedance decides from the prompt whether a run
  *    with a video wired is a style run (renders the requested duration) or an
  *    EDIT of that clip, which renders the clip's own length — and the verdict
  *    arrives only as a rejection the provider layer answers by resubmitting
- *    (`runVideoTaskWithSeedanceEditRetry`). Reserving the requested duration
- *    alone under-billed every edit of a clip longer than the node's Duration.
+ *    (`runVideoTaskWithSeedanceEditRetry`). An unmeasurable clip (NaN/<=0)
+ *    counts as the provider's per-clip cap ({@link refVideoWorstCaseSecFor}),
+ *    so an Auto run with one keeps that worst case.
+ *  - Kling 4.0 renders exactly the requested duration: `outputDurationSec`.
+ */
+export function seedance2RefVideoHeldOutputSec(args: {
+  provider: string
+  /** `pricedOutputDurationSec(provider, requestedDuration)`. */
+  outputDurationSec: number
+  /** The request's own duration: Auto (-1) is the edit shape. */
+  requestedDuration: unknown
+  durationsSec: readonly unknown[]
+}): number {
+  const { provider, outputDurationSec, requestedDuration, durationsSec } = args
+  if (!outputFollowsReferenceClip(provider)) return outputDurationSec
+  const autoEdit = autoEditHeldOutputSec(provider, requestedDuration, durationsSec)
+  if (autoEdit !== undefined) return autoEdit
+  return Math.max(outputDurationSec, ...billedInputSeconds(provider, durationsSec).perClip)
+}
+
+/** The Auto-edit hold of {@link seedance2RefVideoHeldOutputSec}, or undefined when the run is not that shape. */
+function autoEditHeldOutputSec(provider: string, requestedDuration: unknown, durationsSec: readonly unknown[]): number | undefined {
+  if (!outputFollowsReferenceClip(provider)) return undefined
+  if (!isAutoVideoDuration(requestedDuration) || !supportsAutoVideoDuration(provider)) return undefined
+  if (durationsSec.length === 0 || !durationsSec.every((d) => typeof d === "number" && isUsableDuration(d))) return undefined
+  const sourceSec = durationsSec[0] as number
+  // The model's longest clip: what Auto is priced at without a measured clip.
+  const cap = pricedOutputDurationSec(provider, VIDEO_DURATION_AUTO)
+  return Math.min(Math.ceil(sourceSec) + SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC, cap)
+}
+
+/**
+ * BASE credits a RESERVATION must hold for a reference-video run, from
+ * ALREADY-PROBED durations — the most the run can bill under the hold rule
+ * ({@link seedance2RefVideoHeldOutputSec}), since `commit_credits` only ever
+ * refunds. Callers that hold a probe result (the routes' duration pre-check
+ * stashes one on the request) price through here instead of running a second
+ * uncached ffprobe per clip.
  *
- * The settlement ({@link seedance2RefVideoActualBaseCredits}) measures what was
- * delivered and refunds the difference, so a style run still pays its exact
+ * The input side is {@link billedInputSeconds}: an unusable probe counts as
+ * the provider's per-clip cap. The settlement
+ * ({@link seedance2RefVideoActualBaseCredits}) measures what was delivered and
+ * refunds the difference, so a style run still pays its exact
  * `unit × (input + requested)` price.
  */
 export function seedance2RefVideoBaseCreditsFromDurations(args: {
   provider: string
   resolution: string
   outputDurationSec: number
+  /** The request's own duration (Auto = -1, the edit shape). Required so no reservation path can skip the rule. */
+  requestedDuration: unknown
   durationsSec: readonly number[]
 }): number {
-  const { provider, resolution, outputDurationSec, durationsSec } = args
-  const { perClip, totalSec } = billedInputSeconds(provider, durationsSec)
-  const billableOutputSec = outputFollowsReferenceClip(provider) ? Math.max(outputDurationSec, ...perClip) : outputDurationSec
-  return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec: billableOutputSec, inputVideoDurationSec: totalSec })
+  const { provider, resolution, durationsSec } = args
+  const { totalSec } = billedInputSeconds(provider, durationsSec)
+  return seedance2RefVideoBaseCredits({
+    provider,
+    resolution,
+    outputDurationSec: seedance2RefVideoHeldOutputSec(args),
+    inputVideoDurationSec: totalSec,
+  })
 }
 
 /**
@@ -168,8 +226,8 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
  * length the run will most likely render:
  *  - Auto duration (the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE`): an edit
  *    renders its SOURCE clip's length — the first clip (`@video_1`); any
- *    extra clips are references, even a longer one (the reservation's
- *    longest-clip rule still covers it);
+ *    extra clips are references, even a longer one (the reservation holds
+ *    the same source clip, rounded up, plus a second);
  *  - a fixed duration: the requested seconds (a style run).
  * The settlement still measures what was delivered, so this is an estimate a
  * client can show, not a price. Undefined when a clip could not be measured:
@@ -205,11 +263,13 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
   provider: string
   resolution: string
   outputDurationSec: number
+  /** The request's own duration (Auto = -1, the edit shape). */
+  requestedDuration: unknown
   referenceVideoUrls: readonly unknown[]
 }): Promise<number> {
-  const { provider, resolution, outputDurationSec, referenceVideoUrls } = args
+  const { provider, resolution, outputDurationSec, requestedDuration, referenceVideoUrls } = args
   const durationsSec = await probeRefVideoDurations({ provider, referenceVideoUrls })
-  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, durationsSec })
+  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, requestedDuration, durationsSec })
 }
 
 /**
@@ -231,6 +291,14 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
  * Only a job that carries no probe (in flight across the deploy that added
  * it) re-probes, under the same worst-case rule.
  *
+ * An Auto-duration edit is held for its source clip plus a margin
+ * ({@link seedance2RefVideoHeldOutputSec}), not the model's longest clip. A
+ * delivered clip longer than that hold is charged at the hold — the most the
+ * run reserved, all `commit_credits` could collect anyway — and logs an
+ * `[ALERT]` naming the job, the held and the delivered seconds, because it
+ * means the hold rule's assumption (an Auto run with a clip renders that
+ * clip's length) did not hold.
+ *
  * Throws when the delivered clip cannot be measured — the caller then commits
  * the reservation, which is today's behaviour and never under-bills.
  */
@@ -241,18 +309,30 @@ export async function seedance2RefVideoActualBaseCredits(args: {
   referenceVideoUrls: readonly unknown[]
   /** The reservation's probe of `referenceVideoUrls`, when the job carries it. */
   durationsSec?: readonly unknown[]
+  /** The request's own duration (Auto = -1): what the hold was sized from. */
+  requestedDuration: unknown
+  /** For the over-run alert only. */
+  jobId?: string
 }): Promise<number> {
-  const { provider, resolution, outputUrl, referenceVideoUrls } = args
+  const { provider, resolution, outputUrl, referenceVideoUrls, requestedDuration } = args
   const [measuredOutputSec, durationsSec] = await Promise.all([
     probeMediaDuration(outputUrl),
     Array.isArray(args.durationsSec) ? args.durationsSec : probeRefVideoDurations({ provider, referenceVideoUrls }),
   ])
   // Kling 4.0 renders whole seconds (a 3s clip measures 3.04s — live
   // 2026-10-23), so the measured length rounds to the second it was billed at.
-  const outputDurationSec = outputFollowsReferenceClip(provider)
+  const deliveredSec = outputFollowsReferenceClip(provider)
     ? measuredOutputSec
     : Math.max(1, Math.round(measuredOutputSec))
-  if (!isUsableDuration(outputDurationSec)) throw new Error(`unusable output duration: ${measuredOutputSec}`)
+  if (!isUsableDuration(deliveredSec)) throw new Error(`unusable output duration: ${measuredOutputSec}`)
+  const heldSec = autoEditHeldOutputSec(provider, requestedDuration, durationsSec)
+  let outputDurationSec = deliveredSec
+  if (heldSec !== undefined && deliveredSec > heldSec) {
+    console.error(
+      `[ALERT] [billing] Seedance Auto edit delivered more than it held; charging the hold: job=${args.jobId ?? "unknown"} provider=${provider} heldSec=${heldSec} deliveredSec=${deliveredSec}`,
+    )
+    outputDurationSec = heldSec
+  }
   return seedance2RefVideoBaseCredits({
     provider,
     resolution,

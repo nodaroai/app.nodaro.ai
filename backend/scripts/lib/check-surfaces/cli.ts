@@ -88,7 +88,8 @@ async function runtimeTree(repoRoot: string): Promise<{ leaves: string[][]; grou
     const before = new Set(program.commands.map((c) => c.name()))
     if (f.kind === "add") program.addCommand(mod[f.fn]!())
     else mod[f.fn]!(program)
-    for (const c of program.commands) if (!before.has(c.name())) files.set(c.name(), file.slice(repoRoot.length + 1))
+    // Repo-relative with forward slashes on every platform: siblingModules splits on "/".
+    for (const c of program.commands) if (!before.has(c.name())) files.set(c.name(), file.slice(repoRoot.length + 1).replace(/\\/g, "/"))
   }
   const leaves: string[][] = []
   const visit = (c: RuntimeCommand, prefix: string[]): void => {

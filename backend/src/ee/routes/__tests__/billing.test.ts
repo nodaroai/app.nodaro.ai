@@ -30,6 +30,20 @@ const mockStripe = {
     retrieve: vi.fn(),
     update: vi.fn(),
   },
+  checkout: {
+    sessions: {
+      create: vi.fn(),
+    },
+  },
+  customers: {
+    retrieve: vi.fn(),
+  },
+  paymentMethods: {
+    list: vi.fn(),
+  },
+  invoices: {
+    list: vi.fn(),
+  },
 }
 
 vi.mock("@/ee/billing/stripe-client.js", () => ({
@@ -70,6 +84,14 @@ vi.mock("@/ee/billing/stripe-config.js", () => ({
 
 vi.mock("@/ee/billing/provision-credits.js", () => ({
   ensureStripeCustomer: vi.fn(),
+}))
+
+// The self-serve gate of the two Checkout routes: this deployment sells to its users.
+vi.mock("@/lib/surface-profile.js", () => ({
+  runtimeSurfaceProfile: () => ({ billing: { selfServe: true } }),
+}))
+vi.mock("@/lib/deployment-payer.js", () => ({
+  deploymentPayerId: () => null,
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({
@@ -483,5 +505,278 @@ describe("billing routes reject OAuth app tokens", () => {
     expect((await a.inject({ method: "POST", url: "/v1/billing/manage-subscription", payload: {} })).statusCode).toBe(403)
     expect((await a.inject({ method: "POST", url: "/v1/billing/create-checkout-session", payload: { priceId: "pri_pro" } })).statusCode).toBe(403)
     await a.close()
+  })
+
+  it("GET /v1/billing/payment-method + invoices return 403 for OAuth app tokens — settings-grade data", async () => {
+    const a = await appWithOAuth()
+    expect((await a.inject({ method: "GET", url: "/v1/billing/payment-method" })).statusCode).toBe(403)
+    expect((await a.inject({ method: "GET", url: "/v1/billing/invoices" })).statusCode).toBe(403)
+    await a.close()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: returnPath — where Stripe sends the person back
+// ---------------------------------------------------------------------------
+
+describe("returnPath on the Stripe hand-offs", () => {
+  it("manage-subscription returns the portal to the calling origin's own path", async () => {
+    const chain = createSupabaseChain({
+      single: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+    vi.mocked(stripe.billingPortal.sessions.create).mockResolvedValue({ url: "https://billing.stripe.com/session/abc" } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/manage-subscription",
+      headers: { origin: "https://tools.example.com" },
+      payload: { userId: "user-123", returnPath: "/settings/credits" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ return_url: "https://tools.example.com/settings/credits" }),
+    )
+  })
+
+  it("create-checkout-session refuses a returnPath that is not a plain path on this origin, before Stripe is touched", async () => {
+    for (const returnPath of ["https://evil.example.com/x", "//evil.example.com/x", "/\\evil.example.com", "/\t/evil.example.com", "/billing#plans", "billing", "/a b"]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/billing/create-checkout-session",
+        payload: { userId: "user-123", priceId: "pri_pro", returnPath },
+      })
+      expect(res.statusCode, returnPath).toBe(400)
+      expect(res.json().error, returnPath).toMatch(/returnPath/)
+    }
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
+  })
+
+  it("checkout and load send Stripe back to returnPath with the outcome in its query, keeping the query it had, over embedded", async () => {
+    const chain = createSupabaseChain({
+      single: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+    vi.mocked(stripe.checkout.sessions.create).mockResolvedValue({ url: "https://checkout.stripe.com/c/1" } as never)
+
+    const checkout = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-checkout-session",
+      headers: { origin: "https://tools.example.com" },
+      payload: { userId: "user-123", priceId: "pri_pro", embedded: true, returnPath: "/settings/credits?tab=history" },
+    })
+    expect(checkout.statusCode).toBe(200)
+    expect(checkout.json()).toEqual({ data: { url: "https://checkout.stripe.com/c/1" } })
+    expect(stripe.checkout.sessions.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        success_url: "https://tools.example.com/settings/credits?tab=history&checkout=success",
+        cancel_url: "https://tools.example.com/settings/credits?tab=history&checkout=cancelled",
+      }),
+    )
+
+    const load = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-load-session",
+      headers: { origin: "https://tools.example.com" },
+      payload: { userId: "user-123", amountUsd: 20, returnPath: "/billing" },
+    })
+    expect(load.statusCode).toBe(200)
+    expect(stripe.checkout.sessions.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        success_url: "https://tools.example.com/billing?checkout=success",
+        cancel_url: "https://tools.example.com/billing?checkout=cancelled",
+      }),
+    )
+  })
+
+  it("the portal refuses a bad returnPath instead of ignoring it", async () => {
+    const chain = createSupabaseChain({
+      single: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/manage-subscription",
+      payload: { userId: "user-123", returnPath: "https://evil.example.com" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(stripe.billingPortal.sessions.create).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: GET /v1/billing/payment-method
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/billing/payment-method", () => {
+  it("returns 401 when no userId is provided", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/billing/payment-method" })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("answers both nulls for an account Stripe does not know yet, without calling Stripe", async () => {
+    const chain = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/payment-method?userId=user-123" })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: { card: null, billingDetails: null } })
+    expect(stripe.customers.retrieve).not.toHaveBeenCalled()
+  })
+
+  it("reads the default card and its billing details from the Stripe customer", async () => {
+    const chain = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+    vi.mocked(stripe.customers.retrieve).mockResolvedValue({
+      id: "cus_123",
+      deleted: undefined,
+      name: "Asaf",
+      email: "asaf@example.com",
+      address: { country: "IL" },
+      invoice_settings: {
+        default_payment_method: {
+          id: "pm_1",
+          card: { brand: "visa", last4: "1810", exp_month: 12, exp_year: 2030 },
+          billing_details: { name: null, email: null, address: null },
+        },
+      },
+    } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/payment-method?userId=user-123" })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      data: {
+        card: { brand: "visa", last4: "1810", expMonth: 12, expYear: 2030 },
+        billingDetails: { name: "Asaf", email: "asaf@example.com", country: "IL" },
+      },
+    })
+    expect(stripe.paymentMethods.list).not.toHaveBeenCalled()
+  })
+
+  it("falls back to the first saved card when the customer has no default", async () => {
+    const chain = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+    vi.mocked(stripe.customers.retrieve).mockResolvedValue({ id: "cus_123", invoice_settings: { default_payment_method: null } } as never)
+    vi.mocked(stripe.paymentMethods.list).mockResolvedValue({
+      data: [{ id: "pm_2", card: { brand: "mastercard", last4: "4444", exp_month: 1, exp_year: 2031 }, billing_details: { name: "A", email: "a@b.c", address: { country: "US" } } }],
+    } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/payment-method?userId=user-123" })
+
+    expect(res.json()).toEqual({
+      data: { card: { brand: "mastercard", last4: "4444", expMonth: 1, expYear: 2031 }, billingDetails: { name: "A", email: "a@b.c", country: "US" } },
+    })
+    expect(stripe.paymentMethods.list).toHaveBeenCalledWith({ customer: "cus_123", type: "card", limit: 1 })
+  })
+
+  it("falls back to a saved card when the default payment method is not a card", async () => {
+    const chain = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+    vi.mocked(stripe.customers.retrieve).mockResolvedValue({ id: "cus_123", invoice_settings: { default_payment_method: { id: "pm_link", type: "link", link: {} } } } as never)
+    vi.mocked(stripe.paymentMethods.list).mockResolvedValue({ data: [{ id: "pm_2", card: { brand: "visa", last4: "0001", exp_month: 2, exp_year: 2032 }, billing_details: {} }] } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/payment-method?userId=user-123" })
+    expect(res.json().data.card).toEqual({ brand: "visa", last4: "0001", expMonth: 2, expYear: 2032 })
+  })
+
+  it("answers 500, not 'nothing on file', when the customer lookup or Stripe fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const broken = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: "down" } }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(broken as never)
+    expect((await app.inject({ method: "GET", url: "/v1/billing/payment-method?userId=user-123" })).statusCode).toBe(500)
+
+    const known = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockReturnValue(known as never)
+    vi.mocked(stripe.customers.retrieve).mockRejectedValue(new Error("stripe down"))
+    expect((await app.inject({ method: "GET", url: "/v1/billing/payment-method?userId=user-123" })).statusCode).toBe(500)
+    error.mockRestore()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: GET /v1/billing/invoices
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/billing/invoices", () => {
+  const purchase = { id: "tx_1", type: "topup", amount_usd: "35.00", credits_granted: 3000, status: "completed", created_at: "2026-10-25T22:02:00.000Z", receipt_url: "https://pay.stripe.com/receipts/r1" }
+  const refund = { id: "tx_r", type: "refund", amount_usd: "35.00", credits_granted: -3000, status: "completed", created_at: "2026-10-26T09:00:00.000Z", receipt_url: null }
+
+  it("returns 401 when no userId is provided", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/billing/invoices" })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("merges Stripe invoices, credit-purchase receipts and refunds, newest first, skipping drafts", async () => {
+    const purchases = createSupabaseChain({
+      limit: vi.fn().mockResolvedValue({ data: [refund, purchase], error: null }),
+    })
+    const customer = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }),
+    })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => (table === "transactions" ? purchases : customer)) as never)
+    vi.mocked(stripe.invoices.list).mockResolvedValue({
+      data: [
+        { id: "in_new", number: "A-0002", created: 1_767_312_000, total: 1200, currency: "usd", status: "paid", description: null, invoice_pdf: "https://x/in_new.pdf", hosted_invoice_url: "https://x/in_new", lines: { data: [{ description: "Pro (monthly)" }] } },
+        { id: "in_draft", number: null, created: 1_800_000_000, total: 0, currency: "usd", status: "draft", lines: { data: [] } },
+      ],
+    } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/invoices?userId=user-123" })
+
+    expect(res.statusCode).toBe(200)
+    const docs = res.json().data as Array<{ id: string; kind: string; status: string; credits: number | null; amount: { amount: number }; pdfUrl: string | null; url: string | null }>
+    expect(docs.map((d) => d.id)).toEqual(["tx_r", "tx_1", "in_new"])
+    expect(docs[0]).toMatchObject({ kind: "receipt", status: "refunded", credits: -3000, amount: { amount: -35 }, url: null })
+    expect(docs[1]).toMatchObject({ kind: "receipt", status: "paid", credits: 3000, pdfUrl: null, url: "https://pay.stripe.com/receipts/r1" })
+    expect(docs[2]).toMatchObject({ kind: "invoice", status: "paid", credits: null, pdfUrl: "https://x/in_new.pdf", url: "https://x/in_new" })
+    // The person's own purchases and refunds, never an organization's.
+    expect(purchases.eq).toHaveBeenCalledWith("user_id", "user-123")
+    expect(purchases.in).toHaveBeenCalledWith("type", ["topup", "refund"])
+    expect(purchases.is).toHaveBeenCalledWith("org_id", null)
+    expect(stripe.invoices.list).toHaveBeenCalledWith({ customer: "cus_123", limit: 100 })
+  })
+
+  it("answers 500 when Stripe fails, never a list missing the invoices", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const purchases = createSupabaseChain({ limit: vi.fn().mockResolvedValue({ data: [purchase], error: null }) })
+    const customer = createSupabaseChain({ maybeSingle: vi.fn().mockResolvedValue({ data: { stripe_customer_id: "cus_123" }, error: null }) })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => (table === "transactions" ? purchases : customer)) as never)
+    vi.mocked(stripe.invoices.list).mockRejectedValue(new Error("stripe down"))
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/invoices?userId=user-123" })
+    expect(res.statusCode).toBe(500)
+    error.mockRestore()
+  })
+
+  it("lists the receipts alone for an account Stripe does not know yet", async () => {
+    const purchases = createSupabaseChain({
+      limit: vi.fn().mockResolvedValue({ data: [purchase], error: null }),
+    })
+    const customer = createSupabaseChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => (table === "transactions" ? purchases : customer)) as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/billing/invoices?userId=user-123" })
+
+    expect(res.statusCode).toBe(200)
+    expect((res.json().data as Array<{ id: string }>).map((d) => d.id)).toEqual(["tx_1"])
+    expect(stripe.invoices.list).not.toHaveBeenCalled()
   })
 })

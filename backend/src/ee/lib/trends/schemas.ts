@@ -201,6 +201,16 @@ const trendUpscaleJobSchema = z.strictObject({
   error: z.strictObject({ code: z.string().min(1).max(100), message: z.string().max(1000), at: z.string().min(1) }).optional(),
 })
 
+/** A source crop in the making (`TrendSourceCrop`): written by the crop routes only. */
+const trendSourceCropSchema = z.strictObject({
+  aspect: z.enum(["16:9", "9:16"]),
+  position: z.number().min(0).max(1),
+  fromUrl: httpUrl,
+  startedAt: z.string().min(1),
+  by: z.string().min(1),
+  error: z.strictObject({ code: z.string().min(1).max(100), message: z.string().max(1000), at: z.string().min(1) }).optional(),
+})
+
 /**
  * A trend version's engine: its own, else `"seedance-2-5"` (the engine of
  * every version saved before the choice, and of a version that names none).
@@ -250,6 +260,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     faceMask: trendFaceMaskSchema.optional(),
     faceMaskJob: trendFaceMaskJobSchema.optional(),
     upscaleJobs: z.array(trendUpscaleJobSchema).max(MAX_UPSCALE_JOBS).optional(),
+    sourceCrop: trendSourceCropSchema.optional(),
     // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
     // names none is kept without the key, so re-saving an old draft is no change.
     // Nodaro Motion's public ids are taken too and stored as the internal id

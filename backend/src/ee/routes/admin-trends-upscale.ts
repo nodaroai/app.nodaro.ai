@@ -49,12 +49,12 @@ import { TrendMediaError, isTransientMediaFailure, storeUpscaledVideo } from "..
 import {
   UPSCALE_JOB_TYPE,
   UPSCALE_TOPAZ_RESOLUTION,
-  clampPreviewStart,
   currentUpscaleTarget,
   isApplying,
   needsUpscale,
   pendingUpscaleJobs,
   upscaleSourceOf,
+  withNewSourceClip,
   withUpscaleJob,
   withoutUpscaleJob,
   type UpscaleTarget,
@@ -170,17 +170,8 @@ function applied(
   target: UpscaleTarget,
   stored: Awaited<ReturnType<typeof storeUpscaledVideo>>,
 ): TrendVersionData {
-  if (target.target === "source") {
-    // As a new source clip is set: the stored clip, its size and length, and its own display copy.
-    const source: NonNullable<TrendVersionData["source"]> = {
-      videoUrl: stored.url,
-      durationSec: stored.durationSec,
-      width: stored.width,
-      height: stored.height,
-      ...(stored.display ? { display: stored.display } : {}),
-    }
-    return { ...data, source, previewStart: clampPreviewStart(data.previewStart, source.durationSec) }
-  }
+  // As a new source clip is set: the stored clip, its size and length, and its own display copy.
+  if (target.target === "source") return withNewSourceClip(data, stored)
   const examples = data.examples.map((ex, i) => {
     if (i !== target.index) return ex
     const { posterUrl: _old, ...rest } = ex

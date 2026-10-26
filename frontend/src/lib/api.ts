@@ -11243,6 +11243,8 @@ export interface AdminTrendData {
     applying?: { startedAt: string; by: string }
     error?: { code: string; message: string; at: string }
   }>
+  /** The source crop in the making or failed (hidden; written only by the crop routes, kept by a draft save). */
+  sourceCrop?: { aspect: AdminTrendCropAspect; position: number; fromUrl: string; startedAt: string; by: string; error?: { code: string; message: string; at: string } }
   /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
   engine?: AdminTrendEngine
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
@@ -11312,6 +11314,29 @@ export interface AdminTrendDetail {
   upscaleJobs?: AdminTrendPendingUpscale[]
   /** Whether this environment's Cast Swap engine makes a face mask with marks (the marks editor is offered only then). */
   faceMaskMarksSupported?: boolean
+  /** The source crop in the making or failed, or null (absent from an older server). */
+  sourceCrop?: AdminTrendPendingSourceCrop | null
+}
+
+/** The shapes a trend's source clip can be cropped to. */
+export type AdminTrendCropAspect = "16:9" | "9:16"
+
+/**
+ * A crop of the source clip to 16:9 or 9:16, run by the server in the
+ * background: `position` (0–1) is the share of the cut taken from the left
+ * (16:9) or the top (9:16); `current` = it was made from the source the draft
+ * holds now; `running` = it is running (`stale`: it stopped answering, and may
+ * be started again); `error` = it failed (dismiss it, or crop again).
+ */
+export interface AdminTrendPendingSourceCrop {
+  aspect: AdminTrendCropAspect
+  position: number
+  fromUrl: string
+  startedAt: string
+  current: boolean
+  running: boolean
+  stale: boolean
+  error?: { code: string; message: string }
 }
 
 /**
@@ -11819,6 +11844,38 @@ export async function discardAdminTrendUpscale(id: string, jobId: string, revisi
   return (
     await apiRequest<{ data: TrendDraftWrite & { upscaleJobs: AdminTrendPendingUpscale[] } }>(
       `${trendPath(id)}/upscale/${encodeURIComponent(jobId)}?revision=${encodeURIComponent(revision)}`,
+      "apiErr.saveTrend",
+      { method: "DELETE" },
+    )
+  ).data
+}
+
+/**
+ * Crop the SAVED source clip to `aspect` at `position` (0–1 of the cut from
+ * the left / top), keeping its quality. Answers at once (202) with the draft's
+ * new revision and the crop `running`; the server puts the cropped clip in
+ * the draft in the background (read the trend until the record is gone or
+ * carries an error).
+ */
+export async function startAdminTrendCrop(
+  id: string,
+  aspect: AdminTrendCropAspect,
+  position: number,
+  revision: string,
+): Promise<TrendDraftWrite & { sourceCrop: AdminTrendPendingSourceCrop | null }> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite & { sourceCrop: AdminTrendPendingSourceCrop | null } }>(`${trendPath(id)}/crop`, "apiErr.saveTrend", {
+      method: "POST",
+      body: { aspect, position, revision },
+    })
+  ).data
+}
+
+/** Dismiss a failed (or stale) source crop at `revision`. */
+export async function dismissAdminTrendCrop(id: string, revision: string): Promise<TrendDraftWrite & { sourceCrop: null }> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite & { sourceCrop: null } }>(
+      `${trendPath(id)}/crop?revision=${encodeURIComponent(revision)}`,
       "apiErr.saveTrend",
       { method: "DELETE" },
     )

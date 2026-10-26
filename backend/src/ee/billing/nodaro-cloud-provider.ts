@@ -9,8 +9,8 @@ import { usageAmount } from "../../lib/usage-amount.js"
 /** Display-only bucketing of a usage_logs `action` (a model identifier) into
  *  the /usage breakdown's categories. ORDER MATTERS: "image-to-video" is
  *  video work, so video outranks image. Unknown actions land in "other" —
- *  never dropped. */
-function usageCategoryOf(action: string): string {
+ *  never dropped. Shared with the usage summary (usage-summary.ts). */
+export function usageCategoryOf(action: string): string {
   const a = action.toLowerCase()
   if (/video|motion|animate|lip|kling|veo|runway/.test(a)) return "video"
   if (/audio|speech|music|suno|voice|tts|eleven|sound|dub/.test(a)) return "audio"

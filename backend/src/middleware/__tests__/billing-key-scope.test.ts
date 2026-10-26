@@ -192,10 +192,15 @@ const FORBIDDEN: ReadonlyArray<{ method: "GET" | "POST"; url: string }> = [
   { method: "POST", url: "/v1/jobs" },
   { method: "GET", url: "/v1/user/credits" },
   { method: "GET", url: "/v1/credits/transactions" },
+  { method: "GET", url: "/v1/credits/usage-summary" },
+  { method: "GET", url: "/v1/credits/history" },
   { method: "POST", url: "/v1/api-tokens" },
   { method: "POST", url: "/v1/developer-apps" },
   { method: "POST", url: "/mcp" },
   { method: "GET", url: "/v1/admin/users" },
+  // The person's own payment settings and documents: session-only, never the key.
+  { method: "GET", url: "/v1/billing/payment-method" },
+  { method: "GET", url: "/v1/billing/invoices" },
   // A public route too (the plans list): public never widens the key's reach.
   { method: "GET", url: "/v1/billing/plans" },
 ]

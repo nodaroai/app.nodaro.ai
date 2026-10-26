@@ -428,6 +428,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       referenceVideoUrls: input.referenceVideoUrls,
       refVideoDurationsSec: input.refVideoDurationsSec,
       duration: input.duration,
+      jobId: row.id,
     })
     // A recovered clip is the RAW take, so a Seedance draft records its length
     // here exactly as the worker would (the 1080p finalize bills it).

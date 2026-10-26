@@ -145,11 +145,11 @@ describe("kling-4 reference-video billing (output + max(output, input))", () => 
 
   it("the reservation bills the REQUESTED output (no edit mode) and an unprobed clip at the 30s per-clip cap", () => {
     // 10s out, clips 15 + 6 = 21s → 10 + 21 = 31s × 42.5.
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, durationsSec: [15, 6] })).toBe(Math.ceil(42.5 * 31))
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [15, 6] })).toBe(Math.ceil(42.5 * 31))
     // An unreadable clip counts as 30s: 10 + 30 = 40s.
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, durationsSec: [Number.NaN] })).toBe(1700)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [Number.NaN] })).toBe(1700)
     // A short clip still bills 2 × output.
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, durationsSec: [3] })).toBe(850)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [3] })).toBe(850)
   })
 
   it("the quote's expected cost is the requested output even with an auto-duration flag", () => {
@@ -167,7 +167,7 @@ describe("kling-4 reference-video billing (output + max(output, input))", () => 
     it("rounds the delivered clip to its whole second (3.04s → 3s) and prices the stored probe", async () => {
       probe.durations.set(OUT, 5.04)
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: "kling-4", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.04] }),
+        seedance2RefVideoActualBaseCredits({ provider: "kling-4", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.04] }),
       ).resolves.toBe(425)
       expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
     })
@@ -176,7 +176,7 @@ describe("kling-4 reference-video billing (output + max(output, input))", () => 
       probe.durations.set(OUT, 8.02)
       probe.durations.set(REF, 20)
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: "kling-4", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF] }),
+        seedance2RefVideoActualBaseCredits({ provider: "kling-4", resolution: "1080p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
       ).resolves.toBe(Math.ceil(63.75 * 28))
     })
   })

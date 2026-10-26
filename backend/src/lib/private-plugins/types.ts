@@ -2258,6 +2258,28 @@ export interface PluginHttpToolkit {
    * (`ee/billing/seedance2-ref-video-credits.ts`). Cloud-only, same dynamic-import gate as
    * `computeGenerateVideoProPricing`. ADDITIVE-OPTIONAL (no contract bump).
    */
+  /**
+   * The CHARGED credits a Seedance 2 / Kling 4.0 reference-video run holds and
+   * is expected to settle at, from reference clips the caller has ALREADY
+   * measured — for a clip that only exists after the quote (Cast Swap cuts its
+   * clip once it has quoted). `hold` is exactly what the run reserves (the
+   * reservation's own rule, `seedance2RefVideoHeldOutputSec`: an Auto run's
+   * output held at the first clip rounded up plus a second);
+   * `expected` is what it should settle at once delivered, null when a clip
+   * is unmeasurable. `duration` is the requested duration (-1 = Auto);
+   * `durationsSec` the measured clip lengths in seconds, in request order
+   * (null or NaN = unmeasurable, priced at the worst case). Rejects for a
+   * model whose price does not follow its reference clips. Cloud-only.
+   * Present when `tk.capabilities.seedanceRefVideoQuote` is true.
+   * ADDITIVE-OPTIONAL (no contract bump).
+   */
+  quoteSeedanceRefVideo?(args: {
+    provider: string
+    resolution?: string
+    duration?: number
+    draft?: boolean
+    durationsSec: ReadonlyArray<number | null>
+  }): Promise<{ hold: number; expected: number | null }>
   computeSeedanceDraftFinalizePricing?(args: {
     /** The draft's delivered length in seconds (rounded to the billed whole seconds). */
     draftDurationSec: number
@@ -3300,6 +3322,13 @@ export interface PluginCapabilities {
    * no `tk.settings` at all: a plugin reads that as never saved (no masking).
    */
   readonly nodaroMotionMasking?: boolean
+  /**
+   * `tk.http.quoteSeedanceRefVideo` exists: the charged hold and expected
+   * settlement of a reference-video run from clip lengths the plugin has
+   * measured, by the reservation's own rule. An older host has no such
+   * member: a plugin derives the hold itself.
+   */
+  readonly seedanceRefVideoQuote?: boolean
 }
 
 /**

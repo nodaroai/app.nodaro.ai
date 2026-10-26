@@ -413,6 +413,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     referenceVideoUrls,
     refVideoDurationsSec,
     duration,
+    jobId: ctx.jobId,
   })
   // A Seedance DRAFT records its RAW take length — before the loop-cut / audio
   // merge below — because the 1080p finalize re-renders (and bills) that take.
@@ -728,6 +729,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     referenceVideoUrls,
     refVideoDurationsSec,
     duration,
+    jobId: ctx.jobId,
   })
   // Seedance DRAFT: record the raw take length the 1080p finalize bills.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedT2vProvider, outputUrl: result.url })
@@ -1990,6 +1992,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     referenceVideoUrls: d.referenceVideoUrls,
     refVideoDurationsSec: d.refVideoDurationsSec,
     duration: d.duration,
+    jobId: ctx.jobId,
   })
   // Seedance DRAFT: the raw take length (before the voice mux) the finalize bills.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft: d.draft, provider, outputUrl: result.url })

@@ -171,6 +171,7 @@ describe("voiced-video handler — wired references ride along (#1396)", () => {
       referenceVideoUrls: REFS,
       refVideoDurationsSec: [30],
       duration: 12,
+      jobId: "job-1",
     })
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ meteredBaseCredits: 7193, extraNonProviderCredits: 25 }),

@@ -1007,8 +1007,10 @@ request on an LTX 2.3 model renders and bills 6 s.
 `duration: -1` means **Auto** on the models that support it (the Seedance 2
 family — `autoDuration: true` in `GET /v1/models`): the model picks the clip
 length, which is the source clip's length when it edits a reference video. An
-Auto run reserves credits for the model's longest clip and is refunded down to
-the length actually delivered. On any other model `-1` is ignored and the model
+Auto run reserves credits for the model's longest clip — or, with measured
+reference videos, for the first clip's length rounded up to a whole second plus
+one second (never above the longest clip) — and is refunded down to the length
+actually delivered. On any other model `-1` is ignored and the model
 renders its default duration.
 
 ## 4e. Generation sessions
@@ -3458,6 +3460,54 @@ are not registered and return 404.
 | `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
 | `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
+| `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
+
+**`UsageSummary`** (`GET /v1/credits/usage-summary`): `{ period: { from, to,
+bucket }, totals, mostUsed, byModel, byCategory, overTime, bySession,
+byWorkflow, truncated, partial }`. Personal money only: a workspace-paid run
+and an organization's ledger are another wallet. `totals` is `{ used,
+purchased, granted, refunded, runs, avgPerRun }` — `used` sums each run's
+charge (a running hold counts, a refunded run does not), `purchased` the
+packs, loads and subscription grants, `granted` the free credits net (a grant
+taken back subtracted), `refunded` what came back for a refunded run or from
+Stripe (a hold released when a run settled below it is not a refund), `runs`
+the runs charged or still running (a side hold beside a run is not a run).
+`byModel` rows are `{ model, provider, credits, runs, share }` (by spend,
+`share` of `used`, 0–1; `mostUsed` is the first, `null` with no runs);
+`byCategory` rows `{ category, credits, runs }` with `image`, `video`, `audio`
+or `other` (from the job's node type, else the model id); `overTime` one row
+per bucket of the period, empty ones included, oldest first: `{ bucket, used,
+purchased, runs }` where `bucket` is the UTC day (`2026-10-26`), the week's
+Monday, or the month (`2026-10`) — the first bucket may be a partial week or
+month. `bySession` and `byWorkflow` are `{ id, name, tool, credits, runs,
+models, lastAt }` by spend — what each "project" cost (`name` is the session's
+title or the workflow's name, `null` when it has none or is gone; `tool` on a
+session only). `truncated` is `true` when a read hit the server's row cap
+(5,000) and the figures under-report: narrow the period. `partial` is `true`
+when a side read failed (the jobs, or a session's or workflow's name): a
+grouping is missing or unnamed, the totals are whole.
+| `GET` | `/v1/credits/history` | `limit` (1–100, default 50), `cursor` (the previous page's `nextCursor`, opaque; another string is `400`), `kind` (`usage` / `purchase` / `grant` / `refund` / `app` / `adjustment` / `expiry`), `model` (a model identifier, exactly), `from` / `to` (ISO timestamps, inclusive), `q` (words in the description), `format` (`json`, or `csv` for the whole filtered history as a file, at most 5,000 rows, no paging) | Every movement of the balance, newest first: `{ data: HistoryEntry[], nextCursor }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens), like every balance read. |
+
+**`HistoryEntry`** (`GET /v1/credits/history`) is one movement of the
+balance: `{ id, at, kind, source, amount, balanceAfter, pool, description,
+model, provider, charge, status, job, receiptUrl }`. `amount` is signed (a
+run's hold negative, a purchase positive) and `balanceAfter` the balance right
+after it; `pool` is `"subscription"`, `"topup"` or `"mixed"`; `source` is the
+ledger's own word (`usage`, `one_time_purchase`, `subscription_renewal`,
+`signup_grant`, `refund`, `app_earnings`, `admin_adjustment`, `expiry`, …;
+`kind: "app"` is credits earned from or paid for a published app, and
+`adjustment` is an admin's correction and anything else). On a row with a job,
+`model` is the model that ran and `job` is `{ id, type, status, startedAt,
+completedAt, durationMs, workflowId, sessionId }` (`type` and the rest `null`
+when the job is gone or not the person's). A job's **reserve row** (the hold
+taken when the run was accepted) alone carries `charge` — what the run cost in
+the end: the settled charge, the hold while it runs, `0` once refunded — and
+`status` (`reserved` / `committed` / `refunded`); a refund row or a metered
+overrun line of the same job carries `null`, so summing `charge` over a list
+counts each job once. Read `charge`, not `amount`, for spend. `receiptUrl` is
+Stripe's hosted receipt on a purchase that has one. The CSV carries the same
+fields, one line per movement (numbers as numbers), and says on its last line
+when it was cut at 5,000 rows.
 
 **The welcome offer.** While a deployment has the welcome offer switched on,
 `GET /v1/user/credits` carries `welcomeOffer: { popupSeen, consentPending, credits }`
@@ -3527,19 +3577,31 @@ month. Spending draws subscription credits first.
 The plans on sale and their prices are public — see
 [§12c](#12c-plans-and-prices-cloud-edition), which also covers
 `GET /v1/billing/subscription`, the account's own subscription. The routes that
-buy and manage billing are **first-party-only**: they reject API and OAuth-app
-tokens and are used from a logged-in Nodaro session — manage billing at
-[app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+buy and manage billing answer a **signed-in session only** (a Supabase JWT, the
+credential a first-party web app holds): they reject API and OAuth-app tokens
+with `403 forbidden`. A person manages billing at
+[app.nodaro.ai/billing](https://app.nodaro.ai/billing), or in a first-party app
+that calls these through the SDK (`client.billing`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack. |
-| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits. |
-| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan. |
-| `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal. |
-| `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting. |
-| `PUT` | `/v1/billing/auto-recharge` | Changes it. |
-| `GET` | `/v1/billing/transactions` | Purchase history, with receipt links. |
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath? }` → `{ data: { url } }`. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath? }` → `{ data: { url, credits } }`. |
+| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. |
+| `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
+| `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
+| `PUT` | `/v1/billing/auto-recharge` | Changes it: `{ enabled, thresholdCredits?, amountUsd? }` (both required to enable). |
+| `GET` | `/v1/billing/transactions` | Purchase history, newest first (the latest 50): `{ data: [{ id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url }] }`; `type` is `subscription`, `topup` or `refund` (`credits_granted` negative). |
+| `GET` | `/v1/billing/payment-method` | What is on file with Stripe: `{ data: { card, billingDetails } }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Never an error for an account that has not bought yet: both `null`. |
+| `GET` | `/v1/billing/invoices` | Every payment as a document, newest first (the latest 100 of each source): `{ data: [{ id, kind, number, at, amount: { amount, currency }, credits, status, description, pdfUrl, url }] }`. `kind` is `"invoice"` (a subscription payment: `number`, `pdfUrl` and the hosted `url` are Stripe's) or `"receipt"` (a credit pack or a load: `credits` granted and the hosted receipt as `url`; no PDF; a refund is a receipt with `status` `"refunded"`, `amount` and `credits` negative). `status` is `"paid"`, `"open"`, `"void"`, `"uncollectible"` or `"refunded"`. |
+
+`returnPath` (checkout, load, portal) is a path on the **calling origin**
+(`/billing`, `/settings/credits?tab=history`) that Stripe sends the person back
+to, so a first-party app on its own origin lands on its own screen: one leading
+`/`, a query allowed, no host, no backslash, no `#` — anything else is refused
+(`400`). Checkout and load add `checkout=success` or `checkout=cancelled` to
+its query; it wins over `embedded`. Without it the app's own `/billing` and
+`/pricing` pages are used.
 
 On a deployment-payer instance the billing account manages the
 deployment's pool and per-user allowances through
@@ -3839,7 +3901,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 |---|---|---|
 | `provider` | string | A Seedance 2 model or `kling-4`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0). |
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
-| `duration` | number? | Output seconds; `-1` = Auto (priced at the model's longest clip, as the run reserves it). Omitted = the model's default. |
+| `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the first clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
 | `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
@@ -3863,7 +3925,7 @@ The response is `{ "data": { identifier, reserve, expected?, adjustments, warnin
 |---|---|
 | `identifier` | The credit id the run is charged under. |
 | `reserve` | Credits the run holds when it starts. |
-| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
+| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit; for an Auto-duration run with every clip measured, input seconds plus the first clip's length rounded up to a whole second plus one second); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
 | `adjustments` | `{ code, message, credits? }` — why the price is what it is: `ref_video_length` (priced by the clips' lengths), `extra_reference_images` (MiniMax Hailuo 3 images past the first 5), `auto_duration`, `loop_trim_addon` / `voiced_audio_addon` (with their credits), `params_adjusted` (a resolution or ratio snapped to one the model offers). |
 | `warnings` | `{ code, message }` — `settles_to_actual` (the run is charged for what was generated and the rest of `reserve` is refunded), `ref_video_unmeasured` (a clip could not be measured and is priced as the longest the model accepts). |
 

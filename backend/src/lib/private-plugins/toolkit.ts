@@ -138,7 +138,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify"
 import { type LlmReasoningEffort, getLlmModel } from "@nodaro/shared/llm-models"
 import { ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared/entities"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
-import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
+import { DEFAULT_SUNO_MODEL, billsReferenceVideoSeconds } from "@nodaro/shared/models"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
 import { writeCompatible } from "../compatible-workflow-writes.js"
 import { canChangeWorkflowVisibility } from "../workflow-access.js"
@@ -1561,6 +1561,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   voiceChangerProRespeakSlotArgs: true,
   internalRequestProvenance: true,
   nodaroMotionMasking: true,
+  seedanceRefVideoQuote: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1915,6 +1916,19 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (ref !== undefined) return { creditId, baseCredits: ref }
         const { getModelCreditBaseCost } = await import("../../ee/billing/credits.js")
         return { creditId, baseCredits: (await getModelCreditBaseCost(creditId)).creditCost }
+      },
+      // The reservation's own rule and markup (ee/billing/seedance2-ref-video-quote.ts),
+      // loaded only on Cloud — core may not statically import ee/.
+      quoteSeedanceRefVideo: async (args) => {
+        if (!hasCredits()) throw new Error("quoteSeedanceRefVideo requires a Cloud-edition build")
+        if (!billsReferenceVideoSeconds(args.provider)) {
+          throw new Error(`quoteSeedanceRefVideo: "${args.provider}" is not a model whose price follows its reference clips`)
+        }
+        if (!Array.isArray(args.durationsSec) || args.durationsSec.length === 0) {
+          throw new Error("quoteSeedanceRefVideo: durationsSec must name at least one reference clip")
+        }
+        const { seedance2RefVideoChargedHoldQuote } = await import("../../ee/billing/seedance2-ref-video-quote.js")
+        return seedance2RefVideoChargedHoldQuote(args)
       },
       computeGenerateVideoProPricing: async (args) => {
         if (!hasCredits()) {

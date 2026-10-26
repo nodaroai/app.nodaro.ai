@@ -34,8 +34,9 @@ vi.mock("../../lib/config.js", () => ({
 }))
 
 vi.mock("../../lib/admin-check.js", () => ({ warmAdminCache: vi.fn() }))
+const appSettings = vi.hoisted(() => ({ value: { cost_markup_percent: 0 } as Record<string, unknown> }))
 vi.mock("../../lib/app-settings.js", () => ({
-  getAppSettings: vi.fn(() => Promise.resolve({ cost_markup_percent: 0 })),
+  getAppSettings: vi.fn(() => Promise.resolve(appSettings.value)),
 }))
 vi.mock("../../lib/url-validator.js", () => ({
   safeUrlSchema: z.string().url(),
@@ -367,6 +368,84 @@ describe("/v1/text-to-video Seedance 2 reference-video billing", () => {
     const { videoQueue } = await import("../../lib/queue.js")
     expect(videoQueue.add).toHaveBeenCalledWith("text-to-video", expect.objectContaining({ refVideoDurationsSec: [5] }))
     await app.close()
+  })
+
+  // Production 2026-10-26 (a Nodaro Motion preview's child): seedance-2-5,
+  // 720p, Auto, one 4.1 s clip. It held 4.1 + 30 s and delivered ≈ 4.1 s.
+  // The hold is now the clip rounded up plus a second — and the quote
+  // endpoint's figure is that very reservation.
+  it("an Auto edit of a 4.1 s clip @720p holds 4.1 + 6 s — exactly what the quote says", async () => {
+    probeSpy.mockImplementation(() => Promise.resolve(4.1))
+    try {
+      const app = await buildTextToVideoApp()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-video",
+        payload: {
+          prompt: "edit @video_1 as follows: make it black and white",
+          provider: "seedance-2-5",
+          resolution: "720p",
+          duration: -1,
+          aspectRatio: "adaptive",
+          referenceVideoUrls: ["https://r2.example.com/ref.mp4"],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const { seedance2RefVideoChargedQuote } = await import("../../ee/billing/seedance2-ref-video-quote.js")
+      const quote = await seedance2RefVideoChargedQuote({ provider: "seedance-2-5", resolution: "720p", duration: -1, durationsSec: [4.1], unknownClips: 0 })
+      // 0% markup here: ceil(95 × (4.1 + 6)) = 960 (was ceil(95 × 34.1) = 3240).
+      expect(quote.credits).toBe(960)
+      expect(reserveSpy).toHaveBeenCalledWith(
+        "u-1", "job-1", "seedance-2-5:30s:720p-ref", 0, 0,
+        expect.objectContaining({ creditOverride: quote.credits }),
+      )
+      expect(refCreditsSpy).toHaveBeenCalledWith(expect.objectContaining({ requestedDuration: -1, durationsSec: [4.1] }))
+      // The balance check reads the same amount — a user who can afford the
+      // new hold is not refused at the identifier's 30 s row.
+      const { CreditsService } = await import("../../ee/billing/credits.js")
+      expect(CreditsService.checkCreditsWithProfile).toHaveBeenCalledWith(
+        "u-1", expect.anything(), "seedance-2-5:30s:720p-ref", false, quote.credits, expect.anything(),
+      )
+      await app.close()
+    } finally {
+      probeSpy.mockImplementation(() => Promise.resolve(5))
+    }
+  })
+
+  // The plugin seam (`tk.http.quoteSeedanceRefVideo`) quotes a clip it has
+  // measured but not uploaded yet, through `seedance2RefVideoChargedHoldQuote`
+  // (pinned to the toolkit member in toolkit-seedance-ref-quote.test.ts): it
+  // must name what this route reserves.
+  it("the plugin seam's quote holds exactly what the route reserves: 4.1 s @720p Auto at 10% markup = 1056, expected 857", async () => {
+    probeSpy.mockImplementation(() => Promise.resolve(4.1))
+    appSettings.value = { cost_markup_percent: 10 }
+    try {
+      const app = await buildTextToVideoApp()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-video",
+        payload: {
+          prompt: "edit @video_1 as follows: make it black and white",
+          provider: "seedance-2-5",
+          resolution: "720p",
+          duration: -1,
+          aspectRatio: "adaptive",
+          referenceVideoUrls: ["https://r2.example.com/ref.mp4"],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const reserved = (reserveSpy.mock.calls[0] as unknown[] | undefined)?.[5] as { creditOverride?: number } | undefined
+      expect(reserved?.creditOverride).toBe(1056)
+
+      const { seedance2RefVideoChargedHoldQuote } = await import("../../ee/billing/seedance2-ref-video-quote.js")
+      const seam = await seedance2RefVideoChargedHoldQuote({ provider: "seedance-2-5", resolution: "720p", duration: -1, durationsSec: [4.1] })
+      // expected: ceil(95 × (4.1 + 4.1)) = 779 base, 857 charged.
+      expect(seam).toEqual({ hold: reserved?.creditOverride, expected: 857 })
+      await app.close()
+    } finally {
+      probeSpy.mockImplementation(() => Promise.resolve(5))
+      appSettings.value = { cost_markup_percent: 0 }
+    }
   })
 
   it("falls back to the normal base identifier when there are no reference videos", async () => {

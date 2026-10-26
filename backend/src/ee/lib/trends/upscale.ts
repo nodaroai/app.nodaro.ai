@@ -153,3 +153,23 @@ export function clampPreviewStart(start: number | null, durationSec: number): nu
   if (start === null) return null
   return Math.max(0, Math.min(start, Math.max(0, durationSec - PREVIEW_SECONDS)))
 }
+
+/**
+ * `data` with `stored` as its source clip, as a new source clip is set (an
+ * upscale or a crop put in): the stored clip, its size and length, and its
+ * own display copy, with the preview start kept inside it. A stored face mask
+ * goes out of date by design: its settings key names the source clip.
+ */
+export function withNewSourceClip<T extends Pick<TrendVersionData, "source" | "previewStart">>(
+  data: T,
+  stored: { url: string; durationSec: number; width: number; height: number; display?: NonNullable<TrendVersionData["source"]>["display"] },
+): T {
+  const source: NonNullable<TrendVersionData["source"]> = {
+    videoUrl: stored.url,
+    durationSec: stored.durationSec,
+    width: stored.width,
+    height: stored.height,
+    ...(stored.display ? { display: stored.display } : {}),
+  }
+  return { ...data, source, previewStart: clampPreviewStart(data.previewStart, source.durationSec) }
+}

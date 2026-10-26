@@ -1794,6 +1794,8 @@ async function computeSeedance2RefVideoCreditOverride(
     // provider's own default, the same source the identifier's tier reads
     // (#1397: a literal 5 under-reserved seedance-2-5's 8s render).
     outputDurationSec: pricedOutputDurationSec(provider as string, payload.duration as number | string | undefined),
+    // Auto (-1) is the edit shape: its hold follows the source clip.
+    requestedDuration: payload.duration,
   }
   // Probe once, use twice (R15) — the duration gate above already ffprobed
   // this payload for any provider with a declared bound, so the DEBIT prices

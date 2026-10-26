@@ -17,7 +17,8 @@
  * shows as the original. Runs keep editing the uploaded clip.
  *
  * An admin's upscale of the source clip or of an example (`storeUpscaledVideo`)
- * is resized to 1080p here and stored the same way.
+ * is resized to 1080p here and stored the same way, and so is an admin's
+ * crop of the source clip to 16:9 or 9:16 (`storeCroppedSource`).
  */
 import { randomUUID } from "node:crypto"
 import { mkdtemp, open, rm } from "node:fs/promises"
@@ -31,13 +32,15 @@ import {
   probeVideoSource,
   probeVideoStream,
   runFfmpeg,
+  runFfprobe,
   withFfmpegSlot,
 } from "../../../providers/video/ffmpeg-utils.js"
 import { uploadBufferToR2, uploadFileWithKeyToR2 } from "../../../lib/storage.js"
 import { imageDimensionsOf } from "../../../lib/image-dimensions.js"
 import { reencodePeakMemoryMiB } from "../../../providers/video/video-file-stages.js"
 import { thumbnailFromLocalVideo } from "../../../utils/thumbnail.js"
-import type { TrendSourceDisplay } from "./types.js"
+import type { TrendCropAspect, TrendSourceDisplay } from "./types.js"
+import { cropEncodeArgs, cropFilter, cropTargetSize, sourceBitRate, type SourceVideoStream } from "./crop.js"
 import { UPSCALE_SHORT_SIDE, upscaleTargetSize } from "./upscale.js"
 
 export type TrendMediaKind = "video" | "image"
@@ -433,6 +436,159 @@ export async function storeUpscaledVideo(
     )
     const { width = made.width, height = made.height, durationSec = made.durationSeconds } = stored
     return { url: stored.url, width, height, durationSec, ...(posterUrl ? { posterUrl } : {}), ...(stored.display ? { display: stored.display } : {}) }
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
+/**
+ * The ffmpeg arguments that crop `input` to `aspect` at `position` into
+ * `out` (`cropFilter`: on the DECODED frame, so a phone clip is cropped as it
+ * is shown), the picture encoded to keep the original's quality
+ * (`cropEncodeArgs` of its own stream). The first picture and the first sound
+ * track only; the sound copied, or re-encoded to AAC when the MP4 cannot hold
+ * it as it is.
+ */
+export function cropVideoArgs(
+  input: string,
+  crop: { aspect: TrendCropAspect; position: number },
+  stream: SourceVideoStream,
+  audio: "copy" | "aac",
+  out: string,
+  passLog?: string,
+): string[] {
+  return [
+    "-y", "-i", input,
+    "-map", "0:v:0", "-map", "0:a:0?",
+    "-map_metadata", "-1", "-map_chapters", "-1",
+    "-vf", `${cropFilter(crop.aspect, crop.position)},setsar=1`,
+    ...cropEncodeArgs(stream, passLog && sourceBitRate(stream) ? { n: 2, log: passLog } : undefined),
+    "-movflags", "+faststart",
+    ...(audio === "copy" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "192k"]),
+    out,
+  ]
+}
+
+/** The first of the two passes (`cropEncodeArgs`): the picture only, measured into `passLog`, nothing written. */
+export function cropFirstPassArgs(input: string, crop: { aspect: TrendCropAspect; position: number }, stream: SourceVideoStream, passLog: string): string[] {
+  return [
+    "-y", "-i", input,
+    "-map", "0:v:0", "-an",
+    "-vf", `${cropFilter(crop.aspect, crop.position)},setsar=1`,
+    ...cropEncodeArgs(stream, { n: 1, log: passLog }),
+    "-f", "null", "-",
+  ]
+}
+
+const num = (v: unknown): number | undefined => {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+const text = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined)
+
+/**
+ * The picture stream of the local `file` as `cropEncodeArgs` reads it. Its
+ * bitrate is the stream's own, else the container's less the sound's (a
+ * WebM / MKV stream reports none). Never throws: what it cannot read is left
+ * out, and the crop then encodes at a visually lossless constant quality.
+ */
+export async function probeSourceVideoStream(file: string): Promise<SourceVideoStream> {
+  try {
+    const out = await runFfprobe([
+      "-v", "error",
+      "-show_entries", "stream=codec_type,codec_name,pix_fmt,bit_rate,color_space,color_primaries,color_transfer,color_range:format=bit_rate",
+      "-of", "json",
+      file,
+    ])
+    const parsed = JSON.parse(out) as { streams?: Array<Record<string, unknown>>; format?: Record<string, unknown> }
+    const streams = parsed.streams ?? []
+    const v = streams.find((x) => x.codec_type === "video")
+    if (!v) return {}
+    const audioRate = streams.filter((x) => x.codec_type === "audio").reduce((n, a) => n + (num(a.bit_rate) ?? 0), 0)
+    const formatRate = num(parsed.format?.bit_rate)
+    const bitRate = num(v.bit_rate) ?? (formatRate && formatRate > audioRate ? formatRate - audioRate : undefined)
+    return {
+      ...(text(v.codec_name) ? { codec: text(v.codec_name) } : {}),
+      ...(text(v.pix_fmt) ? { pixFmt: text(v.pix_fmt) } : {}),
+      ...(bitRate ? { bitRate } : {}),
+      ...(text(v.color_space) ? { colorSpace: text(v.color_space) } : {}),
+      ...(text(v.color_primaries) ? { colorPrimaries: text(v.color_primaries) } : {}),
+      ...(text(v.color_transfer) ? { colorTransfer: text(v.color_transfer) } : {}),
+      ...(text(v.color_range) ? { colorRange: text(v.color_range) } : {}),
+    }
+  } catch (e) {
+    if (isTransientMediaFailure(e)) throw e
+    return {}
+  }
+}
+
+/** A source clip cropped and stored in the trend's storage, measured there. */
+export interface StoredCrop {
+  url: string
+  width: number
+  height: number
+  durationSec: number
+  display?: TrendSourceDisplay
+}
+
+/**
+ * Crop the source clip `sourceUrl` to `aspect` at `position`
+ * (`cropVideoArgs`, keeping the original's quality) and store it exactly as a
+ * new source clip is (`storeLocalTrendMedia` with the source's length range
+ * and a new display copy). The crop is checked to have come out at the size
+ * expected (`cropTargetSize` of the clip as decoded) before anything is
+ * stored. Throws `TrendMediaError` for a file that cannot be fetched, read or
+ * cropped, or that does not come out as expected; a launch the platform
+ * killed or could not admit, and a storage failure, are thrown as they are.
+ */
+export async function storeCroppedSource(
+  trendId: string,
+  args: { sourceUrl: string; aspect: TrendCropAspect; position: number },
+): Promise<StoredCrop> {
+  const dir = await mkdtemp(join(tmpdir(), "trend-crop-"))
+  const original = join(dir, "original")
+  const cropped = join(dir, "cropped.mp4")
+  try {
+    await fetchTo(args.sourceUrl, original, "video")
+    let probe: Awaited<ReturnType<typeof probeVideoSource>>
+    try {
+      probe = await probeVideoSource(original)
+    } catch (e) {
+      if (isTransientMediaFailure(e)) throw e
+      throw new TrendMediaError("media_unreadable", "Could not read the source clip's size.", { cause: e })
+    }
+    const stream = await probeSourceVideoStream(original)
+    // Admitted at the clip's own canvas: the decode is the larger side of the work.
+    const launch = { peakMemoryMiB: reencodePeakMemoryMiB({ width: probe.width, height: probe.height }) }
+    // At the original's bitrate, in two passes: the first measures the clip into `passLog`.
+    const passLog = sourceBitRate(stream) ? join(dir, "pass") : undefined
+    try {
+      if (passLog) await runFfmpeg(cropFirstPassArgs(original, args, stream, passLog), undefined, launch)
+      try {
+        await runFfmpeg(cropVideoArgs(original, args, stream, "copy", cropped, passLog), undefined, launch)
+      } catch (e) {
+        if (!isAudioCopyFailure(e)) throw e
+        await runFfmpeg(cropVideoArgs(original, args, stream, "aac", cropped, passLog), undefined, launch)
+      }
+    } catch (e) {
+      if (isTransientMediaFailure(e)) throw e
+      throw new TrendMediaError("media_unreadable", `Could not crop the source clip to ${args.aspect}.`, { cause: e })
+    }
+    let made: Awaited<ReturnType<typeof probeVideoSource>>
+    try {
+      made = await probeVideoSource(cropped)
+    } catch (e) {
+      if (isTransientMediaFailure(e)) throw e
+      throw new TrendMediaError("media_unreadable", "Could not read the cropped clip's size.", { cause: e })
+    }
+    // The crop applied any rotation, so its size is the shown one: the decoded frame either way round.
+    const expected = [cropTargetSize(probe.width, probe.height, args.aspect), cropTargetSize(probe.height, probe.width, args.aspect)]
+    if (!expected.some((e) => e.width === made.width && e.height === made.height)) {
+      throw new TrendMediaError("media_unreadable", `The cropped clip came out at ${made.width}×${made.height}, not ${args.aspect}.`)
+    }
+    const stored = await storeLocalTrendMedia(trendId, cropped, "video", { durationSec: TREND_SOURCE_SECONDS, display: true })
+    const { width = made.width, height = made.height, durationSec = made.durationSeconds } = stored
+    return { url: stored.url, width, height, durationSec, ...(stored.display ? { display: stored.display } : {}) }
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined)
   }

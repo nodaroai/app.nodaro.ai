@@ -16,7 +16,7 @@ const estimateBody = z.object({
   provider: z.string().min(1).max(64),
   /** The run's resolution; omitted = the model's default, as the run sends it. */
   resolution: z.string().min(1).max(16).optional(),
-  /** Output seconds; -1 = Auto (priced at the model's longest clip). Omitted = the model's default. */
+  /** Output seconds; -1 = Auto (held for the first clip rounded up plus a second, or the model's longest clip while a clip is unmeasured). Omitted = the model's default. */
   duration: z.union([z.number(), z.string().max(8)]).optional(),
   /** Seedance 2.5 Draft: priced at 480p. */
   draft: z.boolean().optional(),
