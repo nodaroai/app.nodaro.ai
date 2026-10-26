@@ -147,6 +147,7 @@ vi.mock("@/lib/use-case/execution-wrappers.js", () => ({ liveUseCaseWrappersOf: 
 
 import { workflowExecutionRoutes, toExecutionSummary, jobToExecutionSummary } from "../workflow-execution.js"
 import { supabase } from "../../lib/supabase.js"
+import type { RunCredits } from "../../lib/job-credit-status.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -2593,6 +2594,23 @@ describe("jobToExecutionSummary — keys nodeStates by canvas node_id", () => {
     }
     expect(summary.nodeStates["n1"].progress).toBe(0)
   })
+
+  it("shows the run's settled charge (its steps included) once known, the hold until then", () => {
+    const run = (charged: number | null, held: number | null = null) =>
+      new Map([["job-uuid-1", { charged, held }]]) as unknown as RunCredits
+    const done = { ...baseRow, status: "completed", credits: 44 }
+    const settled = jobToExecutionSummary(done, false, run(1063)) as {
+      totalCreditsUsed: number
+      nodeStates: Record<string, Record<string, unknown>>
+    }
+    expect(settled.totalCreditsUsed).toBe(1063)
+    expect(settled.nodeStates["job-uuid-1"].creditsUsed).toBe(1063)
+    // Not settled yet: the run's hold (its steps' included), else the job's own.
+    const open = jobToExecutionSummary(done, false, run(null, 3773)) as { totalCreditsUsed: number }
+    expect(open.totalCreditsUsed).toBe(3773)
+    const plain = jobToExecutionSummary(done, false, run(null)) as { totalCreditsUsed: number }
+    expect(plain.totalCreditsUsed).toBe(44)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -2622,6 +2640,8 @@ describe("GET /v1/workflows/:id/executions — editor-source jobs exclusion", ()
 
     expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["workflow_execution_id", null] })
     expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["mcp_client", null] })
+    // A child job is shown only through its parent, whose row carries the run's charge.
+    expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["parent_job_id", null] })
     // user_id scoping (IDOR control) preserved.
     expect(jobsRec.calls).toContainEqual({ method: "eq", args: ["user_id", TEST_USER_ID] })
   })

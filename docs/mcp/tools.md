@@ -1697,7 +1697,7 @@ The public scope lists what the public gallery shows, with the same moderation a
 
 On your own jobs (`scope: "mine"`), the same filters as `GET /v1/jobs`: `status` takes one status or a list, `types` is one or more `input_data.type` values (the route that made the job, e.g. `generate-image` or `llm-structured`), `sources` is one or more surfaces that created the job (`mcp` — an MCP client such as Claude or ChatGPT —, `web`, `cli`, `sdk`, `extension`, `app`, `api`, `internal`), `favorited: true` keeps the jobs you favorited (`false`: the rest), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated`. They combine with AND. Passing `types` lifts the default `kinds`, so a job with no media (an `llm-structured` draft) is listed; pass `kinds` as well to narrow to media. `project_id` keeps the jobs a session of that project holds now (`none`: a session with no project), each once; `in_session: false` keeps the jobs no session holds (General), `true` the ones at least one does; `with_sessions` adds `sessions` (id, title, projectId) to each job. `types`, `sources`, `favorited`, `rating`, `project_id`, `in_session` and `with_sessions` are refused with `scope: "public"`. A deleted job is never listed: it is in `list_trash`. Each of your own jobs carries `favorited` (`true` / `false`) and `rating` (`"good"`, `"bad"` or `null`) — both left out when they cannot be read for a moment (unknown, not `false`); public-scope rows carry neither.
 
-Each of your own jobs carries `credits` — the amount **held** when it was accepted, which never changes — and `credits_charged` — what it actually cost once the hold settled. A job can settle below its hold (the rest goes back to your balance); `credits_charged` is `0` when the hold was refunded and `null` while the job is still running. To total what jobs cost, sum `credits_charged`, not `credits`. Public-scope rows do not carry `credits_charged`.
+Each of your own jobs carries `credits` — the amount the job itself **held** when it was accepted, which never changes — and `credits_charged` — what it actually cost once the hold settled, **the steps it ran included** (a job that runs other jobs for you, such as a Nodaro Motion run's reference preparation, mask and video, is charged for each; a step adds its charge once it settles). A job can settle below its hold (the rest goes back to your balance); `credits_charged` is `0` when the run's own hold was refunded, plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads `credit_status: "refunded"` with `credits_charged: 165`), and `null` while the job's own hold is still open (even when some steps have settled), when nothing in the run was reserved, or when its steps could not be read for a moment (unknown, never a lower figure). `credits_held` is the run's hold (`credits` plus its steps'), and `credits_released` what went back once every hold in the run settled (`null` until then). To total what jobs cost, sum `credits_charged`, not `credits`. Public-scope rows carry none of the three.
 
 Your own jobs (`scope: "mine"`) include your Apply EDL renders: a render is listed under the kind its output is — `video` for a cut, `audio` for a mix (a render still running, under the kind its order asks for) — and the public scope never lists one. A Preview (`output_data.quality` is `"proxy"`) carries `preview: true`.
 
@@ -1748,10 +1748,10 @@ policy reason if the review rejects it.
 **Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
 `assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
 `height`, `outputData`, `input`, `errorMessage`, `credits`, `creditsCharged`,
-`createdAt`, `startedAt`, `completedAt`, plus `retryable`, `guidance` and
-`suggestedProvider` on a failed, cancelled or held job. `get_asset` and
-`wait_for_job` return the same envelope (`get_asset` without `input` and without
-the two credit figures).
+`creditsHeld`, `creditsReleased`, `createdAt`, `startedAt`, `completedAt`, plus
+`retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
+job. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
+without `input` and without the charge figures).
 
 `width` / `height` are the output's pixel size, present when the job recorded
 it: every image job completed after this release (the size of `outputUrl` as
@@ -1761,12 +1761,21 @@ the next step. A job that made several images also has `outputData.images` —
 `{ url, width, height }` per entry of `outputData.imageUrls`. See
 [Image size on image jobs](../api-integration.md#image-size-on-image-jobs).
 
-`credits` is the amount the job **held** when it was accepted and never
+`credits` is the amount the job itself **held** when it was accepted and never
 changes. `creditsCharged` (`credits_charged` in the text payload's `data`) is
-what the job actually cost once that hold settled: it can be lower than
-`credits`, it is `0` when the hold was refunded, and `null` while the job is
-still running or when it reserved nothing of its own. A job that held 888 and
-settled at 444 reads `credits: 888`, `creditsCharged: 444`.
+what the job actually cost once that hold settled, **including the steps it
+ran** — a job that runs other jobs for you (a Nodaro Motion run's reference
+preparation, mask and video) is charged for each, and a step adds its charge
+once it settles. It can be lower than the hold. It is `0` when the run's own
+hold was refunded, plus any settled steps (a refunded Nodaro Motion run whose
+reference and mask steps committed reads `credit_status: "refunded"` with
+`creditsCharged: 165`), and `null` while the job's own hold is still open
+(even when some steps have settled), when nothing in the run was reserved, or
+when its steps could not be read for a moment (unknown, never a lower figure). `creditsHeld` (`credits_held`) is the run's hold, the steps'
+included, and `creditsReleased` (`credits_released`) what went back once every
+hold in the run settled (`null` until then). A job that held 888 and settled
+at 444 reads `credits: 888`, `creditsCharged: 444`, `creditsHeld: 888`,
+`creditsReleased: 444`.
 
 An Apply EDL render made at Preview quality (`outputData.quality` is `"proxy"`:
 the private 720p cut to review, not the final) also carries `preview: true`. A

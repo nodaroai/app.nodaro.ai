@@ -37,7 +37,6 @@ vi.mock("../supabase.js", () => ({
 }))
 
 const { sideHoldChargesFor, withSideCharge, withSideHoldCharge } = await import("../job-step-charge.js")
-const { creditsChargedOf } = await import("../job-credit-status.js")
 
 beforeEach(() => {
   h.credits = true
@@ -88,11 +87,6 @@ describe("a step's charge", () => {
     expect(await withSideHoldCharge(plain)).toBe(plain)
   })
 
-  it("the public credits_charged adds the side charge to a SETTLED own charge; an open hold stays null", () => {
-    const side = new Map([["clip-1", 9]])
-    const map = new Map([["ul-1", { status: "committed" as const, charged: 250 }], ["ul-2", { status: "reserved" as const, charged: null }]])
-    expect(creditsChargedOf("ul-1", map, "clip-1", side)).toBe(259)
-    expect(creditsChargedOf("ul-2", map, "clip-1", side)).toBeNull()
-    expect(creditsChargedOf("ul-1", map, "img-1", side)).toBe(250)
-  })
+  // The public credits_charged (a run's charge, its steps and side holds
+  // included) is pinned in job-run-credits.test.ts.
 })

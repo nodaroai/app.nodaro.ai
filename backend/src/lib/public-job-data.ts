@@ -47,6 +47,14 @@ export function redactPrivateJobOutput<T>(output: T): T {
 export const CHILD_JOB_COLUMN = "parent_job_id"
 
 /**
+ * How many levels of child jobs any walk down `parent_job_id` follows. A
+ * worker-side handler nests its steps one or two deep (Cast Swap); this bounds
+ * a bad loop. Shared by the run's charge (lib/job-run-steps.ts) and the trend
+ * run delete (ee/lib/trends/run-delete.ts).
+ */
+export const MAX_CHILD_JOB_DEPTH = 5
+
+/**
  * The column that puts a job in the Trash (migration 561): `DELETE
  * /v1/jobs/:id` stamps it, `POST /v1/jobs/:id/restore` clears it, and 30 days
  * on the purge deletes the job for good (lib/job-trash-purge.ts). A job in the

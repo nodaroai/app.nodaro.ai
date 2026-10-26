@@ -12,9 +12,16 @@
  * the side-hold helper (`lib/job-step-charge.ts`); anything else says why it
  * is not one. A new reader fails until it is classified — deliberately.
  *
+ * A job's PUBLIC charge is also a run's: it includes the job's steps (child
+ * jobs, `parent_job_id`, each billed on its own usage log). `runCreditsFor`
+ * (lib/job-credit-status.ts) is the one loader that reads both the steps and
+ * the side holds, and `creditsChargedOf` takes only what it returns (a branded
+ * type, so tsc refuses anything else). The last two cases hold every caller to
+ * it and every other direct reader of a job's usage log to a stated reason.
+ *
  * ITS REAL SCOPE (what it can and cannot see): a `credits_actual` named inside
- * a column-list string literal in backend source (comments stripped), and every
- * caller of `creditsChargedOf`. It does NOT see a step's charge read another way
+ * a column-list string literal in backend source (comments stripped), every
+ * caller of `creditsChargedOf` and every caller of `creditStatusMapFor`. It does NOT see a step's charge read another way
  * — a usage log's `credits_charged` looked up by the job, `jobs.credits` alone,
  * a column list built at run time, or SQL (an RPC, a view, a trigger such as
  * 537's app-run total, which sums executions the node executor already summed
@@ -28,8 +35,8 @@ const SRC = join(__dirname, "..")
 
 /** Readers of a step's charge: each must add the job's settled side holds. */
 const STEP_CHARGE_READERS: Record<string, string> = {
-  "services/workflow-engine/node-executor.ts": "a run step's creditsUsed (poll, cancel-race adoption, fan-out reuse, a UGC child's jobCharge) — the execution total, the app-run total and the creator fee base sum it",
-  "routes/jobs.ts": "the public per-job credits_charged (GET /v1/jobs, /v1/jobs/:id)",
+  "services/workflow-engine/node-executor.ts": "a run step's creditsUsed (poll, cancel-race adoption, fan-out reuse, a UGC child's jobCharge) — the execution total, the app-run total and the creator fee base sum it; through runCreditsFor, so its job's steps (child jobs) count too",
+  "routes/jobs.ts": "the public per-job credits_charged (GET /v1/jobs, /v1/jobs/:id), through runCreditsFor",
   "lib/mcp/tools/diagnose.ts": "diagnose_run's per-step credits",
   "ee/lib/ugc-quote.ts": "the UGC quote's already-spent lines",
 }
@@ -42,6 +49,9 @@ const NOT_STEP_CHARGE_READERS: Record<string, string> = {
   "ee/routes/admin-credit-audit.ts": "admin per-task pricing audit of each job's OWN charge against its OWN provider cost; side holds are audited per (feature, model) by the LLM mode (admin-credit-audit-llm.ts)",
   "services/workflow-engine/use-case-node.ts": "a use-case wrapper's credits_actual is its inner execution's total (finalize-wrapper), already summed by node-executor with side holds",
 }
+
+/** Readers whose figure is a workflow total (execution, app run, creator fee base): they must also add the job's steps (child jobs), through runCreditsFor. */
+const RUN_STEP_TOTAL_READERS = ["services/workflow-engine/node-executor.ts"]
 
 /** Consumers of a reader above that must add the side holds themselves. */
 const SIDE_AWARE_CONSUMERS = ["ee/pipelines/services/_run-worker-job.ts", "lib/mcp/tools/jobs.ts", "lib/webhooks/event.ts"]
@@ -71,7 +81,20 @@ function selectsCreditsActual(source: string): boolean {
   return false
 }
 
-const usesSideHelper = (source: string) => /\b(sideHoldChargesFor|withSideHoldCharge)\(/.test(source)
+/** The side-hold helpers, or the run loader that adds them (and the steps). */
+const usesSideHelper = (source: string) => /\b(sideHoldChargesFor|withSideHoldCharge|runCreditsFor)\(/.test(source)
+const usesRunLoader = (source: string) => /\brunCreditsFor\(/.test(stripComments(source))
+
+/**
+ * Callers of `creditStatusMapFor` — a job's OWN usage log, without its steps or
+ * side holds — each with why that is the figure it needs. A public charge never
+ * comes from here: it comes from `runCreditsFor`.
+ */
+const OWN_USAGE_LOG_READERS: Record<string, string> = {
+  "lib/job-credit-status.ts": "the run loader itself",
+  "routes/jobs.ts": "credit_status only (POST /v1/jobs/status and GET /v1/jobs/:id/status): the job's own hold's lifecycle, never a charge",
+  "ee/routes/admin-credit-audit.ts": "admin per-task pricing audit of each job's OWN charge against its OWN provider cost",
+}
 
 describe("R53 — every reader of a job's charge adds its settled side holds", () => {
   const files = walk(SRC).map((f) => ({ rel: relative(SRC, f), source: readFileSync(f, "utf8") }))
@@ -92,9 +115,37 @@ describe("R53 — every reader of a job's charge adds its settled side holds", (
     }
   })
 
-  it("creditsChargedOf (the public charge) cannot be called without the side charges", () => {
-    for (const f of files.filter((x) => /\bcreditsChargedOf\(/.test(stripComments(x.source)) && x.rel !== "lib/job-credit-status.ts")) {
-      expect(usesSideHelper(f.source), `${f.rel} calls creditsChargedOf without sideHoldChargesFor`).toBe(true)
+  it("creditsChargedOf (the public charge) is read only off the run loader (steps and side holds included)", () => {
+    const callers = files.filter((x) => /\bcreditsChargedOf\(/.test(stripComments(x.source)) && x.rel !== "lib/job-credit-status.ts")
+    expect(callers.length).toBeGreaterThan(0)
+    for (const f of callers) {
+      expect(usesRunLoader(f.source), `${f.rel} calls creditsChargedOf without runCreditsFor`).toBe(true)
     }
+  })
+
+  it("every public credits_charged / creditsCharged a job route sets comes from the run loader", () => {
+    // A key spelled in an object literal from a call (`credits_charged: x(...)`)
+    // or spread from publicCreditFieldsOf: either way the file must load runs.
+    const setters = files.filter((x) => /\b(credits_charged|creditsCharged)\s*:\s*creditsChargedOf\(|\.\.\.publicCreditFieldsOf\(/.test(stripComments(x.source)))
+    expect(setters.length).toBeGreaterThan(0)
+    for (const f of setters) expect(usesRunLoader(f.source), `${f.rel} sets a public charge without runCreditsFor`).toBe(true)
+  })
+
+  it("a workflow node's charge adds its job's steps (child jobs) through the run loader", () => {
+    for (const rel of RUN_STEP_TOTAL_READERS) {
+      const file = files.find((f) => f.rel === rel)
+      expect(file, rel).toBeDefined()
+      expect(usesRunLoader(file!.source), `${rel} must read node charges through runCreditsFor`).toBe(true)
+      // No bare side-hold read left beside it: the loader adds them.
+      expect(/\bsideHoldChargesFor\(/.test(stripComments(file!.source)), `${rel} reads side holds outside runCreditsFor`).toBe(false)
+    }
+  })
+
+  it("every reader of a job's own usage log (creditStatusMapFor) is classified", () => {
+    const readers = files.filter((x) => /\bcreditStatusMapFor\(/.test(stripComments(x.source))).map((x) => x.rel).sort()
+    expect(
+      readers,
+      "A new reader of a job's own usage log: if it shows what a job or run was charged, use runCreditsFor + creditsChargedOf (steps and side holds included); otherwise list it in OWN_USAGE_LOG_READERS with why.",
+    ).toEqual(Object.keys(OWN_USAGE_LOG_READERS).sort())
   })
 })

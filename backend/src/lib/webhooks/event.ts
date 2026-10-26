@@ -26,8 +26,7 @@ import { supabase } from "../supabase.js"
 import { PUBLIC_JOB_KEYS, sanitizeJobForPublic, type JobRecord } from "../../routes/jobs.js"
 import { fillJobRenderQuality } from "../render-label-fill.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
-import { creditStatusMapFor, creditStatusOf, creditsChargedOf } from "../job-credit-status.js"
-import { sideHoldChargesFor } from "../job-step-charge.js"
+import { publicCreditFieldsOf, runCreditsFor } from "../job-credit-status.js"
 import type { WebhookEventType } from "./event-types.js"
 
 export const MAX_EVENT_BYTES = 64 * 1024
@@ -98,12 +97,14 @@ async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | nul
 
   const row = data as unknown as Record<string, unknown>
   const usageLogId = (row.usage_log_id as string | null | undefined) ?? null
-  const credits = await creditStatusMapFor([usageLogId])
-  const sideCharges = await sideHoldChargesFor([d.jobId])
+  // The job as a run: its steps (child jobs) and settled side holds included.
+  const credits = await runCreditsFor([
+    { id: d.jobId, usage_log_id: usageLogId, credits: typeof row.credits === "number" ? row.credits : null },
+  ], d.userId)
   return {
     ...(sanitizeJobForPublic(fillJobRenderQuality(row) as unknown as JobRecord, false) as unknown as Record<string, unknown>),
-    credit_status: creditStatusOf(usageLogId, credits),
-    credits_charged: creditsChargedOf(usageLogId, credits, d.jobId, sideCharges),
+    credit_status: credits.get(d.jobId)?.status ?? null,
+    ...publicCreditFieldsOf(d.jobId, credits),
   }
 }
 

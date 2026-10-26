@@ -40,6 +40,10 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CHILD_JOB_COLUMN, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "../lib/job-credit-status.js"
+
+/** No run figures loaded: the hold, as before. */
+const EMPTY_RUN_CREDITS = new Map() as unknown as RunCredits
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
@@ -1200,7 +1204,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     let jobQuery = supabase
       .from("jobs")
-      .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -1216,7 +1220,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     return {
-      data: jobToExecutionResponse(job, isAdmin),
+      data: jobToExecutionResponse(job, isAdmin, await runCreditsFor([job], req.userId)),
     }
   })
 
@@ -1262,7 +1266,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
       let jobQuery = supabase
         .from("jobs")
-        .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
+        .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
         .eq("id", execId)
         .eq("user_id", req.userId)
         .is("workflow_execution_id", null)
@@ -1277,7 +1281,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       }
 
       const sse = await createSSEStream(req, reply)
-      const jobAsExec = jobToExecutionResponse(job, isAdmin) as unknown as Record<string, unknown>
+      const jobAsExec = jobToExecutionResponse(job, isAdmin, await runCreditsFor([job], req.userId)) as unknown as Record<string, unknown>
       sse.sendEvent({ type: "metadata", data: jobAsExec })
       const jobTerminalStatuses = new Set(["completed", "failed", "cancelled"])
       if (jobTerminalStatuses.has(job.status as string)) {
@@ -1630,11 +1634,15 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs with no execution record) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, node_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, node_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
       .is(TRASHED_JOB_COLUMN, null)
+      // A child job is shown only through its parent (CHILD_JOB_COLUMN), as on
+      // every job list: listed beside it, its charge would show twice (the
+      // parent's row carries its run's charge, the steps' included).
+      .is(CHILD_JOB_COLUMN, null)
       .order("created_at", { ascending: false })
       .limit(limit + 1)
 
@@ -1668,7 +1676,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Merge both sources, sort by created_at desc, take limit + 1
     const execRows = (execResult.data ?? []).map(toExecutionSummary)
-    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, req.userRole === "admin" || req.userRole === "super_admin"))
+    // Each standalone job as a run (its steps' charges included), in one read per table.
+    const jobCredits = await runCreditsFor(jobsResult.data ?? [], req.userId)
+    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, req.userRole === "admin" || req.userRole === "super_admin", jobCredits))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
 
@@ -1766,9 +1776,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, node_id, workflow_id, user_id, status, progress, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, node_id, workflow_id, user_id, status, progress, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
       .is("workflow_execution_id", null)
       .is(TRASHED_JOB_COLUMN, null)
+      // As above: a child job is never listed beside its parent.
+      .is(CHILD_JOB_COLUMN, null)
       .not("workflow_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(limit + 1)
@@ -1799,7 +1811,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Merge both sources, sort by created_at desc, take limit + 1
     const execRows = (execResult.data ?? []).map((row) => ({ ...toExecutionSummary(row), workflowId: row.workflow_id, userId: row.user_id, _source: "exec" as const }))
-    const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row, isAdminViewAll), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
+    // Each standalone job as a run (its steps' charges included), in one read per table.
+    const jobCredits = await runCreditsFor(jobsResult.data ?? [], [...new Set((jobsResult.data ?? []).map((row) => row.user_id as string))])
+    const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row, isAdminViewAll, jobCredits), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
 
@@ -1996,7 +2010,13 @@ const JOB_STATUS_MAP: Record<string, string> = {
  *  decision with credits still reserved, not a terminal state. */
 const HELD_JOB_STATUS = "pending_review"
 
-export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = false) {
+/**
+ * A standalone job as an execution-history row. Its credits are what the run
+ * was charged once settled — its steps (child jobs) included, read through the
+ * one run loader (`credits` from `runCreditsFor`) — and the run's hold until
+ * then.
+ */
+export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = false, credits?: RunCredits) {
   const inputData = (row.input_data ?? {}) as Record<string, unknown>
   // A trend run's failure text is replaced for a non-admin, as on every job read.
   const error = trendRunErrorText(row.error_message as string | null | undefined, row.input_data, isAdmin)
@@ -2014,6 +2034,9 @@ export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = fa
   // for jobs with no node_id (SDK / pre-migration rows).
   const nodeId = (row.node_id as string | null | undefined) ?? null
   const stateKey = nodeId ?? (row.id as string)
+  // The run's charge once settled; until then its hold (the steps' included).
+  const figures = credits ? runCreditsOf(row.id as string, credits) : null
+  const creditsShown = creditsChargedOf(row.id as string, credits ?? EMPTY_RUN_CREDITS) ?? figures?.held ?? ((row.credits ?? 0) as number)
 
   return {
     id: row.id,
@@ -2032,7 +2055,7 @@ export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = fa
         nodeId,
         jobId: row.id,
         progress: (row.progress as number | null | undefined) ?? 0,
-        creditsUsed: row.credits ?? 0,
+        creditsUsed: creditsShown,
         error,
         startedAt: row.started_at,
         completedAt: row.completed_at,
@@ -2047,7 +2070,7 @@ export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = fa
     totalNodes: 1,
     completedNodes: mappedStatus === "completed" ? 1 : 0,
     failedNodes: mappedStatus === "failed" ? 1 : 0,
-    totalCreditsUsed: mappedStatus === "completed" ? ((row.credits ?? 0) as number) : 0,
+    totalCreditsUsed: mappedStatus === "completed" ? creditsShown : 0,
     errorMessage: error,
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -2055,8 +2078,8 @@ export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = fa
   }
 }
 
-function jobToExecutionResponse(row: Record<string, unknown>, isAdmin: boolean) {
-  const summary = jobToExecutionSummary(row, isAdmin)
+function jobToExecutionResponse(row: Record<string, unknown>, isAdmin: boolean, credits: RunCredits) {
+  const summary = jobToExecutionSummary(row, isAdmin, credits)
   return {
     ...summary,
     workflowId: row.workflow_id,

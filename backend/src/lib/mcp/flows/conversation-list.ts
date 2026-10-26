@@ -1,7 +1,6 @@
 import { supabase } from "../../supabase.js"
 import { hasCredits } from "../../config.js"
-import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
-import { sideHoldChargesFor } from "../../job-step-charge.js"
+import { creditsChargedOf, runCreditsFor } from "../../job-credit-status.js"
 import { resolveCanvasResultIds } from "../../canvas-result-ids.js"
 import { KIND_OF_OUTPUT, outputKeyOfStep } from "./mappers/kit.js"
 import { CONVERSATION_IDLE_GAP_MS, monthKey, type McpConversationSettings } from "./conversation-store.js"
@@ -195,12 +194,10 @@ async function creditsByConversation(userId: string, rows: readonly Conversation
       const { data, error } = await supabase.from("jobs").select("id, usage_log_id").eq("user_id", userId).in("id", ids)
       if (error) fail("the jobs read", error)
       const jobs = (data ?? []) as Array<{ id: string; usage_log_id: string | null }>
-      const [map, side] = await Promise.all([
-        creditStatusMapFor(jobs.map((j) => j.usage_log_id)),
-        sideHoldChargesFor(jobs.map((j) => j.id)),
-      ])
+      // Each job as a run: its steps (child jobs) and settled side holds included.
+      const credits = await runCreditsFor(jobs, userId)
       for (const job of jobs) {
-        const charged = creditsChargedOf(job.usage_log_id, map, job.id, side)
+        const charged = creditsChargedOf(job.id, credits)
         const conversation = owner.get(job.id)
         if (charged === null || !conversation) continue
         totals.set(conversation, (totals.get(conversation) ?? 0) + charged)

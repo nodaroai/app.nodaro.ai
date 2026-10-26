@@ -1692,11 +1692,35 @@ changes. `GET /v1/jobs` and `GET /v1/jobs/:id` also carry `credits_charged:
 number | null` — what the job actually cost once its hold settled, read from
 the same usage log. It can be lower than `credits` (some jobs hold more than
 they end up using — a possible re-render, a length measured after the run —
-and the rest goes back to your balance), it is `0` when the hold was refunded,
-and it is `null` while the job is still running (`credit_status: "reserved"`)
-or when the job reserved nothing of its own. To total what jobs cost, sum
+and the rest goes back to your balance). When the job's own hold was refunded
+it is `0` plus any steps that settled (below: a refunded Nodaro Motion run whose
+reference and mask steps committed reads `credit_status: "refunded"` with
+`credits_charged: 165`). It is `null` while the job's own hold is still open
+(`credit_status: "reserved"`) — even when some of its steps have already
+settled — and when nothing in the run was reserved. To total what jobs cost, sum
 `credits_charged`, not `credits`. Example: a job that held 888 and settled at
-444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`. A generation that ends in
+444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`.
+
+`credits_charged` is the charge of the job **as a run, its steps included**.
+Some jobs run other jobs for you — a Nodaro Motion run prepares its references,
+makes a mask and renders the video, each as a step of its own that is never
+listed on its own — and each step is charged once it settles. A step whose
+hold is still open adds nothing yet; a refunded step adds `0`;
+`credits_charged` stays `null` until the job's own hold settles. Beside it,
+`credits_held` is the run's hold (the job's own `credits` plus its steps'
+holds; the same as `credits` for a job with no steps), and `credits_released`
+is what went back from it (`credits_held − credits_charged`) once every hold in
+the run has settled — `null` until then. `credits` and `credit_status` stay the
+job's own. Example: a Nodaro Motion preview whose own hold was 44, with two
+reference steps at 66, a mask at 33 and a video held at 3,564 and settled at
+854, reads `credits: 44`, `credits_charged: 1063`, `credits_held: 3773`,
+`credits_released: 2710`. If the steps cannot be read for a moment,
+`credits_charged`, `credits_held` and `credits_released` read `null` (unknown),
+never a lower figure. A workflow run counts a node the same way: its credits
+(and so the run's `totalCreditsUsed`, and the creator's percentage on a
+monetized app) include the settled steps of the node's job — a failed node's
+too — and a step that settles after its node finished is counted when the run
+ends. A generation that ends in
 a safety-filter block or a policy block is always refunded — see
 [§12 Credits](#12-credits-cloud-edition). A job a deployment's policy has
 **held** for human review reports `status: "pending_review"` — an in-flight
@@ -4502,6 +4526,13 @@ Each run carries its `engine` (`"motion-prism"` or `"motion-pulse"`) and
 `engineName`. A completed Nodaro Motion Prism draft, or a completed Nodaro
 Motion Pulse run at 720p, has `fullQualityUntil` (the end of its 7 days) and
 can be finished at [Full Quality](#full-quality); on Pulse that is a new take.
+
+A run's `creditsCharged` is what the whole run cost once settled: its own
+charge plus every step it ran (the reference preparation, the mask, the
+video), each added once it settles. It is `null` until the run's own hold
+settles. `creditsHeld` is the run's hold (its own plus its steps'), and
+`creditsReleased` what went back from it once every hold in the run settled
+(`null` until then).
 
 A Full Quality version of a draft run (or of a Nodaro Motion Pulse 720p run) is a run of its own in
 `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,

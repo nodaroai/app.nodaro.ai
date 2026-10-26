@@ -36,12 +36,23 @@ function getCostDisplayForModal(job: Job, showDollars: boolean): string {
     if (cost < 0.01) return `$${cost.toFixed(4)}`
     return `$${cost.toFixed(3)}`
   }
-  // The charge once the job settled, the hold until then (`jobCreditsShown`).
-  // A job settled below its hold shows both. A job row carries RAW Nodaro
-  // credits — converted here, at render.
-  const { shown, held, charged } = jobCreditsShown(job)
+  // The run's charge once it settled, its hold until then (`jobCreditsShown`;
+  // a run's figures include its steps). A run settled below its hold shows
+  // both, and what went back once every hold in it settled. A job row carries
+  // RAW Nodaro credits — converted here, at render.
+  const { shown, held, charged, released, open } = jobCreditsShown(job)
   if (shown == null) return "-"
+  // "Held N" only while the hold is open; a job with no charge recorded (a
+  // free run, no usage log) shows its figure as it always did.
+  if (open && held != null) return tx("exec.heldOnly", { held: formatCreditUnits(held) })
   if (charged != null && held != null && charged < held) {
+    if (released != null) {
+      return tx("exec.chargedHeldReleased", {
+        charged: formatCreditUnits(charged),
+        held: creditUnits(held),
+        released: creditUnits(released),
+      })
+    }
     return tx("exec.chargedOfHeld", { charged: formatCreditUnits(charged), held: creditUnits(held) })
   }
   if (charged != null && held != null && charged !== held) {

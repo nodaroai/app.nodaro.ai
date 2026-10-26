@@ -51,7 +51,8 @@ import { buildLottieRequest, type MotionGraphicsLottiePayload } from "../../lib/
 import { buildScriptRequest, type ScriptProvider } from "../../providers/script/script-generator.js"
 import { settleMeteredHoldAfterFlip, settleMeteredHoldsBeforeCancel } from "../../lib/cancel-job.js"
 import { settleSideHoldsAfterFlip } from "../../lib/llm-side-hold.js"
-import { sideHoldChargesFor, withSideCharge } from "../../lib/job-step-charge.js"
+import { runCreditsFor, withRunCharges } from "../../lib/job-credit-status.js"
+import { noteStepCharges } from "./run-step-charges.js"
 import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import type { LlmPlannedCall, MeteredLlmFeature } from "../../lib/llm-billing.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
@@ -739,8 +740,11 @@ export function ugcDepsFor(node: SimpleNode, ctx: OrchestratorContext, iteration
     jobCharge: async (jobId) => {
       const { data } = await supabase.from("jobs").select("credits_actual, credits").eq("id", jobId).single()
       const row = data as { credits_actual?: number | null; credits?: number | null } | null
-      // R53: plus its settled metered side holds (554).
-      return withSideCharge(row?.credits_actual ?? row?.credits ?? 0, jobId, await sideHoldChargesFor([jobId]))
+      // R53: plus its settled metered side holds (554) and its settled steps (child jobs),
+      // noted so the run's end can count a step that settles later (run-step-charges.ts).
+      const credits = await runCreditsFor([{ id: jobId }], ctx.userId)
+      noteStepCharges(ctx, jobId, credits)
+      return withRunCharges(row?.credits_actual ?? row?.credits ?? 0, jobId, credits)
     },
   }
 }
@@ -2576,10 +2580,21 @@ async function settledMetered(jobId: string, jobRecord: { credits_actual?: unkno
   return read.ledger !== null
 }
 
-/** R53: a completed step's charge plus its settled metered side holds (554, `lib/job-step-charge.ts`). */
-async function withSideHoldChargeOf(result: ExecuteNodeResult): Promise<ExecuteNodeResult> {
+/**
+ * A completed node's charge as a run step: its own figure plus its settled
+ * metered side holds (R53, 554) and its settled steps — the child jobs its
+ * job ran (`parent_job_id`), each billed on its own — through the one run
+ * loader (`runCreditsFor`). The execution total, the app-run total and a
+ * monetized app's creator fee base all sum this. Steps are read as the run's
+ * user's only. What it counted is NOTED on the run (`noteStepCharges`): a step
+ * that settles after its parent completed, or whose read failed, is counted
+ * when the run ends (`settleRunStepCharges`), never frozen at a partial figure.
+ */
+async function withSideHoldChargeOf(result: ExecuteNodeResult, ctx: Pick<OrchestratorContext, "userId" | "stepCharges">): Promise<ExecuteNodeResult> {
   if (!result.jobId) return result
-  const creditsUsed = withSideCharge(result.creditsUsed, result.jobId, await sideHoldChargesFor([result.jobId]))
+  const credits = await runCreditsFor([{ id: result.jobId }], ctx.userId)
+  noteStepCharges(ctx, result.jobId, credits)
+  const creditsUsed = withRunCharges(result.creditsUsed, result.jobId, credits)
   return creditsUsed === result.creditsUsed ? result : { ...result, creditsUsed }
 }
 
@@ -2650,6 +2665,8 @@ export async function loadCompletedFanOutIterations(
   ownerId: string,
   nodeId: string,
   nodeType: string,
+  /** The run's notes of its nodes' step charges (`OrchestratorContext.stepCharges`). */
+  stepNotes?: Pick<OrchestratorContext, "stepCharges">,
 ): Promise<Map<number, ExecuteNodeResult>> {
   const byIndex = new Map<number, ExecuteNodeResult>()
   const { data: jobs, error } = await supabase
@@ -2680,9 +2697,14 @@ export async function loadCompletedFanOutIterations(
       // the iteration re-runs rather than reusing an empty result.
     }
   }
-  // R53: each reused step's charge includes its settled side holds (554) — one read for the batch.
-  const side = await sideHoldChargesFor([...byIndex.values()].map((r) => r.jobId))
-  for (const [idx, r] of byIndex) byIndex.set(idx, { ...r, creditsUsed: withSideCharge(r.creditsUsed, r.jobId, side) })
+  // R53: each reused step's charge includes its settled side holds (554) and
+  // its settled steps (child jobs) — one read per table for the batch, noted on
+  // the run like any other node's (run-step-charges.ts).
+  const credits = await runCreditsFor([...byIndex.values()].flatMap((r) => (r.jobId ? [{ id: r.jobId }] : [])), ownerId)
+  for (const [idx, r] of byIndex) {
+    if (stepNotes) noteStepCharges(stepNotes, r.jobId, credits)
+    byIndex.set(idx, { ...r, creditsUsed: withRunCharges(r.creditsUsed, r.jobId, credits) })
+  }
   return byIndex
 }
 
@@ -2702,6 +2724,8 @@ async function cancelJobAndThrow(
   reason: string,
   nodeType: string,
   creditsUsed: number | undefined,
+  /** The run: its user (whose steps an adopted completion counts) and its step-charge notes. */
+  ctx: Pick<OrchestratorContext, "userId" | "stepCharges">,
 ): Promise<ExecuteNodeResult> {
   // D10, BEFORE the flip: a metered LLM hold whose job already recorded a
   // billed cost is committed, never refunded (the reconcile sweep's rule).
@@ -2796,7 +2820,7 @@ async function cancelJobAndThrow(
   if (jobRecord?.status === "completed") {
     // Charge-with-delivery: honor the completion the user already paid for
     // rather than throwing "cancelled" and discarding the committed output.
-    return withSideHoldChargeOf(completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed, await settledMetered(jobId, jobRecord, creditsUsed)))
+    return withSideHoldChargeOf(completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed, await settledMetered(jobId, jobRecord, creditsUsed)), ctx)
   }
   // Already failed (worker refunds failed jobs) or already cancelled — no
   // double-refund. Surface the job's own error if present, else the reason,
@@ -2868,7 +2892,7 @@ async function pollJobToCompletion(
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
     if (ctx.cancelled) {
-      return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed)
+      return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed, ctx)
     }
 
     // Absolute timeout — prevents infinite polling when job never leaves "pending"
@@ -2877,7 +2901,7 @@ async function pollJobToCompletion(
     // `POLL_ABSOLUTE_TIMEOUT_MS` / `NODE_TIMEOUT_MS` plus the job's declared
     // budget excess (`ceilings`, 0 for a job that declares none).
     if (Date.now() - pollStartTime - heldSoFar() - slotWaitMs > ceilings.pollAbsoluteMs) {
-      return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${ceilings.pollAbsoluteMs / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
+      return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${ceilings.pollAbsoluteMs / 1000}s (may still be pending in queue)`, nodeType, creditsUsed, ctx)
     }
 
     // Periodically re-check execution status from DB so mid-level cancellation
@@ -2885,7 +2909,7 @@ async function pollJobToCompletion(
     // ctx ensures only one parallel node queries the DB per interval.
     pollCycle++
     if (await executionCancelledNow(ctx, pollCycle)) {
-      return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed)
+      return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed, ctx)
     }
 
     // Poll job status. credits_actual lets sync-HTTP nodes (which reserve +
@@ -2949,8 +2973,8 @@ async function pollJobToCompletion(
 
     // Check terminal statuses BEFORE timeout — avoids cancelling a just-completed job
     if (status === "completed") {
-      // R53: a step's charge includes its settled metered side holds (554).
-      return withSideHoldChargeOf(completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed, await settledMetered(jobId, jobRecord, creditsUsed)))
+      // R53: a step's charge includes its settled metered side holds (554) and its settled steps (child jobs).
+      return withSideHoldChargeOf(completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed, await settledMetered(jobId, jobRecord, creditsUsed)), ctx)
     }
 
     if (status === "failed" || status === "cancelled") {
@@ -2992,7 +3016,7 @@ async function pollJobToCompletion(
       processingStartTime !== null &&
       Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) - slotWaitMs > ceilings.processingMs
     ) {
-      return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${ceilings.processingMs / 1000}s of processing`, nodeType, creditsUsed)
+      return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${ceilings.processingMs / 1000}s of processing`, nodeType, creditsUsed, ctx)
     }
 
     // Deploy drain (SIGTERM): abort the wait so worker.close() returns inside

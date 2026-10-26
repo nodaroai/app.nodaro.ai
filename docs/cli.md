@@ -322,6 +322,8 @@ nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-ke
 #   SPENDS CREDITS — run `estimate` first; prints the job id (follow it with `nodaro jobs get <id>`).
 #   --session is accepted but not yet applied: trend runs are not filed into sessions yet
 nodaro trends runs [--trend <slug>] [--limit <n>] [--cursor <c>] [--json]   # your trend runs, newest first (--limit 1-60, here and on list)
+#   the credits column is what each run was charged once settled, every step it ran included (its reference
+#   preparation, mask and video); empty until the run's own hold settles
 nodaro trends favorite <slug>                            # and: nodaro trends unfavorite <slug>
 
 # Nodaro Motion (cast-swap) — Full Quality: finish a run at 1080p (Cloud edition): a draft run (a Nodaro Motion

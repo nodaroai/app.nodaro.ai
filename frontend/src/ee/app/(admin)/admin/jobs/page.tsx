@@ -11,6 +11,7 @@ import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
 import { useAdminJobs, useAllAdminUsersLite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import { JobsGallery } from "./jobs-gallery"
+import { creditCell, creditDetailLines } from "./admin-job-credits"
 
 const STATUS_OPTIONS = ["all", "pending", "queued", "processing", "completed", "failed", "cancelled"] as const
 
@@ -78,6 +79,19 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+/** The charge as the figure, the hold (and a parent's run total) as secondary text; the full sentence on hover. */
+function CreditCell({ job }: { job: AdminJob }) {
+  const { main, secondary, title } = creditCell(job)
+  return (
+    <span className="flex flex-col whitespace-nowrap" title={title}>
+      <span>{main}</span>
+      {secondary.map((line) => (
+        <span key={line} className="text-[11px] text-muted-foreground">{line}</span>
+      ))}
+    </span>
+  )
+}
+
 function JobDetailDialog({
   job,
   open,
@@ -127,7 +141,10 @@ function JobDetailDialog({
           </div>
           <div>
             <span className="text-muted-foreground">Credits</span>
-            <p>{job.credits ?? "-"}</p>
+            {/* The settled charge beside the hold (jobs.credits is the hold), and a parent's run with its steps. */}
+            {creditDetailLines(job).length > 0
+              ? creditDetailLines(job).map((line) => <p key={line}>{line}</p>)
+              : <p>-</p>}
           </div>
           <div>
             <span className="text-muted-foreground">Created</span>
@@ -378,7 +395,9 @@ export default function AdminJobsPage() {
                     workflowExecutionId={job.workflow_execution_id}
                   />
                 </td>
-                <td className="px-3 py-2 text-xs">{job.credits ?? "-"}</td>
+                <td className="px-3 py-2 text-xs">
+                  <CreditCell job={job} />
+                </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{job.provider ?? "-"}</td>
                 <td className="px-3 py-2 text-xs">{job.display_cost != null ? `$${job.display_cost.toFixed(4)}` : "-"}</td>
                 <td className="px-3 py-2 text-xs" title={job.reconcile_last_error ?? job.provider_kind ?? undefined}>

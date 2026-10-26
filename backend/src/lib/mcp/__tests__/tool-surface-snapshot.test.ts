@@ -1341,6 +1341,12 @@ const SESSIONS_TRASH_BYTES = 3_662
 // 508_641 total − 508_613 = 28 B; the 79 B of headroom carry across.
 const NODARO_MOTION_RENAME_BYTES = 28
 
+// A job's charge is its run's: the job envelope (`get_job` / `wait_for_job` outputSchema) gains
+// `creditsHeld` (the run's hold, its steps' included) and `creditsReleased`, and the get_job and
+// list_jobs descriptions say `creditsCharged` / `credits_charged` include the run's steps. No tool
+// was added, so the fixture does NOT move. Measured by this suite: 508_953 total against the 508_692 budget = 261 B (no headroom left).
+const RUN_CHARGE_STEPS_BYTES = 261
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1505,6 +1511,7 @@ export const TOOL_WIRE_BUDGET = {
     NODARO_MOTION_BYTES +
     TOPAZ_VIDEO_TARGET_BYTES +
     SESSIONS_TRASH_BYTES +
+    RUN_CHARGE_STEPS_BYTES +
     NODARO_MOTION_RENAME_BYTES,
 }
 

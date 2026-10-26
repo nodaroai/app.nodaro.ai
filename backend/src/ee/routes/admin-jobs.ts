@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { JOB_STATUSES } from "../../lib/job-status.js"
+import { runCreditsFor, runCreditsOf, type RunCreditFigures } from "../../lib/job-credit-status.js"
 
 /**
  * GET /v1/admin/jobs -- the admin Jobs table's data source.
@@ -30,15 +31,49 @@ import { JOB_STATUSES } from "../../lib/job-status.js"
  * Cost fields ARE returned here on purpose -- this route is `requireAdmin`, the
  * same stance `sanitizeJobForPublic` (routes/jobs.ts) already takes for admins
  * on the public jobs route.
+ *
+ * `credits` is the job's HOLD. What it was charged comes beside it in
+ * `credit` (`AdminJobCredit`), read off the usage logs through the one run
+ * loader (lib/job-credit-status.ts `runCreditsFor`), never `jobs.credits_actual`.
+ * An admin list shows a parent and its child jobs side by side, so each row's
+ * figures are the job's OWN (a total over the rows counts every job once), and
+ * a parent's run total (its steps included) rides in `credit.run`.
  */
 
-/** Exactly the columns the admin Jobs table + JobDetailDialog render. */
+/** A job's figures for the admin Jobs page. */
+export interface AdminJobCredit {
+  /** The job's own hold's lifecycle; null with no usage log. */
+  status: RunCreditFigures["status"]
+  /** The job's own settled charge (its side holds included); null while its hold is open. */
+  charged: number | null
+  /** The job's own hold (`jobs.credits`). */
+  held: number | null
+  /** What went back from the job's own hold once it settled. */
+  released: number | null
+  /** The job as a run with its steps (child jobs); null when it has none. */
+  run: { steps: number; charged: number | null; held: number | null; released: number | null; settled: boolean } | null
+}
+
+export function adminJobCredit(figures: RunCreditFigures | null): AdminJobCredit | null {
+  if (!figures) return null
+  return {
+    status: figures.status,
+    charged: figures.ownCharged,
+    held: figures.ownHeld,
+    released: figures.ownReleased,
+    run: figures.steps > 0
+      ? { steps: figures.steps, charged: figures.charged, held: figures.held, released: figures.released, settled: figures.settled }
+      : null,
+  }
+}
+
+/** Exactly the columns the admin Jobs table + JobDetailDialog render (`usage_log_id` is read for the charge only and not returned). */
 const ADMIN_JOB_COLUMNS = [
   "id", "status", "job_type", "credits", "provider", "provider_cost", "display_cost",
   "error_message", "input_data", "output_data", "created_at", "started_at",
   "completed_at", "user_id", "workflow_id", "workflow_execution_id", "source",
   "source_detail", "provider_kind", "provider_task_id", "reconcile_attempts",
-  "reconcile_last_error", "provider_call_started_at",
+  "reconcile_last_error", "provider_call_started_at", "usage_log_id",
 ].join(", ")
 
 const listQuery = z.object({
@@ -94,6 +129,12 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
         error: { code: "internal_error", message: "Lookup failed" },
       })
     }
-    return reply.send({ data: data ?? [] })
+    const rows = (data ?? []) as unknown as Array<Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }>
+    // One read per table for the page: each job's own figures and, for a
+    // parent, its run's (its steps included).
+    const credits = await runCreditsFor(rows, [...new Set(rows.map((r) => r.user_id as string))])
+    return reply.send({
+      data: rows.map(({ usage_log_id: _log, ...row }) => ({ ...row, credit: adminJobCredit(runCreditsOf(row.id, credits)) })),
+    })
   })
 }

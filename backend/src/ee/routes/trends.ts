@@ -80,7 +80,7 @@ import type {
   TrendSlotKind,
   TrendVersionData,
 } from "../lib/trends/types.js"
-import { TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
 
 export type { TrendRun } from "../lib/trends/run-helpers.js"
 
@@ -475,6 +475,8 @@ export async function trendRoutes(app: FastifyInstance) {
         .from("jobs")
         .select(RUN_JOB_COLS)
         .is(TRASHED_JOB_COLUMN, null)
+        // A child job (a run's step) is shown only through its run, as on every job list.
+        .is(CHILD_JOB_COLUMN, null)
         .eq("user_id", userId)
         .filter("input_data->>type", "eq", "cast-swap")
         .not("input_data->trend", "is", null)

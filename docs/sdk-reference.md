@@ -1341,11 +1341,19 @@ them for a moment, so treat a missing field as unknown, never as `false` —
 `recovering` while a processing job is being
 recovered, `credit_status` (the job's credit-reservation lifecycle —
 `"reserved"` | `"committed"` | `"refunded"` | `null`, derived server-side
-from the usage log) and `credits_charged`. `credits` is the amount **held**
-when the job was accepted and never changes; `credits_charged` is what the job
-actually cost once that hold settled — it can be lower (the rest goes back to
-the balance), `0` when refunded, `null` while the job is running or when it
-reserved nothing of its own. Sum `credits_charged` to total spend. `error_hint` is a structured, user-safe failure verdict
+from the usage log), `credits_charged`, `credits_held` and `credits_released`.
+`credits` is the amount the job itself **held** when it was accepted and never
+changes; `credits_charged` is what the job actually cost once that hold
+settled, **including the steps it ran** (a job that runs other jobs for you —
+a Nodaro Motion run's reference preparation, mask and video — is charged for
+each; a step adds its charge once it settles) — it can be lower than the hold
+(the rest goes back to the balance); `0` when the run's own hold was refunded,
+plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads `credit_status: "refunded"` with `credits_charged: 165`); `null` while the job's own hold is open (even when
+some steps have settled), when nothing in the run was reserved, or when its
+steps could not be read for a moment (unknown, never a lower figure). `credits_held` is the run's hold
+(`credits` plus the steps' holds) and `credits_released` what went back from
+it once every hold in the run settled (`null` until then). Sum
+`credits_charged` to total spend. `error_hint` is a structured, user-safe failure verdict
 (`JobErrorHint`) present on a job the worker classified as a final provider
 content-policy block (`kind: "safety-block"` — see [Generate
 Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)
@@ -2341,7 +2349,9 @@ interface TrendRun {
   engine?: "motion-prism" | "motion-pulse" // the engine it was made on; absent = motion-prism
   engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
   videoUrl: string | null; posterUrl: string | null  // once completed
-  creditsCharged: number | null
+  creditsCharged: number | null      // once settled, every step of the run included (reference preparation, mask, video)
+  creditsHeld?: number | null        // the run's hold, its steps' included
+  creditsReleased?: number | null    // what went back from creditsHeld once every hold in the run settled; null until then
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
   fullQuality: { jobId: string; status: string } | null // a draft's newest Full Quality try: a pointer only
   fullQualityUntil: string | null    // until when a completed draft (or motion-pulse 720p run) can be redone in Full Quality

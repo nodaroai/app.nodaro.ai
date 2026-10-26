@@ -10,6 +10,7 @@ vi.mock("../../../../lib/supabase.js", () => ({ supabase: { from: (...a: unknown
 import { engineSupports, followPreviewMasking, fullQualityEligible, runEngineOf, toTrendRun, withoutUnsupportedStoredMask, type RunJobRow } from "../run-helpers.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
 import type { ComposedTrendRun } from "../compose.js"
+import type { RunCredits } from "../../../../lib/job-credit-status.js"
 
 const PREVIEW_JOB = "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10"
 
@@ -199,6 +200,8 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
   })
 
   it("labels a recorded run by the current public id and name (toTrendRun)", () => {
+    // No run figures loaded (lib/job-credit-status.ts `runCreditsFor`): the charge reads null.
+    const NO_RUN_CREDITS = new Map() as unknown as RunCredits
     const row = (engine: string): RunJobRow => ({
       id: "j-1",
       status: "completed",
@@ -212,10 +215,10 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
       completed_at: "2026-10-26T10:01:00.000Z",
       usage_log_id: null,
     })
-    const pulse = toTrendRun(row(RECORDED[gen].pulse), undefined, new Map(), new Map())!
+    const pulse = toTrendRun(row(RECORDED[gen].pulse), undefined, NO_RUN_CREDITS)!
     expect(pulse).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse" })
     expect(pulse.fullQualityUntil).not.toBeNull()
-    expect(toTrendRun(row(RECORDED[gen].prism), undefined, new Map(), new Map())).toMatchObject({
+    expect(toTrendRun(row(RECORDED[gen].prism), undefined, NO_RUN_CREDITS)).toMatchObject({
       engine: "motion-prism",
       engineName: "Nodaro Motion Prism",
       fullQualityUntil: null,

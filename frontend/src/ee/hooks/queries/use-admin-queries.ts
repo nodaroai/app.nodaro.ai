@@ -110,11 +110,39 @@ export interface AdminUser {
   readonly sai_spent?: number | null
 }
 
+/**
+ * A job's credit figures on the admin Jobs page (GET /v1/admin/jobs `credit`),
+ * read off the usage logs. Each row's figures are the job's OWN (the list shows
+ * child jobs beside their parent, so a total over rows counts each job once);
+ * a parent's run, its steps included, rides in `run`.
+ */
+export interface AdminJobCredit {
+  /** The job's own hold's lifecycle; null with no usage log. */
+  readonly status: "reserved" | "committed" | "refunded" | null
+  /** The job's own settled charge; null while its hold is open. */
+  readonly charged: number | null
+  /** The job's own hold (`jobs.credits`). */
+  readonly held: number | null
+  /** What went back from the job's own hold once it settled. */
+  readonly released: number | null
+  /** The job as a run with its steps (child jobs); null when it has none. */
+  readonly run: {
+    readonly steps: number
+    readonly charged: number | null
+    readonly held: number | null
+    readonly released: number | null
+    readonly settled: boolean
+  } | null
+}
+
 export interface AdminJob {
   readonly id: string
   readonly status: string
   readonly job_type: string | null
+  /** The job's own HOLD (what it reserved), not what it was charged: see `credit`. */
   readonly credits: number | null
+  /** What the job was charged, beside its hold; null when the server sent none. */
+  readonly credit: AdminJobCredit | null
   readonly provider: string | null
   readonly provider_cost: number | null
   readonly display_cost: number | null
@@ -404,6 +432,7 @@ interface JobRow {
   status: string
   job_type: string | null
   credits: number | null
+  credit?: AdminJobCredit | null
   provider: string | null
   provider_cost: number | null
   display_cost: number | null
@@ -492,6 +521,7 @@ async function fetchAdminJobsPage(
     status: j.status,
     job_type: j.job_type ?? null,
     credits: j.credits,
+    credit: j.credit ?? null,
     provider: j.provider ?? null,
     provider_cost: j.provider_cost ?? null,
     display_cost: j.display_cost ?? null,

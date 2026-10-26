@@ -111,6 +111,8 @@ The body:
       "credits": 40,
       "credit_status": "committed",
       "credits_charged": 40,
+      "credits_held": 40,
+      "credits_released": 0,
       "source": "sdk",
       "source_detail": "sdk/2.28.0",
       "session_id": null,
@@ -134,6 +136,10 @@ The body:
   attempt builds the body again from the job as it is then — same `id`.)
   `credits_charged` can still be `null` (with `credit_status: "reserved"`)
   if the charge had not settled yet; read the job again for the final figure.
+  Like on `GET /v1/jobs/{id}`, `credits_charged` includes the steps the job
+  ran (a step adds its charge once it settles), `credits_held` is the run's
+  hold with its steps' and `credits_released` what went back once every hold
+  in the run settled (`null` until then).
 - An event is at most 64 KB, always. When a job's data is larger,
   `input_data` is left out, then `output_data`, and `data.omitted` lists
   what was left out: `GET /v1/jobs/{id}` has the whole job. Should a text

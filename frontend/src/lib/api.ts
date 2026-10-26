@@ -6263,10 +6263,18 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (admin only)
   display_cost?: number          // provider_cost with markup (admin only)
   cost?: number                  // What user pays (regular users)
-  credits?: number | null        // Credits HELD when the job was accepted (all users); never changes
-  /** Credits actually charged once the hold settled (all users) — can be below
-   *  `credits`; 0 when refunded; null while running or with no reservation. */
+  credits?: number | null        // Credits HELD when the job was accepted (all users); never changes — the job's own hold
+  /** Credits actually charged once the hold settled (all users), the run's
+   *  steps (child jobs) included — can be below `credits_held`. 0 when the
+   *  run's own hold was refunded, plus any settled steps (a refunded Nodaro
+   *  Motion run whose reference and mask steps committed reads 165). null
+   *  while the job's own hold is open (even with steps settled), with no
+   *  reservation in the run, or when its steps could not be read (unknown). */
   credits_charged?: number | null
+  /** The run's hold: the job's own plus its steps' (equals `credits` for a job with no steps). */
+  credits_held?: number | null
+  /** What went back from `credits_held` once every hold in the run settled; null until then. */
+  credits_released?: number | null
   /** The hold's lifecycle: still held, charged, or refunded. */
   credit_status?: "reserved" | "committed" | "refunded" | null
   credits_actual?: number | null // Credits actually charged after anomaly correction (admin only)
@@ -11378,7 +11386,12 @@ export interface AdminTrendRun {
   engineName?: string
   videoUrl: string | null
   posterUrl: string | null
+  /** What the run was charged once settled, every step it ran included. */
   creditsCharged: number | null
+  /** The run's hold: its own plus its steps'. */
+  creditsHeld?: number | null
+  /** What went back from `creditsHeld` once every hold in the run settled; null until then. */
+  creditsReleased?: number | null
   /** A Full Quality version: the draft run it was made from. Listed as its own run. */
   fullQualityOf: string | null
   /** A draft's Full Quality version: a pointer only; its result is on its own run. */

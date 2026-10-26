@@ -354,7 +354,16 @@ export interface TrendRun {
   /** The result, once completed. */
   videoUrl: string | null
   posterUrl: string | null
+  /**
+   * What the run was charged once settled, every step it ran included (its
+   * reference preparation, mask and video); `null` until the run's own hold
+   * settles. A step adds its charge once it settles.
+   */
   creditsCharged: number | null
+  /** The run's hold: its own plus its steps'. Absent from an older server. */
+  creditsHeld?: number | null
+  /** What went back from `creditsHeld` once every hold in the run settled; `null` until then. Absent from an older server. */
+  creditsReleased?: number | null
   /** A Full Quality version: the job id of the run (a draft, or a Nodaro Motion Pulse 720p run) it was made from. `null` for any other run. */
   fullQualityOf: string | null
   /**

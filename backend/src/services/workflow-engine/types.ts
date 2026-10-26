@@ -893,6 +893,16 @@ export interface OrchestratorContext {
    *  Inline sub-workflows share this context, so their long nodes count too.
    *  Undefined (= 0) for a run with nothing budgeted — today's 120 minutes. */
   budgetExcessMs?: number
+  /**
+   * What each node's figure already counts of its job's STEPS (child jobs),
+   * by job id (`run-step-charges.ts`): `included` is the steps' settled charge
+   * it added, `final` whether every step had settled and been read then. When
+   * the run ends, `settleRunStepCharges` reads the jobs again whose steps were
+   * not final (and the failed nodes' jobs), so a step that settles after its
+   * parent completed still reaches the execution total, the app-run total and
+   * the creator fee base. Run-scoped, never persisted.
+   */
+  stepCharges?: Map<string, { included: number; final: boolean }>
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
   /** In-flight child jobs from a prior (crashed) orchestrator attempt that the

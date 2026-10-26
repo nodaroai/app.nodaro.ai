@@ -7853,6 +7853,8 @@ export const ja: ChromeDict = {
   "editor.downloadAll": "すべてダウンロード（{n}）",
   "exec.costWithEstimate": "{actual}（見積もり {estimated}）",
   "exec.chargedOfHeld": "{charged}（確保 {held}）",
+  "exec.chargedHeldReleased": "請求 {charged}・確保 {held}（返却 {released}）",
+  "exec.heldOnly": "確保 {held}",
   "exec.criticApproved": "承認",
   "exec.criticRejected": "却下",
   "exec.criticMode": "モード：{mode}",

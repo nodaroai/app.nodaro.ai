@@ -60,6 +60,7 @@ import {
 } from "@/ee/hooks/queries/use-admin-queries"
 import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips } from "../model"
 import { MediaPicker } from "./MediaPicker"
+import { trendRunCreditLine } from "../../jobs/admin-job-credits"
 import { uploadLocalFile } from "./uploads"
 
 type ChipChoices = Partial<Record<TrendChipKey, TrendChoice>>
@@ -465,7 +466,8 @@ function RunCard({
               Full Quality
             </Badge>
           )}
-          {run.creditsCharged !== null && <span>{run.creditsCharged} credits</span>}
+          {/* The run's charge, every step it ran included, beside its hold. */}
+          {trendRunCreditLine(run) && <span>{trendRunCreditLine(run)}</span>}
           <span className="text-muted-foreground">{new Date(run.createdAt).toLocaleString()}</span>
         </div>
         {run.error && <p className="text-destructive">{run.error.message}</p>}

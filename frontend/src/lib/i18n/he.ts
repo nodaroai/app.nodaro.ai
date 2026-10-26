@@ -8039,6 +8039,8 @@ export const he: ChromeDict = {
   "editor.downloadAll": "הורדת הכל ({n})",
   "exec.costWithEstimate": "{actual} (הערכה: {estimated})",
   "exec.chargedOfHeld": "{charged} (שוריינו {held})",
+  "exec.chargedHeldReleased": "חויבו {charged} · שוריינו {held} ({released} שוחררו)",
+  "exec.heldOnly": "שוריינו {held}",
   "exec.criticApproved": "אושר",
   "exec.criticRejected": "נדחה",
   "exec.criticMode": "מצב: {mode}",

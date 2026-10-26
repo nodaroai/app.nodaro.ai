@@ -7853,6 +7853,8 @@ export const ptBR: ChromeDict = {
   "editor.downloadAll": "Baixar tudo ({n})",
   "exec.costWithEstimate": "{actual} (estimativa: {estimated})",
   "exec.chargedOfHeld": "{charged} (reservado: {held})",
+  "exec.chargedHeldReleased": "Cobrado: {charged} · reservado: {held} (liberados: {released})",
+  "exec.heldOnly": "Reservado: {held}",
   "exec.criticApproved": "aprovado",
   "exec.criticRejected": "rejeitado",
   "exec.criticMode": "modo: {mode}",

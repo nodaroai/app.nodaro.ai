@@ -49,6 +49,7 @@
  * which copy a run's media into trend storage: only runs by ADMIN
  * accounts (the role `requireAdmin` checks) may become examples.
  */
+import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
@@ -648,6 +649,8 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
           .from("jobs")
           .select(`${RUN_JOB_COLS}, user_id`)
           .in("user_id", admins)
+          // A child job (a run's step) is shown only through its run, as on every job list.
+          .is(CHILD_JOB_COLUMN, null)
           .filter("input_data->>type", "eq", "cast-swap")
           .filter("input_data->trend->>id", "eq", id)
         if (from) query = query.or(afterKeyset("created_at", "id", from))

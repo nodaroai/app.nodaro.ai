@@ -39,6 +39,15 @@ vi.mock("@/lib/job-step-charge.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/job-step-charge.js")>()),
   sideHoldChargesFor: async () => sideCharges.map,
 }))
+// A run's steps (child jobs, lib/job-run-steps.ts) — none unless a test says so.
+type StepRow = { id: string; parent_job_id: string; usage_log_id: string | null; credits: number | null }
+const runSteps = vi.hoisted(() => ({ map: new Map<string, StepRow[]>(), incomplete: new Set<string>(), calls: [] as Array<{ ids: unknown[]; owners: unknown }> }))
+vi.mock("@/lib/job-run-steps.js", () => ({
+  runStepsOf: async (jobs: Array<{ id: string; owner: string }>) => {
+    runSteps.calls.push({ ids: jobs.map((j) => j.id), owners: [...new Set(jobs.map((j) => j.owner))] })
+    return { steps: runSteps.map, incomplete: runSteps.incomplete }
+  },
+}))
 vi.mock("@/lib/job-owner-state.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/job-owner-state.js")>()),
   jobOwnerStateFor: async () => new Map(),
@@ -1279,6 +1288,83 @@ describe("credits_charged — the settled charge beside the hold", () => {
     expect(byId).toEqual({ "job-partial": [888, 444, "committed"], "job-free": [0, null, null] })
     expect(usageReads).toEqual([["ul-partial"]])
     expect(JSON.stringify(res.json())).not.toContain("usage_log_id")
+  })
+})
+
+describe("credits_charged — a run's charge includes its steps (child jobs)", () => {
+  // The production Nodaro Motion preview of 2026-10-26: Cast Swap 44, two
+  // reference preps at 66, a mask at 33, the video held 3,564 and charged 854.
+  const RUN_LOGS = [
+    { id: "ul-run", status: "committed", credits_used: 44, credits_charged: 44 },
+    { id: "ul-ref-1", status: "committed", credits_used: 66, credits_charged: 66 },
+    { id: "ul-ref-2", status: "committed", credits_used: 66, credits_charged: 66 },
+    { id: "ul-mask", status: "committed", credits_used: 33, credits_charged: 33 },
+    { id: "ul-video", status: "committed", credits_used: 3564, credits_charged: 854 },
+  ]
+  const steps = (parent: string): StepRow[] => [
+    { id: "ref-1", parent_job_id: parent, usage_log_id: "ul-ref-1", credits: 66 },
+    { id: "ref-2", parent_job_id: parent, usage_log_id: "ul-ref-2", credits: 66 },
+    { id: "mask", parent_job_id: parent, usage_log_id: "ul-mask", credits: 33 },
+    { id: "video", parent_job_id: parent, usage_log_id: "ul-video", credits: 3564 },
+  ]
+  beforeEach(() => {
+    runSteps.calls = []
+  })
+  afterEach(() => {
+    runSteps.map = new Map()
+    runSteps.calls = []
+  })
+
+  it("GET /v1/jobs/:id: the run's charge (1,063), its hold (3,773) and what went back; credits stays the job's own hold", async () => {
+    const row = { ...sampleJob, id: "run", user_id: TEST_USER_ID, credits: 44, usage_log_id: "ul-run" }
+    runSteps.map = new Map([["run", steps("run")]])
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") return usageLogsAnswer(RUN_LOGS)
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+      return chain as never
+    })
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/run?__userId=${TEST_USER_ID}` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ credits: 44, credits_charged: 1063, credits_held: 3773, credits_released: 2710, credit_status: "committed" })
+    // The steps are read as the job owner's.
+    expect(runSteps.calls).toEqual([{ ids: ["run"], owners: [TEST_USER_ID] }])
+  })
+
+  it("GET /v1/jobs/:id: a step still held adds nothing yet, and nothing reads as released", async () => {
+    const row = { ...sampleJob, id: "run", user_id: TEST_USER_ID, credits: 44, usage_log_id: "ul-run" }
+    runSteps.map = new Map([["run", steps("run")]])
+    const logs = RUN_LOGS.map((l) => (l.id === "ul-video" ? { ...l, status: "reserved", credits_charged: null } : l))
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") return usageLogsAnswer(logs)
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+      return chain as never
+    })
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/run?__userId=${TEST_USER_ID}` })
+    expect(res.json().data).toMatchObject({ credits_charged: 209, credits_held: 3773, credits_released: null })
+  })
+
+  it("GET /v1/jobs (list): each run's steps from one read for the page", async () => {
+    const jobsRows = [
+      { ...characterJob("run"), credits: 44, usage_log_id: "ul-run" },
+      { ...characterJob("solo"), credits: 0 },
+    ]
+    runSteps.map = new Map([["run", steps("run")]])
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") return usageLogsAnswer(RUN_LOGS)
+      const handler: ProxyHandler<Record<string, unknown>> = {
+        get(_t, prop) {
+          if (prop === "then") return (resolve: (v: unknown) => void) => resolve({ data: jobsRows, error: null })
+          return () => proxy
+        },
+      }
+      const proxy: Record<string, unknown> = new Proxy({}, handler)
+      return proxy as never
+    })
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+    expect(res.statusCode).toBe(200)
+    const byId = Object.fromEntries(res.json().data.map((j: Record<string, unknown>) => [j.id, [j.credits, j.credits_charged, j.credits_held]]))
+    expect(byId).toEqual({ run: [44, 1063, 3773], solo: [0, null, 0] })
+    expect(runSteps.calls).toEqual([{ ids: ["run", "solo"], owners: [TEST_USER_ID] }])
   })
 })
 

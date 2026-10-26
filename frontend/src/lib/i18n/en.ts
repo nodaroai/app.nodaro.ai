@@ -8122,6 +8122,8 @@ export const en = {
   "editor.downloadAll": "Download All ({n})",
   "exec.costWithEstimate": "{actual} (est. {estimated})",
   "exec.chargedOfHeld": "{charged} (held {held})",
+  "exec.chargedHeldReleased": "Charged {charged} · held {held} ({released} released)",
+  "exec.heldOnly": "Held {held}",
   "exec.criticApproved": "approved",
   "exec.criticRejected": "rejected",
   "exec.criticMode": "mode: {mode}",

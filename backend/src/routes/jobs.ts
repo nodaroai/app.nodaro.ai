@@ -11,8 +11,7 @@ import "./jobs-docs.js"
 import { liveSessionsOfJobs } from "../lib/job-sessions.js"
 import { ORDER_QUALITY_COLUMNS, fillJobRenderQuality, fillJobsRenderQuality } from "../lib/render-label-fill.js"
 import type { ErrorHint } from "../lib/safety-block.js"
-import { creditStatusMapFor, creditStatusOf, creditsChargedOf } from "../lib/job-credit-status.js"
-import { sideHoldChargesFor } from "../lib/job-step-charge.js"
+import { creditStatusMapFor, creditStatusOf, publicCreditFieldsOf, runCreditsFor } from "../lib/job-credit-status.js"
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../lib/job-owner-state.js"
 import { applyJobListFilters, jobListFilterSelect, parseJobListQuery, ratingsNotAvailable, withoutFilterEmbeds } from "../lib/job-list-filters.js"
 
@@ -274,8 +273,8 @@ export async function jobRoutes(app: FastifyInstance) {
     }
 
     const usageLogId = (job as { usage_log_id?: string | null }).usage_log_id ?? null
-    const creditMap = await creditStatusMapFor([usageLogId])
-    const sideCharges = await sideHoldChargesFor([job.id])
+    // The job as a run: its own charge, its steps' (child jobs) and its side holds.
+    const runCredits = await runCreditsFor([{ id: job.id, usage_log_id: usageLogId, credits: job.credits }], job.user_id)
     // The owner's favorite and rating of it — the owner's, also when an admin
     // reads it. Pollers read this route: a failed read leaves the two fields
     // out (unknown) and the job still answers.
@@ -291,9 +290,10 @@ export async function jobRoutes(app: FastifyInstance) {
         // An old render has no stored Preview label: fill it from the order
         // (read-time only; the Executions tab reads this job).
         ...sanitizeJobForPublic(fillJobRenderQuality(job) as unknown as JobRecord, isAdmin),
-        credit_status: creditStatusOf(usageLogId, creditMap),
-        // What was charged once the hold settled; `credits` stays the hold.
-        credits_charged: creditsChargedOf(usageLogId, creditMap, job.id, sideCharges),
+        credit_status: runCredits.get(job.id)?.status ?? null,
+        // What the run was charged once its hold settled, its steps included,
+        // and the run's hold; `credits` stays the job's own hold.
+        ...publicCreditFieldsOf(job.id, runCredits),
         ...ownerStateFields(job.id, ownerState),
       },
     }
@@ -525,11 +525,16 @@ export async function jobRoutes(app: FastifyInstance) {
     // One usage_logs read for the whole page: each job's billing lifecycle and
     // settled charge. `usage_log_id` is in neither key allowlist, so the
     // sanitizer below strips it.
-    const creditMap = await creditStatusMapFor(
-      cleanedJobs.map((job) => (job as { usage_log_id?: string | null }).usage_log_id),
+    // Each job as a run (its steps' charges and its settled metered side holds
+    // included), in one read per table for the page.
+    const runCredits = await runCreditsFor(
+      cleanedJobs.map((job) => ({
+        id: job.id as string,
+        usage_log_id: (job as { usage_log_id?: string | null }).usage_log_id ?? null,
+        credits: (job as { credits?: number | null }).credits ?? null,
+      })),
+      filterUserId,
     )
-    // R53: each job's settled metered side holds, in one read for the page.
-    const sideCharges = await sideHoldChargesFor(cleanedJobs.map((job) => job.id as string))
     // And one read per table for the owner's favorite and rating of each job;
     // as on GET /v1/jobs/:id, a failed read leaves the two fields out.
     let ownerState: JobOwnerStateMap | null = null
@@ -539,12 +544,11 @@ export async function jobRoutes(app: FastifyInstance) {
       req.log.warn({ err }, "job owner state unavailable: favorited / rating omitted")
     }
     const sanitizedJobs = cleanedJobs.map((job) => {
-      const usageLogId = (job as { usage_log_id?: string | null }).usage_log_id ?? null
       // An old render has no stored Preview label: fill it from the order.
       const sanitized = {
         ...sanitizeJobForPublic(fillJobRenderQuality(job) as JobRecord, isAdmin),
-        credit_status: creditStatusOf(usageLogId, creditMap),
-        credits_charged: creditsChargedOf(usageLogId, creditMap, job.id as string, sideCharges),
+        credit_status: runCredits.get(job.id as string)?.status ?? null,
+        ...publicCreditFieldsOf(job.id as string, runCredits),
         ...ownerStateFields(job.id, ownerState),
       }
       if (!attachToCharacterId) return sanitized

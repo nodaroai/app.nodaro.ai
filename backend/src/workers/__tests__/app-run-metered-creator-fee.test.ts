@@ -78,6 +78,14 @@ vi.mock("@/services/workflow-engine/node-executor.js", () => ({
   executeNode: mocks.executeNode,
   loadCompletedFanOutIterations: vi.fn().mockResolvedValue(new Map()),
 }))
+// The run's end settles its nodes' step charges (run-step-charges.ts): nothing unless a test says so.
+const stepSettle = vi.hoisted(() => ({ delta: 0, calls: 0 }))
+vi.mock("@/services/workflow-engine/run-step-charges.js", () => ({
+  settleRunStepCharges: async () => {
+    stepSettle.calls++
+    return stepSettle.delta
+  },
+}))
 vi.mock("@/lib/reconcile/node-states.js", () => ({
   reconcileNodeStatesFromJobs: vi.fn(async (states: unknown) => ({ next: states, changed: false })),
 }))
@@ -126,6 +134,40 @@ describe("an app run's creator fee on metered LLM spend", () => {
     expect(calculateMonetizationMarkup).toHaveBeenCalledWith(27, 0, 20) // = 6 (on a 368 hold it would have been 74)
     expect(monetizationCalls()).toHaveLength(1)
     expect(monetizationCalls()[0]![1]).toMatchObject({ p_base_cost: 27, p_markup_amount: 6, p_percent_fee: 6 })
+  })
+
+  it("a node whose job ran steps (child jobs): the creator fee is on the node's charge with its steps", async () => {
+    // node-executor reports a node's charge with its settled steps included
+    // (`withRunCharges`, llm-metered-dag.test.ts): a Nodaro Motion-like job of
+    // 44 whose steps were charged 1,019 reports 1,063, and the fee follows it.
+    mocks.reported.motion = 1063
+    try {
+      app([{ id: "motion", type: "generate-image" }])
+      await processWorkflowExecution(job())
+      expect(calculateMonetizationMarkup).toHaveBeenCalledWith(1063, 0, 20)
+      expect(monetizationCalls()[0]![1]).toMatchObject({ p_base_cost: 1063 })
+    } finally {
+      delete mocks.reported.motion
+    }
+  })
+
+  it("a step that settled after its node completed reaches the creator fee base (settled at the run's end, before the fee)", async () => {
+    // The node reported its job and the steps settled by then (44 + 165); the
+    // video step (854) committed a moment later and is counted at the run's end.
+    mocks.reported.motion = 209
+    stepSettle.delta = 854
+    stepSettle.calls = 0
+    try {
+      app([{ id: "motion", type: "generate-image" }])
+      await processWorkflowExecution(job())
+      expect(stepSettle.calls).toBe(1)
+      expect(calculateMonetizationMarkup).toHaveBeenCalledWith(1063, 0, 20)
+      expect(monetizationCalls()[0]![1]).toMatchObject({ p_base_cost: 1063 })
+    } finally {
+      delete mocks.reported.motion
+      stepSettle.delta = 0
+      stepSettle.calls = 0
+    }
   })
 
   it("sync llm-chat node in an app run now counts toward totalCredits", async () => {

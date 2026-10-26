@@ -1452,14 +1452,20 @@ function jobRow(id: string, over: Record<string, unknown> = {}) {
   }
 }
 
-function feed(rows: unknown[], fq: unknown[] = [], usage: Array<Record<string, unknown>> = []) {
+function feed(rows: unknown[], fq: unknown[] = [], usage: Array<Record<string, unknown>> = [], steps: Array<{ id: string; parent_job_id: string; usage_log_id: string | null; credits: number | null }> = []) {
   db.respond = (q) => {
     if (q.table === "usage_logs") return { data: usage, error: null }
     if (q.table !== "jobs") return { data: null, error: null }
+    // A run's steps (child jobs by parent_job_id), for its charge.
+    const stepsOf = q.ops.find((op) => op.m === "in" && op.a[0] === "parent_job_id")
+    if (stepsOf) return { data: steps.filter((st) => (stepsOf.a[1] as string[]).includes(st.parent_job_id)), error: null }
     const isFq = q.ops.some((op) => op.m === "in" && op.a[0] === "input_data->>fullQualityOf")
     return { data: isFq ? fq : rows, error: null }
   }
 }
+
+/** The step lookup a run page makes for its charge: the page's job ids. */
+const stepsLookup = (ids: string[]) => ["parent_job_id", ids]
 
 describe("GET /v1/trends/runs", () => {
   it("is not captured by /:slug", async () => {
@@ -1476,6 +1482,8 @@ describe("GET /v1/trends/runs", () => {
     expect(has(q!, "eq", "user_id", USER)).toBe(true)
     expect(has(q!, "filter", "input_data->>type", "eq", "cast-swap")).toBe(true)
     expect(has(q!, "not", "input_data->trend", "is", null)).toBe(true)
+    // A child job (a run's step) is never listed as a run of its own.
+    expect(has(q!, "is", "parent_job_id", null)).toBe(true)
     // A Full Quality version is its own run: never filtered out.
     expect(q!.ops.some((op) => op.a[0] === "input_data->>fullQualityOf")).toBe(false)
     expect(has(q!, "filter", "input_data->trend->>slug", "eq", "neon-dance")).toBe(true)
@@ -1527,6 +1535,8 @@ describe("GET /v1/trends/runs", () => {
       videoUrl: null,
       posterUrl: null,
       creditsCharged: null,
+      creditsHeld: null,
+      creditsReleased: null,
       fullQualityOf: DRAFT_JOB,
       fullQuality: null,
       fullQualityUntil: null,
@@ -1551,6 +1561,8 @@ describe("GET /v1/trends/runs", () => {
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
+      creditsHeld: null,
+      creditsReleased: null,
       fullQualityOf: null,
       // The draft only points at its newest upgrade try; the upgrade's
       // result and charge are on its own run, never copied here.
@@ -1576,6 +1588,8 @@ describe("GET /v1/trends/runs", () => {
     expect(lookups.map((q) => argOf(q, "in"))).toEqual([
       ["input_data->>fullQualityOf", [DRAFT_JOB]],
       ["input_data->>fullQualityOf", [DRAFT_JOB, FAILED_JOB]],
+      // The page's steps, for each run's charge (the caller's own, as above).
+      stepsLookup([FQ_JOB, DRAFT_JOB, HD_JOB, FAILED_JOB]),
     ])
   })
 
@@ -1611,6 +1625,7 @@ describe("GET /v1/trends/runs", () => {
     expect(lookups.map((q) => argOf(q, "in"))).toEqual([
       ["input_data->>fullQualityOf", [KLING_720]],
       ["input_data->>fullQualityOf", [KLING_720]],
+      stepsLookup([FQ_JOB, KLING_720, KLING_1080]),
     ])
   })
 
@@ -1637,8 +1652,37 @@ describe("GET /v1/trends/runs", () => {
     ])
     // No draft on the page: the only lookup is whether the try is its draft's newest.
     const lookups = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in"))
-    expect(lookups.map((q) => argOf(q, "in"))).toEqual([["input_data->>fullQualityOf", [DRAFT_JOB]]])
+    expect(lookups.map((q) => argOf(q, "in"))).toEqual([["input_data->>fullQualityOf", [DRAFT_JOB]], stepsLookup([FQ_JOB])])
     expectNoHidden(res.body)
+  })
+
+  it("a run's charge includes every step it ran (child jobs), and only settled ones", async () => {
+    // The production Nodaro Motion preview of 2026-10-26: Cast Swap 44, two
+    // reference preps at 66, a mask at 33, the video held 3,564 and charged 854.
+    const RUN = HD_JOB
+    feed(
+      [jobRow(RUN, { input_data: runInput({ resolution: "720p", draft: false, preview: true }), credits: 44 })],
+      [],
+      [
+        { id: `ul-${RUN}`, status: "committed", credits_used: 44, credits_charged: 44 },
+        { id: "ul-ref-1", status: "committed", credits_used: 66, credits_charged: 66 },
+        { id: "ul-ref-2", status: "committed", credits_used: 66, credits_charged: 66 },
+        { id: "ul-mask", status: "committed", credits_used: 33, credits_charged: 33 },
+        { id: "ul-video", status: "committed", credits_used: 3564, credits_charged: 854 },
+      ],
+      [
+        { id: "ref-1", parent_job_id: RUN, usage_log_id: "ul-ref-1", credits: 66 },
+        { id: "ref-2", parent_job_id: RUN, usage_log_id: "ul-ref-2", credits: 66 },
+        { id: "mask", parent_job_id: RUN, usage_log_id: "ul-mask", credits: 33 },
+        { id: "video", parent_job_id: RUN, usage_log_id: "ul-video", credits: 3564 },
+      ],
+    )
+    const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([expect.objectContaining({ jobId: RUN, creditsCharged: 1063, creditsHeld: 3773, creditsReleased: 2710 })])
+    const steps = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in" && op.a[0] === "parent_job_id"))
+    expect(steps.length).toBeGreaterThan(0)
+    for (const q of steps) expect(has(q, "eq", "user_id", USER)).toBe(true)
   })
 
   it("whitelists the stamp and each slot: an extra field in them never passes", async () => {
@@ -1842,6 +1886,8 @@ describe("GET /v1/trends/runs/:jobId", () => {
     db.respond = (q) => {
       if (q.table === "usage_logs") return { data: usage, error: null }
       if (q.table !== "jobs") return { data: null, error: null }
+      // The run's steps (child jobs): none here.
+      if (q.ops.some((op) => op.m === "in" && op.a[0] === "parent_job_id")) return { data: [], error: null }
       const isFq = q.ops.some((op) => op.m === "in" && op.a[0] === "input_data->>fullQualityOf")
       return { data: isFq ? fq : row, error: null }
     }
@@ -1883,6 +1929,8 @@ describe("GET /v1/trends/runs/:jobId", () => {
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
+      creditsHeld: null,
+      creditsReleased: null,
       fullQualityOf: null,
       // A pointer only: the upgrade's video is read from its own run.
       fullQuality: { jobId: FQ_JOB, status: "completed" },

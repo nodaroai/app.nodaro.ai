@@ -1459,6 +1459,8 @@ describe("test runs", () => {
     expect(has(q, "in", "user_id", [ADMIN, ADMIN2])).toBe(true)
     expect(has(q, "filter", "input_data->>type", "eq", "cast-swap")).toBe(true)
     expect(has(q, "filter", "input_data->trend->>id", "eq", T1)).toBe(true)
+    // A child job (a run's step) is never listed as a run of its own.
+    expect(has(q, "is", "parent_job_id", null)).toBe(true)
     // A Full Quality version is listed as its own run.
     expect(q.ops.some((op) => op.a[0] === "input_data->>fullQualityOf")).toBe(false)
     expect(has(q, "order", "created_at", { ascending: false })).toBe(true)

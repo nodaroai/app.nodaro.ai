@@ -147,17 +147,28 @@ export interface Job {
    *  `usage_logs.status`. `null` when there is no usage log to report. Never
    *  changes the meaning of `credits` (the reserved amount) below. */
   credit_status?: CreditStatus | null
-  /** The credits HELD when the job was accepted. Never changes — a job can
-   *  settle below it; read {@link Job.credits_charged} for what it cost. */
+  /** The credits the job itself HELD when it was accepted. Never changes — a
+   *  job can settle below it; read {@link Job.credits_charged} for what it cost. */
   credits: number | null
   /**
-   * What the job actually cost once its hold settled. Can be lower than
-   * `credits` (the unused part goes back to the balance), `0` when the hold was
-   * refunded, `null` while the job is still running or when it reserved
-   * nothing of its own. Sum this — not `credits` — to total spend. Returned by
-   * `get()` and `list()`.
+   * What the job actually cost once its hold settled, INCLUDING the steps it
+   * ran: a job that runs other jobs for you (a Nodaro Motion run's reference
+   * preparation, mask and video) is charged for each, and they are not listed
+   * on their own. A step adds its charge once it settles. Can be lower than
+   * {@link Job.credits_held} (the unused part goes back to the balance). `0`
+   * when the run's own hold was refunded, plus any settled steps (a refunded
+   * Nodaro Motion run whose reference and mask steps committed reads
+   * `credit_status: "refunded"` with `credits_charged: 165`). `null` while the
+   * job's own hold is still open (even when some steps have settled), when
+   * nothing in the run was reserved, or when its steps could not be read for a
+   * moment (unknown — never a lower figure). Sum this — not `credits` — to
+   * total spend. Returned by `get()` and `list()`.
    */
   credits_charged?: number | null
+  /** The run's hold: the job's own `credits` plus its steps' holds (equals `credits` for a job with no steps). */
+  credits_held?: number | null
+  /** What went back from `credits_held` once every hold in the run settled; `null` until then. */
+  credits_released?: number | null
   job_type: string | null
   created_at: string
   started_at: string | null
