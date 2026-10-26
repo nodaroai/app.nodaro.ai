@@ -2586,6 +2586,136 @@ html, body {
   --input: color-mix(in oklab, var(--foreground) 55%, transparent);
 }
 
+/*
+ * Inverted colours and strong contrast: the shared header's a11y.css rules
+ * (its 0.6.0 release), mirrored here so the app's own menu does the same
+ * on a build without the header. On a build with it both stylesheets load and
+ * the rules agree. The header's own surfaces (.ns-root, .ns-layer, its pink
+ * buttons and switches) are styled by its stylesheet and are not repeated
+ * here. Like higher contrast, both apply on the workflow canvas too: they
+ * change colour, never layout, so data-a11y-canvas does not exempt them.
+ */
+
+/* Inverted colours: the page's light and dark swap, hues kept. The filter
+   sits on the root on purpose: a filter on any other element would make it
+   the containing block of fixed elements. Photos, video, frames, canvases, an
+   svg marked data-a11y-media and anything marked data-a11y-keep-colour are
+   inverted back (once: not again inside one another). */
+html:root[data-a11y-invert] {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: var(--color-background, var(--background, #fff));
+}
+:root[data-a11y-invert] :is(img, video, canvas, iframe, picture, svg[data-a11y-media], [data-a11y-keep-colour]):not(:is(picture, svg[data-a11y-media], [data-a11y-keep-colour]) *) {
+  filter: invert(1) hue-rotate(180deg);
+}
+/* The top layer (a fullscreen element, a modal <dialog>, an open popover)
+   renders outside the root's filter: its media is not inverted, so it is not
+   inverted back either, or a fullscreen video plays as a negative. */
+:root[data-a11y-invert][data-a11y-invert] :is(:fullscreen, :modal, :popover-open) :is(img, video, canvas, iframe, picture, svg[data-a11y-media], [data-a11y-keep-colour]),
+:root[data-a11y-invert][data-a11y-invert] :is(img, video, canvas, iframe, picture, svg[data-a11y-media], [data-a11y-keep-colour]):is(:fullscreen, :modal, :popover-open) {
+  filter: none;
+}
+
+/* Strong contrast: yellow text on black, cyan links, buttons black on yellow,
+   a white focus ring. Text and border colours are forced everywhere (but on
+   media and data-a11y-keep-colour); backgrounds are not forced on every
+   element, since a black fill would bury the media under every overlay laid
+   over it. The surfaces turn black through the tokens — the shadcn ones, the
+   sidebar's, the canvas's and the home ramp's surfaces, also inside the
+   surfaces that redefine them — and on <body>; fields, dialogs and buttons
+   are filled explicitly. Text and line tokens need no mapping: the colours
+   they set are forced below. */
+html:root[data-a11y-strong][data-a11y-strong],
+html:root[data-a11y-strong][data-a11y-strong] :is(.home-panel, .templates-page) {
+  --background: #000;
+  --foreground: #ffff00;
+  --card: #000;
+  --card-foreground: #ffff00;
+  --popover: #000;
+  --popover-foreground: #ffff00;
+  --muted: #000;
+  --muted-foreground: #ffff00;
+  --secondary: #000;
+  --secondary-foreground: #ffff00;
+  --accent: #000;
+  --accent-foreground: #ffff00;
+  --sidebar: #000;
+  --sidebar-foreground: #ffff00;
+  --sidebar-primary: #ffff00;
+  --sidebar-primary-foreground: #000;
+  --sidebar-accent: #000;
+  --sidebar-accent-foreground: #ffff00;
+  --sidebar-border: #ffff00;
+  --sidebar-ring: #fff;
+  --primary: #ffff00;
+  --primary-foreground: #000;
+  --border: #ffff00;
+  --input: #ffff00;
+  --ring: #fff;
+  --canvas-bg: #000;
+}
+html:root[data-a11y-strong][data-a11y-strong] {
+  --home-bg: #000;
+  --home-panel: #000;
+  --home-card: #000;
+  --home-raised: #000;
+  --home-raised-2: #000;
+  --home-stripe-a: #000;
+  --home-stripe-b: #000;
+}
+:root[data-a11y-strong] body,
+:root[data-a11y-strong] :is(input, textarea, select, dialog):not([type="button"], [type="submit"], [type="reset"], [data-a11y-keep-colour], [data-a11y-keep-colour] *) {
+  background-color: #000 !important;
+}
+:root[data-a11y-strong] :is(body, body *):not(img, video, canvas, iframe, picture, svg, svg *, [data-a11y-keep-colour], [data-a11y-keep-colour] *),
+:root[data-a11y-strong] body *:not(img, video, canvas, iframe, picture, svg, svg *, [data-a11y-keep-colour], [data-a11y-keep-colour] *)::before,
+:root[data-a11y-strong] body *:not(img, video, canvas, iframe, picture, svg, svg *, [data-a11y-keep-colour], [data-a11y-keep-colour] *)::after {
+  color: #ffff00 !important;
+  border-color: #ffff00 !important;
+}
+:root[data-a11y-strong] ::placeholder {
+  color: #ffff00 !important;
+  opacity: 1 !important;
+}
+/* Links, but not a link that is a button (or sits inside one): the button's
+   black on yellow below holds there. [data-ns-primary] is the shared header's
+   pink button, a link at times: its stylesheet paints it, and this rule must
+   not outrank that on a build that loads both. */
+:root[data-a11y-strong] :is(a[href], a[href] *):not(:is(button, [role="button"], [data-ns-primary]), :is(button, [role="button"], [data-ns-primary]) *, [data-a11y-keep-colour], [data-a11y-keep-colour] *) {
+  color: #00ffff !important;
+}
+:root[data-a11y-strong] :is(button, [role="button"], input:is([type="button"], [type="submit"], [type="reset"])):not([data-a11y-keep-colour], [data-a11y-keep-colour] *) {
+  background-color: #ffff00 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+:root[data-a11y-strong] :is(button, [role="button"]) :not(svg, svg *, [data-a11y-keep-colour], [data-a11y-keep-colour] *) {
+  background-color: transparent !important;
+  color: #000 !important;
+}
+/* A control that cannot be used looks it: yellow on black with a dashed
+   yellow edge, not a filled yellow button. */
+:root[data-a11y-strong] :is(button, [role="button"], input:is([type="button"], [type="submit"], [type="reset"])):is(:disabled, [aria-disabled="true"]):not([data-a11y-keep-colour], [data-a11y-keep-colour] *) {
+  background-color: #000 !important;
+  color: #ffff00 !important;
+  border: 2px dashed #ffff00 !important;
+}
+:root[data-a11y-strong] :is(button, [role="button"]):is(:disabled, [aria-disabled="true"]) :not(svg, svg *, [data-a11y-keep-colour], [data-a11y-keep-colour] *) {
+  color: #ffff00 !important;
+}
+/* The app's menu switches (data-a11y-switch): a black track when off, blue
+   when on, so on and off still differ on a yellow row. */
+:root[data-a11y-strong] [data-a11y-switch] {
+  background-color: #000 !important;
+}
+:root[data-a11y-strong] [aria-pressed="true"] > [data-a11y-switch] {
+  background-color: #1d4ed8 !important;
+}
+:root[data-a11y-strong] :focus-visible {
+  outline: 3px solid #fff !important;
+  outline-offset: 2px !important;
+}
+
 /* Text spacing (WCAG 1.4.12 values), outside the canvas. */
 :root[data-a11y-spacing] body :not(.react-flow, .react-flow *) {
   line-height: 1.6 !important;
@@ -2613,16 +2743,20 @@ html, body {
   outline-offset: 3px;
 }
 
+/* Readable font — but not where the face is the content: code and its
+   measured editors, icon fonts, and anything marked data-a11y-keep-font (the
+   shared header's rule). */
 :root[data-a11y-font] body,
-:root[data-a11y-font] body * {
+:root[data-a11y-font] body *:not(code, pre, kbd, samp, [class*="icon"], [data-a11y-keep-font], [data-a11y-keep-font] *) {
   font-family: Arial, "Segoe UI", Helvetica, sans-serif !important;
 }
 
 /* Large cursor: a 40px arrow (black with a white edge) on the page and on
    links and buttons. Text fields, resize handles and the canvas keep their own
-   cursors (an I-beam, a resize or grab arrow), which say what the place does. */
+   cursors (an I-beam, a resize or grab arrow), which say what the place does,
+   and a disabled control keeps its not-allowed (the shared header's rule). */
 :root[data-a11y-cursor] body,
-:root[data-a11y-cursor] :is(a[href], button, [role="button"], summary, label, select) {
+:root[data-a11y-cursor] :is(a[href], button, [role="button"], summary, label, select):not(:disabled, [aria-disabled="true"]) {
   cursor:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'%3E%3Cpath d='M4 2l15 11-6.5 1.2L16 21l-3 1.4-3.4-6.9L4 20z' fill='%23000' stroke='%23fff' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E")
       6 3,

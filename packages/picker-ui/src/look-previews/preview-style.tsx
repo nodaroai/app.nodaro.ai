@@ -37,7 +37,7 @@ export const ILLUSTRATED_LOOK_PICKERS: ReadonlySet<string> = new Set([
 ])
 
 /** Rendered sets with no drawing to fall back to — always shown real. */
-export const RENDER_ONLY_LOOK_PICKERS: ReadonlySet<string> = new Set(["era", "composition-effects"])
+export const RENDER_ONLY_LOOK_PICKERS: ReadonlySet<string> = new Set(["era", "composition-effects", "photographer", "photo-genre", "aesthetic"])
 
 /** Reads a node's saved choice; anything but "illustration" is "real". */
 export function readLookPreviewStyle(data: Readonly<Record<string, unknown>> | undefined): LookPreviewStyle {

@@ -10,6 +10,20 @@ export interface FactoryPreset {
   /** How the group renders: a collapsible "folder" (default) or a flat "section"
    *  label. Taken from the first preset that opens the group. */
   readonly groupKind?: "folder" | "section"
+  /**
+   * A sub-heading inside the group, for a group large enough to need them (the
+   * YouTube tab's topics: "AI & Tech", "Finance & Crypto"; the social tab's
+   * "Instagram feed", "Stories"). Presets sharing a `section` render together
+   * under it, in array order. Absent on a preset filed straight under its group.
+   */
+  readonly section?: string
+  /**
+   * Where the result is meant to be posted ("YouTube", "TikTok", "LinkedIn",
+   * "Print"…), most fitting first, for a preset that makes a deliverable for a
+   * place. A client shows the first as a badge and filters a tab by them.
+   * Absent on a look or a layout, which has no destination of its own.
+   */
+  readonly platforms?: readonly string[]
   /** Capture-shaped config (no label / fieldMappings / runtime keys). */
   readonly data: Readonly<Record<string, unknown>>
   /**

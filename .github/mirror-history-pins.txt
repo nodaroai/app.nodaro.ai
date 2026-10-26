@@ -1,0 +1,15 @@
+# Reviewed exceptions to the history gate (tools/check-history-surface.mjs).
+#
+# The gate reads every commit the mirror is about to publish: the lines it
+# adds, the paths it writes and its message. A finding on a commit that is not
+# merged yet is fixed by rewriting the branch (rebase, amend or reword). A
+# finding on a commit already merged into dev or main cannot be rewritten, so
+# the mirror stays blocked until someone decides the finding may go public and
+# pins it here, one line per finding, exactly as the gate printed it:
+#
+#   <full commit sha> <rule> <file, or :message>   # why it may go public
+#
+# A pin PUBLISHES the content it names. This file is world-readable: a pin
+# names a commit, a rule and a path, never the content. Add pins only on a PR
+# a maintainer reviews, and only after a secret in the pinned commit has been
+# rotated (pinning does not make a leaked secret safe).

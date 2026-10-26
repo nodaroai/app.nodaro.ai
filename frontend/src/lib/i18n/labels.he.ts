@@ -463,6 +463,20 @@ const HANDLE_LABELS_HE: Record<string, string> = {
 }
 
 const PRESET_GROUPS_HE: Record<string, string> = {
+  // Create Image tiles (tools/preset-tiles/ledger.json)
+  "YouTube": "יוטיוב",
+  "Shorts · TikTok": "שורטס · טיקטוק",
+  "Social & Ads": "רשתות ומודעות",
+  "Business": "עסקים",
+  "Life & Events": "חיים ואירועים",
+  "Layout": "פריסה",
+  "Text": "טקסט",
+  "Business & Marketing": "עסקים ושיווק",
+  "Personal Photos": "תמונות אישיות",
+  "Products & Fashion": "מוצרים ואופנה",
+  "Content & Creative": "תוכן ויצירה",
+  "Home & Spaces": "בית וחללים",
+  "Family & Events": "משפחה ואירועים",
   "Accessibility & SEO": "נגישות ו-SEO",
   "Advertising & Hype": "פרסום והייפ",
   "Ambiences (loopable)": "אווירות (ניתנות ללולאה)",
@@ -1217,6 +1231,7 @@ const PICKER_LABELS_HE: Record<string, string> = {
   "Editorial / Fashion": "אדיטוריאל / אופנה",
   "Documentary / Street": "דוקומנטרי / רחוב",
   "Cinematographer": "צלם קולנוע",
+  "Film Director": "במאי קולנוע",
   "Concept / Digital": "קונספט / דיגיטלי",
   "Illustrator / Animator": "מאייר / אנימטור",
   "Documentary / Candid": "דוקומנטרי / ספונטני",

@@ -1386,17 +1386,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Ensure internal planning docs are not committed
-        run: |
-          # Internal design/planning docs live in the private planning
-          # repo, not here. A curated public subset is in docs/design/. This
-          # guard keeps them from being re-added to the public repo.
-          offenders="$(git ls-files 'specs/' 'docs/superpowers/')"
-          if [ -n "$offenders" ]; then
-            echo "::error::Internal planning docs must not be committed to the public repo. Move them to the private planning repo; curated public design notes belong in docs/design/."
-            echo "$offenders"
-            exit 1
-          fi
-          echo "OK: no specs/ or docs/superpowers/ tracked files."
+        # Internal design/planning docs live in the private planning repo, not
+        # here. The same script is the publish path's tree check
+        # (scripts/publish-to-public.sh); the Public Surface job's history step
+        # catches a commit that added one and a later commit that deleted it.
+        run: bash scripts/check-internal-docs.sh
 
   check-ee-imports:
     name: Check EE Imports
@@ -1517,7 +1511,11 @@ jobs:
           # token, not for a finding. Verify the ref instead, so a shallow
           # regression fails visibly rather than scanning a bogus range.
           git rev-parse --verify --quiet "origin/$BASE^{commit}" > /dev/null
-          node tools/check-history-surface.mjs "origin/$BASE..HEAD"
+          # The checks that need no secret and no gitleaks: commit contents,
+          # messages and merge resolutions against the surface categories, and
+          # internal-doc paths. The private lists and the PR title run in
+          # private-marker-check.yml, message secrets in secret-scan.yml.
+          HISTORY_CHECKS=surface,internal-docs node tools/check-history-surface.mjs "origin/$BASE..HEAD"
 
   check-billing-dumps:
     # Provider-billing extracts (backend/scripts/*.mts output: per-task provider

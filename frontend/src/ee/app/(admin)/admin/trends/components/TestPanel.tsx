@@ -12,7 +12,7 @@
 // run and its media after a confirmation (not while it is running).
 
 import { useRef, useState } from "react"
-import { Copy, Eye, Loader2, Play, Sparkles, Trash2, X } from "lucide-react"
+import { Copy, Eye, Link2, Loader2, Maximize2, Play, Sparkles, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -351,6 +351,48 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
   )
 }
 
+/**
+ * A run's video in a fixed-height black frame (a wide clip letterboxes instead
+ * of shrinking to a strip the controls cover), with Fullscreen and Copy link.
+ */
+function RunVideo({ url, posterUrl }: { readonly url: string; readonly posterUrl: string | null }) {
+  const video = useRef<HTMLVideoElement>(null)
+  const fullscreen = () => {
+    const el = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
+    if (!el) return
+    if (el.requestFullscreen) void el.requestFullscreen().catch(() => toast.error("Couldn't open fullscreen"))
+    else el.webkitEnterFullscreen?.()
+  }
+  const copyLink = () =>
+    navigator.clipboard.writeText(url).then(
+      () => toast.success("Link copied"),
+      () => toast.error("Couldn't copy the link"),
+    )
+  return (
+    <div className="flex flex-col gap-1">
+      <video
+        ref={video}
+        src={url}
+        poster={posterUrl ?? undefined}
+        controls
+        playsInline
+        preload="metadata"
+        className="h-52 w-full rounded bg-black object-contain"
+      />
+      <div className="flex gap-1">
+        <Button type="button" variant="outline" size="sm" className="min-h-9 flex-1 px-2 text-xs" onClick={fullscreen}>
+          <Maximize2 className="mr-1 h-4 w-4" />
+          Fullscreen
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="min-h-9 flex-1 px-2 text-xs" onClick={copyLink}>
+          <Link2 className="mr-1 h-4 w-4" />
+          Copy link
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function RunCard({
   run,
   promoting,
@@ -376,9 +418,9 @@ function RunCard({
         : null
   return (
     <li className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row">
-      <div className="w-full shrink-0 sm:w-40">
+      <div className="w-full shrink-0 sm:w-48">
         {run.videoUrl ? (
-          <video src={run.videoUrl} poster={run.posterUrl ?? undefined} controls playsInline preload="metadata" className="max-h-72 w-full rounded bg-black" />
+          <RunVideo url={run.videoUrl} posterUrl={run.posterUrl} />
         ) : (
           <div className="flex h-24 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
             {isTrendRunInFlight(run) ? <Loader2 className="h-4 w-4 animate-spin" /> : "No video"}

@@ -24,7 +24,9 @@
     "test:coverage": "npm -ws --if-present run test:coverage",
     "check:surfaces": "npm -w backend run check:surfaces --",
     "gen:units": "node tools/units/gen.mjs",
-    "gen": "npm run gen:units && npm -w backend run gen:skills",
+    "gen:tiles": "npx --no tsx tools/preset-tiles/build.mts",
+    "gen:tiles:check": "npx --no tsx tools/preset-tiles/build.mts --check",
+    "gen": "npm run gen:units && npm run gen:tiles && npm -w backend run gen:skills",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish"

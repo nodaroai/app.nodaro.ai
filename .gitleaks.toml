@@ -3,6 +3,14 @@
 # placeholders (verified 2026-07-07: no real secret among them). Kept surgical —
 # real secrets in these files would still be caught (patterns, not blanket paths,
 # except the two files whose entire purpose is showing API-usage examples).
+#
+# NEVER pair `paths` with `regexes` in one allowlist. gitleaks 8.30.1 skips every
+# file a global allowlist's `paths` matches, whatever `condition` or `regexes` say,
+# so "this literal in this file" becomes "nothing in this file". A `.*\.md$` +
+# `Authorization:` entry here once hid every secret in every markdown file.
+# Pin a known historical finding by fingerprint in .gitleaksignore instead, or
+# mark the line `gitleaks:allow`. tools/gitleaks-canary.sh (run by secret-scan)
+# fails when a secret planted in a markdown file or a test file goes unflagged.
 [extend]
 useDefault = true
 
@@ -15,25 +23,11 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Literal idempotency-header fixture in the Pro route tests, not an authentication credential"
-matchCondition = "AND"
-paths = ['''backend/src/routes/__tests__/pro-3d-render\.test\.ts$''']
-regexes = ['''KEY = "idem-key-abcdef0123"''']
-regexTarget = "match"
-
-[[allowlists]]
 description = "Files that exist to SHOW API-usage examples / test model-id matrices — no real secrets"
 paths = [
   '''frontend/src/app/\(dashboard\)/settings/api/page\.tsx''',  # renders curl examples for the user's own API token
   '''backend/scripts/kie-test-matrix\.ts''',                    # modelKey = model identifier strings (test data)
 ]
-
-[[allowlists]]
-description = "curl 'Authorization:' examples inside markdown docs (CLAUDE.md, API docs) — templates, not secrets"
-matchCondition = "AND"
-paths = ['''.*\.md$''']
-regexes = ['''Authorization:''']
-regexTarget = "match"
 
 [[allowlists]]
 description = """Community self-host DEFAULT Supabase keys — deliberately public. These are the
@@ -47,15 +41,3 @@ regexes = [
   '''Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo''',
   '''1S--a7iJ0v6nNEKWYcqAfE3-xI0iZ30ypsFs_xrLLbA''',
 ]
-
-[[allowlists]]
-description = """The billing-admin page tests' FAKE integration-key bearer: the literal
-'ndr_bill_' + the hex alphabet spelled out four times. It is not a minted key (real ones
-are 256 random bits and never appear in the tree); two commits on the branch that added the
-credential carry it as a mint-response fixture, and the fixtures since use a zero-entropy
-stand-in. Pinned to the exact literal and the two test files so any other ndr_bill_ string
-still trips the gate."""
-matchCondition = "AND"
-paths = ['''frontend/src/ee/app/billing-admin/__tests__/.*\.test\.tsx$''']
-regexes = ['''ndr_bill_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd''']
-regexTarget = "match"

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import {
   applyPreferences,
+  CONTRAST_MODES,
   DEFAULT_PREFERENCES,
   HIDE_KEY,
   hiddenUntilAfter,
@@ -10,6 +11,7 @@ import {
   loadPreferences,
   parsePreferences,
   savePreferences,
+  setToggle,
   STORAGE_KEY,
   TOGGLE_KEYS,
 } from "../accessibility-preferences"
@@ -44,7 +46,7 @@ describe("accessibility preferences", () => {
     const everything = Object.fromEntries(TOGGLE_KEYS.map((k) => [k, true]))
     applyPreferences({ ...all, ...everything }, root)
     expect(root.getAttribute("data-a11y-text")).toBe("1")
-    for (const attr of ["contrast", "spacing", "links", "headings", "font", "cursor", "motion"]) {
+    for (const attr of ["contrast", "invert", "strong", "spacing", "links", "headings", "font", "cursor", "motion"]) {
       expect(root.hasAttribute(`data-a11y-${attr}`)).toBe(true)
     }
     applyPreferences(DEFAULT_PREFERENCES, root)
@@ -60,6 +62,20 @@ describe("accessibility preferences", () => {
     expect(loadHiddenUntil(now.getTime())).toBe(until)
     expect(loadHiddenUntil(until + 1)).toBeNull()
     expect(window.localStorage.getItem(HIDE_KEY)).toBeNull()
+  })
+
+  it("keeps one contrast choice at a time", () => {
+    const on = setToggle(DEFAULT_PREFERENCES, "contrast", true)
+    expect(setToggle(on, "strong", true)).toEqual({ ...DEFAULT_PREFERENCES, strong: true })
+    expect(setToggle(on, "invert", true)).toEqual({ ...DEFAULT_PREFERENCES, invert: true })
+    // Turning one off, or another kind of choice on, leaves the rest alone.
+    expect(setToggle(on, "contrast", false)).toEqual(DEFAULT_PREFERENCES)
+    expect(setToggle(on, "links", true)).toEqual({ ...DEFAULT_PREFERENCES, contrast: true, links: true })
+    expect(CONTRAST_MODES).toEqual(["contrast", "invert", "strong"])
+  })
+
+  it("reads one contrast choice from a storage that holds several (the first)", () => {
+    expect(parsePreferences(JSON.stringify({ invert: true, strong: true }))).toEqual({ ...DEFAULT_PREFERENCES, invert: true })
   })
 
   it("knows the defaults", () => {

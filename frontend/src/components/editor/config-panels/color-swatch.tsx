@@ -25,6 +25,8 @@ export function ColorSwatch({
         className,
       )}
       style={{ background: bg }}
+      // The colour is the content: inverted colours and strong contrast leave it alone.
+      data-a11y-keep-colour=""
     />
   )
 }

@@ -449,6 +449,20 @@ const HANDLE_LABELS_JA: Record<string, string> = {
 }
 
 const PRESET_GROUPS_JA: Record<string, string> = {
+  // Create Image tiles (tools/preset-tiles/ledger.json)
+  "YouTube": "YouTube",
+  "Shorts · TikTok": "ショート · TikTok",
+  "Social & Ads": "SNS と広告",
+  "Business": "ビジネス",
+  "Life & Events": "暮らしとイベント",
+  "Layout": "レイアウト",
+  "Text": "テキスト",
+  "Business & Marketing": "ビジネスとマーケティング",
+  "Personal Photos": "パーソナル写真",
+  "Products & Fashion": "プロダクトとファッション",
+  "Content & Creative": "コンテンツとクリエイティブ",
+  "Home & Spaces": "住まいと空間",
+  "Family & Events": "家族とイベント",
   "Accessibility & SEO": "アクセシビリティと SEO",
   "Advertising & Hype": "広告とハイテンション",
   "Ambiences (loopable)": "環境音（ループ可能）",
@@ -1196,6 +1210,7 @@ const PICKER_LABELS_JA: Record<string, string> = {
   "Editorial / Fashion": "エディトリアル／ファッション",
   "Documentary / Street": "ドキュメンタリー／ストリート",
   "Cinematographer": "撮影監督",
+  "Film Director": "映画監督",
   "Concept / Digital": "コンセプト／デジタル",
   "Illustrator / Animator": "イラストレーター／アニメーター",
   "Documentary / Candid": "ドキュメンタリー／スナップ",

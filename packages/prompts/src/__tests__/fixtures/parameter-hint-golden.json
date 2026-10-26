@@ -2281,30 +2281,30 @@
       "expected": "shot on location, shot as a high-fashion magazine editorial, polished studio lighting, deliberate posing, designer wardrobe, full-bleed composition with strong color blocking and a glossy print-ready finish, no text overlays"
     },
     {
-      "key": "photographer/id:guido-van-helten",
+      "key": "photographer/id:ruan-jia",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "photographer",
         "data": {
-          "photographer": "guido-van-helten"
+          "photographer": "ruan-jia"
         }
       },
       "ctx": null,
-      "expected": "in the style of Guido van Helten, monumental muralist portraiture with weathered concrete texture and quiet grayscale tonality"
+      "expected": "in the style of Ruan Jia, lush painterly fantasy portraiture with rich fabrics, gilded accents and warm directional light"
     },
     {
-      "key": "photographer/id:henri-cartier-bresson",
+      "key": "photographer/id:sofia-coppola",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "photographer",
         "data": {
-          "photographer": "henri-cartier-bresson"
+          "photographer": "sofia-coppola"
         }
       },
       "ctx": null,
-      "expected": "in the style of Henri Cartier-Bresson, decisive-moment black-and-white street photography with geometric framing and natural light"
+      "expected": "in the style of Sofia Coppola, soft hazy pastel light, dreamy feminine melancholy, shallow focus, gentle film grain, a lonely contemplative mood, muted pinks and creams and quiet intimacy"
     },
     {
       "key": "photographer/id:tim-walker",

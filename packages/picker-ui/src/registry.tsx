@@ -98,9 +98,12 @@ import {
   VOICE_PACES,
   VOICE_EMOTIONS,
   VOICE_ARCHETYPES,
+  getAestheticLabel,
   getCompositionEffectLabel,
   getEraLabel,
-  getHeldPropLabel
+  getHeldPropLabel,
+  getPhotoGenreLabel,
+  getPhotographerLabel
 } from "@nodaro/prompts/pickers"
 import { PEOPLE, PERSON_DIMENSION_ORDER, PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER, FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "@nodaro/shared/catalogs"
@@ -310,6 +313,8 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "tim-walker",
     catalogId: "photographer",
     entries: mapCat(PHOTOGRAPHERS, "category"),
+    // One rendered scene per creator (Cloud); without a registered render the card keeps its text.
+    renderIcon: (id) => renderArtOrNull("photographer", id, getPhotographerLabel(id)),
     groupOrder: PHOTOGRAPHER_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: PHOTOGRAPHER_CATEGORY_LABELS,
   },
@@ -321,6 +326,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "y2k",
     catalogId: "aesthetic",
     entries: mapCat(AESTHETICS, "category"),
+    renderIcon: (id) => renderArtOrNull("aesthetic", id, getAestheticLabel(id)),
     groupOrder: AESTHETIC_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: AESTHETIC_CATEGORY_LABELS,
   },
@@ -345,6 +351,7 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "fashion-editorial",
     catalogId: "photo-genre",
     entries: mapCat(PHOTO_GENRES, "category"),
+    renderIcon: (id) => renderArtOrNull("photo-genre", id, getPhotoGenreLabel(id)),
     groupOrder: PHOTO_GENRE_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: PHOTO_GENRE_CATEGORY_LABELS,
   },

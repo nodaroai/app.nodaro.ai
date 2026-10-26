@@ -5,8 +5,13 @@
 # from a clean clone) and the nightly mirror-to-public.yml workflow.
 #   usage: scripts/publish-to-public.sh <main|dev>
 # env:
-#   PUBLIC_REMOTE     push target (default: SSH). CI passes an HTTPS+token URL.
+#   PUBLIC_REMOTE     push target (default: SSH). CI passes an HTTPS URL; its
+#                     credential is the nodaro-mirror App's token, the only
+#                     identity public main/dev accept updates from (ruleset).
 #   MIRROR_DRY_RUN=1  run the gate + show the delta, but DO NOT push (gate-only).
+# exit codes: 0 published (or nothing to do), 3 public/$BRANCH has diverged
+#   (carries a commit internal lacks, so it cannot fast-forward), anything else
+#   a gate or push failure.
 set -euo pipefail
 BRANCH="${1:?usage: publish-to-public.sh <main|dev>}"
 FLOOR="15fc0318f6e853b989409e0382909c76187d17a4"   # clean-generation genesis
@@ -23,6 +28,9 @@ PUBLIC_REMOTE="${PUBLIC_REMOTE:-git@github.com:nodaroai/app.nodaro.ai.git}"
 # own file, and a gate missing there would abort the publish for the wrong
 # reason. Same source as when the gate was written inline here.
 MARKER_GATE_SRC="$(cat "$(dirname "${BASH_SOURCE[0]}")/check-private-markers.sh")"
+# Same reason, same treatment: the internal-docs tree gate, shared with
+# ci.yml's "No Internal Specs In Repo".
+INTERNAL_DOCS_GATE_SRC="$(cat "$(dirname "${BASH_SOURCE[0]}")/check-internal-docs.sh")"
 
 git fetch origin "$BRANCH"
 git checkout -B "$BRANCH" "origin/$BRANCH"
@@ -46,6 +54,7 @@ else
 fi
 
 bash -c "$MARKER_GATE_SRC" check-private-markers.sh   # scripts/check-private-markers.sh
+bash -c "$INTERNAL_DOCS_GATE_SRC" check-internal-docs.sh   # scripts/check-internal-docs.sh
 
 echo "== ancestry guard (never publish pre-recreate / dirty history) =="
 git merge-base --is-ancestor "$FLOOR" "$BRANCH" \
@@ -91,10 +100,17 @@ echo "== history gate (never-public content added by the commits about to be pub
 # The other leak gates read the tracked TREE. This push carries HISTORY: a line
 # one commit added and a later commit scrubbed is world-readable forever through
 # `git log -p` on the public remote, with every tree gate green — and public
-# history can never be re-scrubbed. Scope is exactly the commits that have NOT
-# been published yet, which is also exactly the set that can still be rewritten
-# (public/$BRANCH stays an ancestor, so the push still fast-forwards). Anything
-# older is already out and re-flagging it would deadlock the mirror.
+# history can never be re-scrubbed. So every unpublished commit is read whole:
+# the lines it adds (a merge: what its conflict resolution wrote), the paths it
+# writes, and its message, against the surface categories, the internal-docs
+# directories, the private marker and symbol lists, and gitleaks (whose
+# `detect` above reads diffs, never messages). The lists are hard-required by
+# the same variables as their tree gates; gitleaks is required here.
+# A finding on an already-merged commit cannot be rebased away: pin it in
+# .github/mirror-history-pins.txt on a reviewed PR to publish it anyway.
+# Scope is exactly the commits that have NOT been published yet (public/$BRANCH
+# stays an ancestor, so the push still fast-forwards). Anything older is
+# already out, and re-flagging it would deadlock the mirror.
 # "Already published" is the union of BOTH public heads, not just this branch's:
 # after a dev->main promotion, main..public/main is full of commits the world
 # already read on public/dev, and re-flagging those would abort the mirror over
@@ -108,9 +124,22 @@ for PB in main dev; do
 done
 if [ -n "$NOT_PUBLISHED" ]; then
   # shellcheck disable=SC2086  # SHAs, deliberately word-split into rev-list args
-  node tools/check-history-surface.mjs "$BRANCH" --not $NOT_PUBLISHED
+  HISTORY_REQUIRE_GITLEAKS=1 node tools/check-history-surface.mjs "$BRANCH" --not $NOT_PUBLISHED
 else
   echo "(no public head readable — history gate skipped; the tree gates still ran)"
+fi
+
+echo "== fast-forward check (public/$BRANCH must be an ancestor of internal/$BRANCH) =="
+# Something landed on public/$BRANCH that internal lacks (2026-10-25: a public
+# "Version Packages" PR was merged). The push cannot fast-forward, and pushing
+# anyway would rewrite public history, so stop with the distinct code 3: the
+# workflow reports the outage without failing the run, and the cure is to adopt
+# that commit into internal (merge public/$BRANCH into dev on a PR).
+if [ -n "${PUB:-}" ] && git cat-file -e "${PUB}^{commit}" 2>/dev/null \
+  && ! git merge-base --is-ancestor "$PUB" "$BRANCH"; then
+  echo "DIVERGED: public/$BRANCH ($PUB) is not an ancestor of internal/$BRANCH. Commits only on public:"
+  git log --oneline "$BRANCH..$PUB" | head -20 || true
+  exit 3
 fi
 
 if [ "${MIRROR_DRY_RUN:-0}" = "1" ]; then

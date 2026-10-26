@@ -449,6 +449,20 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
 }
 
 const PRESET_GROUPS_PT_BR: Record<string, string> = {
+  // Create Image tiles (tools/preset-tiles/ledger.json)
+  "YouTube": "YouTube",
+  "Shorts · TikTok": "Shorts · TikTok",
+  "Social & Ads": "Redes sociais e anúncios",
+  "Business": "Negócios",
+  "Life & Events": "Vida e eventos",
+  "Layout": "Layout",
+  "Text": "Texto",
+  "Business & Marketing": "Negócios e marketing",
+  "Personal Photos": "Fotos pessoais",
+  "Products & Fashion": "Produtos e moda",
+  "Content & Creative": "Conteúdo e criação",
+  "Home & Spaces": "Casa e espaços",
+  "Family & Events": "Família e eventos",
   "Accessibility & SEO": "Acessibilidade e SEO",
   "Advertising & Hype": "Publicidade e empolgação",
   "Ambiences (loopable)": "Ambiências (em loop)",
@@ -1196,6 +1210,7 @@ const PICKER_LABELS_PT_BR: Record<string, string> = {
   "Editorial / Fashion": "Editorial / moda",
   "Documentary / Street": "Documental / rua",
   "Cinematographer": "Diretor de fotografia",
+  "Film Director": "Diretor de cinema",
   "Concept / Digital": "Conceitual / digital",
   "Illustrator / Animator": "Ilustrador / animador",
   "Documentary / Candid": "Documental / espontâneo",

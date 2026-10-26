@@ -40,3 +40,17 @@ dc25afa28adcf22735f01b16e8bc9fad4fd5a9da:backend/src/providers/elevenlabs/__test
 # type name, not a credential. This pins the PR-branch commit that introduced it; the line now
 # also carries an inline `gitleaks:allow`, which is content-keyed and survives the squash merge.
 dc3d4b181caf83977d1d90220c64d3b6aada8286:backend/scripts/gen-skills.ts:linkedin-client-id:183
+
+# Findings that three `paths` + `regexes` allowlists in .gitleaks.toml used to hide, pinned here
+# when those allowlists were removed (they skipped whole files, see that file's header):
+# - CLAUDE.md, three early-2026 commits: a curl example's `Authorization: Bearer` value is a
+#   short `xxx` placeholder against the product's old API host, not a credential.
+# - pro-3d-render.test.ts: the literal idempotency-header fixture `idem-key-abcdef0123`.
+# - billing-admin tests: the fake integration-key bearer, `ndr_bill_` + the hex alphabet spelled
+#   out four times, never a minted key (real ones are 256 random bits and never in the tree).
+7d8c11f7b845512f21b17724bc7e9d7e2907c146:CLAUDE.md:curl-auth-header:2799
+95fc4af89e7b775759fcb4ae94d5c68240899570:CLAUDE.md:curl-auth-header:4464
+8e4e4615bd25c7518c9cf10f667799d37f075f9b:CLAUDE.md:curl-auth-header:4536
+5a907037b8b6a30f7e8db3f34c2edcde0ac96c3b:backend/src/routes/__tests__/pro-3d-render.test.ts:generic-api-key:65
+ffd6dc89479c59b6ab90ec2eadb945a14d34f2a6:frontend/src/ee/app/billing-admin/__tests__/deployment-billing-wire.test.tsx:generic-api-key:110
+2a279ad2c4a707c360b8e4af88afd7ab2a3b6415:frontend/src/ee/app/billing-admin/__tests__/integrations-block.test.tsx:generic-api-key:54

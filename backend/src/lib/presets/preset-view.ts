@@ -34,6 +34,10 @@ export interface CatalogEntry {
   readonly group?: string
   /** "folder" / "section" for node presets; an app namespace may name its own. */
   readonly groupKind?: string
+  /** A sub-heading inside the group (a YouTube topic, "Instagram feed"); see `FactoryPreset`. */
+  readonly section?: string
+  /** Where the result is meant to be posted, most fitting first; see `FactoryPreset`. */
+  readonly platforms?: readonly string[]
   readonly data: Readonly<Record<string, unknown>>
   readonly minReferences?: number
 }
@@ -46,6 +50,8 @@ export function factoryPresetView(nodeType: string, preset: CatalogEntry) {
     description: preset.description,
     group: preset.group,
     groupKind: preset.groupKind,
+    ...(preset.section ? { section: preset.section } : {}),
+    ...(preset.platforms && preset.platforms.length > 0 ? { platforms: preset.platforms } : {}),
     data: preset.data,
     ...referenceFields(nodeType, preset.data, preset.minReferences),
     previewUrl: factoryPresetPreviewUrl(preset.id, appBaseUrl()),

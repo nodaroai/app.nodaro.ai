@@ -1,10 +1,13 @@
 import type { NodaroClientCore } from "../core.js"
 import type { Job } from "./jobs.js"
 
-/** The session a removed item was removed from. */
+/** The session a removed item was removed from — restore it there with
+ *  `client.sessions.restoreItem(session.id, job.id)`. */
 export interface TrashSession {
   id: string
+  /** `null` = untitled; a UI may fall back to the first prompt. */
   title: string | null
+  /** The session's project, or `null` when it has none. */
   projectId: string | null
 }
 

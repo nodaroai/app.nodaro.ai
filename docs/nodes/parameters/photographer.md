@@ -1,6 +1,6 @@
 # Photographer / Artist
 
-> Pick from a 67-entry catalog of photographers, directors, illustrators, painters, and visual artists. Emits a "style of X" prompt fragment.
+> Pick from a 93-entry catalog of photographers, cinematographers, film directors, illustrators and visual artists, each with an example picture. Emits a "style of X" prompt fragment.
 
 ## Overview
 
@@ -15,15 +15,20 @@ The Photographer / Artist parameter node grounds the visual style of a generatio
 | Post Text    | text   | empty          | Free-form text appended to the composed hint.                                            |
 | Hint mode      | select   | `full`           | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
-## Catalog (67 entries across 5 categories)
+## Catalog (93 entries across 6 categories)
 
 | Category | Examples |
 |---|---|
-| **Photographers** | Tim Walker, Annie Leibovitz, Henri Cartier-Bresson, Steve McCurry |
-| **Cinematographers** | Roger Deakins, Emmanuel Lubezki, Christopher Doyle, Vittorio Storaro |
-| **Illustrators** | Greg Rutkowski, Moebius, Norman Rockwell, Jean Giraud |
-| **Painters** | Caravaggio, Vermeer, Hopper, Klimt |
-| **Studios** | Studio Ghibli, Pixar, Disney, Aardman |
+| **Editorial / Fashion** | Tim Walker, Annie Leibovitz, Paolo Roversi, Helmut Newton |
+| **Documentary / Street** | Henri Cartier-Bresson, Vivian Maier, Saul Leiter, Robert Capa |
+| **Cinematographer** | Roger Deakins, Emmanuel Lubezki, Hoyte van Hoytema, Gordon Willis, Vittorio Storaro, Darius Khondji |
+| **Film Director** | Wes Anderson, Wong Kar-wai, Christopher Nolan, Denis Villeneuve, Stanley Kubrick, David Fincher, Hayao Miyazaki, Sofia Coppola |
+| **Concept / Digital** | Greg Rutkowski, WLOP, Ruan Jia, Ismail Inceoglu |
+| **Illustrator / Animator** | Studio Ghibli, Alphonse Mucha, Makoto Shinkai, Charlie Bowater |
+
+Every entry shows an example picture: the same scene (a woman in a red coat on a small-town
+train platform at dusk, for the cinematographers and directors; a portrait in a plain white shirt
+for the others) rendered in that creator's signature, so two entries compare side by side.
 
 ## Inputs & Outputs
 

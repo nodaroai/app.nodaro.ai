@@ -13,6 +13,8 @@ const shared = vi.hoisted(() => {
   const none = {
     textScale: 0 as 0 | 1 | 2,
     contrast: false,
+    invert: false,
+    strong: false,
     spacing: false,
     links: false,
     headings: false,
@@ -80,6 +82,16 @@ describe("the choices on a shared-header build", () => {
 
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify({ contrast: true }))
     expect(window.localStorage.getItem(HIDE_KEY)).toBeNull()
+  })
+
+  it("keep the header's button place and a newer product's letters and fields when this menu saves", () => {
+    const kept = { position: { x: 40, y: 60 }, unknownLetters: "z", extraFields: ["n1"] } as const
+    shared.set({ prefs: shared.none, hiddenUntil: null, ...kept })
+
+    savePreferences({ ...shared.none, strong: true })
+    expect(shared.state).toEqual({ prefs: { ...shared.none, strong: true }, hiddenUntil: null, ...kept })
+    saveHiddenUntil(FUTURE)
+    expect(shared.state).toEqual({ prefs: { ...shared.none, strong: true }, hiddenUntil: FUTURE, ...kept })
   })
 
   it("apply before the first paint through the header's own call, and only that", () => {

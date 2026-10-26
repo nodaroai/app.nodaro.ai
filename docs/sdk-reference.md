@@ -7056,6 +7056,10 @@ carries:
   one; run such a preset with that many reference images attached.
 - `previewUrl` — an example picture (an absolute URL on the server you asked),
   or `null`. On your own presets, the image you stored with it.
+- On a factory entry, `section` (a sub-heading inside its `group`, such as a
+  YouTube topic) and `platforms` (where the result is meant to be posted, most
+  fitting first) — present only on a preset that has them, so a client groups
+  and filters by them only then.
 
 Servers that predate these fields leave them out, so they are optional in the
 types.

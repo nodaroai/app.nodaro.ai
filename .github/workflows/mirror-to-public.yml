@@ -56,9 +56,27 @@ jobs:
           done
           tar -xzf gitleaks.tar.gz gitleaks
           sudo mv gitleaks /usr/local/bin/gitleaks
+      # The nodaro-mirror GitHub App, installed on the public repo only, is the
+      # one identity public main and dev accept updates from (repository
+      # ruleset), so neither a person nor a PR merge can put a commit there that
+      # internal lacks. Until its client id is configured, the push uses the token.
+      - name: mint the nodaro-mirror App token
+        id: app-token
+        if: vars.PUBLIC_MIRROR_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.PUBLIC_MIRROR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PUBLIC_MIRROR_APP_KEY }}
+          owner: nodaroai
+          repositories: app.nodaro.ai
+          permission-contents: write
+          # The mirror carries .github/workflows/* changes, and GitHub refuses an
+          # App push that touches a workflow file without this permission.
+          permission-workflows: write
       - name: gate + mirror main and dev
+        id: mirror
         env:
-          TOK: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+          TOK: ${{ steps.app-token.outputs.token || secrets.PUBLIC_MIRROR_TOKEN }}
           GH_TOK: ${{ github.token }}
           # Private-marker gate input (see publish-to-public.sh): newline-separated
           # strings that must never publish. The nightly path HARD-REQUIRES the list
@@ -96,24 +114,43 @@ jobs:
             export MIRROR_DRY_RUN=1
             export PUBLIC_REMOTE="https://github.com/nodaroai/app.nodaro.ai.git"
           fi
-          bash scripts/publish-to-public.sh main
-          bash scripts/publish-to-public.sh dev
+          # A diverged public branch (exit 3) is reported, not failed: this run
+          # is a check on main, and a red one makes Railway skip the production
+          # deploy, which is not the public repo's call to make (decided
+          # 2026-10-25). A gate failure (any other code) still fails the run.
+          DIVERGED=""
+          for BR in main dev; do
+            rc=0
+            bash scripts/publish-to-public.sh "$BR" || rc=$?
+            if [ "$rc" = 3 ]; then
+              DIVERGED="$DIVERGED $BR"
+              echo "::warning::public/$BR has diverged from internal/$BR and was not mirrored; adopt the public commit(s) into internal (merge public/$BR into dev on a PR)."
+            elif [ "$rc" != 0 ]; then
+              exit "$rc"
+            fi
+          done
+          echo "diverged=${DIVERGED# }" >> "$GITHUB_OUTPUT"
       # The Jul 11-13 outage: three consecutive nightly failures, zero alerts,
       # while blocked commits were hand-pushed around the gate. One open issue
       # per outage (deduped by label), a comment per subsequent failure.
       - name: alert on failure (auto-issue)
-        if: failure()
+        if: failure() || steps.mirror.outputs.diverged != ''
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DIVERGED: ${{ steps.mirror.outputs.diverged }}
         run: |
           set -euo pipefail
+          WHY="The gated mirror failed"
+          if [ -n "$DIVERGED" ]; then
+            WHY="The gated mirror could not fast-forward public ${DIVERGED}: it carries commit(s) internal lacks. Adopt them into internal (merge the public branch into dev on a PR, with a merge commit)"
+          fi
           gh label create mirror-failure --repo "$GITHUB_REPOSITORY" --color B60205 --description "mirror-to-public run failed" --force 2>/dev/null || true
           OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" --label mirror-failure --state open --json number --jq '.[0].number // empty')
           if [ -n "$OPEN" ]; then
-            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "mirror-to-public failed again: $RUN_URL"
+            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "Again: ${WHY}. $RUN_URL"
           else
-            BODY=$(printf 'The nightly gated mirror failed: %s\n\nUntil this is green, nothing reaches the public repo (and npm publishes stay stuck behind it). Check the run log for the gate that tripped (identity / leaks / secrets / ancestry). Close this issue when a run succeeds.' "$RUN_URL")
+            BODY=$(printf '%s: %s\n\nUntil this is green, nothing reaches the public repo (and npm publishes stay stuck behind it). Check the run log for the gate that tripped (identity / leaks / secrets / ancestry). Close this issue when a run succeeds.' "$WHY" "$RUN_URL")
             gh issue create --repo "$GITHUB_REPOSITORY" --label mirror-failure \
               --title "mirror-to-public is failing — public mirror is falling behind" \
               --body "$BODY"
