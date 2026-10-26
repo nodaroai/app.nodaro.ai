@@ -17,6 +17,7 @@ import { useT } from "@/lib/i18n"
 import { useDocumentTitle } from "@/components/layout/page-title"
 import { formatNumber } from "@/lib/i18n/format"
 import { isBlockedSignIn } from "@/lib/sign-in-error"
+import { ssoEntryPath } from "@/lib/sibling-origin"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -213,7 +214,7 @@ export default function LoginPage() {
     try {
       if (p.kind === "assertion") {
         // The backend route 302s to the IdP; a full navigation (not fetch).
-        window.location.assign(`/v1/sso/${encodeURIComponent(p.id)}`)
+        window.location.assign(ssoEntryPath(p.id))
         return
       }
       // Supabase-native OIDC/SAML: let the client redirect to the IdP and land

@@ -12,7 +12,11 @@ import { resolveSsoUser } from "../lib/sso-linking.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
 
 const ParamsSchema = z.object({ provider: z.string() })
-const QuerySchema = z.object({ assertion: z.string().optional(), next: z.string().optional() })
+const QuerySchema = z.object({
+  assertion: z.string().optional(),
+  next: z.string().optional(),
+  via: z.string().max(512).optional(),
+})
 
 /** Same-origin relative path only (§5.6 rule 5 — open-redirect guard). Mirrors
  *  the frontend consumeRedirect / auth-callback guard. */
@@ -35,6 +39,43 @@ function initiateUrlFor(provider: SsoProviderConfig, host: string | null): strin
   const byHost = provider.initiateUrlByHost
   if (host && byHost && Object.prototype.hasOwnProperty.call(byHost, host)) return byHost[host]
   return provider.initiateUrl
+}
+
+/**
+ * The IdP bounce re-pointed at the site the user originally came from.
+ *
+ * One IdP can sit behind several sites of the same family — a community's own
+ * subdomain (`gur.example.com`) beside the shared `example.com` — each with its
+ * own login session. The browser remembers which one the user arrived from and
+ * passes it as `via`; sending re-login to that site instead of the shared
+ * default keeps the user in the session they already have.
+ *
+ * `via` is a hint from the browser, so it can only NARROW within the host the
+ * config already names: an https origin (no port, no credentials, no path)
+ * whose host is the configured initiate host or a subdomain of it, and never
+ * this studio's own host. Only the origin changes — the configured path is kept.
+ * Anything else falls back to the configured URL rather than refusing, because
+ * a stale or odd hint must never stop someone signing in.
+ */
+function initiateUrlVia(initiate: string, via: string | undefined, requestHost: string | null): string {
+  if (!via) return initiate
+  let base: URL
+  let hint: URL
+  try {
+    base = new URL(initiate)
+    hint = new URL(via)
+  } catch {
+    return initiate
+  }
+  if (base.protocol !== "https:" || hint.protocol !== "https:") return initiate
+  if (hint.port || hint.username || hint.password || hint.search || hint.hash) return initiate
+  if (hint.pathname !== "/") return initiate
+  const host = hint.hostname
+  if (host === requestHost) return initiate
+  if (host !== base.hostname && !host.endsWith(`.${base.hostname}`)) return initiate
+  const target = new URL(base)
+  target.hostname = host
+  return target.toString()
 }
 
 // Unauthenticated crypto + DB + Redis route ⇒ per-IP rate limit (the shared
@@ -98,7 +139,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
     const query = QuerySchema.safeParse(req.query)
     if (!query.success) return reply.status(400).send({ error: { code: "invalid_request" } })
-    const { assertion, next } = query.data
+    const { assertion, next, via } = query.data
 
     // Supabase-native providers are handled client-side (signInWithSSO /
     // signInWithOAuth) — the assertion exchange is only for bespoke issuers.
@@ -109,10 +150,12 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // No assertion ⇒ this is the login-button entry point: bounce to the IdP
-    // this request's host belongs to (initiateUrl for every unmapped host).
+    // this request's host belongs to (initiateUrl for every unmapped host),
+    // on the site the user came from when the browser knows it.
     if (!assertion) {
-      const initiate = initiateUrlFor(provider, requestHostname(req))
-      if (initiate) return reply.redirect(initiate)
+      const host = requestHostname(req)
+      const initiate = initiateUrlFor(provider, host)
+      if (initiate) return reply.redirect(initiateUrlVia(initiate, via, host))
       return reply.status(400).send({ error: { code: "no_assertion" } })
     }
 
