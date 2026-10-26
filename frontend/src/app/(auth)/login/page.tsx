@@ -12,6 +12,7 @@ import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
+import { ssoEntryPath } from "@/lib/sibling-origin"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -196,7 +197,7 @@ export default function LoginPage() {
     try {
       if (p.kind === "assertion") {
         // The backend route 302s to the IdP; a full navigation (not fetch).
-        window.location.assign(`/v1/sso/${encodeURIComponent(p.id)}`)
+        window.location.assign(ssoEntryPath(p.id))
         return
       }
       // Supabase-native OIDC/SAML: let the client redirect to the IdP and land

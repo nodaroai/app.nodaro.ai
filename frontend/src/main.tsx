@@ -9,6 +9,11 @@ import "@/lib/i18n-bootstrap"
 // through subscribeCatalogPacks the moment the registration lands). Safety
 // never depended on this — the server refuses foreign ids on every run lane.
 import { bootstrapCatalogs } from "@/lib/catalog-bootstrap"
+// Which sibling site (e.g. a community's chat) the user arrived from — read
+// from the referrer before anything navigates. See lib/sibling-origin.ts.
+import { rememberSiblingOrigin } from "@/lib/sibling-origin"
+
+rememberSiblingOrigin()
 
 // Auto-reload on stale chunks after deployment.
 // Vite fires this when any preloaded JS/CSS dep returns 404.

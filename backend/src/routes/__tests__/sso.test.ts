@@ -316,3 +316,65 @@ describe("initiateUrlByHost — the IdP bounce follows the request host", () => 
     expect(res.body).not.toContain("chat.example.com")
   })
 })
+
+describe("via — re-login returns to the site the user came from", () => {
+  const mapped = {
+    ...assertionProvider,
+    initiateUrlByHost: { "studio.example.com": "https://example.com/api/studio/sso" },
+  }
+  const entry = async (via: string, host = "studio.example.com") => {
+    providers.list = [mapped]
+    const app = await build()
+    return app.inject({
+      method: "GET",
+      url: `/v1/sso/librechat?via=${encodeURIComponent(via)}`,
+      headers: { "x-forwarded-host": host },
+    })
+  }
+
+  it("bounces to the same IdP path on a subdomain of the configured host", async () => {
+    const res = await entry("https://gur.example.com")
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toBe("https://gur.example.com/api/studio/sso")
+  })
+
+  it("accepts the trailing slash a referrer origin carries", async () => {
+    const res = await entry("https://gur.example.com/")
+    expect(res.headers.location).toBe("https://gur.example.com/api/studio/sso")
+  })
+
+  it("keeps the per-host path — only the origin changes", async () => {
+    providers.list = [{ ...assertionProvider, initiateUrl: "https://example.com/api/studio-next/sso?x=1" }]
+    const app = await build()
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/sso/librechat?via=${encodeURIComponent("https://gur.example.com")}`,
+      headers: { "x-forwarded-host": "studio2.example.com" },
+    })
+    expect(res.headers.location).toBe("https://gur.example.com/api/studio-next/sso?x=1")
+  })
+
+  it.each([
+    ["a foreign host", "https://evil.test"],
+    ["a look-alike suffix", "https://evilexample.com"],
+    ["a sibling family", "https://idp.example"],
+    ["plain http", "http://gur.example.com"],
+    ["an explicit port", "https://gur.example.com:8443"],
+    ["credentials", "https://user:pw@gur.example.com"],
+    ["a path", "https://gur.example.com/login"],
+    ["a query", "https://gur.example.com/?next=x"],
+    ["this studio's own host", "https://studio.example.com"],
+    ["garbage", "not a url"],
+  ])("ignores %s and uses the configured URL", async (_label, via) => {
+    const res = await entry(via)
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toBe("https://example.com/api/studio/sso")
+  })
+
+  it("never lets a hint cross to another family's IdP", async () => {
+    // studio.example.com's IdP is example.com — a hint naming the default
+    // initiateUrl's host (idp.example) is not inside it.
+    const res = await entry("https://login.idp.example")
+    expect(res.headers.location).toBe("https://example.com/api/studio/sso")
+  })
+})

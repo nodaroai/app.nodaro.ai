@@ -27,6 +27,9 @@ export type AuthMethod = "email" | "google" | "sso"
 export interface SurfaceSibling {
   label: string
   url: string
+  /** Per-studio-host override of `url`, keyed by bare lower-case hostname
+   *  (backend twin validates it). Resolved by lib/sibling-origin.ts. */
+  urlByHost?: Record<string, string>
 }
 
 /** B2b — the billing display surface (Phase B); see the backend twin. */
