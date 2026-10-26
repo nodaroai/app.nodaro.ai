@@ -1,5 +1,39 @@
 # @nodaro/sdk
 
+## 2.49.0
+
+### Minor Changes
+
+- ba1c2c3: Factory preset pictures come in two sizes: the tile picture (512px wide, `previewUrl`) and a full-screen one (1024px wide). `GET /v1/node-presets/factory` entries carry `previewSrcSet` — both with their widths, ready for an `<img srcset>` — when the preset has both files; `FactoryPresetEntry.previewSrcSet` in the SDK. `@nodaro/prompts/presets` exports the large file map (`FACTORY_PRESET_PREVIEW_LARGE_FILES`), `factoryPresetPreviewSrcSet` and the two widths.
+- f99913b: A job's `credits_charged` now includes the steps it ran (the child jobs a run such as Nodaro Motion makes for its reference preparation, mask and video), and jobs carry `credits_held` (the run's hold, its steps' included) and `credits_released` (what went back once every hold in the run settled). A trend run's `creditsCharged` includes its steps the same way, beside `creditsHeld` and `creditsReleased`.
+
+### Patch Changes
+
+- Updated dependencies [ba1c2c3]
+  - @nodaro/prompts@1.44.0
+
+## 2.48.0
+
+### Minor Changes
+
+- 5d62976: Nodaro Motion's engines are renamed: **Nodaro Motion Prism** (`"motion-prism"`, was `"motion-pro"`) and **Nodaro Motion Pulse** (`"motion-pulse"`, was `"motion-lite"`). The earlier ids are still accepted wherever an engine is sent and are read as the new ones. The trend routes, the MCP tools and the SDK's `castSwap.estimate()` answer the new ids; until every environment runs the renamed Nodaro Motion engine, a job's `input_data.engine` (and its output's `engine`), and a quote read straight from `POST /v1/cast-swap/estimate`, may still name an earlier id.
+
+  `@nodaro/shared/models`: `NODARO_MOTION_ENGINES` is `["motion-prism", "motion-pulse"]` and `NODARO_MOTION_ENGINE_NAMES` names them Prism and Pulse. `NODARO_MOTION_ENGINE_NAMES` and `CAST_SWAP_ENGINE_OF_NODARO_MOTION` keep the earlier ids as keys, answering the engine each became. `castSwapEngineFrom` reads every id (current, earlier and internal), and `CAST_SWAP_ENGINE_IDS_ACCEPTED` lists them all. New: `NODARO_MOTION_LEGACY_ENGINES` / `NODARO_MOTION_LEGACY_ENGINE_OF` (each earlier id and the id it became), `NodaroMotionLegacyEngine`, and `nodaroMotionEngineFrom` (the public id any engine id names).
+
+  `@nodaro/sdk`: `CastSwapEngine` (and `TrendEngine`) is now `"motion-prism" | "motion-pulse"`. `CastSwapEngineLegacyId` adds `"motion-pro"` and `"motion-lite"`, still accepted in a request. `castSwap.estimate()` answers the quote's `engine` by the current id even when the server names an earlier one. TypeScript code that compares a response's `engine` with `"motion-pro"` or `"motion-lite"` must compare with the new ids.
+
+  `@nodaro/cli`: help text names Nodaro Motion Prism and Pulse.
+
+### Patch Changes
+
+- d8f4384: `TrashSession` documents its fields (`title` `null` = untitled; `projectId` `null` when the session has no project).
+- Updated dependencies [ecd39bd]
+- Updated dependencies [de7d07b]
+- Updated dependencies [5d62976]
+- Updated dependencies [edcd8d5]
+  - @nodaro/prompts@1.43.0
+  - @nodaro/shared@3.45.0
+
 ## 2.47.0
 
 ### Minor Changes

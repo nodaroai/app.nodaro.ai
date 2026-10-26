@@ -47,6 +47,10 @@ export const PRESET_TILES_JA: Record<string, PresetCopy> = {
     name: "モデル対決",
     description: "画像・動画モデルの比較。「どっちが上？」",
   },
+  "generate-image/thumb-node-diagram": {
+    name: "ノード図",
+    description: "自動化・AIエージェント系。整ったワークフロー図の中心に一人。",
+  },
   "generate-image/thumb-finance-shock": {
     name: "金融ショック",
     description: "お金・暗号資産チャンネル。損益の数字と頭を抱える姿。",
@@ -86,6 +90,14 @@ export const PRESET_TILES_JA: Record<string, PresetCopy> = {
   "generate-image/thumb-stage-talk": {
     name: "ステージ登壇",
     description: "カンファレンス登壇者や SaaS 創業者のトーク動画。",
+  },
+  "generate-image/thumb-screen-portals": {
+    name: "スクリーン・ポータル",
+    description: "広告・マーケ系。驚く司会者の周りを舞うスマホ画面。",
+  },
+  "generate-image/thumb-copy-me-arrow": {
+    name: "変身の矢印",
+    description: "起業系。匿名のシルエットから自信ある創業者へ、大きな黄色い矢印。",
   },
   "generate-image/thumb-challenge-timer": {
     name: "チャレンジタイマー",
@@ -138,6 +150,10 @@ export const PRESET_TILES_JA: Record<string, PresetCopy> = {
   "generate-image/thumb-food-feast": {
     name: "ごちそう",
     description: "フードブロガー・レシピ系。料理の接写、空腹の顔、価格か主張。",
+  },
+  "generate-image/thumb-vlog-bright": {
+    name: "明るいVlog",
+    description: "旅行・ライフスタイル系。日差しの街、笑顔、手描き三行タイポ。",
   },
   "generate-image/thumb-science-explainer": {
     name: "科学解説",
@@ -199,6 +215,10 @@ export const PRESET_TILES_JA: Record<string, PresetCopy> = {
     name: "正解と不正解",
     description: "ハウツー・アドバイス系。これはやる、これはやらない。",
   },
+  "generate-image/thumb-playful-cast": {
+    name: "にぎやかな仲間たち",
+    description: "アニメ・キッズ系。オリジナルの3Dキャラに囲まれた司会者。",
+  },
   "generate-image/thumb-pets": {
     name: "ペット",
     description: "ペット・保護動物チャンネル。",
@@ -210,6 +230,18 @@ export const PRESET_TILES_JA: Record<string, PresetCopy> = {
   "generate-image/thumb-parenting": {
     name: "子育て",
     description: "ファミリー・育児系。親と子、共感できるカオス。",
+  },
+  "generate-image/thumb-swiss-collage": {
+    name: "スイス・コラージュ",
+    description: "デザイナー向け。切り抜きポートレートと巨大タイポの印刷風コラージュ。",
+  },
+  "generate-image/thumb-editorial-type": {
+    name: "エディトリアル・タイプ",
+    description: "ファッション・文化系。巨大な一語と顔、キャンペーンポスターの抑制。",
+  },
+  "generate-image/thumb-reel-cover-bold": {
+    name: "霧の中の二語",
+    description: "モチベーション系。霧に浮かぶ巨大な二語と小さな人影。",
   },
   "generate-image/short-pov-hook": {
     name: "POV フック",
@@ -466,6 +498,10 @@ export const PRESET_TILES_JA: Record<string, PresetCopy> = {
   "generate-image/merch-standalone-print-art": {
     name: "Tシャツ用プリント素材",
     description: "POD 販売者。シャツなしの前面アートのみ、白背景。",
+  },
+  "generate-image/layout-visionary-magazine-cover": {
+    name: "雑誌の表紙",
+    description: "起業家・パーソナルブランド向け。マストヘッドと特集見出し付きの縦長ファッション誌表紙。",
   },
   "generate-image/merch-sticker-sheet": {
     name: "ステッカーシート",

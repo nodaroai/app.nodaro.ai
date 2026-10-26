@@ -292,6 +292,8 @@ test("a failed declaration check fails the job but never hides the tests' result
 })
 
 test("a hung gate cannot hold the Diff Gate", () => {
-  assert.match(jobs.changes, /^    timeout-minutes: \d+$/m)
+  // A number — or, for a PR into main, which waits for the dev run on its
+  // head (tools/test-select/ci-mode.mjs), a longer number; still bounded.
+  assert.match(jobs.changes, /^    timeout-minutes: (?:\d+|\$\{\{ github\.base_ref == 'main' && \d+ \|\| \d+ \}\})$/m)
   assert.match(jobs.changes.match(/- name: Decide the gated jobs\n((?: {8}.*\n)+)/)[1], /^ {8}timeout-minutes: \d+$/m)
 })

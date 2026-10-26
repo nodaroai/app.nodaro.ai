@@ -18,7 +18,7 @@
  * so a field a route might add later does not reach the agent by accident.
  * The route is the authority on every rule (required slots, chips per kind,
  * image caps, the resolutions the trend's engine offers, draft only at 480p
- * on Nodaro Motion Pro); this file maps snake_case to its body.
+ * on Nodaro Motion Prism); this file maps snake_case to its body.
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — off-cloud the
  * routes are not served and a call answers `not_available`.
@@ -92,7 +92,7 @@ export const trendRunShape = {
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
-  draft: z.boolean().optional().describe("Default true; only at 480p (a motion-lite trend has none)."),
+  draft: z.boolean().optional().describe("Default true; only at 480p (a motion-pulse trend has none)."),
   preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
@@ -171,7 +171,7 @@ function originalView(v: unknown): Rec | undefined {
   }
 }
 
-/** The trend's engine by its public id and name: Nodaro Motion Pro when the route names none it knows. */
+/** The trend's engine by its public id and name: Nodaro Motion Prism when the route names none it knows. */
 function engineView(v: unknown): { engine: NodaroMotionEngine; engineName: string } {
   const engine = castSwapEngineFrom(v) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
   return { engine: nodaroMotionEngineOf(engine), engineName: nodaroMotionEngineName(engine) }
@@ -333,7 +333,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
         title: "Get Trend",
         description:
           "One trend: its original (the clip it recasts; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, chips the user may set, their defaults), " +
-          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"motion-pro\" or \"motion-lite\") with its engineName and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"motion-prism\" or \"motion-pulse\") with its engineName and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

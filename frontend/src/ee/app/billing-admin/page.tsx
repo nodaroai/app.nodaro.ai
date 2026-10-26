@@ -18,6 +18,7 @@ import {
 } from "@/ee/hooks/queries/use-deployment-billing"
 import { UsersBlock, errorText } from "./users-block"
 import { IntegrationsBlock } from "./integrations-block"
+import { AutoRechargeBlock } from "./auto-recharge-block"
 import { ListError } from "./list-error"
 import {
   dollarsInputError,
@@ -126,6 +127,8 @@ export default function BillingAdminPage() {
       <DefaultBlock overview={overview} />
       <UsersBlock unit={overview.unit} />
       <CardBlock overview={overview} />
+      {/* Auto top-up charges the card the purchase above saved — beside it. */}
+      <AutoRechargeBlock stripeConfigured={overview.stripeConfigured} />
 
       {/* The credentials another system authenticates with. Mintable here and
           nowhere else: the route refuses a key that tries to mint a key, so the

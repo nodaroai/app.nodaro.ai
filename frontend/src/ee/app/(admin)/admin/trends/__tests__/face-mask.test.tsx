@@ -89,7 +89,7 @@ describe("the stored face mask", { timeout: 20_000 }, () => {
     await waitFor(() => expect(sentTo(`POST ${BASE}/face-mask/approve`)).toEqual([{ jobId: JOB, revision: "rev-2" }]))
 
     // The next draft write carries the revision the approval returned.
-    await user.type(screen.getByLabelText(/trend prompt/i), "!")
+    await user.type(screen.getByLabelText("Trend prompt"), "!")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
     await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
     const [saved] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown>; revision: string }>
@@ -135,7 +135,7 @@ describe("the stored face mask", { timeout: 20_000 }, () => {
     await user.click(await screen.findByRole("button", { name: /make face mask/i }))
     expect(await screen.findByRole("button", { name: /^approve$/i })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(/trend prompt/i), "!")
+    await user.type(screen.getByLabelText("Trend prompt"), "!")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
     expect(await screen.findByText(/made from older settings or another source clip/i)).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument()
@@ -220,7 +220,7 @@ describe("the stored face mask", { timeout: 20_000 }, () => {
     renderEditor()
     const make = await screen.findByRole("button", { name: /make face mask/i })
     expect(make).toBeEnabled()
-    await user.type(screen.getByLabelText(/trend prompt/i), "!")
+    await user.type(screen.getByLabelText("Trend prompt"), "!")
     expect(make).toBeDisabled()
     expect(screen.getByText(/the face mask is made from the saved draft/i)).toBeInTheDocument()
   })

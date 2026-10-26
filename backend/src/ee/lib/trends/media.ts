@@ -74,6 +74,8 @@ export interface StoredTrendMedia {
   width?: number
   height?: number
   durationSec?: number
+  /** A constant-rate video's frame rate (its video stream's), when the probe reads one. */
+  fps?: number
   /** The video's display copy, when it was asked for (`display: true`). */
   display?: TrendSourceDisplay
 }
@@ -250,7 +252,7 @@ export async function storeLocalTrendMedia(
         `The clip is ${probe.durationSeconds.toFixed(1)} s; it must be ${range.min}–${range.max} s.`,
       )
     }
-    measured = { width: probe.width, height: probe.height, durationSec: probe.durationSeconds }
+    measured = { width: probe.width, height: probe.height, durationSec: probe.durationSeconds, ...(probe.fps ? { fps: probe.fps } : {}) }
     if (opts.display) measured.display = await makeDisplayCopy(trendId, file, { canvas: { width: probe.width, height: probe.height } })
   } else {
     const dims = await imageDimensionsOf(file)

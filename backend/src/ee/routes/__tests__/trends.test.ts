@@ -97,7 +97,15 @@ const REF_LINE = "HIDDEN-REF-LINE keep the neon sign"
 const PROMPT = "HIDDEN-PROMPT dance like nobody watches"
 const SOURCE_JOB = "HIDDEN-SOURCE-JOB-1"
 const PRE = "HIDDEN-PRE-PROMPT open on the stage"
-const HIDDEN = [SOURCE, ROLE, REF_IMAGE, REF_LINE, PROMPT, SOURCE_JOB, PRE, "roleName", "trendPrompt", "sourceJobId", "prePrompt", "faceMasking", "__"]
+/** The 4 s preview's own prompt parts: hidden like the full run's. */
+const PREVIEW_ROLE = "HIDDEN-PREVIEW-ROLE the woman"
+const PREVIEW_REF_LINE = "HIDDEN-PREVIEW-REF-LINE the sign"
+const PREVIEW_PROMPT = "HIDDEN-PREVIEW-PROMPT dance"
+const PREVIEW_PRE = "HIDDEN-PREVIEW-PRE on stage"
+const HIDDEN = [
+  SOURCE, ROLE, REF_IMAGE, REF_LINE, PROMPT, SOURCE_JOB, PRE, PREVIEW_ROLE, PREVIEW_REF_LINE, PREVIEW_PROMPT, PREVIEW_PRE,
+  "roleName", "trendPrompt", "sourceJobId", "prePrompt", "faceMasking", "previewRoleName", "previewLine", "previewTrendPrompt", "previewPrePrompt", "__",
+]
 /** The published trend's masking (hidden like the rest). */
 const MASKING = { mode: "auto" as const, fill: "depth" as const, minFaceHeightPct: 12, zone: { topPct: 4 }, threshold: 0.4 }
 
@@ -122,12 +130,14 @@ function versionData(over: Partial<TrendVersionData> = {}): TrendVersionData {
     source: { videoUrl: SOURCE, durationSec: 12, width: 720, height: 1280, display: DISPLAY },
     previewStart: 2,
     slots: [
-      { key: "lead", label: { en: "Lead dancer", he: "רקדנית" }, kind: "person", required: true, hint: { en: "A clear face" }, roleName: ROLE, defaults: { hair: "original" } },
+      { key: "lead", label: { en: "Lead dancer", he: "רקדנית" }, kind: "person", required: true, hint: { en: "A clear face" }, roleName: ROLE, previewRoleName: PREVIEW_ROLE, defaults: { hair: "original" } },
       { key: "place", label: { en: "Place" }, kind: "location", required: false, roleName: "HIDDEN-ROLE the street" },
     ],
-    references: [{ images: [REF_IMAGE], line: REF_LINE }],
+    references: [{ images: [REF_IMAGE], line: REF_LINE, previewLine: PREVIEW_REF_LINE }],
     trendPrompt: PROMPT,
     prePrompt: PRE,
+    previewTrendPrompt: PREVIEW_PROMPT,
+    previewPrePrompt: PREVIEW_PRE,
     faceMasking: MASKING,
     examples: [
       {
@@ -343,7 +353,7 @@ describe("GET /v1/trends/:slug", () => {
     const d = res.json().data
     expect(d).toMatchObject({
       id: T_PUB, slug: "neon-dance", version: 2, previewSec: 4,
-      engine: "motion-pro", engineName: "Nodaro Motion Pro", resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
+      engine: "motion-prism", engineName: "Nodaro Motion Prism", resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
     })
     expect(d.slots).toEqual([
       { key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: ["body", "outfit", "hair"], defaults: { hair: "original" } },
@@ -592,6 +602,34 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(has(session!, "eq", "user_id", USER)).toBe(true)
   })
 
+  it("a 4 s preview run sends the preview's own prompt parts to the engine, and none of them back", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { ...RUN_BODY, preview: true } })
+    expect(res.statusCode).toBe(202)
+    expectNoHidden(res.body)
+    const body = engine.calls[0]!.body as { roles: Array<{ name: string }>; references: Array<{ line: string }>; prePrompt?: string; postPrompt?: string }
+    // The lead's preview role name; the place has none of its own, so it keeps its role name.
+    expect(body.roles.map((r) => r.name)).toEqual([PREVIEW_ROLE, "HIDDEN-ROLE the street"])
+    expect(body.references.map((r) => r.line)).toEqual([PREVIEW_REF_LINE])
+    expect(body.prePrompt).toBe(PREVIEW_PRE)
+    expect(body.postPrompt).toBe(PREVIEW_PROMPT)
+    expectNoHidden(JSON.stringify((body as { trendRun?: unknown }).trendRun))
+  })
+
+  it("a full run sends the full run's prompt parts only, even after a preview", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/trends/neon-dance/runs",
+      headers: as(),
+      payload: { ...RUN_BODY, resolution: "1080p", previewJobId: "00000000-0000-4000-8000-0000000000b9" },
+    })
+    expect(res.statusCode).toBe(202)
+    const body = engine.calls.at(-1)!.body as { roles: Array<{ name: string }>; references: Array<{ line: string }>; prePrompt?: string; postPrompt?: string }
+    expect(body.roles.map((r) => r.name)).toEqual([ROLE, "HIDDEN-ROLE the street"])
+    expect(body.references.map((r) => r.line)).toEqual([REF_LINE])
+    expect([body.prePrompt, body.postPrompt]).toEqual([PRE, PROMPT])
+    expect(JSON.stringify(body)).not.toContain("HIDDEN-PREVIEW")
+  })
+
   it("a missing required slot is a 400 missing_slot naming the slot, with no dispatch", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { slots: {} } })
     expect(res.statusCode).toBe(400)
@@ -671,6 +709,15 @@ describe("POST /v1/trends/:slug/runs", () => {
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
     expect(res.statusCode).toBe(503)
     expect(res.json().error.code).toBe("trend_unavailable")
+  })
+
+  it("a published trend with marks whose stored face mask does not match is a 503 trend_unavailable, with no internal POST", async () => {
+    const mark = { label: "erased" as const, fromFrame: 0, toFrame: 10, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 50 }
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: { ...MASKING, marks: [mark] } })
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error).toEqual({ code: "trend_unavailable", message: "This trend is not available right now." })
+    expect(engine.calls).toHaveLength(0)
   })
 
   it("an engine lacking pet is a 503 engine_unsupported, with no internal POST", async () => {
@@ -875,7 +922,7 @@ describe("POST /v1/trends/:slug/estimate", () => {
 
 describe("a Kling 4 trend", () => {
   const T_KLING = "00000000-0000-4000-8000-0000000000a5"
-  const KLING_ENGINE = { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], engines: ["seedance-2-5", "kling-4"] as Array<"seedance-2-5" | "kling-4" | "motion-pro" | "motion-lite"> }
+  const KLING_ENGINE = { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], engines: ["seedance-2-5", "kling-4"] as Array<"seedance-2-5" | "kling-4" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite"> }
   beforeEach(() => {
     mem.trends.push(trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4" })))
     setPluginSupports({ castSwap: KLING_ENGINE })
@@ -885,7 +932,7 @@ describe("a Kling 4 trend", () => {
     mem.trends[mem.trends.length - 1] = trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4", klingLength: "cut-start" }))
     const res = await app.inject({ method: "GET", url: "/v1/trends/kling-dance", headers: as() })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toMatchObject({ engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] })
+    expect(res.json().data).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse", resolutions: ["720p", "1080p"] })
     expect(res.body).not.toContain("klingLength")
     expectNoHidden(res.body)
   })
@@ -896,7 +943,7 @@ describe("a Kling 4 trend", () => {
     for (const c of engine.calls) expect(c.body).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false })
   })
 
-  it("sends a Lite trend's length fit as klingLength to an older engine, and as motionLength where the engine takes Nodaro Motion's names", async () => {
+  it("sends a Pulse trend's length fit as klingLength to an older engine, and as motionLength where the engine takes Nodaro Motion's names", async () => {
     mem.trends[mem.trends.length - 1] = trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4", klingLength: "cut-start" }))
     expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
     expect(engine.calls.at(-1)!.body).toMatchObject({ klingLength: "cut-start" })
@@ -907,16 +954,18 @@ describe("a Kling 4 trend", () => {
     expect(engine.calls.at(-1)!.body).not.toHaveProperty("klingLength")
   })
 
-  it("still runs where the engine declares Nodaro Motion's public ids, and sends it the internal id it takes", async () => {
-    setPluginSupports({ castSwap: { ...KLING_ENGINE, engines: ["motion-pro", "motion-lite"], engineAliases: true } })
-    expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
-    expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
-    expect(engine.calls.length).toBeGreaterThan(0)
-    for (const c of engine.calls) expect(c.body).toMatchObject({ engine: "kling-4" })
-  })
+  for (const engines of [["motion-pro", "motion-lite"], ["motion-prism", "motion-pulse"]] as const) {
+    it(`still runs where the engine declares Nodaro Motion's public ids (${engines.join(" + ")}), and sends it the internal id it takes`, async () => {
+      setPluginSupports({ castSwap: { ...KLING_ENGINE, engines: [...engines], engineAliases: true } })
+      expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
+      expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
+      expect(engine.calls.length).toBeGreaterThan(0)
+      for (const c of engine.calls) expect(c.body).toMatchObject({ engine: "kling-4" })
+    })
+  }
 
-  it("is held back (engine_unsupported) where the engine declares Pro alone, in either vocabulary", async () => {
-    for (const engines of [["seedance-2-5"], ["motion-pro"]] as const) {
+  it("is held back (engine_unsupported) where the engine declares Prism alone, in any vocabulary", async () => {
+    for (const engines of [["seedance-2-5"], ["motion-pro"], ["motion-prism"]] as const) {
       setPluginSupports({ castSwap: { ...KLING_ENGINE, engines: [...engines] } })
       const res = await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })
       expect(res.statusCode).toBe(503)
@@ -1263,7 +1312,7 @@ describe("trend face masking and pre prompt", () => {
       engine.estimateBody = body
       const res = await run(RUN_BODY, "estimate")
       expect(res.json().data).toEqual(answered)
-      expect(res.body).not.toMatch(/seedance|kling|masking|castSwap/i)
+      expect(res.body).not.toMatch(/seedance|kling|masking|castSwap|Motion (Pro|Lite)\b|motion-(pro|lite)\b/i)
     }
     engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80 }, privacyCredits: "30" }
     const bad = await run(RUN_BODY, "estimate")
@@ -1403,14 +1452,20 @@ function jobRow(id: string, over: Record<string, unknown> = {}) {
   }
 }
 
-function feed(rows: unknown[], fq: unknown[] = [], usage: Array<Record<string, unknown>> = []) {
+function feed(rows: unknown[], fq: unknown[] = [], usage: Array<Record<string, unknown>> = [], steps: Array<{ id: string; parent_job_id: string; usage_log_id: string | null; credits: number | null }> = []) {
   db.respond = (q) => {
     if (q.table === "usage_logs") return { data: usage, error: null }
     if (q.table !== "jobs") return { data: null, error: null }
+    // A run's steps (child jobs by parent_job_id), for its charge.
+    const stepsOf = q.ops.find((op) => op.m === "in" && op.a[0] === "parent_job_id")
+    if (stepsOf) return { data: steps.filter((st) => (stepsOf.a[1] as string[]).includes(st.parent_job_id)), error: null }
     const isFq = q.ops.some((op) => op.m === "in" && op.a[0] === "input_data->>fullQualityOf")
     return { data: isFq ? fq : rows, error: null }
   }
 }
+
+/** The step lookup a run page makes for its charge: the page's job ids. */
+const stepsLookup = (ids: string[]) => ["parent_job_id", ids]
 
 describe("GET /v1/trends/runs", () => {
   it("is not captured by /:slug", async () => {
@@ -1427,6 +1482,8 @@ describe("GET /v1/trends/runs", () => {
     expect(has(q!, "eq", "user_id", USER)).toBe(true)
     expect(has(q!, "filter", "input_data->>type", "eq", "cast-swap")).toBe(true)
     expect(has(q!, "not", "input_data->trend", "is", null)).toBe(true)
+    // A child job (a run's step) is never listed as a run of its own.
+    expect(has(q!, "is", "parent_job_id", null)).toBe(true)
     // A Full Quality version is its own run: never filtered out.
     expect(q!.ops.some((op) => op.a[0] === "input_data->>fullQualityOf")).toBe(false)
     expect(has(q!, "filter", "input_data->trend->>slug", "eq", "neon-dance")).toBe(true)
@@ -1473,11 +1530,13 @@ describe("GET /v1/trends/runs", () => {
       preview: false,
       resolution: "1080p",
       draft: false,
-      engine: "motion-pro",
-      engineName: "Nodaro Motion Pro",
+      engine: "motion-prism",
+      engineName: "Nodaro Motion Prism",
       videoUrl: null,
       posterUrl: null,
       creditsCharged: null,
+      creditsHeld: null,
+      creditsReleased: null,
       fullQualityOf: DRAFT_JOB,
       fullQuality: null,
       fullQualityUntil: null,
@@ -1497,11 +1556,13 @@ describe("GET /v1/trends/runs", () => {
       preview: false,
       resolution: "480p",
       draft: true,
-      engine: "motion-pro",
-      engineName: "Nodaro Motion Pro",
+      engine: "motion-prism",
+      engineName: "Nodaro Motion Prism",
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
+      creditsHeld: null,
+      creditsReleased: null,
       fullQualityOf: null,
       // The draft only points at its newest upgrade try; the upgrade's
       // result and charge are on its own run, never copied here.
@@ -1527,11 +1588,13 @@ describe("GET /v1/trends/runs", () => {
     expect(lookups.map((q) => argOf(q, "in"))).toEqual([
       ["input_data->>fullQualityOf", [DRAFT_JOB]],
       ["input_data->>fullQualityOf", [DRAFT_JOB, FAILED_JOB]],
+      // The page's steps, for each run's charge (the caller's own, as above).
+      stepsLookup([FQ_JOB, DRAFT_JOB, HD_JOB, FAILED_JOB]),
     ])
   })
 
-  // The job stores the engine as the engine recorded it: the internal id, or (an engine that knows them) the public one.
-  for (const stored of ["kling-4", "motion-lite"]) it(`a completed Nodaro Motion Lite run at 720p (stored as ${stored}) can be redone in Full Quality (a new take); at 1080p it cannot`, async () => {
+  // The job stores the engine as the engine recorded it: the internal id, or (an engine that knows them) a public one, earlier or current.
+  for (const stored of ["kling-4", "motion-lite", "motion-pulse"]) it(`a completed Nodaro Motion Pulse run at 720p (stored as ${stored}) can be redone in Full Quality (a new take); at 1080p it cannot`, async () => {
     const KLING_720 = "00000000-0000-4000-8000-0000000000e7"
     const KLING_1080 = "00000000-0000-4000-8000-0000000000e8"
     const fqRow = jobRow(FQ_JOB, {
@@ -1550,18 +1613,19 @@ describe("GET /v1/trends/runs", () => {
     const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
     expect(res.statusCode).toBe(200)
     const runs = res.json().data
-    expect(runs[0]).toMatchObject({ jobId: FQ_JOB, engine: "motion-lite", engineName: "Nodaro Motion Lite", fullQualityOf: KLING_720, fullQuality: null, fullQualityUntil: null })
+    expect(runs[0]).toMatchObject({ jobId: FQ_JOB, engine: "motion-pulse", engineName: "Nodaro Motion Pulse", fullQualityOf: KLING_720, fullQuality: null, fullQualityUntil: null })
     expect(runs[1]).toMatchObject({
-      jobId: KLING_720, engine: "motion-lite", resolution: "720p", draft: false,
+      jobId: KLING_720, engine: "motion-pulse", resolution: "720p", draft: false,
       fullQuality: { jobId: FQ_JOB, status: "processing" },
       fullQualityUntil: "2026-10-27T10:00:00.000Z",
     })
-    expect(runs[2]).toMatchObject({ jobId: KLING_1080, engine: "motion-lite", fullQuality: null, fullQualityUntil: null })
+    expect(runs[2]).toMatchObject({ jobId: KLING_1080, engine: "motion-pulse", fullQuality: null, fullQualityUntil: null })
     // The upgrades looked up are the 720p run's only.
     const lookups = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in"))
     expect(lookups.map((q) => argOf(q, "in"))).toEqual([
       ["input_data->>fullQualityOf", [KLING_720]],
       ["input_data->>fullQualityOf", [KLING_720]],
+      stepsLookup([FQ_JOB, KLING_720, KLING_1080]),
     ])
   })
 
@@ -1588,8 +1652,37 @@ describe("GET /v1/trends/runs", () => {
     ])
     // No draft on the page: the only lookup is whether the try is its draft's newest.
     const lookups = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in"))
-    expect(lookups.map((q) => argOf(q, "in"))).toEqual([["input_data->>fullQualityOf", [DRAFT_JOB]]])
+    expect(lookups.map((q) => argOf(q, "in"))).toEqual([["input_data->>fullQualityOf", [DRAFT_JOB]], stepsLookup([FQ_JOB])])
     expectNoHidden(res.body)
+  })
+
+  it("a run's charge includes every step it ran (child jobs), and only settled ones", async () => {
+    // The production Nodaro Motion preview of 2026-10-26: Cast Swap 44, two
+    // reference preps at 66, a mask at 33, the video held 3,564 and charged 854.
+    const RUN = HD_JOB
+    feed(
+      [jobRow(RUN, { input_data: runInput({ resolution: "720p", draft: false, preview: true }), credits: 44 })],
+      [],
+      [
+        { id: `ul-${RUN}`, status: "committed", credits_used: 44, credits_charged: 44 },
+        { id: "ul-ref-1", status: "committed", credits_used: 66, credits_charged: 66 },
+        { id: "ul-ref-2", status: "committed", credits_used: 66, credits_charged: 66 },
+        { id: "ul-mask", status: "committed", credits_used: 33, credits_charged: 33 },
+        { id: "ul-video", status: "committed", credits_used: 3564, credits_charged: 854 },
+      ],
+      [
+        { id: "ref-1", parent_job_id: RUN, usage_log_id: "ul-ref-1", credits: 66 },
+        { id: "ref-2", parent_job_id: RUN, usage_log_id: "ul-ref-2", credits: 66 },
+        { id: "mask", parent_job_id: RUN, usage_log_id: "ul-mask", credits: 33 },
+        { id: "video", parent_job_id: RUN, usage_log_id: "ul-video", credits: 3564 },
+      ],
+    )
+    const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([expect.objectContaining({ jobId: RUN, creditsCharged: 1063, creditsHeld: 3773, creditsReleased: 2710 })])
+    const steps = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in" && op.a[0] === "parent_job_id"))
+    expect(steps.length).toBeGreaterThan(0)
+    for (const q of steps) expect(has(q, "eq", "user_id", USER)).toBe(true)
   })
 
   it("whitelists the stamp and each slot: an extra field in them never passes", async () => {
@@ -1793,6 +1886,8 @@ describe("GET /v1/trends/runs/:jobId", () => {
     db.respond = (q) => {
       if (q.table === "usage_logs") return { data: usage, error: null }
       if (q.table !== "jobs") return { data: null, error: null }
+      // The run's steps (child jobs): none here.
+      if (q.ops.some((op) => op.m === "in" && op.a[0] === "parent_job_id")) return { data: [], error: null }
       const isFq = q.ops.some((op) => op.m === "in" && op.a[0] === "input_data->>fullQualityOf")
       return { data: isFq ? fq : row, error: null }
     }
@@ -1829,11 +1924,13 @@ describe("GET /v1/trends/runs/:jobId", () => {
       preview: false,
       resolution: "480p",
       draft: true,
-      engine: "motion-pro",
-      engineName: "Nodaro Motion Pro",
+      engine: "motion-prism",
+      engineName: "Nodaro Motion Prism",
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
+      creditsHeld: null,
+      creditsReleased: null,
       fullQualityOf: null,
       // A pointer only: the upgrade's video is read from its own run.
       fullQuality: { jobId: FQ_JOB, status: "completed" },

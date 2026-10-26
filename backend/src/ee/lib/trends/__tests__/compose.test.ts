@@ -417,6 +417,7 @@ describe("composeTrendRun — display and needs", () => {
       fixedReferences: true,
       faceMasking: false,
       faceMaskTarget: null,
+      storedFaceMask: false,
       trendPrePrompt: false,
       engine: "seedance-2-5",
     })
@@ -641,5 +642,146 @@ describe("composeTrendRun — the stored face mask", () => {
   it("a version with a stored mask still validates", () => {
     expect(trendVersionDataSchema.safeParse({ ...data, faceMask }).success).toBe(true)
     expect(trendVersionDataSchema.safeParse({ ...data, faceMask: { ...faceMask, extra: 1 } }).success).toBe(false)
+  })
+
+  describe("with marks", () => {
+    const MARK = { label: "erased" as const, fromFrame: 0, toFrame: 100, leftPct: 50, topPct: 0, rightPct: 100, bottomPct: 50 }
+    const marked = version({ faceMasking: { ...MASKING, marks: [MARK] } })
+    const markedMask = { ...faceMask, settingsKey: faceMaskSettingsKey(marked)! }
+
+    it("runs on the approved mask made with them, and never sends the marks", () => {
+      for (const r of [req(), req({ preview: true })]) {
+        const { body, needs } = composeTrendRun(trend({ ...marked, faceMask: markedMask }), r)
+        // The engine must take a stored mask (engineSupports): never masked per run.
+        expect(needs.storedFaceMask).toBe(true)
+        // Required: an engine that honours it fails the run rather than masking per run.
+        expect(body.storedFaceMask).toEqual({ url: faceMask.url, frames: 360, required: true })
+        expect(body.faceMasking).toEqual(withResolvedZone(MASKING))
+        expect(body.faceMasking).not.toHaveProperty("marks")
+      }
+    })
+
+    it("refuses the run (face_mask_required) with no approved mask, or one made without these marks", () => {
+      expect(codeOf(() => composeTrendRun(trend(marked), req()))).toMatchObject({ code: "face_mask_required" })
+      // The mask approved before the marks were added: masking per run would cover the faces they leave out.
+      expect(codeOf(() => composeTrendRun(trend({ ...marked, faceMask }), req()))).toMatchObject({ code: "face_mask_required" })
+    })
+
+    it("a trend without marks sends its stored mask as before (not required)", () => {
+      expect(composeTrendRun(trend({ ...data, faceMask }), req()).body.storedFaceMask).toEqual({ url: faceMask.url, frames: 360 })
+    })
+
+    it("empty marks run as before marks existed (per run when no mask matches)", () => {
+      const { body } = composeTrendRun(trend(version({ faceMasking: { ...MASKING, marks: [] } })), req())
+      expect(body).not.toHaveProperty("storedFaceMask")
+      expect(body.faceMasking).toEqual(withResolvedZone(MASKING))
+    })
+
+    it("a version with marks validates; a mark with another label, a stray key or more than 50 does not", () => {
+      expect(trendVersionDataSchema.safeParse(marked).success).toBe(true)
+      const bad = (marks: unknown) => trendVersionDataSchema.safeParse({ ...marked, faceMasking: { ...MASKING, marks } }).success
+      expect(bad([{ ...MARK, label: "keep" }])).toBe(false)
+      expect(bad([{ ...MARK, extra: 1 }])).toBe(false)
+      expect(bad([{ ...MARK, topPct: 60 }])).toBe(false)
+      expect(bad(Array.from({ length: 51 }, () => MARK))).toBe(false)
+      expect(bad(Array.from({ length: 50 }, () => MARK))).toBe(true)
+    })
+  })
+})
+
+describe("composeTrendRun — the 4 s preview's own prompt parts", () => {
+  /** Every prompt part worded differently for the preview. */
+  const PREVIEW = version({
+    slots: [
+      { ...version().slots[0]!, previewRoleName: "PREVIEW the woman" },
+      { ...version().slots[1]!, previewRoleName: "PREVIEW the man" },
+      version().slots[2]!,
+    ] as TrendSlot[],
+    references: [{ images: [img("cloud1"), img("cloud2")], line: "the clouds in the opening dive", previewLine: "PREVIEW the clouds" }],
+    prePrompt: "FULL pre words",
+    trendPrompt: "FULL trend words",
+    previewPrePrompt: "PREVIEW pre words",
+    previewTrendPrompt: "PREVIEW trend words",
+  })
+  const names = (body: { roles: unknown[] }) => body.roles.map((r) => (r as { name: string }).name)
+
+  it("a preview run sends each preview part: role names, reference lines, pre and trend prompts", () => {
+    const { body, needs } = composeTrendRun(trend(PREVIEW), req({ preview: true, details: "with a hat" }))
+    expect(names(body)).toEqual(["PREVIEW the woman", "PREVIEW the man", "the dance floor"])
+    expect(body.references).toEqual([{ images: [img("cloud1"), img("cloud2")], line: "PREVIEW the clouds" }])
+    expect(body.prePrompt).toBe("PREVIEW pre words")
+    expect(body.postPrompt).toBe("PREVIEW trend words\n\nwith a hat")
+    expect(needs.trendPrePrompt).toBe(true)
+  })
+
+  it("a full run sends the full run's parts only", () => {
+    const { body } = composeTrendRun(trend(PREVIEW), req({ details: "with a hat" }))
+    expect(names(body)).toEqual(["the woman on the left", "the man on the right", "the dance floor"])
+    expect(body.references[0]!.line).toBe("the clouds in the opening dive")
+    expect(body.prePrompt).toBe("FULL pre words")
+    expect(body.postPrompt).toBe("FULL trend words\n\nwith a hat")
+    expect(JSON.stringify(body)).not.toContain("PREVIEW")
+  })
+
+  it("a full run that follows a preview sends the full run's parts too", () => {
+    const { body } = composeTrendRun(trend(PREVIEW), req({ previewJobId: "00000000-0000-4000-8000-000000000099", resolution: "1080p" }))
+    expect(body.preview).toBe(false)
+    expect(JSON.stringify(body)).not.toContain("PREVIEW")
+    expect(body.prePrompt).toBe("FULL pre words")
+  })
+
+  it("each preview part left empty (or blank) falls back to the full run's, one by one", () => {
+    const partly = version({
+      ...PREVIEW,
+      slots: [{ ...PREVIEW.slots[0]!, previewRoleName: "  " }, PREVIEW.slots[1]!, PREVIEW.slots[2]!] as TrendSlot[],
+      references: [{ ...PREVIEW.references[0]!, previewLine: "" }],
+      previewPrePrompt: "",
+    })
+    const { body } = composeTrendRun(trend(partly), req({ preview: true }))
+    expect(names(body)).toEqual(["the woman on the left", "PREVIEW the man", "the dance floor"])
+    expect(body.references[0]!.line).toBe("the clouds in the opening dive")
+    expect(body.prePrompt).toBe("FULL pre words")
+    expect(body.postPrompt).toBe("PREVIEW trend words")
+  })
+
+  it("a trend with no preview parts sends a preview exactly as before", () => {
+    const plain = version({ prePrompt: "FULL pre words" })
+    const before = composeTrendRun(trend(plain), req({ preview: true })).body
+    const empty = version({
+      prePrompt: "FULL pre words",
+      previewPrePrompt: "",
+      previewTrendPrompt: "",
+      slots: plain.slots.map((s) => ({ ...s, previewRoleName: "" })) as TrendSlot[],
+      references: plain.references.map((r) => ({ ...r, previewLine: "" })),
+    })
+    expect(composeTrendRun(trend(empty), req({ preview: true })).body).toEqual(before)
+  })
+
+  it("a pre prompt only the preview has is sent by a preview alone, and needs trendPrePrompt there", () => {
+    const onlyPreview = version({ previewPrePrompt: "PREVIEW pre words" })
+    const preview = composeTrendRun(trend(onlyPreview), req({ preview: true }))
+    expect(preview.body.prePrompt).toBe("PREVIEW pre words")
+    expect(preview.needs.trendPrePrompt).toBe(true)
+    const full = composeTrendRun(trend(onlyPreview), req())
+    expect(full.body).not.toHaveProperty("prePrompt")
+    expect(full.needs.trendPrePrompt).toBe(false)
+  })
+
+  it("holds the preview's trend prompt and the details to the post prompt cap", () => {
+    const long = version({ trendPrompt: "short", previewTrendPrompt: "t".repeat(3000) })
+    expect(composeTrendRun(trend(long), req({ details: "d".repeat(999) })).body.postPrompt).toContain("short")
+    expect(codeOf(() => composeTrendRun(trend(long), req({ preview: true, details: "d".repeat(999) }))).code).toBe("prompt_too_long")
+  })
+
+  it("never puts a preview part in the public display", () => {
+    const { display, body } = composeTrendRun(trend(PREVIEW), req({ preview: true }))
+    expect(JSON.stringify(display)).not.toContain("PREVIEW")
+    expect(JSON.stringify(body.trendRun)).not.toContain("PREVIEW")
+  })
+
+  it("the preview parts validate with their full ones' limits, empty allowed", () => {
+    expect(trendVersionDataSchema.safeParse(PREVIEW).success).toBe(true)
+    const empty = { ...PREVIEW, previewPrePrompt: "", previewTrendPrompt: "", slots: PREVIEW.slots.map((s) => ({ ...s, previewRoleName: "" })) }
+    expect(trendVersionDataSchema.safeParse(empty).success).toBe(true)
   })
 })

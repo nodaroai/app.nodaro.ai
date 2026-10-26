@@ -8,7 +8,7 @@
  *   GET    /v1/admin/trends/engine-environments      what each environment's engine supports
  *   GET    /v1/admin/trends/tags                     every tag in use or labelled, with its labels
  *   PUT    /v1/admin/trends/tags                     save one tag's labels ({ tag, labels }; none = clear)
- *   GET    /v1/admin/trends/test-runs/:jobId/prompt  the engine prompt a run used
+ *   GET    /v1/admin/trends/test-runs/:jobId/prompt  the engine prompt a run used, and the trend's prompt parts (admin-trends-prompt.ts; ?mode=full|preview)
  *   GET    /v1/admin/trends/:id                      the trend, its draft and published data
  *   PATCH  /v1/admin/trends/:id                      slug, tags, badges, sort order
  *   PUT    /v1/admin/trends/:id/draft                save the draft (examples kept)
@@ -49,6 +49,7 @@
  * which copy a run's media into trend storage: only runs by ADMIN
  * accounts (the role `requireAdmin` checks) may become examples.
  */
+import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
@@ -92,7 +93,6 @@ import {
   outputVideo,
   relay,
   unavailableOrInternal,
-  str,
   toTrendRuns,
   type RunJobRow,
   type RunKeyset,
@@ -100,9 +100,10 @@ import {
 } from "../lib/trends/run-helpers.js"
 import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
-import { draftFaceMaskState, registerTrendFaceMaskRoutes } from "./admin-trends-face-mask.js"
+import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes, withMarksForSource } from "./admin-trends-face-mask.js"
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
+import { registerTrendPromptRoutes } from "./admin-trends-prompt.js"
 import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
@@ -364,6 +365,8 @@ async function saveValidDraft(
 }
 
 function trendRunError(reply: FastifyReply, e: TrendRunError) {
+  // The draft is not ready to run yet, not a bad request.
+  if (e.code === "face_mask_required") return err(reply, 409, e.code, e.message)
   // Admins see the real reason (the public route masks some of them).
   return err(reply, 400, e.code, e.message, {
     ...(e.slot !== undefined ? { slot: e.slot } : {}),
@@ -469,24 +472,6 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
     }
   })
 
-  app.get("/v1/admin/trends/test-runs/:jobId/prompt", { preHandler: requireAdmin }, async (req, reply) => {
-    const { jobId } = req.params as { jobId: string }
-    try {
-      const run = await findTrendRun(jobId)
-      if (!run) return notFound(reply, "Run")
-      const childId = isRec(run.output_data) ? str(run.output_data.__castSwapChildJobId) : null
-      if (!childId) return err(reply, 404, "prompt_unavailable", "This run has no engine prompt yet.")
-      const { data, error } = await supabase.from("jobs").select("input_data").eq("id", childId).maybeSingle()
-      if (error) throw new Error(`Could not read job ${childId}: ${error.message}`)
-      const input = (data as { input_data?: unknown } | null)?.input_data
-      const prompt = isRec(input) ? str(input.prompt) : null
-      if (prompt === null) return err(reply, 404, "prompt_unavailable", "This run has no engine prompt yet.")
-      return { data: { prompt } }
-    } catch (e) {
-      return unavailableOrInternal(reply, req, e, "Failed to read the run's prompt")
-    }
-  })
-
   app.get("/v1/admin/trends/:id", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       const loaded = await loadDraft(req, reply)
@@ -500,7 +485,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
             : await getVersion(trend.id, trend.publishedVersion)
       return {
         data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft),
-          upscaleJobs: pendingUpscaleJobs(draft) },
+          upscaleJobs: pendingUpscaleJobs(draft),
+          // Whether a face mask with marks can be made here (the marks editor is offered only then).
+          faceMaskMarksSupported: loadedEngineMakesMarks() },
       }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read the trend")
@@ -541,16 +528,19 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // revision the client read) are kept.
       const { faceMask: _mask, faceMaskJob: _job, upscaleJobs: _upscales, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
       const { faceMask, faceMaskJob, upscaleJobs } = loaded.draft
-      const data = {
+      const merged = {
         ...edited,
         examples: loaded.draft.examples,
         ...(faceMask ? { faceMask } : {}),
         ...(faceMaskJob ? { faceMaskJob } : {}),
         ...(upscaleJobs ? { upscaleJobs } : {}),
       } as unknown as TrendVersionData
+      // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
+      const { data, cleared } = withMarksForSource(merged, loaded.draft)
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
       if (!saved) return reply
-      return { data: saved }
+      // The face mask's state after the save: the editor starts no make when the saved settings already match it.
+      return { data: { ...saved, faceMaskState: await draftFaceMaskState(req, data), ...(cleared ? { marksCleared: true } : {}) } }
     } catch (e) {
       if (e instanceof DraftConflictError) return draftConflict(reply)
       return unavailableOrInternal(reply, req, e, "Failed to save the draft")
@@ -659,6 +649,8 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
           .from("jobs")
           .select(`${RUN_JOB_COLS}, user_id`)
           .in("user_id", admins)
+          // A child job (a run's step) is shown only through its run, as on every job list.
+          .is(CHILD_JOB_COLUMN, null)
           .filter("input_data->>type", "eq", "cast-swap")
           .filter("input_data->trend->>id", "eq", id)
         if (from) query = query.or(afterKeyset("created_at", "id", from))
@@ -813,6 +805,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   })
 
   registerTrendLifecycleRoutes(app, { findTrendRun })
+  registerTrendPromptRoutes(app, { findTrendRun, badRequest })
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

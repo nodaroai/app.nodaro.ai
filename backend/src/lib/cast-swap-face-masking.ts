@@ -18,12 +18,15 @@ import {
   CAST_SWAP_FACE_MASK_TARGETS,
   type CastSwapFaceMaskTarget,
 } from "@nodaro/shared/models"
+// Internal only (render-rules, not an Apache grant): a trend face mask's marks.
+import { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, type FaceMaskMark, type MaskEraseBox } from "@nodaro/render-rules"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export type FaceMaskingMode = "off" | "always" | "auto"
 export type FaceMaskingFill = "blur" | "depth"
 /** What a mask covers: `"head"` (default: hair and people seen from behind too) or `"face"` (the hair stays visible). */
 export type FaceMaskingTarget = CastSwapFaceMaskTarget
+export type { FaceMaskMark, MaskEraseBox }
 
 export interface FaceMaskingZone {
   leftPct?: number
@@ -57,6 +60,20 @@ export interface FaceMasking {
   threshold?: number
 }
 
+/**
+ * A trend's face masking setting: `FaceMasking` plus `marks`, labelled boxes
+ * on its stored face mask (`FaceMaskMark`, at most 50; decided 2026-10-26).
+ * The one label today, `"erased"`: the faces centred in the box, on its
+ * frames, are left out of the mask. Marks belong to a trend's STORED face
+ * mask only: `faceMaskingWithMarksSchema` is the one schema that takes them
+ * (Nodaro Motion's defaults, through `faceMaskingSchema`, refuse the key), the
+ * make route sends them to the engine, and a run never does (`withoutMarks`
+ * gives the `FaceMasking` a run body carries, which has no such key).
+ */
+export interface FaceMaskingWithMarks extends FaceMasking {
+  marks?: FaceMaskMark[]
+}
+
 /** The engine's default `minFaceHeightPct`, for the `min ≤ max` check when min is left out. */
 export const FACE_MASKING_DEFAULT_MIN_FACE_HEIGHT_PCT = CAST_SWAP_FACE_MASKING_DEFAULTS.minFaceHeightPct
 
@@ -72,24 +89,70 @@ export const faceMaskingZoneSchema: z.ZodType<FaceMaskingZone> = z.strictObject(
   bottomPct: margin.optional(),
 })
 
+const edge = within(CAST_SWAP_FACE_MASK_MARK_LIMITS.edgePct)
+const frame = z.int().min(0)
+const boxShape = { fromFrame: frame, toFrame: frame, leftPct: edge, topPct: edge, rightPct: edge, bottomPct: edge }
+type Box = Pick<MaskEraseBox, "fromFrame" | "toFrame" | "leftPct" | "rightPct" | "topPct" | "bottomPct">
+/** Whole frames, `from ≤ to`, and a box with room inside (`left < right`, `top < bottom`). */
+function boxChecks<T extends z.ZodType<Box>>(schema: T) {
+  return schema
+    .refine((b) => b.fromFrame <= b.toFrame, { path: ["toFrame"], message: "The last frame must be at or after the first." })
+    .refine((b) => b.leftPct < b.rightPct, { path: ["rightPct"], message: "The box's right edge must be right of its left edge." })
+    .refine((b) => b.topPct < b.bottomPct, { path: ["bottomPct"], message: "The box's bottom edge must be below its top edge." })
+}
+
+/** One box of the core `mask-erase` job (`MaskEraseBox`), strict. */
+export const maskEraseBoxSchema: z.ZodType<MaskEraseBox> = boxChecks(z.strictObject(boxShape))
+
+/** One face mask mark (`FaceMaskMark`): a label and a box (`maskEraseBoxSchema`'s checks), strict. */
+export const faceMaskMarkSchema: z.ZodType<FaceMaskMark> = boxChecks(
+  z.strictObject({ label: z.enum(CAST_SWAP_FACE_MASK_MARK_LABELS), ...boxShape }),
+)
+
+const faceMaskingShape = {
+  mode: z.enum(["off", "always", "auto"]),
+  target: z.enum(CAST_SWAP_FACE_MASK_TARGETS).optional(),
+  fill: z.enum(["blur", "depth"]).optional(),
+  minFaceHeightPct: pct.optional(),
+  maxFaceHeightPct: pct.optional(),
+  zone: faceMaskingZoneSchema.nullable().optional(),
+  blurStrengthPct: within(CAST_SWAP_FACE_MASKING_BOUNDS.blurStrengthPct).optional(),
+  threshold: within(CAST_SWAP_FACE_MASKING_BOUNDS.threshold).optional(),
+}
+
+const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHeightPct">) =>
+  m.maxFaceHeightPct === undefined ||
+  m.maxFaceHeightPct === 0 ||
+  m.maxFaceHeightPct >= (m.minFaceHeightPct ?? FACE_MASKING_DEFAULT_MIN_FACE_HEIGHT_PCT)
+const faceHeightsMessage = { path: ["maxFaceHeightPct"], message: "The largest face height must be at least the smallest (or 0 for no limit)." }
+
+/** A face masking setting without marks: what a run takes, and Nodaro Motion's defaults. */
 export const faceMaskingSchema: z.ZodType<FaceMasking> = z
-  .strictObject({
-    mode: z.enum(["off", "always", "auto"]),
-    target: z.enum(CAST_SWAP_FACE_MASK_TARGETS).optional(),
-    fill: z.enum(["blur", "depth"]).optional(),
-    minFaceHeightPct: pct.optional(),
-    maxFaceHeightPct: pct.optional(),
-    zone: faceMaskingZoneSchema.nullable().optional(),
-    blurStrengthPct: within(CAST_SWAP_FACE_MASKING_BOUNDS.blurStrengthPct).optional(),
-    threshold: within(CAST_SWAP_FACE_MASKING_BOUNDS.threshold).optional(),
-  })
-  .refine(
-    (m) =>
-      m.maxFaceHeightPct === undefined ||
-      m.maxFaceHeightPct === 0 ||
-      m.maxFaceHeightPct >= (m.minFaceHeightPct ?? FACE_MASKING_DEFAULT_MIN_FACE_HEIGHT_PCT),
-    { path: ["maxFaceHeightPct"], message: "The largest face height must be at least the smallest (or 0 for no limit)." },
-  )
+  .strictObject(faceMaskingShape)
+  .refine(faceHeightsInOrder, faceHeightsMessage)
+
+/** A trend's face masking setting: `faceMaskingSchema` plus `marks` (at most `CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks`). */
+export const faceMaskingWithMarksSchema: z.ZodType<FaceMaskingWithMarks> = z
+  .strictObject({ ...faceMaskingShape, marks: z.array(faceMaskMarkSchema).max(CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks).optional() })
+  .refine(faceHeightsInOrder, faceHeightsMessage)
+
+/** The setting's marks; none (absent or empty) = `[]`. */
+export function faceMaskMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): readonly FaceMaskMark[] {
+  return m?.marks ?? []
+}
+
+/** The boxes of the setting's `"erased"` marks (labels dropped): what the core `mask-erase` job takes. */
+export function erasedBoxesOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): MaskEraseBox[] {
+  return faceMaskMarksOf(m)
+    .filter((mark) => mark.label === "erased")
+    .map(({ fromFrame, toFrame, leftPct, topPct, rightPct, bottomPct }) => ({ fromFrame, toFrame, leftPct, topPct, rightPct, bottomPct }))
+}
+
+/** The setting without its marks (a new object): what a run, and the base of a mask, are made from. */
+export function withoutMarks(m: FaceMaskingWithMarks): FaceMasking {
+  const { marks: _marks, ...rest } = m
+  return rest
+}
 
 /** Whether this setting masks anything at all (absent or "off" = today's pipeline). */
 export function faceMaskingOn(m: FaceMasking | undefined): m is FaceMasking {

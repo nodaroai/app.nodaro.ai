@@ -1,4 +1,4 @@
-import { factoryPresetPreviewUrl, presetMinReferences } from "@nodaro/prompts/presets"
+import { factoryPresetPreviewSrcSet, factoryPresetPreviewUrl, presetMinReferences } from "@nodaro/prompts/presets"
 import { appBaseUrl } from "../deployment-urls.js"
 
 /**
@@ -11,6 +11,8 @@ import { appBaseUrl } from "../deployment-urls.js"
  *   - `previewUrl` — an example picture: for a factory preset, its committed
  *     file on this installation's public origin (null until one is committed);
  *     for a user preset, the image the user stored with it (null when unset).
+ *   - `previewSrcSet` — a factory preset's picture at its two sizes (512w and
+ *     up to 1024w) for an `<img srcset>`; only when both files are committed.
  */
 export interface PresetReferenceFields {
   readonly minReferences: number
@@ -55,5 +57,17 @@ export function factoryPresetView(nodeType: string, preset: CatalogEntry) {
     data: preset.data,
     ...referenceFields(nodeType, preset.data, preset.minReferences),
     previewUrl: factoryPresetPreviewUrl(preset.id, appBaseUrl()),
+    ...previewSrcSetField(preset.id),
   }
+}
+
+/**
+ * `previewSrcSet` — the example picture at its two sizes (512w and up to
+ * 1024w) for an `<img srcset>`, present only when the preset has both files. REST only:
+ * the MCP listing picks its own fields and leaves it out (dead weight to an
+ * agent, as with the picker catalogs' `imageSrcSet`).
+ */
+function previewSrcSetField(presetId: string): { previewSrcSet?: string } {
+  const srcSet = factoryPresetPreviewSrcSet(presetId, appBaseUrl())
+  return srcSet ? { previewSrcSet: srcSet } : {}
 }

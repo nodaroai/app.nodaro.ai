@@ -8,8 +8,10 @@
  * see a trend's published version.
  *
  * HIDDEN: the uploaded `source` clip (its `videoUrl`, length and size),
- * `TrendSlot.roleName`, `references`, `trendPrompt`, `prePrompt`,
- * `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs` and `klingLength` never leave the server — public responses
+ * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
+ * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
+ * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`
+ * and `klingLength` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -17,9 +19,9 @@
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
-import type { FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 
-export type { CastSwapEngine, CastSwapKlingLength, FaceMasking }
+export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
 
 /** The platform's interface languages (the same set `/v1/user/settings` accepts). */
 export type Locale = LocaleId
@@ -51,6 +53,12 @@ interface TrendSlotBase {
   hintImageUrl?: string
   /** HIDDEN. Who this is in the source clip, e.g. "the woman on the left" (1–200). */
   roleName: string
+  /**
+   * HIDDEN. Who this is in the 4 s preview, when the preview needs other words
+   * (≤ 200). Empty or absent = `roleName`. Read only by a preview run
+   * (prompt-parts.ts); a full run never does.
+   */
+  previewRoleName?: string
 }
 
 /**
@@ -64,8 +72,12 @@ export type TrendSlot =
   | (TrendSlotBase & { kind: "product"; defaults?: ProductChips; chips?: Array<keyof ProductChips> })
   | (TrendSlotBase & { kind: "location"; defaults?: never; chips?: never })
 
-/** HIDDEN. A fixed reference sent with every run: 1–3 images and its prompt line (1–500). */
-export interface TrendReference { images: string[]; line: string }
+/**
+ * HIDDEN. A fixed reference sent with every run: 1–3 images and its prompt
+ * line (1–500). `previewLine` (≤ 500) is the line a 4 s preview run sends
+ * instead; empty or absent = `line`.
+ */
+export interface TrendReference { images: string[]; line: string; previewLine?: string }
 
 /**
  * HIDDEN. A trend's approved face mask: its WHOLE source clip with the faces
@@ -86,10 +98,38 @@ export interface TrendFaceMask {
   settingsKey: string
   /** The job that made it. */
   jobId: string
-  stats: { shots: number; heldFrames: number; coverage: number; droppedRegions: number }
+  /** `erasedRegions`: the regions its `"erased"` marks dropped (absent on a mask approved before marks = 0). */
+  stats: { shots: number; heldFrames: number; coverage: number; droppedRegions: number; erasedRegions?: number }
   approvedAt: string
   /** The admin who approved it. */
   approvedBy: string
+  /**
+   * The raw mask, made from the base settings (`faceMaskBaseKey`: the
+   * settings with the marks left out) BEFORE any mark was applied, copied into
+   * the trend's storage like `url`, with `baseKey` the base it was made from
+   * and `depthUrl` the depth view (fill "depth" only). While the draft's base
+   * key is still `baseKey` (and the recipes are current), editing the marks
+   * re-makes the mask from these (`fromMask`, `reusableFaceMaskBase`) instead
+   * of finding the faces again. All three absent on a mask approved before
+   * marks, or by an engine that keeps no raw mask: the first edit makes it whole.
+   */
+  rawMaskUrl?: string
+  depthUrl?: string
+  baseKey?: string
+  /**
+   * The raw mask's own stats (before any mark was applied; `stats.coverage` is
+   * the delivered mask's), what a make from it (`fromMask.stats`) carries on.
+   * Absent on a mask approved before it: its `stats` stand in when nothing was
+   * erased from it, else the mask is no base (`reusableFaceMaskBase`).
+   */
+  baseStats?: { shots: number; heldFrames: number; coverage: number; droppedRegions: number }
+  /**
+   * The stored masked clip's video frame rate, probed when it was approved:
+   * the editor counts a mark's frames on it (a container's duration can run
+   * past the picture, with the sound). Absent: not read (the editor then
+   * counts on the clip's duration).
+   */
+  fps?: number
 }
 
 /**
@@ -174,11 +214,20 @@ export interface TrendVersionData {
   /** HIDDEN. Prompt text placed at the start of every run's prompt (≤ 3000): Cast Swap's `prePrompt`. */
   prePrompt?: string
   /**
+   * HIDDEN. The trend prompt a 4 s preview run sends instead of `trendPrompt`
+   * (≤ 3000; a preview has less to go on than the full clip). Empty or absent
+   * = `trendPrompt`. Kept while the trend offers no preview, and read only by
+   * a preview run (prompt-parts.ts).
+   */
+  previewTrendPrompt?: string
+  /** HIDDEN. The pre prompt a 4 s preview run sends instead of `prePrompt` (≤ 3000); empty or absent = `prePrompt`. */
+  previewPrePrompt?: string
+  /**
    * HIDDEN. Cast Swap's face masking for every run of this trend. Absent or
    * `mode: "off"` = no masking. With `"auto"`, a full run whose preview was
    * masked (`TrendRunRequest.previewJobId`) is sent as `"always"`.
    */
-  faceMasking?: FaceMasking
+  faceMasking?: FaceMaskingWithMarks
   /** HIDDEN. The approved face mask (see `TrendFaceMask`); absent = none. */
   faceMask?: TrendFaceMask
   /** HIDDEN. The face mask job started last and not approved yet (see `TrendFaceMaskJob`). */

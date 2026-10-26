@@ -61,6 +61,7 @@ export function IntegrationsBlock() {
   const [name, setName] = useState("")
   const [expiry, setExpiry] = useState("")
   const [cidrs, setCidrs] = useState("")
+  const [readOnly, setReadOnly] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
 
   const rows = keys.data ?? []
@@ -114,6 +115,7 @@ export function IntegrationsBlock() {
         name: trimmedName,
         ...(expiresAt ? { expiresAt } : {}),
         ...(ranges.length > 0 ? { allowedCidrs: ranges } : {}),
+        ...(readOnly ? { readOnly: true } : {}),
       },
       {
         // EMPTIED ON SUCCESS, together with the disabled button below. A form
@@ -125,6 +127,7 @@ export function IntegrationsBlock() {
           setName("")
           setExpiry("")
           setCidrs("")
+          setReadOnly(false)
         },
       },
     )
@@ -222,6 +225,22 @@ export function IntegrationsBlock() {
             {t("billingAdmin.integrationsCidrsHint", { max: MAX_CIDRS })}
           </p>
         </div>
+        <div className="sm:col-span-2">
+          <label className="flex items-center gap-2 text-sm" htmlFor="integration-read-only">
+            <input
+              id="integration-read-only"
+              data-testid="integration-read-only"
+              type="checkbox"
+              className="h-4 w-4"
+              checked={readOnly}
+              onChange={(e) => setReadOnly(e.target.checked)}
+            />
+            {t("billingAdmin.integrationsReadOnly")}
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("billingAdmin.integrationsReadOnlyHint")}
+          </p>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -299,7 +318,17 @@ function KeyRow({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{k.name}</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-medium">{k.name}</span>
+            {k.readOnly && (
+              <span
+                data-testid={`integration-key-read-only-${k.id}`}
+                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
+              >
+                {t("billingAdmin.integrationsReadOnlyBadge")}
+              </span>
+            )}
+          </div>
           {/* The PREFIX, which is what a log line carries. It is not a
               credential and cannot be used as one. */}
           <code dir="ltr" className="mt-0.5 block truncate text-xs text-muted-foreground">

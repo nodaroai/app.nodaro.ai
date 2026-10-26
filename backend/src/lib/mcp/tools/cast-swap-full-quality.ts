@@ -1,8 +1,8 @@
 /**
  * MCP Full Quality verbs — a finished Nodaro Motion (Cast Swap) or trend run
  * made again at 1080p, with the clip's audio, as a new job linked to it: a
- * Nodaro Motion Pro DRAFT's own take re-rendered (`kind: "same-take"`), or a
- * new Nodaro Motion Lite take
+ * Nodaro Motion Prism DRAFT's own take re-rendered (`kind: "same-take"`), or a
+ * new Nodaro Motion Pulse take
  * from a 720p run's inputs (`kind: "new-take"`). The quote's `kind` words it;
  * an older engine answers none (a same take). The MCP face of the Cloud
  * plugin's routes:
@@ -18,7 +18,7 @@
  * keys the job by the draft, so no client idempotency key is sent.
  *
  * Results are rebuilt field by field from the route's answer (never spread).
- * The route is the authority on every rule (a draft or a Nodaro Motion Lite 720p run,
+ * The route is the authority on every rule (a draft or a Nodaro Motion Pulse 720p run,
  * finished, within 7 days).
  * Its one refusal that ends on its own, 409 `full_quality_pending` (an earlier
  * try's 1080p render is being reviewed or has not started), says to try again
@@ -133,7 +133,7 @@ function refusal(statusCode: number, body: string) {
 
 /** A job id: anything else (a slash, a dot segment) is refused before a request is made. */
 const JOB_ID_RE = /^[A-Za-z0-9-]{1,64}$/
-const JOB_ID_HINT = "The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-lite at 720p."
+const JOB_ID_HINT = "The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-pulse at 720p."
 const fullQualityUrl = (id: string) => `/v1/cast-swap/${encodeURIComponent(id)}/full-quality`
 
 export function registerCastSwapFullQualityTools({ server, session, fastify }: RegisterCastSwapFullQualityToolsOpts): void {
@@ -152,7 +152,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       title: "Estimate Full Quality",
       description:
         "Quote finishing a Nodaro Motion (cast_swap) or trend run at Full Quality (free; nothing starts): a DRAFT's same take re-rendered at 1080p, " +
-        'or, for a motion-lite run at 720p, a new take at 1080p (the quote\'s kind: "same-take" or "new-take"). ' +
+        'or, for a motion-pulse run at 720p, a new take at 1080p (the quote\'s kind: "same-take" or "new-take"). ' +
         "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free.",
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
@@ -175,7 +175,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       title: "Full Quality",
       description:
         "Finish a Nodaro Motion (cast_swap) or trend run at Full Quality, at 1080p with the clip's audio, as a new job: a DRAFT's same take re-rendered, " +
-        "or a new take of a motion-lite 720p run (the quote says which). " +
+        "or a new take of a motion-pulse 720p run (the quote says which). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job.",
       inputSchema: {

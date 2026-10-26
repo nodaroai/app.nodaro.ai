@@ -78,8 +78,8 @@ const DETAIL = {
   ...CARD,
   version: 3,
   previewSec: 4,
-  engine: "motion-pro",
-  engineName: "Nodaro Motion Pro",
+  engine: "motion-prism",
+  engineName: "Nodaro Motion Prism",
   resolutions: ["480p", "720p", "1080p"],
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example/hint-lead.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
@@ -170,16 +170,16 @@ describe("get_trend", () => {
     expect(JSON.parse(res.content[0]!.text!)).toEqual(DETAIL)
   })
 
-  it("hands back a Nodaro Motion Lite trend's engine and its resolutions, from either vocabulary; an unknown or missing engine reads as Pro", async () => {
-    const lite = { ...DETAIL, engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] }
-    for (const answered of ["motion-lite", "kling-4"]) {
+  it("hands back a Nodaro Motion Pulse trend's engine and its resolutions, from any vocabulary; an unknown or missing engine reads as Prism", async () => {
+    const lite = { ...DETAIL, engine: "motion-pulse", engineName: "Nodaro Motion Pulse", resolutions: ["720p", "1080p"] }
+    for (const answered of ["motion-pulse", "motion-lite", "kling-4"]) {
       const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: { ...lite, engine: answered } } } })
       expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(lite)
     }
     const { engine: _e, engineName: _n, ...older } = DETAIL
     for (const body of [older, { ...older, engine: "kling-3" }]) {
       const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: body } } })
-      expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "motion-pro", engineName: "Nodaro Motion Pro" })
+      expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "motion-prism", engineName: "Nodaro Motion Prism" })
     }
   })
 
@@ -188,13 +188,19 @@ describe("get_trend", () => {
       ...DETAIL,
       source: { videoUrl: "https://cdn.example/source.mp4" },
       trendPrompt: "secret",
-      slots: [{ ...DETAIL.slots[0], roleName: "the woman in red" }],
+      previewTrendPrompt: "preview-secret",
+      previewPrePrompt: "preview-pre-secret",
+      references: [{ images: ["https://cdn.example/ref.png"], line: "ref-line", previewLine: "preview-ref-line" }],
+      slots: [{ ...DETAIL.slots[0], roleName: "the woman in red", previewRoleName: "the woman in blue" }],
       examples: [{ ...DETAIL.examples[0], jobId: "j-src" }],
     }
     const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: leaky } } })
     const res = await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })
     const text = res.content[0]!.text! + JSON.stringify(res.structuredContent)
-    for (const hidden of ["source.mp4", "secret", "the woman in red", "j-src", "roleName", "trendPrompt"]) {
+    for (const hidden of [
+      "source.mp4", "secret", "the woman in red", "j-src", "roleName", "trendPrompt",
+      "the woman in blue", "preview-ref-line", "ref-line", "previewRoleName", "previewLine", "previewTrendPrompt", "previewPrePrompt",
+    ]) {
       expect(text).not.toContain(hidden)
     }
   })

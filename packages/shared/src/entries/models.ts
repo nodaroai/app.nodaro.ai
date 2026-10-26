@@ -222,6 +222,9 @@ export {
   CAST_SWAP_ENGINE_OF_NODARO_MOTION,
   NODARO_MOTION_ENGINE_OF_CAST_SWAP,
   CAST_SWAP_ENGINE_IDS_ACCEPTED,
+  NODARO_MOTION_LEGACY_ENGINES,
+  NODARO_MOTION_LEGACY_ENGINE_OF,
+  nodaroMotionEngineFrom,
   nodaroMotionEngineOf,
   nodaroMotionEngineName,
   castSwapEngineFrom,
@@ -229,7 +232,7 @@ export {
   CAST_SWAP_KLING_LENGTH_WHEN_OMITTED,
   CAST_SWAP_KLING_MAX_IMAGES,
 } from "../cast-swap-limits.js"
-export type { CastSwapEngine, CastSwapFaceMaskTarget, CastSwapKlingLength, NodaroMotionEngine } from "../cast-swap-limits.js"
+export type { CastSwapEngine, CastSwapFaceMaskTarget, CastSwapKlingLength, NodaroMotionEngine, NodaroMotionLegacyEngine } from "../cast-swap-limits.js"
 export type {
   ImageAspectRatio,
   ImageResolution,

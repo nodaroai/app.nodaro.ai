@@ -58,6 +58,12 @@ export interface FactoryPresetEntry extends FactoryPreset {
    * server you asked — or null while the preset has none.
    */
   previewUrl?: string | null
+  /**
+   * The same picture at its two sizes for an `<img srcset>` — the tile picture
+   * at 512w and the full-screen one at up to 1024w. Present only when the
+   * preset has both; absent from servers that predate it.
+   */
+  previewSrcSet?: string
 }
 
 /**

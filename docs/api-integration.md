@@ -1692,11 +1692,35 @@ changes. `GET /v1/jobs` and `GET /v1/jobs/:id` also carry `credits_charged:
 number | null` — what the job actually cost once its hold settled, read from
 the same usage log. It can be lower than `credits` (some jobs hold more than
 they end up using — a possible re-render, a length measured after the run —
-and the rest goes back to your balance), it is `0` when the hold was refunded,
-and it is `null` while the job is still running (`credit_status: "reserved"`)
-or when the job reserved nothing of its own. To total what jobs cost, sum
+and the rest goes back to your balance). When the job's own hold was refunded
+it is `0` plus any steps that settled (below: a refunded Nodaro Motion run whose
+reference and mask steps committed reads `credit_status: "refunded"` with
+`credits_charged: 165`). It is `null` while the job's own hold is still open
+(`credit_status: "reserved"`) — even when some of its steps have already
+settled — and when nothing in the run was reserved. To total what jobs cost, sum
 `credits_charged`, not `credits`. Example: a job that held 888 and settled at
-444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`. A generation that ends in
+444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`.
+
+`credits_charged` is the charge of the job **as a run, its steps included**.
+Some jobs run other jobs for you — a Nodaro Motion run prepares its references,
+makes a mask and renders the video, each as a step of its own that is never
+listed on its own — and each step is charged once it settles. A step whose
+hold is still open adds nothing yet; a refunded step adds `0`;
+`credits_charged` stays `null` until the job's own hold settles. Beside it,
+`credits_held` is the run's hold (the job's own `credits` plus its steps'
+holds; the same as `credits` for a job with no steps), and `credits_released`
+is what went back from it (`credits_held − credits_charged`) once every hold in
+the run has settled — `null` until then. `credits` and `credit_status` stay the
+job's own. Example: a Nodaro Motion preview whose own hold was 44, with two
+reference steps at 66, a mask at 33 and a video held at 3,564 and settled at
+854, reads `credits: 44`, `credits_charged: 1063`, `credits_held: 3773`,
+`credits_released: 2710`. If the steps cannot be read for a moment,
+`credits_charged`, `credits_held` and `credits_released` read `null` (unknown),
+never a lower figure. A workflow run counts a node the same way: its credits
+(and so the run's `totalCreditsUsed`, and the creator's percentage on a
+monetized app) include the settled steps of the node's job — a failed node's
+too — and a step that settles after its node finished is counted when the run
+ends. A generation that ends in
 a safety-filter block or a policy block is always refunded — see
 [§12 Credits](#12-credits-cloud-edition). A job a deployment's policy has
 **held** for human review reports `status: "pending_review"` — an in-flight
@@ -3527,6 +3551,13 @@ billing account owns it. `POST /v1/deployment-billing/checkout` answers
 `503 stripe_not_configured` on a deployment that takes no card; the
 account is then topped up by the platform operator instead.
 
+A billing integration key (`ndr_bill_…`, minted on `/billing-admin`)
+reaches only `/v1/deployment-billing/*`. A **read-only** key
+(`ndr_bill_ro_…`) may only `GET` there — any other verb answers
+`403 billing_key_read_only` before the route runs. `GET
+/v1/deployment-billing/balance` includes the billing account's
+auto top-up status (`autoRecharge`, or `null` when it cannot be read).
+
 ### A model with no price yet (`llm_model_unpriced`)
 
 An LLM node is charged per model, at the rate of the lane that serves it. A
@@ -4213,28 +4244,31 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `resolution` (`"480p"` — the default —
-`"720p"` or `"1080p"`; on Nodaro Motion Lite `"720p"` — its default — or
+`"720p"` or `"1080p"`; on Nodaro Motion Pulse `"720p"` — its default — or
 `"1080p"`), `draft` (on by default at 480p, off above it; `true` above 480p is
-refused, and Nodaro Motion Lite has no draft), `prepareReferences` (default
+refused, and Nodaro Motion Pulse has no draft), `prepareReferences` (default
 `true`, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
 
-**Engines.** `engine` chooses the engine: `"motion-pro"` (Nodaro Motion Pro,
-the default when `engine` is left out) or `"motion-lite"` (Nodaro Motion
-Lite). Pro renders 480p (a draft by default), 720p or 1080p, and its Full
-Quality re-renders a draft's own take at 1080p. Lite makes a new take guided
+**Engines.** `engine` chooses the engine: `"motion-prism"` (Nodaro Motion Prism,
+the default when `engine` is left out) or `"motion-pulse"` (Nodaro Motion
+Pulse). Prism renders 480p (a draft by default), 720p or 1080p, and its Full
+Quality re-renders a draft's own take at 1080p. Pulse makes a new take guided
 by the clip and your images: it renders 720p (the default) or 1080p, with no
 draft (`draft: true` answers `400 draft_unsupported`, and 480p is refused).
-Lite renders whole seconds, so the clip is cut to whole seconds:
+Pulse renders whole seconds, so the clip is cut to whole seconds:
 `motionLength` says where — `"cut-end"` (the default: the fraction of a second
-at its end is dropped) or `"cut-start"` (at its start); Pro ignores it. A
-preview is still 4 s from `previewStart`, and Lite's Full Quality makes a new
+at its end is dropped) or `"cut-start"` (at its start); Prism ignores it. A
+preview is still 4 s from `previewStart`, and Pulse's Full Quality makes a new
 take at 1080p from a completed 720p run's inputs (see
 [Full Quality](#full-quality)). The job records its engine in
-`input_data.engine`, and a completed job's output in its `engine`. Each
-engine's own limits apply (Lite takes fewer images per run than the 30 Pro
+`input_data.engine`, and a completed job's output in its `engine`. The trend
+routes name the engine by the ids above. For now a job's record, and this
+route's quote, may still name it by the id it had before the rename (the
+SDK's `estimate()` answers the current id). Each
+engine's own limits apply (Pulse takes fewer images per run than the 30 Prism
 allows), and the route refuses what it cannot run.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
@@ -4259,17 +4293,17 @@ whose picture could not be made. Locations are not prepared.
 
 The quote names two totals. `totalCredits` is what is held when the run
 starts; `expectedCredits` is the charge the run is expected to come to, never
-above `totalCredits`. On Nodaro Motion Pro the video's length is left to the
+above `totalCredits`. On Nodaro Motion Prism the video's length is left to the
 model (Auto), so the video is held at its longest output but is expected to
 be charged for about the clip in and as much out; `settlesLower: true` says
 so (the final charge is expected to come out lower than `totalCredits`, at
-about `expectedCredits`). On Nodaro Motion Lite the two totals are equal and
-`settlesLower` is `false`: Lite renders exactly the length asked for. The run
+about `expectedCredits`). On Nodaro Motion Pulse the two totals are equal and
+`settlesLower` is `false`: Pulse renders exactly the length asked for. The run
 is charged what it actually costs. `breakdown` names the quote's parts, for
 display only: `base` (the run itself), `references` (the reference
 preparation, 0 when it is off or there is nothing to prepare), `motion` (what
-the video holds; on Lite what it costs), `motionExpected` (what the video is
-expected to be charged, never above `motion`; Pro only) and `privacy`
+the video holds; on Pulse what it costs), `motionExpected` (what the video is
+expected to be charged, never above `motion`; Prism only) and `privacy`
 (preparing the clip, when the engine's setting does: in both totals when it
 always runs, in neither when it is the retry below). `motion` and
 `motionExpected` are alternatives, so read the totals, never the sum. When
@@ -4291,17 +4325,17 @@ Refusals, all before anything is charged (bodies are
 | Status | `code` | When |
 |---|---|---|
 | `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, Also an invalid `origin`. |
-| `400` | `draft_unsupported` | `draft: true` with `engine: "motion-lite"`, which has no draft. |
-| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "motion-lite"`. |
-| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "motion-lite"` (only a Nodaro Motion Pro edit can be one). |
-| `400` | `too_many_images` | More than 10 images in an `engine: "motion-lite"` run, across every role and fixed reference. |
+| `400` | `draft_unsupported` | `draft: true` with `engine: "motion-pulse"`, which has no draft. |
+| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "motion-pulse"`. |
+| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "motion-pulse"` (only a Nodaro Motion Prism edit can be one). |
+| `400` | `too_many_images` | More than 10 images in an `engine: "motion-pulse"` run, across every role and fixed reference. |
 | `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
-| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Lite's is 8,000 characters). |
+| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
 | `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
@@ -4315,10 +4349,10 @@ Refusals, all before anything is charged (bodies are
 A finished run can be finished at Full Quality, at 1080p, fitted to the clip
 and given its original audio back, as a new job linked to it:
 
-- a Nodaro Motion Pro DRAFT run (a Nodaro Motion run made as a draft, or a
+- a Nodaro Motion Prism DRAFT run (a Nodaro Motion run made as a draft, or a
   trend run whose default is a draft): the same take re-rendered at 1080p;
-- a Nodaro Motion Lite run at 720p: a NEW take at 1080p from the run's own
-  inputs (for a trend run, recomposed from the trend version it ran on). Lite
+- a Nodaro Motion Pulse run at 720p: a NEW take at 1080p from the run's own
+  inputs (for a trend run, recomposed from the trend version it ran on). Pulse
   cannot redo a take sharper, so it will not match the 720p run frame for
   frame.
 
@@ -4334,10 +4368,10 @@ MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 | `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil }`. |
 | `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
-`:jobId` is the draft's (or Nodaro Motion Lite 720p run's) job id. The quote
+`:jobId` is the draft's (or Nodaro Motion Pulse 720p run's) job id. The quote
 is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
 plus `breakdown.motionHd` (a same take: the 1080p render of the draft's take)
-or `breakdown.motion` (Lite's new take). `motionHd` is 0 when an earlier
+or `breakdown.motion` (Pulse's new take). `motionHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only
 the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
 the price depends on the draft. The quote does not look for a Full Quality
@@ -4359,7 +4393,7 @@ Refusals, all before anything is charged (bodies are
 | `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
 | `404` | `not_found` | Not your job, or not a Nodaro Motion run; also a `sessionId` you may not use (start only). |
 | `409` | `not_completed` | The run has not finished. |
-| `409` | `not_a_draft` | The run is neither a Nodaro Motion Pro draft nor a Nodaro Motion Lite run at 720p. |
+| `409` | `not_a_draft` | The run is neither a Nodaro Motion Prism draft nor a Nodaro Motion Pulse run at 720p. |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
@@ -4383,7 +4417,7 @@ an unknown slug is a `404` on every route.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the engine every run of the trend uses (`"motion-pro"` or `"motion-lite"`, with its name in `engineName`: "Nodaro Motion Pro" or "Nodaro Motion Lite"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Pro (480p is the draft), `["720p", "1080p"]` on Nodaro Motion Lite (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the engine every run of the trend uses (`"motion-prism"` or `"motion-pulse"`, with its name in `engineName`: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Prism (480p is the draft), `["720p", "1080p"]` on Nodaro Motion Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
@@ -4412,9 +4446,9 @@ The estimate and run body is
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
 - `resolution`: one of the trend's `resolutions`, default its first
-  (`"480p"`, or `"720p"` on a Nodaro Motion Lite trend); another is a `400`
+  (`"480p"`, or `"720p"` on a Nodaro Motion Pulse trend); another is a `400`
   `resolution_unsupported`. `draft` (default `true`) is only available at 480p
-  on a Nodaro Motion Pro trend; `draft: true` on a Nodaro Motion Lite trend is
+  on a Nodaro Motion Prism trend; `draft: true` on a Nodaro Motion Pulse trend is
   a `400` `draft_unsupported`.
 - `sessionId`: one of your generation sessions. Accepted (one you may not
   use is still a `404`), but not yet applied: trend runs are not filed into
@@ -4445,9 +4479,9 @@ anything is charged:
 | `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
-| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Lite). |
-| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Lite trend). |
-| `400` | `too_many_images` | A Nodaro Motion Lite trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
+| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Pulse). |
+| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Pulse trend). |
+| `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend does not have (any `example` on a trend with none). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
@@ -4488,12 +4522,19 @@ else `cancelled` or `failed`. The message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
 
-Each run carries its `engine` (`"motion-pro"` or `"motion-lite"`) and
-`engineName`. A completed Nodaro Motion Pro draft, or a completed Nodaro
-Motion Lite run at 720p, has `fullQualityUntil` (the end of its 7 days) and
-can be finished at [Full Quality](#full-quality); on Lite that is a new take.
+Each run carries its `engine` (`"motion-prism"` or `"motion-pulse"`) and
+`engineName`. A completed Nodaro Motion Prism draft, or a completed Nodaro
+Motion Pulse run at 720p, has `fullQualityUntil` (the end of its 7 days) and
+can be finished at [Full Quality](#full-quality); on Pulse that is a new take.
 
-A Full Quality version of a draft run (or of a Nodaro Motion Lite 720p run) is a run of its own in
+A run's `creditsCharged` is what the whole run cost once settled: its own
+charge plus every step it ran (the reference preparation, the mask, the
+video), each added once it settles. It is `null` until the run's own hold
+settles. `creditsHeld` is the run's hold (its own plus its steps'), and
+`creditsReleased` what went back from it once every hold in the run settled
+(`null` until then).
+
+A Full Quality version of a draft run (or of a Nodaro Motion Pulse 720p run) is a run of its own in
 `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
 `status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
 `draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any
@@ -4603,7 +4644,7 @@ factory catalog it reads as anyone can.
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
-A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, section?, platforms?, data, minReferences, needsImage, previewUrl }`.
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, section?, platforms?, data, minReferences, needsImage, previewUrl, previewSrcSet? }`.
 
 **Where a preset is filed — `group`, `section`, `platforms`.** `group` is the folder
 (the Create Image tiles' groups are the everyday ones: YouTube, Shorts · TikTok, Social &
@@ -4631,6 +4672,18 @@ server you asked (`https://<host>/preset-previews/<nodeType>/<slug>.<hash>.webp`
 or `null` while the preset has no picture yet. The name changes whenever the
 picture does, so a URL can be cached for good. For a preset of your own, the
 preset's own copy of the image you gave it (see Writes), or `null`.
+
+**Sizes — `previewSrcSet`.** A factory preset's picture comes in two sizes: the
+tile picture (`previewUrl`, 512px wide) and a full-screen one (up to 1024px
+wide, under `/preset-previews/1024/…`). `previewSrcSet` names both with their
+real widths, ready for an `<img srcset>`, so the browser picks by the room it has:
+
+```html
+<img src="{previewUrl}" srcset="{previewSrcSet}" sizes="(min-width: 900px) 80vw, 100vw" alt="{name}">
+```
+
+It is present only on a preset that has both files, and never on a preset of
+your own. The MCP listing leaves it out.
 
 ### Writes
 

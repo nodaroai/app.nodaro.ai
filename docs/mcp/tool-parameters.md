@@ -415,10 +415,10 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
-| `engine` | string |  | Default "motion-pro" (Nodaro Motion Pro). "motion-lite" (Nodaro Motion Lite): 720p or 1080p only, no draft; its Full Quality is a new take. One of `motion-pro`, `motion-lite`. |
-| `motion_length` | string |  | motion-lite only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
-| `resolution` | string |  | Default "480p" (motion-lite: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | Render as a draft, 480p motion-pro only. Default true at 480p, false above. |
+| `engine` | string |  | Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take. One of `motion-prism`, `motion-pulse`. |
+| `motion_length` | string |  | motion-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
+| `resolution` | string |  | Default "480p" (motion-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Render as a draft, 480p motion-prism only. Default true at 480p, false above. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
@@ -811,7 +811,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-lite at 720p. |
+| `job_id` | string | yes | The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-pulse at 720p. |
 
 ## `estimate_trend`
 
@@ -825,7 +825,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | Default true; only at 480p (a motion-lite trend has none). |
+| `draft` | boolean |  | Default true; only at 480p (a motion-pulse trend has none). |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
 ## `export_workflow`
@@ -920,7 +920,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-lite at 720p. |
+| `job_id` | string | yes | The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-pulse at 720p. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 
@@ -2678,7 +2678,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | Default true; only at 480p (a motion-lite trend has none). |
+| `draft` | boolean |  | Default true; only at 480p (a motion-pulse trend has none). |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 | `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |

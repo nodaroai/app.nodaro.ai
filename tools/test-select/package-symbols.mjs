@@ -7,6 +7,7 @@
 // that (transitively) import it — and a test is selected through the package
 // only if it, or an app module it loads, imports one of those names.
 // Pure; built-ins only. Every doubt returns null: the package rule stands.
+import { memoBySource } from "./source-memo.mjs"
 
 const PACKAGE = "@nodaro/shared"
 const SRC = "packages/shared/src/"
@@ -84,8 +85,15 @@ export function affectedNames(files, changed) {
 }
 
 // The names a module imports from the package (any subpath), or "*" when it
-// takes the whole namespace or imports it in a way we cannot read.
+// takes the whole namespace or imports it in a way we cannot read. Memoised
+// per source (source-memo.mjs; every test asks about every module it loads);
+// each caller gets its own copy of the Set.
+const importedNamesOf = memoBySource("importedNames", importedNamesUncached, { freeze: false })
 export function importedNames(source) {
+  const names = importedNamesOf(source)
+  return names instanceof Set ? new Set(names) : names
+}
+function importedNamesUncached(source) {
   if (!source.includes(PACKAGE)) return null
   const names = new Set()
   const spec = `["']${PACKAGE}(?:/[^"']*)?["']`

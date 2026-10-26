@@ -4,8 +4,9 @@
  *
  * A job event's `data.job` is the job in the same public shape `GET
  * /v1/jobs/:id` answers a non-admin: `sanitizeJobForPublic` (credits, never
- * USD; no provider; internal input fields stripped) plus `credit_status` and
- * `credits_charged` read through the charge reader. The job is read as its
+ * USD; no provider; internal input fields stripped) plus `credit_status`,
+ * `credits_charged`, `credits_held` and `credits_released` read through the
+ * run loader (the job's steps included). The job is read as its
  * owner's, and a body is built once — the first attempt's exact text is what
  * every retry sends again.
  */
@@ -110,11 +111,11 @@ describe("eventBodyFor — a job event", () => {
     })
     expect(Object.keys(event).sort()).toEqual(["createdAt", "data", "id", "type"])
     const job = event.data.job
-    // Exactly the public keys plus the two credit figures — what GET /v1/jobs/:id answers.
-    expect(Object.keys(job).sort()).toEqual([...PUBLIC_JOB_KEYS, "credit_status", "credits_charged"].sort())
+    // Exactly the public keys plus the credit figures — what GET /v1/jobs/:id answers.
+    expect(Object.keys(job).sort()).toEqual([...PUBLIC_JOB_KEYS, "credit_status", "credits_charged", "credits_held", "credits_released"].sort())
     expect(Object.keys(job)).toEqual(expect.arrayContaining(["session_id", "source", "output_data"]))
     expect(job.input_data).toEqual({ type: "generate-image", prompt: "a lighthouse" })
-    expect(job).toMatchObject({ credit_status: "committed", credits_charged: 38, credits: 40 })
+    expect(job).toMatchObject({ credit_status: "committed", credits_charged: 38, credits: 40, credits_held: 40, credits_released: 2 })
     expect(built.body).not.toMatch(/provider|usage_log|error_detail|credits_actual|reconcile/)
   })
 

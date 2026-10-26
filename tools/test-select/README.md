@@ -52,6 +52,16 @@ the runner image, which bounds what it cannot see (the clock, system
 libraries, a flaky pass) to a week. Bump `PASS_CACHE_EPOCH` to throw every
 recorded pass away.
 
+When no Select step wrote the graph (`--graph-out`: dev's post-merge runs, a PR
+that runs everything), the plan step builds it itself, inside its 5-minute
+timeout, and without a plan nothing is recorded. The graph summarizes every
+test against every module it loads — ~250k (test, module) pairs over ~2.7k
+distinct modules in `frontend/` — so each per-module parser (annotations,
+bindings, registry verdicts, `@nodaro/shared` imports) is memoised per source
+text in `source-memo.mjs`, and `test-select-source-memo.test.mjs` holds it to
+once per source. A new per-module analysis goes through the memo too: parsing
+each module once per test is what pushed the step past its timeout.
+
 In CI the Select step reads the change from the checked-out merge commit
 (`--merge-commit`: its diff against the first parent), not the PR files API:
 the commit is fixed by the run's SHA, so all four shards select from the same

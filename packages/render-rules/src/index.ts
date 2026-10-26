@@ -764,6 +764,24 @@ export {
 export { TIER_BILLED_LLM_FEATURES, isTierBilledLlmFeature, type TierBilledLlmFeature } from "./llm-tier-billed"
 // What a Kling 4 trend run sends Cast Swap (its engine text and pictures), for the trend checks and the trend builder.
 export { KLING_ENGINE_TEXT, klingEngineText, castSwapImagesSent } from "./cast-swap-kling-trend"
+// A trend's prompt texts as a run sends them (the 4 s preview's own, else the full run's) and the room they must leave.
+export {
+  ENGINE_PROMPT_MAX,
+  KLING_ENGINE_PROMPT_MAX,
+  TREND_DETAILS_MAX,
+  TREND_PROMPT_MODES,
+  hasOwnPreviewPrompts,
+  hasPreviewText,
+  previewTextOr,
+  promptModesOf,
+  trendPromptBudget,
+  withPromptsFor,
+  type TrendPromptBudget,
+  type TrendPromptMode,
+  type TrendPromptSource,
+} from "./trend-prompts"
+export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS } from "./face-mask-marks"
+export type { CastSwapFaceMaskMarkLabel, FaceMaskMark, MaskEraseBox } from "./face-mask-marks"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

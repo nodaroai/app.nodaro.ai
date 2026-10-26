@@ -27,7 +27,14 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { hasAdmin } from "@/lib/edition"
 import { cn } from "@/lib/utils"
-import { TrendPublishBlockedError, type AdminTrendDetail, type TrendPublishBlocker } from "@/lib/api"
+import {
+  TrendPublishBlockedError,
+  type AdminTrendDetail,
+  type AdminTrendFaceMasking,
+  type AdminTrendFaceMaskMark,
+  type AdminTrendFaceMaskState,
+  type TrendPublishBlocker,
+} from "@/lib/api"
 import {
   isDraftConflict,
   useAdminTrend,
@@ -47,6 +54,7 @@ import {
   imagesSentAtMost,
   maxImagesFor,
   toForm,
+  withPreviewPrompts,
   type TrendForm,
 } from "../model"
 import { SourceClipEditor } from "../components/SourceClipEditor"
@@ -62,6 +70,15 @@ import { PublishBar } from "../components/PublishBar"
 import { StaleUpscales, UpscalePanel, type UpscaleApplied } from "../components/UpscalePanel"
 
 const CONFLICT_MESSAGE = "This trend changed elsewhere — reloaded."
+/** The placeholder of a 4 s preview prompt part left empty: the preview sends the full run's. */
+const PREVIEW_FALLBACK = "Same as the full run"
+const MARKS_CLEARED = "Erase marks were cleared because the source clip changed"
+
+/** The masking without its marks (a new object). */
+function withoutMarks(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
+  const { marks: _marks, ...rest } = m
+  return rest
+}
 
 /** What would be saved, as a string: equal strings = nothing to save. */
 const snapshot = (form: TrendForm) => JSON.stringify(fromForm(form))
@@ -82,9 +99,12 @@ export default function AdminTrendEditorPage() {
   const [revision, setRevision] = useState("")
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [blockers, setBlockers] = useState<TrendPublishBlocker[] | null>(null)
+  /** The last save cleared the face mask's marks (a new source clip). */
+  const [marksCleared, setMarksCleared] = useState(false)
   /** The form's state as of the latest render, for replies that land after more edits. */
   const latest = useRef({ baseline: "", dirty: false })
   const promptRoomId = useId()
+  const previewRoomId = useId()
 
   const load = (d: AdminTrendDetail) => {
     const f = toForm(d.draft)
@@ -143,16 +163,57 @@ export default function AdminTrendEditorPage() {
       {
         onSuccess: (w) => {
           setRevision(w.revision)
-          setBaseline(JSON.stringify(data))
+          // A new source clip: the server cleared the face mask's marks (they were drawn on the old clip).
+          const cleared = w.marksCleared === true && !!data.faceMasking
+          const savedData = cleared ? { ...data, faceMasking: withoutMarks(data.faceMasking!) } : data
+          setBaseline(JSON.stringify(savedData))
           // Saved keys are fixed from now on.
-          setForm((f) => (f ? { ...f, slots: f.slots.map((s) => ({ ...s, isNew: false })) } : f))
+          setForm((f) =>
+            f
+              ? {
+                  ...f,
+                  slots: f.slots.map((s) => ({ ...s, isNew: false })),
+                  ...(cleared && f.faceMasking ? { faceMasking: withoutMarks(f.faceMasking) } : {}),
+                }
+              : f,
+          )
           setBlockers(null)
+          setMarksCleared(cleared)
+          if (cleared) toast.warning(MARKS_CLEARED)
           toast.success("Draft saved")
         },
         onError: onWriteError,
       },
     )
   }
+
+  /**
+   * Save the face mask's marks: the draft as this screen holds it (no unsaved
+   * edits — the panel waits for those) with these marks, through the same
+   * save as Save, so the form keeps them. The new revision, or null.
+   */
+  const onSaveMarks = (marks: AdminTrendFaceMaskMark[]) =>
+    new Promise<{ revision: string; faceMaskState?: AdminTrendFaceMaskState } | null>((resolve) => {
+      if (!form.faceMasking) return resolve(null)
+      const { marks: _old, ...rest } = form.faceMasking
+      const next: TrendForm = { ...form, faceMasking: marks.length > 0 ? { ...rest, marks } : rest }
+      const data = fromForm(next)
+      save.mutate(
+        { data, revision },
+        {
+          onSuccess: (w) => {
+            setRevision(w.revision)
+            setForm(next)
+            setBaseline(JSON.stringify(data))
+            resolve({ revision: w.revision, ...(w.faceMaskState ? { faceMaskState: w.faceMaskState } : {}) })
+          },
+          onError: (e) => {
+            onWriteError(e)
+            resolve(null)
+          },
+        },
+      )
+    })
 
   /**
    * After a server-side write this screen's revision does not guard (a
@@ -190,6 +251,10 @@ export default function AdminTrendEditorPage() {
         : "This draft was also changed elsewhere; saving will reload it.",
     )
   }
+
+  // The 4 s preview's own prompt parts are edited only while the trend offers a preview (kept when it stops).
+  const hasPreview = form.previewStart !== null
+  const previewBudget = promptBudget(withPreviewPrompts(form))
 
   const upscales = server.upscaleJobs ?? []
   const savedSource = server.draft.source
@@ -286,6 +351,7 @@ export default function AdminTrendEditorPage() {
             <SlotsEditor
               trendId={id}
               slots={form.slots}
+              hasPreview={hasPreview}
               onChange={(fn) => setForm((f) => (f ? { ...f, slots: fn(f.slots) } : f))}
             />
           </Section>
@@ -293,10 +359,18 @@ export default function AdminTrendEditorPage() {
             <ReferencesEditor
               trendId={id}
               references={form.references}
+              hasPreview={hasPreview}
               onChange={(fn) => setForm((f) => (f ? { ...f, references: fn(f.references) } : f))}
             />
           </Section>
-          <Section title="4. Prompts" description="Added to every run's prompt. Hidden from users.">
+          <Section
+            title="4. Prompts"
+            description={
+              hasPreview
+                ? "Added to every run's prompt. Hidden from users. A 4 s preview has less to go on: give it its own words where it needs them."
+                : "Added to every run's prompt. Hidden from users."
+            }
+          >
             <PromptField
               label="Pre prompt"
               help="Placed at the start of the prompt, before the slots."
@@ -304,6 +378,16 @@ export default function AdminTrendEditorPage() {
               max={MAX_PRE_PROMPT}
               onChange={(prePrompt) => set({ prePrompt })}
             />
+            {hasPreview && (
+              <PromptField
+                label="Pre prompt in the 4 s preview"
+                help="Sent instead of the pre prompt by a 4 s preview run. Empty: the preview sends the pre prompt."
+                value={form.previewPrePrompt}
+                max={MAX_PRE_PROMPT}
+                placeholder={PREVIEW_FALLBACK}
+                onChange={(previewPrePrompt) => set({ previewPrePrompt })}
+              />
+            )}
             <PromptField
               label="Trend prompt"
               help="Placed at the end of the prompt, before the user's own details."
@@ -312,7 +396,19 @@ export default function AdminTrendEditorPage() {
               describedBy={promptRoomId}
               onChange={(trendPrompt) => set({ trendPrompt })}
             />
+            {hasPreview && (
+              <PromptField
+                label="Trend prompt in the 4 s preview"
+                help="Sent instead of the trend prompt by a 4 s preview run. Empty: the preview sends the trend prompt."
+                value={form.previewTrendPrompt}
+                max={previewBudget.trendPromptMax}
+                placeholder={PREVIEW_FALLBACK}
+                describedBy={previewRoomId}
+                onChange={(previewTrendPrompt) => set({ previewTrendPrompt })}
+              />
+            )}
             <PromptRoom id={promptRoomId} room={promptBudget(form).room} />
+            {hasPreview && <PromptRoom id={previewRoomId} room={previewBudget.room} preview />}
           </Section>
           <Section title="5. Model" description="The video model every run uses. People running the trend never choose it.">
             <EngineEditor
@@ -324,6 +420,11 @@ export default function AdminTrendEditorPage() {
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
             <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
+            {marksCleared && (
+              <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                {MARKS_CLEARED}.
+              </p>
+            )}
             {(form.faceMasking?.mode ?? "off") !== "off" && (
               <FaceMaskPanel
                 trendId={id}
@@ -336,6 +437,9 @@ export default function AdminTrendEditorPage() {
                 onRevision={setRevision}
                 onReload={() => void reload()}
                 onWriteError={onWriteError}
+                marks={server.draft.faceMasking?.marks}
+                onSaveMarks={onSaveMarks}
+                marksSupported={server.faceMaskMarksSupported === true}
               />
             )}
           </Section>
@@ -430,6 +534,7 @@ function PromptField({
   help,
   value,
   max,
+  placeholder,
   describedBy,
   onChange,
 }: {
@@ -437,6 +542,7 @@ function PromptField({
   readonly help: string
   readonly value: string
   readonly max: number
+  readonly placeholder?: string
   /** The id of more text describing the field, read after its help. */
   readonly describedBy?: string
   readonly onChange: (v: string) => void
@@ -455,6 +561,7 @@ function PromptField({
         aria-describedby={describedBy ? `${id}-help ${describedBy}` : `${id}-help`}
         rows={4}
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
       <p className={cn("text-right text-xs tabular-nums", value.length > max ? "text-destructive" : "text-muted-foreground")}>
@@ -468,14 +575,16 @@ function PromptField({
  * The room left for the trend prompt once the user's details at their longest
  * have theirs (the server's publish check). It describes the Trend prompt
  * field: the pre prompt counts too, but shortening the trend prompt is always
- * enough.
+ * enough. `preview`: the same for the texts a 4 s preview run sends (its own,
+ * else the full run's).
  */
-function PromptRoom({ id, room }: { readonly id: string; readonly room: number }) {
+function PromptRoom({ id, room, preview = false }: { readonly id: string; readonly room: number; readonly preview?: boolean }) {
+  const which = preview ? "the 4 s preview's trend prompt" : "the trend prompt"
   return (
     <p id={id} className={cn("text-xs tabular-nums", room < 0 ? "text-destructive" : "text-muted-foreground")}>
       {room >= 0
-        ? `${room} characters left for the trend prompt, keeping room for the user's details (up to ${TREND_DETAILS_MAX}).`
-        : `${-room} characters over: shorten the trend prompt to keep room for the user's details (up to ${TREND_DETAILS_MAX}).`}
+        ? `${room} characters left for ${which}, keeping room for the user's details (up to ${TREND_DETAILS_MAX}).`
+        : `${-room} characters over: shorten ${which} to keep room for the user's details (up to ${TREND_DETAILS_MAX}).`}
     </p>
   )
 }

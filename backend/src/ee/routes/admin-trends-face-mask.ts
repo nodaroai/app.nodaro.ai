@@ -16,6 +16,16 @@
  * key recorded here rather than the engine's stored copy of the request (the
  * engine fills in its defaults there).
  *
+ * Marks (`faceMasking.marks`, decided 2026-10-26): a make sends them to the
+ * engine, which leaves the faces of the `"erased"` ones out of the mask. One
+ * with marks is held back unless the loaded engine declares
+ * `castSwap.faceMaskErase`. When the approved mask is a reusable base
+ * (`reusableFaceMaskBase`: made from the draft's current settings without the
+ * marks, by the masking that runs now, with its raw mask kept), the make
+ * sends it as `fromMask` and the engine skips finding the faces again.
+ * Approving keeps the job's raw mask (`maskUrl`) and depth view (`depthUrl`)
+ * in the trend's storage, with the base key they were made from.
+ *
  * Approving takes the draft's own pending job only: the caller's, a finished
  * `cast-swap-face-mask` job with a masked clip, made from the draft's CURRENT
  * source and settings, and not out of date on arrival (Video Mask's recipe,
@@ -30,7 +40,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { deriveJobSource } from "../../lib/job-source.js"
-import { faceMaskTargetOf, faceMaskingOn, loadedEngineMasksTarget, withResolvedZone } from "../../lib/cast-swap-face-masking.js"
+import { faceMaskMarksOf, faceMaskTargetOf, faceMaskingOn, loadedEngineMasksTarget, withResolvedZone, withoutMarks } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, type EngineEnvironment } from "../lib/engine-environments.js"
@@ -39,9 +49,14 @@ import { trendVersionDataSchema } from "../lib/trends/schemas.js"
 import { TrendMediaError, copyToTrendStorage } from "../lib/trends/media.js"
 import {
   FACE_MASK_JOB_TYPE,
+  faceMaskBaseKey,
+  faceMaskHasMarks,
+  faceMaskMarksMatch,
   faceMaskSettingsKey,
   faceMaskState,
+  faceMaskBaseStats,
   faceMaskStats,
+  reusableFaceMaskBase,
   type FaceMaskState,
 } from "../lib/trends/face-mask.js"
 import { engineRequest, isRec, jobIdOf, relay, str, unavailableOrInternal } from "../lib/trends/run-helpers.js"
@@ -93,6 +108,26 @@ export async function draftFaceMaskState(req: FastifyRequest, draft: TrendVersio
   return faceMaskState(draft, await environmentsOrNull(req), TREND_PUBLISH_ENVIRONMENTS)
 }
 
+/** Whether this environment's Cast Swap engine makes a stored face mask with marks (the editor offers them only then). */
+export function loadedEngineMakesMarks(): boolean {
+  const cs = getPluginSupports().castSwap
+  return cs?.storedFaceMask === true && cs.faceMaskErase === true
+}
+
+/**
+ * `data` with its face mask marks dropped when its source clip is not the
+ * stored draft's (decided 2026-10-26): a mark's frames and box belong to the
+ * clip it was drawn on. `cleared` when there were marks to drop. A 1080p
+ * upscale of the same clip keeps them: it is applied by the upscale routes
+ * (same frames, same picture), never through a draft save.
+ */
+export function withMarksForSource(data: TrendVersionData, stored: TrendVersionData): { data: TrendVersionData; cleared: boolean } {
+  const masking = data.faceMasking
+  if (!masking || faceMaskMarksOf(masking).length === 0) return { data, cleared: false }
+  if (data.source?.videoUrl === stored.source?.videoUrl) return { data, cleared: false }
+  return { data: { ...data, faceMasking: withoutMarks(masking) }, cleared: true }
+}
+
 /** The caller's own job `jobId`, or null. Throws on a database error. */
 async function ownJob(jobId: string, userId: string): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabase
@@ -139,8 +174,14 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       if (!faceMaskingOn(draft.faceMasking)) {
         return err(reply, 409, "face_masking_off", "This trend does not mask faces: turn face masking on and save the draft first.")
       }
-      if (getPluginSupports().castSwap?.storedFaceMask !== true) {
+      const castSwap = getPluginSupports().castSwap
+      if (castSwap?.storedFaceMask !== true) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot make a stored face mask yet.")
+      }
+      // An engine that does not declare marks strips them and masks every face: refused before anything is paid.
+      const takesMarks = castSwap.faceMaskErase === true
+      if (faceMaskHasMarks(draft) && !takesMarks) {
+        return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot leave faces unmasked yet: remove the marks, or wait for the engine.")
       }
       // An engine that does not declare the target strips it and masks heads: a face-only mask made
       // there would be stored under the face-only settings key, so it is refused before anything is paid.
@@ -154,19 +195,24 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const valid = trendVersionDataSchema.safeParse({ ...draft, faceMaskJob: placeholder })
       if (!valid.success) return deps.badRequest(reply, valid.error)
       const key = req.headers["idempotency-key"]
+      // The settings as a run sends them, so the mask is the one a run would make, plus the marks
+      // (only when there are some: a setting without is sent exactly as before marks existed).
+      const marks = faceMaskMarksOf(draft.faceMasking)
+      const faceMasking = { ...withResolvedZone(withoutMarks(draft.faceMasking)), ...(marks.length > 0 ? { marks: structuredClone([...marks]) } : {}) }
+      // The approved mask's raw mask, when it is still the base of this one: no new face finding.
+      const fromMask = takesMarks ? reusableFaceMaskBase(draft, castSwap.faceMaskRecipe) : undefined
       const res = await engineRequest(
         app,
         req,
         "/v1/cast-swap/face-mask",
-        // The settings as a run sends them, so the mask is the one a run would make.
-        { videoUrl: draft.source.videoUrl, faceMasking: withResolvedZone(draft.faceMasking) },
+        { videoUrl: draft.source.videoUrl, faceMasking, ...(fromMask ? { fromMask } : {}) },
         typeof key === "string" && key ? { "idempotency-key": key } : {},
         { origin: "trends-admin", source: deriveJobSource(req) },
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       const jobId = jobIdOf(res.body)
       if (!jobId) return err(reply, 502, "engine_error", "Nodaro Motion did not return a job id.")
-      await audit(req, "make_trend_face_mask", "trend", trend.id, { slug: trend.slug, jobId, settingsKey })
+      await audit(req, "make_trend_face_mask", "trend", trend.id, { slug: trend.slug, jobId, settingsKey, ...(fromMask ? { fromMask: true } : {}) })
 
       // The job is paid for: record it on the draft even when another write
       // landed meanwhile (re-read, keep that write), and say so (`draftMoved`).
@@ -220,11 +266,25 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       if (!job) return err(reply, 404, "not_found", "Face mask job not found")
       const input = isRec(job.input_data) ? job.input_data : {}
       if (input.type !== FACE_MASK_JOB_TYPE) return err(reply, 409, "not_a_face_mask", "That job is not a face mask.")
+      // Made with the draft's marks, as the engine recorded them: one that dropped them would cover the
+      // faces they leave out (the settings key above is the platform's record, not the engine's).
+      const madeWith = isRec(input.faceMasking) ? input.faceMasking.marks : undefined
+      if (!faceMaskMarksMatch(madeWith, faceMaskMarksOf(draft.faceMasking))) {
+        return err(reply, 409, "face_mask_settings_changed", "This mask was not made with the trend's marks. Make it again.")
+      }
       if (job.status !== "completed") return err(reply, 409, "not_completed", "Only a finished face mask can be approved.")
       const output = isRec(job.output_data) ? job.output_data : {}
       const maskedUrl = str(output.maskedUrl)
       if (!maskedUrl) {
         return err(reply, 409, "no_mask", output.reason === "no_faces" ? "No face was found to cover, so there is no mask to approve." : "This job has no masked clip.")
+      }
+      // With marks, a mask only an engine that erases makes: its raw mask and its count of faces left
+      // unmasked (an older engine, mid-deploy, reports neither — its mask covers the faces the marks leave out).
+      if (faceMaskHasMarks(draft)) {
+        const stats = isRec(output.stats) ? output.stats : {}
+        if (!str(output.maskUrl) || typeof stats.erasedRegions !== "number" || !Number.isFinite(stats.erasedRegions)) {
+          return err(reply, 409, "face_mask_not_erased", "This mask was not made by an engine that leaves faces unmasked. Make it again.")
+        }
       }
       const frames = output.frames
       const recipe = isRec(output.recipe) ? output.recipe : {}
@@ -251,7 +311,22 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       }
 
       const stored = await copyToTrendStorage(trend.id, maskedUrl, "video")
-      const faceMask: TrendFaceMask = { ...candidate, url: stored.url }
+      // The raw mask (and depth view) the next edit of the marks starts from, kept beside it. One the
+      // job re-used from the approved mask is already in the trend's storage: kept as it is.
+      const kept = async (url: string | null, already: string | undefined): Promise<string | undefined> =>
+        url === null ? undefined : url === already ? already : (await copyToTrendStorage(trend.id, url, "video")).url
+      const rawMaskUrl = await kept(str(output.maskUrl), draft.faceMask?.rawMaskUrl)
+      const depthUrl = rawMaskUrl ? await kept(str(output.depthUrl), draft.faceMask?.depthUrl) : undefined
+      const baseKey = rawMaskUrl ? faceMaskBaseKey(draft) : null
+      const baseStats = faceMaskBaseStats(output.baseStats)
+      const faceMask: TrendFaceMask = {
+        ...candidate,
+        url: stored.url,
+        // The masked clip's video frame rate, as stored: what the editor counts a mark's frames on.
+        ...(stored.fps ? { fps: stored.fps } : {}),
+        ...(rawMaskUrl && baseKey ? { rawMaskUrl, baseKey, ...(depthUrl ? { depthUrl } : {}) } : {}),
+        ...(rawMaskUrl && baseStats ? { baseStats } : {}),
+      }
       // The pending job is done once approved; another (newer) pending job stays.
       const { faceMaskJob: _done, ...rest } = draft
       const next: TrendVersionData = { ...(pending && pending.jobId !== faceMask.jobId ? draft : rest), faceMask }

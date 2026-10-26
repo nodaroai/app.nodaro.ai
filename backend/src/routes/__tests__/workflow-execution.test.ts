@@ -147,6 +147,7 @@ vi.mock("@/lib/use-case/execution-wrappers.js", () => ({ liveUseCaseWrappersOf: 
 
 import { workflowExecutionRoutes, toExecutionSummary, jobToExecutionSummary } from "../workflow-execution.js"
 import { supabase } from "../../lib/supabase.js"
+import type { RunCredits } from "../../lib/job-credit-status.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -198,11 +199,11 @@ afterEach(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function authedPost(url: string, payload: Record<string, unknown> = {}) {
+function authedPost(url: string, payload: Record<string, unknown> = {}, authKind?: string) {
   return app.inject({
     method: "POST",
     url,
-    headers: { "x-user-id": TEST_USER_ID },
+    headers: { "x-user-id": TEST_USER_ID, ...(authKind ? { "x-auth-kind": authKind } : {}) },
     payload,
   })
 }
@@ -337,7 +338,12 @@ describe("POST /v1/workflows/:id/run", () => {
     expect(res.json().executionId).toBe(TEST_EXEC_ID)
   })
 
-  it("returns 202 on success and enqueues orchestration job", async () => {
+  it.each([
+    [undefined, false],
+    ["jwt", true],
+    ["api_token", false],
+    ["app_token", false],
+  ] as const)("returns 202 on success and enqueues orchestration job (auth: %s)", async (authKind, inAppSession) => {
     const mockFrom = vi.mocked(supabase.from)
     // Starts at 1: the workflow lookup below is keyed by table, not by
     // position, so the first table that IS counted is the second step.
@@ -399,7 +405,7 @@ describe("POST /v1/workflows/:id/run", () => {
       } as never
     })
 
-    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`)
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {}, authKind)
     expect(res.statusCode).toBe(202)
     expect(res.json().executionId).toBe(TEST_EXEC_ID)
     expect(res.json().status).toBe("pending")
@@ -419,12 +425,17 @@ describe("POST /v1/workflows/:id/run", () => {
       }),
       expect.objectContaining({ jobId: TEST_EXEC_ID }),
     )
-    expect(mockResolveBillingContext).toHaveBeenCalledWith({
-      userId: TEST_USER_ID,
-      workflowId: TEST_WORKFLOW_ID,
-      explicitWorkspaceId: undefined,
-      internal: false,
-    })
+    // Only a session JWT is an in-app run: on a deployment-payer instance
+    // that is the one kind of run that may trigger the payer's auto top-up.
+    expect(mockResolveBillingContext).toHaveBeenCalledWith(
+      {
+        userId: TEST_USER_ID,
+        workflowId: TEST_WORKFLOW_ID,
+        explicitWorkspaceId: undefined,
+        internal: false,
+      },
+      { inAppSession },
+    )
   })
 
   it("P14: a DEGRADED resolve on WORKSPACE-HOMED work refuses 503 — never silently personal", async () => {
@@ -2583,6 +2594,23 @@ describe("jobToExecutionSummary — keys nodeStates by canvas node_id", () => {
     }
     expect(summary.nodeStates["n1"].progress).toBe(0)
   })
+
+  it("shows the run's settled charge (its steps included) once known, the hold until then", () => {
+    const run = (charged: number | null, held: number | null = null) =>
+      new Map([["job-uuid-1", { charged, held }]]) as unknown as RunCredits
+    const done = { ...baseRow, status: "completed", credits: 44 }
+    const settled = jobToExecutionSummary(done, false, run(1063)) as {
+      totalCreditsUsed: number
+      nodeStates: Record<string, Record<string, unknown>>
+    }
+    expect(settled.totalCreditsUsed).toBe(1063)
+    expect(settled.nodeStates["job-uuid-1"].creditsUsed).toBe(1063)
+    // Not settled yet: the run's hold (its steps' included), else the job's own.
+    const open = jobToExecutionSummary(done, false, run(null, 3773)) as { totalCreditsUsed: number }
+    expect(open.totalCreditsUsed).toBe(3773)
+    const plain = jobToExecutionSummary(done, false, run(null)) as { totalCreditsUsed: number }
+    expect(plain.totalCreditsUsed).toBe(44)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -2612,6 +2640,8 @@ describe("GET /v1/workflows/:id/executions — editor-source jobs exclusion", ()
 
     expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["workflow_execution_id", null] })
     expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["mcp_client", null] })
+    // A child job is shown only through its parent, whose row carries the run's charge.
+    expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["parent_job_id", null] })
     // user_id scoping (IDOR control) preserved.
     expect(jobsRec.calls).toContainEqual({ method: "eq", args: ["user_id", TEST_USER_ID] })
   })

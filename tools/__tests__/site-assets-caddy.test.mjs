@@ -51,6 +51,8 @@ test("a build's files are kept for good, older styling files come from the archi
   writeFileSync(join(dist, "fonts", "geist.woff2"), "wOF2")
   mkdirSync(join(dist, "preset-previews", "generate-image"), { recursive: true })
   writeFileSync(join(dist, "preset-previews", "generate-image", "character-board.1a2b3c4d.webp"), "RIFF0000WEBP")
+  mkdirSync(join(dist, "preset-previews", "1024", "generate-image"), { recursive: true })
+  writeFileSync(join(dist, "preset-previews", "1024", "generate-image", "character-board.5e6f7a8b.webp"), "RIFF0000WEBP")
 
   const asked = []
   const backend = standInBackend(asked)
@@ -122,8 +124,14 @@ test("a build's files are kept for good, older styling files come from the archi
     assert.match(preview.headers.get("content-type"), /^image\/webp/)
     assert.equal(preview.headers.get("cache-control"), IMMUTABLE)
     assert.equal(preview.headers.get("access-control-allow-origin"), "*")
+    // Its full-screen size, one folder deeper (1024/<nodeType>/…): the same rules.
+    const large = await get("/preset-previews/1024/generate-image/character-board.5e6f7a8b.webp")
+    assert.equal(large.status, 200)
+    assert.match(large.headers.get("content-type"), /^image\/webp/)
+    assert.equal(large.headers.get("cache-control"), IMMUTABLE)
+    assert.equal(large.headers.get("access-control-allow-origin"), "*")
     // A preview that is not there: a 404 nobody caches, never the SPA's HTML.
-    for (const path of ["/preset-previews/generate-image/pose-board.0badc0de.webp", "/preset-previews/gone.webp", "/preset-previews/"]) {
+    for (const path of ["/preset-previews/generate-image/pose-board.0badc0de.webp", "/preset-previews/1024/generate-image/pose-board.0badc0de.webp", "/preset-previews/gone.webp", "/preset-previews/"]) {
       const missing = await get(path)
       assert.equal(missing.status, 404, `${path} should be a 404`)
       assert.equal(missing.headers.get("cache-control"), "no-store", `${path} must not be cached`)

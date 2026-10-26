@@ -148,8 +148,12 @@ export const JOB_VIEW_SCHEMA = {
   suggestedProvider: z.string().optional(),
   /** Credits HELD when the job was accepted; never changes. */
   credits: z.number().nullable().optional(),
-  /** Credits actually charged once the hold settled (can be below `credits`; 0 if refunded); null while running. */
+  /** Credits actually charged once the hold settled, the run's steps (child jobs) included (can be below `creditsHeld`). 0 when the run's own hold was refunded, plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads 165). null while the job's own hold is open (even with steps settled), with no reservation in the run, or when its steps could not be read (unknown). */
   creditsCharged: z.number().nullable().optional(),
+  /** The run's hold: the job's own plus its steps'. */
+  creditsHeld: z.number().nullable().optional(),
+  /** What went back from `creditsHeld` once every hold in the run settled; null until then. */
+  creditsReleased: z.number().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   startedAt: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
@@ -167,8 +171,12 @@ export interface JobRowLike {
   error_message?: string | null
   error_hint?: unknown
   credits?: number | null
-  /** The settled charge (lib/job-credit-status.ts); absent when the caller did not look it up. */
+  /** The run's settled charge (lib/job-credit-status.ts); absent when the caller did not look it up. */
   credits_charged?: number | null
+  /** The run's hold, its steps' included. */
+  credits_held?: number | null
+  /** What went back once every hold in the run settled. */
+  credits_released?: number | null
   created_at?: string | null
   started_at?: string | null
   completed_at?: string | null
@@ -191,6 +199,8 @@ export function jobView(row: JobRowLike): JobView {
     errorMessage: row.error_message ?? null,
     credits: row.credits ?? null,
     creditsCharged: row.credits_charged ?? null,
+    ...(row.credits_held !== undefined ? { creditsHeld: row.credits_held } : {}),
+    ...(row.credits_released !== undefined ? { creditsReleased: row.credits_released } : {}),
     createdAt: row.created_at ?? null,
     startedAt: row.started_at ?? null,
     completedAt: row.completed_at ?? null,

@@ -47,6 +47,10 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "מודל מול מודל",
     description: "סוקרי AI שמשווים שני מודלי תמונה או וידאו. 'מי יותר טוב?'",
   },
+  "generate-image/thumb-node-diagram": {
+    name: "תרשים צמתים",
+    description: "ערוצי אוטומציה וסוכני AI: אדם אחד במרכז תרשים זרימה נקי.",
+  },
   "generate-image/thumb-finance-shock": {
     name: "הלם פיננסי",
     description: "ערוצי כסף וקריפטו. מספר של הפסד או רווח, ראש בידיים.",
@@ -86,6 +90,14 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   "generate-image/thumb-stage-talk": {
     name: "הרצאה על במה",
     description: "דוברים בכנסים ומייסדי SaaS שמעלים הרצאות.",
+  },
+  "generate-image/thumb-screen-portals": {
+    name: "מסכים מרחפים",
+    description: "יוצרי פרסום ושיווק: מסכי טלפון מרחפים סביב מנחה מופתע.",
+  },
+  "generate-image/thumb-copy-me-arrow": {
+    name: "חץ של טרנספורמציה",
+    description: "ערוצי יזמות: מצללית אנונימית למייסדת בטוחה, חץ צהוב אחד גדול.",
   },
   "generate-image/thumb-challenge-timer": {
     name: "אתגר עם טיימר",
@@ -138,6 +150,10 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   "generate-image/thumb-food-feast": {
     name: "סעודה",
     description: "ולוגרים של אוכל וערוצי מתכונים. אוכל מקרוב, פנים רעבות, מחיר או טענה.",
+  },
+  "generate-image/thumb-vlog-bright": {
+    name: "ולוג שמשי",
+    description: "ולוגרים של טיולים ולייף־סטייל: רחוב שמשי, חיוך גדול, כיתוב מצויר ביד.",
   },
   "generate-image/thumb-science-explainer": {
     name: "הסבר מדעי",
@@ -199,6 +215,10 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "נכון ולא נכון",
     description: "ערוצי הדרכה ועצות: ככה כן, ככה לא.",
   },
+  "generate-image/thumb-playful-cast": {
+    name: "צוות משועשע",
+    description: "יוצרי אנימציה ותוכן לילדים: מנחה מוקף בדמויות תלת־ממד מקוריות.",
+  },
   "generate-image/thumb-pets": {
     name: "חיות מחמד",
     description: "ערוצי חיות וסיפורי חילוץ.",
@@ -210,6 +230,18 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   "generate-image/thumb-parenting": {
     name: "הורות",
     description: "יוצרי משפחה והורות. הורה + ילד, כאוס שמזדהים איתו.",
+  },
+  "generate-image/thumb-swiss-collage": {
+    name: "קולאז' שוויצרי",
+    description: "מעצבים ומותגים: קולאז' דפוס עם פורטרט גזור וטיפוגרפיה ענקית.",
+  },
+  "generate-image/thumb-editorial-type": {
+    name: "טיפוגרפיה עיתונאית",
+    description: "אופנה ותרבות: פנים דרך מילה אחת ענקית, איפוק של פוסטר קמפיין.",
+  },
+  "generate-image/thumb-reel-cover-bold": {
+    name: "שתי מילים בערפל",
+    description: "ערוצי מוטיבציה: שתי מילים ענקיות בערפל ודמות קטנה לקנה מידה.",
   },
   "generate-image/short-pov-hook": {
     name: "הוק POV",
@@ -466,6 +498,10 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   "generate-image/merch-standalone-print-art": {
     name: "הדפס לחולצה בלבד",
     description: "מוכרי הדפסה לפי דרישה: הגרפיקה לבדה, בלי חולצה, על רקע לבן.",
+  },
+  "generate-image/layout-visionary-magazine-cover": {
+    name: "שער מגזין",
+    description: "יזמים ומותגים אישיים: שער מגזין אופנה אנכי עם כותרת ראשית וסיפור שער.",
   },
   "generate-image/merch-sticker-sheet": {
     name: "גיליון מדבקות",

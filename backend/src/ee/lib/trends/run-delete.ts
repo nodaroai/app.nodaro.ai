@@ -33,9 +33,8 @@ import { ownedJobOutputKeys } from "../../../lib/job-output-keys.js"
 import { deletableKeys, permanentlyDeleteAsset } from "../../../lib/asset-delete.js"
 import { deleteKeysRecordingFailures } from "../../../lib/storage-delete.js"
 import { deleteJobWithPrivateMedia } from "../../../lib/workflow-delete.js"
+import { MAX_CHILD_JOB_DEPTH } from "../../../lib/public-job-data.js"
 
-/** A Cast Swap handler nests its steps one or two deep; this bounds a bad loop. */
-const MAX_CHILD_DEPTH = 5
 
 /** The run (or one of its child jobs) is still running. */
 export class TrendRunInFlightError extends Error {
@@ -66,7 +65,7 @@ export interface TrendRunDeleteResult {
 async function runFamily(runId: string, ownerId: string): Promise<FamilyJob[]> {
   const family: FamilyJob[] = []
   let level = [runId]
-  for (let depth = 0; depth <= MAX_CHILD_DEPTH && level.length > 0; depth++) {
+  for (let depth = 0; depth <= MAX_CHILD_JOB_DEPTH && level.length > 0; depth++) {
     const query = supabase.from("jobs").select("id, status, output_data").eq("user_id", ownerId)
     const { data, error } = depth === 0 ? await query.eq("id", runId) : await query.in("parent_job_id", level)
     if (error) throw new Error(`Could not read the jobs of trend run ${runId}: ${error.message}`)

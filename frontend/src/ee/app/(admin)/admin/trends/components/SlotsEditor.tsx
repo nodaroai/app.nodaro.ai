@@ -1,7 +1,8 @@
 // The trend's slots: what a user replaces (people, a place, products, pets).
 // A slot's key is stable once saved (examples and runs name slots by key);
 // its label and hint are per language; its roleName (hidden) names who it is
-// in the source clip; a person / pet / product carries its kind's default chips,
+// in the source clip, and its previewRoleName (hidden, optional, shown only
+// while the trend offers a 4 s preview) who it is in that preview; a person / pet / product carries its kind's default chips,
 // each shown to people (they may change it) or hidden (fixed at its value).
 // A slot may carry a hint picture (e.g. a frame of that actor from the
 // original), copied into the trend's storage as it is added; shown with the
@@ -59,11 +60,13 @@ function fixedLabel(v: TrendChoice | undefined): string {
 interface Props {
   readonly trendId: string
   readonly slots: FormSlot[]
+  /** The trend offers a 4 s preview: each slot shows its preview role name (kept, not shown, otherwise). */
+  readonly hasPreview: boolean
   /** Functional: a hint picture arrives asynchronously, after other edits may have landed. */
   readonly onChange: (fn: (slots: FormSlot[]) => FormSlot[]) => void
 }
 
-export function SlotsEditor({ trendId, slots, onChange }: Props) {
+export function SlotsEditor({ trendId, slots, hasPreview, onChange }: Props) {
   // By uid, on the slots as they are when the change lands (never the ones this render saw).
   const update = (uid: string, fn: (s: FormSlot) => FormSlot) => onChange((ss) => ss.map((s) => (s.uid === uid ? fn(s) : s)))
   const move = (uid: string, by: -1 | 1) =>
@@ -88,6 +91,7 @@ export function SlotsEditor({ trendId, slots, onChange }: Props) {
           slot={s}
           index={i}
           count={slots.length}
+          hasPreview={hasPreview}
           kindFull={(k) => k !== s.kind && countOf(k) >= SLOT_CAPS[k]}
           onChange={(next) => update(s.uid, () => next)}
           onHintImage={(url) => update(s.uid, (x) => withHintImage(x, url))}
@@ -126,6 +130,7 @@ interface CardProps {
   readonly slot: FormSlot
   readonly index: number
   readonly count: number
+  readonly hasPreview: boolean
   readonly kindFull: (k: TrendSlotKind) => boolean
   readonly onChange: (s: FormSlot) => void
   /** Applied to the slot as it is when the picture lands. */
@@ -134,7 +139,7 @@ interface CardProps {
   readonly onRemove: () => void
 }
 
-function SlotCard({ trendId, slot, index, count, kindFull, onChange, onHintImage, onMove, onRemove }: CardProps) {
+function SlotCard({ trendId, slot, index, count, hasPreview, kindFull, onChange, onHintImage, onMove, onRemove }: CardProps) {
   const n = index + 1
   const keyOk = SLOT_KEY_RE.test(slot.key)
   const setChip = (chip: TrendChipKey, v: TrendChoice | "default") => {
@@ -220,6 +225,19 @@ function SlotCard({ trendId, slot, index, count, kindFull, onChange, onHintImage
         />
         <span className="text-xs text-muted-foreground">Who this is in the source clip. Hidden from users; goes into the prompt.</span>
       </label>
+      {hasPreview && (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Role name in the 4 s preview</span>
+          <Input
+            value={slot.previewRoleName ?? ""}
+            maxLength={200}
+            placeholder="Same as the full run"
+            onChange={(e) => onChange({ ...slot, previewRoleName: e.target.value })}
+            className="h-9"
+          />
+          <span className="text-xs text-muted-foreground">Who this is in the 4 s preview, if it needs other words. Empty: the role name.</span>
+        </label>
+      )}
 
       {CHIPS_BY_KIND[slot.kind].length > 0 && (
         <div className="flex flex-col gap-1 text-sm">

@@ -13,7 +13,7 @@ interface GlobalOpts extends OutputOpts {
  */
 function fullQualityCommand(): Command {
   const cmd = new Command("full-quality").description(
-    "finish a run (Nodaro Motion or trend) at Full Quality at 1080p, as a new job: a draft's same take, or a new take of a Nodaro Motion Lite 720p run — `estimate` quotes it (free), `run` SPENDS CREDITS",
+    "finish a run (Nodaro Motion or trend) at Full Quality at 1080p, as a new job: a draft's same take, or a new take of a Nodaro Motion Pulse 720p run — `estimate` quotes it (free), `run` SPENDS CREDITS",
   )
 
   cmd

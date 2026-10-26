@@ -24,8 +24,7 @@ import { supabase } from "../../../lib/supabase.js"
 import { callerGrantOf, withJobSubmissionContext, type TrustedJobProvenance } from "../../../lib/job-submission-context.js"
 import { resolveWebSurfaceFlag } from "../../../middleware/credit-guard.js"
 import { redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../../lib/public-job-data.js"
-import { creditStatusMapFor, creditsChargedOf } from "../../../lib/job-credit-status.js"
-import { sideHoldChargesFor } from "../../../lib/job-step-charge.js"
+import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "../../../lib/job-credit-status.js"
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
@@ -61,16 +60,26 @@ export interface TrendRun {
   resolution: string
   draft: boolean
   /**
-   * The engine the run was made on, by its public id: `"motion-pro"` (every
-   * run before the choice) or `"motion-lite"`. A job stores either vocabulary
-   * (an engine that knows the public ids records those).
+   * The engine the run was made on, by its public id: `"motion-prism"` (every
+   * run before the choice) or `"motion-pulse"`. A job stores any vocabulary
+   * (an engine that knows the public ids records those, the earlier ones up to
+   * 0.397.0), each read as the current public id.
    */
   engine: NodaroMotionEngine
-  /** Its name: "Nodaro Motion Pro" or "Nodaro Motion Lite". */
+  /** Its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse". */
   engineName: string
   videoUrl: string | null
   posterUrl: string | null
+  /**
+   * What the run was charged once settled, every step it ran included (its
+   * reference preparation, mask and video: child jobs billed on their own).
+   * Null until the run's own hold settles; a step adds its charge once it settles.
+   */
   creditsCharged: number | null
+  /** The run's hold: its own plus its steps'. */
+  creditsHeld: number | null
+  /** What went back from `creditsHeld` once every hold in the run settled; null until then. */
+  creditsReleased: number | null
   /**
    * A Full Quality version: the draft run it was made from (which may be gone
    * since). Null for any other run. Such a run is listed on its own, with its
@@ -94,7 +103,7 @@ const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
 const FULL_QUALITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
- * A run's engine (internal id), from its stored input in either vocabulary (an
+ * A run's engine (internal id), from its stored input in any vocabulary (an
  * engine that knows Nodaro Motion's public ids records those): Seedance 2.5
  * when it names none (every run before the choice) or names no engine.
  */
@@ -115,7 +124,7 @@ export function fullQualityEligible(input: Rec): boolean {
 }
 
 export const RUN_JOB_COLS =
-  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, usage_log_id"
+  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, usage_log_id, credits"
 
 export type Rec = Record<string, unknown>
 export const isRec = (v: unknown): v is Rec => !!v && typeof v === "object" && !Array.isArray(v)
@@ -134,6 +143,10 @@ export interface RunJobRow {
   started_at: string | null
   completed_at: string | null
   usage_log_id: string | null
+  /** The run's own hold (read for its run's figures). */
+  credits?: number | null
+  /** The owner, on a list over several (the admin test runs): whose steps the run's charge reads. */
+  user_id?: string | null
 }
 
 // ── reading a run back ──────────────────────────────────────────────────────
@@ -201,14 +214,11 @@ function runError(row: RunJobRow, audience: RunAudience): TrendRun["error"] {
   return { code, message: RUN_FAILED_MESSAGE }
 }
 
-export type CreditStatusMap = Awaited<ReturnType<typeof creditStatusMapFor>>
-
 /** A Cast Swap job row → `TrendRun`, or null when it is not a trend run. */
 export function toTrendRun(
   raw: RunJobRow,
   fq: RunJobRow | undefined,
-  credits: CreditStatusMap,
-  sideCharges: ReadonlyMap<string, number>,
+  credits: RunCredits,
   audience: RunAudience = "public",
 ): TrendRun | null {
   // Redaction first (drops every `__` key), then the whitelist below.
@@ -244,7 +254,11 @@ export function toTrendRun(
     engineName: nodaroMotionEngineName(runEngineOf(input)),
     videoUrl: row.status === "completed" ? videoUrl : null,
     posterUrl: row.status === "completed" ? posterUrl : null,
-    creditsCharged: creditsChargedOf(row.usage_log_id, credits, row.id, sideCharges),
+    // The run's charge: its own, and every step it ran (the reference
+    // preparation, the mask, the video — each a child job billed on its own).
+    creditsCharged: creditsChargedOf(row.id, credits),
+    creditsHeld: runCreditsOf(row.id, credits)?.held ?? null,
+    creditsReleased: runCreditsOf(row.id, credits)?.released ?? null,
     fullQualityOf: str(input.fullQualityOf),
     fullQuality: fqRow ? { jobId: fqRow.id, status: fqRow.status } : null,
     fullQualityUntil,
@@ -343,13 +357,12 @@ export async function toTrendRuns(
 ): Promise<TrendRun[]> {
   if (page.length === 0) return []
   const drafts = page.filter((r) => isRec(r.input_data) && fullQualityEligible(r.input_data)).map((r) => r.id)
-  const [fqByDraft, credits, sideCharges] = await Promise.all([
+  const [fqByDraft, credits] = await Promise.all([
     fullQualityByDraft(drafts, owners),
-    creditStatusMapFor(page.map((r) => r.usage_log_id)),
-    sideHoldChargesFor(page.map((r) => r.id)),
+    runCreditsFor(page, owners),
   ])
   return page.flatMap((r) => {
-    const run = toTrendRun(r, fqByDraft.get(r.id), credits, sideCharges, audience)
+    const run = toTrendRun(r, fqByDraft.get(r.id), credits, audience)
     return run ? [run] : []
   })
 }
@@ -373,6 +386,9 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   // An engine that does not declare the target strips it and masks heads: never send it a face-only trend.
   if (composed.needs.faceMaskTarget && !faceMaskTargetsOf(cs).includes(composed.needs.faceMaskTarget)) return false
   if (composed.needs.trendPrePrompt && cs.trendPrePrompt !== true) return false
+  // A trend with marks runs on its stored mask only, never masked per run: the engine must take it
+  // (`withoutUnsupportedStoredMask` would strip it) and honour `required` (an older one strips that too).
+  if (composed.needs.storedFaceMask && (cs.storedFaceMask !== true || cs.storedFaceMaskRequired !== true)) return false
   return cs.resolutions.includes(composed.body.resolution)
 }
 
@@ -526,7 +542,7 @@ export async function engineRequest(
         ...(webFreeMode ? { "x-web-free-mode": "true" } : {}),
         "content-type": "application/json",
       },
-      // A Lite trend's length fit, under the key this environment's engine takes.
+      // A Pulse trend's length fit, under the key this environment's engine takes.
       payload: withWireLengthKey(payload),
     }),
   )

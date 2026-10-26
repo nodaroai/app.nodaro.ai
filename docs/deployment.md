@@ -206,6 +206,7 @@ here for each one anyway.
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated. Not combinable with a `billing.payerAccount` whose effective grade is `free` or `payg`: the pool is resolved at the payer's tier, so the API refuses to boot (`PAYG_WEB_BLOCK_ENABLED is on and the deployment payer's effective tier is …`) rather than refuse every run — put the payer on a paid subscription or leave the flag off |
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch: it guards the trigger + charge path only, while webhook provisioning stays on so in-flight payments still settle |
+| `HOSTED_DEPLOYMENTS` | unset | Cloud only — the dedicated deployments whose billing status `/admin/hosted-deployments` shows: a JSON array of `{ "name", "url", "key" }`, where `url` is the deployment's https origin and `key` a **read-only** billing integration key (`ndr_bill_ro_…`) minted on that deployment's `/billing-admin`. An entry with any other key, or a non-https URL, is refused and shown as misconfigured — never called. The page reads each deployment's `GET /v1/deployment-billing/balance` (pool, monthly spend, low balance, auto top-up), cached for a minute. |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. On at `app.nodaro.ai` and `next.nodaro.ai` since 2026-10-08. See the Credits section of each node's page |
@@ -878,8 +879,9 @@ optional; each array empty = "keep the default"):
     Consequences when set: every reservation debits the payer account
     (ownership and galleries stay the requester's); requester tier gates run
     at the payer account's grade, with watermarking and daily caps off;
-    per-user storage quotas stop enforcing (usage is still tracked); the
-    payer is never auto-recharged; and `/usage` shows each user their own
+    per-user storage quotas stop enforcing (usage is still tracked); a
+    requester's own card is never auto-recharged (see the billing page below
+    for the payer's); and `/usage` shows each user their own
     consumption for the period, plus their own allowance as soon as a payer is
     set (the seeded or billing-account-set default until the user has a row of
     their own; it only *binds* under `billing.allowances: "enforce"`) — never
@@ -898,6 +900,26 @@ optional; each array empty = "keep the default"):
     charged and nothing lands. Without `STRIPE_SECRET_KEY` the page still works
     and reports that card payment is not configured (the route answers `503
     stripe_not_configured`); Nodaro then tops the payer up by hand.
+    The same page configures **auto top-up**: when the pool drops below a
+    threshold (raw credits), the card saved by the payer's last card purchase
+    is charged automatically — the stock auto-recharge limits apply ($5–$1,000
+    per charge, at most 3 a day, 10 minutes apart, stopped after 3 failed
+    charges) and it needs `AUTO_RECHARGE_ENABLED` on the server as well as the
+    `payment_intent.succeeded` / `payment_intent.payment_failed` events on the
+    Stripe webhook endpoint. **Only work started in the product itself can
+    trigger a charge**: personal API tokens, OAuth apps, connected instances,
+    webhook / schedule / Telegram triggers and internal loopbacks spend the
+    pool but never charge the card; a pool they drain below the threshold is
+    topped up on the next in-app generation. `GET
+    /v1/deployment-billing/balance` reports the status read-only
+    (`autoRecharge`: enabled, active, threshold, amount, failures, last
+    attempt).
+    The page also mints **billing integration keys** for another system (for
+    example the back office). A key is **full** (`ndr_bill_…`: may read the
+    pool, usage and prices and administer allowances) or **read-only**
+    (`ndr_bill_ro_…`: may only read — every non-GET request answers `403
+    billing_key_read_only`); the kind is fixed when the key is created. Use a
+    read-only key wherever only monitoring is needed.
     The billing account is an ordinary **SSO identity of the deployment's own
     provider**: it links on its first verified sign-in whatever
     `EXTERNAL_SSO_LINK_EXISTING` says (an unverified assertion is refused), and

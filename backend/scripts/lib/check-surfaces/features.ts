@@ -145,6 +145,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "image-to-image": "the Image to Image route",
   "llm-chat": "the LLM Chat node's routes",
   "llm-suggest-description": "suggesting a description with an LLM",
+  "mask-erase": "an internal step of a trend face mask (refuses every caller but the platform's own jobs)",
   "meta-ads-scrape": "the Meta Ads scrape node's routes",
   onboarding: "the onboarding state",
   present: "presentation mode",

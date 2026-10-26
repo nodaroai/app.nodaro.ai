@@ -13,7 +13,9 @@
  *    becomes an example (D16), and its media is COPIED into trend storage;
  *  - a source clip outside 4–30 s is refused before anything is stored;
  *  - a test run is composed from the DRAFT version and dispatched as the admin;
- *  - "Show prompt" returns the Seedance child's prompt;
+ *  - "Show prompt" returns the Seedance child's prompt, and the trend's prompt
+ *    parts for a Full or a 4 s preview run (each preview part falling back to
+ *    the full run's);
  *  - every route is admin-only.
  *
  * The store is an in-memory stand-in honouring the store's contract
@@ -25,7 +27,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { has, type QueryResult, type RecordedQuery } from "../../../lib/__tests__/fake-supabase-query.js"
-import type { TrendRow, TrendVersionData } from "../../lib/trends/types.js"
+import type { TrendFaceMask, TrendRow, TrendVersionData } from "../../lib/trends/types.js"
 
 const db = vi.hoisted(() => ({
   log: [] as RecordedQuery[],
@@ -57,6 +59,8 @@ const mem = vi.hoisted(() => ({
   ffmpegFails: null as null | Error,
   /** When set, the next ffprobe of a video fails with it. */
   probeFails: null as null | Error,
+  /** When set, the frame rate every ffprobe of a video reads. */
+  fps: undefined as number | undefined,
   /** Every `req.log.warn` the routes write: [object, message]. */
   warns: [] as unknown[][],
   /** The store fails as on a database without migration 549's tables. */
@@ -249,7 +253,7 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
 
 /** What the stubbed ffprobe reads: 720×1280, the length set for the downloaded URL (else 12 s). */
 function probed(path: string) {
-  return { width: 720, height: 1280, durationSeconds: mem.durations.get(mem.downloads.get(path) ?? "") ?? 12 }
+  return { width: 720, height: 1280, durationSeconds: mem.durations.get(mem.downloads.get(path) ?? "") ?? 12, ...(mem.fps ? { fps: mem.fps } : {}) }
 }
 
 import { adminTrendsRoutes } from "../admin-trends.js"
@@ -258,7 +262,7 @@ import { resolveRequestOrigin } from "../../../lib/client-origin-scope.js"
 import { resolveRequestSession } from "../../../lib/generation-session-scope.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { withResolvedZone } from "../../../lib/cast-swap-face-masking.js"
-import { faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
+import { faceMaskBaseKey, faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
@@ -597,9 +601,30 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     // Save the draft: the body's examples are ignored (examples come only from runs).
     const saved = await call("PUT", `/v1/admin/trends/${id}/draft`, { data: { ...draftData(), examples: [EXAMPLE] }, revision: await revisionOf(id) })
     expect(saved.statusCode).toBe(200)
-    expect(saved.json().data).toEqual({ version: 1, revision: expect.any(String) })
+    // With the draft's face mask state after the save (none: it does not mask).
+    expect(saved.json().data).toEqual({ version: 1, revision: expect.any(String), faceMaskState: { status: "none", reasons: [] } })
     expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
     expect(mem.trends[0]!.versions[1]!.data.trendPrompt).toBe("DRAFT-PROMPT neon lights")
+
+    // The 4 s preview's prompt parts are saved and read back as written, and kept when the preview is turned off.
+    const withPreview = {
+      ...draftData(),
+      previewStart: null,
+      previewPrePrompt: "PREVIEW-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT",
+      slots: [{ ...draftData().slots[0]!, previewRoleName: "the woman" }, draftData().slots[1]!],
+      references: [{ images: [`https://cdn.test/trends/${id}/r.png`], line: "the sign", previewLine: "a sign" }],
+    }
+    expect((await call("PUT", `/v1/admin/trends/${id}/draft`, { data: withPreview, revision: await revisionOf(id) })).statusCode).toBe(200)
+    expect(((await call("GET", `/v1/admin/trends/${id}`)).json().data as { draft: TrendVersionData }).draft).toMatchObject({
+      previewStart: null,
+      previewPrePrompt: "PREVIEW-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT",
+      slots: [{ previewRoleName: "the woman" }, { roleName: "the dog" }],
+      references: [{ line: "the sign", previewLine: "a sign" }],
+    })
+    const tooLong = { ...withPreview, slots: [{ ...withPreview.slots[0]!, previewRoleName: "r".repeat(201) }, withPreview.slots[1]!] }
+    expect((await call("PUT", `/v1/admin/trends/${id}/draft`, { data: tooLong, revision: await revisionOf(id) })).statusCode).toBe(400)
 
     // Pre prompt and face masking are saved and read back as written.
     const MASK = { mode: "always" as const, fill: "depth" as const, maxFaceHeightPct: 0, zone: { leftPct: 10 } }
@@ -653,7 +678,7 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     // Edit the published trend: a NEW version; the published row is untouched.
     const loaded = (await call("GET", `/v1/admin/trends/${id}`)).json().data as { draft: TrendVersionData; revision: string }
     const edit = await call("PUT", `/v1/admin/trends/${id}/draft`, { data: { ...loaded.draft, name: { en: "Neon Dance II" } }, revision: loaded.revision })
-    expect(edit.json().data).toEqual({ version: 2, revision: expect.any(String) })
+    expect(edit.json().data).toEqual({ version: 2, revision: expect.any(String), faceMaskState: { status: "none", reasons: [] } })
     expect(mem.trends[0]!.versions[1]!.data.name.en).toBe("Neon Dance")
     expect(mem.trends[0]!.versions[2]!.data.examples).toHaveLength(1) // examples carried into v2
 
@@ -1315,6 +1340,27 @@ describe("test runs", () => {
     expect((body.trendRun as { display: { trend: unknown } }).display.trend).toEqual({ id: T1, slug: "neon-dance", version: 2, name: "Neon Dance II" })
   })
 
+  it("a 4 s preview test runs the draft's preview prompt parts; a full test run the full run's", async () => {
+    seed({}, draftData({
+      slots: [
+        { key: "lead", label: { en: "Lead dancer" }, kind: "person", required: true, roleName: "the woman on the left", previewRoleName: "PREVIEW the woman" },
+        { key: "dog", label: { en: "Dog" }, kind: "pet", required: false, roleName: "the dog" },
+      ],
+      prePrompt: "DRAFT-PRE",
+      previewPrePrompt: "PREVIEW-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT",
+      examples: [EXAMPLE],
+    }))
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, preview: true })).statusCode).toBe(202)
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+    const [preview, full] = engine.calls.map((c) => c.body as { roles: Array<{ name: string }>; prePrompt?: string; postPrompt?: string })
+    expect(preview!.roles.map((r) => r.name)).toEqual(["PREVIEW the woman", "the dog"])
+    expect([preview!.prePrompt, preview!.postPrompt]).toEqual(["PREVIEW-PRE", "PREVIEW-PROMPT"])
+    expect(full!.roles.map((r) => r.name)).toEqual(["the woman on the left", "the dog"])
+    expect([full!.prePrompt, full!.postPrompt]).toEqual(["DRAFT-PRE", "DRAFT-PROMPT neon lights"])
+  })
+
   it("the draft's pre prompt and masking ride at the top level; a masked preview makes the full run always", async () => {
     const MASK = { mode: "auto" as const, blurStrengthPct: 3 }
     seed({}, draftData({ prePrompt: "DRAFT-PRE", faceMasking: MASK, examples: [EXAMPLE] }))
@@ -1413,6 +1459,8 @@ describe("test runs", () => {
     expect(has(q, "in", "user_id", [ADMIN, ADMIN2])).toBe(true)
     expect(has(q, "filter", "input_data->>type", "eq", "cast-swap")).toBe(true)
     expect(has(q, "filter", "input_data->trend->>id", "eq", T1)).toBe(true)
+    // A child job (a run's step) is never listed as a run of its own.
+    expect(has(q, "is", "parent_job_id", null)).toBe(true)
     // A Full Quality version is listed as its own run.
     expect(q.ops.some((op) => op.a[0] === "input_data->>fullQualityOf")).toBe(false)
     expect(has(q, "order", "created_at", { ascending: false })).toBe(true)
@@ -1457,17 +1505,91 @@ describe("test runs", () => {
     expect(res.json().data[0].error).toEqual({ code: "safety-block", message: "Seedance refused the clip." })
   })
 
-  it("Show prompt returns the Seedance child's prompt", async () => {
+  /** A draft that words its 4 s preview's prompt parts its own way. */
+  const previewDraft = () =>
+    draftData({
+      slots: [
+        { key: "lead", label: { en: "Lead dancer" }, kind: "person", required: true, roleName: "the woman on the left", previewRoleName: "the woman" },
+        { key: "dog", label: { en: "Dog" }, kind: "pet", required: false, roleName: "the dog" },
+      ],
+      references: [{ images: ["https://cdn.test/r.png"], line: "the neon sign", previewLine: "the sign" }],
+      prePrompt: "FULL-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT neon",
+    })
+
+  it("Show prompt returns the Seedance child's prompt and the full run's prompt parts", async () => {
+    seed({}, previewDraft())
     world.jobs.set(RUN, jobRow(RUN, ADMIN))
     world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT: the woman on the left dances" } })
     const res = await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: { prompt: "ENGINE PROMPT: the woman on the left dances" } })
+    expect(res.json()).toEqual({
+      data: {
+        mode: "full",
+        runMode: "full",
+        prompt: "ENGINE PROMPT: the woman on the left dances",
+        previewOffered: true,
+        parts: {
+          mode: "full",
+          prePrompt: { text: "FULL-PRE", fromFullRun: false },
+          roles: [
+            { key: "lead", label: "Lead dancer", kind: "person", roleName: { text: "the woman on the left", fromFullRun: false } },
+            { key: "dog", label: "Dog", kind: "pet", roleName: { text: "the dog", fromFullRun: false } },
+          ],
+          references: [{ line: { text: "the neon sign", fromFullRun: false } }],
+          trendPrompt: { text: "DRAFT-PROMPT neon lights", fromFullRun: false },
+        },
+      },
+    })
   })
 
-  it("Show prompt is a 404 for a run with no child yet, or a job that is not a trend run", async () => {
+  it("Show prompt switched to the 4 s preview: the preview's parts, and no engine prompt for a full run", async () => {
+    seed({}, previewDraft())
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT full" } })
+    const res = await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt?mode=preview`)
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data).toMatchObject({ mode: "preview", runMode: "full", prompt: null, previewOffered: true })
+    expect(data.parts.prePrompt).toEqual({ text: "FULL-PRE", fromFullRun: true })
+    expect(data.parts.roles.map((r: { roleName: unknown }) => r.roleName)).toEqual([
+      { text: "the woman", fromFullRun: false },
+      { text: "the dog", fromFullRun: true },
+    ])
+    expect(data.parts.references).toEqual([{ line: { text: "the sign", fromFullRun: false } }])
+    expect(data.parts.trendPrompt).toEqual({ text: "PREVIEW-PROMPT neon", fromFullRun: false })
+  })
+
+  it("Show prompt of a preview run opens on the preview, with its engine prompt; switched to Full, the full run's parts", async () => {
+    seed({}, previewDraft())
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ preview: true }) }))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT preview" } })
+    const own = (await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data
+    expect(own).toMatchObject({ mode: "preview", runMode: "preview", prompt: "ENGINE PROMPT preview" })
+    expect(own.parts.trendPrompt).toEqual({ text: "PREVIEW-PROMPT neon", fromFullRun: false })
+    const full = (await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt?mode=full`)).json().data
+    expect(full).toMatchObject({ mode: "full", runMode: "preview", prompt: null })
+    expect(full.parts.trendPrompt).toEqual({ text: "DRAFT-PROMPT neon lights", fromFullRun: false })
+    expect(full.parts.roles[0].roleName).toEqual({ text: "the woman on the left", fromFullRun: false })
+  })
+
+  it("Show prompt says when the trend offers no preview, and has no parts when the run's version is gone", async () => {
+    seed({}, draftData({ previewStart: null }))
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "P" } })
+    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data).toMatchObject({ previewOffered: false, prompt: "P" })
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ trend: { id: T1, slug: "neon-dance", version: 9, name: "Neon Dance" } }) }))
+    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data).toMatchObject({ prompt: "P", parts: null, previewOffered: false })
+  })
+
+  it("Show prompt has no engine prompt for a run with no child yet; a job that is not a trend run is a 404; a bad mode a 400", async () => {
+    seed()
     world.jobs.set(RUN, jobRow(RUN, ADMIN, { output_data: { videoUrl: null } }))
-    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().error.code).toBe("prompt_unavailable")
+    const res = await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ mode: "full", runMode: "full", prompt: null })
+    expect(res.json().data.parts.trendPrompt).toEqual({ text: "DRAFT-PROMPT neon lights", fromFullRun: false })
+    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt?mode=both`)).statusCode).toBe(400)
     world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: { type: "cast-swap" } }))
     expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).statusCode).toBe(404)
   })
@@ -1909,6 +2031,204 @@ describe("the stored face mask", () => {
     it("a pending job made from older settings reads as not current", async () => {
       seed({}, making({ faceMasking: { ...MASKING, threshold: 0.6 } }))
       expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskJob).toMatchObject({ jobId: FACE_MASK_JOB, current: false })
+    })
+  })
+
+  describe("marks (faces left unmasked)", () => {
+    const MARK = { label: "erased" as const, fromFrame: 0, toFrame: 359, leftPct: 60, topPct: 10, rightPct: 90, bottomPct: 50 }
+    const MARKED = { ...MASKING, marks: [MARK] }
+    const MKEY = () => faceMaskSettingsKey(draftData({ faceMasking: MARKED }))!
+    const BASE_KEY = () => faceMaskBaseKey(draftData({ faceMasking: MARKED }))!
+    const RAW = `https://cdn.test/trends/${T1}/raw.mp4`
+    const BASE_STATS = { shots: 3, heldFrames: 12, coverage: 0.05, droppedRegions: 0 }
+    function supportErase(over: Record<string, unknown> = {}) {
+      setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], faceMaskErase: true, ...over } })
+    }
+    /** The approved mask: made without marks, its raw mask kept (the base of the next edit). */
+    const approvedBase = (over: Partial<TrendFaceMask> = {}): TrendFaceMask => ({
+      url: `https://cdn.test/trends/${T1}/mask.mp4`,
+      frames: 360,
+      recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" },
+      settingsKey: KEY(),
+      jobId: "fm-old",
+      stats: { shots: 3, heldFrames: 12, coverage: 0.05, droppedRegions: 0 },
+      approvedAt: "2026-10-25T10:00:00.000Z",
+      approvedBy: ADMIN,
+      rawMaskUrl: RAW,
+      baseKey: BASE_KEY(),
+      baseStats: BASE_STATS,
+      ...over,
+    })
+    const start = async () => call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+
+    it("holds back a make with marks on an engine that does not declare faceMaskErase (it would mask every face)", async () => {
+      seed({}, draftData({ faceMasking: MARKED }))
+      const res = await start()
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error.code).toBe("engine_unsupported")
+      expect(engine.calls).toEqual([])
+    })
+
+    it("sends the marks, and the approved mask as fromMask (recipe and raw stats) when it is a current base", async () => {
+      supportErase()
+      seed({}, draftData({ faceMasking: MARKED, faceMask: approvedBase() }))
+      const res = await start()
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({
+        videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+        faceMasking: { ...withResolvedZone(MASKING), marks: [MARK] },
+        fromMask: { maskUrl: RAW, recipe: VIDEO_MASK_RECIPE, stats: BASE_STATS },
+      })
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(MKEY())
+      expect(audits()[0]!.payload).toMatchObject({ fromMask: true, settingsKey: MKEY() })
+    })
+
+    it("makes it whole (no fromMask) when the approved mask kept no raw mask, was made from other base settings, or by another engine recipe", async () => {
+      for (const [faceMask, supports] of [
+        [approvedBase({ rawMaskUrl: undefined, baseKey: undefined, baseStats: undefined }), {}],
+        [approvedBase({ baseKey: "v2:other" }), {}],
+        [approvedBase(), { faceMaskRecipe: "2" }],
+        // Approved before baseStats, with faces erased: its stats are not the raw mask's.
+        [approvedBase({ baseStats: undefined, stats: { ...BASE_STATS, coverage: 0.02, erasedRegions: 2 } }), {}],
+      ] as const) {
+        supportErase(supports)
+        mem.trends = []
+        engine.calls.length = 0
+        seed({}, draftData({ faceMasking: MARKED, faceMask }))
+        expect((await start()).statusCode).toBe(202)
+        expect(engine.calls[0]!.body).not.toHaveProperty("fromMask")
+        expect(engine.calls[0]!.body.faceMasking).toMatchObject({ marks: [MARK] })
+      }
+    })
+
+    it("sends no marks key and no fromMask for a draft without marks on an engine without the capability (exactly as before)", async () => {
+      seed({}, draftData({ faceMasking: { ...MASKING, marks: [] }, faceMask: approvedBase() }))
+      expect((await start()).statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone(MASKING) })
+    })
+
+    it("approving keeps the raw mask, its base key and raw stats; a raw mask re-used from the approved one is kept as it is", async () => {
+      supportErase()
+      const job = fmJob({}, { faceMasking: { ...withResolvedZone(MASKING), fill: "blur", marks: [MARK] } }, {
+        maskUrl: "https://out.example/raw.mp4",
+        stats: { shots: 3, heldFrames: 12, coverage: 0.03, droppedRegions: 0, erasedRegions: 1 },
+        baseStats: BASE_STATS,
+      })
+      seed({}, draftData({ faceMasking: MARKED, faceMaskJob: pendingJob({ settingsKey: MKEY() }) }))
+      world.jobs.set(FACE_MASK_JOB, job)
+      const res = await approve()
+      expect(res.statusCode).toBe(200)
+      const fm = mem.trends[0]!.versions[1]!.data.faceMask!
+      expect(fm).toMatchObject({
+        settingsKey: MKEY(),
+        baseKey: BASE_KEY(),
+        baseStats: BASE_STATS,
+        stats: { coverage: 0.03, erasedRegions: 1 },
+        rawMaskUrl: expect.stringMatching(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]+\\.mp4$`)),
+      })
+      expect(fm.depthUrl).toBeUndefined()
+      // The masked clip and the raw mask, both copied into the trend's storage.
+      expect(mem.uploads).toHaveLength(2)
+
+      // A make from that mask echoes its raw mask back: kept, not copied again.
+      mem.trends = []
+      mem.uploads.length = 0
+      seed({}, draftData({ faceMasking: MARKED, faceMask: approvedBase(), faceMaskJob: pendingJob({ settingsKey: MKEY() }) }))
+      world.jobs.set(FACE_MASK_JOB, { ...job, output_data: { ...job.output_data, maskUrl: RAW } })
+      expect((await approve()).statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ rawMaskUrl: RAW, baseKey: BASE_KEY() })
+      expect(mem.uploads).toHaveLength(1)
+    })
+
+    it("refuses, with marks, a mask whose job reports no raw mask or no count of faces left unmasked (an older engine)", async () => {
+      supportErase()
+      const recorded = { faceMasking: { ...withResolvedZone(MASKING), fill: "blur", marks: [MARK] } }
+      for (const output of [
+        { stats: { shots: 3, heldFrames: 12, coverage: 0.03, droppedRegions: 0, erasedRegions: 1 } },
+        { maskUrl: "https://out.example/raw.mp4", stats: { shots: 3, heldFrames: 12, coverage: 0.03, droppedRegions: 0 } },
+      ]) {
+        mem.trends = []
+        seed({}, draftData({ faceMasking: MARKED, faceMaskJob: pendingJob({ settingsKey: MKEY() }) }))
+        world.jobs.set(FACE_MASK_JOB, fmJob({}, recorded, output))
+        const res = await approve()
+        expect([res.statusCode, res.json().error.code]).toEqual([409, "face_mask_not_erased"])
+        expect(mem.uploads).toEqual([])
+      }
+    })
+
+    it("approving keeps the masked clip's video frame rate when the probe reads one", async () => {
+      supportErase()
+      mem.fps = 29.97
+      try {
+        seed({}, making())
+        world.jobs.set(FACE_MASK_JOB, fmJob())
+        expect((await approve()).statusCode).toBe(200)
+        expect(mem.trends[0]!.versions[1]!.data.faceMask!.fps).toBe(29.97)
+      } finally {
+        mem.fps = undefined
+      }
+    })
+
+    it("a draft save with a new source clip clears the marks and says so; the same clip keeps them", async () => {
+      seed({}, draftData({ faceMasking: MARKED }))
+      const loaded = (await call("GET", `/v1/admin/trends/${T1}`)).json().data as { draft: TrendVersionData; revision: string }
+      const same = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...loaded.draft, trendPrompt: "edited" }, revision: loaded.revision })
+      expect(same.statusCode).toBe(200)
+      expect(same.json().data).not.toHaveProperty("marksCleared")
+      expect(mem.trends[0]!.versions[1]!.data.faceMasking).toEqual(MARKED)
+
+      const again = (await call("GET", `/v1/admin/trends/${T1}`)).json().data as { draft: TrendVersionData; revision: string }
+      const moved = { ...again.draft, source: { videoUrl: `https://cdn.test/trends/${T1}/other.mp4`, durationSec: 10 } }
+      const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: moved, revision: again.revision })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data).toMatchObject({ marksCleared: true })
+      expect(mem.trends[0]!.versions[1]!.data.faceMasking).toEqual(MASKING)
+    })
+
+    it("the trend detail says whether this engine makes a mask with marks", async () => {
+      seed({}, draftData({ faceMasking: MARKED }))
+      expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskMarksSupported).toBe(false)
+      supportErase()
+      expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskMarksSupported).toBe(true)
+    })
+
+    it("refuses a job made without the draft's marks (an engine that dropped them), storing nothing", async () => {
+      supportErase()
+      seed({}, draftData({ faceMasking: MARKED, faceMaskJob: pendingJob({ settingsKey: MKEY() }) }))
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const res = await approve()
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("face_mask_settings_changed")
+      expect(mem.uploads).toEqual([])
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toBeUndefined()
+    })
+
+    it("a test run of a draft with marks on an engine that takes no stored mask is refused, never masked per run", async () => {
+      const MARKED_KEY = faceMaskSettingsKey(draftData({ faceMasking: MARKED }))!
+      seed({}, draftData({ faceMasking: MARKED, faceMask: approvedBase({ settingsKey: MARKED_KEY }) }))
+      supportStored(false)
+      const held = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots: { lead: { images: ["https://u.example/me.png"] } } })
+      expect([held.statusCode, held.json().error?.code]).toEqual([503, "engine_unsupported"])
+      expect(engine.calls.filter((c) => c.url === "/v1/cast-swap")).toEqual([])
+      // An engine that takes the stored mask but would strip `required` (and mask per run): refused too.
+      supportStored(true)
+      const stripped = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots: { lead: { images: ["https://u.example/me.png"] } } })
+      expect([stripped.statusCode, stripped.json().error?.code]).toEqual([503, "engine_unsupported"])
+      expect(engine.calls.filter((c) => c.url === "/v1/cast-swap")).toEqual([])
+      // With the engine honouring `required`: the run goes out on the stored mask, required, without the marks.
+      setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], storedFaceMaskRequired: true } })
+      const ran = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots: { lead: { images: ["https://u.example/me.png"] } } })
+      expect(ran.statusCode).toBe(202)
+      const sent = engine.calls.find((c) => c.url === "/v1/cast-swap")!.body
+      expect(sent.storedFaceMask).toEqual({ url: `https://cdn.test/trends/${T1}/mask.mp4`, frames: 360, required: true })
+      expect(sent.faceMasking).not.toHaveProperty("marks")
+    })
+
+    it("a test run of a draft with marks and no matching approved mask is refused 409", async () => {
+      seed({}, draftData({ faceMasking: MARKED, faceMask: approvedBase() }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots: { lead: { images: ["https://u.example/me.png"] } } })
+      expect([res.statusCode, res.json().error?.code]).toEqual([409, "face_mask_required"])
+      expect(engine.calls.filter((c) => c.url === "/v1/cast-swap")).toEqual([])
     })
   })
 

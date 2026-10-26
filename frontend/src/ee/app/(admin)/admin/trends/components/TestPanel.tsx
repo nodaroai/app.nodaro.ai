@@ -2,7 +2,11 @@
 // the full clip, billed to the admin's own account at the price users pay.
 // The runs of this trend by admin accounts are listed below with their result,
 // status and inputs; a finished full-length one can become an example, and
-// any one's composed engine prompt can be opened (admins only, never users).
+// any one's composed engine prompt can be opened (admins only, never users),
+// with a Full / 4 s preview switch: the engine prompt of the mode the run ran
+// in, and the trend's own prompt parts for either (a preview run sends the
+// preview's own role names, reference lines, pre and trend prompts, each
+// falling back to the full run's).
 // Every chip of every slot can be set here, the ones hidden from people too,
 // so each variant can be tried before choosing what people see.
 //
@@ -34,8 +38,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineHasDraft } from "@nodaro/shared/models"
-import type { AdminTrendEngine, AdminTrendRun, AdminTrendSlot, TrendChipKey, TrendChoice, TrendResolution, TrendTestRunRequest } from "@/lib/api"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom, castSwapEngineHasDraft } from "@nodaro/shared/models"
+import type {
+  AdminTrendEngine,
+  AdminTrendPromptMode,
+  AdminTrendPromptPart,
+  AdminTrendPromptParts,
+  AdminTrendRun,
+  AdminTrendSlot,
+  TrendChipKey,
+  TrendChoice,
+  TrendResolution,
+  TrendTestRunRequest,
+} from "@/lib/api"
 import {
   isTrendRunInFlight,
   useDeleteTrendTestRun,
@@ -45,6 +60,7 @@ import {
 } from "@/ee/hooks/queries/use-admin-queries"
 import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips } from "../model"
 import { MediaPicker } from "./MediaPicker"
+import { trendRunCreditLine } from "../../jobs/admin-job-credits"
 import { uploadLocalFile } from "./uploads"
 
 type ChipChoices = Partial<Record<TrendChipKey, TrendChoice>>
@@ -82,7 +98,7 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
   const [draft, setDraft] = useState(true)
   const draftable = hasDraft && resolution === "480p"
   const [details, setDetails] = useState("")
-  const [promptOf, setPromptOf] = useState<string | null>(null)
+  const [promptOf, setPromptOf] = useState<{ jobId: string; runMode: AdminTrendPromptMode } | null>(null)
   const [deleting, setDeleting] = useState<AdminTrendRun | null>(null)
   const remove = useDeleteTrendTestRun(trendId)
   const formTop = useRef<HTMLDivElement>(null)
@@ -256,6 +272,11 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
               <Switch aria-label="4 s preview" checked={hasPreview && preview} disabled={!hasPreview} onCheckedChange={setPreview} />
               4 s preview
             </label>
+            {hasPreview && preview && (
+              <span className="basis-full text-xs text-muted-foreground">
+                A preview run sends the preview's own role names, reference lines and prompts (each left empty: the full run's).
+              </span>
+            )}
             <div className="flex items-center gap-1" role="group" aria-label="Resolution">
               {resolutions.map((r) => (
                 <Button
@@ -318,7 +339,7 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
                 run={r}
                 promoting={promotingId === r.jobId}
                 onPromote={() => onPromote(r.jobId)}
-                onShowPrompt={() => setPromptOf(r.jobId)}
+                onShowPrompt={() => setPromptOf({ jobId: r.jobId, runMode: r.preview ? "preview" : "full" })}
                 onCopyInputs={() => copyInputs(r)}
                 onDelete={() => setDeleting(r)}
               />
@@ -327,7 +348,7 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
         )}
       </div>
 
-      <PromptDialog jobId={promptOf} onClose={() => setPromptOf(null)} />
+      <PromptDialog key={promptOf?.jobId ?? ""} run={promptOf} onClose={() => setPromptOf(null)} />
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && !remove.isPending && setDeleting(null)}>
         <DialogContent>
           <DialogHeader>
@@ -439,13 +460,14 @@ function RunCard({
             {run.resolution}
             {run.draft ? " draft" : ""}
           </span>
-          {(run.engine === "motion-lite" || run.engine === "kling-4") && <span>{run.engineName ?? "Nodaro Motion Lite"} (Kling 4)</span>}
+          {castSwapEngineFrom(run.engine) === "kling-4" && <span>{run.engineName ?? "Nodaro Motion Pulse"} (Kling 4)</span>}
           {run.fullQualityOf && (
             <Badge variant="secondary" title={`Full Quality version of run ${run.fullQualityOf}`}>
               Full Quality
             </Badge>
           )}
-          {run.creditsCharged !== null && <span>{run.creditsCharged} credits</span>}
+          {/* The run's charge, every step it ran included, beside its hold. */}
+          {trendRunCreditLine(run) && <span>{trendRunCreditLine(run)}</span>}
           <span className="text-muted-foreground">{new Date(run.createdAt).toLocaleString()}</span>
         </div>
         {run.error && <p className="text-destructive">{run.error.message}</p>}
@@ -502,27 +524,118 @@ function RunCard({
   )
 }
 
-function PromptDialog({ jobId, onClose }: { readonly jobId: string | null; readonly onClose: () => void }) {
-  const prompt = useTrendRunPrompt(jobId)
+const MODE_LABELS: Readonly<Record<AdminTrendPromptMode, string>> = { full: "Full", preview: "4 s preview" }
+
+/**
+ * "Show prompt": the engine prompt of one run and the trend's prompt parts, as
+ * a Full or a 4 s preview run (the mode it ran in first). The engine prompt
+ * exists only for the mode the run ran in; the parts, for either.
+ */
+function PromptDialog({
+  run,
+  onClose,
+}: {
+  readonly run: { jobId: string; runMode: AdminTrendPromptMode } | null
+  readonly onClose: () => void
+}) {
+  const [picked, setMode] = useState<AdminTrendPromptMode | null>(null)
+  const mode = picked ?? run?.runMode ?? "full"
+  const prompt = useTrendRunPrompt(run?.jobId ?? null, mode)
+  const data = prompt.data
+  const previewOffered = data ? data.previewOffered || data.runMode === "preview" : true
   return (
-    <Dialog open={jobId !== null} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={run !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Engine prompt</DialogTitle>
-          <DialogDescription>What the engine was sent for this run. Admins only; users never see it.</DialogDescription>
+          <DialogTitle>Prompt</DialogTitle>
+          <DialogDescription>
+            What the engine was sent for this run, and the trend's prompt parts. Admins only; users never see it.
+          </DialogDescription>
         </DialogHeader>
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Prompt of">
+          {(["full", "preview"] as const).map((m) => (
+            <Button
+              key={m}
+              type="button"
+              size="sm"
+              className="min-h-9"
+              variant={mode === m ? "default" : "outline"}
+              aria-pressed={mode === m}
+              disabled={m === "preview" && !previewOffered}
+              title={m === "preview" && !previewOffered ? "This trend offers no 4 s preview." : undefined}
+              onClick={() => setMode(m)}
+            >
+              {MODE_LABELS[m]}
+            </Button>
+          ))}
+        </div>
         {prompt.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : prompt.error ? (
           <p className="text-sm text-destructive">{prompt.error.message}</p>
-        ) : (
-          <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-xs" dir="auto">
-            {prompt.data?.prompt}
-          </pre>
-        )}
+        ) : data ? (
+          <div className="flex max-h-[60vh] flex-col gap-3 overflow-auto">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold">Engine prompt</h3>
+              {data.prompt !== null ? (
+                <pre className="whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-xs" dir="auto">
+                  {data.prompt}
+                </pre>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {data.mode === data.runMode
+                    ? "This run has no engine prompt yet."
+                    : `This was a ${data.runMode === "full" ? "full" : "4 s preview"} run: the engine was never sent a ${MODE_LABELS[data.mode].toLowerCase()} prompt for it. The trend's parts for one are below.`}
+                </p>
+              )}
+            </div>
+            {data.parts && <PromptParts parts={data.parts} />}
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The trend's prompt parts for one mode, marking what a preview takes from the full run. */
+function PromptParts({ parts }: { readonly parts: AdminTrendPromptParts }) {
+  const preview = parts.mode === "preview"
+  return (
+    <div className="flex flex-col gap-2 text-xs" data-prompt-parts={parts.mode}>
+      <h3 className="text-sm font-semibold">{preview ? "The trend's prompt parts in the 4 s preview" : "The trend's prompt parts"}</h3>
+      <p className="text-muted-foreground">As this run's version is saved now. The run's details follow the trend prompt.</p>
+      <PartRow label="Pre prompt" part={parts.prePrompt} preview={preview} />
+      {parts.roles.map((r) => (
+        <PartRow key={r.key} label={`Role: ${r.label || r.key}`} part={r.roleName} preview={preview} />
+      ))}
+      {parts.references.map((r, i) => (
+        <PartRow key={i} label={`Reference ${i + 1}`} part={r.line} preview={preview} />
+      ))}
+      <PartRow label="Trend prompt" part={parts.trendPrompt} preview={preview} />
+    </div>
+  )
+}
+
+function PartRow({ label, part, preview }: { readonly label: string; readonly part: AdminTrendPromptPart | null; readonly preview: boolean }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border p-2">
+      <span className="flex flex-wrap items-center gap-2 font-medium">
+        {label}
+        {preview && part?.fromFullRun && (
+          <Badge variant="secondary" className="font-normal">
+            Same as the full run
+          </Badge>
+        )}
+      </span>
+      {part && part.text ? (
+        <span className="whitespace-pre-wrap break-words text-muted-foreground" dir="auto">
+          {part.text}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">None</span>
+      )}
+    </div>
   )
 }

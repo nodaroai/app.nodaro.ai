@@ -6263,10 +6263,18 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (admin only)
   display_cost?: number          // provider_cost with markup (admin only)
   cost?: number                  // What user pays (regular users)
-  credits?: number | null        // Credits HELD when the job was accepted (all users); never changes
-  /** Credits actually charged once the hold settled (all users) — can be below
-   *  `credits`; 0 when refunded; null while running or with no reservation. */
+  credits?: number | null        // Credits HELD when the job was accepted (all users); never changes — the job's own hold
+  /** Credits actually charged once the hold settled (all users), the run's
+   *  steps (child jobs) included — can be below `credits_held`. 0 when the
+   *  run's own hold was refunded, plus any settled steps (a refunded Nodaro
+   *  Motion run whose reference and mask steps committed reads 165). null
+   *  while the job's own hold is open (even with steps settled), with no
+   *  reservation in the run, or when its steps could not be read (unknown). */
   credits_charged?: number | null
+  /** The run's hold: the job's own plus its steps' (equals `credits` for a job with no steps). */
+  credits_held?: number | null
+  /** What went back from `credits_held` once every hold in the run settled; null until then. */
+  credits_released?: number | null
   /** The hold's lifecycle: still held, charged, or refunded. */
   credit_status?: "reserved" | "committed" | "refunded" | null
   credits_actual?: number | null // Credits actually charged after anomaly correction (admin only)
@@ -11060,6 +11068,8 @@ export interface AdminTrendSlot {
   hintImageUrl?: string
   /** Who this is in the source clip (hidden from users). */
   roleName: string
+  /** Who this is in the 4 s preview (hidden; ≤ 200). Empty or absent = `roleName`; only a preview run reads it. */
+  previewRoleName?: string
   /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
   defaults?: Partial<Record<TrendChipKey, TrendChoice>>
   /**
@@ -11073,6 +11083,8 @@ export interface AdminTrendSlot {
 export interface AdminTrendReference {
   images: string[]
   line: string
+  /** The line a 4 s preview run sends instead (hidden; ≤ 500). Empty or absent = `line`. */
+  previewLine?: string
 }
 
 export interface AdminTrendExample {
@@ -11142,6 +11154,26 @@ export interface AdminTrendFaceMasking {
   blurStrengthPct?: number
   /** 0.05–0.95; default 0.5. Lower finds more faces. */
   threshold?: number
+  /**
+   * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
+   * centred in the box, on its frames, are left unmasked. Only the stored mask
+   * is made with them: a trend with marks runs on its approved mask only.
+   */
+  marks?: AdminTrendFaceMaskMark[]
+}
+
+/** What a face mask mark says about the faces in its box; `"erased"` (left unmasked) is the only one. */
+export type AdminTrendFaceMaskMarkLabel = "erased"
+
+/** A box on the face mask over a range of frames: frames 0-based and inclusive, edges in % of the frame from its left / top. */
+export interface AdminTrendFaceMaskMark {
+  label: AdminTrendFaceMaskMarkLabel
+  fromFrame: number
+  toFrame: number
+  leftPct: number
+  topPct: number
+  rightPct: number
+  bottomPct: number
 }
 
 /** A trend's approved face mask: its whole source clip, masked once and stored in trend storage. */
@@ -11154,6 +11186,13 @@ export interface AdminTrendFaceMask {
   stats: AdminTrendFaceMaskStats
   approvedAt: string
   approvedBy: string
+  /** The mask before any mark (the base the next edit of the marks is made from), when kept. Absent: the first edit makes the mask whole. */
+  rawMaskUrl?: string
+  depthUrl?: string
+  baseKey?: string
+  baseStats?: Omit<AdminTrendFaceMaskStats, "erasedRegions">
+  /** The masked clip's video frame rate, when it was read: marks count frames on it. */
+  fps?: number
 }
 
 export interface AdminTrendFaceMaskStats {
@@ -11162,6 +11201,8 @@ export interface AdminTrendFaceMaskStats {
   /** The share of the picture covered, 0–1. */
   coverage: number
   droppedRegions: number
+  /** The faces the "erased" marks left out (absent = 0). */
+  erasedRegions?: number
 }
 
 /** Why a stored face mask is out of date. */
@@ -11184,6 +11225,10 @@ export interface AdminTrendData {
   trendPrompt?: string
   /** Placed at the start of every run's prompt (hidden from users). */
   prePrompt?: string
+  /** The trend prompt a 4 s preview run sends instead (hidden). Empty or absent = `trendPrompt`; kept while the trend offers no preview. */
+  previewTrendPrompt?: string
+  /** The pre prompt a 4 s preview run sends instead (hidden). Empty or absent = `prePrompt`. */
+  previewPrePrompt?: string
   faceMasking?: AdminTrendFaceMasking
   /** The approved face mask (hidden; written only by the face mask routes, kept by a draft save). */
   faceMask?: AdminTrendFaceMask
@@ -11210,13 +11255,16 @@ export type AdminTrendKlingLength = "cut-end" | "cut-start"
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
- * 2.5 (Nodaro Motion Pro: 480p draft, 720p, 1080p) or Kling 4 (Nodaro Motion
- * Lite: 720p, 1080p; no draft). People see the public ids (`NodaroMotionEngine`).
+ * 2.5 (Nodaro Motion Prism: 480p draft, 720p, 1080p) or Kling 4 (Nodaro Motion
+ * Pulse: 720p, 1080p; no draft). People see the public ids (`NodaroMotionEngine`).
  */
 export type AdminTrendEngine = "seedance-2-5" | "kling-4"
 
 /** Nodaro Motion's public engine ids, as every user-facing response names them. */
-export type NodaroMotionEngine = "motion-pro" | "motion-lite"
+export type NodaroMotionEngine = "motion-prism" | "motion-pulse"
+
+/** The public ids the engines had before (2026-10-26); an older server may still answer one. */
+export type NodaroMotionLegacyEngine = "motion-pro" | "motion-lite"
 
 /** `archived`: put away by an admin — off the catalog, kept with its runs. */
 export type TrendStatus = "draft" | "published" | "unpublished" | "archived"
@@ -11262,6 +11310,8 @@ export interface AdminTrendDetail {
   faceMaskJob?: AdminTrendPendingFaceMaskJob | null
   /** The upscales to 1080p in the making (absent from an older server). */
   upscaleJobs?: AdminTrendPendingUpscale[]
+  /** Whether this environment's Cast Swap engine makes a face mask with marks (the marks editor is offered only then). */
+  faceMaskMarksSupported?: boolean
 }
 
 /**
@@ -11292,6 +11342,10 @@ export interface AdminTrendPendingFaceMaskJob {
 export interface TrendDraftWrite {
   version: number
   revision: string
+  /** A draft save: the face mask's state after it (the server's reading). */
+  faceMaskState?: AdminTrendFaceMaskState
+  /** A draft save with a new source clip: the face mask's marks were cleared (they were drawn on the old clip). */
+  marksCleared?: true
 }
 
 export interface AdminTrendRunSlot {
@@ -11323,15 +11377,21 @@ export interface AdminTrendRun {
   resolution: string
   draft: boolean
   /**
-   * The engine it was made on, by its PUBLIC id (Nodaro Motion Pro for every
-   * run before the choice); an older server answered the internal id.
+   * The engine it was made on, by its PUBLIC id (Nodaro Motion Prism for every
+   * run before the choice); an older server answered the internal id or an
+   * earlier public id.
    */
-  engine?: NodaroMotionEngine | AdminTrendEngine
-  /** Its name, "Nodaro Motion Pro" or "Nodaro Motion Lite" (absent from an older server). */
+  engine?: NodaroMotionEngine | NodaroMotionLegacyEngine | AdminTrendEngine
+  /** Its name, "Nodaro Motion Prism" or "Nodaro Motion Pulse" (absent from an older server). */
   engineName?: string
   videoUrl: string | null
   posterUrl: string | null
+  /** What the run was charged once settled, every step it ran included. */
   creditsCharged: number | null
+  /** The run's hold: its own plus its steps'. */
+  creditsHeld?: number | null
+  /** What went back from `creditsHeld` once every hold in the run settled; null until then. */
+  creditsReleased?: number | null
   /** A Full Quality version: the draft run it was made from. Listed as its own run. */
   fullQualityOf: string | null
   /** A draft's Full Quality version: a pointer only; its result is on its own run. */
@@ -11362,6 +11422,8 @@ export interface TrendEngineEnvironment {
       storedFaceMask?: boolean
       faceMaskRecipe?: string
       faceMaskTargets?: AdminTrendFaceMaskingTarget[]
+      faceMaskErase?: boolean
+      storedFaceMaskRequired?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11516,10 +11578,44 @@ export async function startAdminTrendTestRun(id: string, body: TrendTestRunReque
   ).data
 }
 
-export async function fetchAdminTrendRunPrompt(jobId: string): Promise<{ prompt: string }> {
+/** Which run's prompt parts: the full clip's, or the 4 s preview's. */
+export type AdminTrendPromptMode = "full" | "preview"
+
+/** One prompt part as a run in a mode sends it; `fromFullRun`: the preview has no text of its own for it. */
+export interface AdminTrendPromptPart {
+  text: string
+  fromFullRun: boolean
+}
+
+/** A trend's hidden prompt parts as a run in `mode` sends them (admins only). */
+export interface AdminTrendPromptParts {
+  mode: AdminTrendPromptMode
+  prePrompt: AdminTrendPromptPart | null
+  roles: Array<{ key: string; label: string; kind: TrendSlotKind; roleName: AdminTrendPromptPart }>
+  references: Array<{ line: AdminTrendPromptPart }>
+  trendPrompt: AdminTrendPromptPart | null
+}
+
+/**
+ * "Show prompt" for one run, as a Full or 4 s preview run. `prompt`: what the
+ * engine was sent, only in the mode the run ran in (`runMode`), null before
+ * the engine has it. `parts`: the trend's prompt parts for `mode`, from the
+ * version the run used as it is saved now (null when that version is gone).
+ */
+export interface AdminTrendRunPrompt {
+  mode: AdminTrendPromptMode
+  runMode: AdminTrendPromptMode
+  prompt: string | null
+  previewOffered: boolean
+  parts: AdminTrendPromptParts | null
+}
+
+/** `mode` left out = the mode the run ran in. */
+export async function fetchAdminTrendRunPrompt(jobId: string, mode?: AdminTrendPromptMode): Promise<AdminTrendRunPrompt> {
+  const query = mode ? `?mode=${mode}` : ""
   return (
-    await apiRequest<{ data: { prompt: string } }>(
-      `${ADMIN_TRENDS}/test-runs/${encodeURIComponent(jobId)}/prompt`,
+    await apiRequest<{ data: AdminTrendRunPrompt }>(
+      `${ADMIN_TRENDS}/test-runs/${encodeURIComponent(jobId)}/prompt${query}`,
       "apiErr.loadTrends",
     )
   ).data

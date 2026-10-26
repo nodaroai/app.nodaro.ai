@@ -22,12 +22,17 @@ vi.mock("../../../job-owner-state.js", async (importOriginal) => ({
   jobOwnerStateFor: async () => new Map(),
 }))
 
+// A run's steps (child jobs, lib/job-run-steps.ts): none unless a test says so.
+const runSteps = vi.hoisted(() => ({ map: new Map<string, Array<{ id: string; parent_job_id: string; usage_log_id: string | null; credits: number | null }>>() }))
+vi.mock("../../../job-run-steps.js", () => ({ runStepsOf: async () => ({ steps: runSteps.map, incomplete: new Set<string>() }) }))
+
 const { registerJobs } = await import("../jobs.js")
 const { supabase } = await import("../../../supabase.js")
 const { WAIT_FOR_JOB_CALL_CEILING_S, waitForJobCallSeconds } = await import("../_wait-for-job.js")
 
 beforeEach(() => {
   vi.clearAllMocks()
+  runSteps.map = new Map()
 })
 
 function mockListJobs(rows: unknown[]) {
@@ -589,6 +594,25 @@ describe("MCP job reads carry the settled charge", () => {
     const text = JSON.parse(result.content[0]!.text as string) as { data: Record<string, unknown> }
     expect(text.data.credits_charged).toBe(444)
     expect(text.data).not.toHaveProperty("usage_log_id")
+  })
+
+  it("get_job: a run's charge includes its steps (child jobs), and the envelope carries the run's hold", async () => {
+    // The production Nodaro Motion preview: Cast Swap 44 and its video step,
+    // held 3,564 and charged 854 (the reference preps and mask left out here).
+    const run = { ...settled, job_type: "cast-swap", credits: 44, usage_log_id: "ul-run" }
+    runSteps.map = new Map([[JOB, [{ id: "video", parent_job_id: JOB, usage_log_id: "ul-video", credits: 3564 }]]])
+    const logs: Array<{ id: string }> = [
+      { id: "ul-run", status: "committed", credits_used: 44, credits_charged: 44 },
+      { id: "ul-video", status: "committed", credits_used: 3564, credits_charged: 854 },
+    ] as Array<{ id: string; status: string; credits_used: number; credits_charged: number }>
+    mockJobsAndUsage([run], logs)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect([sc.credits, sc.creditsCharged, sc.creditsHeld, sc.creditsReleased]).toEqual([44, 898, 3608, 2710])
+    const text = JSON.parse(result.content[0]!.text as string) as { data: Record<string, unknown> }
+    expect(text.data).toMatchObject({ credits: 44, credits_charged: 898, credits_held: 3608, credits_released: 2710 })
   })
 
   it("wait_for_job: the finished job's envelope carries the charge", async () => {

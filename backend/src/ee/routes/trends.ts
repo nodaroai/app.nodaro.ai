@@ -80,7 +80,7 @@ import type {
   TrendSlotKind,
   TrendVersionData,
 } from "../lib/trends/types.js"
-import { TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
 
 export type { TrendRun } from "../lib/trends/run-helpers.js"
 
@@ -130,15 +130,15 @@ export interface TrendDetail extends TrendCard {
   original?: TrendOriginal
   /**
    * The engine every run of this trend uses, by its public id (the person
-   * never chooses it): `"motion-pro"` or `"motion-lite"`.
+   * never chooses it): `"motion-prism"` or `"motion-pulse"`.
    */
   engine: NodaroMotionEngine
-  /** Its name: "Nodaro Motion Pro" or "Nodaro Motion Lite". */
+  /** Its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse". */
   engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:
-   * Nodaro Motion Pro `["480p", "720p", "1080p"]` (480p is the draft),
-   * Nodaro Motion Lite `["720p", "1080p"]` (no draft).
+   * Nodaro Motion Prism `["480p", "720p", "1080p"]` (480p is the draft),
+   * Nodaro Motion Pulse `["720p", "1080p"]` (no draft).
    */
   resolutions: TrendResolution[]
   /**
@@ -359,6 +359,9 @@ function trendRunError(reply: FastifyReply, e: TrendRunError) {
       // The composed length would tell the hidden trend prompt's length.
       return err(reply, 400, e.code, "Your details are too long for this trend. Shorten them and try again.")
     case "source_missing":
+    // Its stored face mask does not match (publishing requires one): nothing the caller can change,
+    // answered as the documented `503 trend_unavailable` (docs/api-integration.md).
+    case "face_mask_required":
       return err(reply, 503, "trend_unavailable", "This trend is not available right now.")
     default:
       return err(reply, 400, e.code, e.message, {
@@ -472,6 +475,8 @@ export async function trendRoutes(app: FastifyInstance) {
         .from("jobs")
         .select(RUN_JOB_COLS)
         .is(TRASHED_JOB_COLUMN, null)
+        // A child job (a run's step) is shown only through its run, as on every job list.
+        .is(CHILD_JOB_COLUMN, null)
         .eq("user_id", userId)
         .filter("input_data->>type", "eq", "cast-swap")
         .not("input_data->trend", "is", null)

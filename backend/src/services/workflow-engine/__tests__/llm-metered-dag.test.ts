@@ -31,6 +31,8 @@ const h = vi.hoisted(() => ({
   /** R38 / N1: the post-flip settle of a not-started verdict — kept (the call started meanwhile), settled (at the actual), or refund. */
   keptAfterFlip: vi.fn(async (_id: string) => "refund" as "kept" | "settled" | "refund"),
   loopbackFetch: vi.fn(),
+  /** usage_logs rows the run loader reads (a node's steps' settled charges). */
+  usageLogs: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock("../../../lib/config.js", async (importOriginal) => ({
@@ -50,6 +52,7 @@ vi.mock("../../../lib/supabase.js", () => {
     const resolve = () => {
       if (op === "insert") return { data: { id: "job-1" }, error: null }
       if (op === "select" && table === "jobs") return { data: h.jobRow, error: null }
+      if (op === "select" && table === "usage_logs") return { data: h.usageLogs, error: null }
       if (op === "update" && table === "jobs" && row?.status === "cancelled") {
         return { data: [{ id: "job-1", user_id: "user-1", provider_task_id: null, provider_kind: null, credits: 368 }], error: null }
       }
@@ -91,6 +94,15 @@ const stepSide = vi.hoisted(() => ({ map: new Map<string, number>() }))
 vi.mock("../../../lib/job-step-charge.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/job-step-charge.js")>()),
   sideHoldChargesFor: async () => stepSide.map,
+}))
+// A node's job's steps (child jobs, lib/job-run-steps.ts) — none unless a test says so.
+type StepRow = { id: string; parent_job_id: string; usage_log_id: string | null; credits: number | null }
+const runSteps = vi.hoisted(() => ({ map: new Map<string, StepRow[]>(), owners: [] as string[] }))
+vi.mock("../../../lib/job-run-steps.js", () => ({
+  runStepsOf: async (jobs: Array<{ id: string; owner: string }>) => {
+    runSteps.owners.push(...jobs.map((j) => j.owner))
+    return { steps: runSteps.map, incomplete: new Set<string>() }
+  },
 }))
 // 554: a cancelled job's metered SIDE holds settle on their own markers after the flip.
 const sideHolds = vi.hoisted(() => ({ settle: vi.fn(async (_ids: readonly string[]) => {}) }))
@@ -298,6 +310,51 @@ describe("what a metered node reports into the execution total (A5)", () => {
     } finally {
       stepSide.map = new Map()
     }
+  })
+
+  it("a node whose job ran steps (child jobs) counts each settled step — the run total and the creator fee base follow it", async () => {
+    h.loopbackFetch.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ jobId: "chat-job" }),
+      text: async () => JSON.stringify({ jobId: "chat-job" }),
+    })
+    h.jobRow = { status: "completed", output_data: { text: "hello" }, error_message: null, progress: 100, credits_actual: 6, credits: 368, error_hint: null, input_data: {} }
+    runSteps.map = new Map([["chat-job", [
+      { id: "step-1", parent_job_id: "chat-job", usage_log_id: "ul-step-1", credits: 66 },
+      { id: "step-2", parent_job_id: "chat-job", usage_log_id: "ul-step-2", credits: 3564 },
+      { id: "step-3", parent_job_id: "chat-job", usage_log_id: "ul-step-3", credits: 40 },
+    ]]])
+    h.usageLogs = [
+      { id: "ul-step-1", status: "committed", credits_used: 66, credits_charged: 66 },
+      { id: "ul-step-2", status: "committed", credits_used: 3564, credits_charged: 854 },
+      // A step still held adds nothing until it settles.
+      { id: "ul-step-3", status: "reserved", credits_used: 40, credits_charged: null },
+    ]
+    runSteps.owners = []
+    try {
+      const node = { id: "chat", type: "llm-chat", data: { prompt: "say hello", llmModel: "claude-fable-5" } } as SimpleNode
+      const result = await executeNode(node, {}, [], [node], {}, ctx({ isAppRun: true }))
+      expect(result.creditsUsed).toBe(6 + 66 + 854)
+      // The steps are read as the run's user's.
+      expect(runSteps.owners).toEqual(["user-1"])
+      const { ugcDepsFor } = await import("../node-executor.js")
+      expect(await ugcDepsFor(node, ctx()).jobCharge("chat-job")).toBe(6 + 66 + 854)
+    } finally {
+      runSteps.map = new Map()
+      h.usageLogs = []
+    }
+  })
+
+  it("a node whose job ran no steps reports exactly what it did before", async () => {
+    h.loopbackFetch.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ jobId: "chat-job" }),
+      text: async () => JSON.stringify({ jobId: "chat-job" }),
+    })
+    h.jobRow = { status: "completed", output_data: { text: "hello" }, error_message: null, progress: 100, credits_actual: 6, credits: 368, error_hint: null, input_data: {} }
+    const node = { id: "chat", type: "llm-chat", data: { prompt: "say hello", llmModel: "claude-fable-5" } } as SimpleNode
+    const result = await executeNode(node, {}, [], [node], {}, ctx({ isAppRun: true }))
+    expect(result.creditsUsed).toBe(6)
   })
 })
 

@@ -155,10 +155,11 @@ describe("attemptAutoRecharge", () => {
 describe("hook coverage (audit F2.2) — text pins", () => {
   const read = (rel: string) => readFileSync(path.resolve(__dirname, "..", rel), "utf8")
 
-  it("all three reservation sites fire the attempt", () => {
-    expect(read("credits.ts")).toContain("void attemptAutoRecharge(userId)")
-    expect(read("../pipelines/credits.ts")).toContain("void attemptAutoRecharge(args.userId)")
-    expect(read("../pipelines/scene-helper-credits.ts")).toContain("void attemptAutoRecharge(args.userId)")
+  it("all three reservation sites fire the attempt, for the account autoRechargeTargetFor chose", () => {
+    // The full guard (no raw user id at any call) is auto-recharge-target.test.ts.
+    expect(read("credits.ts")).toContain("void attemptAutoRecharge(rechargeTarget)")
+    expect(read("../pipelines/credits.ts")).toContain("void attemptAutoRecharge(rechargeTarget)")
+    expect(read("../pipelines/scene-helper-credits.ts")).toContain("void attemptAutoRecharge(rechargeTarget)")
   })
 
   it("third-party app operations are excluded at the guard", () => {

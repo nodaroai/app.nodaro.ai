@@ -10,8 +10,7 @@ import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrend
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
-import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
-import { sideHoldChargesFor } from "../../job-step-charge.js"
+import { publicCreditFieldsOf, runCreditsFor } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
@@ -26,22 +25,31 @@ const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 // Rating a job writes to it, as REST's PUT /v1/jobs/:id/rating needs assets:write.
 const jobsRateGate: ToolGate = { required: ["assets:write"] }
 
+type PublicCreditFields = ReturnType<typeof publicCreditFieldsOf>
+
 /**
- * Replace each row's `usage_log_id` with `credits_charged` — the settled
- * charge, read through the one charge reader in one query. `credits` stays the
+ * Replace each row's `usage_log_id` with `credits_charged` — the run's settled
+ * charge, its steps (child jobs) and settled side holds included — plus
+ * `credits_held` (the run's hold) and `credits_released`, read through the one
+ * run loader (a read per table for all rows). `credits` stays the job's own
  * hold. The raw usage-log id never reaches the agent.
  */
-async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unknown }>(
+async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unknown; credits?: unknown }>(
   rows: readonly T[],
-): Promise<Array<Omit<T, "usage_log_id"> & { credits_charged: number | null }>> {
+  ownerId: string,
+): Promise<Array<Omit<T, "usage_log_id"> & PublicCreditFields>> {
   const logId = (r: T) => (typeof r.usage_log_id === "string" ? r.usage_log_id : null)
   const jobId = (r: T) => (typeof r.id === "string" ? r.id : null)
-  const map = await creditStatusMapFor(rows.map(logId))
-  // R53: plus each job's settled metered side holds (one read).
-  const side = await sideHoldChargesFor(rows.map(jobId))
+  const credits = await runCreditsFor(
+    rows.flatMap((r) => {
+      const id = jobId(r)
+      return id ? [{ id, usage_log_id: logId(r), credits: typeof r.credits === "number" ? r.credits : null }] : []
+    }),
+    ownerId,
+  )
   return rows.map((r) => {
     const { usage_log_id: _log, ...rest } = r
-    return { ...rest, credits_charged: creditsChargedOf(logId(r), map, jobId(r), side) }
+    return { ...rest, ...publicCreditFieldsOf(jobId(r), credits) }
   })
 }
 
@@ -83,8 +91,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         "image grid). Use this tool only when the agent needs structured " +
         "fields (status, error_message, credits, timestamps) for " +
         "programmatic logic — e.g. \"how many failed yesterday\", \"how " +
-        "many credits did I burn this week\" (sum credits_charged: " +
-        "credits is the hold, which a job can settle below). Your own " +
+        "many credits did I burn this week\" (sum credits_charged: it " +
+        "includes the run's steps; credits is the job's own hold, which it " +
+        "can settle below). Your own " +
         "jobs carry favorited and rating.",
       inputSchema: {
         scope: z
@@ -306,7 +315,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
           .map(({ user_id: _owner, ...row }) => row)
       } else {
-        const charged = await withCreditsCharged(rows)
+        const charged = await withCreditsCharged(rows, session.userId)
         // A failed read leaves the two fields out (unknown), as GET /v1/jobs
         // does — the jobs still list.
         let state: JobOwnerStateMap | null = null
@@ -339,7 +348,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       title: "Get Job",
       description:
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
-        "progress, jobType, assetKind, outputUrl (the finished image/video/audio; width/height in pixels when known), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
+        "progress, jobType, assetKind, outputUrl (the finished image/video/audio; width/height in pixels when known), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled, the run's steps included; can be lower), creditsHeld (the run's hold) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
         "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs).",
       inputSchema: {
@@ -394,7 +403,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // An old render carries no stored Preview label: fill it from the order
       // (response only, never written back), as the job-status routes do.
       // A trend run's failure text is replaced before either envelope is built.
-      const [charged] = await withCreditsCharged([maskTrendRunError(data, false)])
+      const [charged] = await withCreditsCharged([maskTrendRunError(data, false)], session.userId)
       const filled = fillJobRenderQuality(charged!)
       const publicData = redactPrivateJobData(filled)
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
@@ -520,7 +529,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         .is(CHILD_JOB_COLUMN, null)
         .is(TRASHED_JOB_COLUMN, null)
         .maybeSingle()
-      const charged = row ? (await withCreditsCharged([maskTrendRunError(row, false)]))[0] : null
+      const charged = row ? (await withCreditsCharged([maskTrendRunError(row, false)], session.userId))[0] : null
       // Without the row (gone between the two reads), the wait's own error
       // text, a trend run's replaced as everywhere else.
       const waitedError = trendRunErrorText(waited.error, { trend: (own as { trend_run_marker?: unknown }).trend_run_marker }, false)

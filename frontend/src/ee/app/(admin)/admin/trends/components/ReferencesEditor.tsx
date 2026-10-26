@@ -1,5 +1,7 @@
 // Fixed references: pictures sent with every run of the trend (a logo, a
-// prop), each with the prompt line that says what it is. Hidden from users.
+// prop), each with the prompt line that says what it is, and optionally its
+// own line for the 4 s preview (shown only while the trend offers one; kept
+// when it does not). Hidden from users.
 // Pictures are copied into the trend's storage as they are added.
 
 import { useState } from "react"
@@ -15,11 +17,13 @@ import { uploadLocalFile } from "./uploads"
 interface Props {
   readonly trendId: string
   readonly references: FormReference[]
+  /** The trend offers a 4 s preview: each reference shows its preview line (kept, not shown, otherwise). */
+  readonly hasPreview: boolean
   /** Functional: pictures arrive asynchronously, one after another. */
   readonly onChange: (fn: (refs: FormReference[]) => FormReference[]) => void
 }
 
-export function ReferencesEditor({ trendId, references, onChange }: Props) {
+export function ReferencesEditor({ trendId, references, hasPreview, onChange }: Props) {
   const update = (uid: string, fn: (r: FormReference) => FormReference) =>
     onChange((refs) => refs.map((r) => (r.uid === uid ? fn(r) : r)))
 
@@ -32,6 +36,7 @@ export function ReferencesEditor({ trendId, references, onChange }: Props) {
           trendId={trendId}
           index={i}
           reference={r}
+          hasPreview={hasPreview}
           onAddImage={(url) => update(r.uid, (x) => ({ ...x, images: [...x.images, url].slice(0, MAX_IMAGES_PER_SLOT) }))}
           onChange={(fn) => update(r.uid, fn)}
           onRemove={() => onChange((refs) => refs.filter((x) => x.uid !== r.uid))}
@@ -55,12 +60,13 @@ interface CardProps {
   readonly trendId: string
   readonly index: number
   readonly reference: FormReference
+  readonly hasPreview: boolean
   readonly onAddImage: (url: string) => void
   readonly onChange: (fn: (r: FormReference) => FormReference) => void
   readonly onRemove: () => void
 }
 
-function ReferenceCard({ trendId, index, reference, onAddImage, onChange, onRemove }: CardProps) {
+function ReferenceCard({ trendId, index, reference, hasPreview, onAddImage, onChange, onRemove }: CardProps) {
   const media = useTrendMedia(trendId)
   const [uploading, setUploading] = useState(false)
   const n = index + 1
@@ -131,6 +137,22 @@ function ReferenceCard({ trendId, index, reference, onAddImage, onChange, onRemo
         />
         <span className="text-right text-xs text-muted-foreground tabular-nums">{reference.line.length} / 500</span>
       </label>
+      {hasPreview && (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Prompt line in the 4 s preview</span>
+          <Textarea
+            rows={2}
+            maxLength={500}
+            value={reference.previewLine ?? ""}
+            placeholder="Same as the full run"
+            onChange={(e) => {
+              const previewLine = e.target.value
+              onChange((r) => ({ ...r, previewLine }))
+            }}
+          />
+          <span className="text-right text-xs text-muted-foreground tabular-nums">{(reference.previewLine ?? "").length} / 500</span>
+        </label>
+      )}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { nodaroMotionEngineFrom } from "@nodaro/shared/models"
 import type { NodaroClientCore } from "../core.js"
 
 /**
@@ -13,8 +14,8 @@ import type { NodaroClientCore } from "../core.js"
  * photos if it fails, and is turned off with `prepareReferences: false`.
  * Locations are not prepared.
  *
- * Engines: a run is made on Nodaro Motion Pro (`engine` left out, or
- * `"motion-pro"`) or Nodaro Motion Lite (`"motion-lite"`). Lite renders 720p
+ * Engines: a run is made on Nodaro Motion Prism (`engine` left out, or
+ * `"motion-prism"`) or Nodaro Motion Pulse (`"motion-pulse"`). Pulse renders 720p
  * (its default) or 1080p and has no draft; it makes a new take guided by the
  * clip and pictures, so its Full Quality is a new take at 1080p rather than
  * the same take re-rendered (`CastSwapFullQualityEstimate.kind`).
@@ -38,7 +39,7 @@ import type { NodaroClientCore } from "../core.js"
  * anything is charged: 400 `validation_error` (the body: no role with images,
  * no reference and no `prePrompt` or `postPrompt`, more roles of a kind
  * than allowed, more than 30 images in all, `draft: true` above 480p, a
- * `prePrompt` or `postPrompt` over 4,000 characters); on Nodaro Motion Lite,
+ * `prePrompt` or `postPrompt` over 4,000 characters); on Nodaro Motion Pulse,
  * `draft_unsupported` (`draft: true`), `resolution_unsupported` (480p),
  * `output_format_unsupported` (a MOV edit output) and `too_many_images` (more
  * than 10 images in the run, across every role and fixed reference);
@@ -49,7 +50,7 @@ import type { NodaroClientCore } from "../core.js"
  * `inPreview: false`, always refused even with a prompt, or with no role kept
  * in it that has images and no `prePrompt` or `postPrompt`), `prompt_too_long`
  * (the prompt would build too long: a `{role:N}` reads as the role's name when
- * it sends no images; Nodaro Motion Lite's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
+ * it sends no images; Nodaro Motion Pulse's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
  * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
  * only).
@@ -57,27 +58,29 @@ import type { NodaroClientCore } from "../core.js"
 
 /**
  * The engine a Nodaro Motion run is made on, by its public id. Left out =
- * `"motion-pro"`.
+ * `"motion-prism"`.
  *
- * - `"motion-pro"` (Nodaro Motion Pro): 480p (the default, a draft unless
+ * - `"motion-prism"` (Nodaro Motion Prism): 480p (the default, a draft unless
  *   `draft: false`), 720p or 1080p; Full Quality re-renders a draft's own take
  *   at 1080p.
- * - `"motion-lite"` (Nodaro Motion Lite): 720p (the default) or 1080p, never a
+ * - `"motion-pulse"` (Nodaro Motion Pulse): 720p (the default) or 1080p, never a
  *   draft (`draft: true` answers 400 `draft_unsupported`); Full Quality makes a
  *   new take at 1080p from a completed 720p run's inputs. A preview is still
  *   4 s from `previewStart`.
  */
-export type CastSwapEngine = "motion-pro" | "motion-lite"
+export type CastSwapEngine = "motion-prism" | "motion-pulse"
 
 /**
- * The engine ids an older client sent (`"seedance-2-5"` = `"motion-pro"`,
- * `"kling-4"` = `"motion-lite"`). Still accepted in a request; never returned.
+ * The engine ids an older client sent: the earlier public ids (`"motion-pro"`
+ * = `"motion-prism"`, `"motion-lite"` = `"motion-pulse"`) and the internal
+ * ones (`"seedance-2-5"`, `"kling-4"`). Still accepted in a request; never
+ * returned.
  * @deprecated use {@link CastSwapEngine}.
  */
-export type CastSwapEngineLegacyId = "seedance-2-5" | "kling-4"
+export type CastSwapEngineLegacyId = "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4"
 
 /**
- * Where a Nodaro Motion Lite run cuts the clip to whole seconds (Lite renders
+ * Where a Nodaro Motion Pulse run cuts the clip to whole seconds (Pulse renders
  * whole seconds; asked for more than the clip, it would stretch the motion):
  * - `"cut-end"` (the default): drop the fraction of a second at its end;
  * - `"cut-start"`: drop it at its start.
@@ -241,29 +244,29 @@ export interface CastSwapParams {
   /** Where the preview starts, in seconds. Default 0. */
   previewStart?: number
   /**
-   * The engine (see {@link CastSwapEngine}). Default `"motion-pro"`. The job
+   * The engine (see {@link CastSwapEngine}). Default `"motion-prism"`. The job
    * records it in `input_data.engine`, and a completed job's output in its
    * `engine`. The ids an older client sent ({@link CastSwapEngineLegacyId})
    * are still accepted.
    */
   engine?: CastSwapEngine | CastSwapEngineLegacyId
   /**
-   * Nodaro Motion Lite only (Pro ignores it): which end of the clip is cut to
+   * Nodaro Motion Pulse only (Prism ignores it): which end of the clip is cut to
    * whole seconds (see {@link CastSwapMotionLength}). Default `"cut-end"`.
    */
   motionLength?: CastSwapMotionLength
   /** @deprecated use {@link motionLength} (still accepted). */
   klingLength?: CastSwapKlingLength
   /**
-   * The output resolution. Nodaro Motion Pro: `"480p"` (default), `"720p"` or
-   * `"1080p"`. Nodaro Motion Lite: `"720p"` (default) or `"1080p"`; `"480p"`
+   * The output resolution. Nodaro Motion Prism: `"480p"` (default), `"720p"` or
+   * `"1080p"`. Nodaro Motion Pulse: `"720p"` (default) or `"1080p"`; `"480p"`
    * answers 400.
    */
   resolution?: "480p" | "720p" | "1080p"
   /**
-   * Render as a draft (Nodaro Motion Pro only). Defaults to `true` at 480p and
+   * Render as a draft (Nodaro Motion Prism only). Defaults to `true` at 480p and
    * `false` above it; `true` with `"720p"` or `"1080p"` answers 400 (draft is
-   * 480p only). Nodaro Motion Lite has no draft: `true` answers 400
+   * 480p only). Nodaro Motion Pulse has no draft: `true` answers 400
    * `draft_unsupported`.
    */
   draft?: boolean
@@ -295,7 +298,8 @@ export interface CastSwapParams {
 export interface CastSwapEstimate {
   /**
    * The engine the run would use, by its public id (absent from an older
-   * server = `"motion-pro"`).
+   * server = `"motion-prism"`). An id an older server answers is read as the
+   * public id it names.
    */
   engine?: CastSwapEngine
   /**
@@ -305,7 +309,7 @@ export interface CastSwapEstimate {
   totalCredits: number
   /**
    * The charge the run is expected to come to. Never above `totalCredits`
-   * (on Nodaro Motion Lite it equals it: Lite renders exactly the length
+   * (on Nodaro Motion Pulse it equals it: Pulse renders exactly the length
    * asked for, so the hold is what it settles at). Absent from an older
    * server: read `totalCredits` then.
    */
@@ -316,9 +320,9 @@ export interface CastSwapEstimate {
    *   names it `castSwap` instead: read `base`, else `castSwap`;
    * - `references`: preparing the reference pictures (0 when
    *   `prepareReferences` is off or there is nothing to prepare);
-   * - `motion`: what the video holds (on Nodaro Motion Lite, what it costs);
+   * - `motion`: what the video holds (on Nodaro Motion Pulse, what it costs);
    * - `motionExpected`: what the video is expected to be charged, never above
-   *   `motion` (Nodaro Motion Pro);
+   *   `motion` (Nodaro Motion Prism);
    * - `privacy`: preparing the clip, when the engine's setting does. In both
    *   totals when it always runs; outside both when it is the retry
    *   (`privacyCredits`).
@@ -346,9 +350,9 @@ export interface CastSwapEstimate {
   /** @deprecated read {@link privacyCredits} (an older server answered this name). */
   maskingCredits?: number
   /**
-   * `true` when the video is made at Auto length (every Nodaro Motion Pro
+   * `true` when the video is made at Auto length (every Nodaro Motion Prism
    * run): the final charge is expected to come out lower than `totalCredits`,
-   * at about `expectedCredits`. `false` on Nodaro Motion Lite.
+   * at about `expectedCredits`. `false` on Nodaro Motion Pulse.
    */
   settlesLower: boolean
 }
@@ -368,7 +372,7 @@ export interface CastSwapRunOptions {
 
 /**
  * What a Full Quality version would be: `"same-take"` re-renders a Nodaro
- * Motion Pro draft's own take at 1080p; `"new-take"` makes a new Nodaro Motion Lite take at
+ * Motion Prism draft's own take at 1080p; `"new-take"` makes a new Nodaro Motion Pulse take at
  * 1080p from a 720p run's inputs (it will not match the 720p run frame for
  * frame). The 720p run or draft stays either way.
  */
@@ -376,8 +380,8 @@ export type CastSwapFullQualityKind = "same-take" | "new-take"
 
 /**
  * What a Full Quality version of a run would cost
- * (`POST /v1/cast-swap/:jobId/full-quality/estimate`): a Nodaro Motion Pro
- * draft, or a completed Nodaro Motion Lite run at 720p.
+ * (`POST /v1/cast-swap/:jobId/full-quality/estimate`): a Nodaro Motion Prism
+ * draft, or a completed Nodaro Motion Pulse run at 720p.
  */
 export interface CastSwapFullQualityEstimate {
   /**
@@ -425,8 +429,8 @@ export interface CastSwapFullQualityResult {
  * - `not_found` (404): not your job, or not a Nodaro Motion run; also a
  *   `sessionId` you may not use;
  * - `not_completed` (409): the run has not finished;
- * - `not_a_draft` (409): the run is neither a Nodaro Motion Pro draft nor a
- *   Nodaro Motion Lite run at 720p (a Lite run at 1080p is already Full Quality);
+ * - `not_a_draft` (409): the run is neither a Nodaro Motion Prism draft nor a
+ *   Nodaro Motion Pulse run at 720p (a Pulse run at 1080p is already Full Quality);
  * - `draft_expired` (410): more than 7 days after the draft completed, or
  *   the draft can no longer be finished at Full Quality;
  * - `full_quality_pending` (409, `details.retryable: true`): not final — an
@@ -481,14 +485,17 @@ export class CastSwapResource {
   }
 
   /** Quote a run before starting it (`POST /v1/cast-swap/estimate`); spends nothing. */
-  estimate(params: CastSwapParams): Promise<CastSwapEstimate> {
-    return this.client.request("POST", "/v1/cast-swap/estimate", { body: params })
+  async estimate(params: CastSwapParams): Promise<CastSwapEstimate> {
+    const quote = await this.client.request<CastSwapEstimate>("POST", "/v1/cast-swap/estimate", { body: params })
+    // An older server names the engine by an earlier id: answered as the public id it names.
+    const engine = nodaroMotionEngineFrom(quote?.engine)
+    return engine && engine !== quote.engine ? { ...quote, engine } : quote
   }
 
   /**
    * Quote finishing a run at Full Quality (`POST
    * /v1/cast-swap/:jobId/full-quality/estimate`); spends nothing. `jobId` is a
-   * finished Nodaro Motion Pro DRAFT run, or a finished Nodaro Motion Lite
+   * finished Nodaro Motion Prism DRAFT run, or a finished Nodaro Motion Pulse
    * run at 720p (a Nodaro Motion or trend run); the quote's `kind` says whether it is the same take
    * re-rendered or a new take. The quote
    * does not look for a Full Quality already running: when one is,
@@ -502,7 +509,7 @@ export class CastSwapResource {
   /**
    * Finish a run at Full Quality (`POST /v1/cast-swap/:jobId/full-quality`):
    * at 1080p, with the clip's audio, as a new job linked to the run — a
-   * Nodaro Motion Pro draft's own take re-rendered, or a new Nodaro Motion Lite take from a
+   * Nodaro Motion Prism draft's own take re-rendered, or a new Nodaro Motion Pulse take from a
    * 720p run's inputs (the quote's `kind`). SPENDS CREDITS: quote it first with
    * {@link fullQualityEstimate}. Answers 202 `{ jobId }`, or 200
    * `{ jobId, existing: true }` when this run's Full Quality is already

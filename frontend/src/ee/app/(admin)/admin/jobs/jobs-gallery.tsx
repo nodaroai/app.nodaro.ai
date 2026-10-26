@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { useAdminJobsInfinite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import { jobPlatform } from "@/lib/job-platform"
 import { ago, buildGroups, jobThumb, typeLabel, type GItem } from "./jobs-gallery-grouping"
+import { creditTileLabel } from "./admin-job-credits"
 
 const STATUS_TAG: Record<string, string> = {
   failed: "bg-red-500 text-white",
@@ -52,7 +53,7 @@ function Tile({ item, onOpen }: { item: GItem; onOpen: () => void }) {
           {job.user_email}
         </span>
         <span className="flex justify-between font-mono text-[11px] text-muted-foreground">
-          <span>{job.credits ?? 0} cr</span>
+          <span>{creditTileLabel(job)}</span>
           <span>{ago(job.created_at)}</span>
         </span>
       </div>

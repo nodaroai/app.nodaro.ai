@@ -85,7 +85,7 @@ describe("trends command", () => {
     expect(out).toContain("video, expected: 23")
     expect(out).toContain("reference pictures: 3")
     expect(out).toContain("other: 1")
-    expect(out).not.toMatch(/seedance|kling/i)
+    expect(out).not.toMatch(/seedance|kling|Motion (Pro|Lite)\b/i)
   })
 
   it("estimate --json answers privacyCredits and the neutral part names, reading an older server's old ones", async () => {

@@ -1,5 +1,30 @@
 # @nodaro/prompts
 
+## 1.45.0
+
+### Minor Changes
+
+- 79d9aca: Create Image tiles: every from-words preset now says what an attached picture is for. The 45 text tiles: it is the backdrop, the lettering sits over it in its light and colours. The other tiles and the use cases that work from words: a person in it is the person shown, a product in it is the product, a scene is the backdrop, in its light and colours. Before, a preset mentioned with an `@` picture gave the model `Image 1 (…)` with no role, and the picture was ignored. Tiles that already work from a photo are unchanged.
+
+## 1.44.0
+
+### Minor Changes
+
+- ba1c2c3: Factory preset pictures come in two sizes: the tile picture (512px wide, `previewUrl`) and a full-screen one (1024px wide). `GET /v1/node-presets/factory` entries carry `previewSrcSet` — both with their widths, ready for an `<img srcset>` — when the preset has both files; `FactoryPresetEntry.previewSrcSet` in the SDK. `@nodaro/prompts/presets` exports the large file map (`FACTORY_PRESET_PREVIEW_LARGE_FILES`), `factoryPresetPreviewSrcSet` and the two widths.
+
+## 1.43.0
+
+### Minor Changes
+
+- ecd39bd: Photographer / Artist catalog: a new **Film Director** category (22 entries: Wes Anderson, Wong Kar-wai, Christopher Nolan, Denis Villeneuve, Stanley Kubrick, David Fincher, Hayao Miyazaki, Sofia Coppola, …) and eight more cinematographers (Hoyte van Hoytema, Gordon Willis, Bradford Young, Robert Richardson, Janusz Kaminski, Vittorio Storaro, Linus Sandgren, Darius Khondji), each with a prompt hint and a compact term. Rendered example pictures for every Photographer / Artist, Photo Genre and Aesthetic option (one shared scene per catalog, so options compare side by side) and for the Style option "Early Color Photo", served on Cloud through `imageUrl` like the other look previews.
+- de7d07b: Generate Image factory catalog: 307 ready-to-use tiles in thirteen user-facing groups — 187 content tiles (YouTube, Shorts · TikTok, Social & Ads, Business, Life & Events, Layout, Text) and 120 use cases (Business & Marketing, Personal Photos, Products & Fashion, Content & Creative, Home & Spaces, Family & Events), 58 of them edits of the person's own photo (`minReferences: 1`) — each with an example picture and its on-image headline as a `{TEXT || …}` slot. Two new optional fields on `FactoryPreset`: `section` (a sub-heading inside the group, such as a YouTube topic) and `platforms` (where the result is meant to be posted, most fitting first); `GET /v1/node-presets/factory` serves both.
+- edcd8d5: Create Image tiles, art direction v3: twelve YouTube thumbnails rewritten and re-rendered with photographic depth and layered type (Burning Question, Shocked Reaction, Before / After, Interview Two-Up, Beauty & Makeup, Creator Milestone, Challenge Timer, Tier List, Science Explainer, Gaming Rush, AI Tool Reveal, Coding Tutorial), eight new thumbnails (Swiss Collage, Editorial Type and Two Words in Fog under a new "Editorial & Design" topic; Vlog Bright, Node Diagram, Screen Portals, Copy This Arrow, Playful Cast under their topics), and a 9:16 "Visionary Magazine Cover" under Business › Covers & print with masthead, kicker and cover-story slots. 316 tiles with pictures.
+
+### Patch Changes
+
+- Updated dependencies [5d62976]
+  - @nodaro/shared@3.45.0
+
 ## 1.42.1
 
 ### Patch Changes

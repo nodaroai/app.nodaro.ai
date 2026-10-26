@@ -26,19 +26,29 @@ const JobSummary = z
     credits: z
       .number()
       .nullable()
-      .describe("Credits HELD for this job when it was accepted. Never changes; a job can settle below it."),
+      .describe("Credits this job itself HELD when it was accepted. Never changes; a job can settle below it."),
     credits_charged: z
       .number()
       .nullable()
       .optional()
       .describe(
-        "Credits actually charged once the hold settled — can be below `credits` (the unused part goes back to the balance); 0 when refunded. null while the job is still running, or when it reserved nothing of its own.",
+        "Credits actually charged once the hold settled, the steps the job ran included (child jobs such as a Nodaro Motion run's reference preparation, mask and video; a step adds its charge once it settles) — can be below `credits_held` (the unused part goes back to the balance). 0 when the run's own hold was refunded, plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads 165). null while the job's own hold is open (even with steps settled), when nothing in the run was reserved, or when its steps could not be read (unknown, never a lower figure).",
       ),
+    credits_held: z
+      .number()
+      .nullable()
+      .optional()
+      .describe("The run's hold: `credits` plus its steps' holds (equals `credits` for a job with no steps)."),
+    credits_released: z
+      .number()
+      .nullable()
+      .optional()
+      .describe("What went back from `credits_held` (`credits_held − credits_charged`) once every hold in the run settled; null until then."),
     credit_status: z
       .enum(["reserved", "committed", "refunded"])
       .nullable()
       .optional()
-      .describe("The hold's lifecycle: reserved (still held), committed (charged) or refunded."),
+      .describe("The job's own hold's lifecycle: reserved (still held), committed (charged) or refunded."),
     job_type: z.string().nullable(),
     session_id: z
       .string()

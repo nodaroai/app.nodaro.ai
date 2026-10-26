@@ -14,7 +14,7 @@ import {
   getMaxVideoPromptChars,
   TREND_PROMPT_LIMITS,
 } from "@nodaro/shared/models"
-import { klingEngineText } from "@nodaro/render-rules"
+import { hasOwnPreviewPrompts as ruleHasOwn, klingEngineText, trendPromptBudget, withPromptsFor } from "@nodaro/render-rules"
 import {
   describeBlocker,
   engineOfForm,
@@ -26,12 +26,14 @@ import {
   maxImagesFor,
   MAX_PRE_PROMPT,
   MAX_TREND_PROMPT,
+  hasOwnPreviewPrompts,
   promptBudget,
   shownChips,
   TREND_DETAILS_MAX,
   toForm,
   withChipShown,
   withKind,
+  withPreviewPrompts,
 } from "../model"
 
 function draft(over: Partial<AdminTrendData> = {}): AdminTrendData {
@@ -162,7 +164,7 @@ describe("face masking and the pre prompt in the form", () => {
   })
 
   it("describes an engine without Kling 4", () => {
-    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "kling-4" })).toBe("production: Nodaro Motion Lite (Kling 4) not supported yet")
+    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "kling-4" })).toBe("production: Nodaro Motion Pulse (Kling 4) not supported yet")
   })
 
   it("describes an engine without face masking", () => {
@@ -263,7 +265,7 @@ describe("the model (engine) in the form", () => {
     expect(imagesSentAtMost(toForm(draft({ slots: five })))).toBe(15)
     const references = [{ images: ["https://x/1.png", "https://x/2.png", "https://x/3.png"], line: "l" }, { images: ["https://x/4.png", "https://x/5.png", "https://x/6.png"], line: "l" }]
     expect(formIssues(toForm(draft({ engine: "kling-4", slots: five, references })))).toContain(
-      "11 images: at most 10 on Nodaro Motion Lite (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).",
+      "11 images: at most 10 on Nodaro Motion Pulse (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).",
     )
   })
 
@@ -325,5 +327,82 @@ describe("the original's display copy and a slot's hint picture", () => {
     expect(describeBlocker({ code: "source_display_missing" })).toBe(
       "The source clip has no display copy (the copy users see). Upload the clip again to make one.",
     )
+  })
+})
+
+describe("the 4 s preview's own prompt parts in the form", () => {
+  const withPreview = (over: Partial<AdminTrendData> = {}) =>
+    draft({
+      slots: [{ key: "lead", label: { en: "Lead" }, kind: "person", required: true, roleName: "the woman on the left", previewRoleName: "the woman" }],
+      references: [{ images: ["https://cdn.test/r.png"], line: "the neon sign", previewLine: "the sign" }],
+      prePrompt: "Open on the stage.",
+      previewPrePrompt: "Open close.",
+      previewTrendPrompt: "Keep it short.",
+      ...over,
+    })
+
+  it("round-trips every preview part exactly, and a draft with none stays without them", () => {
+    expect(fromForm(toForm(withPreview()))).toEqual(savedOf(withPreview()))
+    const plain = fromForm(toForm(draft()))
+    for (const key of ["previewPrePrompt", "previewTrendPrompt"]) expect(plain).not.toHaveProperty(key)
+    expect(plain.slots[0]).not.toHaveProperty("previewRoleName")
+  })
+
+  it("an empty or blank preview part is not saved (it runs the full run's text)", () => {
+    const form = toForm(withPreview())
+    const cleared = fromForm({
+      ...form,
+      previewPrePrompt: " ",
+      previewTrendPrompt: "",
+      slots: form.slots.map((s) => ({ ...s, previewRoleName: "  " })),
+      references: form.references.map((r) => ({ ...r, previewLine: "" })),
+    })
+    expect(cleared).not.toHaveProperty("previewPrePrompt")
+    expect(cleared).not.toHaveProperty("previewTrendPrompt")
+    expect(cleared.slots[0]).not.toHaveProperty("previewRoleName")
+    expect(cleared.references[0]).toEqual({ images: ["https://cdn.test/r.png"], line: "the neon sign" })
+  })
+
+  it("keeps the preview parts when the trend stops offering a preview", () => {
+    const out = fromForm({ ...toForm(withPreview()), previewStart: null })
+    expect(out).toMatchObject({ previewStart: null, previewPrePrompt: "Open close.", previewTrendPrompt: "Keep it short." })
+    expect(out.slots[0]!.previewRoleName).toBe("the woman")
+    expect(out.references[0]!.previewLine).toBe("the sign")
+  })
+
+  it("withPreviewPrompts: the preview's own texts, else the full run's", () => {
+    const p = withPreviewPrompts(toForm(withPreview({ previewTrendPrompt: "" })))
+    expect([p.prePrompt, p.trendPrompt]).toEqual(["Open close.", "Keep the shake."])
+    expect(p.slots[0]!.roleName).toBe("the woman")
+    expect(p.references[0]!.line).toBe("the sign")
+    expect(hasOwnPreviewPrompts(toForm(draft()))).toBe(false)
+    expect(hasOwnPreviewPrompts(toForm(withPreview()))).toBe(true)
+  })
+
+  it("holds the preview parts to their limits, and to the budget only while a preview is offered", () => {
+    const form = toForm(withPreview())
+    expect(formIssues(form)).toEqual([])
+    const long = { ...form, slots: form.slots.map((s) => ({ ...s, previewRoleName: "r".repeat(201) })) }
+    expect(formIssues(long)).toContain("Slot 1: the role name in the 4 s preview is at most 200 characters.")
+    const longLine = { ...form, references: form.references.map((r) => ({ ...r, previewLine: "l".repeat(501) })) }
+    expect(formIssues(longLine)).toContain("Reference 1: the prompt line in the 4 s preview is at most 500 characters.")
+    expect(formIssues({ ...form, previewPrePrompt: "p".repeat(MAX_PRE_PROMPT + 1) })).toContain(
+      `Pre prompt in the 4 s preview: at most ${MAX_PRE_PROMPT} characters.`,
+    )
+    const over = { ...form, previewTrendPrompt: "t".repeat(promptBudget({ prePrompt: "", trendPrompt: "" }).trendPromptMax + 1) }
+    expect(formIssues(over)).toEqual([
+      `Trend prompt in the 4 s preview: at most ${promptBudget({ prePrompt: "", trendPrompt: "" }).trendPromptMax} characters, to leave room for the user's details (up to ${TREND_DETAILS_MAX}).`,
+    ])
+    // No preview offered: kept, never run, so not held to the budget.
+    expect(formIssues({ ...over, previewStart: null })).toEqual([])
+  })
+})
+
+describe("the editor runs the server's rule (@nodaro/render-rules), never a copy", () => {
+  it("withPreviewPrompts, hasOwnPreviewPrompts and promptBudget are the package's", () => {
+    const form = toForm(draft({ previewTrendPrompt: "Short.", slots: [{ key: "lead", label: { en: "Lead" }, kind: "person", required: true, roleName: "the woman", previewRoleName: "her" }] }))
+    expect(withPreviewPrompts(form)).toEqual(withPromptsFor(form, "preview"))
+    expect(hasOwnPreviewPrompts).toBe(ruleHasOwn)
+    expect(promptBudget({ ...form, engine: "kling-4" })).toEqual(trendPromptBudget({ ...form, engine: "kling-4" }))
   })
 })

@@ -6,7 +6,9 @@
  * - A stale revision (409 `draft_conflict`) reloads the trend and says so.
  * - Publish refused (409 `publish_blocked`) lists every reason readably.
  * - "Use as example" promotes exactly that run; "Show prompt" shows the
- *   engine prompt.
+ *   engine prompt and the trend's prompt parts, Full or 4 s preview.
+ * - Each prompt part has its 4 s preview version, shown while the trend
+ *   offers a preview (the fallback as placeholder) and kept when it does not.
  * - The image counter shows N / 30 and, above 30, an error and no Save.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -37,6 +39,8 @@ import {
 import AdminTrendEditorPage from "../detail/page"
 
 const BASE = `/v1/admin/trends/${TREND_ID}`
+/** The slot's role name field (its label holds its help line too), not its 4 s preview one. */
+const ROLE_NAME = /^role name(?! in the 4 s preview)/i
 
 function renderEditor() {
   return renderWith(<AdminTrendEditorPage />, `/admin/trends/${TREND_ID}`, "/admin/trends/:id")
@@ -63,7 +67,7 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
     renderEditor()
-    const roleName = await screen.findByLabelText(/role name/i)
+    const roleName = await screen.findByLabelText(ROLE_NAME)
     await user.clear(roleName)
     await user.type(roleName, "the man in the hat")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
@@ -166,7 +170,7 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
     renderEditor()
     await user.click(await screen.findByRole("combobox", { name: "Model" }))
-    await user.click(screen.getByRole("option", { name: "Nodaro Motion Lite (Kling 4)" }))
+    await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
     expect(screen.getByText(/720p or 1080p, with no draft/)).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: /save draft/i }))
     await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
@@ -181,7 +185,7 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await screen.findByRole("combobox", { name: "Model" })
     expect(screen.queryByRole("combobox", { name: "Length" })).not.toBeInTheDocument()
     await user.click(screen.getByRole("combobox", { name: "Model" }))
-    await user.click(screen.getByRole("option", { name: "Nodaro Motion Lite (Kling 4)" }))
+    await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
     const length = screen.getByRole("combobox", { name: "Length" })
     expect(length).toHaveTextContent("Cut the end to whole seconds")
     await user.click(length)
@@ -439,7 +443,7 @@ describe("the trend editor", { timeout: 20_000 }, () => {
       body: { error: { code: "draft_conflict", message: "The draft changed since it was loaded." } },
     })
     renderEditor()
-    const roleName = await screen.findByLabelText(/role name/i)
+    const roleName = await screen.findByLabelText(ROLE_NAME)
     await user.clear(roleName)
     await user.type(roleName, "mine")
     routes[`GET ${BASE}`] = () => ({
@@ -448,7 +452,7 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await user.click(screen.getByRole("button", { name: /save draft/i }))
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith("This trend changed elsewhere — reloaded."))
-    await waitFor(() => expect(screen.getByLabelText(/role name/i)).toHaveValue("theirs"))
+    await waitFor(() => expect(screen.getByLabelText(ROLE_NAME)).toHaveValue("theirs"))
     expect(toast.error).not.toHaveBeenCalled()
   })
 
@@ -608,12 +612,74 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await waitFor(() => expect(sentTo(`POST ${BASE}/restore`)).toHaveLength(1))
   })
 
-  it("shows a run's engine prompt", async () => {
+  it("shows a run's engine prompt and the trend's prompt parts, switching between Full and the 4 s preview", async () => {
     const user = userEvent.setup()
-    routes[`GET /v1/admin/trends/test-runs/${RUN_ID}/prompt`] = () => ({ body: { data: { prompt: "Replace {role:1} with…" } } })
+    const PROMPT = `/v1/admin/trends/test-runs/${RUN_ID}/prompt`
+    const role = (text: string, fromFullRun: boolean) => ({ key: "dancer", label: "Dancer", kind: "person", roleName: { text, fromFullRun } })
+    routes[`GET ${PROMPT}?mode=full`] = () => ({
+      body: {
+        data: {
+          mode: "full", runMode: "full", prompt: "Replace {role:1} with…", previewOffered: true,
+          parts: { mode: "full", prePrompt: null, roles: [role("the woman on the left", false)], references: [], trendPrompt: { text: "Keep the camera moves.", fromFullRun: false } },
+        },
+      },
+    })
+    routes[`GET ${PROMPT}?mode=preview`] = () => ({
+      body: {
+        data: {
+          mode: "preview", runMode: "full", prompt: null, previewOffered: true,
+          parts: { mode: "preview", prePrompt: null, roles: [role("the woman", false)], references: [], trendPrompt: { text: "Keep the camera moves.", fromFullRun: true } },
+        },
+      },
+    })
     renderEditor()
     await user.click(await screen.findByRole("button", { name: /show prompt/i }))
-    expect(await screen.findByText("Replace {role:1} with…")).toBeInTheDocument()
+    const dialog = await screen.findByRole("dialog")
+    // A full run opens on Full: its engine prompt, and the full run's parts.
+    expect(await within(dialog).findByText("Replace {role:1} with…")).toBeInTheDocument()
+    expect(within(dialog).getByRole("button", { name: "Full" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(dialog).getByText("the woman on the left")).toBeInTheDocument()
+    expect(within(dialog).queryByText("Same as the full run")).not.toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole("button", { name: "4 s preview" }))
+    expect(await within(dialog).findByText("the woman")).toBeInTheDocument()
+    expect(within(dialog).getByRole("button", { name: "4 s preview" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(dialog).getByText(/the engine was never sent a 4 s preview prompt/)).toBeInTheDocument()
+    // The trend prompt the preview takes from the full run is marked so.
+    expect(within(dialog).getByText("Same as the full run")).toBeInTheDocument()
+    expect(within(dialog).queryByText("Replace {role:1} with…")).not.toBeInTheDocument()
+  })
+
+  it("Show prompt reads the trend's parts again after a draft save", async () => {
+    const user = userEvent.setup()
+    const PROMPT = `GET /v1/admin/trends/test-runs/${RUN_ID}/prompt?mode=full`
+    routes[PROMPT] = () => ({ body: { data: { mode: "full", runMode: "full", prompt: "P", previewOffered: true, parts: null } } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /show prompt/i }))
+    expect(await within(await screen.findByRole("dialog")).findByText("P")).toBeInTheDocument()
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(sentTo(PROMPT)).toHaveLength(1)
+
+    await user.type(screen.getByLabelText("Trend prompt in the 4 s preview"), "Short.")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    await user.click(screen.getByRole("button", { name: /show prompt/i }))
+    await waitFor(() => expect(sentTo(PROMPT)).toHaveLength(2))
+  })
+
+  it("a preview run's prompt opens on the 4 s preview", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}/test-runs`] = () => ({ body: { data: [run({ preview: true })] } })
+    routes[`GET /v1/admin/trends/test-runs/${RUN_ID}/prompt?mode=preview`] = () => ({
+      body: { data: { mode: "preview", runMode: "preview", prompt: "PREVIEW ENGINE PROMPT", previewOffered: true, parts: null } },
+    })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /show prompt/i }))
+    const dialog = await screen.findByRole("dialog")
+    expect(await within(dialog).findByText("PREVIEW ENGINE PROMPT")).toBeInTheDocument()
+    expect(within(dialog).getByRole("button", { name: "4 s preview" })).toHaveAttribute("aria-pressed", "true")
   })
 
   it("counts a Kling 4 trend's images as sent, a prepared picture as one, against its 10", async () => {
@@ -638,10 +704,10 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { prePrompt: "p".repeat(3000), trendPrompt: "t".repeat(2998), references: [1, 2].map((i) => ({ images: [`https://cdn.test/r${i}.png`], line: "l".repeat(500) })) }) } })
     renderEditor()
     await screen.findByRole("combobox", { name: "Model" })
-    expect(screen.queryByText(/on Nodaro Motion Lite \(Kling 4\), to leave room/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/on Nodaro Motion Pulse \(Kling 4\), to leave room/)).not.toBeInTheDocument()
     await user.click(screen.getByRole("combobox", { name: "Model" }))
-    await user.click(screen.getByRole("option", { name: "Nodaro Motion Lite (Kling 4)" }))
-    expect(await screen.findByText(/at most \d+ characters together on Nodaro Motion Lite \(Kling 4\)/)).toBeInTheDocument()
+    await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
+    expect(await screen.findByText(/at most \d+ characters together on Nodaro Motion Pulse \(Kling 4\)/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
   })
 
@@ -760,7 +826,7 @@ describe("the original's display copy and a slot's hint picture", { timeout: 20_
     routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
     renderEditor()
 
-    const roleName = await screen.findByLabelText(/role name/i)
+    const roleName = await screen.findByLabelText(ROLE_NAME)
     expect(screen.queryByText("Unsaved changes.")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
     expect(screen.getByRole("img", { name: "Slot 1 hint picture" })).toHaveAttribute("src", HINT)
@@ -809,7 +875,7 @@ describe("the original's display copy and a slot's hint picture", { timeout: 20_
     const group = await screen.findByRole("group", { name: "Slot 1 hint picture" })
     await user.type(within(group).getByLabelText("Add hint picture: URL"), "https://u.example/actor.png{Enter}")
     await waitFor(() => expect(sentTo(`POST ${BASE}/media`)).toHaveLength(1))
-    await user.type(screen.getByLabelText(/role name/i), "!")
+    await user.type(screen.getByLabelText(ROLE_NAME), "!")
     release()
     expect(await screen.findByRole("img", { name: "Slot 1 hint picture" })).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: /save draft/i }))
@@ -861,5 +927,93 @@ describe("the original's display copy and a slot's hint picture", { timeout: 20_
     await user.click(await screen.findByRole("button", { name: /^publish$/i }))
     const reasons = await screen.findByRole("list", { name: /why it can't be published/i })
     expect(within(reasons).getByText(/upload the clip again/i)).toBeInTheDocument()
+  })
+})
+
+describe("the 4 s preview's own prompt parts", { timeout: 20_000 }, () => {
+  const PREVIEW_ROLE = /^role name in the 4 s preview/i
+  const PREVIEW_LINE = /^prompt line in the 4 s preview/i
+  const REFERENCE = { images: ["https://cdn.test/r.png"], line: "the neon sign" }
+
+  it("shows each one under its full one with the fallback as placeholder, and saves what is typed", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { references: [REFERENCE] }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    const role = await screen.findByLabelText(PREVIEW_ROLE)
+    const pre = screen.getByLabelText("Pre prompt in the 4 s preview")
+    const trend = screen.getByLabelText("Trend prompt in the 4 s preview")
+    const line = screen.getByLabelText(PREVIEW_LINE)
+    for (const field of [role, pre, trend, line]) {
+      expect(field).toHaveValue("")
+      expect(field).toHaveAttribute("placeholder", "Same as the full run")
+    }
+    // Loading a draft with none is no change.
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+
+    await user.type(role, "the woman")
+    await user.type(pre, "Open close.")
+    await user.type(trend, "Keep it short.")
+    await user.type(line, "the sign")
+    expect(screen.getByText(/characters left for the 4 s preview's trend prompt/)).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).toMatchObject({
+      previewPrePrompt: "Open close.",
+      previewTrendPrompt: "Keep it short.",
+      slots: [{ ...slot(), previewRoleName: "the woman" }],
+      references: [{ ...REFERENCE, previewLine: "the sign" }],
+    })
+    // The full run's own texts are untouched.
+    expect(body.data.trendPrompt).toBe("Keep the camera moves.")
+    expect(body.data).not.toHaveProperty("prePrompt")
+  })
+
+  it("hides them while the trend offers no preview, and keeps their stored values through a save", async () => {
+    const user = userEvent.setup()
+    const stored = {
+      previewStart: null,
+      previewPrePrompt: "Open close.",
+      previewTrendPrompt: "Keep it short.",
+      slots: [slot({ previewRoleName: "the woman" })],
+      references: [{ ...REFERENCE, previewLine: "the sign" }],
+    }
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, stored) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    const roleName = await screen.findByLabelText(ROLE_NAME)
+    for (const label of [PREVIEW_ROLE, PREVIEW_LINE, "Pre prompt in the 4 s preview", "Trend prompt in the 4 s preview"]) {
+      expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+    }
+    expect(screen.queryByText(/4 s preview's trend prompt/)).not.toBeInTheDocument()
+    await user.type(roleName, "!")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).toMatchObject({
+      previewStart: null,
+      previewPrePrompt: "Open close.",
+      previewTrendPrompt: "Keep it short.",
+      slots: [{ roleName: "the woman on the left!", previewRoleName: "the woman" }],
+      references: [{ previewLine: "the sign" }],
+    })
+  })
+
+  it("holds Save on a preview trend prompt that leaves the details no room", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { previewTrendPrompt: "t".repeat(2990) }) } })
+    renderEditor()
+    await user.type(await screen.findByLabelText("Trend prompt in the 4 s preview"), "123456789")
+    expect(await screen.findByText(/^Trend prompt in the 4 s preview: at most 2998 characters/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+  })
+
+  it("a test run's 4 s preview says it sends the preview's own parts", async () => {
+    renderEditor()
+    expect(await screen.findByRole("switch", { name: "4 s preview" })).toBeChecked()
+    expect(screen.getByText(/A preview run sends the preview's own role names, reference lines and prompts/)).toBeInTheDocument()
   })
 })

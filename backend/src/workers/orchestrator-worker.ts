@@ -36,6 +36,7 @@ import { payloadBillingContext } from "../lib/billing-context.js"
 import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
 import { chargedCreditsOfRejection, fanOutProgressOfRejection, retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
+import { settleRunStepCharges } from "../services/workflow-engine/run-step-charges.js"
 import { usecaseFanOutRefusal } from "../services/workflow-engine/use-case-request.js"
 import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
@@ -1557,6 +1558,18 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     let completedCount = resumedNodeCount
     let failedCount = 0
     let totalCredits = 0
+    // Before the run's totals are written for the last time: the steps (child
+    // jobs) of its nodes' jobs that settled after their parent completed, or
+    // could not be read then, and the settled steps of a failed node's job
+    // (run-step-charges.ts). The execution total, the app-run total and the
+    // creator fee base are all written from `totalCredits` after this.
+    const settleStepCharges = async (): Promise<void> => {
+      try {
+        totalCredits += await settleRunStepCharges(ctx, nodeStates)
+      } catch (err) {
+        console.error(`[orchestrator] could not settle the step charges of execution ${executionId}:`, err)
+      }
+    }
     const startTime = Date.now()
     // A use-case node's hidden run: its wrapper job shows the run's progress. Best-effort.
     const wrapperJobId = job.data.wrapperJobId
@@ -1577,6 +1590,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // grown by the node executor at dispatch). A run with nothing budgeted
       // keeps 120 minutes exactly.
       if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > workflowCapMs(ctx.budgetExcessMs)) {
+        await settleStepCharges()
         await failExecution(executionId, "Workflow execution timed out", nodeStates)
         return
       }
@@ -1588,6 +1602,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // control states are handled together.
       if (controlStatus === "cancelled" || controlStatus === "stopping") {
         ctx.cancelled = true
+        await settleStepCharges()
         await markExecutionCancelled(executionId, nodeStates, { completedNodes: completedCount, failedNodes: failedCount, totalCreditsUsed: totalCredits })
         return
       }
@@ -1996,6 +2011,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // A Stop held back part of a tries-every stage: the run stops here, as a
       // Stop seen at a level boundary does (the nodes after it never run).
       if (stoppedMidLevel) {
+        await settleStepCharges()
         await markExecutionCancelled(executionId, nodeStates, { completedNodes: completedCount, failedNodes: failedCount, totalCreditsUsed: totalCredits })
         return
       }
@@ -2007,6 +2023,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           .map(([id, s]) => `${id}: ${s.error}`)
           .join("; ")
 
+        await settleStepCharges()
         await failExecution(
           executionId,
           `Node execution failed: ${failedNodeErrors}`,
@@ -2020,6 +2037,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     }
 
     // 8. Mark execution completed
+    await settleStepCharges()
     await updateExecution(executionId, {
       status: "completed",
       node_states: nodeStates,
@@ -2178,7 +2196,7 @@ async function executeNodeForList(
   // (reconcile leaves it "running"). Reuse the iterations that ALREADY completed
   // (+ committed) on the prior attempt instead of re-running them, so the re-run
   // doesn't double-charge or double-spend at the provider. Empty on a first run.
-  const priorIterations = await loadCompletedFanOutIterations(executionId, ctx.userId, node.id, node.type ?? "")
+  const priorIterations = await loadCompletedFanOutIterations(executionId, ctx.userId, node.id, node.type ?? "", ctx)
 
   // A render's batch has one row per run, not one per plan clip: every row is
   // stamped with what it is sent for (its clip and the run's quality), up

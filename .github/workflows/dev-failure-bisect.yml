@@ -1,0 +1,113 @@
+# Names the merge that broke a post-merge run on dev that covered several
+# merges. dev is one CI concurrency group (ci.yml): a run in progress always
+# finishes and only the newest pending run is kept, so one run can test a
+# burst of merges, and its Attribute Dev Failure comment can only say "one of
+# these". This workflow re-runs only the files that failed again when re-run
+# alone, at merges inside the batch, by binary search
+# (tools/test-select/bisect-dev.mjs), and comments on the PR whose merge
+# broke them.
+#
+# Its own workflow, not a job in ci.yml: it neither delays nor changes the
+# conclusion of the CI run, a newer dev push cannot cancel it, and it can be
+# re-run on its own.
+#
+# It does nothing when: the run covered one merge (the attribution comment
+# already names it); the last finished dev run was red too (the failure may be
+# older); every failing file passed when re-run alone (likely flaky); or only
+# jobs without file lists failed (Remotion, Characterization, Migration
+# Behavior, FFmpeg Ledger), whose comment already went to every PR covered.
+name: dev-failure-bisect
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [dev]
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+concurrency:
+  group: dev-failure-bisect-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+jobs:
+  bisect:
+    name: Bisect Dev Failure
+    if: >-
+      github.repository == 'nodaroai/app.nodaro.ai-internal' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    # Each probe installs and builds a commit (a few minutes); a batch of up to
+    # 30 merges needs at most five probes.
+    timeout-minutes: 90
+    env:
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: test-key
+      EDITION: cloud
+      NODE_ENV: test
+      YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+      ONNXRUNTIME_NODE_INSTALL: skip
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          # The first-parent chain back to the last finished dev run
+          # (tools/test-select/dev-batch.mjs walks at most 30).
+          fetch-depth: 31
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          pattern: failed-*
+          path: ${{ runner.temp }}/failed
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # GITHUB_SHA here is the default branch's; the failed run's commit:
+          DEV_SHA: ${{ github.event.workflow_run.head_sha }}
+          FAILED_DIR: ${{ runner.temp }}/failed
+          BATCH: ${{ runner.temp }}/batch.json
+        run: |
+          node tools/test-select/dev-batch.mjs > "$BATCH"
+          node tools/test-select/bisect-dev.mjs plan
+          # The probes move the checkout; later steps run a copy from outside it.
+          cp -R tools/test-select "$RUNNER_TEMP/test-select"
+      # Probes run the failing files at older commits with this commit's
+      # pinned ffmpeg; the backend's real-ffmpeg tests need one.
+      - name: Install the production-pinned ffmpeg
+        if: steps.plan.outputs.go == 'true'
+        run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
+      - name: Pin npm 11
+        if: steps.plan.outputs.go == 'true'
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Bisect
+        if: steps.plan.outputs.go == 'true'
+        env:
+          FILES: ${{ steps.plan.outputs.files }}
+          COMMITS: ${{ steps.plan.outputs.commits }}
+          RESULT: ${{ runner.temp }}/bisect.json
+          REPO_ROOT: ${{ github.workspace }}
+        run: node "$RUNNER_TEMP/test-select/bisect-dev.mjs" run
+      - name: Comment on the PR that broke it
+        if: steps.plan.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BATCH: ${{ runner.temp }}/batch.json
+          RESULT: ${{ runner.temp }}/bisect.json
+          FILES: ${{ steps.plan.outputs.files }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          BISECT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUT: ${{ runner.temp }}/bisect.md
+        run: |
+          node "$RUNNER_TEMP/test-select/bisect-dev.mjs" comment
+          cat "$OUT" >> "$GITHUB_STEP_SUMMARY"
+          PR=$(cat "$OUT.pr")
+          if [ -n "$PR" ]; then gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$OUT"; fi

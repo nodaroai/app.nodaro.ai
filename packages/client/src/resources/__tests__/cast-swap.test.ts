@@ -156,18 +156,32 @@ describe("castSwap resource", () => {
     expect([minimal, zoneOnly, noMargins, noMode, badMode, badFill]).toHaveLength(6)
   })
 
-  it("run and estimate post engine unchanged, Nodaro Motion Lite at 720p with no draft", async () => {
+  it("run and estimate post engine unchanged, Nodaro Motion Pulse at 720p with no draft", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-k" }, 202)).mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: { castSwap: 1, motion: 0, references: 0 }, settlesLower: false }))
     const client = make(fetchMock)
-    const lite: CastSwapParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "motion-lite", resolution: "720p", draft: false, motionLength: "cut-start" }
+    const lite: CastSwapParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "motion-pulse", resolution: "720p", draft: false, motionLength: "cut-start" }
     await client.castSwap.run(lite)
     await client.castSwap.estimate(lite)
     for (const call of fetchMock.mock.calls) {
-      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "motion-lite", resolution: "720p", draft: false, motionLength: "cut-start" })
+      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "motion-pulse", resolution: "720p", draft: false, motionLength: "cut-start" })
     }
   })
 
-  it("leaves engine out of the body when it is not given (the route runs Nodaro Motion Pro)", async () => {
+  it("answers an estimate's engine by its public id, whichever id the server named it by", async () => {
+    for (const [answered, engine] of [
+      ["motion-pro", "motion-prism"],
+      ["motion-lite", "motion-pulse"],
+      ["kling-4", "motion-pulse"],
+      ["motion-pulse", "motion-pulse"],
+    ] as const) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ engine: answered, totalCredits: 1, breakdown: {}, settlesLower: false }))
+      await expect(make(fetchMock).castSwap.estimate(params)).resolves.toMatchObject({ engine, totalCredits: 1 })
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ totalCredits: 2, breakdown: {}, settlesLower: false }))
+    expect(await make(fetchMock).castSwap.estimate(params)).not.toHaveProperty("engine")
+  })
+
+  it("leaves engine out of the body when it is not given (the route runs Nodaro Motion Prism)", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-s" }, 202))
     const client = make(fetchMock)
     await client.castSwap.run(params)
@@ -175,13 +189,15 @@ describe("castSwap resource", () => {
   })
 
   it("types engine and the Full Quality kind: only the documented values", () => {
-    const engines: CastSwapEngine[] = ["motion-pro", "motion-lite"]
+    const engines: CastSwapEngine[] = ["motion-prism", "motion-pulse"]
     // @ts-expect-error — not an engine
     const badEngine: CastSwapEngine = "kling-3"
     // @ts-expect-error — an old id is not a public engine (it is never returned)
     const oldId: CastSwapEngine = "kling-4"
+    // @ts-expect-error — nor is an earlier public id
+    const earlierId: CastSwapEngine = "motion-lite"
     // …but a request still takes it (deprecated).
-    const legacy: CastSwapParams["engine"][] = ["seedance-2-5", "kling-4", "motion-pro"]
+    const legacy: CastSwapParams["engine"][] = ["seedance-2-5", "kling-4", "motion-pro", "motion-lite", "motion-prism"]
     // @ts-expect-error — not a length fit ("pad" would stretch the motion)
     const badLength: CastSwapParams["motionLength"] = "pad"
     const kinds: CastSwapFullQualityKind[] = ["same-take", "new-take"]
@@ -189,7 +205,7 @@ describe("castSwap resource", () => {
     const badKind: CastSwapFullQualityKind = "remaster"
     // kind is optional: an older engine answers none (a same take).
     const older: CastSwapFullQualityEstimate = { totalCredits: 1, breakdown: { castSwap: 1, motionHd: 0 }, availableUntil: "x" }
-    expect([engines, badEngine, oldId, legacy, badLength, kinds, badKind, older]).toHaveLength(8)
+    expect([engines, badEngine, oldId, earlierId, legacy, badLength, kinds, badKind, older]).toHaveLength(9)
   })
 
   it("types the base fee as base, with castSwap (an older server's name) still accepted", async () => {
@@ -217,7 +233,7 @@ describe("castSwap resource", () => {
 
   it("estimate passes the privacy credits and the neutral breakdown through", async () => {
     const estimate: CastSwapEstimate = {
-      engine: "motion-pro",
+      engine: "motion-prism",
       totalCredits: 15,
       breakdown: { base: 5, motion: 7, references: 3, privacy: 2 },
       privacyCredits: 2,

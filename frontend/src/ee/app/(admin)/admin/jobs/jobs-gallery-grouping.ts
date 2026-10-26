@@ -1,5 +1,6 @@
 import type { AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import { type JobPlatform } from "@/lib/job-platform"
+import { ownCreditsForTotal } from "./admin-job-credits"
 
 // Pure grouping + formatting for the admin Jobs Gallery. Kept out of the React
 // component so the grouping logic is unit-testable without rendering.
@@ -103,7 +104,9 @@ export function buildGroups(items: GItem[], primary: "day" | "source"): GGroup[]
       sub: primary === "day" ? daySub(rows[0].job.created_at) : "",
       outputs: rows.length,
       subCount: subOrder.length,
-      credits: rows.reduce((a, it) => a + (Number(it.job.credits) || 0), 0),
+      // Each job's OWN charge (its hold while open): the list shows child jobs
+      // beside their parent, so a run total here would count the steps twice.
+      credits: rows.reduce((a, it) => a + ownCreditsForTotal(it.job), 0),
       sections: subOrder.map((sk) => {
         const secItems = bySub.get(sk)!
         return {
@@ -113,7 +116,7 @@ export function buildGroups(items: GItem[], primary: "day" | "source"): GGroup[]
               ? secItems[0].plat.label
               : `${dayLabel(secItems[0].job.created_at)} · ${daySub(secItems[0].job.created_at)}`,
           count: secItems.length,
-          credits: secItems.reduce((a, it) => a + (Number(it.job.credits) || 0), 0),
+          credits: secItems.reduce((a, it) => a + ownCreditsForTotal(it.job), 0),
           items: secItems,
         }
       }),

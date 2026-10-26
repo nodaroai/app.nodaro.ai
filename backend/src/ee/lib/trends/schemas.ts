@@ -3,7 +3,8 @@
  *
  * Limits follow Cast Swap's: person roles ≤ 6, location ≤ 1, product ≤ 3,
  * pet ≤ 3; ≤ 3 images per role; ≤ 5 fixed references of 1–3 images; ≤ 30
- * images in all; a 4–30 s clip with a 4 s preview inside it.
+ * images in all; a 4–30 s clip with a 4 s preview inside it. A prompt part's
+ * 4 s preview version has its full one's limit, and may be empty.
  */
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
@@ -15,7 +16,7 @@ import {
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
 } from "@nodaro/shared/models"
-import { faceMaskingSchema } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
 import type {
   Choice,
   LocalizedText,
@@ -116,6 +117,9 @@ const slotBase = {
   hint: localizedText(500).optional(),
   hintImageUrl: httpUrl.optional(),
   roleName: z.string().min(1).max(200),
+  // The 4 s preview's own wording (prompt-parts.ts): same limit, and empty is
+  // allowed (it falls back to `roleName`), so clearing one never fails a save.
+  previewRoleName: z.string().max(200).optional(),
 }
 
 // Strict objects: a chip that is not the slot kind's own (or any `defaults`
@@ -145,6 +149,7 @@ const trendSlotSchema = z.discriminatedUnion("kind", [
 const trendReferenceSchema = z.strictObject({
   images: z.array(httpUrl).min(1).max(MAX_IMAGES_PER_SLOT),
   line: z.string().min(1).max(500),
+  previewLine: z.string().max(500).optional(),
 })
 
 const trendExampleSchema = z.strictObject({
@@ -166,9 +171,14 @@ const trendFaceMaskSchema = z.strictObject({
   recipe: z.strictObject({ core: z.string().min(1).max(100).nullable(), plugin: z.string().min(1).max(100) }),
   settingsKey: z.string().min(1).max(200),
   jobId: z.string().min(1),
-  stats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative }),
+  stats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative, erasedRegions: nonNegative.optional() }),
   approvedAt: z.string().min(1),
   approvedBy: z.string().min(1),
+  rawMaskUrl: httpUrl.optional(),
+  depthUrl: httpUrl.optional(),
+  baseKey: z.string().min(1).max(200).optional(),
+  baseStats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative }).optional(),
+  fps: z.number().positive().max(1000).optional(),
 })
 
 /** The face mask being made (`TrendFaceMaskJob`): written by the face mask routes only. */
@@ -233,7 +243,10 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     references: z.array(trendReferenceSchema).max(5),
     trendPrompt: z.string().max(TREND_PROMPT_LIMITS.trendPromptMax).optional(),
     prePrompt: z.string().max(TREND_PROMPT_LIMITS.prePromptMax).optional(),
-    faceMasking: faceMaskingSchema.optional(),
+    // The 4 s preview's own versions (prompt-parts.ts), held to the same limits.
+    previewTrendPrompt: z.string().max(TREND_PROMPT_LIMITS.trendPromptMax).optional(),
+    previewPrePrompt: z.string().max(TREND_PROMPT_LIMITS.prePromptMax).optional(),
+    faceMasking: faceMaskingWithMarksSchema.optional(),
     faceMask: trendFaceMaskSchema.optional(),
     faceMaskJob: trendFaceMaskJobSchema.optional(),
     upscaleJobs: z.array(trendUpscaleJobSchema).max(MAX_UPSCALE_JOBS).optional(),

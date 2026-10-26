@@ -1,7 +1,7 @@
 import { useCallback } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { getAuthHeaders } from "@/lib/api"
+import { getAuthHeaders, getAutoRecharge, updateAutoRecharge } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import {
@@ -147,9 +147,13 @@ export interface AllowanceGrantRow {
 export interface IntegrationKey {
   readonly id: string
   readonly name: string
-  /** The first 12 characters (`ndr_bill_` + 3 hex) — enough to recognise a key
-   *  in a log line, useless as a credential. */
+  /** The first characters (`ndr_bill_` + 3 hex, or `ndr_bill_ro_` + 3 hex for
+   *  a read-only key) — enough to recognise a key in a log line, useless as a
+   *  credential. */
   readonly tokenPrefix: string
+  /** A read-only key may only read the billing surface; the server refuses
+   *  every write it attempts. Fixed at mint. */
+  readonly readOnly?: boolean
   readonly createdAt: string
   readonly expiresAt: string | null
   readonly lastUsedAt: string | null
@@ -166,6 +170,7 @@ export interface MintedIntegrationKey {
   readonly name: string
   readonly token: string
   readonly tokenPrefix: string
+  readonly readOnly?: boolean
   readonly expiresAt: string | null
 }
 
@@ -188,6 +193,16 @@ export interface DeploymentBalance {
   readonly periodEnd: string | null
   readonly lowBalance: boolean
   readonly threshold: number | null
+  /** The payer's card top-up, read-only; null = could not be read right now.
+   *  `active` folds in the server's kill switch and the failure stop. */
+  readonly autoRecharge?: {
+    readonly enabled: boolean
+    readonly active: boolean
+    readonly thresholdCredits: number | null
+    readonly amountUsd: number | null
+    readonly failureCount: number
+    readonly lastAttemptAt: string | null
+  } | null
 }
 
 /** The cap the mint route enforces. Mirrored here so the page can say how many
@@ -379,6 +394,7 @@ export const deploymentBillingKeys = {
   grants: (userId: string) => [...ROOT, "grants", userId] as const,
   integrationKeys: [...ROOT, "integration-keys"] as const,
   balance: [...ROOT, "balance"] as const,
+  autoRecharge: [...ROOT, "auto-recharge"] as const,
 }
 
 // ── Reads ───────────────────────────────────────────────────────────────────
@@ -530,6 +546,36 @@ export function useDeploymentBalance(enabled: boolean) {
   })
 }
 
+/**
+ * The billing account's OWN auto-recharge settings — the stock
+ * `/v1/billing/auto-recharge` route, which acts on the signed-in account, and
+ * on this page that account IS the payer. Thresholds are RAW Nodaro credits,
+ * compared against the pool.
+ */
+export function usePayerAutoRecharge(enabled: boolean) {
+  return useQuery({
+    queryKey: deploymentBillingKeys.autoRecharge,
+    queryFn: getAutoRecharge,
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+export function useSetPayerAutoRechargeMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: updateAutoRecharge,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: deploymentBillingKeys.autoRecharge })
+      void qc.invalidateQueries({ queryKey: deploymentBillingKeys.balance })
+    },
+    // Rendered inline by the block, in the page's language — suppress the
+    // default toast of the server's English sentence (see the mint mutation).
+    onError: () => {},
+  })
+}
+
 /** Refetch everything the pool's figures depend on (the Stripe return).
  *  Stable across renders — the page lists it in an effect's deps, and a fresh
  *  closure every render would re-invalidate on every re-render. */
@@ -626,7 +672,7 @@ export function useDeploymentCheckoutMutation() {
 export function useMintIntegrationKeyMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (vars: { name: string; expiresAt?: string; allowedCidrs?: string[] }) =>
+    mutationFn: (vars: { name: string; expiresAt?: string; allowedCidrs?: string[]; readOnly?: boolean }) =>
       request<MintedIntegrationKey>("/integration-keys", {
         method: "POST",
         body: JSON.stringify(vars),

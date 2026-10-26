@@ -47,6 +47,10 @@ export const PRESET_TILES_KO: Record<string, PresetCopy> = {
     name: "모델 대 모델",
     description: "두 이미지·영상 모델 비교. '어느 쪽이 더 나을까?'",
   },
+  "generate-image/thumb-node-diagram": {
+    name: "노드 다이어그램",
+    description: "자동화·AI 에이전트 채널. 깔끔한 워크플로 도식의 중심에 한 사람.",
+  },
   "generate-image/thumb-finance-shock": {
     name: "금융 충격",
     description: "재테크·크립토 채널. 손익 숫자, 머리를 감싼 얼굴.",
@@ -86,6 +90,14 @@ export const PRESET_TILES_KO: Record<string, PresetCopy> = {
   "generate-image/thumb-stage-talk": {
     name: "무대 강연",
     description: "컨퍼런스 연사, 강연을 올리는 SaaS 창업자.",
+  },
+  "generate-image/thumb-screen-portals": {
+    name: "스크린 포털",
+    description: "광고·마케팅 크리에이터. 놀란 진행자 주위를 도는 폰 화면들.",
+  },
+  "generate-image/thumb-copy-me-arrow": {
+    name: "변화의 화살표",
+    description: "창업 채널. 익명의 실루엣에서 당당한 창업자로, 큰 노란 화살표.",
   },
   "generate-image/thumb-challenge-timer": {
     name: "챌린지 타이머",
@@ -138,6 +150,10 @@ export const PRESET_TILES_KO: Record<string, PresetCopy> = {
   "generate-image/thumb-food-feast": {
     name: "먹방 피스트",
     description: "푸드 블로거, 레시피 채널. 음식 클로즈업, 배고픈 얼굴, 가격이나 주장.",
+  },
+  "generate-image/thumb-vlog-bright": {
+    name: "밝은 브이로그",
+    description: "여행·라이프스타일 브이로거. 햇살 거리, 큰 미소, 손글씨 세 줄.",
   },
   "generate-image/thumb-science-explainer": {
     name: "과학 설명",
@@ -199,6 +215,10 @@ export const PRESET_TILES_KO: Record<string, PresetCopy> = {
     name: "맞고 틀리고",
     description: "하우투·조언 채널. 이건 하고, 저건 하지 마세요.",
   },
+  "generate-image/thumb-playful-cast": {
+    name: "유쾌한 캐스트",
+    description: "애니메이션·키즈 크리에이터. 독창적인 3D 친구들에 둘러싸인 진행자.",
+  },
   "generate-image/thumb-pets": {
     name: "반려동물",
     description: "반려동물 채널, 구조 이야기.",
@@ -210,6 +230,18 @@ export const PRESET_TILES_KO: Record<string, PresetCopy> = {
   "generate-image/thumb-parenting": {
     name: "육아",
     description: "가족·육아 크리에이터. 부모와 아이, 공감되는 혼돈.",
+  },
+  "generate-image/thumb-swiss-collage": {
+    name: "스위스 콜라주",
+    description: "디자이너·브랜드 채널. 오려낸 인물과 거대 타이포의 인쇄 콜라주.",
+  },
+  "generate-image/thumb-editorial-type": {
+    name: "에디토리얼 타이포",
+    description: "패션·문화 채널. 거대한 한 단어와 얼굴, 캠페인 포스터의 절제.",
+  },
+  "generate-image/thumb-reel-cover-bold": {
+    name: "안개 속 두 단어",
+    description: "동기부여 채널. 안개 속 거대한 두 단어와 작은 인물.",
   },
   "generate-image/short-pov-hook": {
     name: "POV 훅",
@@ -466,6 +498,10 @@ export const PRESET_TILES_KO: Record<string, PresetCopy> = {
   "generate-image/merch-standalone-print-art": {
     name: "티셔츠 프린트 아트워크",
     description: "POD 셀러. 셔츠 없이 앞면 그래픽만, 흰 배경.",
+  },
+  "generate-image/layout-visionary-magazine-cover": {
+    name: "매거진 커버",
+    description: "창업가·퍼스널 브랜드. 제호와 커버스토리가 있는 세로형 패션 매거진 표지.",
   },
   "generate-image/merch-sticker-sheet": {
     name: "스티커 시트",

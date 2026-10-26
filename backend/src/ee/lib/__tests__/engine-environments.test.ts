@@ -36,6 +36,7 @@ import {
 } from "../engine-environments.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import type { PluginSupports } from "../../../lib/private-plugins/types.js"
+import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
 
 const SUPPORTS: PluginSupports = {
   castSwap: {
@@ -125,6 +126,19 @@ describe("recordThisEngineEnvironment (boot hook)", () => {
       plugin_build_id: "@nodaroai/cloud-plugins@1.2.3",
       supports: SUPPORTS,
     })
+  })
+
+  it.each([
+    ["0.397.0", ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"]],
+    ["new ids only", ["motion-prism", "motion-pulse"]],
+  ] as const)("records a plugin's declared engines (%s) as it declares them, read as both engines", async (_gen, engines) => {
+    process.env.RAILWAY_ENVIRONMENT_NAME = "production"
+    const supports: PluginSupports = { castSwap: { ...SUPPORTS.castSwap!, engines, engineAliases: true } }
+    setPluginSupports(supports)
+    await recordThisEngineEnvironment("@nodaroai/cloud-plugins@x")
+    const recorded = argOf(db.log[0]!, "upsert")![0] as { supports: PluginSupports }
+    expect(recorded.supports.castSwap?.engines).toEqual(engines)
+    expect(castSwapEnginesOf(recorded.supports.castSwap)).toEqual(["seedance-2-5", "kling-4"])
   })
 
   it("does nothing without a Railway environment name", async () => {

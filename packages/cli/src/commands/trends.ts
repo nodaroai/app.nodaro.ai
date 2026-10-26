@@ -47,9 +47,9 @@ function addRunFlags(cmd: Command): Command {
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")
     .addOption(
-      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Motion Lite trend").choices([...RESOLUTIONS]),
+      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Motion Pulse trend").choices([...RESOLUTIONS]),
     )
-    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there; a Nodaro Motion Lite trend has none)")
+    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there; a Nodaro Motion Pulse trend has none)")
 }
 
 function checkSlotKey(flag: string, spec: string, key: string): void {

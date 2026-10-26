@@ -134,7 +134,7 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     await waitFor(() => expect(screen.queryByRole("group", { name: "Upscale example 1" })).not.toBeInTheDocument())
 
     // The next draft write carries the revision the server holds now.
-    await user.type(screen.getByLabelText(/trend prompt/i), "!")
+    await user.type(screen.getByLabelText("Trend prompt"), "!")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
     await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
     expect((sentTo(`PUT ${BASE}/draft`)[0] as { revision: string }).revision).toBe("rev-4")
@@ -252,7 +252,7 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     expect(await screen.findByText("1080×1920", {}, { timeout: 5_000 })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole("group", { name: "Upscale the source clip" })).not.toBeInTheDocument())
 
-    await user.type(screen.getByLabelText(/trend prompt/i), "!")
+    await user.type(screen.getByLabelText("Trend prompt"), "!")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
     await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
     const [saved] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: AdminTrendData; revision: string }>
@@ -278,7 +278,7 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     renderEditor()
     const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
     expect(within(panel).getByRole("button", { name: /upscale to 1080p/i })).toBeEnabled()
-    await user.type(screen.getByLabelText(/trend prompt/i), "!")
+    await user.type(screen.getByLabelText("Trend prompt"), "!")
     expect(within(panel).getByRole("button", { name: /upscale to 1080p/i })).toBeDisabled()
     expect(within(panel).getByText(/save first/i)).toBeInTheDocument()
   })

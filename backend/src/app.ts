@@ -177,6 +177,7 @@ import { faceSwapRoutes } from "./routes/face-swap.js"
 import { generateMaskRoutes } from "./routes/generate-mask.js"
 import { videoMaskRoutes } from "./routes/video-mask.js"
 import { maskCompositeRoutes } from "./routes/mask-composite.js"
+import { maskEraseRoutes } from "./routes/mask-erase.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
@@ -229,6 +230,7 @@ import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
 import { adminCopilotGapsRoutes } from "./ee/routes/admin-copilot-gaps.js"
 import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
+import { adminHostedDeploymentsRoutes } from "./ee/routes/admin-hosted-deployments.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
@@ -353,6 +355,7 @@ import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
+import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
@@ -559,6 +562,9 @@ export async function buildApp() {
   // A retired video model id in a request body runs as the model it became
   // (RETIRED_VIDEO_PROVIDERS), before any route prices or validates it.
   registerRetiredVideoProviderHook(app)
+  // A Nodaro Motion run or quote naming its engine by any id (public, earlier
+  // or internal) reaches the plugin's route as the internal id every engine takes.
+  registerNodaroMotionEngineHook(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the
   // identity this validates against. A no-op unless organizations are
@@ -695,6 +701,7 @@ export async function buildApp() {
   await app.register(generateMaskRoutes)
   await app.register(videoMaskRoutes)
   await app.register(maskCompositeRoutes)
+  await app.register(maskEraseRoutes)
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
@@ -772,6 +779,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminCopilotGapsRoutes)
   if (hasAdmin()) await app.register(adminAppReportsRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
+  if (hasAdmin()) await app.register(adminHostedDeploymentsRoutes)
   if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
   if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)

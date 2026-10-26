@@ -550,6 +550,16 @@ describe("using an upscale", () => {
     expect(detail.faceMaskState).toEqual({ status: "out_of_date", reasons: [{ why: "settings" }] })
   })
 
+  it("the source upscaled to 1080p keeps the face mask's marks: the same clip, the same frames and picture", async () => {
+    const MARK = { label: "erased" as const, fromFrame: 0, toFrame: 99, leftPct: 10, topPct: 10, rightPct: 40, bottomPct: 40 }
+    seed({}, { ...draftData({ faceMasking: { mode: "always", marks: [MARK] } }), upscaleJobs: [pending({ target: "source", fromUrl: SRC })] })
+    world.jobs.set(UP_JOB, upJob(SRC))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    const d = draftNow()
+    expect(d.source!.videoUrl).toBe(`https://cdn.test/trends/${T1}/up-src-1.mp4`)
+    expect(d.faceMasking).toEqual({ mode: "always", marks: [MARK] })
+  })
+
   it("on a published trend, writes a new draft version and leaves the published one as it was", async () => {
     const data = draftData({ upscaleJobs: [pending()] })
     seed({ status: "published", publishedVersion: 1 }, data)

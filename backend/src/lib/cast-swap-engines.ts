@@ -4,11 +4,14 @@
  * it drops an `engine` it does not know, so a body naming another engine must
  * be held back rather than sent, or it would silently run on Seedance.
  *
- * Declared in either vocabulary: an engine that knows Nodaro Motion's public
- * ids declares those (`"motion-pro"`, `"motion-lite"`, with `engineAliases`),
- * an older one the internal ids. Both read as the internal ids here, the ones
- * the platform stores and sends (`castSwapEngineFrom`); a value that names no
- * engine is dropped.
+ * Declared in any vocabulary: an engine that knows Nodaro Motion's public ids
+ * declares those — the current ones (`"motion-prism"`, `"motion-pulse"`), or
+ * the earlier ones (`"motion-pro"`, `"motion-lite"`, 0.394.0 – 0.397.0, with
+ * `engineAliases`) — and may list the internal ids beside them; an older one
+ * declares the internal ids only. Every form reads as the internal ids here,
+ * the ones the platform stores and sends (`castSwapEngineFrom`), so a list of
+ * the new ids alone still names both engines; a value that names no engine is
+ * dropped.
  */
 import { CAST_SWAP_ENGINE_WHEN_OMITTED, castSwapEngineFrom, type CastSwapEngine } from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
@@ -29,7 +32,7 @@ export function loadedEngineRuns(engine: CastSwapEngine): boolean {
 }
 
 /**
- * The request key for a Nodaro Motion Lite run's length fit: `motionLength`
+ * The request key for a Nodaro Motion Pulse run's length fit: `motionLength`
  * where the loaded engine takes Nodaro Motion's names (`engineAliases`,
  * 0.394.0+), else the old `klingLength` (an older engine knows only that one
  * and would drop the other silently, cutting the clip's end).
