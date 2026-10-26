@@ -3529,19 +3529,31 @@ month. Spending draws subscription credits first.
 The plans on sale and their prices are public — see
 [§12c](#12c-plans-and-prices-cloud-edition), which also covers
 `GET /v1/billing/subscription`, the account's own subscription. The routes that
-buy and manage billing are **first-party-only**: they reject API and OAuth-app
-tokens and are used from a logged-in Nodaro session — manage billing at
-[app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+buy and manage billing answer a **signed-in session only** (a Supabase JWT, the
+credential a first-party web app holds): they reject API and OAuth-app tokens
+with `403 forbidden`. A person manages billing at
+[app.nodaro.ai/billing](https://app.nodaro.ai/billing), or in a first-party app
+that calls these through the SDK (`client.billing`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack. |
-| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits. |
-| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan. |
-| `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal. |
-| `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting. |
-| `PUT` | `/v1/billing/auto-recharge` | Changes it. |
-| `GET` | `/v1/billing/transactions` | Purchase history, with receipt links. |
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath? }` → `{ data: { url } }`. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath? }` → `{ data: { url, credits } }`. |
+| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. |
+| `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
+| `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
+| `PUT` | `/v1/billing/auto-recharge` | Changes it: `{ enabled, thresholdCredits?, amountUsd? }` (both required to enable). |
+| `GET` | `/v1/billing/transactions` | Purchase history, newest first (the latest 50): `{ data: [{ id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url }] }`; `type` is `subscription`, `topup` or `refund` (`credits_granted` negative). |
+| `GET` | `/v1/billing/payment-method` | What is on file with Stripe: `{ data: { card, billingDetails } }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Never an error for an account that has not bought yet: both `null`. |
+| `GET` | `/v1/billing/invoices` | Every payment as a document, newest first (the latest 100 of each source): `{ data: [{ id, kind, number, at, amount: { amount, currency }, credits, status, description, pdfUrl, url }] }`. `kind` is `"invoice"` (a subscription payment: `number`, `pdfUrl` and the hosted `url` are Stripe's) or `"receipt"` (a credit pack or a load: `credits` granted and the hosted receipt as `url`; no PDF; a refund is a receipt with `status` `"refunded"`, `amount` and `credits` negative). `status` is `"paid"`, `"open"`, `"void"`, `"uncollectible"` or `"refunded"`. |
+
+`returnPath` (checkout, load, portal) is a path on the **calling origin**
+(`/billing`, `/settings/credits?tab=history`) that Stripe sends the person back
+to, so a first-party app on its own origin lands on its own screen: one leading
+`/`, a query allowed, no host, no backslash, no `#` — anything else is refused
+(`400`). Checkout and load add `checkout=success` or `checkout=cancelled` to
+its query; it wins over `embedded`. Without it the app's own `/billing` and
+`/pricing` pages are used.
 
 On a deployment-payer instance the billing account manages the
 deployment's pool and per-user allowances through

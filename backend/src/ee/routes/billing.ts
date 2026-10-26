@@ -7,6 +7,14 @@
  * POST /v1/billing/create-checkout-session - Create Stripe Checkout session
  * POST /v1/billing/manage-subscription    - Get Stripe Customer Portal URL
  * POST /v1/billing/change-plan            - Change subscription tier
+ * GET  /v1/billing/payment-method         - The card and billing details on file
+ * GET  /v1/billing/invoices               - Invoices (subscriptions) and receipts (credit purchases), newest first
+ *
+ * The three routes that send the person to Stripe (checkout, load, portal)
+ * take an optional `returnPath` — a path on the CALLING origin (`/billing`,
+ * `/settings/credits`) Stripe sends them back to, so a first-party app on
+ * another origin (tools.nodaro.ai) lands on its own screen. Checkout and
+ * load add `checkout=success` or `checkout=cancelled` to it.
  */
 
 import type { FastifyInstance } from "fastify"
@@ -22,6 +30,7 @@ import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { tierColumns } from "../billing/tier-columns.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { deploymentPayerId } from "../../lib/deployment-payer.js"
+import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -34,6 +43,25 @@ function getOrigin(req: { headers: Record<string, string | string[] | undefined>
   return ""
 }
 
+/**
+ * Where Stripe sends the person back: a path on the calling origin, never
+ * another host, so a first-party app on its own origin lands on its own
+ * screen. One leading `/` (not `//host`), no backslash (a browser reads
+ * `/\host` as `//host`), no whitespace, no fragment (`#` would swallow the
+ * `checkout=` flag); a query is allowed.
+ */
+const RETURN_PATH = /^\/(?![/\\])[^\\\s#?]*(\?[^\\\s#]*)?$/
+const RETURN_PATH_MESSAGE = "returnPath must be a path on this origin: one leading /, no host, no #"
+const returnPathSchema = z.string().max(200).regex(RETURN_PATH, RETURN_PATH_MESSAGE).optional()
+
+/** `returnPath` with `checkout=<outcome>` added to its query, on the calling origin. */
+function returnUrl(origin: string, returnPath: string, outcome: "success" | "cancelled"): string {
+  const [path, query = ""] = returnPath.split("?", 2)
+  const params = new URLSearchParams(query)
+  params.set("checkout", outcome)
+  return `${origin}${path}?${params.toString()}`
+}
+
 const checkoutSessionSchema = z.object({
   priceId: z.string(),
   mode: z.enum(["subscription", "payment"]).optional(),
@@ -42,7 +70,20 @@ const checkoutSessionSchema = z.object({
   // no-auth /checkout-complete page instead of /billing — the latter would
   // bounce that tab to login, since its session lives in the parent app.
   embedded: z.boolean().optional(),
+  returnPath: returnPathSchema,
 })
+
+/** The customer Stripe knows this user as; `null` before a first purchase. Throws when the lookup fails (never "nothing on file"). */
+async function stripeCustomerIdOf(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("stripe_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (error) throw new Error(`stripe_customers lookup failed: ${error.message}`)
+  const id = data?.stripe_customer_id
+  return typeof id === "string" && id ? id : null
+}
 
 const changePlanSchema = z.object({
   newPriceId: z.string(),
@@ -207,10 +248,11 @@ export async function billingRoutes(app: FastifyInstance) {
 
     const parsed = checkoutSessionSchema.safeParse(req.body)
     if (!parsed.success) {
-      return reply.status(400).send({ error: "priceId is required" })
+      const onReturnPath = parsed.error.issues.some((issue) => issue.path[0] === "returnPath")
+      return reply.status(400).send({ error: onReturnPath ? RETURN_PATH_MESSAGE : "priceId is required" })
     }
 
-    const { priceId, mode, embedded } = parsed.data
+    const { priceId, mode, embedded, returnPath } = parsed.data
     const checkoutMode = mode ?? (PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
 
     // Validate price ID
@@ -254,14 +296,18 @@ export async function billingRoutes(app: FastifyInstance) {
       // return to the public no-auth /checkout-complete page — the normal
       // /billing (or /pricing) return URL would bounce that tab to login,
       // since its session lives in the parent app, not here.
-      const successUrl = embedded
-        ? `${baseUrl}/checkout-complete?status=success`
-        : checkoutMode === "payment"
-          ? `${baseUrl}/billing?topup=true`
-          : `${baseUrl}/billing?success=true`
-      const cancelUrl = embedded
-        ? `${baseUrl}/checkout-complete?status=cancelled`
-        : `${baseUrl}/pricing`
+      const successUrl = returnPath
+        ? returnUrl(baseUrl, returnPath, "success")
+        : embedded
+          ? `${baseUrl}/checkout-complete?status=success`
+          : checkoutMode === "payment"
+            ? `${baseUrl}/billing?topup=true`
+            : `${baseUrl}/billing?success=true`
+      const cancelUrl = returnPath
+        ? returnUrl(baseUrl, returnPath, "cancelled")
+        : embedded
+          ? `${baseUrl}/checkout-complete?status=cancelled`
+          : `${baseUrl}/pricing`
 
       const session = await getStripe().checkout.sessions.create({
         customer: stripeCustomerId ?? undefined,
@@ -302,14 +348,16 @@ export async function billingRoutes(app: FastifyInstance) {
       .object({
         amountUsd: z.number().int().min(MIN_LOAD_USD).max(MAX_LOAD_USD),
         embedded: z.boolean().optional(),
+        returnPath: returnPathSchema,
       })
       .safeParse(req.body)
     if (!parsed.success) {
+      const onReturnPath = parsed.error.issues.some((issue) => issue.path[0] === "returnPath")
       return reply.status(400).send({
-        error: `amountUsd must be a whole dollar amount between ${MIN_LOAD_USD} and ${MAX_LOAD_USD}`,
+        error: onReturnPath ? RETURN_PATH_MESSAGE : `amountUsd must be a whole dollar amount between ${MIN_LOAD_USD} and ${MAX_LOAD_USD}`,
       })
     }
-    const { amountUsd, embedded } = parsed.data
+    const { amountUsd, embedded, returnPath } = parsed.data
     const credits = creditsForLoadUsd(amountUsd)
 
     try {
@@ -346,12 +394,16 @@ export async function billingRoutes(app: FastifyInstance) {
       const loadEmail = emailRow?.email ?? null
 
       const baseUrl = getOrigin(req)
-      const successUrl = embedded
-        ? `${baseUrl}/checkout-complete?status=success`
-        : `${baseUrl}/billing?topup=true`
-      const cancelUrl = embedded
-        ? `${baseUrl}/checkout-complete?status=cancelled`
-        : `${baseUrl}/billing`
+      const successUrl = returnPath
+        ? returnUrl(baseUrl, returnPath, "success")
+        : embedded
+          ? `${baseUrl}/checkout-complete?status=success`
+          : `${baseUrl}/billing?topup=true`
+      const cancelUrl = returnPath
+        ? returnUrl(baseUrl, returnPath, "cancelled")
+        : embedded
+          ? `${baseUrl}/checkout-complete?status=cancelled`
+          : `${baseUrl}/billing`
 
       const session = await getStripe().checkout.sessions.create({
         customer: stripeCustomerId ?? undefined,
@@ -493,10 +545,16 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "No Stripe customer found for this user" })
     }
 
+    const parsedReturn = z.object({ returnPath: returnPathSchema }).safeParse(req.body ?? {})
+    if (!parsedReturn.success) {
+      return reply.status(400).send({ error: RETURN_PATH_MESSAGE })
+    }
+    const { returnPath } = parsedReturn.data
+
     try {
       const portalSession = await getStripe().billingPortal.sessions.create({
         customer: customer.stripe_customer_id,
-        return_url: `${getOrigin(req)}/billing`,
+        return_url: `${getOrigin(req)}${returnPath ?? "/billing"}`,
       })
 
       return reply.send({ data: { url: portalSession.url } })
@@ -607,6 +665,87 @@ export async function billingRoutes(app: FastifyInstance) {
     } catch (err) {
       console.error("[billing] Failed to change plan:", (err as Error).message)
       return reply.status(500).send({ error: "Failed to change plan" })
+    }
+  })
+
+  // The card and the billing details on file with Stripe: the customer's
+  // default payment method, else the first saved card. Settings-grade data,
+  // so a signed-in session only, like every billing surface. A user Stripe
+  // does not know yet (no purchase) has nothing on file: `{ card: null,
+  // billingDetails: null }`, never an error.
+  app.get("/v1/billing/payment-method", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: "Authentication required" })
+    if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
+
+    try {
+      const customerId = await stripeCustomerIdOf(userId)
+      if (!customerId) return reply.send({ data: paymentMethodView(null, null) })
+
+      const stripe = getStripe()
+      const customer = await stripe.customers.retrieve(customerId, { expand: ["invoice_settings.default_payment_method"] })
+      if (customer.deleted) return reply.send({ data: paymentMethodView(null, null) })
+      const preferred = customer.invoice_settings?.default_payment_method
+      // The default when it is a card; else the first saved card (the default may be Link or a bank account).
+      let method = preferred && typeof preferred !== "string" && preferred.card ? preferred : null
+      if (!method) {
+        const cards = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 })
+        method = cards.data[0] ?? null
+      }
+      return reply.send({ data: paymentMethodView(customer, method) })
+    } catch (err) {
+      console.error("[billing] Failed to read the payment method:", (err as Error).message)
+      return reply.status(500).send({ error: "Failed to read the payment method" })
+    }
+  })
+
+  // Every payment as a document, newest first: a Stripe invoice for each
+  // subscription payment (with its PDF), a receipt for each credit purchase
+  // (a pack or a pay-as-you-go load; the `transactions` row's hosted receipt)
+  // and the refund of one (migration 308: `type = 'refund'`, credits negative).
+  // Personal rows only: an organization's pack claims ride the owner's
+  // user_id (migration 351) and are not this person's purchases. The latest
+  // 100 of each source; `amount_usd` is what the person paid, in US dollars.
+  app.get("/v1/billing/invoices", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: "Authentication required" })
+    if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
+
+    const purchaseColumns = "id, type, amount_usd, credits_granted, status, created_at, receipt_url"
+    let { data: purchases, error } = await supabase
+      .from("transactions")
+      .select(purchaseColumns)
+      .eq("user_id", userId)
+      .in("type", ["topup", "refund"])
+      .is("org_id", null)
+      .order("created_at", { ascending: false })
+      .limit(100)
+    if (error?.code === "42703") {
+      // The org_id column has not reached this database yet: no org rows can exist.
+      ;({ data: purchases, error } = await supabase
+        .from("transactions")
+        .select(purchaseColumns)
+        .eq("user_id", userId)
+        .in("type", ["topup", "refund"])
+        .order("created_at", { ascending: false })
+        .limit(100))
+    }
+    if (error) {
+      console.error("[billing] Failed to fetch purchases:", error.message)
+      return reply.status(500).send({ error: "Failed to fetch invoices" })
+    }
+
+    try {
+      const customerId = await stripeCustomerIdOf(userId)
+      const invoices = customerId ? (await getStripe().invoices.list({ customer: customerId, limit: 100 })).data : []
+      const docs = [
+        ...invoices.map(invoiceDocument).filter((doc) => doc !== null),
+        ...((purchases ?? []) as PurchaseRow[]).map((row) => receiptDocument(row, "USD")),
+      ]
+      return reply.send({ data: byNewest(docs) })
+    } catch (err) {
+      console.error("[billing] Failed to list invoices:", (err as Error).message)
+      return reply.status(500).send({ error: "Failed to fetch invoices" })
     }
   })
 }

@@ -6874,11 +6874,15 @@ if (grant === "granted") showToast(`Your ${credits} free credits are ready`)  //
 
 ### `client.billing`
 
-Plans and prices, the caller's subscription, and how the deployment bills. See
-[API integration § 12c](./api-integration.md#12c-plans-and-prices-cloud-edition).
-Buying, changing the plan and the payment settings stay in the Nodaro app —
-those routes refuse API and app tokens, so the SDK has no method for them; link
-the user to the app's pricing page instead.
+Plans and prices, the caller's subscription, how the deployment bills — and,
+for a first-party app signed in with the person's own session (`supabaseAuth`),
+the whole billing screen: purchases, invoices, the card on file, the automatic
+top-up, and the hand-offs to Stripe Checkout and the Customer Portal. See
+[API integration § 12](./api-integration.md#12-credits-cloud-edition) and
+[§ 12c](./api-integration.md#12c-plans-and-prices-cloud-edition). The methods
+marked **session only** answer a signed-in session alone: an API key or an
+app's OAuth token gets `ForbiddenError`; link such a client to the app's
+billing page instead.
 
 ```ts
 // A pricing screen: works signed out.
@@ -6895,6 +6899,27 @@ const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-y
 | `subscription()` | `Promise<BillingSubscriptionResult>` | `GET /v1/billing/subscription`. `{ data: BillingSubscription \| null, effectiveTier }` — `data` is `null` when the account never subscribed. `effectiveTier` is the tier its entitlements follow: usually a `BillingPlan` `id`; `"payg"` (no subscription, credits bought); or a tier not on sale, such as `"enterprise"`. Needs a signed-in session, a personal API token without a workflow limit, or an app's OAuth token (a workflow-limited key gets `ForbiddenError`). Nodaro Cloud only. |
 | `surface()` | `Promise<BillingSurface>` | `GET /v1/billing/surface`. Public, every edition: whether the deployment meters usage at all (`providerId` is `"none"` when it does not) and the unit costs display in (`displayUnit`). |
 | `account()` | `Promise<BillingAccountSummary \| null>` | `GET /v1/billing/account`. The caller's `plan`, `balance` and `dailyAllowance` as the deployment's billing provider reports them, in its `unit`, plus optional fields a provider may add ([§ 12b](./api-integration.md#12b-billing-surface)). `null` when the provider could not answer — not a zero balance. Every edition. |
+| `purchases()` | `Promise<BillingPurchase[]>` | `GET /v1/billing/transactions`. **Session only.** The account's credit purchases, newest first (the latest 50) — `{ id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url }`; `type` is `"subscription"`, `"topup"`, or `"refund"` (money given back: `credits_granted` negative); `receipt_url` is Stripe's hosted receipt when one was captured. |
+| `invoices()` | `Promise<BillingDocument[]>` | `GET /v1/billing/invoices`. **Session only.** Every payment as a document, newest first (the latest 100 of each source): `kind` `"invoice"` (a subscription payment: Stripe's `number`, `pdfUrl` and hosted `url`) or `"receipt"` (a credit pack or a load: the `credits` granted and the hosted receipt as `url`, no PDF; a refund is a receipt with `status` `"refunded"` and `amount` and `credits` negative). `amount` is a `BillingMoney`; `status` is `"paid"`, `"open"`, `"void"`, `"uncollectible"` or `"refunded"`. |
+| `paymentMethod()` | `Promise<BillingPaymentMethod>` | `GET /v1/billing/payment-method`. **Session only.** `{ card, billingDetails }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Both `null` for an account that has not bought yet; never an error. |
+| `autoRecharge()` | `Promise<BillingAutoRecharge>` | `GET /v1/billing/auto-recharge`. **Session only.** `{ enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard }` — when the balance falls under the threshold, the amount is loaded from the saved card. |
+| `setAutoRecharge(input)` | `Promise<BillingAutoRechargeSaved>` | `PUT /v1/billing/auto-recharge`. **Session only.** `{ enabled, thresholdCredits?, amountUsd? }`; enabling needs both figures (`thresholdCredits` 100–100,000; `amountUsd` a whole amount within `topUpRange`), else a `NodaroError` with status 400. Saving clears the failure count. |
+| `checkout(input)` | `Promise<BillingCheckoutSession>` | `POST /v1/billing/create-checkout-session`. **Session only.** `{ priceId, mode?, returnPath?, embedded? }` → `{ url }`, a Stripe Checkout page for a plan's price or a credit pack (`BillingTopUp.id`): send the person there. `returnPath` is a path on your own origin (`"/billing"`, a query allowed; one leading `/`, no host, no `#`) Stripe brings them back to, with `checkout=success` or `checkout=cancelled` in the query; it wins over `embedded`, and without it the Nodaro app's pages are used. `ForbiddenError` with code `self_serve_disabled` where the deployment does not sell to its users. |
+| `loadCredits(input)` | `Promise<BillingLoadSession>` | `POST /v1/billing/create-load-session`. **Session only.** `{ amountUsd, returnPath?, embedded? }` → `{ url, credits }`: a Checkout page loading a whole amount within `topUpRange` as credits at the packs' rate, `credits` being what it grants. The card is saved for the automatic top-up. |
+| `portal(input?)` | `Promise<BillingPortalSession>` | `POST /v1/billing/manage-subscription`. **Session only.** `{ returnPath? }` → `{ url }`, a Stripe Customer Portal page (the card, the billing address, the invoices, cancelling); `returnPath` is where its Back goes. `NotFoundError` before a first purchase. |
+| `changePlan(input)` | `Promise<BillingChangePlanResult>` | `POST /v1/billing/change-plan`. **Session only.** `{ newPriceId }` → `{ subscriptionId, tier }`: moves the active subscription to another plan's price, prorated by Stripe; the tier applies at once. `NotFoundError` with no active subscription; status 400 on a pack's price or the current one. |
+
+```ts
+// A billing screen in a first-party app (signed in with supabaseAuth).
+const [method, docs, auto] = await Promise.all([
+  client.billing.paymentMethod(),
+  client.billing.invoices(),
+  client.billing.autoRecharge(),
+])
+// Buy a pack and come back to this screen.
+const { url } = await client.billing.checkout({ priceId: pack.id, returnPath: "/settings/credits" })
+window.location.assign(url!)
+```
 
 **`BillingPlan`:**
 
@@ -8688,6 +8713,9 @@ Every type used in a public method signature is re-exported from
 - `BillingPlansResult` / `BillingPlan` / `BillingPlanPrices` / `BillingMoney` / `BillingMonthlyPrice` / `BillingYearlyPrice` / `BillingPriceCredits` / `BillingTopUp` — `billing.plans()`: the plans and credit packs on sale
 - `BillingSubscriptionResult` / `BillingSubscription` — `billing.subscription()`
 - `BillingSurface` / `BillingAccountSummary` / `BillingUsageCategory` — `billing.surface()` / `billing.account()`
+- `BillingPurchase` / `BillingDocument` / `BillingCard` / `BillingDetails` / `BillingPaymentMethod` — `billing.purchases()` / `billing.invoices()` / `billing.paymentMethod()`
+- `BillingAutoRecharge` / `BillingAutoRechargeInput` / `BillingAutoRechargeSaved` — `billing.autoRecharge()` / `billing.setAutoRecharge()`
+- `BillingCheckoutInput` / `BillingCheckoutSession` / `BillingLoadInput` / `BillingLoadSession` / `BillingPortalInput` / `BillingPortalSession` / `BillingChangePlanInput` / `BillingChangePlanResult` — the hand-offs to Stripe: `billing.checkout()` / `billing.loadCredits()` / `billing.portal()` / `billing.changePlan()`
 
 ### Client identity
 

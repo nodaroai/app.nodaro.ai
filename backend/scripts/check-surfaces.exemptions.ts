@@ -24,9 +24,10 @@ export interface SurfaceExemption {
 }
 
 /**
- * Billing routes a signed-in browser session uses and every API or app token
- * is refused on (`rejectProgrammaticAuth`): buying, changing the plan, the
- * payment settings and the receipts stay in the Nodaro app.
+ * Billing routes that answer a signed-in session only (`rejectProgrammaticAuth`
+ * refuses every API key and app token): buying, the plan, the payment settings,
+ * the receipts and the invoices. A first-party web app calls them through the
+ * SDK with the person's own session; the CLI and an MCP client never hold one.
  */
 const BILLING_SESSION_ONLY = [
   "GET /v1/billing/transactions",
@@ -36,9 +37,13 @@ const BILLING_SESSION_ONLY = [
   "PUT /v1/billing/auto-recharge",
   "POST /v1/billing/manage-subscription",
   "POST /v1/billing/change-plan",
+  "GET /v1/billing/payment-method",
+  "GET /v1/billing/invoices",
 ] as const
-const BILLING_SESSION_ONLY_REASON =
-  "browser session only: buying, plan changes and payment settings happen in the Nodaro app, and the route refuses API and app tokens"
+const BILLING_SESSION_ONLY_REASONS = {
+  cli: "the route answers a signed-in session only (buying, the plan and the payment settings are the person's own); the CLI signs in with an API key or app token, which it refuses by design. A web app calls it through the SDK",
+  mcp: "an MCP client signs in with an app token, which the route refuses by design: buying, the plan and the payment settings are the person's own, never an agent's",
+} as const
 /**
  * The welcome offer's two writes answer a signed-in browser session only
  * (`rejectProgrammaticAuth`): the email consent they record is a person's
@@ -144,13 +149,13 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   ...(["cli", "mcp"] as const).flatMap((surface) =>
     WELCOME_OFFER_SESSION_ONLY.map((atom) => ({ feature: "credits", surface, atom, reason: WELCOME_OFFER_REASONS[surface] })),
   ),
-  ...BILLING_SESSION_ONLY.map((atom) => ({ feature: "billing", surface: "sdk" as const, atom, reason: BILLING_SESSION_ONLY_REASON })),
+  ...BILLING_SESSION_ONLY.map((atom) => ({ feature: "billing", surface: "cli" as const, atom, reason: BILLING_SESSION_ONLY_REASONS.cli })),
   // The purchase history reaches agents through credit_transactions, which reads the same rows.
   ...BILLING_SESSION_ONLY.filter((atom) => atom !== "GET /v1/billing/transactions").map((atom) => ({
     feature: "billing",
     surface: "mcp" as const,
     atom,
-    reason: BILLING_SESSION_ONLY_REASON,
+    reason: BILLING_SESSION_ONLY_REASONS.mcp,
   })),
   {
     feature: "billing",
