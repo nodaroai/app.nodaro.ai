@@ -2,8 +2,8 @@
  * Topaz image upscale, priced by output size (decided 2026-10-25,
  * `@nodaro/render-rules` topaz-pricing.ts): a run is charged its factor's tier
  * row or the one-unit row × the output's size units, whichever is higher — an
- * ordinary image costs what it always did, a very large one is not sold below
- * what the provider bills for it.
+ * ordinary image costs what it always did, a very large one costs more, in
+ * steps of output size.
  *
  * One reading for both lanes that charge such a run: `/v1/edit-image`'s guard
  * and the workflow run's reservation (`node-executor.ts`). The size is read
