@@ -41,8 +41,11 @@ import {
   startAdminTrendUpscale,
   applyAdminTrendUpscale,
   discardAdminTrendUpscale,
+  startAdminTrendCrop,
+  dismissAdminTrendCrop,
   fetchAdminTrendUpscaleJob,
   type AdminTrendUpscaleTarget,
+  type AdminTrendCropAspect,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
   type AdminTrendData,
@@ -1589,7 +1592,10 @@ export function useAdminTrend(id: string) {
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     // "Use it" on an upscale runs on the server: read the trend until it is done (or failed).
-    refetchInterval: (q) => (q.state.data?.upscaleJobs?.some((u) => u.applying && !u.applying.stale) ? TREND_UPSCALE_APPLY_POLL_MS : false),
+    refetchInterval: (q) =>
+      q.state.data?.upscaleJobs?.some((u) => u.applying && !u.applying.stale) || q.state.data?.sourceCrop?.running
+        ? TREND_UPSCALE_APPLY_POLL_MS
+        : false,
   })
 }
 
@@ -1857,6 +1863,27 @@ export function useDiscardTrendUpscale(id: string) {
   return useMutation({
     onError: handledByScreen,
     mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => discardAdminTrendUpscale(id, jobId, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Crop the saved source clip to 16:9 or 9:16 (in the background). */
+export function useStartTrendCrop(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ aspect, position, revision }: { aspect: AdminTrendCropAspect; position: number; revision: string }) =>
+      startAdminTrendCrop(id, aspect, position, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Dismiss a failed source crop at `revision`. */
+export function useDismissTrendCrop(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ revision }: { revision: string }) => dismissAdminTrendCrop(id, revision),
     onSuccess: () => invalidate(id),
   })
 }

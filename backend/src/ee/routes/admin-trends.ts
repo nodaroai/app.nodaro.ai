@@ -29,6 +29,8 @@
  *   POST   /v1/admin/trends/:id/upscale              upscale the source or an example to 1080p (admin-trends-upscale.ts) → 202
  *   POST   /v1/admin/trends/:id/upscale/apply        use a finished upscale (in the background) → 202: replaces that video on the draft
  *   DELETE /v1/admin/trends/:id/upscale/:jobId       discard an upscale in the making
+ *   POST   /v1/admin/trends/:id/crop                 crop the source to 16:9 / 9:16 (admin-trends-crop.ts, in the background) → 202
+ *   DELETE /v1/admin/trends/:id/crop                 dismiss a failed source crop
  *
  * Replies use the platform's `{ data }` envelope; errors `{ error: { code, message, … } }`.
  *
@@ -104,6 +106,8 @@ import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
 import { registerTrendPromptRoutes } from "./admin-trends-prompt.js"
+import { registerTrendCropRoutes } from "./admin-trends-crop.js"
+import { pendingSourceCrop } from "../lib/trends/crop.js"
 import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
@@ -485,7 +489,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
             : await getVersion(trend.id, trend.publishedVersion)
       return {
         data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft),
-          upscaleJobs: pendingUpscaleJobs(draft),
+          upscaleJobs: pendingUpscaleJobs(draft), sourceCrop: pendingSourceCrop(draft),
           // Whether a face mask with marks can be made here (the marks editor is offered only then).
           faceMaskMarksSupported: loadedEngineMakesMarks() },
       }
@@ -523,17 +527,19 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       if (!loaded) return reply
       if (loaded.revision !== body.data.revision) return draftConflict(reply)
       // Examples are written only by the example routes, the face mask only
-      // by the face mask routes and the upscales in the making only by the
-      // upscale routes: the body's are ignored, and the row's own (at the
-      // revision the client read) are kept.
-      const { faceMask: _mask, faceMaskJob: _job, upscaleJobs: _upscales, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
-      const { faceMask, faceMaskJob, upscaleJobs } = loaded.draft
+      // by the face mask routes, the upscales in the making only by the
+      // upscale routes and the source crop only by the crop routes: the
+      // body's are ignored, and the row's own (at the revision the client
+      // read) are kept.
+      const { faceMask: _mask, faceMaskJob: _job, upscaleJobs: _upscales, sourceCrop: _crop, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
+      const { faceMask, faceMaskJob, upscaleJobs, sourceCrop } = loaded.draft
       const merged = {
         ...edited,
         examples: loaded.draft.examples,
         ...(faceMask ? { faceMask } : {}),
         ...(faceMaskJob ? { faceMaskJob } : {}),
         ...(upscaleJobs ? { upscaleJobs } : {}),
+        ...(sourceCrop ? { sourceCrop } : {}),
       } as unknown as TrendVersionData
       // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
       const { data, cleared } = withMarksForSource(merged, loaded.draft)
@@ -808,4 +814,5 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   registerTrendPromptRoutes(app, { findTrendRun, badRequest })
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
+  registerTrendCropRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

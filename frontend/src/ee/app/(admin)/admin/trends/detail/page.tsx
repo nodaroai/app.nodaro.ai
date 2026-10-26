@@ -68,6 +68,7 @@ import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
 import { PublishBar } from "../components/PublishBar"
 import { StaleUpscales, UpscalePanel, type UpscaleApplied } from "../components/UpscalePanel"
+import { CropPanel } from "../components/CropPanel"
 
 const CONFLICT_MESSAGE = "This trend changed elsewhere — reloaded."
 /** The placeholder of a 4 s preview prompt part left empty: the preview sends the full run's. */
@@ -82,6 +83,15 @@ function withoutMarks(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
 
 /** What would be saved, as a string: equal strings = nothing to save. */
 const snapshot = (form: TrendForm) => JSON.stringify(fromForm(form))
+
+/** How many face mask marks a draft held, from its `snapshot` (none for an unreadable one). */
+function marksIn(snap: string): number {
+  try {
+    return (JSON.parse(snap) as { faceMasking?: { marks?: unknown[] } }).faceMasking?.marks?.length ?? 0
+  } catch {
+    return 0
+  }
+}
 
 export default function AdminTrendEditorPage() {
   const { id = "" } = useParams<{ id: string }>()
@@ -99,7 +109,7 @@ export default function AdminTrendEditorPage() {
   const [revision, setRevision] = useState("")
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [blockers, setBlockers] = useState<TrendPublishBlocker[] | null>(null)
-  /** The last save cleared the face mask's marks (a new source clip). */
+  /** The face mask's marks were cleared by the last save (a new source clip) or by a crop. */
   const [marksCleared, setMarksCleared] = useState(false)
   /** The form's state as of the latest render, for replies that land after more edits. */
   const latest = useRef({ baseline: "", dirty: false })
@@ -332,6 +342,34 @@ export default function AdminTrendEditorPage() {
               previewStart={form.previewStart}
               onChange={(next) => set(next)}
             />
+            {savedSource && (
+              <CropPanel
+                trendId={id}
+                shown={{
+                  videoUrl: savedSource.display?.videoUrl ?? savedSource.videoUrl,
+                  posterUrl: savedSource.display?.posterUrl,
+                  width: savedSource.display?.width ?? savedSource.width,
+                  height: savedSource.display?.height ?? savedSource.height,
+                }}
+                pending={server.sourceCrop}
+                revision={revision}
+                waitFor={dirty ? "Save first: the crop is made from the saved source clip, and replaces it." : undefined}
+                faceMaskStored={!!server.draft.faceMask}
+                onRevision={setRevision}
+                onCropped={() => {
+                  toast.success("Source clip cropped")
+                  // The crop clears the face mask's marks (they were drawn on the uncropped frame): say so, as a save does.
+                  const fresh = queryClient.getQueryData<AdminTrendDetail>(queryKeys.admin.trend(id))
+                  if (fresh && marksIn(latest.current.baseline) > 0 && (fresh.draft.faceMasking?.marks?.length ?? 0) === 0) {
+                    setMarksCleared(true)
+                    toast.warning(MARKS_CLEARED)
+                  }
+                  adoptServerDraft("The source clip was cropped while you edited; saving will reload the draft.")
+                }}
+                onServerWrite={() => adoptServerDraft("This draft was also changed elsewhere; saving will reload it.")}
+                onWriteError={onWriteError}
+              />
+            )}
             {savedSource && (
               <UpscalePanel
                 {...upscaleProps}

@@ -10,8 +10,8 @@
  * HIDDEN: the uploaded `source` clip (its `videoUrl`, length and size),
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
- * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`
- * and `klingLength` never leave the server — public responses
+ * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
+ * `sourceCrop` and `klingLength` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -20,6 +20,7 @@
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
+import type { TrendCropAspect } from "@nodaro/render-rules"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
 
@@ -168,6 +169,34 @@ export interface TrendUpscaleJob {
   error?: { code: string; message: string; at: string }
 }
 
+/**
+ * HIDDEN. A crop of the source clip to 16:9 or 9:16 in the making,
+ * run on the server in the background (the download, the crop and the store
+ * outlast a request). Named by the clip it was made FROM (`fromUrl`, the
+ * source's `videoUrl`): it is put in the draft only while that is still the
+ * source. Written only by the crop routes; a draft save keeps the stored one.
+ * Putting the crop in the draft clears it; a failure leaves it carrying the
+ * `error` until it is dismissed or another crop is started.
+ */
+export interface TrendSourceCrop {
+  aspect: TrendCropAspect
+  /**
+   * Where the kept frame sits in the clip, 0–1: the share of the cut taken
+   * from the LEFT (16:9) or the TOP (9:16); the rest comes off the other side.
+   * 0.5 = centered.
+   */
+  position: number
+  fromUrl: string
+  /** When it started, and by whom. One older than `CROP_STALE_MS` (a server restart) may be started again. */
+  startedAt: string
+  by: string
+  /** It failed: why. */
+  error?: { code: string; message: string; at: string }
+}
+
+/** The shapes a source clip can be cropped to (`@nodaro/render-rules`, the rule the trend builder shows). */
+export type { TrendCropAspect }
+
 /** A promoted example run: its result video and the pictures used per slot. */
 export interface TrendExample {
   videoUrl: string
@@ -234,6 +263,8 @@ export interface TrendVersionData {
   faceMaskJob?: TrendFaceMaskJob
   /** HIDDEN. The upscales started and not applied or discarded yet (see `TrendUpscaleJob`). */
   upscaleJobs?: TrendUpscaleJob[]
+  /** HIDDEN. The source crop in the making, or the one that failed (see `TrendSourceCrop`). */
+  sourceCrop?: TrendSourceCrop
   /**
    * The video engine every run of this trend uses; the person running it
    * never chooses. Absent = `"seedance-2-5"` (every version saved before the
