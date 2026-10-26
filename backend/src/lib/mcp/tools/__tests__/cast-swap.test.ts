@@ -116,7 +116,7 @@ describe("cast_swap", () => {
     expect(res.isError).toBeFalsy()
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /v1/cast-swap/estimate"])
     expect(calls[0]!.payload).toEqual(BODY)
-    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { castSwap: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
     expect(res.content[0]!.text).toContain("12 credits")
     expect(res.content[0]!.text).toContain("confirm: true")
   })
@@ -144,7 +144,7 @@ describe("cast_swap", () => {
       totalCredits: 40,
       expectedCredits: 31,
       // The engine's old key names are answered by their neutral ones.
-      breakdown: { castSwap: 5, references: 3, motion: 32, motionExpected: 23 },
+      breakdown: { base: 5, references: 3, motion: 32, motionExpected: 23 },
       settlesLower: true,
       confirmed: false,
     })
@@ -157,7 +157,7 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toContain("15 credits")
     expect(res.content[0]!.text).toMatch(/3 credits?[^.]*prepar/i)
     expect(res.content[0]!.text).toContain("prepare_references: false")
-    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 15, breakdown: { castSwap: 5, references: 3, motion: 7 }, settlesLower: false, confirmed: false })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 15, breakdown: { base: 5, references: 3, motion: 7 }, settlesLower: false, confirmed: false })
   })
 
   it("says nothing of the preparation when it costs nothing", async () => {
@@ -323,7 +323,7 @@ describe("cast_swap", () => {
         const lite = { engine: declared.engineAliases ? "motion-lite" : "kling-4", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
         const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: lite } })
         const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, preview: false, engine: "motion-lite" })
-        expect(res.structuredContent).toEqual({ engine: "motion-lite", engineName: "Nodaro Motion Lite", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
+        expect(res.structuredContent).toEqual({ engine: "motion-lite", engineName: "Nodaro Motion Lite", totalCredits: 420, expectedCredits: 420, breakdown: { base: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
         expect(res.content[0]!.text).toContain("This Nodaro Motion Lite run costs about 420 credits.")
         expect(res.content[0]!.text).not.toMatch(/held|lower|kling/i)
       })
@@ -368,21 +368,24 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toContain("12 credits")
     expect(res.content[0]!.text).toMatch(/retried once, for 4 more credits charged only then/)
     expect(res.content[0]!.text).not.toMatch(/mask|blur|depth|seedance|kling/i)
-    expect(res.structuredContent).toMatchObject({ totalCredits: 12, privacyCredits: 4, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 }, confirmed: false })
+    expect(res.structuredContent).toMatchObject({ totalCredits: 12, privacyCredits: 4, breakdown: { base: 5, motion: 7, references: 0, privacy: 4 }, confirmed: false })
     expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance|kling|masking/i)
   })
 
   it("reads the neutral key names first (an engine that sends both), and the old ones from an older engine", async () => {
     const both = {
-      totalCredits: 12, breakdown: { castSwap: 5, seedance: 99, motion: 7, references: 0, masking: 9, privacy: 4 },
+      totalCredits: 12, breakdown: { castSwap: 99, base: 5, seedance: 99, motion: 7, references: 0, masking: 9, privacy: 4 },
       maskingCredits: 9, privacyCredits: 4, settlesLower: false,
     }
-    const fresh = { totalCredits: 12, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false }
-    for (const body of [both, fresh]) {
+    const fresh = { totalCredits: 12, breakdown: { base: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false }
+    // Before 0.396.0 the base fee is castSwap only.
+    const castSwapOnly = { ...fresh, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 } }
+    for (const body of [both, fresh, castSwapOnly]) {
       const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
       const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
-      expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false, confirmed: false })
+      expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false, confirmed: false })
       expect(res.content[0]!.text).toMatch(/for 4 more credits/)
+      expect(JSON.stringify(res.structuredContent)).not.toContain("castSwap")
     }
   })
 

@@ -125,7 +125,7 @@ const BODY = {
   sessionId: "s-1",
 }
 
-const QUOTE = { data: { expectedCredits: 10, holdCredits: 14, breakdown: { castSwap: 4, motion: 10 } } }
+const QUOTE = { data: { expectedCredits: 10, holdCredits: 14, breakdown: { base: 4, motion: 10 } } }
 
 afterEach(() => {
   h.credits = true
@@ -296,7 +296,7 @@ describe("estimate_trend", () => {
     })
     const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {} })
     // …by their neutral names: an older server's `seedance` is answered as `motion`.
-    expect((res.structuredContent as { breakdown: unknown }).breakdown).toEqual({ castSwap: 4, motion: 10 })
+    expect((res.structuredContent as { breakdown: unknown }).breakdown).toEqual({ base: 4, motion: 10 })
   })
 
   it("names the privacy credits (an older server's maskingCredits too), and sends preview_job_id as previewJobId", async () => {

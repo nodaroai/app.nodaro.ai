@@ -5,6 +5,7 @@
  * only. The CLI reads the new key first, falls back to the old one, and never
  * prints an old name — in its text or its `--json`:
  *
+ *   base            was castSwap (Cast Swap 0.396.0 answers both, 0.397.0 base only)
  *   motion          was seedance / kling
  *   motionExpected  was seedanceExpected
  *   motionHd        was seedanceHd
@@ -14,6 +15,7 @@
  * (The same renames as the platform's `backend/src/lib/nodaro-motion-quote.ts`.)
  */
 const RENAMES: Readonly<Record<string, readonly string[]>> = {
+  base: ["castSwap"],
   motion: ["seedance", "kling"],
   motionExpected: ["seedanceExpected"],
   motionHd: ["seedanceHd"],
@@ -49,7 +51,7 @@ export function neutralQuote<T extends { breakdown?: unknown }>(quote: T): T {
 }
 
 const PART_LABELS: Readonly<Record<string, string>> = {
-  castSwap: "Nodaro Motion",
+  base: "Nodaro Motion",
   references: "reference pictures",
   motion: "video",
   motionExpected: "video, expected",

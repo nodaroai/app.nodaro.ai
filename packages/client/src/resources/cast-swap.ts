@@ -312,7 +312,8 @@ export interface CastSwapEstimate {
   expectedCredits?: number
   /**
    * The parts of the quote, by name, for display only:
-   * - `castSwap`: the run itself;
+   * - `base`: the run itself (its base fee). A server before Cast Swap 0.396.0
+   *   names it `castSwap` instead: read `base`, else `castSwap`;
    * - `references`: preparing the reference pictures (0 when
    *   `prepareReferences` is off or there is nothing to prepare);
    * - `motion`: what the video holds (on Nodaro Motion Lite, what it costs);
@@ -326,7 +327,15 @@ export interface CastSwapEstimate {
    * than either total: read `totalCredits` and `expectedCredits`, never the
    * sum. Other parts may appear.
    */
-  breakdown: { castSwap: number; references: number; motion?: number; motionExpected?: number; privacy?: number } & Record<string, number>
+  breakdown: {
+    base?: number
+    /** @deprecated read {@link base} (an older server answered this name for the same part). */
+    castSwap?: number
+    references: number
+    motion?: number
+    motionExpected?: number
+    privacy?: number
+  } & Record<string, number>
   /**
    * The extra credits charged only if the video model refuses the clip and
    * the run is retried (Nodaro's setting for the engine decides whether it
@@ -376,15 +385,22 @@ export interface CastSwapFullQualityEstimate {
    * be worded right. Absent from an older server: `"same-take"`.
    */
   kind?: CastSwapFullQualityKind
-  /** The quote in credits: `breakdown.castSwap` plus the 1080p render (same take) or the new take. */
+  /** The quote in credits: `breakdown.base` plus the 1080p render (same take) or the new take. */
   totalCredits: number
   /**
-   * The parts of the quote, by name, for display only: `castSwap` (the Full
-   * Quality job's own steps), and `motionHd` (a same take: the 1080p render,
-   * 0 when an earlier try of this draft already finished that render, which
-   * is then reused) or `motion` (a new take).
+   * The parts of the quote, by name, for display only: `base` (the Full
+   * Quality job's own steps; a server before Cast Swap 0.396.0 names it
+   * `castSwap` instead: read `base`, else `castSwap`), and `motionHd` (a same
+   * take: the 1080p render, 0 when an earlier try of this draft already
+   * finished that render, which is then reused) or `motion` (a new take).
    */
-  breakdown: { castSwap: number; motionHd?: number; motion?: number } & Record<string, number>
+  breakdown: {
+    base?: number
+    /** @deprecated read {@link base} (an older server answered this name for the same part). */
+    castSwap?: number
+    motionHd?: number
+    motion?: number
+  } & Record<string, number>
   /** ISO time until which the run can be finished at Full Quality (7 days after it completed). */
   availableUntil: string
 }

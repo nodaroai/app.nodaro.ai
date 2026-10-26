@@ -6,12 +6,16 @@
  * the new key first and falls back to the old, and every answer the platform
  * shapes itself (MCP, the trend routes) carries the new keys only.
  *
+ *   breakdown.base            was breakdown.castSwap (the run's own base fee)
  *   breakdown.motion          was breakdown.seedance / breakdown.kling
  *   breakdown.motionExpected  was breakdown.seedanceExpected
  *   breakdown.motionHd        was breakdown.seedanceHd (Full Quality)
  *   breakdown.privacy         was breakdown.masking
  *   privacyCredits            was maskingCredits
  *   output privacy            was output faceMasking ({ applied, reason, stored? })
+ *
+ * `base` follows the same pattern one release later: Cast Swap 0.396.0
+ * answers `base` beside `castSwap`, 0.397.0 `base` only.
  */
 
 type Rec = Record<string, unknown>
@@ -21,6 +25,7 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 
 /** Each neutral breakdown key and the old keys it replaces, in the order they are read. */
 export const NODARO_MOTION_BREAKDOWN_RENAMES: Readonly<Record<string, readonly string[]>> = {
+  base: ["castSwap"],
   motion: ["seedance", "kling"],
   motionExpected: ["seedanceExpected"],
   motionHd: ["seedanceHd"],

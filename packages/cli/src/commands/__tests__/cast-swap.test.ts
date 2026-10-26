@@ -56,10 +56,24 @@ describe("cast-swap full-quality", () => {
   it("estimate --json emits the quote with its parts' neutral names (an older engine's old ones renamed)", async () => {
     mocks.fullQualityEstimate.mockResolvedValueOnce(QUOTE)
     await runCmd("cast-swap", "full-quality", "estimate", "draft-1", "--json")
-    expect(emit).toHaveBeenCalledWith({ ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
-    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } })
+    expect(emit).toHaveBeenCalledWith({ ...QUOTE, breakdown: { base: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, breakdown: { base: 5, motionHd: 7 } })
     await runCmd("cast-swap", "full-quality", "estimate", "draft-1", "--json")
-    expect(emit).toHaveBeenLastCalledWith({ ...QUOTE, breakdown: { castSwap: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
+    expect(emit).toHaveBeenLastCalledWith({ ...QUOTE, breakdown: { base: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
+  })
+
+  it("reads the base fee from base, else castSwap (0.396.0 sends both, 0.397.0 base only), and never prints castSwap", async () => {
+    for (const breakdown of [{ castSwap: 5, motionHd: 7 }, { base: 5, motionHd: 7 }, { base: 5, castSwap: 99, motionHd: 7 }]) {
+      mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, breakdown })
+      await runCmd("cast-swap", "full-quality", "estimate", "draft-1", "--json")
+      expect(emit).toHaveBeenLastCalledWith({ ...QUOTE, breakdown: { base: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
+      vi.mocked(dim).mockReset()
+      mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, breakdown })
+      await runCmd("cast-swap", "full-quality", "estimate", "draft-1")
+      const out = vi.mocked(dim).mock.calls.flat().join("\n")
+      expect(out).toContain("Nodaro Motion: 5")
+      expect(out).not.toMatch(/castSwap|99/)
+    }
   })
 
   it("estimate says a Nodaro Motion Lite run's Full Quality is a new take, and lists every part by its label, never a vendor name", async () => {

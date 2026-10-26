@@ -92,7 +92,7 @@ describe("trends command", () => {
     mocks.estimate.mockResolvedValueOnce({ expectedCredits: 40, holdCredits: 40, breakdown: { castSwap: 5, seedance: 35, masking: 6 }, maskingCredits: 6 })
     await runCmd("trends", "estimate", "dance", "--slot", "person=https://a", "--json")
     expect(emit).toHaveBeenCalledWith(
-      { expectedCredits: 40, holdCredits: 40, breakdown: { castSwap: 5, motion: 35, privacy: 6 }, privacyCredits: 6 },
+      { expectedCredits: 40, holdCredits: 40, breakdown: { base: 5, motion: 35, privacy: 6 }, privacyCredits: 6 },
       expect.objectContaining({ json: true }),
     )
   })

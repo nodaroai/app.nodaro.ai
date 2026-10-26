@@ -226,7 +226,7 @@ describe("trends resource", () => {
   })
 
   it("estimate POSTs the request to /v1/trends/:slug/estimate and returns the quote", async () => {
-    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, motion: 25 } }
+    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { base: 20, motion: 25 } }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: quote }))
     const client = make(fetchMock)
 
@@ -239,7 +239,7 @@ describe("trends resource", () => {
   })
 
   it("estimate and run send previewJobId, and the quote carries privacyCredits", async () => {
-    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, motion: 25, privacy: 12 }, privacyCredits: 12 }
+    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { base: 20, motion: 25, privacy: 12 }, privacyCredits: 12 }
     const fetchMock = vi
       .fn()
       .mockReturnValueOnce(mockOk({ data: quote }))

@@ -60,8 +60,8 @@ interface FullQualityQuote {
   /** Absent from an older engine (then a same take). */
   kind?: FullQualityKind
   totalCredits: number
-  /** `castSwap`, and the engine's other parts by their neutral names (`motionHd`: the 1080p render, 0 when reused). */
-  breakdown: { castSwap: number; motionHd?: number } & Record<string, number>
+  /** `base` (the Full Quality job's own steps), and the engine's other parts by their neutral names (`motionHd`: the 1080p render, 0 when reused). */
+  breakdown: { base: number; motionHd?: number } & Record<string, number>
   availableUntil: string
 }
 
@@ -82,10 +82,11 @@ function dataOf(body: string): unknown {
 function quoteOf(body: string): FullQualityQuote | null {
   const q = dataOf(body)
   if (!isRec(q) || !finite(q.totalCredits) || !isRec(q.breakdown) || typeof q.availableUntil !== "string") return null
-  if (!finite(q.breakdown.castSwap)) return null
   // Only the breakdown's own numeric parts, by their neutral names (an engine before 0.395.0
-  // also, or only, sends the old ones); a new engine's other part names pass through.
+  // also, or only, sends the old ones; before 0.397.0 `castSwap` for `base`); a new engine's
+  // other part names pass through.
   const breakdown = neutralBreakdown(q.breakdown) as FullQualityQuote["breakdown"]
+  if (!finite(breakdown.base)) return null
   const kind = q.kind === "same-take" || q.kind === "new-take" ? q.kind : undefined
   return { ...(kind ? { kind } : {}), totalCredits: q.totalCredits, breakdown, availableUntil: q.availableUntil }
 }
