@@ -4,11 +4,13 @@ import {
   AArrowDown,
   AArrowUp,
   Contrast,
+  Eclipse,
   Heading,
   Link2,
   MousePointer2,
   Pause,
   RotateCcw,
+  SunMoon,
   Type,
   TextWrap,
   X,
@@ -27,6 +29,7 @@ import {
   loadPreferences,
   saveHiddenUntil,
   savePreferences,
+  setToggle,
   type HideMonths,
   type AccessibilityPreferences,
   type TextScale,
@@ -47,8 +50,16 @@ import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
  * button that opened it. Each choice is a pressed/not-pressed button.
  */
 
-const TOGGLES: ReadonlyArray<{ readonly key: ToggleKey; readonly label: MessageKey; readonly icon: ReactNode }> = [
+type ToggleRow = { readonly key: ToggleKey; readonly label: MessageKey; readonly icon: ReactNode }
+
+/** One at a time, like the shared header's menu (setToggle turns the other two off). */
+const CONTRAST_TOGGLES: ReadonlyArray<ToggleRow> = [
   { key: "contrast", label: "a11yMenu.contrast", icon: <Contrast className="size-4" aria-hidden /> },
+  { key: "invert", label: "a11yMenu.invert", icon: <SunMoon className="size-4" aria-hidden /> },
+  { key: "strong", label: "a11yMenu.strong", icon: <Eclipse className="size-4" aria-hidden /> },
+]
+
+const TOGGLES: ReadonlyArray<ToggleRow> = [
   { key: "links", label: "a11yMenu.links", icon: <Link2 className="size-4" aria-hidden /> },
   { key: "headings", label: "a11yMenu.headings", icon: <Heading className="size-4" aria-hidden /> },
   { key: "readableFont", label: "a11yMenu.font", icon: <Type className="size-4" aria-hidden /> },
@@ -139,7 +150,11 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
     setHiddenUntil(null)
   }
 
-  const toggle = (key: ToggleKey) => update({ ...prefs, [key]: !prefs[key] })
+  const toggle = (key: ToggleKey) => update(setToggle(prefs, key, !prefs[key]))
+  const toggleButtons = (rows: ReadonlyArray<ToggleRow>) =>
+    rows.map(({ key, label, icon }) => (
+      <ToggleButton key={key} pressed={prefs[key]} label={t(label)} icon={icon} onClick={() => toggle(key)} />
+    ))
   const scaleBy = (delta: 1 | -1) =>
     update({ ...prefs, textScale: Math.min(2, Math.max(0, prefs.textScale + delta)) as TextScale })
 
@@ -236,35 +251,13 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
             </div>
           </div>
 
-          {TOGGLES.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={prefs[key]}
-              onClick={() => toggle(key)}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm hover:bg-accent",
-                prefs[key] && "bg-accent font-medium",
-              )}
-            >
-              {icon}
-              <span className="flex-1">{t(label)}</span>
-              <span
-                aria-hidden
-                className={cn(
-                  "h-4 w-7 rounded-full p-0.5 transition-colors",
-                  prefs[key] ? "bg-[#1d4ed8]" : "bg-muted-foreground/40",
-                )}
-              >
-                <span
-                  className={cn(
-                    "block size-3 rounded-full bg-white",
-                    prefs[key] && "ms-3",
-                  )}
-                />
-              </span>
-            </button>
-          ))}
+          <div role="group" aria-describedby="a11y-contrast-note" className="space-y-1">
+            {toggleButtons(CONTRAST_TOGGLES)}
+            <span id="a11y-contrast-note" className="sr-only">
+              {t("a11yMenu.contrastOne")}
+            </span>
+          </div>
+          {toggleButtons(TOGGLES)}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t px-4 py-3 text-sm">
@@ -314,5 +307,42 @@ export function AccessibilityMenu({ pathname, showStatementLink, onNavigate }: A
         </div>
       </PopoverContent>
     </Popover>
+  )
+}
+
+interface ToggleButtonProps {
+  readonly pressed: boolean
+  readonly label: string
+  readonly icon: ReactNode
+  readonly onClick: () => void
+}
+
+/** One choice: a pressed/not-pressed button with a switch drawn beside its label. */
+function ToggleButton({ pressed, label, icon, onClick }: ToggleButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm hover:bg-accent",
+        pressed && "bg-accent font-medium",
+      )}
+    >
+      {icon}
+      <span className="flex-1">{label}</span>
+      {/* Its own colours under inverted colours and strong contrast (globals.css), so on and off still differ. */}
+      <span
+        aria-hidden
+        data-a11y-switch=""
+        data-a11y-keep-colour=""
+        className={cn(
+          "h-4 w-7 rounded-full p-0.5 transition-colors",
+          pressed ? "bg-[#1d4ed8]" : "bg-muted-foreground/40",
+        )}
+      >
+        <span className={cn("block size-3 rounded-full bg-white", pressed && "ms-3")} />
+      </span>
+    </button>
   )
 }

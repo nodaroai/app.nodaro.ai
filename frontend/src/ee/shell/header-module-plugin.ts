@@ -32,10 +32,9 @@ import type { Plugin } from "vite"
  * And `virtual:site-a11y`: the accessibility choices every product shares (a
  * cookie too), read by the app's boot (before the first paint) and its own
  * menu, so it is light for the same reason. On the package decision it is an
- * adapter over the package's accessibility entry and its page-wide stylesheet,
- * plus the app's cookie writer (`a11y-cookie.ts` — the package does not
- * export one); elsewhere `lib/site-a11y-stub.ts` (`null`: the app keeps its
- * own storage).
+ * adapter over the package's accessibility entry (its reader, its cookie
+ * writer and its boot call) and its page-wide stylesheet; elsewhere
+ * `lib/site-a11y-stub.ts` (`null`: the app keeps its own storage).
  *
  * Types come from `site-header.d.ts`, `lib/site-locale.d.ts` and
  * `lib/site-a11y.d.ts`; `contract/` holds the internal-only check that those
@@ -89,8 +88,6 @@ export interface SiteHeaderModuleOptions {
   readonly localeStubPath: string
   /** The accessibility stub's absolute path. */
   readonly a11yStubPath: string
-  /** The app's shared-cookie writer (`a11y-cookie.ts`), which the accessibility adapter imports. */
-  readonly a11yCookiePath: string
   /** Test seam; defaults to Node resolution from `root`. */
   readonly isInstalled?: (root: string) => boolean
   /** Test seam; defaults to Vite's own `loadEnv` (the process env plus `.env*` files, `VITE_` only). */
@@ -115,24 +112,18 @@ const LOCALE_ADAPTER = [
   "",
 ].join("\n")
 
-/** Forward slashes: the adapter imports the writer by its absolute path, on Windows too. */
-const importPath = (path: string) => path.replace(/\\/g, "/")
-
-function a11yAdapter(cookiePath: string): string {
-  return [
-    `import "${PACKAGE}/a11y.css"`,
-    `import { applySavedAccessibility, readAccessibility } from "${PACKAGE}/a11y"`,
-    `import { writeAccessibilityCookie } from ${JSON.stringify(importPath(cookiePath))}`,
-    "export const sharedAccessibility = Object.freeze({",
-    "  read: (now) => readAccessibility(now),",
-    "  save: (state) => writeAccessibilityCookie(state),",
-    "  applySaved: () => {",
-    "    applySavedAccessibility()",
-    "  },",
-    "})",
-    "",
-  ].join("\n")
-}
+const A11Y_ADAPTER = [
+  `import "${PACKAGE}/a11y.css"`,
+  `import { applySavedAccessibility, readAccessibility, saveAccessibility } from "${PACKAGE}/a11y"`,
+  "export const sharedAccessibility = Object.freeze({",
+  "  read: (now) => readAccessibility(now),",
+  "  save: (state) => saveAccessibility(state),",
+  "  applySaved: () => {",
+  "    applySavedAccessibility()",
+  "  },",
+  "})",
+  "",
+].join("\n")
 
 export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   const installed = options.isInstalled ?? isPackageInstalled
@@ -159,7 +150,6 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       if (id === SITE_HEADER_ID) return decision === "package" ? RESOLVED_ID : options.stubPath
       if (id === SITE_LOCALE_ID) return decision === "package" ? RESOLVED_LOCALE_ID : options.localeStubPath
       if (id === SITE_A11Y_ID) return decision === "package" ? RESOLVED_A11Y_ID : options.a11yStubPath
-      if (importer === RESOLVED_A11Y_ID && id === importPath(options.a11yCookiePath)) return options.a11yCookiePath
       // The adapters have no file of their own: resolve their imports from the
       // frontend directory, as if a file there imported them.
       const fromAdapter = importer === RESOLVED_ID || importer === RESOLVED_LOCALE_ID || importer === RESOLVED_A11Y_ID
@@ -170,7 +160,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
     },
     load(id) {
       if (id === RESOLVED_ID) return ADAPTER
-      if (id === RESOLVED_A11Y_ID) return a11yAdapter(options.a11yCookiePath)
+      if (id === RESOLVED_A11Y_ID) return A11Y_ADAPTER
       return id === RESOLVED_LOCALE_ID ? LOCALE_ADAPTER : null
     },
   }

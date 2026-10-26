@@ -84,7 +84,7 @@ const HE: StatementContent = {
   ],
   menuTitle: "תפריט הנגישות",
   menu:
-    "בפינת המסך יש כפתור נגישות שפותח תפריט, וגם המקשים Alt+A פותחים אותו בכל דף. בתפריט אפשר להגדיל את הטקסט, להגביר ניגודיות, להדגיש קישורים וכותרות, לעבור לגופן קריא, להגדיל ריווח, להגדיל את הסמן ולהפחית אנימציות. אפשר גם להסתיר את הכפתור לחודש, לשלושה חודשים או לחצי שנה; גם כשהוא מוסתר, Alt+A פותח את התפריט. התפריט זהה בכל המוצרים, והבחירות נשמרות בדפדפן: הן נשארות לביקור הבא ועוברות איתכם ממוצר למוצר.",
+    "בפינת המסך יש כפתור נגישות שפותח תפריט, וגם המקשים Alt+A פותחים אותו בכל דף. בתפריט אפשר להגדיל את הטקסט, להגביר ניגודיות, להפוך צבעים, לעבור לניגודיות חזקה (צהוב על שחור), להדגיש קישורים וכותרות, לעבור לגופן קריא, להגדיל ריווח, להגדיל את הסמן ולהפחית אנימציות. אפשר לבחור רק אפשרות ניגודיות אחת בכל פעם. אפשר גם להסתיר את הכפתור לחודש, לשלושה חודשים או לחצי שנה; גם כשהוא מוסתר, Alt+A פותח את התפריט. בתפריט המשותף לכל המוצרים אפשר גם להזיז את הכפתור למקום אחר במסך, והוא נשאר שם. התפריט זהה בכל המוצרים, והבחירות נשמרות בדפדפן: הן נשארות לביקור הבא ועוברות איתכם ממוצר למוצר.",
   limitsTitle: "רכיבים שאינם נגישים במלואם",
   limitsIntro: "למרות מאמצינו, ייתכן שתכנים מסוימים אינם נגישים במלואם:",
   limits: [
@@ -94,7 +94,7 @@ const HE: StatementContent = {
   limitsOutro: "אם נתקלתם בקושי, כתבו לנו ונעזור.",
   reportTitle: "נתקלתם בבעיית נגישות?",
   reportIntro: "ספרו לנו מה ניסיתם לעשות ובאיזה דף. כל דיווח מגיע ישירות אלינו. אפשר גם לכתוב במייל:",
-  updated: "ההצהרה עודכנה לאחרונה: 25 באוקטובר 2026.",
+  updated: "ההצהרה עודכנה לאחרונה: 26 באוקטובר 2026.",
   form: {
     message: "מה הבעיה? (חובה)",
     messageMissing: "כתבו כמה מילים על הבעיה.",
@@ -132,7 +132,7 @@ const EN: StatementContent = {
   ],
   menuTitle: "The accessibility menu",
   menu:
-    "A button in the corner of the screen opens the accessibility menu, and Alt+A opens it on any page. In the menu you can enlarge text, raise contrast, highlight links and headings, switch to a readable font, increase spacing, enlarge the cursor and reduce motion. You can also hide the button for a month, three months or six months; while it is hidden, Alt+A still opens the menu. The menu is the same in every product, and your choices are kept in your browser: they stay for your next visit and follow you from one product to another.",
+    "A button in the corner of the screen opens the accessibility menu, and Alt+A opens it on any page. In the menu you can enlarge text, raise contrast, invert colours, switch to strong contrast (yellow on black), highlight links and headings, switch to a readable font, increase spacing, enlarge the cursor and reduce motion. Only one contrast choice can be on at a time. You can also hide the button for a month, three months or six months; while it is hidden, Alt+A still opens the menu. In the menu shared by all products you can also move the button to another place on the screen, and it stays there. The menu is the same in every product, and your choices are kept in your browser: they stay for your next visit and follow you from one product to another.",
   limitsTitle: "Content that is not fully accessible",
   limitsIntro: "Despite our efforts, some content may not be fully accessible:",
   limits: [
@@ -142,7 +142,7 @@ const EN: StatementContent = {
   limitsOutro: "If you run into difficulty, write to us and we will help.",
   reportTitle: "Found an accessibility problem?",
   reportIntro: "Tell us what you tried to do and on which page. Every report reaches us directly. You can also email us:",
-  updated: "This statement was last updated on 25 October 2026.",
+  updated: "This statement was last updated on 26 October 2026.",
   form: {
     message: "What is the problem? (required)",
     messageMissing: "Write a few words about the problem.",
@@ -180,7 +180,7 @@ const JA: StatementContent = {
   ],
   menuTitle: "アクセシビリティメニュー",
   menu:
-    "画面の隅にあるボタン、またはどのページでも Alt+A でアクセシビリティメニューが開きます。メニューでは、文字の拡大、コントラストの強化、リンクと見出しの強調、読みやすいフォント、間隔の拡大、大きなカーソル、動きを減らす設定ができます。ボタンを1か月、3か月、6か月非表示にすることもでき、非表示の間も Alt+A でメニューを開けます。メニューはすべての製品で共通です。選択した設定はブラウザに保存され、次回の訪問でも、ほかの製品に移っても引き継がれます。",
+    "画面の隅にあるボタン、またはどのページでも Alt+A でアクセシビリティメニューが開きます。メニューでは、文字の拡大、コントラストの強化、色の反転、強いコントラスト（黒地に黄色）、リンクと見出しの強調、読みやすいフォント、間隔の拡大、大きなカーソル、動きを減らす設定ができます。コントラストの設定は一度に 1 つだけ選べます。ボタンを1か月、3か月、6か月非表示にすることもでき、非表示の間も Alt+A でメニューを開けます。すべての製品で共通のメニューでは、ボタンを画面の別の場所に移動して、そこに固定することもできます。メニューはすべての製品で共通です。選択した設定はブラウザに保存され、次回の訪問でも、ほかの製品に移っても引き継がれます。",
   limitsTitle: "完全には対応していない内容",
   limitsIntro: "努力しておりますが、一部の内容は完全には対応していない場合があります：",
   limits: [
@@ -190,7 +190,7 @@ const JA: StatementContent = {
   limitsOutro: "お困りの際はご連絡ください。サポートいたします。",
   reportTitle: "アクセシビリティの問題を見つけた場合",
   reportIntro: "何をしようとしたか、どのページかをお知らせください。報告はすべて私たちに直接届きます。メールでも受け付けています：",
-  updated: "この方針の最終更新日：2026年10月25日。",
+  updated: "この方針の最終更新日：2026年10月26日。",
   form: {
     message: "どのような問題ですか？（必須）",
     messageMissing: "問題について一言ご記入ください。",
@@ -228,7 +228,7 @@ const KO: StatementContent = {
   ],
   menuTitle: "접근성 메뉴",
   menu:
-    "화면 모서리의 버튼을 누르거나 어느 페이지에서든 Alt+A를 누르면 접근성 메뉴가 열립니다. 메뉴에서 글자 확대, 대비 높이기, 링크와 제목 강조, 읽기 쉬운 글꼴, 간격 넓히기, 큰 커서, 움직임 줄이기를 설정할 수 있습니다. 버튼을 한 달, 세 달, 여섯 달 동안 숨길 수도 있으며, 숨긴 동안에도 Alt+A로 메뉴를 열 수 있습니다. 메뉴는 모든 제품에서 같으며, 선택한 설정은 브라우저에 저장되어 다음 방문에도, 다른 제품으로 옮겨 가도 유지됩니다.",
+    "화면 모서리의 버튼을 누르거나 어느 페이지에서든 Alt+A를 누르면 접근성 메뉴가 열립니다. 메뉴에서 글자 확대, 대비 높이기, 색상 반전, 강한 대비(검은 바탕에 노란 글자), 링크와 제목 강조, 읽기 쉬운 글꼴, 간격 넓히기, 큰 커서, 움직임 줄이기를 설정할 수 있습니다. 대비 설정은 한 번에 하나만 선택할 수 있습니다. 버튼을 한 달, 세 달, 여섯 달 동안 숨길 수도 있으며, 숨긴 동안에도 Alt+A로 메뉴를 열 수 있습니다. 모든 제품에 공통인 메뉴에서는 버튼을 화면의 다른 곳으로 옮겨 그 자리에 고정할 수도 있습니다. 메뉴는 모든 제품에서 같으며, 선택한 설정은 브라우저에 저장되어 다음 방문에도, 다른 제품으로 옮겨 가도 유지됩니다.",
   limitsTitle: "완전히 접근할 수 없는 콘텐츠",
   limitsIntro: "최선을 다하고 있지만, 일부 콘텐츠는 완전히 접근하기 어려울 수 있습니다:",
   limits: [
@@ -238,7 +238,7 @@ const KO: StatementContent = {
   limitsOutro: "어려움이 있으면 연락해 주세요. 도와드리겠습니다.",
   reportTitle: "접근성 문제를 발견하셨나요?",
   reportIntro: "무엇을 하려고 했는지, 어느 페이지였는지 알려 주세요. 모든 신고는 저희에게 바로 전달됩니다. 이메일로도 보내실 수 있습니다:",
-  updated: "이 성명의 최종 수정일: 2026년 10월 25일.",
+  updated: "이 성명의 최종 수정일: 2026년 10월 26일.",
   form: {
     message: "어떤 문제인가요? (필수)",
     messageMissing: "문제에 대해 간단히 적어 주세요.",
@@ -276,7 +276,7 @@ const PT_BR: StatementContent = {
   ],
   menuTitle: "O menu de acessibilidade",
   menu:
-    "Um botão no canto da tela abre o menu de acessibilidade, e Alt+A o abre em qualquer página. No menu, você pode aumentar o texto, aumentar o contraste, destacar links e títulos, mudar para uma fonte legível, aumentar o espaçamento, aumentar o cursor e reduzir o movimento. Também é possível ocultar o botão por um mês, três meses ou seis meses; mesmo oculto, Alt+A abre o menu. O menu é o mesmo em todos os produtos, e suas escolhas ficam salvas no navegador: valem na próxima visita e acompanham você de um produto para outro.",
+    "Um botão no canto da tela abre o menu de acessibilidade, e Alt+A o abre em qualquer página. No menu, você pode aumentar o texto, aumentar o contraste, inverter as cores, ativar o contraste forte (amarelo sobre preto), destacar links e títulos, mudar para uma fonte legível, aumentar o espaçamento, aumentar o cursor e reduzir o movimento. Só uma opção de contraste pode ficar ativa por vez. Também é possível ocultar o botão por um mês, três meses ou seis meses; mesmo oculto, Alt+A abre o menu. No menu compartilhado por todos os produtos, também é possível mover o botão para outro lugar da tela, e ele fica lá. O menu é o mesmo em todos os produtos, e suas escolhas ficam salvas no navegador: valem na próxima visita e acompanham você de um produto para outro.",
   limitsTitle: "Conteúdo que não é totalmente acessível",
   limitsIntro: "Apesar dos nossos esforços, alguns conteúdos podem não ser totalmente acessíveis:",
   limits: [
@@ -286,7 +286,7 @@ const PT_BR: StatementContent = {
   limitsOutro: "Se tiver alguma dificuldade, escreva para nós e vamos ajudar.",
   reportTitle: "Encontrou um problema de acessibilidade?",
   reportIntro: "Conte o que você tentou fazer e em qual página. Todo relato chega diretamente até nós. Você também pode nos escrever por e-mail:",
-  updated: "Esta declaração foi atualizada pela última vez em 25 de outubro de 2026.",
+  updated: "Esta declaração foi atualizada pela última vez em 26 de outubro de 2026.",
   form: {
     message: "Qual é o problema? (obrigatório)",
     messageMissing: "Escreva algumas palavras sobre o problema.",

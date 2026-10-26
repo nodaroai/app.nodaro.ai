@@ -25,6 +25,10 @@ export type TextScale = 0 | 1 | 2
 export interface AccessibilityPreferences {
   readonly textScale: TextScale
   readonly contrast: boolean
+  /** Inverted colours: light and dark swap; photos and video stay natural. */
+  readonly invert: boolean
+  /** Strong contrast: yellow text on black, cyan links. */
+  readonly strong: boolean
   readonly spacing: boolean
   readonly links: boolean
   readonly headings: boolean
@@ -38,6 +42,8 @@ export type ToggleKey = Exclude<keyof AccessibilityPreferences, "textScale">
 export const DEFAULT_PREFERENCES: AccessibilityPreferences = {
   textScale: 0,
   contrast: false,
+  invert: false,
+  strong: false,
   spacing: false,
   links: false,
   headings: false,
@@ -50,6 +56,8 @@ export const STORAGE_KEY = "nodaro.a11y.v1"
 
 const ATTRIBUTES: Readonly<Record<ToggleKey, string>> = {
   contrast: "data-a11y-contrast",
+  invert: "data-a11y-invert",
+  strong: "data-a11y-strong",
   spacing: "data-a11y-spacing",
   links: "data-a11y-links",
   headings: "data-a11y-headings",
@@ -64,6 +72,28 @@ function isTextScale(value: unknown): value is TextScale {
   return value === 0 || value === 1 || value === 2
 }
 
+/**
+ * The contrast choices: at most one is on at a time, since each repaints the
+ * whole page. The shared header's rule (`CONTRAST_MODES` and
+ * `setAccessibilityToggle` in the package), so both menus behave alike;
+ * `ee/shell/__tests__/a11y-package.test.ts` holds this copy to the package's.
+ */
+export const CONTRAST_MODES: readonly ToggleKey[] = ["contrast", "invert", "strong"]
+
+/** Turns a choice on or off; turning a contrast mode on turns the other two off. */
+export function setToggle(prefs: AccessibilityPreferences, key: ToggleKey, on: boolean): AccessibilityPreferences {
+  const others = on && CONTRAST_MODES.includes(key)
+    ? Object.fromEntries(CONTRAST_MODES.filter((mode) => mode !== key).map((mode) => [mode, false]))
+    : {}
+  return { ...prefs, ...others, [key]: on }
+}
+
+/** Keeps the first contrast mode on (in CONTRAST_MODES order) when the storage holds several. */
+function oneContrastMode(prefs: AccessibilityPreferences): AccessibilityPreferences {
+  const first = CONTRAST_MODES.find((mode) => prefs[mode])
+  return first ? setToggle(prefs, first, true) : prefs
+}
+
 /** Reads what this browser kept, keeping only well-formed values. */
 export function parsePreferences(raw: string | null): AccessibilityPreferences {
   if (!raw) return DEFAULT_PREFERENCES
@@ -72,10 +102,10 @@ export function parsePreferences(raw: string | null): AccessibilityPreferences {
     const toggles = Object.fromEntries(
       TOGGLE_KEYS.map((key) => [key, stored[key] === true]),
     ) as Record<ToggleKey, boolean>
-    return {
+    return oneContrastMode({
       ...toggles,
       textScale: isTextScale(stored.textScale) ? stored.textScale : 0,
-    }
+    })
   } catch {
     return DEFAULT_PREFERENCES
   }
@@ -92,7 +122,9 @@ export function loadPreferences(): AccessibilityPreferences {
 
 export function savePreferences(prefs: AccessibilityPreferences): void {
   if (sharedAccessibility) {
-    sharedAccessibility.save({ prefs, hiddenUntil: sharedAccessibility.read().hiddenUntil })
+    // Spread what is kept: the header's button place and a newer product's
+    // letters and fields are not this menu's to erase.
+    sharedAccessibility.save({ ...sharedAccessibility.read(), prefs })
     return
   }
   try {
@@ -161,7 +193,7 @@ export function loadHiddenUntil(now: number = Date.now()): number | null {
 
 export function saveHiddenUntil(until: number | null): void {
   if (sharedAccessibility) {
-    sharedAccessibility.save({ prefs: sharedAccessibility.read().prefs, hiddenUntil: until })
+    sharedAccessibility.save({ ...sharedAccessibility.read(), hiddenUntil: until })
     return
   }
   try {

@@ -11,6 +11,10 @@ declare module "virtual:site-a11y" {
   export interface SharedAccessibilityPreferences {
     readonly textScale: 0 | 1 | 2
     readonly contrast: boolean
+    /** Inverted colours: light and dark swap; photos and video stay natural. */
+    readonly invert: boolean
+    /** Strong contrast: yellow text on black, cyan links. */
+    readonly strong: boolean
     readonly spacing: boolean
     readonly links: boolean
     readonly headings: boolean
@@ -19,10 +23,25 @@ declare module "virtual:site-a11y" {
     readonly stopMotion: boolean
   }
 
-  /** The choices plus the corner button's hiding (`null` = shown). */
+  /** Where the viewer moved the header's button: its top-left corner in whole percent of the viewport. */
+  export interface ButtonPosition {
+    readonly x: number
+    readonly y: number
+  }
+
+  /**
+   * The choices plus the corner button's hiding (`null` = shown) and place
+   * (absent or `null` = the default corner). `unknownLetters` and
+   * `extraFields` are what a newer product wrote that this one does not know.
+   * The app never builds a state from scratch: it spreads what `read()`
+   * returned, so a save from its own menu keeps the place and those unknowns.
+   */
   export interface SharedAccessibilityState {
     readonly prefs: SharedAccessibilityPreferences
     readonly hiddenUntil: number | null
+    readonly position?: ButtonPosition | null
+    readonly unknownLetters?: string
+    readonly extraFields?: readonly string[]
   }
 
   export interface SharedAccessibility {
@@ -31,7 +50,7 @@ declare module "virtual:site-a11y" {
      * app's earlier per-browser choices are read once and written through.
      */
     read(now?: number): SharedAccessibilityState
-    /** Keeps the choices for every product. */
+    /** Keeps the choices for every product (the package's own cookie writer). */
     save(state: SharedAccessibilityState): void
     /** Reads and applies the choices to `<html>` (before the first paint). Never throws. */
     applySaved(): void

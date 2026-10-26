@@ -57,10 +57,8 @@ describe("where the shared site header can render", () => {
 
   it("the shared accessibility choices have their own small module, read only by the app's preferences", () => {
     // Read before the first paint and by the app's own menu, in the main
-    // bundle: a new importer must be as light as these. The cookie writer
-    // names it for the state's type only.
+    // bundle: a new importer must be as light as these.
     expect(where(/["']virtual:site-a11y["']/)).toEqual([
-      "ee/shell/a11y-cookie.ts",
       "ee/shell/contract/props.contract.ts",
       "ee/shell/header-module-plugin.ts",
       "lib/accessibility-preferences.ts",

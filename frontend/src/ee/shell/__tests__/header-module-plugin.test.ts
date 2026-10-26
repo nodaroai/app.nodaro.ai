@@ -23,7 +23,6 @@ const LOCALE_STUB = "/stub/site-locale.ts"
 const RESOLVED = `\0${SITE_HEADER_ID}`
 const RESOLVED_LOCALE = `\0${SITE_LOCALE_ID}`
 const A11Y_STUB = "/stub/site-a11y.ts"
-const A11Y_COOKIE = "C:\\repo\\frontend\\src\\ee\\shell\\a11y-cookie.ts"
 const RESOLVED_A11Y = `\0${SITE_A11Y_ID}`
 const FORCED_OFF = { define: { "import.meta.env.VITE_SHARED_HEADER": JSON.stringify("false") } }
 
@@ -33,7 +32,6 @@ function plugin(installed: boolean, env: Record<string, string>): Plugin {
     stubPath: STUB,
     localeStubPath: LOCALE_STUB,
     a11yStubPath: A11Y_STUB,
-    a11yCookiePath: A11Y_COOKIE,
     isInstalled: () => installed,
     readEnv: () => env,
   })
@@ -115,9 +113,10 @@ describe("siteHeaderModule", () => {
     expect(resolve(on, SITE_A11Y_ID)).toBe(RESOLVED_A11Y)
     const source = load(on, RESOLVED_A11Y) ?? ""
     expect(source).toMatch(/^import ".+\/a11y\.css"$/m)
-    expect(source).toMatch(/^import \{ applySavedAccessibility, readAccessibility \} from ".+\/a11y"$/m)
-    // The app's writer, by an absolute path with forward slashes (Windows too).
-    expect(source).toContain('import { writeAccessibilityCookie } from "C:/repo/frontend/src/ee/shell/a11y-cookie.ts"')
+    // The package's own reader, cookie writer and boot call: the app keeps no copy of the cookie format.
+    expect(source).toMatch(/^import \{ applySavedAccessibility, readAccessibility, saveAccessibility \} from ".+\/a11y"$/m)
+    expect(source).toContain("save: (state) => saveAccessibility(state)")
+    expect(source).not.toMatch(/a11y-cookie/)
     expect(source).toMatch(/export const sharedAccessibility = /)
     expect(source).not.toMatch(/shell\.css|NodaroShell/)
 
@@ -131,12 +130,11 @@ describe("siteHeaderModule", () => {
     }
   })
 
-  it("resolves the accessibility adapter's imports: the writer by its path, the package from the frontend directory", async () => {
+  it("resolves the accessibility adapter's import of the package from the frontend directory", async () => {
     const p = plugin(true, ON)
     await runConfig(p, "build")
     const context = { resolve: async (id: string) => ({ id: `/resolved/${id}` }) }
     const resolveId = p.resolveId as (this: typeof context, id: string, importer?: string) => Promise<unknown> | unknown
-    expect(await resolveId.call(context, "C:/repo/frontend/src/ee/shell/a11y-cookie.ts", RESOLVED_A11Y)).toBe(A11Y_COOKIE)
     const pkgImport = (load(p, RESOLVED_A11Y) ?? "").match(/from "(.+\/a11y)"$/m)?.[1] ?? ""
     expect(await resolveId.call(context, pkgImport, RESOLVED_A11Y)).toEqual({ id: `/resolved/${pkgImport}` })
   })
@@ -181,7 +179,6 @@ describe("siteHeaderModule", () => {
       stubPath: STUB,
       localeStubPath: LOCALE_STUB,
       a11yStubPath: A11Y_STUB,
-      a11yCookiePath: A11Y_COOKIE,
       isInstalled: () => false,
       readEnv: (_mode, dir) => {
         dirs.push(dir)

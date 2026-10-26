@@ -58,7 +58,7 @@ function fixture({ withResolver }) {
       "  root: __dirname,",
       "  envDir: __dirname,",
       "  logLevel: 'silent',",
-      withResolver ? "  plugins: [siteHeaderModule({ root: __dirname, stubPath: path.resolve(__dirname, 'stub.js'), localeStubPath: path.resolve(__dirname, 'locale-stub.js'), a11yStubPath: path.resolve(__dirname, 'a11y-stub.js'), a11yCookiePath: path.resolve(__dirname, 'a11y-cookie.js'), isInstalled: () => false })]," : "",
+      withResolver ? "  plugins: [siteHeaderModule({ root: __dirname, stubPath: path.resolve(__dirname, 'stub.js'), localeStubPath: path.resolve(__dirname, 'locale-stub.js'), a11yStubPath: path.resolve(__dirname, 'a11y-stub.js'), isInstalled: () => false })]," : "",
       "  build: { minify: false, outDir: path.resolve(__dirname, 'out'), lib: { entry: path.resolve(__dirname, 'main.js'), formats: ['es'], fileName: 'out' } },",
       "}",
       "",

@@ -26,10 +26,34 @@ describe("accessibility menu", () => {
     renderMenu()
     fireEvent.click(screen.getByRole("button", { name: "Accessibility menu" }))
     const dialog = await screen.findByRole("dialog", { name: "Accessibility" })
-    for (const name of ["Higher contrast", "Highlight links", "Highlight headings", "Readable font", "Text spacing", "Large cursor", "Reduce motion"]) {
+    for (const name of ["Higher contrast", "Inverted colours", "Strong contrast", "Highlight links", "Highlight headings", "Readable font", "Text spacing", "Large cursor", "Reduce motion"]) {
       expect(screen.getByRole("button", { name })).toHaveAttribute("aria-pressed", "false")
     }
     expect(await axeViolations(dialog)).toEqual([])
+  })
+
+  it("keeps one contrast choice at a time, and says so to a screen reader", async () => {
+    renderMenu()
+    fireEvent.click(screen.getByRole("button", { name: "Accessibility menu" }))
+    const contrast = await screen.findByRole("button", { name: "Higher contrast" })
+    const invert = screen.getByRole("button", { name: "Inverted colours" })
+    const strong = screen.getByRole("button", { name: "Strong contrast" })
+    expect(contrast.closest("[role='group']")).toHaveAccessibleDescription("Only one contrast choice at a time.")
+
+    fireEvent.click(contrast)
+    fireEvent.click(strong)
+    expect(strong).toHaveAttribute("aria-pressed", "true")
+    expect(contrast).toHaveAttribute("aria-pressed", "false")
+    expect(document.documentElement.hasAttribute("data-a11y-strong")).toBe(true)
+    expect(document.documentElement.hasAttribute("data-a11y-contrast")).toBe(false)
+
+    fireEvent.click(invert)
+    expect(document.documentElement.hasAttribute("data-a11y-invert")).toBe(true)
+    expect(document.documentElement.hasAttribute("data-a11y-strong")).toBe(false)
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}")).toMatchObject({ contrast: false, invert: true, strong: false })
+
+    fireEvent.click(invert)
+    expect(document.documentElement.hasAttribute("data-a11y-invert")).toBe(false)
   })
 
   it("applies a choice to the page and keeps it for the next visit", async () => {

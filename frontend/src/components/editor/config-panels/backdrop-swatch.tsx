@@ -69,6 +69,8 @@ export const BackdropSwatch = memo(function BackdropSwatch({
       className={cn("rounded-md overflow-hidden border border-black/10 dark:border-white/10", className)}
       style={style}
       aria-hidden="true"
+      // The colour is the content: inverted colours and strong contrast leave it alone.
+      data-a11y-keep-colour=""
     />
   )
 })
