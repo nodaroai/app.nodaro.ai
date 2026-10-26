@@ -24,6 +24,13 @@ vi.mock("@/lib/deployment-payer.js", () => ({
   deploymentPayerId: vi.fn(),
 }))
 
+// The history's reads and shaping are lib/credit-history.ts's own tests; the
+// route is tested for what it does around them.
+vi.mock("@/lib/credit-history.js", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/credit-history.js")>("@/lib/credit-history.js")
+  return { ...actual, listCreditHistory: vi.fn(), exportCreditHistory: vi.fn() }
+})
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -31,6 +38,7 @@ vi.mock("@/lib/deployment-payer.js", () => ({
 import { registerCreditsBalanceRoutes } from "../credits-balance.js"
 import { supabase } from "../../../lib/supabase.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../../lib/deployment-payer.js"
+import { exportCreditHistory, listCreditHistory } from "../../../lib/credit-history.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -666,5 +674,84 @@ describe("registerCreditsBalanceRoutes self-hosted gating", () => {
     await localApp.close()
 
     vi.doUnmock("@/lib/config.js")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /v1/credits/history
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/credits/history", () => {
+  const ENTRY = { id: "l-1", at: "2026-10-26T16:07:00.000Z", kind: "usage", source: "usage", amount: -15, balanceAfter: 2950, pool: "topup", description: "Job job-1: nano-banana", model: "nano-banana", provider: "kie", charge: 12, status: "committed", job: null, receiptUrl: null }
+
+  it("returns 401 when no userId", async () => {
+    expect((await app.inject({ method: "GET", url: "/v1/credits/history" })).statusCode).toBe(401)
+    expect(listCreditHistory).not.toHaveBeenCalled()
+  })
+
+  it("rejects a bad query with 400 before reading anything: limit over 100, an unknown kind, a date that is not ISO-8601, an unknown format, a model with or() syntax", async () => {
+    for (const query of ["limit=101", "kind=gifts", "from=yesterday", "format=xlsx", "limit=0", "model=a,b", "model=x(1)"]) {
+      const res = await authedGet(`/v1/credits/history?${query}`)
+      expect(res.statusCode, query).toBe(400)
+      expect(res.json().error.code, query).toBe("validation_error")
+    }
+    expect(listCreditHistory).not.toHaveBeenCalled()
+  })
+
+  it("rejects a cursor that is not one it gave with 400", async () => {
+    vi.mocked(listCreditHistory).mockResolvedValueOnce({ badCursor: true })
+    const res = await authedGet("/v1/credits/history?cursor=2026-10-27T00:00:00Z")
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("403s payer_balance_jwt_only for the payer via the relay app_token: every row carries the payer's balance", async () => {
+    vi.mocked(deploymentPayerActive).mockReturnValue(true)
+    vi.mocked(deploymentPayerId).mockReturnValue(PAYER_ID)
+    const res = await getAs("/v1/credits/history", PAYER_ID, "app_token")
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_balance_jwt_only")
+    expect(listCreditHistory).not.toHaveBeenCalled()
+    // The payer's own session, and any other user through a token, still read.
+    vi.mocked(listCreditHistory).mockResolvedValue({ items: [], nextCursor: null })
+    expect((await getAs("/v1/credits/history", PAYER_ID, "jwt")).statusCode).toBe(200)
+    expect((await getAs("/v1/credits/history", TEST_USER_ID, "app_token")).statusCode).toBe(200)
+  })
+
+  it("passes the filters and the page to the reader and answers its page", async () => {
+    vi.mocked(listCreditHistory).mockResolvedValueOnce({ items: [ENTRY as never], nextCursor: "2026-10-26T16:07:00.000Z" })
+    const res = await authedGet("/v1/credits/history?kind=usage&model=nano-banana&from=2026-10-01T00:00:00Z&to=2026-10-31T23:59:59Z&q=nano&limit=20&cursor=2026-10-27T00:00:00Z")
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: [ENTRY], nextCursor: "2026-10-26T16:07:00.000Z" })
+    expect(listCreditHistory).toHaveBeenCalledWith(
+      TEST_USER_ID,
+      { kind: "usage", model: "nano-banana", from: "2026-10-01T00:00:00Z", to: "2026-10-31T23:59:59Z", q: "nano" },
+      { limit: 20, cursor: "2026-10-27T00:00:00Z" },
+      expect.any(Function),
+    )
+  })
+
+  it("defaults to a page of 50 with no filters", async () => {
+    vi.mocked(listCreditHistory).mockResolvedValueOnce({ items: [], nextCursor: null })
+    await authedGet("/v1/credits/history")
+    expect(listCreditHistory).toHaveBeenCalledWith(TEST_USER_ID, {}, { limit: 50, cursor: undefined }, expect.any(Function))
+  })
+
+  it("format=csv answers the export as a CSV attachment", async () => {
+    vi.mocked(exportCreditHistory).mockResolvedValueOnce({ csv: "at,kind\r\n2026-10-26T16:07:00.000Z,usage\r\n" })
+    const res = await authedGet("/v1/credits/history?format=csv&kind=usage")
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["content-type"]).toMatch(/^text\/csv/)
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="credit-history.csv"')
+    expect(res.body).toBe("at,kind\r\n2026-10-26T16:07:00.000Z,usage\r\n")
+    expect(exportCreditHistory).toHaveBeenCalledWith(TEST_USER_ID, { kind: "usage" }, expect.any(Function))
+    expect(listCreditHistory).not.toHaveBeenCalled()
+  })
+
+  it("answers 500 with no detail when the read fails", async () => {
+    vi.mocked(listCreditHistory).mockResolvedValueOnce({ error: { message: "down" } })
+    const res = await authedGet("/v1/credits/history")
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: "Lookup failed" } })
   })
 })

@@ -212,6 +212,83 @@ export interface CreditTransactionsOptions {
   cursor?: string
 }
 
+/** What a movement of the balance was; `app` is credits earned from, or paid for, a published app. */
+export type CreditHistoryKind = "usage" | "purchase" | "grant" | "refund" | "app" | "adjustment" | "expiry"
+
+/** The job behind a usage row of {@link CreditHistoryEntry}. */
+export interface CreditHistoryJob {
+  id: string
+  /** The node type that ran (`generate-image`, `image-to-video`, …); `null` when the job is gone. */
+  type: string | null
+  status: string | null
+  startedAt: string | null
+  completedAt: string | null
+  /** From start to completion; `null` until it completes. */
+  durationMs: number | null
+  workflowId: string | null
+  sessionId: string | null
+}
+
+/** One movement of the balance (`credits.history()`). */
+export interface CreditHistoryEntry {
+  id: string
+  /** ISO-8601. Also the paging cursor. */
+  at: string
+  kind: CreditHistoryKind
+  /** The ledger's own word: `usage`, `one_time_purchase`, `subscription_renewal`, `signup_grant`, `refund`, `admin_adjustment`, `expiry`, … */
+  source: string
+  /** The movement, signed: a run's hold negative, a purchase positive. */
+  amount: number
+  /** The balance right after this movement. */
+  balanceAfter: number
+  /** Which pool moved; `"mixed"` when both did. */
+  pool: "subscription" | "topup" | "mixed"
+  description: string | null
+  /** The model that ran, on a row with a job; `null` otherwise. */
+  model: string | null
+  provider: string | null
+  /**
+   * The job's charge, on its reserve row only (the hold taken when the run
+   * was accepted): the settled charge, the hold while the run is open, `0`
+   * once refunded. `null` on every other row — a refund, a metered overrun
+   * line, a purchase — so summing it over a list counts each job once. Read
+   * this for spend, not `amount`.
+   */
+  charge: number | null
+  /** The run's credit status (`"reserved"`, `"committed"` or `"refunded"`), beside `charge`; `null` elsewhere. */
+  status: string | null
+  /** On a row with a job; `type` and the rest `null` when the job is gone or not the person's. */
+  job: CreditHistoryJob | null
+  /** Stripe's hosted receipt, on a purchase that has one. */
+  receiptUrl: string | null
+}
+
+/** A page of {@link CreditHistoryEntry}, newest first. */
+export interface CreditHistoryPage {
+  data: CreditHistoryEntry[]
+  /** Pass as `cursor` for the next page; `null` when there are no more rows. */
+  nextCursor: string | null
+}
+
+/** What narrows the history. */
+export interface CreditHistoryFilters {
+  kind?: CreditHistoryKind
+  /** A model identifier: only runs of that model. */
+  model?: string
+  /** ISO-8601 bounds on `at`, inclusive. */
+  from?: string
+  to?: string
+  /** Words looked for in the description, case-insensitively. */
+  q?: string
+}
+
+export interface CreditHistoryOptions extends CreditHistoryFilters {
+  /** Rows per page, 1–100 (server default 50). */
+  limit?: number
+  /** The `nextCursor` of the previous page, as given (opaque; another string is refused with 400). */
+  cursor?: string
+}
+
 /** Max identifiers per `model-costs` batch — the route caps the request at 50. */
 const MODEL_COSTS_LIMIT = 50
 
@@ -241,6 +318,35 @@ export class CreditsResource {
   transactions(options: CreditTransactionsOptions = {}): Promise<CreditTransactionsPage> {
     return this.client.request<CreditTransactionsPage>("GET", "/v1/credits/transactions", {
       query: { limit: options.limit, cursor: options.cursor },
+    })
+  }
+
+  /**
+   * `GET /v1/credits/history` → one page of every movement of the balance,
+   * newest first — runs, purchases, grants, refunds, adjustments, expiries —
+   * each with the balance after it; a job's reserve row carries its model,
+   * its `charge` (the settled charge, the hold while the run is open, `0`
+   * once refunded — read that for spend, not `amount`) and its job. Filter by
+   * `kind`, `model`, `from` / `to` and `q`; pass the page's `nextCursor` (an
+   * opaque string) as `cursor` for the next page (`null` at the end).
+   * Cloud-only route: a self-hosted instance answers 404.
+   */
+  history(options: CreditHistoryOptions = {}): Promise<CreditHistoryPage> {
+    const { limit, cursor, ...filters } = options
+    return this.client.request<CreditHistoryPage>("GET", "/v1/credits/history", {
+      query: { limit, cursor, ...filters },
+    })
+  }
+
+  /**
+   * `GET /v1/credits/history?format=csv` → the whole filtered history as a
+   * CSV file (the same fields as {@link history}, one line per movement,
+   * newest first), at most 5,000 rows — the last line says when it was cut.
+   * Hand the text to the person as `credit-history.csv`.
+   */
+  exportHistory(filters: CreditHistoryFilters = {}): Promise<string> {
+    return this.client.requestText("GET", "/v1/credits/history", {
+      query: { ...filters, format: "csv" },
     })
   }
 

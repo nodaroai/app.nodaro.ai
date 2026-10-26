@@ -3460,6 +3460,28 @@ are not registered and return 404.
 | `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
 | `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
+| `GET` | `/v1/credits/history` | `limit` (1–100, default 50), `cursor` (the previous page's `nextCursor`, opaque; another string is `400`), `kind` (`usage` / `purchase` / `grant` / `refund` / `app` / `adjustment` / `expiry`), `model` (a model identifier, exactly), `from` / `to` (ISO timestamps, inclusive), `q` (words in the description), `format` (`json`, or `csv` for the whole filtered history as a file, at most 5,000 rows, no paging) | Every movement of the balance, newest first: `{ data: HistoryEntry[], nextCursor }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens), like every balance read. |
+
+**`HistoryEntry`** (`GET /v1/credits/history`) is one movement of the
+balance: `{ id, at, kind, source, amount, balanceAfter, pool, description,
+model, provider, charge, status, job, receiptUrl }`. `amount` is signed (a
+run's hold negative, a purchase positive) and `balanceAfter` the balance right
+after it; `pool` is `"subscription"`, `"topup"` or `"mixed"`; `source` is the
+ledger's own word (`usage`, `one_time_purchase`, `subscription_renewal`,
+`signup_grant`, `refund`, `app_earnings`, `admin_adjustment`, `expiry`, …;
+`kind: "app"` is credits earned from or paid for a published app, and
+`adjustment` is an admin's correction and anything else). On a row with a job,
+`model` is the model that ran and `job` is `{ id, type, status, startedAt,
+completedAt, durationMs, workflowId, sessionId }` (`type` and the rest `null`
+when the job is gone or not the person's). A job's **reserve row** (the hold
+taken when the run was accepted) alone carries `charge` — what the run cost in
+the end: the settled charge, the hold while it runs, `0` once refunded — and
+`status` (`reserved` / `committed` / `refunded`); a refund row or a metered
+overrun line of the same job carries `null`, so summing `charge` over a list
+counts each job once. Read `charge`, not `amount`, for spend. `receiptUrl` is
+Stripe's hosted receipt on a purchase that has one. The CSV carries the same
+fields, one line per movement (numbers as numbers), and says on its last line
+when it was cut at 5,000 rows.
 
 **The welcome offer.** While a deployment has the welcome offer switched on,
 `GET /v1/user/credits` carries `welcomeOffer: { popupSeen, consentPending, credits }`

@@ -6618,7 +6618,7 @@ example there.
 
 ### `client.credits`
 
-Authenticated user's credit balance, transaction history and per-model cost previews.
+Authenticated user's credit balance, transaction history, the whole statement of the balance (with a CSV export) and per-model cost previews.
 
 #### `balance()`
 
@@ -6770,6 +6770,65 @@ do {
   cursor = page.nextCursor ?? undefined
 } while (cursor)
 console.log(`${spent} credits charged`)
+```
+
+#### `history(options?)`
+
+```ts
+history(options?: CreditHistoryOptions): Promise<CreditHistoryPage>
+```
+
+`GET /v1/credits/history` → one page of **every movement of the balance**,
+newest first — runs, purchases, grants, refunds, adjustments, expiries — each
+with the balance after it. Where `transactions()` lists runs alone, this is
+the whole statement a billing screen shows. `limit` is 1–100 (default 50);
+pass the page's `nextCursor` (opaque) as `cursor` for the next page (`null` at
+the end). Filters: `kind` (`"usage"` / `"purchase"` / `"grant"` / `"refund"` /
+`"app"` / `"adjustment"` / `"expiry"`), `model` (a model identifier, exactly:
+only its runs), `from` / `to` (ISO-8601, inclusive) and `q` (words in the
+description). Cloud edition only; on a deployment-payer instance the billing
+account's own session alone (`ForbiddenError`, `payer_balance_jwt_only`, to its
+tokens).
+
+**`CreditHistoryEntry`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | The ledger row. |
+| `at` | `string` | ISO-8601. The paging cursor is the last row's value. |
+| `kind` | `CreditHistoryKind` | What it was; `"app"` is credits earned from or paid for a published app, `"adjustment"` an admin's correction and anything else. |
+| `source` | `string` | The ledger's own word: `usage`, `one_time_purchase`, `subscription_created`, `subscription_renewal`, `signup_grant`, `refund`, `stripe_refund`, `app_earnings`, `admin_adjustment`, `expiry`, … |
+| `amount` | `number` | The movement, signed: a run's hold negative, a purchase positive. |
+| `balanceAfter` | `number` | The balance right after it. |
+| `pool` | `"subscription" \| "topup" \| "mixed"` | Which pool moved. |
+| `description` | `string \| null` | The ledger's note (`Job <id>: <model>` on a run). |
+| `model` | `string \| null` | The model that ran, on a row with a job. |
+| `provider` | `string \| null` | Where the run was routed, on a row with a job. |
+| `charge` | `number \| null` | The job's charge, on its **reserve row only** (the hold taken when the run was accepted): the settled charge, the hold while the run is open, `0` once refunded. `null` on every other row — a refund, a metered overrun line, a purchase — so **summing it counts each job once**. Read this for spend, not `amount`. |
+| `status` | `string \| null` | The run's credit status (`"reserved"`, `"committed"` or `"refunded"`), beside `charge`. |
+| `job` | `CreditHistoryJob \| null` | `{ id, type, status, startedAt, completedAt, durationMs, workflowId, sessionId }` on a row with a job (`type` and the rest `null` when the job is gone or not the person's). |
+| `receiptUrl` | `string \| null` | Stripe's hosted receipt, on a purchase that has one. |
+
+```ts
+// A billing screen's history table, one page at a time, runs only.
+const page = await client.credits.history({ kind: "usage", limit: 50 })
+for (const e of page.data) console.log(e.at, e.model, e.charge ?? e.amount, "→", e.balanceAfter)
+```
+
+#### `exportHistory(filters?)`
+
+```ts
+exportHistory(filters?: CreditHistoryFilters): Promise<string>
+```
+
+`GET /v1/credits/history?format=csv` → the whole filtered history as CSV text
+(the same fields as `history()`, one line per movement, newest first), at most
+5,000 rows — the last line says when it was cut; narrow `from` / `to` for the
+rest. Hand it to the person as `credit-history.csv`:
+
+```ts
+const csv = await client.credits.exportHistory({ from: "2026-10-01T00:00:00Z" })
+const href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
 ```
 
 #### `claimSignupGrant(keys?)`
@@ -8924,6 +8983,7 @@ not two.
 
 - `UserBalance` — full balance + tier record (see `balance()` table above)
 - `ModelCostsResult` — `{ data: Record<string, number>; missing: string[]; errors: string[] }`
+- `CreditHistoryEntry` / `CreditHistoryJob` / `CreditHistoryKind` / `CreditHistoryPage` / `CreditHistoryFilters` / `CreditHistoryOptions` — `credits.history()` / `credits.exportHistory()`: every movement of the balance (see the `history()` table above)
 
 ### Uploads
 

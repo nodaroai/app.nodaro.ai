@@ -5,6 +5,7 @@ import { hasCredits } from "../../lib/config.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { supabase } from "../../lib/supabase.js"
 import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX } from "../../lib/usage-transactions.js"
+import { CREDIT_HISTORY_PAGE_MAX, HISTORY_KINDS, MODEL_FILTER, exportCreditHistory, listCreditHistory } from "../../lib/credit-history.js"
 
 // The allowlist and the usage rows' projection live in core (lib/usage-transactions.ts)
 // so the MCP `credit_transactions` tool lists the same rows this route does.
@@ -125,5 +126,64 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
     }
     const { items, nextCursor } = listed
     return reply.send({ data: items, nextCursor })
+  })
+
+  const historyQuery = z.object({
+    limit: z.coerce.number().int().min(1).max(CREDIT_HISTORY_PAGE_MAX).default(50),
+    cursor: z.string().max(80).optional(),
+    kind: z.enum(HISTORY_KINDS).optional(),
+    model: z.string().regex(MODEL_FILTER, "model is a model identifier").optional(),
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+    q: z.string().min(1).max(120).optional(),
+    format: z.enum(["json", "csv"]).default("json"),
+  })
+
+  // Every movement of the person's balance, newest first — runs, purchases,
+  // grants, refunds, adjustments, expiries — with the balance after each one;
+  // a job's reserve row carries its model, charge and job. `format=csv` is
+  // the whole filtered history as a file (no paging). lib/credit-history.ts.
+  // Every row carries a balance, so the payer's relay credential is refused
+  // like on every balance read (payer-balance-guard.ts).
+  app.get("/v1/credits/history", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
+    const parsed = historyQuery.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid query",
+        },
+      })
+    }
+    const { limit, cursor, format, ...filters } = parsed.data
+    const report = (table: string, message: string) => req.log.error({ table, message }, "credits/history enrichment read failed")
+
+    if (format === "csv") {
+      const exported = await exportCreditHistory(req.userId, filters, report)
+      if ("error" in exported) {
+        req.log.error({ err: exported.error }, "credits/history export failed")
+        return reply.status(500).send({ error: { code: "internal_error", message: "Lookup failed" } })
+      }
+      return reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", 'attachment; filename="credit-history.csv"')
+        .send(exported.csv)
+    }
+
+    const listed = await listCreditHistory(req.userId, filters, { limit, cursor }, report)
+    if ("badCursor" in listed) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "cursor is not one this route gave" } })
+    }
+    if ("error" in listed) {
+      req.log.error({ err: listed.error }, "credits/history lookup failed")
+      return reply.status(500).send({ error: { code: "internal_error", message: "Lookup failed" } })
+    }
+    return reply.send({ data: listed.items, nextCursor: listed.nextCursor })
   })
 }

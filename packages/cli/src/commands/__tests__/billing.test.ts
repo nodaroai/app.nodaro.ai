@@ -8,12 +8,14 @@ const mocks = {
   subscription: vi.fn(),
   surface: vi.fn(),
   account: vi.fn(),
+  history: vi.fn(),
+  exportHistory: vi.fn(),
 }
 
 // The wiring of each subcommand. Which client the public ones build (no
 // credential, any instance) is billing-public.test.ts, unmocked.
 vi.mock("../../client.js", () => ({
-  buildClient: () => ({ billing: mocks }),
+  buildClient: () => ({ billing: mocks, credits: mocks }),
   buildPublicClient: () => ({ billing: mocks }),
   handleError: (err: unknown) => {
     throw err
@@ -63,8 +65,55 @@ describe("billing command", () => {
     vi.mocked(info).mockReset()
   })
 
-  it("registers plans, subscription, account and surface", () => {
-    expect(billingCommand().commands.map((c) => c.name()).sort()).toEqual(["account", "plans", "subscription", "surface"])
+  it("registers plans, subscription, account, history and surface", () => {
+    expect(billingCommand().commands.map((c) => c.name()).sort()).toEqual(["account", "history", "plans", "subscription", "surface"])
+  })
+
+  const ENTRY = {
+    id: "l-1",
+    at: "2026-10-26T16:07:00.000Z",
+    kind: "usage",
+    source: "usage",
+    amount: -15,
+    balanceAfter: 2950,
+    pool: "topup",
+    description: "Job job-1: nano-banana",
+    model: "nano-banana",
+    provider: "kie",
+    charge: 12,
+    status: "committed",
+    job: { id: "job-1", type: "generate-image", status: "completed", startedAt: null, completedAt: null, durationMs: null, workflowId: null, sessionId: null },
+    receiptUrl: null,
+  }
+  const PURCHASE = { ...ENTRY, id: "l-2", at: "2026-10-25T22:02:00.000Z", kind: "purchase", source: "one_time_purchase", amount: 3000, balanceAfter: 3085, description: "Credit pack", model: null, provider: null, charge: null, status: null, job: null }
+
+  it("history passes the filters and the page to the SDK, and prints one row per movement with the charge for a run", async () => {
+    mocks.history.mockResolvedValueOnce({ data: [ENTRY, PURCHASE], nextCursor: "2026-10-25T22:02:00.000Z" })
+    await runCmd("billing", "history", "--kind", "usage", "--model", "nano-banana", "--since", "2026-10-01T00:00:00Z", "--until", "2026-10-31T00:00:00Z", "--search", "nano", "--limit", "20", "--cursor", "c1")
+    expect(mocks.history).toHaveBeenCalledWith({ kind: "usage", model: "nano-banana", from: "2026-10-01T00:00:00Z", to: "2026-10-31T00:00:00Z", q: "nano", limit: 20, cursor: "c1" })
+    const [rows, cols] = vi.mocked(table).mock.calls[0]!
+    expect(cols).toEqual(["at", "kind", "what", "credits", "status", "balance", "job"])
+    expect(rows[0]).toEqual({ at: "2026-10-26 16:07", kind: "usage", what: "nano-banana", credits: 12, status: "committed", balance: 2950, job: "job-1" })
+    expect(rows[1]).toEqual({ at: "2026-10-25 22:02", kind: "purchase", what: "Credit pack", credits: 3000, status: "", balance: 3085, job: "" })
+  })
+
+  it("history --json emits the page whole; --csv writes the SDK's file to stdout without the page options", async () => {
+    mocks.history.mockResolvedValueOnce({ data: [], nextCursor: null })
+    await runCmd("billing", "history", "--json")
+    expect(emit).toHaveBeenCalledWith({ data: [], nextCursor: null }, expect.objectContaining({ json: true }))
+
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+    mocks.exportHistory.mockResolvedValueOnce("at,kind\r\n")
+    await runCmd("billing", "history", "--csv", "--kind", "purchase", "--limit", "5")
+    expect(mocks.exportHistory).toHaveBeenCalledWith({ kind: "purchase", model: undefined, from: undefined, to: undefined, q: undefined })
+    expect(write).toHaveBeenCalledWith("at,kind\r\n")
+    write.mockRestore()
+  })
+
+  it("history refuses an unknown --kind and a --limit out of range before calling the SDK", async () => {
+    await expect(runCmd("billing", "history", "--kind", "gifts")).rejects.toThrow(/--kind/)
+    await expect(runCmd("billing", "history", "--limit", "500")).rejects.toThrow(/--limit/)
+    expect(mocks.history).not.toHaveBeenCalled()
   })
 
   it("plans --json emits the SDK answer whole", async () => {

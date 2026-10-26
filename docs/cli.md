@@ -195,6 +195,8 @@ nodaro billing plans [--base-url <url>] [--json]        # plans and credit packs
 nodaro billing subscription [--json]                    # your subscription, and the tier your account's entitlements follow (Nodaro Cloud)
 nodaro billing account [--json]                         # your plan and balance as the deployment's billing provider reports them, in its unit
 nodaro billing surface [--base-url <url>] [--json]      # how this deployment bills: whether it meters usage, and the unit costs display in (no sign-in needed)
+nodaro billing history [--kind <k>] [--model <id>] [--since <iso>] [--until <iso>] [--search <words>] [--limit <n>] [--cursor <c>] [--csv] [--json]
+                                                        # every movement of your balance, newest first, with the balance after each (Nodaro Cloud); --csv prints the whole filtered history as CSV
 #   `plans` and `surface` send no credential: they ask --base-url, else the profile's instance, else https://app.nodaro.ai
 #   `plans` and `subscription` answer 404 on a self-hosted instance (no billing there)
 

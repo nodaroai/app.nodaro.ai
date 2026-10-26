@@ -22,4 +22,10 @@ export type {
   CreditTransaction,
   CreditTransactionsPage,
   CreditTransactionsOptions,
+  CreditHistoryKind,
+  CreditHistoryJob,
+  CreditHistoryEntry,
+  CreditHistoryPage,
+  CreditHistoryFilters,
+  CreditHistoryOptions,
 } from "../resources/credits.js"

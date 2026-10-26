@@ -1,7 +1,43 @@
 import { Command } from "commander"
 import type { BillingMoney, BillingPlan, BillingPriceCredits } from "@nodaro/sdk/billing"
+import type { CreditHistoryEntry, CreditHistoryKind, CreditHistoryOptions } from "@nodaro/sdk/credits"
 import { buildClient, buildPublicClient, handleError } from "../client.js"
 import { detail, dim, emit, info, table, type OutputOpts } from "../output.js"
+
+const HISTORY_KINDS: readonly CreditHistoryKind[] = ["usage", "purchase", "grant", "refund", "app", "adjustment", "expiry"]
+
+interface HistoryOpts extends OutputOpts {
+  profile?: string
+  kind?: string
+  model?: string
+  since?: string
+  until?: string
+  search?: string
+  limit?: string
+  cursor?: string
+  csv?: boolean
+}
+
+/** One history row as the table shows it: a job's charge on its reserve row (the settled charge, the hold while it runs), the movement otherwise. */
+function historyRow(e: CreditHistoryEntry): Record<string, unknown> {
+  return {
+    at: e.at.replace("T", " ").slice(0, 16),
+    kind: e.kind,
+    what: e.model ?? e.description ?? e.source,
+    credits: e.kind === "usage" ? (e.charge ?? e.amount) : e.amount,
+    status: e.status ?? "",
+    balance: e.balanceAfter,
+    job: e.job?.id ?? "",
+  }
+}
+
+function historyOptions(opts: HistoryOpts): CreditHistoryOptions {
+  const kind = opts.kind as CreditHistoryKind | undefined
+  if (kind !== undefined && !HISTORY_KINDS.includes(kind)) throw new Error(`--kind must be one of ${HISTORY_KINDS.join(", ")}`)
+  const limit = opts.limit === undefined ? undefined : Number(opts.limit)
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100)) throw new Error("--limit must be a whole number from 1 to 100")
+  return { kind, model: opts.model, from: opts.since, to: opts.until, q: opts.search, limit, cursor: opts.cursor }
+}
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -147,6 +183,40 @@ Examples:
           return
         }
         detail(account)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("history")
+    .description("every movement of your balance, newest first, with the balance after each (Nodaro Cloud)")
+    .option("--profile <name>")
+    .option("--kind <kind>", `only ${HISTORY_KINDS.join(" / ")}`)
+    .option("--model <id>", "only runs of this model")
+    .option("--since <iso>", "from this time (ISO-8601), inclusive")
+    .option("--until <iso>", "up to this time (ISO-8601), inclusive")
+    .option("--search <words>", "words in the description")
+    .option("--limit <n>", "rows per page, 1–100 (default 50)")
+    .option("--cursor <cursor>", "the previous page's nextCursor")
+    .option("--csv", "the whole filtered history as CSV (no paging; at most 5,000 rows)")
+    .option("--json")
+    .action(async (opts: HistoryOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const options = historyOptions(opts)
+        if (opts.csv) {
+          const { limit: _limit, cursor: _cursor, ...filters } = options
+          process.stdout.write(await client.credits.exportHistory(filters))
+          return
+        }
+        const page = await client.credits.history(options)
+        if (opts.json) {
+          emit(page, opts)
+          return
+        }
+        table(page.data.map(historyRow), ["at", "kind", "what", "credits", "status", "balance", "job"])
+        if (page.nextCursor) dim(`more: --cursor ${page.nextCursor}`)
       } catch (err) {
         handleError(err)
       }

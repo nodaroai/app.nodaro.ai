@@ -6,7 +6,7 @@ import {
   InsufficientCreditsError,
   StorageExceededError,
 } from "../../index.js"
-import type { ModelCostResult, ModelCostsResult, UserBalance, WelcomeOfferClaimResult } from "../../index.js"
+import type { CreditHistoryEntry, CreditHistoryPage, ModelCostResult, ModelCostsResult, UserBalance, WelcomeOfferClaimResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -66,6 +66,53 @@ describe("credits.transactions()", () => {
     expect(url.searchParams.get("limit")).toBe("50")
     expect(url.searchParams.get("cursor")).toBe("2026-10-13T20:00:00.000Z")
     expect(page).toEqual({ data: [], nextCursor: null })
+  })
+})
+
+describe("credits.history() and credits.exportHistory()", () => {
+  const ENTRY: CreditHistoryEntry = {
+    id: "l-1",
+    at: "2026-10-26T16:07:00.000Z",
+    kind: "usage",
+    source: "usage",
+    amount: -15,
+    balanceAfter: 2950,
+    pool: "topup",
+    description: "Job job-1: nano-banana",
+    model: "nano-banana",
+    provider: "kie",
+    charge: 12,
+    status: "committed",
+    job: { id: "job-1", type: "generate-image", status: "completed", startedAt: "2026-10-26T16:07:00.000Z", completedAt: "2026-10-26T16:07:48.000Z", durationMs: 48_000, workflowId: "wf-1", sessionId: "ses-1" },
+    receiptUrl: null,
+  }
+
+  it("GETs /v1/credits/history with the filters and the page as query, and returns the page whole", async () => {
+    const page: CreditHistoryPage = { data: [ENTRY], nextCursor: "2026-10-26T16:07:00.000Z" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(page))
+    const client = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result = await client.credits.history({ kind: "usage", model: "nano-banana", from: "2026-10-01T00:00:00Z", q: "nano", limit: 20, cursor: "2026-10-27T00:00:00Z" })
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe("/v1/credits/history")
+    expect(Object.fromEntries(url.searchParams)).toEqual({ kind: "usage", model: "nano-banana", from: "2026-10-01T00:00:00Z", q: "nano", limit: "20", cursor: "2026-10-27T00:00:00Z" })
+    expect(result).toEqual(page)
+  })
+
+  it("sends no query at all by default", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], nextCursor: null }))
+    const client = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await client.credits.history()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/credits/history")
+  })
+
+  it("exportHistory() asks for format=csv with the filters and returns the text", async () => {
+    const csv = "at,kind\r\n2026-10-26T16:07:00.000Z,usage\r\n"
+    const fetchMock = vi.fn().mockReturnValueOnce(Promise.resolve({ ok: true, status: 200, text: async () => csv } as unknown as Response))
+    const client = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    expect(await client.credits.exportHistory({ kind: "purchase", to: "2026-10-31T23:59:59Z" })).toBe(csv)
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(Object.fromEntries(url.searchParams)).toEqual({ kind: "purchase", to: "2026-10-31T23:59:59Z", format: "csv" })
   })
 })
 
