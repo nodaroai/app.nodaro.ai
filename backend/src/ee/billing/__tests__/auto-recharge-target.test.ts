@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * Who a reservation may auto-recharge — `autoRechargeTargetFor` is the ONE
  * place that decides, and every reserve site must ask it. What these pin:
