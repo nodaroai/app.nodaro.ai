@@ -17,7 +17,7 @@ import { refuseIfConsentPending } from "../lib/consent-gate.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
-import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
+import { isInAppSession, resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
@@ -382,12 +382,18 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // the forwarded workspace header is the decision. The execution ROW
     // carries the pair (W7) and the payload carries the context; workers
     // read, never re-resolve.
-    const billingContext = await resolveBillingContext({
-      userId: req.userId,
-      workflowId,
-      explicitWorkspaceId: req.workspaceId,
-      internal: req.authKind === "internal",
-    })
+    // `inAppSession` only matters on a deployment-payer instance: a run started
+    // from the product may let the payer's auto-recharge fire; one started
+    // with an API token, an OAuth app or the MCP loopback never does.
+    const billingContext = await resolveBillingContext(
+      {
+        userId: req.userId,
+        workflowId,
+        explicitWorkspaceId: req.workspaceId,
+        internal: req.authKind === "internal",
+      },
+      { inAppSession: isInAppSession(req) },
+    )
     // P14: a DEGRADED resolve on WORKSPACE-HOMED work refuses rather than
     // silently billing the member's pocket for class work. Retryable.
     if (shouldRefuseDegradedRun(billingContext, accessFacts.workspace_id)) {

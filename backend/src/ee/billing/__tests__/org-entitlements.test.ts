@@ -59,7 +59,8 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
-vi.mock("../auto-recharge.js", () => ({
+vi.mock("../auto-recharge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../auto-recharge.js")>()),
   attemptAutoRecharge: mockAttemptAutoRecharge,
 }))
 

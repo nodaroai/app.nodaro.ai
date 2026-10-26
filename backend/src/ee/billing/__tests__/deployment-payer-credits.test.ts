@@ -3,8 +3,9 @@
  * the debit user becomes the PAYER account (`p_user_id`) while the
  * positional requester keeps the job; the requester is stamped into
  * `usage_logs.on_behalf_of` — and, since Track A, by the RPC's OWN insert
- * rather than by a second statement afterwards (D5); auto-recharge never
- * fires for a deployment payer (prepaid-only); the ledger row is payer-keyed;
+ * rather than by a second statement afterwards (D5); auto-recharge fires for
+ * the PAYER account and only for in-app work (`autoRecharge: true`), never
+ * for the requester; the ledger row is payer-keyed;
  * and — the merge condition — a call WITHOUT a deployment context is
  * byte-identical to pre-payer behavior.
  *
@@ -83,7 +84,10 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false,
   hasAdmin: () => true,
 }))
-vi.mock("../auto-recharge.js", () => ({ attemptAutoRecharge: mockAutoRecharge }))
+vi.mock("../auto-recharge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../auto-recharge.js")>()),
+  attemptAutoRecharge: mockAutoRecharge,
+}))
 // The enforcement switch is boot state in the real module; here it is a dial,
 // so a single test can prove attribution-without-enforcement (the step-3
 // window) and enforcement-on independently.
@@ -257,9 +261,27 @@ describe("reserveCredits under a deployment payer", () => {
     expect(mockInvalidate).toHaveBeenCalledWith(REQUESTER)
   })
 
-  it("NEVER auto-recharges a deployment payer — prepaid-only, no card to pump", async () => {
+  it("never auto-recharges for work without the in-app stamp (API token, trigger, loopback)", async () => {
     mockRpc.mockResolvedValueOnce({ data: "log-1", error: null })
     await CreditsService.reserveCredits(REQUESTER, "job-1", "flux", 0.05, 0.0625, { billingContext: DEP_CTX })
+    expect(mockAutoRecharge).not.toHaveBeenCalled()
+  })
+
+  it("in-app work auto-recharges the PAYER account — never the requester", async () => {
+    mockRpc.mockResolvedValueOnce({ data: "log-1", error: null })
+    await CreditsService.reserveCredits(REQUESTER, "job-1", "flux", 0.05, 0.0625, {
+      billingContext: { ...DEP_CTX, autoRecharge: true },
+    })
+    expect(mockAutoRecharge).toHaveBeenCalledTimes(1)
+    expect(mockAutoRecharge).toHaveBeenCalledWith(PAYER)
+  })
+
+  it("a third-party app's work never auto-recharges the payer, even when stamped", async () => {
+    mockRpc.mockResolvedValueOnce({ data: "log-1", error: null })
+    await CreditsService.reserveCredits(REQUESTER, "job-1", "flux", 0.05, 0.0625, {
+      billingContext: { ...DEP_CTX, autoRecharge: true },
+      skipAutoRecharge: true,
+    })
     expect(mockAutoRecharge).not.toHaveBeenCalled()
   })
 

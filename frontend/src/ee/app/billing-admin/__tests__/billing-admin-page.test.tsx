@@ -131,6 +131,7 @@ const refresh = vi.fn()
 const thresholdMutate = vi.fn()
 const balanceRefetch = vi.fn()
 const mintMutate = vi.fn()
+const autoRechargeMutate = vi.fn()
 const mintReset = vi.fn()
 const revokeMutate = vi.fn()
 
@@ -162,6 +163,15 @@ const state = {
   /** The keys list in flight — the window in which a history row knows a
    *  credential id it cannot yet name. */
   keysLoading: false,
+  /** The billing account's own auto-recharge settings (stock route). */
+  autoRecharge: {
+    enabled: false,
+    thresholdCredits: null as number | null,
+    amountUsd: null as number | null,
+    failureCount: 0,
+    lastAttemptAt: null as string | null,
+    hasSavedCard: true,
+  },
 }
 
 vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
@@ -222,6 +232,8 @@ vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
     useSetDefaultAllowanceMutation: () => ({ mutate: defaultMutate, isPending: false }),
     useDeploymentCheckoutMutation: () => ({ mutate: checkoutMutate, isPending: false }),
     useDeploymentBillingRefresh: () => refresh,
+    usePayerAutoRecharge: () => ({ data: state.autoRecharge, isLoading: false, isError: false }),
+    useSetPayerAutoRechargeMutation: () => ({ mutate: autoRechargeMutate, isPending: false, isError: false }),
   }
 })
 
@@ -258,6 +270,14 @@ beforeEach(() => {
   state.balanceFailed = false
   state.keys = integrationKeys
   state.keysLoading = false
+  state.autoRecharge = {
+    enabled: false,
+    thresholdCredits: null,
+    amountUsd: null,
+    failureCount: 0,
+    lastAttemptAt: null,
+    hasSavedCard: true,
+  }
   useLocaleStore.setState({ locale: "he" })
 })
 
@@ -887,6 +907,68 @@ describe("the Integrations block is on the page", () => {
   it("mounts it — the keys are mintable nowhere else", () => {
     renderPage()
     expect(screen.getByTestId("integrations-block")).toBeInTheDocument()
+  })
+})
+
+describe("auto top-up — the billing account's card refill", () => {
+  it("is on the page, beside the card purchase", () => {
+    renderPage()
+    expect(screen.getByTestId("auto-recharge-block")).toBeInTheDocument()
+  })
+
+  it("turning it on sends the threshold in RAW credits and the amount in dollars", () => {
+    renderPage()
+    fireEvent.click(screen.getByTestId("auto-recharge-enabled"))
+    fireEvent.change(screen.getByTestId("auto-recharge-threshold"), { target: { value: "5000" } })
+    fireEvent.change(screen.getByTestId("auto-recharge-amount"), { target: { value: "50" } })
+    fireEvent.click(screen.getByTestId("auto-recharge-save"))
+    expect(autoRechargeMutate).toHaveBeenCalledWith({ enabled: true, thresholdCredits: 5000, amountUsd: 50 })
+  })
+
+  it("refuses to turn on with an out-of-range value, client-side", () => {
+    renderPage()
+    fireEvent.click(screen.getByTestId("auto-recharge-enabled"))
+    fireEvent.change(screen.getByTestId("auto-recharge-threshold"), { target: { value: "50" } })
+    fireEvent.change(screen.getByTestId("auto-recharge-amount"), { target: { value: "50" } })
+    fireEvent.click(screen.getByTestId("auto-recharge-save"))
+    expect(autoRechargeMutate).not.toHaveBeenCalled()
+  })
+
+  it("turning it off needs no values", () => {
+    state.autoRecharge = { ...state.autoRecharge, enabled: true }
+    renderPage()
+    fireEvent.click(screen.getByTestId("auto-recharge-enabled"))
+    fireEvent.change(screen.getByTestId("auto-recharge-threshold"), { target: { value: "" } })
+    fireEvent.click(screen.getByTestId("auto-recharge-save"))
+    expect(autoRechargeMutate).toHaveBeenCalledWith({ enabled: false })
+  })
+
+  it("is disabled while card payment is not configured on the server", () => {
+    state.overview = { ...overview, stripeConfigured: false }
+    renderPage()
+    expect(screen.getByTestId("auto-recharge-save")).toBeDisabled()
+    expect(screen.getByTestId("auto-recharge-enabled")).toBeDisabled()
+  })
+})
+
+describe("the Integrations block mints read-only keys", () => {
+  it("sends readOnly only when the box is ticked", () => {
+    renderPage()
+    fireEvent.change(screen.getByTestId("integration-name"), { target: { value: "Nodaro admin" } })
+    fireEvent.click(screen.getByTestId("integration-read-only"))
+    fireEvent.click(screen.getByTestId("integration-mint"))
+    expect(mintMutate).toHaveBeenCalledWith({ name: "Nodaro admin", readOnly: true }, expect.anything())
+
+    mintMutate.mockClear()
+    fireEvent.click(screen.getByTestId("integration-read-only"))
+    fireEvent.click(screen.getByTestId("integration-mint"))
+    expect(mintMutate).toHaveBeenCalledWith({ name: "Nodaro admin" }, expect.anything())
+  })
+
+  it("badges a read-only key in the list", () => {
+    state.keys = [{ ...integrationKeys[0]!, readOnly: true }]
+    renderPage()
+    expect(screen.getByTestId(`integration-key-read-only-${integrationKeys[0]!.id}`)).toBeInTheDocument()
   })
 })
 

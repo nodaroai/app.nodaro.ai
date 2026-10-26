@@ -2,7 +2,8 @@
  * The billing integration key — a machine credential for the deployment's
  * billing surface, and the ONLY module that names its table.
  *
- * Shape: `ndr_bill_<64 hex>`. Resolved by the auth hook (`middleware/auth.ts`)
+ * Shape: `ndr_bill_<64 hex>`, or `ndr_bill_ro_<64 hex>` for a READ-ONLY key
+ * (see `BILLING_KEY_READ_ONLY_PREFIX`). Resolved by the auth hook (`middleware/auth.ts`)
  * in a branch that runs BEFORE the personal-token branch, because `ndr_bill_`
  * also starts with `ndr_`, and only while a deployment payer is configured — so
  * on mainline the prefix is unknown and the bearer is refused by the ordinary
@@ -42,9 +43,27 @@ import { supabase } from "./supabase.js"
 
 export const BILLING_KEY_PREFIX = "ndr_bill_"
 
-/** First 12 characters of a bearer: `ndr_bill_` plus three hex. Enough to name
- *  a key on the page and in an audit line; far too little to reconstruct one. */
-const PREFIX_CHARS = 12
+/**
+ * A READ-ONLY key: may only GET/HEAD the billing surface (the auth hook refuses
+ * every other verb). Its kind lives in the bearer itself and in the stored
+ * `token_prefix` — like a restricted vs a secret key elsewhere — so it needs no
+ * column: the prefix is written once at mint and never updated, and it is
+ * unambiguous because `r` is not a hex digit, so no full key's prefix
+ * (`ndr_bill_` + hex) can start with `ndr_bill_ro_`. It still starts with
+ * `ndr_bill_`, so the hook's existing branch is the one that resolves it.
+ */
+export const BILLING_KEY_READ_ONLY_PREFIX = "ndr_bill_ro_"
+
+/** First 12 characters of a full bearer: `ndr_bill_` plus three hex. Enough to
+ *  name a key on the page and in an audit line; far too little to reconstruct
+ *  one. A read-only bearer keeps the same three hex after its longer kind tag
+ *  (15 characters), so read-only keys stay as distinguishable as full ones. */
+const PREFIX_HEX_CHARS = 3
+
+/** Whether a stored `token_prefix` (or a bearer) names a read-only key. */
+export function isReadOnlyBillingKeyPrefix(prefix: string): boolean {
+  return prefix.startsWith(BILLING_KEY_READ_ONLY_PREFIX)
+}
 
 const TABLE = "deployment_integration_keys"
 
@@ -63,6 +82,8 @@ export const MAX_LIVE_BILLING_KEYS = 5
 export interface ResolvedBillingKey {
   id: string
   name: string
+  /** From the stored `token_prefix` — never from anything the caller sends. */
+  readOnly: boolean
   /** Canonical CIDR strings; null means "any source". */
   allowedCidrs: string[] | null
   expiresAt: string | null
@@ -100,7 +121,8 @@ export function hashBillingKey(plaintext: string): string {
 }
 
 export function billingKeyPrefix(plaintext: string): string {
-  return plaintext.slice(0, PREFIX_CHARS)
+  const kind = isReadOnlyBillingKeyPrefix(plaintext) ? BILLING_KEY_READ_ONLY_PREFIX : BILLING_KEY_PREFIX
+  return plaintext.slice(0, kind.length + PREFIX_HEX_CHARS)
 }
 
 /** Forget one key, so the next request re-reads it. Called by the revoke route
@@ -300,6 +322,7 @@ export async function resolveBillingKey(token: string): Promise<ResolvedBillingK
   const resolved: ResolvedBillingKey = {
     id: row.id,
     name: row.name,
+    readOnly: isReadOnlyBillingKeyPrefix(row.token_prefix),
     allowedCidrs: row.allowed_cidrs ?? null,
     expiresAt: row.expires_at ?? null,
   }
@@ -343,8 +366,11 @@ export async function mintBillingKey(input: {
   expiresAt: string | null
   allowedCidrs: string[] | null
   createdBy: string
+  /** Mint a read-only key (`ndr_bill_ro_…`). Fixed for the key's life. */
+  readOnly?: boolean
 }): Promise<MintBillingKeyResult> {
-  const token = BILLING_KEY_PREFIX + randomBytes(32).toString("hex")
+  const kind = input.readOnly === true ? BILLING_KEY_READ_ONLY_PREFIX : BILLING_KEY_PREFIX
+  const token = kind + randomBytes(32).toString("hex")
   const { data, error } = await supabase
     .from(TABLE)
     .insert({

@@ -23,12 +23,87 @@
  *
  * Kill switch: `AUTO_RECHARGE_ENABLED` env (default off). Webhook
  * provisioning stays on regardless so in-flight PaymentIntents settle.
+ *
+ * Which account a reservation may recharge is decided ONLY by
+ * `autoRechargeTargetFor` below — every reserve site asks it rather than
+ * deciding inline (guarded by auto-recharge-sites.test.ts).
  */
 
 import { supabase } from "../../lib/supabase.js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import { config } from "../../lib/config.js"
 import { getStripe } from "./stripe-client.js"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "./load-rate.js"
+
+/**
+ * The account a successful reservation may auto-recharge, or null for none.
+ *
+ * - PERSONAL payer: the requester — their own balance dropped, their own card.
+ * - WORKSPACE payer: never. The member's personal balance did not move, and
+ *   class work must never charge a member's saved card.
+ * - DEPLOYMENT payer: the payer account — the balance that dropped is the
+ *   payer's — but ONLY when the context carries `autoRecharge: true`, which
+ *   the resolve point stamps for an in-app session alone (JWT, no third-party
+ *   app). Fail-closed: API tokens, webhook / schedule / telegram triggers,
+ *   internal loopbacks and every lane that never learns how the work was
+ *   started carry no stamp, so no unscoped credential can drive the payer's
+ *   card. A balance such traffic lowers still recharges on the next in-app
+ *   reservation — the threshold check reads the balance, not who spent it.
+ */
+export function autoRechargeTargetFor(requesterId: string, ctx: BillingContext | undefined): string | null {
+  if (ctx?.payer === "workspace") return null
+  if (ctx?.payer === "deployment") return ctx.autoRecharge === true ? ctx.payerId : null
+  return requesterId
+}
+
+/** Read-only auto-recharge status for one account (billing surfaces). */
+export interface AutoRechargeStatus {
+  /** The account's own switch. */
+  enabled: boolean
+  /** Whether a charge can actually fire now: the account's switch, the
+   *  instance kill switch, a complete config and fewer than 3 failures. */
+  active: boolean
+  thresholdCredits: number | null
+  amountUsd: number | null
+  failureCount: number
+  lastAttemptAt: string | null
+}
+
+/**
+ * The status as `attemptAutoRecharge` would see it. A FAILED READ ANSWERS
+ * NULL — "unknown right now", never "off": a status line on top of a balance
+ * must not take the balance down with it.
+ */
+export async function readAutoRechargeStatus(userId: string): Promise<AutoRechargeStatus | null> {
+  const { data: p, error } = await supabase
+    .from("profiles")
+    .select(
+      "auto_recharge_enabled, auto_recharge_threshold_credits, auto_recharge_amount_usd, auto_recharge_failure_count, auto_recharge_last_attempt_at"
+    )
+    .eq("id", userId)
+    .maybeSingle()
+  if (error || !p) {
+    if (error) console.error("[auto-recharge] status read failed:", userId, error.message)
+    return null
+  }
+  const enabled = p.auto_recharge_enabled === true
+  const thresholdCredits = typeof p.auto_recharge_threshold_credits === "number" ? p.auto_recharge_threshold_credits : null
+  const amountUsd = typeof p.auto_recharge_amount_usd === "number" ? p.auto_recharge_amount_usd : null
+  const failureCount = p.auto_recharge_failure_count ?? 0
+  return {
+    enabled,
+    active:
+      enabled &&
+      config.AUTO_RECHARGE_ENABLED === true &&
+      thresholdCredits !== null &&
+      amountUsd !== null &&
+      failureCount < 3,
+    thresholdCredits,
+    amountUsd,
+    failureCount,
+    lastAttemptAt: p.auto_recharge_last_attempt_at ?? null,
+  }
+}
 
 export async function attemptAutoRecharge(userId: string): Promise<void> {
   try {

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockAttemptAutoRecharge = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
-vi.mock("../../billing/auto-recharge.js", () => ({ attemptAutoRecharge: mockAttemptAutoRecharge }))
+vi.mock("../../billing/auto-recharge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../billing/auto-recharge.js")>()),
+  attemptAutoRecharge: mockAttemptAutoRecharge,
+}))
 import {
   estimateUpfrontCredits,
   resolveMaxCostCredits,
@@ -349,6 +352,34 @@ describe("reservePipelineCredits — P14 workspace payer", () => {
       credits: 30,
     })
     expect(mockAttemptAutoRecharge).toHaveBeenCalledTimes(1)
+  })
+
+  it("a deployment payer recharges the PAYER, and only for in-app (stamped) work", async () => {
+    const DEP = {
+      payer: "deployment" as const,
+      userId: "u1",
+      payerId: "payer-1",
+      entitlements: { watermark: false as const, dailyCapCredits: null, parallelism: 4, tierForGates: "basic" as const },
+    }
+    mockAttemptAutoRecharge.mockClear()
+    await reservePipelineCredits({
+      supabase: makeSupabaseMock({ data: "log-1" }) as never,
+      userId: "u1",
+      pipelineId: "p1",
+      credits: 30,
+      billingContext: DEP,
+    })
+    expect(mockAttemptAutoRecharge).not.toHaveBeenCalled()
+
+    await reservePipelineCredits({
+      supabase: makeSupabaseMock({ data: "log-2" }) as never,
+      userId: "u1",
+      pipelineId: "p1",
+      credits: 30,
+      billingContext: { ...DEP, autoRecharge: true as const },
+    })
+    expect(mockAttemptAutoRecharge).toHaveBeenCalledTimes(1)
+    expect(mockAttemptAutoRecharge).toHaveBeenCalledWith("payer-1")
   })
 
   it("a personal reserve's wire shape is byte-identical — no p_workspace_id key", async () => {

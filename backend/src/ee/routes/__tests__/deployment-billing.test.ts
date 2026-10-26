@@ -189,7 +189,7 @@ async function buildApp(): Promise<FastifyInstance> {
     // WITHOUT `req.billingKey` the widened `rejectProgrammaticAuth` branch is
     // never reached, and every assertion below would pass for the wrong reason
     // — the key would be indistinguishable from an ordinary browser session.
-    if (req.authKind === "billing_key") req.billingKey = { id: BILLING_KEY_ID, name: "back office" }
+    if (req.authKind === "billing_key") req.billingKey = { id: BILLING_KEY_ID, name: "back office", readOnly: false }
     // A programmatic credential that nonetheless carries authKind "jwt" — the
     // shape the guard alone would let through, and the reason every write verb
     // ALSO calls rejectProgrammaticAuth. The two live in different files, and

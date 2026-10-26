@@ -9,7 +9,7 @@ import { authorizeExternalReservation, deliverExternalWalletSettlements, externa
 // answer FALSE on a deployment with no `billing.payerAccount`, which is what
 // keeps every branch below inert there.
 import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
-import { attemptAutoRecharge } from "./auto-recharge.js"
+import { attemptAutoRecharge, autoRechargeTargetFor } from "./auto-recharge.js"
 import { applyOrgEntitlements } from "./org-entitlements.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
@@ -2682,7 +2682,8 @@ export class CreditsService {
       // Returning here prevents the legacy post-RPC writes from duplicating it.
       if (pricing.creditCost > 0) await authorizeExternalReservation(result.usageLogId, userId)
       if (dep) await invalidateRequesterBalance(userId)
-      if (!result.replayed && !options.skipAutoRecharge && !ws && !dep) void attemptAutoRecharge(userId)
+      const rechargeTarget = autoRechargeTargetFor(userId, options.billingContext)
+      if (!result.replayed && !options.skipAutoRecharge && rechargeTarget) void attemptAutoRecharge(rechargeTarget)
       return { usageLogId: result.usageLogId, creditsReserved: pricing.creditCost, watermark: result.watermark }
     }
     const usageLogId = reserveData
@@ -2777,13 +2778,13 @@ export class CreditsService {
 
     // Successful reserve = the only place balances DECREASE — fire the
     // auto-recharge check (best-effort, never blocks). Third-party-app
-    // attributed operations are excluded via skipAutoRecharge. A WORKSPACE
-    // payer is excluded as an invariant, not a call-site flag: the member's
-    // personal balance did not move, and class work must never charge a
-    // member's saved card. A DEPLOYMENT payer is excluded the same way —
-    // prepaid-only by contract; the payer account must never pump a card.
-    if (!options?.skipAutoRecharge && !ws && !dep) {
-      void attemptAutoRecharge(userId)
+    // attributed operations are excluded via skipAutoRecharge. WHICH account
+    // may be recharged (none for a workspace payer; the payer account, and
+    // only for in-app work, for a deployment payer) is autoRechargeTargetFor's
+    // invariant, not a call-site decision.
+    const rechargeTarget = autoRechargeTargetFor(userId, options?.billingContext)
+    if (!options?.skipAutoRecharge && rechargeTarget) {
+      void attemptAutoRecharge(rechargeTarget)
     }
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }
   }

@@ -139,6 +139,8 @@ beforeEach(async () => {
       req.userId = header
       req.userRole = undefined
     }
+    const kind = req.headers["x-auth-kind"]
+    if (typeof kind === "string") req.authKind = kind as typeof req.authKind
   })
 
   await app.register(async (instance) => {
@@ -156,11 +158,11 @@ afterEach(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function authedPost(url: string, payload: Record<string, unknown> = {}) {
+function authedPost(url: string, payload: Record<string, unknown> = {}, authKind?: string) {
   return app.inject({
     method: "POST",
     url,
-    headers: { "x-user-id": TEST_USER_ID },
+    headers: { "x-user-id": TEST_USER_ID, ...(authKind ? { "x-auth-kind": authKind } : {}) },
     payload,
   })
 }
@@ -295,7 +297,12 @@ describe("POST /v1/workflows/:id/run", () => {
     expect(res.json().executionId).toBe(TEST_EXEC_ID)
   })
 
-  it("returns 202 on success and enqueues orchestration job", async () => {
+  it.each([
+    [undefined, false],
+    ["jwt", true],
+    ["api_token", false],
+    ["app_token", false],
+  ] as const)("returns 202 on success and enqueues orchestration job (auth: %s)", async (authKind, inAppSession) => {
     const mockFrom = vi.mocked(supabase.from)
     // Starts at 1: the workflow lookup below is keyed by table, not by
     // position, so the first table that IS counted is the second step.
@@ -357,7 +364,7 @@ describe("POST /v1/workflows/:id/run", () => {
       } as never
     })
 
-    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`)
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {}, authKind)
     expect(res.statusCode).toBe(202)
     expect(res.json().executionId).toBe(TEST_EXEC_ID)
     expect(res.json().status).toBe("pending")
@@ -377,12 +384,17 @@ describe("POST /v1/workflows/:id/run", () => {
       }),
       expect.objectContaining({ jobId: TEST_EXEC_ID }),
     )
-    expect(mockResolveBillingContext).toHaveBeenCalledWith({
-      userId: TEST_USER_ID,
-      workflowId: TEST_WORKFLOW_ID,
-      explicitWorkspaceId: undefined,
-      internal: false,
-    })
+    // Only a session JWT is an in-app run: on a deployment-payer instance
+    // that is the one kind of run that may trigger the payer's auto top-up.
+    expect(mockResolveBillingContext).toHaveBeenCalledWith(
+      {
+        userId: TEST_USER_ID,
+        workflowId: TEST_WORKFLOW_ID,
+        explicitWorkspaceId: undefined,
+        internal: false,
+      },
+      { inAppSession },
+    )
   })
 
   it("P14: a DEGRADED resolve on WORKSPACE-HOMED work refuses 503 — never silently personal", async () => {

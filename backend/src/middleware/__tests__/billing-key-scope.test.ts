@@ -199,7 +199,7 @@ const FORBIDDEN: ReadonlyArray<{ method: "GET" | "POST"; url: string }> = [
 let app: FastifyInstance
 let handlers: Map<string, ReturnType<typeof vi.fn>>
 /** What the auth hook left on each request that actually reached a handler. */
-let seen: Array<{ url: string; authKind?: string; billingKey?: { id: string; name: string } }>
+let seen: Array<{ url: string; authKind?: string; billingKey?: { id: string; name: string; readOnly: boolean } }>
 
 async function buildApp(): Promise<FastifyInstance> {
   const instance = Fastify({ logger: false })
@@ -299,7 +299,7 @@ describe("the billing surface", () => {
     expect(res.statusCode).toBe(200)
     const passed = seen.find((s) => s.url.startsWith("/v1/deployment-billing/overview"))
     expect(passed?.authKind).toBe("billing_key")
-    expect(passed?.billingKey).toEqual({ id: KEY_ID, name: "Back office" })
+    expect(passed?.billingKey).toEqual({ id: KEY_ID, name: "Back office", readOnly: false })
   })
 
   it("stamps the request as the PAYER, so the identity guard passes", async () => {
@@ -309,6 +309,62 @@ describe("the billing surface", () => {
     // `requireDeploymentPayer` 403s anything whose userId is not the payer, so
     // a 200 IS the identity assertion.
     expect(res.statusCode).toBe(200)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2b. A READ-ONLY key reads the surface and writes nothing on it
+// ---------------------------------------------------------------------------
+
+describe("a read-only key (ndr_bill_ro_…)", () => {
+  const AS_RO_KEY = { authorization: `Bearer ndr_bill_ro_${"c".repeat(64)}` }
+  const roKey = () => liveKey({ token_prefix: "ndr_bill_ro_ccc" })
+
+  it("reads: GET /balance answers 200 and the request is stamped read-only", async () => {
+    payerDeployment()
+    roKey()
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_RO_KEY })
+    expect(res.statusCode).toBe(200)
+    const passed = seen.find((s) => s.url.startsWith("/v1/deployment-billing/balance"))
+    expect(passed?.billingKey).toEqual({ id: KEY_ID, name: "Back office", readOnly: true })
+  })
+
+  it("every non-GET verb is refused BEFORE any handler — billing_key_read_only", async () => {
+    payerDeployment()
+    for (const r of [
+      { method: "PUT" as const, url: "/v1/deployment-billing/balance/threshold", payload: { credits: 1 } },
+      { method: "PUT" as const, url: "/v1/deployment-billing/default-allowance", payload: { units: 1 } },
+      { method: "POST" as const, url: `/v1/deployment-billing/users/${PAYER}/grant`, payload: { units: 1 } },
+      { method: "PUT" as const, url: `/v1/deployment-billing/users/${PAYER}/allowance`, payload: {} },
+      { method: "DELETE" as const, url: `/v1/deployment-billing/integration-keys/${KEY_ID}`, payload: undefined },
+    ]) {
+      roKey()
+      const res = await app.inject({ method: r.method, url: r.url, headers: AS_RO_KEY, payload: r.payload })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
+      expect(res.json().error.code, `${r.method} ${r.url}`).toBe("billing_key_read_only")
+    }
+    expect(seen).toHaveLength(0)
+    expect(rec.writes).toHaveLength(0)
+  })
+
+  it("the path allow-list still applies — a read-only key is no wider than a full one", async () => {
+    payerDeployment()
+    roKey()
+    const res = await app.inject({ method: "GET", url: "/v1/user/credits", headers: AS_RO_KEY })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("billing_key_scope")
+  })
+
+  it("a FULL key keeps its write verbs (the refusal is the read-only kind, not the verb)", async () => {
+    payerDeployment()
+    liveKey()
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_KEY,
+      payload: { credits: 1 },
+    })
+    expect(res.json().error?.code).not.toBe("billing_key_read_only")
   })
 })
 

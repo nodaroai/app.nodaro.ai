@@ -4,7 +4,7 @@ import type { BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
 // Track A: the step-8 enforcement flip (see pipelines/credits.ts).
 import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
-import { attemptAutoRecharge } from "../billing/auto-recharge.js"
+import { attemptAutoRecharge, autoRechargeTargetFor } from "../billing/auto-recharge.js"
 import { creditsToUsd } from "@nodaro/shared"
 import type { SceneHelperName } from "@nodaro/shared"
 import {
@@ -123,10 +123,10 @@ export async function reserveHelperCredits(
   }
   // Reserve succeeded — balance dropped; auto-recharge check (fire-and-
   // forget, never blocks the pipeline). Covers the direct-RPC reserve lane
-  // the CreditsService hook can't see (audit F2.2). NEVER for a workspace
-  // payer — class work must not pump a member's saved card. NEVER for a
-  // deployment payer — prepaid-only, no card to pump.
-  if (!ws && !dep) void attemptAutoRecharge(args.userId)
+  // the CreditsService hook can't see (audit F2.2). The target is
+  // autoRechargeTargetFor's invariant (see ee/billing/auto-recharge.ts).
+  const rechargeTarget = autoRechargeTargetFor(args.userId, args.billingContext)
+  if (rechargeTarget) void attemptAutoRecharge(rechargeTarget)
   // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5) —
   // migration 382's reserve writes the column in its own INSERT.
   return { ok: true, usageLogId: usageLogId as string }
