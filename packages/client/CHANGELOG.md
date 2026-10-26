@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.49.0
+
+### Minor Changes
+
+- ba1c2c3: Factory preset pictures come in two sizes: the tile picture (512px wide, `previewUrl`) and a full-screen one (1024px wide). `GET /v1/node-presets/factory` entries carry `previewSrcSet` — both with their widths, ready for an `<img srcset>` — when the preset has both files; `FactoryPresetEntry.previewSrcSet` in the SDK. `@nodaro/prompts/presets` exports the large file map (`FACTORY_PRESET_PREVIEW_LARGE_FILES`), `factoryPresetPreviewSrcSet` and the two widths.
+- f99913b: A job's `credits_charged` now includes the steps it ran (the child jobs a run such as Nodaro Motion makes for its reference preparation, mask and video), and jobs carry `credits_held` (the run's hold, its steps' included) and `credits_released` (what went back once every hold in the run settled). A trend run's `creditsCharged` includes its steps the same way, beside `creditsHeld` and `creditsReleased`.
+
+### Patch Changes
+
+- Updated dependencies [ba1c2c3]
+  - @nodaro/prompts@1.44.0
+
 ## 2.48.0
 
 ### Minor Changes
