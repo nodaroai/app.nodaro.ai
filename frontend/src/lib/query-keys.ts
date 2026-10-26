@@ -398,6 +398,7 @@ export const queryKeys = {
       ["admin", "app-reports", "list", offset, kind, appSlug, status, userFilter] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
+    hostedDeployments: () => ["admin", "hosted-deployments"] as const,
     siteAnalytics: (days: number) =>
       ["admin", "site-analytics", days] as const,
     siteAnalyticsInspection: (url: string) =>
