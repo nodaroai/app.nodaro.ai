@@ -12,7 +12,8 @@
  * required slot, pictures for every slot in every example (a trend may have
  * no example at all: it shows only its original), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
- * the user's details (`promptBudget`). And the Cast Swap engine of EVERY
+ * the user's details (`promptBudget`), the 4 s preview's own too when the
+ * trend offers one (`promptModesOf`). And the Cast Swap engine of EVERY
  * environment in `TREND_PUBLISH_ENVIRONMENTS` must support it: the slot kinds
  * it uses, fixed references when it has some, face masking when it masks
  * (mode not "off"), a trend pre prompt when it has one, the trend's video
@@ -42,7 +43,8 @@ import {
 } from "@nodaro/shared/models"
 import { castSwapImagesSent } from "@nodaro/render-rules"
 import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
-import { promptBudget, TREND_DETAILS_MAX } from "./prompt-budget.js"
+import { promptBudget, promptModesOf, TREND_DETAILS_MAX } from "./prompt-budget.js"
+import { withPromptsFor } from "./prompt-parts.js"
 import { faceMaskHasMarks, faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
@@ -103,7 +105,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...(faceMaskHasMarks(data) ? ["storedFaceMaskRequired"] : []),
     // The head (the default) is every masking engine's: only the face alone is a need of its own.
     ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "face" ? [FACE_ONLY_NEED] : []),
-    ...(data.prePrompt ? ["trendPrePrompt"] : []),
+    // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
+    ...(promptModesOf(data).some((mode) => withPromptsFor(data, mode).prePrompt) ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? [engine] : []),
     ...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine],
@@ -157,19 +160,24 @@ export function publishBlockers(
     const issue = parsed.error.issues[0]
     out.push({ code: "invalid_data", message: issue ? `${issue.path.join(".") || "data"}: ${issue.message}` : "Invalid trend data." })
   }
-  const budget = promptBudget(data)
-  const trendLen = data.trendPrompt?.length ?? 0
-  if (trendLen > budget.trendPromptMax) {
-    out.push({
-      code: "prompt_budget",
-      message: `The trend prompt is ${trendLen} characters; with the user's details (up to ${TREND_DETAILS_MAX}) the most is ${budget.trendPromptMax}.`,
-    })
-  } else if (budget.room < 0) {
-    const kling = engineOf(data) === "kling-4" ? " on Kling 4" : ""
-    out.push({
-      code: "prompt_budget",
-      message: `The pre and trend prompts are ${(data.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most${kling} is ${Math.max(0, budget.promptsMax)}.`,
-    })
+  for (const mode of promptModesOf(data)) {
+    // The texts a run in this mode sends: the preview's own role names, reference lines and prompts where it has them.
+    const texts = withPromptsFor(data, mode)
+    const budget = promptBudget(texts)
+    const trendLen = texts.trendPrompt?.length ?? 0
+    const what = mode === "preview" ? "4 s preview: the" : "The"
+    if (trendLen > budget.trendPromptMax) {
+      out.push({
+        code: "prompt_budget",
+        message: `${what} trend prompt is ${trendLen} characters; with the user's details (up to ${TREND_DETAILS_MAX}) the most is ${budget.trendPromptMax}.`,
+      })
+    } else if (budget.room < 0) {
+      const kling = engineOf(data) === "kling-4" ? " on Kling 4" : ""
+      out.push({
+        code: "prompt_budget",
+        message: `${what} pre and trend prompts are ${(texts.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most${kling} is ${Math.max(0, budget.promptsMax)}.`,
+      })
+    }
   }
   // Kling 4 takes at most 10 images a run, as the route counts them: every slot filled to its 3,
   // a prepared one (person, pet, product: a trend run prepares) as one, plus the fixed references.

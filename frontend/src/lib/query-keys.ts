@@ -434,7 +434,9 @@ export const queryKeys = {
     trendTags: () => ["admin", "trends", "tags"] as const,
     trend: (id: string) => ["admin", "trends", "one", id] as const,
     trendTestRuns: (id: string) => ["admin", "trends", "one", id, "test-runs"] as const,
-    trendRunPrompt: (jobId: string) => ["admin", "trends", "run-prompt", jobId] as const,
+    /** Every run's "Show prompt" (its parts read the trend as saved: a draft save refreshes them). */
+    trendRunPrompts: () => ["admin", "trends", "run-prompt"] as const,
+    trendRunPrompt: (jobId: string, mode: "full" | "preview" | "run") => ["admin", "trends", "run-prompt", jobId, mode] as const,
     trendFaceMaskJob: (jobId: string) => ["admin", "trends", "face-mask-job", jobId] as const,
     trendUpscaleJob: (jobId: string) => ["admin", "trends", "upscale-job", jobId] as const,
     trendEngineEnvironments: () => ["admin", "trends", "engine-environments"] as const,

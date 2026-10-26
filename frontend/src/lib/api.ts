@@ -11060,6 +11060,8 @@ export interface AdminTrendSlot {
   hintImageUrl?: string
   /** Who this is in the source clip (hidden from users). */
   roleName: string
+  /** Who this is in the 4 s preview (hidden; ≤ 200). Empty or absent = `roleName`; only a preview run reads it. */
+  previewRoleName?: string
   /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
   defaults?: Partial<Record<TrendChipKey, TrendChoice>>
   /**
@@ -11073,6 +11075,8 @@ export interface AdminTrendSlot {
 export interface AdminTrendReference {
   images: string[]
   line: string
+  /** The line a 4 s preview run sends instead (hidden; ≤ 500). Empty or absent = `line`. */
+  previewLine?: string
 }
 
 export interface AdminTrendExample {
@@ -11213,6 +11217,10 @@ export interface AdminTrendData {
   trendPrompt?: string
   /** Placed at the start of every run's prompt (hidden from users). */
   prePrompt?: string
+  /** The trend prompt a 4 s preview run sends instead (hidden). Empty or absent = `trendPrompt`; kept while the trend offers no preview. */
+  previewTrendPrompt?: string
+  /** The pre prompt a 4 s preview run sends instead (hidden). Empty or absent = `prePrompt`. */
+  previewPrePrompt?: string
   faceMasking?: AdminTrendFaceMasking
   /** The approved face mask (hidden; written only by the face mask routes, kept by a draft save). */
   faceMask?: AdminTrendFaceMask
@@ -11557,10 +11565,44 @@ export async function startAdminTrendTestRun(id: string, body: TrendTestRunReque
   ).data
 }
 
-export async function fetchAdminTrendRunPrompt(jobId: string): Promise<{ prompt: string }> {
+/** Which run's prompt parts: the full clip's, or the 4 s preview's. */
+export type AdminTrendPromptMode = "full" | "preview"
+
+/** One prompt part as a run in a mode sends it; `fromFullRun`: the preview has no text of its own for it. */
+export interface AdminTrendPromptPart {
+  text: string
+  fromFullRun: boolean
+}
+
+/** A trend's hidden prompt parts as a run in `mode` sends them (admins only). */
+export interface AdminTrendPromptParts {
+  mode: AdminTrendPromptMode
+  prePrompt: AdminTrendPromptPart | null
+  roles: Array<{ key: string; label: string; kind: TrendSlotKind; roleName: AdminTrendPromptPart }>
+  references: Array<{ line: AdminTrendPromptPart }>
+  trendPrompt: AdminTrendPromptPart | null
+}
+
+/**
+ * "Show prompt" for one run, as a Full or 4 s preview run. `prompt`: what the
+ * engine was sent, only in the mode the run ran in (`runMode`), null before
+ * the engine has it. `parts`: the trend's prompt parts for `mode`, from the
+ * version the run used as it is saved now (null when that version is gone).
+ */
+export interface AdminTrendRunPrompt {
+  mode: AdminTrendPromptMode
+  runMode: AdminTrendPromptMode
+  prompt: string | null
+  previewOffered: boolean
+  parts: AdminTrendPromptParts | null
+}
+
+/** `mode` left out = the mode the run ran in. */
+export async function fetchAdminTrendRunPrompt(jobId: string, mode?: AdminTrendPromptMode): Promise<AdminTrendRunPrompt> {
+  const query = mode ? `?mode=${mode}` : ""
   return (
-    await apiRequest<{ data: { prompt: string } }>(
-      `${ADMIN_TRENDS}/test-runs/${encodeURIComponent(jobId)}/prompt`,
+    await apiRequest<{ data: AdminTrendRunPrompt }>(
+      `${ADMIN_TRENDS}/test-runs/${encodeURIComponent(jobId)}/prompt${query}`,
       "apiErr.loadTrends",
     )
   ).data

@@ -201,6 +201,26 @@ describe("trendVersionDataSchema", () => {
     expect(trendVersionDataSchema.safeParse(data({ trendPrompt: "a".repeat(3001) })).success).toBe(false)
   })
 
+  it("takes each prompt part's 4 s preview version under its full one's limit, empty allowed", () => {
+    const ok = (over: Record<string, unknown>) => trendVersionDataSchema.safeParse(data(over)).success
+    expect(ok({ previewTrendPrompt: "a".repeat(3000), previewPrePrompt: "b".repeat(3000) })).toBe(true)
+    expect(ok({ previewTrendPrompt: "a".repeat(3001) })).toBe(false)
+    expect(ok({ previewPrePrompt: "b".repeat(3001) })).toBe(false)
+    expect(ok({ previewTrendPrompt: "", previewPrePrompt: "" })).toBe(true)
+    expect(ok({ slots: [slot("dancer", "person", { previewRoleName: "r".repeat(200) })] })).toBe(true)
+    expect(ok({ slots: [slot("dancer", "person", { previewRoleName: "r".repeat(201) })] })).toBe(false)
+    expect(ok({ slots: [slot("room", "location", { previewRoleName: "" })] })).toBe(true)
+    const ref = (extra: Record<string, unknown>) => ({ images: [IMG], line: "the sign", ...extra })
+    expect(ok({ references: [ref({ previewLine: "l".repeat(500) })] })).toBe(true)
+    expect(ok({ references: [ref({ previewLine: "l".repeat(501) })] })).toBe(false)
+    expect(ok({ references: [ref({ previewLine: "" })] })).toBe(true)
+    // Kept while the trend offers no preview.
+    expect(ok({ previewStart: null, previewTrendPrompt: "kept" })).toBe(true)
+    // Strict still: a misspelt field is refused, never dropped.
+    expect(ok({ slots: [slot("dancer", "person", { previewRole: "x" })] })).toBe(false)
+    expect(ok({ references: [ref({ previewLines: "x" })] })).toBe(false)
+  })
+
   it("rejects an example naming a slot the trend does not have", () => {
     const example = {
       videoUrl: "https://cdn.example.com/ex.mp4", width: 720, height: 1280, durationSec: 10,

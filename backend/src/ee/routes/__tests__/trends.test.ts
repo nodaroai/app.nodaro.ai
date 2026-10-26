@@ -97,7 +97,15 @@ const REF_LINE = "HIDDEN-REF-LINE keep the neon sign"
 const PROMPT = "HIDDEN-PROMPT dance like nobody watches"
 const SOURCE_JOB = "HIDDEN-SOURCE-JOB-1"
 const PRE = "HIDDEN-PRE-PROMPT open on the stage"
-const HIDDEN = [SOURCE, ROLE, REF_IMAGE, REF_LINE, PROMPT, SOURCE_JOB, PRE, "roleName", "trendPrompt", "sourceJobId", "prePrompt", "faceMasking", "__"]
+/** The 4 s preview's own prompt parts: hidden like the full run's. */
+const PREVIEW_ROLE = "HIDDEN-PREVIEW-ROLE the woman"
+const PREVIEW_REF_LINE = "HIDDEN-PREVIEW-REF-LINE the sign"
+const PREVIEW_PROMPT = "HIDDEN-PREVIEW-PROMPT dance"
+const PREVIEW_PRE = "HIDDEN-PREVIEW-PRE on stage"
+const HIDDEN = [
+  SOURCE, ROLE, REF_IMAGE, REF_LINE, PROMPT, SOURCE_JOB, PRE, PREVIEW_ROLE, PREVIEW_REF_LINE, PREVIEW_PROMPT, PREVIEW_PRE,
+  "roleName", "trendPrompt", "sourceJobId", "prePrompt", "faceMasking", "previewRoleName", "previewLine", "previewTrendPrompt", "previewPrePrompt", "__",
+]
 /** The published trend's masking (hidden like the rest). */
 const MASKING = { mode: "auto" as const, fill: "depth" as const, minFaceHeightPct: 12, zone: { topPct: 4 }, threshold: 0.4 }
 
@@ -122,12 +130,14 @@ function versionData(over: Partial<TrendVersionData> = {}): TrendVersionData {
     source: { videoUrl: SOURCE, durationSec: 12, width: 720, height: 1280, display: DISPLAY },
     previewStart: 2,
     slots: [
-      { key: "lead", label: { en: "Lead dancer", he: "רקדנית" }, kind: "person", required: true, hint: { en: "A clear face" }, roleName: ROLE, defaults: { hair: "original" } },
+      { key: "lead", label: { en: "Lead dancer", he: "רקדנית" }, kind: "person", required: true, hint: { en: "A clear face" }, roleName: ROLE, previewRoleName: PREVIEW_ROLE, defaults: { hair: "original" } },
       { key: "place", label: { en: "Place" }, kind: "location", required: false, roleName: "HIDDEN-ROLE the street" },
     ],
-    references: [{ images: [REF_IMAGE], line: REF_LINE }],
+    references: [{ images: [REF_IMAGE], line: REF_LINE, previewLine: PREVIEW_REF_LINE }],
     trendPrompt: PROMPT,
     prePrompt: PRE,
+    previewTrendPrompt: PREVIEW_PROMPT,
+    previewPrePrompt: PREVIEW_PRE,
     faceMasking: MASKING,
     examples: [
       {
@@ -590,6 +600,34 @@ describe("POST /v1/trends/:slug/runs", () => {
     const [session] = db.log.filter((q) => q.table === "generation_sessions")
     expect(has(session!, "eq", "id", SESSION)).toBe(true)
     expect(has(session!, "eq", "user_id", USER)).toBe(true)
+  })
+
+  it("a 4 s preview run sends the preview's own prompt parts to the engine, and none of them back", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { ...RUN_BODY, preview: true } })
+    expect(res.statusCode).toBe(202)
+    expectNoHidden(res.body)
+    const body = engine.calls[0]!.body as { roles: Array<{ name: string }>; references: Array<{ line: string }>; prePrompt?: string; postPrompt?: string }
+    // The lead's preview role name; the place has none of its own, so it keeps its role name.
+    expect(body.roles.map((r) => r.name)).toEqual([PREVIEW_ROLE, "HIDDEN-ROLE the street"])
+    expect(body.references.map((r) => r.line)).toEqual([PREVIEW_REF_LINE])
+    expect(body.prePrompt).toBe(PREVIEW_PRE)
+    expect(body.postPrompt).toBe(PREVIEW_PROMPT)
+    expectNoHidden(JSON.stringify((body as { trendRun?: unknown }).trendRun))
+  })
+
+  it("a full run sends the full run's prompt parts only, even after a preview", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/trends/neon-dance/runs",
+      headers: as(),
+      payload: { ...RUN_BODY, resolution: "1080p", previewJobId: "00000000-0000-4000-8000-0000000000b9" },
+    })
+    expect(res.statusCode).toBe(202)
+    const body = engine.calls.at(-1)!.body as { roles: Array<{ name: string }>; references: Array<{ line: string }>; prePrompt?: string; postPrompt?: string }
+    expect(body.roles.map((r) => r.name)).toEqual([ROLE, "HIDDEN-ROLE the street"])
+    expect(body.references.map((r) => r.line)).toEqual([REF_LINE])
+    expect([body.prePrompt, body.postPrompt]).toEqual([PRE, PROMPT])
+    expect(JSON.stringify(body)).not.toContain("HIDDEN-PREVIEW")
   })
 
   it("a missing required slot is a 400 missing_slot naming the slot, with no dispatch", async () => {

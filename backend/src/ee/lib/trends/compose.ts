@@ -17,7 +17,14 @@
  * - `needs`: what the engine must support for this run.
  *
  * HIDDEN data (source, roleName, references, trendPrompt, prePrompt,
- * faceMasking) goes only into the engine's own fields, never into `display`.
+ * faceMasking, and their 4 s preview versions) goes only into the engine's
+ * own fields, never into `display`.
+ *
+ * A preview run (`preview: true`) sends the trend's preview prompt parts —
+ * each slot's `previewRoleName`, each reference's `previewLine`, the
+ * `previewPrePrompt` and `previewTrendPrompt` — each falling back to the full
+ * run's text when it has none (`withPromptsFor`, prompt-parts.ts). A full run
+ * sends the full run's texts only, a full run that follows a preview too.
  *
  * A masked trend whose approved face mask was made from these exact settings
  * (`storedFaceMaskFor`, face-mask.ts) also sends `storedFaceMask: { url,
@@ -55,6 +62,7 @@ import {
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
 import { faceMaskHasMarks, storedFaceMaskFor } from "./face-mask.js"
+import { withPromptsFor } from "./prompt-parts.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
@@ -225,6 +233,8 @@ export function composeTrendRun(
 ): ComposedTrendRun {
   const allowHiddenChips = options.allowHiddenChips === true
   const { data } = trend
+  // The prompt texts this run sends: a preview's own where it has them, else the full run's.
+  const texts = withPromptsFor(data, req.preview === true ? "preview" : "full")
 
   if (!data.source) throw new TrendRunError("source_missing", "This trend has no source clip yet.")
 
@@ -265,7 +275,7 @@ export function composeTrendRun(
 
   const slots: TrendRunDisplaySlot[] = []
   const roles: unknown[] = []
-  for (const slot of data.slots) {
+  for (const slot of texts.slots) {
     const entry = entryOf(req, slot.key)
     const own = entry?.images ?? []
     let images: string[]
@@ -304,7 +314,7 @@ export function composeTrendRun(
     if (i < 0) throw new TrendRunError("invalid_slot_mention", `Details mention an unknown slot "${key}".`, key)
     return `{role:${i + 1}}`
   })
-  const postPrompt = [data.trendPrompt, mapped].filter(Boolean).join("\n\n")
+  const postPrompt = [texts.trendPrompt, mapped].filter(Boolean).join("\n\n")
   if (postPrompt.length > CAST_SWAP_POST_PROMPT_MAX) {
     throw new TrendRunError(
       "prompt_too_long",
@@ -360,8 +370,8 @@ export function composeTrendRun(
   const body: TrendRunBody = {
     videoUrl: data.source.videoUrl,
     roles,
-    references: data.references.map((r) => ({ images: [...r.images], line: r.line })),
-    ...(data.prePrompt ? { prePrompt: data.prePrompt } : {}),
+    references: texts.references.map((r) => ({ images: [...r.images], line: r.line })),
+    ...(texts.prePrompt ? { prePrompt: texts.prePrompt } : {}),
     ...(postPrompt ? { postPrompt } : {}),
     // The zone resolved here (left out = the default margins), so the estimate and the run send
     // the margins the trend means. A run that follows its masked preview takes the preview's
@@ -388,7 +398,7 @@ export function composeTrendRun(
       faceMasking: masking !== undefined,
       faceMaskTarget: masking ? faceMaskTargetOf(masking) : null,
       storedFaceMask: faceMaskHasMarks(data),
-      trendPrePrompt: !!data.prePrompt,
+      trendPrePrompt: !!texts.prePrompt,
       engine,
     },
     maskingZoneLeftOut: masking !== undefined && masking.zone === undefined,

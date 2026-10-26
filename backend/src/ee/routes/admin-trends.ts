@@ -8,7 +8,7 @@
  *   GET    /v1/admin/trends/engine-environments      what each environment's engine supports
  *   GET    /v1/admin/trends/tags                     every tag in use or labelled, with its labels
  *   PUT    /v1/admin/trends/tags                     save one tag's labels ({ tag, labels }; none = clear)
- *   GET    /v1/admin/trends/test-runs/:jobId/prompt  the engine prompt a run used
+ *   GET    /v1/admin/trends/test-runs/:jobId/prompt  the engine prompt a run used, and the trend's prompt parts (admin-trends-prompt.ts; ?mode=full|preview)
  *   GET    /v1/admin/trends/:id                      the trend, its draft and published data
  *   PATCH  /v1/admin/trends/:id                      slug, tags, badges, sort order
  *   PUT    /v1/admin/trends/:id/draft                save the draft (examples kept)
@@ -92,7 +92,6 @@ import {
   outputVideo,
   relay,
   unavailableOrInternal,
-  str,
   toTrendRuns,
   type RunJobRow,
   type RunKeyset,
@@ -103,6 +102,7 @@ import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
 import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes, withMarksForSource } from "./admin-trends-face-mask.js"
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
+import { registerTrendPromptRoutes } from "./admin-trends-prompt.js"
 import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
@@ -471,24 +471,6 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
     }
   })
 
-  app.get("/v1/admin/trends/test-runs/:jobId/prompt", { preHandler: requireAdmin }, async (req, reply) => {
-    const { jobId } = req.params as { jobId: string }
-    try {
-      const run = await findTrendRun(jobId)
-      if (!run) return notFound(reply, "Run")
-      const childId = isRec(run.output_data) ? str(run.output_data.__castSwapChildJobId) : null
-      if (!childId) return err(reply, 404, "prompt_unavailable", "This run has no engine prompt yet.")
-      const { data, error } = await supabase.from("jobs").select("input_data").eq("id", childId).maybeSingle()
-      if (error) throw new Error(`Could not read job ${childId}: ${error.message}`)
-      const input = (data as { input_data?: unknown } | null)?.input_data
-      const prompt = isRec(input) ? str(input.prompt) : null
-      if (prompt === null) return err(reply, 404, "prompt_unavailable", "This run has no engine prompt yet.")
-      return { data: { prompt } }
-    } catch (e) {
-      return unavailableOrInternal(reply, req, e, "Failed to read the run's prompt")
-    }
-  })
-
   app.get("/v1/admin/trends/:id", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       const loaded = await loadDraft(req, reply)
@@ -820,6 +802,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   })
 
   registerTrendLifecycleRoutes(app, { findTrendRun })
+  registerTrendPromptRoutes(app, { findTrendRun, badRequest })
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

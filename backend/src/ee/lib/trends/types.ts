@@ -8,8 +8,10 @@
  * see a trend's published version.
  *
  * HIDDEN: the uploaded `source` clip (its `videoUrl`, length and size),
- * `TrendSlot.roleName`, `references`, `trendPrompt`, `prePrompt`,
- * `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs` and `klingLength` never leave the server — public responses
+ * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
+ * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
+ * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`
+ * and `klingLength` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -51,6 +53,12 @@ interface TrendSlotBase {
   hintImageUrl?: string
   /** HIDDEN. Who this is in the source clip, e.g. "the woman on the left" (1–200). */
   roleName: string
+  /**
+   * HIDDEN. Who this is in the 4 s preview, when the preview needs other words
+   * (≤ 200). Empty or absent = `roleName`. Read only by a preview run
+   * (prompt-parts.ts); a full run never does.
+   */
+  previewRoleName?: string
 }
 
 /**
@@ -64,8 +72,12 @@ export type TrendSlot =
   | (TrendSlotBase & { kind: "product"; defaults?: ProductChips; chips?: Array<keyof ProductChips> })
   | (TrendSlotBase & { kind: "location"; defaults?: never; chips?: never })
 
-/** HIDDEN. A fixed reference sent with every run: 1–3 images and its prompt line (1–500). */
-export interface TrendReference { images: string[]; line: string }
+/**
+ * HIDDEN. A fixed reference sent with every run: 1–3 images and its prompt
+ * line (1–500). `previewLine` (≤ 500) is the line a 4 s preview run sends
+ * instead; empty or absent = `line`.
+ */
+export interface TrendReference { images: string[]; line: string; previewLine?: string }
 
 /**
  * HIDDEN. A trend's approved face mask: its WHOLE source clip with the faces
@@ -201,6 +213,15 @@ export interface TrendVersionData {
   trendPrompt?: string
   /** HIDDEN. Prompt text placed at the start of every run's prompt (≤ 3000): Cast Swap's `prePrompt`. */
   prePrompt?: string
+  /**
+   * HIDDEN. The trend prompt a 4 s preview run sends instead of `trendPrompt`
+   * (≤ 3000; a preview has less to go on than the full clip). Empty or absent
+   * = `trendPrompt`. Kept while the trend offers no preview, and read only by
+   * a preview run (prompt-parts.ts).
+   */
+  previewTrendPrompt?: string
+  /** HIDDEN. The pre prompt a 4 s preview run sends instead of `prePrompt` (≤ 3000); empty or absent = `prePrompt`. */
+  previewPrePrompt?: string
   /**
    * HIDDEN. Cast Swap's face masking for every run of this trend. Absent or
    * `mode: "off"` = no masking. With `"auto"`, a full run whose preview was

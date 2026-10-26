@@ -188,13 +188,19 @@ describe("get_trend", () => {
       ...DETAIL,
       source: { videoUrl: "https://cdn.example/source.mp4" },
       trendPrompt: "secret",
-      slots: [{ ...DETAIL.slots[0], roleName: "the woman in red" }],
+      previewTrendPrompt: "preview-secret",
+      previewPrePrompt: "preview-pre-secret",
+      references: [{ images: ["https://cdn.example/ref.png"], line: "ref-line", previewLine: "preview-ref-line" }],
+      slots: [{ ...DETAIL.slots[0], roleName: "the woman in red", previewRoleName: "the woman in blue" }],
       examples: [{ ...DETAIL.examples[0], jobId: "j-src" }],
     }
     const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: leaky } } })
     const res = await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })
     const text = res.content[0]!.text! + JSON.stringify(res.structuredContent)
-    for (const hidden of ["source.mp4", "secret", "the woman in red", "j-src", "roleName", "trendPrompt"]) {
+    for (const hidden of [
+      "source.mp4", "secret", "the woman in red", "j-src", "roleName", "trendPrompt",
+      "the woman in blue", "preview-ref-line", "ref-line", "previewRoleName", "previewLine", "previewTrendPrompt", "previewPrePrompt",
+    ]) {
       expect(text).not.toContain(hidden)
     }
   })

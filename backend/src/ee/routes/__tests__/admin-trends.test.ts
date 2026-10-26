@@ -13,7 +13,9 @@
  *    becomes an example (D16), and its media is COPIED into trend storage;
  *  - a source clip outside 4–30 s is refused before anything is stored;
  *  - a test run is composed from the DRAFT version and dispatched as the admin;
- *  - "Show prompt" returns the Seedance child's prompt;
+ *  - "Show prompt" returns the Seedance child's prompt, and the trend's prompt
+ *    parts for a Full or a 4 s preview run (each preview part falling back to
+ *    the full run's);
  *  - every route is admin-only.
  *
  * The store is an in-memory stand-in honouring the store's contract
@@ -603,6 +605,26 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(saved.json().data).toEqual({ version: 1, revision: expect.any(String), faceMaskState: { status: "none", reasons: [] } })
     expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
     expect(mem.trends[0]!.versions[1]!.data.trendPrompt).toBe("DRAFT-PROMPT neon lights")
+
+    // The 4 s preview's prompt parts are saved and read back as written, and kept when the preview is turned off.
+    const withPreview = {
+      ...draftData(),
+      previewStart: null,
+      previewPrePrompt: "PREVIEW-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT",
+      slots: [{ ...draftData().slots[0]!, previewRoleName: "the woman" }, draftData().slots[1]!],
+      references: [{ images: [`https://cdn.test/trends/${id}/r.png`], line: "the sign", previewLine: "a sign" }],
+    }
+    expect((await call("PUT", `/v1/admin/trends/${id}/draft`, { data: withPreview, revision: await revisionOf(id) })).statusCode).toBe(200)
+    expect(((await call("GET", `/v1/admin/trends/${id}`)).json().data as { draft: TrendVersionData }).draft).toMatchObject({
+      previewStart: null,
+      previewPrePrompt: "PREVIEW-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT",
+      slots: [{ previewRoleName: "the woman" }, { roleName: "the dog" }],
+      references: [{ line: "the sign", previewLine: "a sign" }],
+    })
+    const tooLong = { ...withPreview, slots: [{ ...withPreview.slots[0]!, previewRoleName: "r".repeat(201) }, withPreview.slots[1]!] }
+    expect((await call("PUT", `/v1/admin/trends/${id}/draft`, { data: tooLong, revision: await revisionOf(id) })).statusCode).toBe(400)
 
     // Pre prompt and face masking are saved and read back as written.
     const MASK = { mode: "always" as const, fill: "depth" as const, maxFaceHeightPct: 0, zone: { leftPct: 10 } }
@@ -1318,6 +1340,27 @@ describe("test runs", () => {
     expect((body.trendRun as { display: { trend: unknown } }).display.trend).toEqual({ id: T1, slug: "neon-dance", version: 2, name: "Neon Dance II" })
   })
 
+  it("a 4 s preview test runs the draft's preview prompt parts; a full test run the full run's", async () => {
+    seed({}, draftData({
+      slots: [
+        { key: "lead", label: { en: "Lead dancer" }, kind: "person", required: true, roleName: "the woman on the left", previewRoleName: "PREVIEW the woman" },
+        { key: "dog", label: { en: "Dog" }, kind: "pet", required: false, roleName: "the dog" },
+      ],
+      prePrompt: "DRAFT-PRE",
+      previewPrePrompt: "PREVIEW-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT",
+      examples: [EXAMPLE],
+    }))
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, preview: true })).statusCode).toBe(202)
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+    const [preview, full] = engine.calls.map((c) => c.body as { roles: Array<{ name: string }>; prePrompt?: string; postPrompt?: string })
+    expect(preview!.roles.map((r) => r.name)).toEqual(["PREVIEW the woman", "the dog"])
+    expect([preview!.prePrompt, preview!.postPrompt]).toEqual(["PREVIEW-PRE", "PREVIEW-PROMPT"])
+    expect(full!.roles.map((r) => r.name)).toEqual(["the woman on the left", "the dog"])
+    expect([full!.prePrompt, full!.postPrompt]).toEqual(["DRAFT-PRE", "DRAFT-PROMPT neon lights"])
+  })
+
   it("the draft's pre prompt and masking ride at the top level; a masked preview makes the full run always", async () => {
     const MASK = { mode: "auto" as const, blurStrengthPct: 3 }
     seed({}, draftData({ prePrompt: "DRAFT-PRE", faceMasking: MASK, examples: [EXAMPLE] }))
@@ -1460,17 +1503,91 @@ describe("test runs", () => {
     expect(res.json().data[0].error).toEqual({ code: "safety-block", message: "Seedance refused the clip." })
   })
 
-  it("Show prompt returns the Seedance child's prompt", async () => {
+  /** A draft that words its 4 s preview's prompt parts its own way. */
+  const previewDraft = () =>
+    draftData({
+      slots: [
+        { key: "lead", label: { en: "Lead dancer" }, kind: "person", required: true, roleName: "the woman on the left", previewRoleName: "the woman" },
+        { key: "dog", label: { en: "Dog" }, kind: "pet", required: false, roleName: "the dog" },
+      ],
+      references: [{ images: ["https://cdn.test/r.png"], line: "the neon sign", previewLine: "the sign" }],
+      prePrompt: "FULL-PRE",
+      previewTrendPrompt: "PREVIEW-PROMPT neon",
+    })
+
+  it("Show prompt returns the Seedance child's prompt and the full run's prompt parts", async () => {
+    seed({}, previewDraft())
     world.jobs.set(RUN, jobRow(RUN, ADMIN))
     world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT: the woman on the left dances" } })
     const res = await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: { prompt: "ENGINE PROMPT: the woman on the left dances" } })
+    expect(res.json()).toEqual({
+      data: {
+        mode: "full",
+        runMode: "full",
+        prompt: "ENGINE PROMPT: the woman on the left dances",
+        previewOffered: true,
+        parts: {
+          mode: "full",
+          prePrompt: { text: "FULL-PRE", fromFullRun: false },
+          roles: [
+            { key: "lead", label: "Lead dancer", kind: "person", roleName: { text: "the woman on the left", fromFullRun: false } },
+            { key: "dog", label: "Dog", kind: "pet", roleName: { text: "the dog", fromFullRun: false } },
+          ],
+          references: [{ line: { text: "the neon sign", fromFullRun: false } }],
+          trendPrompt: { text: "DRAFT-PROMPT neon lights", fromFullRun: false },
+        },
+      },
+    })
   })
 
-  it("Show prompt is a 404 for a run with no child yet, or a job that is not a trend run", async () => {
+  it("Show prompt switched to the 4 s preview: the preview's parts, and no engine prompt for a full run", async () => {
+    seed({}, previewDraft())
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT full" } })
+    const res = await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt?mode=preview`)
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data).toMatchObject({ mode: "preview", runMode: "full", prompt: null, previewOffered: true })
+    expect(data.parts.prePrompt).toEqual({ text: "FULL-PRE", fromFullRun: true })
+    expect(data.parts.roles.map((r: { roleName: unknown }) => r.roleName)).toEqual([
+      { text: "the woman", fromFullRun: false },
+      { text: "the dog", fromFullRun: true },
+    ])
+    expect(data.parts.references).toEqual([{ line: { text: "the sign", fromFullRun: false } }])
+    expect(data.parts.trendPrompt).toEqual({ text: "PREVIEW-PROMPT neon", fromFullRun: false })
+  })
+
+  it("Show prompt of a preview run opens on the preview, with its engine prompt; switched to Full, the full run's parts", async () => {
+    seed({}, previewDraft())
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ preview: true }) }))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT preview" } })
+    const own = (await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data
+    expect(own).toMatchObject({ mode: "preview", runMode: "preview", prompt: "ENGINE PROMPT preview" })
+    expect(own.parts.trendPrompt).toEqual({ text: "PREVIEW-PROMPT neon", fromFullRun: false })
+    const full = (await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt?mode=full`)).json().data
+    expect(full).toMatchObject({ mode: "full", runMode: "preview", prompt: null })
+    expect(full.parts.trendPrompt).toEqual({ text: "DRAFT-PROMPT neon lights", fromFullRun: false })
+    expect(full.parts.roles[0].roleName).toEqual({ text: "the woman on the left", fromFullRun: false })
+  })
+
+  it("Show prompt says when the trend offers no preview, and has no parts when the run's version is gone", async () => {
+    seed({}, draftData({ previewStart: null }))
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "P" } })
+    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data).toMatchObject({ previewOffered: false, prompt: "P" })
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ trend: { id: T1, slug: "neon-dance", version: 9, name: "Neon Dance" } }) }))
+    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data).toMatchObject({ prompt: "P", parts: null, previewOffered: false })
+  })
+
+  it("Show prompt has no engine prompt for a run with no child yet; a job that is not a trend run is a 404; a bad mode a 400", async () => {
+    seed()
     world.jobs.set(RUN, jobRow(RUN, ADMIN, { output_data: { videoUrl: null } }))
-    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().error.code).toBe("prompt_unavailable")
+    const res = await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ mode: "full", runMode: "full", prompt: null })
+    expect(res.json().data.parts.trendPrompt).toEqual({ text: "DRAFT-PROMPT neon lights", fromFullRun: false })
+    expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt?mode=both`)).statusCode).toBe(400)
     world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: { type: "cast-swap" } }))
     expect((await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).statusCode).toBe(404)
   })

@@ -47,6 +47,7 @@ import {
   saveAdminTrendTagLabels,
   type AdminTrendData,
   type AdminTrendMediaKind,
+  type AdminTrendPromptMode,
   type AdminTrendRun,
   type TrendBadge,
   type TrendLocalizedText,
@@ -1590,12 +1591,17 @@ function useInvalidateTrend() {
 }
 
 export function useSaveTrendDraft(id: string) {
+  const qc = useQueryClient()
   const invalidate = useInvalidateTrend()
   return useMutation({
     onError: handledByScreen,
     mutationFn: ({ data, revision }: { data: Omit<AdminTrendData, "examples">; revision: string }) =>
       saveAdminTrendDraft(id, data, revision),
-    onSuccess: () => invalidate(id),
+    onSuccess: () => {
+      // "Show prompt" lists the trend's prompt parts as saved: a save may change them.
+      void qc.invalidateQueries({ queryKey: queryKeys.admin.trendRunPrompts() })
+      return invalidate(id)
+    },
   })
 }
 
@@ -1655,10 +1661,11 @@ export function useStartTrendTestRun(id: string) {
   })
 }
 
-export function useTrendRunPrompt(jobId: string | null) {
+/** "Show prompt" for a run, as a Full or 4 s preview run (left out = the mode it ran in). */
+export function useTrendRunPrompt(jobId: string | null, mode?: AdminTrendPromptMode) {
   return useQuery({
-    queryKey: queryKeys.admin.trendRunPrompt(jobId ?? ""),
-    queryFn: () => fetchAdminTrendRunPrompt(jobId!),
+    queryKey: queryKeys.admin.trendRunPrompt(jobId ?? "", mode ?? "run"),
+    queryFn: () => fetchAdminTrendRunPrompt(jobId!, mode),
     enabled: hasAdmin() && !!jobId,
     staleTime: Infinity,
     retry: false,

@@ -6,6 +6,13 @@
  * The server's schemas are strict (backend/src/ee/lib/trends/schemas.ts): a
  * save must carry no client-only field, a slot only its own kind's chips (a
  * location none), and no optional text whose English is empty.
+ *
+ * The 4 s preview's own prompt parts (a slot's `previewRoleName`, a
+ * reference's `previewLine`, `previewPrePrompt`, `previewTrendPrompt`) are
+ * saved only when they have text: an empty one runs the full run's text
+ * (`withPromptsFor` in `@nodaro/render-rules`, the server's rule too). They are kept while
+ * the trend offers no preview, and checked against the budget only while it
+ * does.
  */
 import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
@@ -13,11 +20,17 @@ import {
   CAST_SWAP_FACE_MASKING_DEFAULTS,
   CAST_SWAP_ENGINE_WHEN_OMITTED,
   CAST_SWAP_KLING_MAX_IMAGES,
-  CAST_SWAP_POST_PROMPT_MAX,
-  getMaxVideoPromptChars,
   TREND_PROMPT_LIMITS,
 } from "@nodaro/shared/models"
-import { castSwapImagesSent, klingEngineText } from "@nodaro/render-rules"
+import {
+  castSwapImagesSent,
+  promptModesOf,
+  TREND_DETAILS_MAX,
+  trendPromptBudget,
+  withPromptsFor,
+  type TrendPromptBudget,
+  type TrendPromptSource,
+} from "@nodaro/render-rules"
 import type {
   AdminTrendData,
   AdminTrendEngine,
@@ -41,43 +54,30 @@ export const MAX_TREND_PROMPT = TREND_PROMPT_LIMITS.trendPromptMax
 export const MAX_PRE_PROMPT = TREND_PROMPT_LIMITS.prePromptMax
 
 /**
- * The room a trend's prompts leave for the user's details, as the server's
- * publish check counts it (backend/src/ee/lib/trends/prompt-budget.ts), from
- * the same numbers in `@nodaro/shared`: the trend prompt shares the engine's
- * post prompt field (`CAST_SWAP_POST_PROMPT_MAX`) with the details (after a
- * blank line), and the pre and trend prompts share Seedance 2.5's
- * whole-prompt cap with the engine's own text and the details.
+ * The room a trend's prompts leave for the user's details, and the texts a 4 s
+ * preview run sends: `@nodaro/render-rules`' trend-prompts.ts, the one rule
+ * the server's publish check and composition run too
+ * (backend/src/ee/lib/trends/prompt-budget.ts, prompt-parts.ts).
  */
-export const TREND_DETAILS_MAX = TREND_PROMPT_LIMITS.detailsMax
-const SEP = 2
+export { hasOwnPreviewPrompts } from "@nodaro/render-rules"
+export { TREND_DETAILS_MAX }
 
-export interface PromptBudget {
-  /** The longest trend prompt that leaves the details their room. */
-  readonly trendPromptMax: number
-  /** The longest pre + trend prompt that leave the engine's text and the details their room. */
-  readonly promptsMax: number
-  /** Characters still free under the tighter of the two; below 0 = over. */
-  readonly room: number
-}
+export type PromptBudget = TrendPromptBudget
 
 /**
- * A Kling 4 trend is held to Kling 4's cap, less the engine text of its own
- * slots and references (`klingEngineText`), as the server counts it.
+ * The budget of these texts: the trend prompt shares the engine's post prompt
+ * field with the details, and the pre and trend prompts share the whole-prompt
+ * cap (Kling 4's less the engine text of its own slots and references).
  */
 export function promptBudget(
   form: Pick<TrendForm, "prePrompt" | "trendPrompt"> & Partial<Pick<TrendForm, "engine" | "slots" | "references">>,
 ): PromptBudget {
-  const trendPromptMax = CAST_SWAP_POST_PROMPT_MAX - SEP - TREND_DETAILS_MAX
-  const promptsMax =
-    form.engine === "kling-4"
-      ? getMaxVideoPromptChars("kling-4") -
-        klingEngineText({ slots: form.slots ?? [], references: form.references ?? [] }) -
-        SEP -
-        TREND_DETAILS_MAX
-      : getMaxVideoPromptChars("seedance-2-5") - TREND_PROMPT_LIMITS.engineTextReserve - SEP - TREND_DETAILS_MAX
-  const pre = form.prePrompt.length
-  const trend = form.trendPrompt.length
-  return { trendPromptMax, promptsMax, room: Math.min(trendPromptMax - trend, promptsMax - pre - trend) }
+  return trendPromptBudget(form)
+}
+
+/** The form with the texts a 4 s preview run sends in the full run's fields (the preview's own, else the full run's). */
+export function withPreviewPrompts<F extends TrendPromptSource>(form: F): F {
+  return withPromptsFor(form, "preview")
 }
 
 /**
@@ -133,6 +133,10 @@ export interface TrendForm {
   references: FormReference[]
   trendPrompt: string
   prePrompt: string
+  /** The 4 s preview's own trend prompt; "" = the trend prompt. */
+  previewTrendPrompt: string
+  /** The 4 s preview's own pre prompt; "" = the pre prompt. */
+  previewPrePrompt: string
   /** As stored: undefined = the draft has none (masking off). */
   faceMasking: AdminTrendFaceMasking | undefined
   /** As stored: undefined = the draft names none (Seedance 2.5), so loading an old draft is no change. */
@@ -154,6 +158,8 @@ export function toForm(draft: AdminTrendData): TrendForm {
     references: draft.references.map((r) => ({ ...r, images: [...r.images], uid: newUid() })),
     trendPrompt: draft.trendPrompt ?? "",
     prePrompt: draft.prePrompt ?? "",
+    previewTrendPrompt: draft.previewTrendPrompt ?? "",
+    previewPrePrompt: draft.previewPrePrompt ?? "",
     faceMasking: draft.faceMasking ? structuredClone(draft.faceMasking) : undefined,
     engine: draft.engine,
     klingLength: draft.klingLength,
@@ -233,6 +239,8 @@ function cleanSlot(s: FormSlot): AdminTrendSlot {
     required: s.required,
     roleName: s.roleName.trim(),
   }
+  const previewRole = s.previewRoleName?.trim()
+  if (previewRole) out.previewRoleName = previewRole
   if (hasAnyText(s.hint)) out.hint = cleanText(s.hint!)
   if (s.hintImageUrl) out.hintImageUrl = s.hintImageUrl
   const defaults: Partial<Record<TrendChipKey, TrendChoice>> = {}
@@ -271,9 +279,15 @@ export function fromForm(form: TrendForm): Omit<AdminTrendData, "examples"> {
     source: cleanSource(form.source),
     previewStart: form.previewStart,
     slots: form.slots.map(cleanSlot),
-    references: form.references.map((r) => ({ images: [...r.images], line: r.line.trim() })),
+    references: form.references.map((r) => {
+      const previewLine = r.previewLine?.trim()
+      return { images: [...r.images], line: r.line.trim(), ...(previewLine ? { previewLine } : {}) }
+    }),
     ...(form.trendPrompt.trim() ? { trendPrompt: form.trendPrompt } : {}),
     ...(form.prePrompt.trim() ? { prePrompt: form.prePrompt } : {}),
+    // Kept while the trend offers no preview, so turning it back on finds them again.
+    ...(form.previewTrendPrompt.trim() ? { previewTrendPrompt: form.previewTrendPrompt } : {}),
+    ...(form.previewPrePrompt.trim() ? { previewPrePrompt: form.previewPrePrompt } : {}),
     ...(form.faceMasking ? { faceMasking: cleanMasking(form.faceMasking) } : {}),
     ...(form.engine ? { engine: form.engine } : {}),
     // Read only on Kling 4: kept out of a Seedance draft.
@@ -349,6 +363,7 @@ export function formIssues(form: TrendForm): string[] {
     const role = s.roleName.trim()
     if (!role) out.push(`${n}: the role name is required.`)
     else if (role.length > 200) out.push(`${n}: the role name is at most 200 characters.`)
+    if ((s.previewRoleName?.trim().length ?? 0) > 200) out.push(`${n}: the role name in the 4 s preview is at most 200 characters.`)
     if (hasAnyText(s.hint) && !s.hint!.en.trim()) out.push(`${n}: the hint needs English when any language has text.`)
   })
   for (const kind of SLOT_KINDS) {
@@ -363,18 +378,15 @@ export function formIssues(form: TrendForm): string[] {
     const line = r.line.trim()
     if (!line) out.push(`${n}: the prompt line is required.`)
     else if (line.length > 500) out.push(`${n}: the prompt line is at most 500 characters.`)
+    if ((r.previewLine?.trim().length ?? 0) > 500) out.push(`${n}: the prompt line in the 4 s preview is at most 500 characters.`)
   })
 
-  const budget = promptBudget(form)
-  if (form.trendPrompt.length > MAX_TREND_PROMPT) out.push(`Trend prompt: at most ${MAX_TREND_PROMPT} characters.`)
-  else if (form.trendPrompt.length > budget.trendPromptMax) {
-    out.push(`Trend prompt: at most ${budget.trendPromptMax} characters, to leave room for the user's details (up to ${TREND_DETAILS_MAX}).`)
-  }
-  if (form.prePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
-  else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
-    const on = form.engine === "kling-4" ? " on Nodaro Motion Pulse (Kling 4)" : ""
-    out.push(`Pre and trend prompts: at most ${Math.max(0, budget.promptsMax)} characters together${on}, to leave room for the engine's text and the user's details.`)
-  }
+  out.push(...promptIssues(form, ""))
+  if (form.previewTrendPrompt.length > MAX_TREND_PROMPT) out.push(`Trend prompt in the 4 s preview: at most ${MAX_TREND_PROMPT} characters.`)
+  if (form.previewPrePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt in the 4 s preview: at most ${MAX_PRE_PROMPT} characters.`)
+  // The preview's texts are held to the budget only while the trend offers a preview and has
+  // text of its own (else it sends the full run's): the server's publish check (`promptModesOf`).
+  if (promptModesOf(form).includes("preview")) out.push(...promptIssues(withPreviewPrompts(form), " in the 4 s preview"))
   if (form.faceMasking) out.push(...maskingIssues(form.faceMasking))
   if (form.source && form.previewStart !== null && form.previewStart + PREVIEW_SECONDS > form.source.durationSec) {
     out.push(`The ${PREVIEW_SECONDS} s preview must fit inside the ${form.source.durationSec.toFixed(1)} s clip.`)
@@ -386,6 +398,26 @@ export function formIssues(form: TrendForm): string[] {
       form.engine === "kling-4"
         ? `${images} images: at most ${most} on Nodaro Motion Pulse (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
         : `${images} images: at most ${most} (3 per slot plus the reference pictures).`,
+    )
+  }
+  return out
+}
+
+/** The prompt length and budget issues of these texts (the full run's, or the preview's with `where`). */
+function promptIssues(form: TrendForm, where: string): string[] {
+  const out: string[] = []
+  const budget = promptBudget(form)
+  if (form.trendPrompt.length > MAX_TREND_PROMPT) {
+    if (!where) out.push(`Trend prompt: at most ${MAX_TREND_PROMPT} characters.`)
+  } else if (form.trendPrompt.length > budget.trendPromptMax) {
+    out.push(`Trend prompt${where}: at most ${budget.trendPromptMax} characters, to leave room for the user's details (up to ${TREND_DETAILS_MAX}).`)
+  }
+  if (form.prePrompt.length > MAX_PRE_PROMPT) {
+    if (!where) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
+  } else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
+    const on = form.engine === "kling-4" ? " on Nodaro Motion Pulse (Kling 4)" : ""
+    out.push(
+      `Pre and trend prompts${where}: at most ${Math.max(0, budget.promptsMax)} characters together${on}, to leave room for the engine's text and the user's details.`,
     )
   }
   return out

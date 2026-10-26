@@ -20,23 +20,25 @@
  * rather than the fixed worst case kept for Seedance.
  *
  * The numbers are `@nodaro/shared`'s (`CAST_SWAP_POST_PROMPT_MAX`,
- * `TREND_PROMPT_LIMITS`), which the admin screen (admin/trends/model.ts) reads
+ * `TREND_PROMPT_LIMITS`) and the formula is `@nodaro/render-rules`'
+ * `trendPromptBudget`, which the admin screen (admin/trends/model.ts) runs
  * too, to show the room left and hold Save; publishing refuses a trend over either limit
  * (`publish-check.ts`, `prompt_budget`). A user's `{slot:…}` mentions that the
  * engine expands to long role names can still pass the cap: that run gets the
  * engine's own `prompt_too_long`.
+ *
+ * A trend that offers a 4 s preview is held to the budget twice: with the
+ * full run's prompt parts, and with the preview's (its own role names,
+ * reference lines, pre and trend prompts, each falling back to the full
+ * run's: `withPromptsFor`). `promptModesOf` says when.
  */
-import { getMaxVideoPromptChars, TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
-import { klingEngineText } from "@nodaro/render-rules"
-import { CAST_SWAP_POST_PROMPT_MAX } from "./compose.js"
-import { engineOf } from "./schemas.js"
+import { TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
+import { trendPromptBudget, type TrendPromptBudget } from "@nodaro/render-rules"
 import type { TrendVersionData } from "./types.js"
 
-/** The run schema's `details` limit (`trendRunRequestSchema` reads it too). */
-export const TREND_DETAILS_MAX = TREND_PROMPT_LIMITS.detailsMax
-
-/** The Cast Swap engine's cap on the whole prompt it builds. */
-export const ENGINE_PROMPT_MAX = getMaxVideoPromptChars("seedance-2-5")
+// The budget and when the preview is held to it are @nodaro/render-rules' (trend-prompts.ts),
+// which the trend builder runs too: one formula, never a copy here.
+export { ENGINE_PROMPT_MAX, KLING_ENGINE_PROMPT_MAX, TREND_DETAILS_MAX, promptModesOf } from "@nodaro/render-rules"
 
 /**
  * The engine's own text around the trend's prompts, at its longest: a block
@@ -48,30 +50,11 @@ export const ENGINE_PROMPT_MAX = getMaxVideoPromptChars("seedance-2-5")
  */
 export const ENGINE_TEXT_RESERVE = TREND_PROMPT_LIMITS.engineTextReserve
 
-/** The blank line ("\n\n") between two prompt parts. */
-const SEP = 2
+export type PromptBudget = TrendPromptBudget
 
-export interface PromptBudget {
-  /** The longest trend prompt that leaves the details their room in the post prompt field. */
-  readonly trendPromptMax: number
-  /** The longest pre prompt + trend prompt that leave the engine's text and the details their room. */
-  readonly promptsMax: number
-  /** Characters still free under the tighter of the two; below 0 = over by that much. */
-  readonly room: number
-}
-
-/** Kling 4's cap on the whole prompt Cast Swap builds. */
-export const KLING_ENGINE_PROMPT_MAX = getMaxVideoPromptChars("kling-4")
-
+/** The budget of these texts (pass a version, or `withPromptsFor` of one for a preview run). */
 export function promptBudget(
   d: { readonly prePrompt?: string; readonly trendPrompt?: string } & Partial<Pick<TrendVersionData, "engine" | "slots" | "references">>,
 ): PromptBudget {
-  const pre = d.prePrompt?.length ?? 0
-  const trend = d.trendPrompt?.length ?? 0
-  const trendPromptMax = CAST_SWAP_POST_PROMPT_MAX - SEP - TREND_DETAILS_MAX
-  const promptsMax =
-    engineOf(d) === "kling-4"
-      ? KLING_ENGINE_PROMPT_MAX - klingEngineText({ slots: d.slots ?? [], references: d.references ?? [] }) - SEP - TREND_DETAILS_MAX
-      : ENGINE_PROMPT_MAX - ENGINE_TEXT_RESERVE - SEP - TREND_DETAILS_MAX
-  return { trendPromptMax, promptsMax, room: Math.min(trendPromptMax - trend, promptsMax - pre - trend) }
+  return trendPromptBudget(d)
 }
