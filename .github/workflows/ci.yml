@@ -4,22 +4,26 @@ on:
   # Feature branches are covered by the pull_request event (which tests the
   # merge result), so we DON'T also run on their push — that doubled every PR's
   # CI. `push` runs for dev (the post-merge full suite — decided 2026-10-13:
-  # PRs into dev are to run only the tests their change can affect; until the
-  # repository variable TEST_SELECT_ENFORCE is `true` they run in shadow mode,
-  # the full suite plus the selector's report) and for main (the migrate gate;
-  # tests there are skipped when the tree already passed on dev).
+  # PRs into dev run only the tests their change can affect, since the
+  # repository variable TEST_SELECT_ENFORCE is `true`; without it they run in
+  # shadow mode, the full suite plus the selector's report) and for main (the
+  # migrate gate; tests there are skipped when the tree already passed on dev).
   push:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
 
-# PR runs: a newer commit cancels the superseded run. Pushes never cancel:
-# every dev commit needs its own full run so a failure lands on the PR that
-# caused it — and a shared group would also drop the PENDING run when a third
-# arrives, so dev pushes are grouped per commit. main keeps one group (its
-# migrate job must always complete).
+# PR runs: a newer commit cancels the superseded run. Pushes never cancel a
+# run in progress, and each branch is one group: GitHub keeps one run going
+# and only the NEWEST pending one, dropping the pending runs in between. On dev
+# a burst of merges is therefore covered by one or two full runs instead of
+# one each (decided 2026-10-26: per-commit runs queued for hours on the pool);
+# a red run covers the merges since the last finished one, and Attribute Dev
+# Failure comments on each of them. Cancelling the run in
+# progress instead would starve dev of any green run during a busy evening.
+# main's migrate job must always complete, so it never cancels either.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || (github.ref == 'refs/heads/dev' && github.sha) || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -81,7 +85,9 @@ jobs:
   changes:
     name: Diff Gate
     runs-on: ubuntu-slim
-    timeout-minutes: 10
+    # A PR into main waits here (bounded at 45 minutes by ci-mode.mjs) for the
+    # dev run on its head, so it can reuse that run instead of repeating it.
+    timeout-minutes: ${{ github.base_ref == 'main' && 55 || 10 }}
     permissions:
       pull-requests: read
       actions: read
@@ -937,6 +943,9 @@ jobs:
         with:
           persist-credentials: false
           sparse-checkout: tools/test-select
+          # The first-parent chain back to the last finished dev run
+          # (tools/test-select/dev-batch.mjs walks at most 30).
+          fetch-depth: 31
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -945,34 +954,37 @@ jobs:
         with:
           pattern: failed-*
           path: ${{ runner.temp }}/failed
-      - name: Comment on the PR that produced this commit
+      - name: Comment on the PRs this run covered
         env:
           GH_TOKEN: ${{ github.token }}
-          BEFORE: ${{ github.event.before }}
           FAILED_DIR: ${{ runner.temp }}/failed
           NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # One run covers every merge since the last dev commit whose run
+          # finished (the dev group keeps only the newest pending run), so the
+          # comparison point is that commit, not github.event.before.
+          node tools/test-select/dev-batch.mjs > "$RUNNER_TEMP/batch.json"
           # The three lists each failed shard uploads (failed-<p>.txt,
           # .flaky, .unknown) are found at any depth: one matching artifact is
           # extracted straight into $FAILED_DIR, several into a subdirectory
           # each (tools/test-select/failed-lists.mjs).
-          PREVIOUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$BEFORE&event=push&branch=dev&per_page=1" --jq '.workflow_runs[0].conclusion // "none"' || echo none)"
-          export PREVIOUS
-          # commits/{sha}/pulls also lists OPEN PRs that contain the commit;
-          # only the PR whose merge commit IS this commit produced it.
-          PR="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq "[.[] | select(.merge_commit_sha == \"$GITHUB_SHA\")][0].number // empty" || true)"
-          node --input-type=module -e '
+          BATCH="$RUNNER_TEMP/batch.json" node --input-type=module -e '
+            import { readFileSync } from "node:fs"
             import { buildAttributionComment, failedJobsFrom } from "./tools/test-select/attribution.mjs"
             import { readFailedLists } from "./tools/test-select/failed-lists.mjs"
+            const { last, lastState, merges } = JSON.parse(readFileSync(process.env.BATCH, "utf8"))
             process.stdout.write(buildAttributionComment({
-              sha: process.env.GITHUB_SHA, before: process.env.BEFORE, runUrl: process.env.RUN_URL,
+              sha: process.env.GITHUB_SHA, before: last ?? "", runUrl: process.env.RUN_URL,
               ...readFailedLists(process.env.FAILED_DIR),
-              previousConclusion: process.env.PREVIOUS,
+              previousConclusion: { green: "success", failed: "failure" }[lastState] ?? "none",
               failedJobs: failedJobsFrom(JSON.parse(process.env.NEEDS || "{}")),
+              merges,
             }))' > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
-          if [ -n "$PR" ]; then gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"; fi
+          for PR in $(jq -r '.merges[].pr // empty' "$RUNNER_TEMP/batch.json"); do
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          done
 
   # The ffmpeg memory ledger's real Lua scripts (and, in the same job, the
   # download-slot ledger's: download-slot-ledger.redis.test.ts, and the admin
