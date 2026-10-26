@@ -4613,7 +4613,7 @@ factory catalog it reads as anyone can.
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
-A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, section?, platforms?, data, minReferences, needsImage, previewUrl }`.
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, section?, platforms?, data, minReferences, needsImage, previewUrl, previewSrcSet? }`.
 
 **Where a preset is filed — `group`, `section`, `platforms`.** `group` is the folder
 (the Create Image tiles' groups are the everyday ones: YouTube, Shorts · TikTok, Social &
@@ -4641,6 +4641,18 @@ server you asked (`https://<host>/preset-previews/<nodeType>/<slug>.<hash>.webp`
 or `null` while the preset has no picture yet. The name changes whenever the
 picture does, so a URL can be cached for good. For a preset of your own, the
 preset's own copy of the image you gave it (see Writes), or `null`.
+
+**Sizes — `previewSrcSet`.** A factory preset's picture comes in two sizes: the
+tile picture (`previewUrl`, 512px wide) and a full-screen one (up to 1024px
+wide, under `/preset-previews/1024/…`). `previewSrcSet` names both with their
+real widths, ready for an `<img srcset>`, so the browser picks by the room it has:
+
+```html
+<img src="{previewUrl}" srcset="{previewSrcSet}" sizes="(min-width: 900px) 80vw, 100vw" alt="{name}">
+```
+
+It is present only on a preset that has both files, and never on a preset of
+your own. The MCP listing leaves it out.
 
 ### Writes
 

@@ -1,6 +1,6 @@
-import { FACTORY_PRESET_PREVIEW_FILES } from "./preview-files.generated.js"
+import { FACTORY_PRESET_PREVIEW_FILES, FACTORY_PRESET_PREVIEW_LARGE_FILES } from "./preview-files.generated.js"
 
-export { FACTORY_PRESET_PREVIEW_FILES }
+export { FACTORY_PRESET_PREVIEW_FILES, FACTORY_PRESET_PREVIEW_LARGE_FILES }
 
 /**
  * Where the factory preset previews live, relative to the app's origin:
@@ -9,6 +9,17 @@ export { FACTORY_PRESET_PREVIEW_FILES }
  * server caches them as immutable and a regenerated picture is a new URL.
  */
 export const PRESET_PREVIEW_PATH = "/preset-previews/"
+
+/** The tile picture (`previewUrl`) is this wide. */
+export const PRESET_PREVIEW_WIDTH = 512
+/** The full-screen picture (the second entry of `previewSrcSet`) is at most this wide; the map records its real width. */
+export const PRESET_PREVIEW_LARGE_WIDTH = 1024
+
+/** A full-screen picture as the large map records it: its file under /preset-previews/ and its real width. */
+export interface PresetPreviewLargeFile {
+  readonly file: string
+  readonly width: number
+}
 
 function originOf(baseUrl: string): string | undefined {
   try {
@@ -37,4 +48,25 @@ export function factoryPresetPreviewUrl(
   if (!file) return null
   const origin = originOf(baseUrl)
   return origin ? `${origin}${PRESET_PREVIEW_PATH}${file}` : null
+}
+
+/**
+ * The same picture at its two sizes as an `<img srcset>` value — the tile
+ * picture at 512w and the full-screen one at its real width (up to 1024w) —
+ * so a client lets the browser pick by the room it has. Null when either size
+ * is missing, so a srcset never names a file that does not exist.
+ *
+ * @param files the small map; @param largeFiles the large map — both default to the committed ones
+ */
+export function factoryPresetPreviewSrcSet(
+  presetId: string,
+  baseUrl: string,
+  files: Readonly<Record<string, string>> = FACTORY_PRESET_PREVIEW_FILES,
+  largeFiles: Readonly<Record<string, PresetPreviewLargeFile>> = FACTORY_PRESET_PREVIEW_LARGE_FILES,
+): string | null {
+  const small = factoryPresetPreviewUrl(presetId, baseUrl, files)
+  const big = Object.prototype.hasOwnProperty.call(largeFiles, presetId) ? largeFiles[presetId] : undefined
+  const large = big ? factoryPresetPreviewUrl(presetId, baseUrl, { [presetId]: big.file }) : null
+  if (!small || !large || !big) return null
+  return `${small} ${PRESET_PREVIEW_WIDTH}w, ${large} ${big.width}w`
 }

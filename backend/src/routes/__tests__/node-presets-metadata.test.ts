@@ -36,7 +36,12 @@ const copyOf = (key: string) => `https://cdn.example.test/node-presets/u/copy-of
 vi.mock("@nodaro/prompts/presets", async (importOriginal) => {
   const orig = await importOriginal<typeof import("@nodaro/prompts/presets")>()
   const files = { "generate-image/character-board": "generate-image/character-board.1a2b3c4d.webp" }
-  return { ...orig, factoryPresetPreviewUrl: (id: string, base: string) => orig.factoryPresetPreviewUrl(id, base, files) }
+  const largeFiles = { "generate-image/character-board": { file: "1024/generate-image/character-board.5e6f7a8b.webp", width: 1024 } }
+  return {
+    ...orig,
+    factoryPresetPreviewUrl: (id: string, base: string) => orig.factoryPresetPreviewUrl(id, base, files),
+    factoryPresetPreviewSrcSet: (id: string, base: string) => orig.factoryPresetPreviewSrcSet(id, base, files, largeFiles),
+  }
 })
 
 const { nodePresetRoutes } = await import("../node-presets.js")
@@ -73,7 +78,7 @@ beforeEach(() => {
   preview.release.mockClear()
 })
 
-type FactoryEntry = { id: string; minReferences: number; needsImage: boolean; previewUrl: string | null }
+type FactoryEntry = { id: string; minReferences: number; needsImage: boolean; previewUrl: string | null; previewSrcSet?: string }
 
 async function factory(nodeType: string): Promise<FactoryEntry[]> {
   const res = await (await app()).inject({ method: "GET", url: `/v1/node-presets/factory?nodeType=${nodeType}` })
@@ -108,10 +113,20 @@ describe("GET /v1/node-presets/factory — reference counts and previews", () =>
     expect(byId.get("generate-image/pose-board")!.previewUrl).toBeNull()
   })
 
-  it("with no committed files at all, every previewUrl is null", async () => {
-    const { factoryPresetPreviewUrl } = await vi.importActual<typeof import("@nodaro/prompts/presets")>("@nodaro/prompts/presets")
+  it("previewSrcSet names both sizes with their widths when the preset has both files, and is absent otherwise", async () => {
+    const byId = new Map((await factory("generate-image")).map((p) => [p.id, p]))
+    expect(byId.get("generate-image/character-board")!.previewSrcSet).toBe(
+      `${appBaseUrl()}/preset-previews/generate-image/character-board.1a2b3c4d.webp 512w, ` +
+        `${appBaseUrl()}/preset-previews/1024/generate-image/character-board.5e6f7a8b.webp 1024w`,
+    )
+    expect("previewSrcSet" in byId.get("generate-image/pose-board")!).toBe(false)
+  })
+
+  it("with no committed files at all, every previewUrl is null and no previewSrcSet is built", async () => {
+    const { factoryPresetPreviewUrl, factoryPresetPreviewSrcSet } = await vi.importActual<typeof import("@nodaro/prompts/presets")>("@nodaro/prompts/presets")
     for (const p of await factory("generate-image")) {
       expect(factoryPresetPreviewUrl(p.id, appBaseUrl(), {})).toBeNull()
+      expect(factoryPresetPreviewSrcSet(p.id, appBaseUrl(), {}, {})).toBeNull()
     }
   })
 
