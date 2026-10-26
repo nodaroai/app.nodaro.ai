@@ -130,15 +130,15 @@ export interface TrendDetail extends TrendCard {
   original?: TrendOriginal
   /**
    * The engine every run of this trend uses, by its public id (the person
-   * never chooses it): `"motion-pro"` or `"motion-lite"`.
+   * never chooses it): `"motion-prism"` or `"motion-pulse"`.
    */
   engine: NodaroMotionEngine
-  /** Its name: "Nodaro Motion Pro" or "Nodaro Motion Lite". */
+  /** Its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse". */
   engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:
-   * Nodaro Motion Pro `["480p", "720p", "1080p"]` (480p is the draft),
-   * Nodaro Motion Lite `["720p", "1080p"]` (no draft).
+   * Nodaro Motion Prism `["480p", "720p", "1080p"]` (480p is the draft),
+   * Nodaro Motion Pulse `["720p", "1080p"]` (no draft).
    */
   resolutions: TrendResolution[]
   /**

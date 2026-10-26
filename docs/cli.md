@@ -317,7 +317,7 @@ nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice 
 #   1-32 of a-z, 0-9 and _, checked before anything is sent);
 #   --choice keeps a trait of the clip (original) or makes it anew from your pictures (new): a person's
 #   body / outfit / hair, a pet's body / coat, a product's shape / finish. --resolution is one the trend offers
-#   (`trends get`); default its first: a 480p draft, or 720p on a Nodaro Motion Lite trend (which has no draft).
+#   (`trends get`); default its first: a 480p draft, or 720p on a Nodaro Motion Pulse trend (which has no draft).
 nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-key <key>] [--json]
 #   SPENDS CREDITS — run `estimate` first; prints the job id (follow it with `nodaro jobs get <id>`).
 #   --session is accepted but not yet applied: trend runs are not filed into sessions yet
@@ -325,7 +325,7 @@ nodaro trends runs [--trend <slug>] [--limit <n>] [--cursor <c>] [--json]   # yo
 nodaro trends favorite <slug>                            # and: nodaro trends unfavorite <slug>
 
 # Nodaro Motion (cast-swap) — Full Quality: finish a run at 1080p (Cloud edition): a draft run (a Nodaro Motion
-# or trend run made as a draft) as the same take, or a Nodaro Motion Lite run at 720p as a new take from the same inputs
+# or trend run made as a draft) as the same take, or a Nodaro Motion Pulse run at 720p as a new take from the same inputs
 nodaro cast-swap full-quality estimate <jobId> [--json]
 #   free quote: "about N credits", whether it is the same take or a new take, each part of the quote
 #   by label (Nodaro Motion + the 1080p render, which is 0 when an earlier try's render is reused) and until when

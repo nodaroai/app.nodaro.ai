@@ -76,14 +76,14 @@ describe("cast-swap full-quality", () => {
     }
   })
 
-  it("estimate says a Nodaro Motion Lite run's Full Quality is a new take, and lists every part by its label, never a vendor name", async () => {
+  it("estimate says a Nodaro Motion Pulse run's Full Quality is a new take, and lists every part by its label, never a vendor name", async () => {
     mocks.fullQualityEstimate.mockResolvedValueOnce({ kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380 }, availableUntil: "2026-10-28T10:00:00.000Z" })
     await runCmd("cast-swap", "full-quality", "estimate", "run-720")
     const out = vi.mocked(dim).mock.calls.flat().join("\n")
     expect(out).toMatch(/new take/i)
     expect(out).toContain("video: 380")
     expect(out).toContain("Nodaro Motion: 40")
-    expect(out).not.toMatch(/kling|seedance/i)
+    expect(out).not.toMatch(/kling|seedance|Motion (Pro|Lite)\b/i)
     expect(out).not.toMatch(/reuse/i)
   })
 
@@ -99,7 +99,7 @@ describe("cast-swap full-quality", () => {
     const out = vi.mocked(dim).mock.calls.flat().join("\n")
     expect(out).toMatch(/reuse/i)
     expect(out).toContain("1080p render: 0")
-    expect(out).not.toMatch(/seedance/i)
+    expect(out).not.toMatch(/seedance|Motion (Pro|Lite)\b/i)
   })
 
   it("estimate takes no --session: refused before anything is sent", async () => {

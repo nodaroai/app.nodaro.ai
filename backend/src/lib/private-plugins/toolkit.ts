@@ -123,6 +123,7 @@ import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from ".
 import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideHoldsAvailable } from "../llm-side-hold.js"
 import { appBaseUrl } from "../deployment-urls.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
+import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
@@ -2094,7 +2095,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_masking: the app settings could not be read")
         const masking = settings.nodaro_motion_masking
-        return masking ? structuredClone(masking) : null
+        // Under the current AND the earlier keys (a transition shim: a plugin up to
+        // 0.397.0 reads only "motion-pro" / "motion-lite"), each a fresh copy.
+        return masking ? withEarlierMaskingKeys(masking) : null
       },
     },
     deployment: { publicUrl: appBaseUrl() },

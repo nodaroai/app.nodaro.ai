@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest"
 import type { FaceMasking } from "../../cast-swap-face-masking.js"
 import type { PluginFaceMasking, PluginNodaroMotionMasking } from "../types.js"
-import type { NodaroMotionMasking } from "../../nodaro-motion-masking.js"
+import type { NodaroMotionMaskingForPlugin } from "../../nodaro-motion-masking.js"
 
 /**
  * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Nodaro
@@ -43,14 +43,21 @@ describe("tk.settings.nodaroMotionMasking", () => {
     expect(h.reads).toBe(1)
   })
 
-  it("answers each engine's setting, as a copy the plugin may change", async () => {
-    const saved = { "motion-pro": { mode: "auto", zone: { leftPct: 5 } }, "motion-lite": { mode: "always", target: "face" } }
+  it("answers each engine's setting under its current and its earlier key, each a copy the plugin may change", async () => {
+    const saved = { "motion-prism": { mode: "auto", zone: { leftPct: 5 } }, "motion-pulse": { mode: "always", target: "face" } }
     h.masking = saved
     const got = await buildToolkit().settings!.nodaroMotionMasking!()
-    expect(got).toEqual(saved)
-    got!["motion-pro"]!.mode = "off"
-    got!["motion-pro"]!.zone!.leftPct = 40
-    expect(saved["motion-pro"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
+    // The transition shim: a plugin up to 0.397.0 reads only "motion-pro" / "motion-lite".
+    expect(got).toEqual({ ...saved, "motion-pro": saved["motion-prism"], "motion-lite": saved["motion-pulse"] })
+    got!["motion-prism"]!.mode = "off"
+    got!["motion-prism"]!.zone!.leftPct = 40
+    expect(got!["motion-pro"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
+    expect(saved["motion-prism"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
+  })
+
+  it("answers only the engines that were saved, under both keys", async () => {
+    h.masking = { "motion-pulse": { mode: "auto" } }
+    expect(await buildToolkit().settings!.nodaroMotionMasking!()).toEqual({ "motion-pulse": { mode: "auto" }, "motion-lite": { mode: "auto" } })
   })
 })
 
@@ -59,7 +66,7 @@ describe("the plugin-side types mirror the host's", () => {
     expectTypeOf<FaceMasking>().toEqualTypeOf<PluginFaceMasking>()
   })
 
-  it("PluginNodaroMotionMasking is the stored setting", () => {
-    expectTypeOf<NodaroMotionMasking>().toEqualTypeOf<PluginNodaroMotionMasking>()
+  it("PluginNodaroMotionMasking is what the host answers (both key sets)", () => {
+    expectTypeOf<NodaroMotionMaskingForPlugin>().toEqualTypeOf<PluginNodaroMotionMasking>()
   })
 })

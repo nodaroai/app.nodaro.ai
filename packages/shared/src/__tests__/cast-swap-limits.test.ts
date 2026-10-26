@@ -22,6 +22,9 @@ import {
   NODARO_MOTION_ENGINES,
   NODARO_MOTION_ENGINE_NAMES,
   NODARO_MOTION_ENGINE_OF_CAST_SWAP,
+  NODARO_MOTION_LEGACY_ENGINES,
+  NODARO_MOTION_LEGACY_ENGINE_OF,
+  nodaroMotionEngineFrom,
   castSwapEngineFrom,
   nodaroMotionEngineName,
   nodaroMotionEngineOf,
@@ -89,10 +92,20 @@ describe("Cast Swap limits", () => {
     expect(CAST_SWAP_KLING_MAX_IMAGES).toBe(10)
   })
 
-  it("names the two engines Nodaro Motion Pro and Lite, with public ids that map one-to-one onto the internal ones", () => {
-    expect(NODARO_MOTION_ENGINES).toEqual(["motion-pro", "motion-lite"])
-    expect(NODARO_MOTION_ENGINE_NAMES).toEqual({ "motion-pro": "Nodaro Motion Pro", "motion-lite": "Nodaro Motion Lite" })
-    expect(CAST_SWAP_ENGINE_OF_NODARO_MOTION).toEqual({ "motion-pro": "seedance-2-5", "motion-lite": "kling-4" })
+  it("names the two engines Nodaro Motion Prism and Pulse, with public ids that map one-to-one onto the internal ones", () => {
+    expect(NODARO_MOTION_ENGINES).toEqual(["motion-prism", "motion-pulse"])
+    // The earlier ids are keys too, answering the engine they became (code written against them reads no undefined).
+    expect(NODARO_MOTION_ENGINE_NAMES).toEqual({
+      "motion-prism": "Nodaro Motion Prism",
+      "motion-pulse": "Nodaro Motion Pulse",
+      "motion-pro": "Nodaro Motion Prism",
+      "motion-lite": "Nodaro Motion Pulse",
+    })
+    expect(CAST_SWAP_ENGINE_OF_NODARO_MOTION).toEqual({ "motion-prism": "seedance-2-5", "motion-pulse": "kling-4", "motion-pro": "seedance-2-5", "motion-lite": "kling-4" })
+    for (const [legacy, pub] of Object.entries(NODARO_MOTION_LEGACY_ENGINES)) {
+      expect(NODARO_MOTION_ENGINE_NAMES[legacy as keyof typeof NODARO_MOTION_ENGINE_NAMES]).toBe(NODARO_MOTION_ENGINE_NAMES[pub])
+      expect(CAST_SWAP_ENGINE_OF_NODARO_MOTION[legacy as keyof typeof CAST_SWAP_ENGINE_OF_NODARO_MOTION]).toBe(CAST_SWAP_ENGINE_OF_NODARO_MOTION[pub])
+    }
     // Total and inverse both ways: every internal engine has exactly one public id.
     for (const engine of CAST_SWAP_ENGINES) {
       const pub = nodaroMotionEngineOf(engine)
@@ -101,19 +114,33 @@ describe("Cast Swap limits", () => {
     }
     for (const pub of NODARO_MOTION_ENGINES) expect(nodaroMotionEngineOf(CAST_SWAP_ENGINE_OF_NODARO_MOTION[pub])).toBe(pub)
     expect(new Set(Object.values(NODARO_MOTION_ENGINE_OF_CAST_SWAP)).size).toBe(CAST_SWAP_ENGINES.length)
-    expect(nodaroMotionEngineName("seedance-2-5")).toBe("Nodaro Motion Pro")
-    expect(nodaroMotionEngineName("kling-4")).toBe("Nodaro Motion Lite")
+    expect(nodaroMotionEngineName("seedance-2-5")).toBe("Nodaro Motion Prism")
+    expect(nodaroMotionEngineName("kling-4")).toBe("Nodaro Motion Pulse")
   })
 
-  it("reads an engine named in either vocabulary, and nothing else", () => {
+  it("maps the earlier public ids onto the new ones, one-to-one and both ways", () => {
+    expect(NODARO_MOTION_LEGACY_ENGINES).toEqual({ "motion-pro": "motion-prism", "motion-lite": "motion-pulse" })
+    for (const [legacy, pub] of Object.entries(NODARO_MOTION_LEGACY_ENGINES)) {
+      expect(NODARO_MOTION_LEGACY_ENGINE_OF[pub]).toBe(legacy)
+    }
+    expect(Object.keys(NODARO_MOTION_LEGACY_ENGINE_OF).sort()).toEqual([...NODARO_MOTION_ENGINES].sort())
+  })
+
+  it("reads an engine named in any vocabulary, and nothing else", () => {
+    expect(castSwapEngineFrom("motion-prism")).toBe("seedance-2-5")
+    expect(castSwapEngineFrom("motion-pulse")).toBe("kling-4")
     expect(castSwapEngineFrom("motion-pro")).toBe("seedance-2-5")
     expect(castSwapEngineFrom("motion-lite")).toBe("kling-4")
     expect(castSwapEngineFrom("seedance-2-5")).toBe("seedance-2-5")
     expect(castSwapEngineFrom("kling-4")).toBe("kling-4")
-    for (const other of ["kling-3", "Motion-Pro", "", "toString", "__proto__", undefined, null, 4, {}]) {
+    for (const other of ["kling-3", "Motion-Pro", "Motion-Prism", "", "toString", "__proto__", undefined, null, 4, {}]) {
       expect(castSwapEngineFrom(other), String(other)).toBeUndefined()
+      expect(nodaroMotionEngineFrom(other), String(other)).toBeUndefined()
     }
-    expect(CAST_SWAP_ENGINE_IDS_ACCEPTED).toEqual(["motion-pro", "motion-lite", "seedance-2-5", "kling-4"])
+    expect(CAST_SWAP_ENGINE_IDS_ACCEPTED).toEqual(["motion-prism", "motion-pulse", "motion-pro", "motion-lite", "seedance-2-5", "kling-4"])
     for (const id of CAST_SWAP_ENGINE_IDS_ACCEPTED) expect(castSwapEngineFrom(id)).toBeDefined()
+    expect(nodaroMotionEngineFrom("motion-pro")).toBe("motion-prism")
+    expect(nodaroMotionEngineFrom("kling-4")).toBe("motion-pulse")
+    expect(nodaroMotionEngineFrom("motion-pulse")).toBe("motion-pulse")
   })
 })

@@ -1315,7 +1315,7 @@ const FACE_MASK_TARGET_BYTES = 173
 
 // LOWERED 2026-10-25 by Nodaro Motion: `cast_swap` no longer lists `face_masking` (Nodaro sets it
 // per engine) or `kling_length` (an older client's is still read, unlisted, as `motion_length`), its
-// engines are "motion-pro" / "motion-lite", and the cast_swap / trend / Full Quality descriptions
+// engines were "motion-pro" / "motion-lite" (renamed since, below), and the cast_swap / trend / Full Quality descriptions
 // name Nodaro Motion. No tool was added or removed, so the fixture does NOT move. Measured by this
 // suite: 504_667 total − 505_985 = −1_318 B; the 64 B of headroom carry across.
 const NODARO_MOTION_BYTES = -1_318
@@ -1333,6 +1333,13 @@ const TOPAZ_VIDEO_TARGET_BYTES = 299
 // cloud/all, cloud/jobs and community/all membership fixtures move. Measured: 509_474 total −
 // 505_812 = 3_662 B.
 const SESSIONS_TRASH_BYTES = 3_662
+
+// RAISED 2026-10-26 by the Nodaro Motion engine rename: "motion-pro" / "motion-lite" became
+// "motion-prism" / "motion-pulse" ("Nodaro Motion Prism" / "Nodaro Motion Pulse") in the
+// cast_swap, trend and Full Quality descriptions and the engine enum (the earlier ids are still
+// read, unlisted). No tool was added, so the fixture does NOT move. Measured by this suite:
+// 508_641 total − 508_613 = 28 B; the 79 B of headroom carry across.
+const NODARO_MOTION_RENAME_BYTES = 28
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
@@ -1497,7 +1504,8 @@ export const TOOL_WIRE_BUDGET = {
     FACE_MASK_TARGET_BYTES +
     NODARO_MOTION_BYTES +
     TOPAZ_VIDEO_TARGET_BYTES +
-    SESSIONS_TRASH_BYTES,
+    SESSIONS_TRASH_BYTES +
+    NODARO_MOTION_RENAME_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

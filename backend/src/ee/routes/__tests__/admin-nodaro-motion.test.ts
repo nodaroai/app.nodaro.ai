@@ -60,8 +60,8 @@ beforeEach(async () => {
 
 const as = { "x-user": "00000000-0000-4000-8000-0000000000ad" }
 const ENGINES = [
-  { id: "motion-pro", name: "Nodaro Motion Pro", internal: "seedance-2-5" },
-  { id: "motion-lite", name: "Nodaro Motion Lite", internal: "kling-4" },
+  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
+  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
 ]
 
 describe("GET /v1/admin/nodaro-motion/masking", () => {
@@ -78,16 +78,23 @@ describe("GET /v1/admin/nodaro-motion/masking", () => {
   })
 
   it("answers the stored setting, an invalid engine entry left out", async () => {
-    h.row = { value: { "motion-pro": { mode: "auto" }, "motion-lite": { mode: "nope" } }, updated_at: "2026-10-25T10:00:00.000Z" }
+    h.row = { value: { "motion-prism": { mode: "auto" }, "motion-pulse": { mode: "nope" } }, updated_at: "2026-10-25T10:00:00.000Z" }
     const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking", headers: as })
-    expect(res.json().data).toEqual({ masking: { "motion-pro": { mode: "auto" } }, updatedAt: "2026-10-25T10:00:00.000Z", engines: ENGINES })
+    expect(res.json().data).toEqual({ masking: { "motion-prism": { mode: "auto" } }, updatedAt: "2026-10-25T10:00:00.000Z", engines: ENGINES })
+  })
+
+  it("answers a setting saved under the earlier ids by the current ones", async () => {
+    h.row = { value: { "motion-pro": { mode: "always" }, "motion-lite": { mode: "auto", target: "face" } }, updated_at: "2026-10-25T10:00:00.000Z" }
+    const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking", headers: as })
+    expect(res.json().data.masking).toEqual({ "motion-prism": { mode: "always" }, "motion-pulse": { mode: "auto", target: "face" } })
+    expect(res.body).not.toMatch(/motion-pro|motion-lite/)
   })
 })
 
 describe("PUT /v1/admin/nodaro-motion/masking", () => {
   const masking = {
-    "motion-pro": { mode: "always", target: "head", fill: "blur", minFaceHeightPct: 10, maxFaceHeightPct: 0, zone: { leftPct: 5, rightPct: 5 }, blurStrengthPct: 2.5, threshold: 0.4 },
-    "motion-lite": { mode: "auto", target: "face", fill: "depth", zone: null },
+    "motion-prism": { mode: "always", target: "head", fill: "blur", minFaceHeightPct: 10, maxFaceHeightPct: 0, zone: { leftPct: 5, rightPct: 5 }, blurStrengthPct: 2.5, threshold: 0.4 },
+    "motion-pulse": { mode: "auto", target: "face", fill: "depth", zone: null },
   }
 
   it("is admin-only, and writes nothing for a non-admin", async () => {
@@ -98,11 +105,13 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
   })
 
   it("saves the whole setting with who and when, clears the cache, audits before and after, and answers what is now stored", async () => {
-    h.row = { value: { "motion-pro": { mode: "off" } }, updated_at: "2026-10-24T10:00:00.000Z" }
+    h.row = { value: { "motion-prism": { mode: "off" } }, updated_at: "2026-10-24T10:00:00.000Z" }
     const before = Date.now()
     const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_masking", value: masking, updated_at: expect.any(String), updated_by: as["x-user"] }])
+    // Under both key sets: an environment still on the app before the rename reads only the earlier ones.
+    const stored = { ...masking, "motion-pro": masking["motion-prism"], "motion-lite": masking["motion-pulse"] }
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_masking", value: stored, updated_at: expect.any(String), updated_by: as["x-user"] }])
     expect(h.invalidated).toBe(1)
     // The "Saved" time moves with every save.
     const savedAt = res.json().data.updatedAt as string
@@ -115,13 +124,13 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
         action: "update_nodaro_motion_masking",
         target_type: "app_setting",
         target_id: NODARO_MOTION_MASKING_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_masking", before: { "motion-pro": { mode: "off" } }, after: masking },
+        payload: { key: "nodaro_motion_masking", before: { "motion-prism": { mode: "off" } }, after: masking },
       },
     ])
   })
 
   it("takes one engine alone, or none (no engine masks)", async () => {
-    for (const m of [{ "motion-lite": { mode: "auto" } }, {}]) {
+    for (const m of [{ "motion-pulse": { mode: "auto" } }, {}]) {
       const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
@@ -132,13 +141,14 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
     for (const payload of [
       {},
       { masking: null },
-      { masking: { "motion-pro": { mode: "sometimes" } } },
-      { masking: { "motion-pro": { mode: "auto", threshold: 2 } } },
-      { masking: { "motion-lite": { mode: "auto", minFaceHeightPct: 40, maxFaceHeightPct: 20 } } },
-      { masking: { "motion-lite": { mode: "auto", zone: { leftPct: 60 } } } },
-      { masking: { "motion-lite": { mode: "auto", fill: "pixelate" } } },
-      { masking: { "motion-lite": { mode: "auto", tresh: 0.4 } } },
+      { masking: { "motion-prism": { mode: "sometimes" } } },
+      { masking: { "motion-prism": { mode: "auto", threshold: 2 } } },
+      { masking: { "motion-pulse": { mode: "auto", minFaceHeightPct: 40, maxFaceHeightPct: 20 } } },
+      { masking: { "motion-pulse": { mode: "auto", zone: { leftPct: 60 } } } },
+      { masking: { "motion-pulse": { mode: "auto", fill: "pixelate" } } },
+      { masking: { "motion-pulse": { mode: "auto", tresh: 0.4 } } },
       { masking: { "kling-4": { mode: "auto" } } },
+      { masking: { "motion-pro": { mode: "auto" } } },
       { masking: {}, extra: 1 },
     ]) {
       const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload })

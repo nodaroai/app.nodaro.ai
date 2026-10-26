@@ -11239,13 +11239,16 @@ export type AdminTrendKlingLength = "cut-end" | "cut-start"
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
- * 2.5 (Nodaro Motion Pro: 480p draft, 720p, 1080p) or Kling 4 (Nodaro Motion
- * Lite: 720p, 1080p; no draft). People see the public ids (`NodaroMotionEngine`).
+ * 2.5 (Nodaro Motion Prism: 480p draft, 720p, 1080p) or Kling 4 (Nodaro Motion
+ * Pulse: 720p, 1080p; no draft). People see the public ids (`NodaroMotionEngine`).
  */
 export type AdminTrendEngine = "seedance-2-5" | "kling-4"
 
 /** Nodaro Motion's public engine ids, as every user-facing response names them. */
-export type NodaroMotionEngine = "motion-pro" | "motion-lite"
+export type NodaroMotionEngine = "motion-prism" | "motion-pulse"
+
+/** The public ids the engines had before (2026-10-26); an older server may still answer one. */
+export type NodaroMotionLegacyEngine = "motion-pro" | "motion-lite"
 
 /** `archived`: put away by an admin — off the catalog, kept with its runs. */
 export type TrendStatus = "draft" | "published" | "unpublished" | "archived"
@@ -11358,11 +11361,12 @@ export interface AdminTrendRun {
   resolution: string
   draft: boolean
   /**
-   * The engine it was made on, by its PUBLIC id (Nodaro Motion Pro for every
-   * run before the choice); an older server answered the internal id.
+   * The engine it was made on, by its PUBLIC id (Nodaro Motion Prism for every
+   * run before the choice); an older server answered the internal id or an
+   * earlier public id.
    */
-  engine?: NodaroMotionEngine | AdminTrendEngine
-  /** Its name, "Nodaro Motion Pro" or "Nodaro Motion Lite" (absent from an older server). */
+  engine?: NodaroMotionEngine | NodaroMotionLegacyEngine | AdminTrendEngine
+  /** Its name, "Nodaro Motion Prism" or "Nodaro Motion Pulse" (absent from an older server). */
   engineName?: string
   videoUrl: string | null
   posterUrl: string | null

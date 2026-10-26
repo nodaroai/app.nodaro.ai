@@ -372,7 +372,7 @@ export function formIssues(form: TrendForm): string[] {
   }
   if (form.prePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
   else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
-    const on = form.engine === "kling-4" ? " on Nodaro Motion Lite (Kling 4)" : ""
+    const on = form.engine === "kling-4" ? " on Nodaro Motion Pulse (Kling 4)" : ""
     out.push(`Pre and trend prompts: at most ${Math.max(0, budget.promptsMax)} characters together${on}, to leave room for the engine's text and the user's details.`)
   }
   if (form.faceMasking) out.push(...maskingIssues(form.faceMasking))
@@ -384,7 +384,7 @@ export function formIssues(form: TrendForm): string[] {
   if (images > most) {
     out.push(
       form.engine === "kling-4"
-        ? `${images} images: at most ${most} on Nodaro Motion Lite (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
+        ? `${images} images: at most ${most} on Nodaro Motion Pulse (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
         : `${images} images: at most ${most} (3 per slot plus the reference pictures).`,
     )
   }
@@ -423,7 +423,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   storedFaceMaskRequired: "stored face masks a run must use (marks)",
   "faceMaskTarget:face": "face-only masks",
   trendPrePrompt: "pre prompts",
-  "kling-4": "Nodaro Motion Lite (Kling 4)",
+  "kling-4": "Nodaro Motion Pulse (Kling 4)",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
   castSwap: "Cast Swap",

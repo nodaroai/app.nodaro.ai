@@ -322,3 +322,22 @@ describe("publishBlockers — a masked trend", () => {
     expect(publishBlockers(data({ faceMasking: { mode: "off" } }), ENVS, REQUIRED)).toEqual([])
   })
 })
+
+describe("publishBlockers — a Nodaro Motion Pulse trend, whatever ids the engine declares", () => {
+  const PULSE = { faceMasking: { mode: "off" as const }, engine: "kling-4" as const }
+  it.each([
+    ["0.397.0", ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"]],
+    ["new ids only", ["motion-prism", "motion-pulse"]],
+  ] as const)("publishes on engines that declare %s", (_gen, engines) => {
+    const e = { ...ALL, engines, engineAliases: true }
+    expect(publishBlockers(data(PULSE), [env("staging", e), env("production", e)], REQUIRED)).toEqual([])
+  })
+
+  it("is held back where the engine declares no Pulse", () => {
+    const prismOnly = { ...ALL, engines: ["motion-prism"] }
+    expect(publishBlockers(data(PULSE), [env("staging", prismOnly), env("production")], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "staging", need: "kling-4" },
+      { code: "engine_unsupported", env: "production", need: "kling-4" },
+    ])
+  })
+})

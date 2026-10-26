@@ -66,8 +66,8 @@ const detail: TrendDetail = {
   ...card,
   version: 3,
   previewSec: 4,
-  engine: "motion-pro",
-  engineName: "Nodaro Motion Pro",
+  engine: "motion-prism",
+  engineName: "Nodaro Motion Prism",
   resolutions: ["480p", "720p", "1080p"],
   original,
   slots: [
@@ -109,8 +109,8 @@ const run: TrendRun = {
   preview: false,
   resolution: "480p",
   draft: true,
-  engine: "motion-pro",
-  engineName: "Nodaro Motion Pro",
+  engine: "motion-prism",
+  engineName: "Nodaro Motion Prism",
   videoUrl: "https://cdn.example.com/out.mp4",
   posterUrl: null,
   creditsCharged: 7,
@@ -180,10 +180,10 @@ describe("trends resource", () => {
     expect(Object.fromEntries(call(fetchMock, 1).url.searchParams)).toEqual({ locale: "he" })
   })
 
-  it("get returns a Nodaro Motion Lite trend's engine, its name and its resolutions (no draft)", async () => {
-    const lite: TrendDetail = { ...detail, engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] }
+  it("get returns a Nodaro Motion Pulse trend's engine, its name and its resolutions (no draft)", async () => {
+    const lite: TrendDetail = { ...detail, engine: "motion-pulse", engineName: "Nodaro Motion Pulse", resolutions: ["720p", "1080p"] }
     const fetchMock = vi.fn().mockReturnValue(mockOk({ data: lite }))
-    await expect(make(fetchMock).trends.get("dance-off")).resolves.toMatchObject({ engine: "motion-lite", engineName: "Nodaro Motion Lite", resolutions: ["720p", "1080p"] })
+    await expect(make(fetchMock).trends.get("dance-off")).resolves.toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse", resolutions: ["720p", "1080p"] })
   })
 
   it("get returns the original and a slot's hint picture; a trend with no example has examples [] and its cover is the original", async () => {

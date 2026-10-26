@@ -3321,10 +3321,18 @@ export interface PluginFaceMasking {
 
 /**
  * Nodaro Motion's face masking per engine, keyed by the PUBLIC engine ids
- * (`"motion-pro"` = Seedance 2.5, `"motion-lite"` = Kling 4). An engine left
- * out masks nothing.
+ * (`"motion-prism"` = Seedance 2.5, `"motion-pulse"` = Kling 4). An engine
+ * left out masks nothing.
+ *
+ * TRANSITION SHIM (the 2026-10-26 rename): every entry is answered under BOTH
+ * its current key and its earlier one (`"motion-pro"` beside `"motion-prism"`,
+ * `"motion-lite"` beside `"motion-pulse"`, the same value), because a plugin
+ * up to 0.397.0 looks only for the earlier keys. Drop the earlier keys once
+ * every environment pins a plugin that reads the new ones.
  */
-export type PluginNodaroMotionMasking = Partial<Record<"motion-pro" | "motion-lite", PluginFaceMasking>>
+export type PluginNodaroMotionMasking = Partial<
+  Record<"motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite", PluginFaceMasking>
+>
 
 /**
  * Deployment-wide settings a plugin feature reads (host → plugin), each a
@@ -3410,12 +3418,13 @@ export interface PluginSupports {
    *   absent ⇒ an engine that predates the choice, read as `["seedance-2-5"]`
    *   (such an engine drops an `engine` it does not know and runs Seedance,
    *   so a run on any other engine is held back until it is declared here).
-   *   Either vocabulary: Nodaro Motion's public ids (`"motion-pro"`,
-   *   `"motion-lite"`) or the internal ones — an engine with `engineAliases`
-   *   (0.394.0+) declares all four, the internal ids as aliases of the public
-   *   ones. The host reads every form as the internal ids (`castSwapEnginesOf`:
-   *   two engines, never four) and keeps sending the internal ids, which every
-   *   engine takes (0.393.0 and older refuse the public ones).
+   *   Any vocabulary: Nodaro Motion's public ids (`"motion-prism"`,
+   *   `"motion-pulse"`), their earlier ids (`"motion-pro"`, `"motion-lite"`,
+   *   what 0.394.0 – 0.397.0 declare, with the internal ids as their aliases)
+   *   or the internal ones. The host reads every form as the internal ids
+   *   (`castSwapEnginesOf`: two engines, however many ids are listed, so a
+   *   list of the new ids alone names both) and keeps sending the internal
+   *   ids, which every engine takes (0.393.0 and older refuse the public ones).
    * - `engineAliases`: the engine takes `engine` in either vocabulary (the
    *   public ids and the internal ones, normalised to the public ids at parse
    *   time) and records the public id. Additive-optional: absent ⇒ an engine
@@ -3457,7 +3466,7 @@ export interface PluginSupports {
     readonly trendRun: boolean
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
-    readonly engines?: readonly ("seedance-2-5" | "kling-4" | "motion-pro" | "motion-lite")[]
+    readonly engines?: readonly ("motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
     readonly engineAliases?: boolean
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string

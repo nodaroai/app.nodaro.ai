@@ -10,10 +10,12 @@
  * accepted it, runs (`POST /v1/cast-swap` → 202 `{ jobId }`), and the job is
  * followed with `get_job` / `wait_for_job` like any other.
  *
- * Engines: the tool takes Nodaro Motion's public ids (`"motion-pro"`,
- * `"motion-lite"`) and, unlisted, the internal ones an older client may still
- * send; both are sent to the route as the INTERNAL id (`castSwapEngineFrom`),
- * which every Cast Swap engine takes, and the quote names the public one.
+ * Engines: the tool takes Nodaro Motion's public ids (`"motion-prism"`,
+ * `"motion-pulse"`) and, unlisted, the ids an older client may still send (the
+ * earlier public ids `"motion-pro"` / `"motion-lite"`, and the internal ones);
+ * every form is sent to the route as the INTERNAL id (`castSwapEngineFrom`),
+ * which every Cast Swap engine takes, and the quote — whichever id the engine
+ * answers it under — names the current public one.
  *
  * Face masking is not the user's: Nodaro sets it per engine (the admin's
  * `nodaro_motion_masking`, read by the engine itself). The tool lists no
@@ -22,7 +24,7 @@
  * `motion_length`, and `face_masking` is accepted, ignored and never sent.
  *
  * The route is the authority on every rule (role counts, the 30-image total,
- * draft only at 480p, each engine's resolutions and Nodaro Motion Lite's lack
+ * draft only at 480p, each engine's resolutions and Nodaro Motion Pulse's lack
  * of a draft, the clip's length, the pre / post prompt's `{role:N}`
  * mentions, the preview-only role settings); this tool maps snake_case to
  * the route's body and leaves the rest to it. The user travels in
@@ -70,17 +72,18 @@ export interface RegisterCastSwapToolsOpts {
 interface CastSwapQuote {
   /** Held when the run starts. */
   totalCredits: number
-  /** The charge the run is expected to come to; on Nodaro Motion Lite the hold itself; absent from an older engine. */
+  /** The charge the run is expected to come to; on Nodaro Motion Pulse the hold itself; absent from an older engine. */
   expectedCredits?: number
   breakdown?: unknown
-  /** The engine, in either vocabulary (absent from an older engine = Nodaro Motion Pro); answered as the public id. */
+  /** The engine, in any vocabulary (absent from an older engine = Nodaro Motion Prism); answered as the current public id. */
   engine?: string
   settlesLower: boolean
 }
 
 /**
  * `engine` as the tool takes it: a public id, or (still accepted from an older
- * client, never listed) an internal one, read as the public id it names.
+ * client, never listed) an earlier public id or an internal one, read as the
+ * public id it names.
  */
 export const castSwapEngineArg = z.preprocess(
   (v) => {
@@ -90,7 +93,7 @@ export const castSwapEngineArg = z.preprocess(
   z.enum(NODARO_MOTION_ENGINES),
 )
 
-/** A Nodaro Motion Lite run's length fits. */
+/** A Nodaro Motion Pulse run's length fits. */
 const LENGTHS = ["cut-end", "cut-start"] as const
 
 const trait = z.enum(["new", "original"]).optional()
@@ -126,7 +129,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
-        'engine picks the engine: "motion-pro" (Nodaro Motion Pro, the default; 480p draft, 720p, 1080p) or "motion-lite" (Nodaro Motion Lite; 720p default or 1080p, no draft). ' +
+        'engine picks the engine: "motion-prism" (Nodaro Motion Prism, the default; 480p draft, 720p, 1080p) or "motion-pulse" (Nodaro Motion Pulse; 720p default or 1080p, no draft). ' +
         "Image and video URLs must be http(s): upload local files with the upload tools first.",
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
@@ -189,13 +192,13 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         preview_start: z.number().min(0).optional().describe("Seconds, default 0; preview_start + 4 must fit the clip."),
         engine: castSwapEngineArg
           .optional()
-          .describe('Default "motion-pro" (Nodaro Motion Pro). "motion-lite" (Nodaro Motion Lite): 720p or 1080p only, no draft; its Full Quality is a new take.'),
+          .describe('Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()
-          .describe('motion-lite only: cut the clip to whole seconds at its end (default) or start.'),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (motion-lite: "720p"; no 480p).'),
-        draft: z.boolean().optional().describe("Render as a draft, 480p motion-pro only. Default true at 480p, false above."),
+          .describe('motion-pulse only: cut the clip to whole seconds at its end (default) or start.'),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (motion-pulse: "720p"; no 480p).'),
+        draft: z.boolean().optional().describe("Render as a draft, 480p motion-prism only. Default true at 480p, false above."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
@@ -207,7 +210,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
     async (args) => {
       // The internal id: what every Cast Swap engine takes on the wire (an older one knows no other).
       const engine = args.engine !== undefined ? castSwapEngineFrom(args.engine) : undefined
-      // An engine that predates the choice drops an `engine` it does not know and runs Pro:
+      // An engine that predates the choice drops an `engine` it does not know and runs Prism:
       // never send it a body that names another engine (quote or run).
       if (engine !== undefined && !loadedEngineRuns(engine)) {
         return errorResult(
@@ -269,7 +272,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           privacyCredits !== undefined && privacyCredits > 0
             ? ` If the video model refuses the clip, the run is retried once, for ${privacyCredits} more credits charged only then.`
             : ""
-        // The quote's engine: absent from an older engine, which runs Nodaro Motion Pro.
+        // The quote's engine: absent from an older engine, which runs Nodaro Motion Prism.
         const quotedEngine = castSwapEngineFrom(quote.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
         const publicEngine: NodaroMotionEngine = nodaroMotionEngineOf(quotedEngine)
         const engineName = nodaroMotionEngineName(quotedEngine)

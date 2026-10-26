@@ -105,7 +105,7 @@ describe("estimate_full_quality", () => {
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: OLD_QUOTE } })
     const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
     expect(res.structuredContent).toEqual(QUOTE)
-    expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance/i)
+    expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance|Motion (Pro|Lite)\b/i)
   })
 
   it("reads the base fee from base, else castSwap (0.396.0 sends both, 0.397.0 base only), and answers base only", async () => {
@@ -130,7 +130,7 @@ describe("estimate_full_quality", () => {
     expect(res.content[0]!.text).toMatch(/could not be read/i)
   })
 
-  it("words a Nodaro Motion Lite new take as one, and passes its kind and every numeric part through", async () => {
+  it("words a Nodaro Motion Pulse new take as one, and passes its kind and every numeric part through", async () => {
     const newTake = { kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380, note: "x" }, availableUntil: "2026-10-28T10:00:00.000Z" }
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: newTake } })
     const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })

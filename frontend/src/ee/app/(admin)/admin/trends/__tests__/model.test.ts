@@ -162,7 +162,7 @@ describe("face masking and the pre prompt in the form", () => {
   })
 
   it("describes an engine without Kling 4", () => {
-    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "kling-4" })).toBe("production: Nodaro Motion Lite (Kling 4) not supported yet")
+    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "kling-4" })).toBe("production: Nodaro Motion Pulse (Kling 4) not supported yet")
   })
 
   it("describes an engine without face masking", () => {
@@ -263,7 +263,7 @@ describe("the model (engine) in the form", () => {
     expect(imagesSentAtMost(toForm(draft({ slots: five })))).toBe(15)
     const references = [{ images: ["https://x/1.png", "https://x/2.png", "https://x/3.png"], line: "l" }, { images: ["https://x/4.png", "https://x/5.png", "https://x/6.png"], line: "l" }]
     expect(formIssues(toForm(draft({ engine: "kling-4", slots: five, references })))).toContain(
-      "11 images: at most 10 on Nodaro Motion Lite (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).",
+      "11 images: at most 10 on Nodaro Motion Pulse (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).",
     )
   })
 

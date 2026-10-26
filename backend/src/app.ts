@@ -354,6 +354,7 @@ import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
+import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
@@ -560,6 +561,9 @@ export async function buildApp() {
   // A retired video model id in a request body runs as the model it became
   // (RETIRED_VIDEO_PROVIDERS), before any route prices or validates it.
   registerRetiredVideoProviderHook(app)
+  // A Nodaro Motion run or quote naming its engine by any id (public, earlier
+  // or internal) reaches the plugin's route as the internal id every engine takes.
+  registerNodaroMotionEngineHook(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the
   // identity this validates against. A no-op unless organizations are

@@ -2067,11 +2067,11 @@ interface CastSwapParams {
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
-  engine?: CastSwapEngine          // "motion-pro" (default) | "motion-lite" (see below)
-  motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-lite only; default "cut-end"
-  resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-lite: "720p" (default) or "1080p"
+  engine?: CastSwapEngine          // "motion-prism" (default) | "motion-pulse" (see below)
+  motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-pulse only; default "cut-end"
+  resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-pulse: "720p" (default) or "1080p"
   draft?: boolean                  // default true at 480p, false above; true above 480p is a 400;
-                                   // motion-lite has no draft (true = 400 draft_unsupported)
+                                   // motion-pulse has no draft (true = 400 draft_unsupported)
   prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
   faceMasking?: CastSwapFaceMasking // @deprecated: accepted and ignored (Nodaro sets it per engine)
   quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
@@ -2079,8 +2079,8 @@ interface CastSwapParams {
   origin?: string
 }
 
-type CastSwapEngine = "motion-pro" | "motion-lite" // Nodaro Motion Pro / Lite: what every response names
-type CastSwapEngineLegacyId = "seedance-2-5" | "kling-4" // @deprecated: still accepted in a request, never returned
+type CastSwapEngine = "motion-prism" | "motion-pulse" // Nodaro Motion Prism / Pulse: what the trend routes and estimate() answer
+type CastSwapEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
 
 interface CastSwapEstimate {
   engine?: CastSwapEngine // the engine quoted
@@ -2089,10 +2089,10 @@ interface CastSwapEstimate {
   breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number } & Record<string, number>
                           // the parts, for display only: base (the run itself), references (preparing
                           // the reference pictures; 0 when off), motion (what the video holds), motionExpected
-                          // (what it is expected to be charged; Pro), privacy (preparing the clip) — motion and
+                          // (what it is expected to be charged; Prism), privacy (preparing the clip) — motion and
                           // motionExpected are alternatives, so read the totals, never the sum
   privacyCredits?: number // charged only if the clip is refused and the run is retried; not in the totals
-  settlesLower: boolean   // Auto length (Pro): the final charge is expected to be lower
+  settlesLower: boolean   // Auto length (Prism): the final charge is expected to be lower
 }
 
 interface CastSwapFullQualityEstimate {
@@ -2183,26 +2183,27 @@ const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.ran
 ```
 
 **Engines** (`engine`, `CastSwapEngine`). Left out, a run is made on
-Nodaro Motion Pro (`"motion-pro"`), as before. `"motion-lite"` (Nodaro Motion
-Lite) makes a new take guided by the clip and the pictures: 720p (its default)
+Nodaro Motion Prism (`"motion-prism"`), as before. `"motion-pulse"` (Nodaro Motion
+Pulse) makes a new take guided by the clip and the pictures: 720p (its default)
 or 1080p, no draft (`draft: true` is a `400 draft_unsupported`, 480p is
-refused), a 4 s preview as on Pro, and a Full Quality that is a new take
-(below). `motionLength` (`CastSwapMotionLength`) says where a Lite run cuts the
+refused), a 4 s preview as on Prism, and a Full Quality that is a new take
+(below). `motionLength` (`CastSwapMotionLength`) says where a Pulse run cuts the
 clip to whole seconds: `"cut-end"` (default) or `"cut-start"` drops the
-fraction of a second at that end. A Lite quote names `engine`, with
+fraction of a second at that end. A Pulse quote names `engine`, with
 `expectedCredits` = `totalCredits` and `settlesLower: false`. Its own
 refusals: `draft_unsupported`, `resolution_unsupported`,
 `output_format_unsupported`, `too_many_images` (over 10 images) and, past its
 8,000-character prompt cap, `prompt_too_long`. The job records it in
 `input_data.engine`, and a completed job's output in its `engine`. The ids an
-older client sent (`CastSwapEngineLegacyId`: `"seedance-2-5"`, `"kling-4"`) are
-still accepted in a request and read as Pro and Lite; every response names the
-public ids.
+older client sent (`CastSwapEngineLegacyId`) are still accepted in a request
+and read as Prism and Pulse. The trend routes and `estimate()` answer the
+public ids above; for now a job's `input_data.engine` (and its output's
+`engine`) may still name the engine by the id it had before the rename.
 
 **Full Quality.** A finished draft run (a Nodaro Motion run made as a draft,
 or a trend run, whose default is a draft) can be finished at Full Quality within 7
 days: `fullQuality(jobId)` re-renders the same take at 1080p, with the clip's
-audio, as a new job linked to the draft. A finished Nodaro Motion Lite run at
+audio, as a new job linked to the draft. A finished Nodaro Motion Pulse run at
 720p can be too: Full Quality then makes a NEW take at 1080p from the same inputs (it will
 not match the 720p run frame for frame; the 720p run stays). The quote's
 `kind` (`CastSwapFullQualityKind`: `"same-take"` or `"new-take"`) says which,
@@ -2285,9 +2286,9 @@ interface TrendCard {
 interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
-  engine?: "motion-pro" | "motion-lite" // TrendEngine: the engine every run uses (the trend's choice); absent = motion-pro
-  engineName?: string                   // "Nodaro Motion Pro" | "Nodaro Motion Lite"
-  resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-pro ["480p" (draft), "720p", "1080p"], motion-lite ["720p", "1080p"]
+  engine?: "motion-prism" | "motion-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = motion-prism
+  engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
+  resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p" (draft), "720p", "1080p"], motion-pulse ["720p", "1080p"]
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy
   slots: TrendDetailSlot[]
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []
@@ -2313,7 +2314,7 @@ interface TrendRunRequest {
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
-  draft?: boolean       // only at 480p on motion-pro; default true there; motion-lite: true = 400 draft_unsupported
+  draft?: boolean       // only at 480p on motion-prism; default true there; motion-pulse: true = 400 draft_unsupported
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
@@ -2337,13 +2338,13 @@ interface TrendRun {
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean
-  engine?: "motion-pro" | "motion-lite" // the engine it was made on; absent = motion-pro
-  engineName?: string                   // "Nodaro Motion Pro" | "Nodaro Motion Lite"
+  engine?: "motion-prism" | "motion-pulse" // the engine it was made on; absent = motion-prism
+  engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
   videoUrl: string | null; posterUrl: string | null  // once completed
   creditsCharged: number | null
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
   fullQuality: { jobId: string; status: string } | null // a draft's newest Full Quality try: a pointer only
-  fullQualityUntil: string | null    // until when a completed draft (or motion-lite 720p run) can be redone in Full Quality
+  fullQualityUntil: string | null    // until when a completed draft (or motion-pulse 720p run) can be redone in Full Quality
 }
 
 interface TrendTag {

@@ -76,8 +76,8 @@ function serverWith(fastify: FastifyInstance, scopes: Scope[] = ["workflows:exec
 }
 
 const QUOTE = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0 }, settlesLower: false }
-/** What the tool adds to a quote that names no engine (an older engine's: Nodaro Motion Pro). */
-const PRO = { engine: "motion-pro", engineName: "Nodaro Motion Pro" }
+/** What the tool adds to a quote that names no engine (an older engine's: Nodaro Motion Prism). */
+const PRO = { engine: "motion-prism", engineName: "Nodaro Motion Prism" }
 
 const ARGS = {
   video_url: "https://cdn.example/clip.mp4",
@@ -260,7 +260,7 @@ describe("cast_swap", () => {
     const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
     expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).not.toContain("face_masking")
     expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).not.toContain("kling_length")
-    expect(JSON.stringify(tool)).not.toMatch(/mask|blur|depth|seedance|kling|SAM\b/i)
+    expect(JSON.stringify(tool)).not.toMatch(/mask|blur|depth|seedance|kling|SAM\b|Motion (Pro|Lite)\b|motion-(pro|lite)\b/i)
   })
 
   it("takes an older client's kling_length as motion_length (unlisted), and refuses one that is not a length fit", async () => {
@@ -275,12 +275,17 @@ describe("cast_swap", () => {
     expect(calls).toHaveLength(2)
   })
 
-  it("refuses a motion-lite run (or the old kling-4 id), sending nothing, where the loaded engine does not declare it (an older engine would run Pro)", async () => {
+  it("refuses a motion-pulse run (or an older id of it), sending nothing, where the loaded engine does not declare it (an older engine would run Prism)", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    for (const castSwap of [undefined, { engines: ["seedance-2-5" as const] }, { engines: ["motion-pro" as const], engineAliases: true }]) {
+    for (const castSwap of [
+      undefined,
+      { engines: ["seedance-2-5" as const] },
+      { engines: ["motion-pro" as const], engineAliases: true },
+      { engines: ["motion-prism" as const], engineAliases: true },
+    ]) {
       _resetPluginSupportsForTests()
       if (castSwap) setPluginSupports({ castSwap: castSwap as never })
-      for (const engine of ["motion-lite", "kling-4"]) {
+      for (const engine of ["motion-pulse", "motion-lite", "kling-4"]) {
         for (const confirm of [undefined, true]) {
           const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, ...(confirm ? { confirm } : {}) })
           expect(res.isError).toBe(true)
@@ -290,18 +295,23 @@ describe("cast_swap", () => {
       }
     }
     expect(calls).toEqual([])
-    // Pro named outright, by either id, still runs anywhere, sent as the internal id.
+    // Prism named outright, by any id, still runs anywhere, sent as the internal id.
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-prism" })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pro" })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "seedance-2-5" })
-    expect(calls.map((c) => (c.payload as { engine?: string }).engine)).toEqual(["seedance-2-5", "seedance-2-5"])
+    expect(calls.map((c) => (c.payload as { engine?: string }).engine)).toEqual(["seedance-2-5", "seedance-2-5", "seedance-2-5"])
     _resetPluginSupportsForTests()
   })
 
   it("answers the quote's engine by its public id and name, whichever vocabulary the engine answered in", async () => {
     for (const [answered, engine, engineName] of [
-      [undefined, "motion-pro", "Nodaro Motion Pro"],
-      ["seedance-2-5", "motion-pro", "Nodaro Motion Pro"],
-      ["motion-pro", "motion-pro", "Nodaro Motion Pro"],
+      [undefined, "motion-prism", "Nodaro Motion Prism"],
+      ["seedance-2-5", "motion-prism", "Nodaro Motion Prism"],
+      ["motion-pro", "motion-prism", "Nodaro Motion Prism"],
+      ["motion-prism", "motion-prism", "Nodaro Motion Prism"],
+      ["kling-4", "motion-pulse", "Nodaro Motion Pulse"],
+      ["motion-lite", "motion-pulse", "Nodaro Motion Pulse"],
+      ["motion-pulse", "motion-pulse", "Nodaro Motion Pulse"],
     ] as const) {
       const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: { ...QUOTE, ...(answered ? { engine: answered } : {}) } } })
       const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
@@ -310,35 +320,37 @@ describe("cast_swap", () => {
     }
   })
 
-  // An older engine declares the internal ids; a newer one the public ids with `engineAliases`.
+  // An older engine declares the internal ids; 0.394.0 – 0.397.0 the earlier public ids with
+  // `engineAliases` (and records and quotes them); a newer one the current public ids alone.
   for (const declared of [
-    { engines: ["seedance-2-5", "kling-4"] },
-    { engines: ["motion-pro", "motion-lite"], engineAliases: true },
+    { engines: ["seedance-2-5", "kling-4"], answers: "kling-4" },
+    { engines: ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"], engineAliases: true, answers: "motion-lite" },
+    { engines: ["motion-prism", "motion-pulse"], engineAliases: true, answers: "motion-pulse" },
   ]) {
     describe(`on an engine that declares ${declared.engines.join(" + ")}`, () => {
       beforeEach(() => setPluginSupports({ castSwap: declared as never }))
       afterEach(() => _resetPluginSupportsForTests())
 
-      it("quotes a motion-lite run (expected = hold) as one price, named Nodaro Motion Lite, with nothing held beside it", async () => {
-        const lite = { engine: declared.engineAliases ? "motion-lite" : "kling-4", totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
+      it("quotes a motion-pulse run (expected = hold) as one price, named Nodaro Motion Pulse, with nothing held beside it", async () => {
+        const lite = { engine: declared.answers, totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
         const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: lite } })
-        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, preview: false, engine: "motion-lite" })
-        expect(res.structuredContent).toEqual({ engine: "motion-lite", engineName: "Nodaro Motion Lite", totalCredits: 420, expectedCredits: 420, breakdown: { base: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
-        expect(res.content[0]!.text).toContain("This Nodaro Motion Lite run costs about 420 credits.")
+        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, preview: false, engine: "motion-pulse" })
+        expect(res.structuredContent).toEqual({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse", totalCredits: 420, expectedCredits: 420, breakdown: { base: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
+        expect(res.content[0]!.text).toContain("This Nodaro Motion Pulse run costs about 420 credits.")
         expect(res.content[0]!.text).not.toMatch(/held|lower|kling/i)
       })
 
-      it("sends engine to the route as the internal id, public or old id alike (quote and run), and no engine key without it", async () => {
+      it("sends engine to the route as the internal id, public or older id alike (quote and run), and no engine key without it", async () => {
         const { fastify, calls } = stubFastify({
           "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
           "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-k" } },
         })
         // motion_length, or the deprecated kling_length from an older client.
-        for (const [engine, length] of [["motion-lite", "motion_length"], ["kling-4", "kling_length"]]) {
+        for (const [engine, length] of [["motion-pulse", "motion_length"], ["motion-lite", "motion_length"], ["kling-4", "kling_length"]]) {
           await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start" })
           await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start", confirm: true })
         }
-        expect(calls).toHaveLength(4)
+        expect(calls).toHaveLength(6)
         // Sent as motionLength only where the engine takes Nodaro Motion's names; an older one knows klingLength alone.
         const lengthKey = declared.engineAliases ? "motionLength" : "klingLength"
         for (const c of calls) expect(c.payload).toEqual({ ...BODY, engine: "kling-4", resolution: "1080p", [lengthKey]: "cut-start" })
@@ -347,13 +359,13 @@ describe("cast_swap", () => {
         expect("engine" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
       })
 
-      it("refuses an engine it does not know before calling the route; leaves draft on motion-lite to the route", async () => {
-        const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Nodaro Motion Lite has no draft." } } } })
+      it("refuses an engine it does not know before calling the route; leaves draft on motion-pulse to the route", async () => {
+        const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Nodaro Motion Pulse has no draft." } } } })
         expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-3" })).isError).toBe(true)
         expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-max" })).isError).toBe(true)
-        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-lite", motion_length: "pad" })).isError).toBe(true)
+        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pulse", motion_length: "pad" })).isError).toBe(true)
         expect(calls).toEqual([])
-        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-lite", draft: true })
+        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pulse", draft: true })
         expect(res.isError).toBe(true)
         expect(res.content[0]!.text).toContain("draft_unsupported")
         expect(calls[0]!.payload).toMatchObject({ engine: "kling-4", draft: true })
@@ -369,7 +381,7 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toMatch(/retried once, for 4 more credits charged only then/)
     expect(res.content[0]!.text).not.toMatch(/mask|blur|depth|seedance|kling/i)
     expect(res.structuredContent).toMatchObject({ totalCredits: 12, privacyCredits: 4, breakdown: { base: 5, motion: 7, references: 0, privacy: 4 }, confirmed: false })
-    expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance|kling|masking/i)
+    expect(JSON.stringify(res.structuredContent)).not.toMatch(/seedance|kling|masking|Motion (Pro|Lite)\b|motion-(pro|lite)\b/i)
   })
 
   it("reads the neutral key names first (an engine that sends both), and the old ones from an older engine", async () => {

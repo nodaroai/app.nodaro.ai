@@ -61,12 +61,13 @@ export interface TrendRun {
   resolution: string
   draft: boolean
   /**
-   * The engine the run was made on, by its public id: `"motion-pro"` (every
-   * run before the choice) or `"motion-lite"`. A job stores either vocabulary
-   * (an engine that knows the public ids records those).
+   * The engine the run was made on, by its public id: `"motion-prism"` (every
+   * run before the choice) or `"motion-pulse"`. A job stores any vocabulary
+   * (an engine that knows the public ids records those, the earlier ones up to
+   * 0.397.0), each read as the current public id.
    */
   engine: NodaroMotionEngine
-  /** Its name: "Nodaro Motion Pro" or "Nodaro Motion Lite". */
+  /** Its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse". */
   engineName: string
   videoUrl: string | null
   posterUrl: string | null
@@ -94,7 +95,7 @@ const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
 const FULL_QUALITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
- * A run's engine (internal id), from its stored input in either vocabulary (an
+ * A run's engine (internal id), from its stored input in any vocabulary (an
  * engine that knows Nodaro Motion's public ids records those): Seedance 2.5
  * when it names none (every run before the choice) or names no engine.
  */
@@ -529,7 +530,7 @@ export async function engineRequest(
         ...(webFreeMode ? { "x-web-free-mode": "true" } : {}),
         "content-type": "application/json",
       },
-      // A Lite trend's length fit, under the key this environment's engine takes.
+      // A Pulse trend's length fit, under the key this environment's engine takes.
       payload: withWireLengthKey(payload),
     }),
   )

@@ -425,8 +425,13 @@ describe("trendVersionDataSchema — engine", () => {
     }
   })
 
-  it("takes Nodaro Motion's public ids too, and stores the internal id each names", () => {
-    for (const [engine, stored] of [["motion-pro", "seedance-2-5"], ["motion-lite", "kling-4"]] as const) {
+  it("takes Nodaro Motion's public ids too (and their earlier ids), and stores the internal id each names", () => {
+    for (const [engine, stored] of [
+      ["motion-prism", "seedance-2-5"],
+      ["motion-pulse", "kling-4"],
+      ["motion-pro", "seedance-2-5"],
+      ["motion-lite", "kling-4"],
+    ] as const) {
       const r = trendVersionDataSchema.safeParse(data({ engine }))
       expect(r.success, engine).toBe(true)
       expect(r.data?.engine).toBe(stored)

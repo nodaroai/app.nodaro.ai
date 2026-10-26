@@ -3,7 +3,7 @@
 // the SDK, MCP `cast_swap`). People never set it. A trend keeps its own
 // setting (Admin → Trends). Until an admin saves here, no engine masks.
 //
-// One setting per engine (Pro, Lite), edited with the trend editor's own
+// One setting per engine (Prism, Pulse), edited with the trend editor's own
 // controls, saved together (PUT /v1/admin/nodaro-motion/masking): the
 // deployment's whole setting, read by the Cast Swap engine within a minute.
 

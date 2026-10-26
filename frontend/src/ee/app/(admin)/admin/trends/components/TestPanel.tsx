@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineHasDraft } from "@nodaro/shared/models"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom, castSwapEngineHasDraft } from "@nodaro/shared/models"
 import type { AdminTrendEngine, AdminTrendRun, AdminTrendSlot, TrendChipKey, TrendChoice, TrendResolution, TrendTestRunRequest } from "@/lib/api"
 import {
   isTrendRunInFlight,
@@ -439,7 +439,7 @@ function RunCard({
             {run.resolution}
             {run.draft ? " draft" : ""}
           </span>
-          {(run.engine === "motion-lite" || run.engine === "kling-4") && <span>{run.engineName ?? "Nodaro Motion Lite"} (Kling 4)</span>}
+          {castSwapEngineFrom(run.engine) === "kling-4" && <span>{run.engineName ?? "Nodaro Motion Pulse"} (Kling 4)</span>}
           {run.fullQualityOf && (
             <Badge variant="secondary" title={`Full Quality version of run ${run.fullQualityOf}`}>
               Full Quality
