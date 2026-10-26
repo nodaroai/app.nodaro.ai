@@ -103,7 +103,7 @@ declare module "fastify" {
      *  write made through one can be attributed to the credential rather than
      *  only to the account. Present only on a deployment that configures a
      *  billing payer; unset everywhere else. */
-    billingKey?: { id: string; name: string }
+    billingKey?: { id: string; name: string; readOnly: boolean }
     /** Pool-aware spend-surface mode (D1 v2), stamped by creditGuard Step 0:
      *  true = consumer-surface browser session while the flag is on. Payg
      *  resolution happens downstream (check/reserve/RPC self-gate). */
@@ -544,13 +544,26 @@ export function registerAuthHook(app: FastifyInstance): void {
         return
       }
 
+      // A READ-ONLY key reads and never writes. Refused by VERB, here, once —
+      // not route by route — so a write route added under this prefix later
+      // is closed to it by default.
+      if (key.readOnly && req.method !== "GET" && req.method !== "HEAD") {
+        reply.status(403).send({
+          error: {
+            code: "billing_key_read_only",
+            message: "This billing integration key is read-only.",
+          },
+        })
+        return
+      }
+
       // Acts AS the billing account, on a strict subset of what that account
       // may do. `requireDeploymentPayer` still checks the identity; the
       // `authKind` above is what tells it, and the two verbs that stay
       // browser-only, which credential it is.
       req.userId = deploymentPayerId() ?? undefined
       req.authKind = "billing_key"
-      req.billingKey = { id: key.id, name: key.name }
+      req.billingKey = { id: key.id, name: key.name, readOnly: key.readOnly }
       touchBillingKeyLastUsed(key.id)
       return
     }

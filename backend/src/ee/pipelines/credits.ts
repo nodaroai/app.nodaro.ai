@@ -7,7 +7,7 @@ import { blockedReservationRefusal } from "../../lib/access-blocks.js"
 // `billing.allowances = "enforce"`.
 import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import type { BillingContext } from "../../lib/billing-context.js"
-import { attemptAutoRecharge } from "../billing/auto-recharge.js"
+import { attemptAutoRecharge, autoRechargeTargetFor } from "../billing/auto-recharge.js"
 import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared/pipeline"
 import { buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, sunoCreditType } from "@nodaro/shared/credits"
 import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
@@ -304,11 +304,11 @@ export async function reservePipelineCredits(
   }
   // Reserve succeeded — balance dropped; auto-recharge check (fire-and-
   // forget, never blocks the pipeline). Covers the direct-RPC reserve lane
-  // the CreditsService hook can't see (audit F2.2). NEVER for a workspace
-  // payer — the member's balance did not move, and class work must not pump
-  // a member's saved card (the family-0 invariant, mirrored). NEVER for a
-  // deployment payer — prepaid-only, the payer account has no card to pump.
-  if (!ws && !dep) void attemptAutoRecharge(args.userId)
+  // the CreditsService hook can't see (audit F2.2). The target (none for a
+  // workspace payer; the payer account, only for in-app work, for a
+  // deployment payer) is autoRechargeTargetFor's invariant (mirrored).
+  const rechargeTarget = autoRechargeTargetFor(args.userId, args.billingContext)
+  if (rechargeTarget) void attemptAutoRecharge(rechargeTarget)
   // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5):
   // migration 382's `reserve_credits` names the column in its own INSERT, so
   // attribution is written in the same transaction as the debit instead of by

@@ -233,7 +233,7 @@ async function buildApp(): Promise<FastifyInstance> {
     req.authKind = typeof kind === "string" ? (kind as NonNullable<typeof req.authKind>) : "jwt"
     if (req.authKind === "api_token") req.apiToken = { id: "tok", userId: String(userId) } as never
     if (req.authKind === "app_token") req.appAuthorization = { id: "auth" } as never
-    if (req.authKind === "billing_key") req.billingKey = { id: KEY_ID, name: "back office" }
+    if (req.authKind === "billing_key") req.billingKey = { id: KEY_ID, name: "back office", readOnly: false }
   })
   await instance.register(async (i) => {
     await deploymentBillingRoutes(i)
@@ -1042,6 +1042,39 @@ describe("GET /balance", () => {
     expect(d.balanceCredits).toBe(41_250)
     expect(d.burn).toMatchObject({ credits: 900, generations: 2, capped: false })
     expect(d.periodEnd).toBeNull()
+  })
+
+  it("carries the payer's auto-recharge status, read-only, thresholds in RAW credits", async () => {
+    tableResults.set("deployment_payer_settings:single", { data: { low_balance_threshold_credits: null }, error: null })
+    tableResults.set("profiles:single", {
+      data: {
+        auto_recharge_enabled: true,
+        auto_recharge_threshold_credits: 5000,
+        auto_recharge_amount_usd: 50,
+        auto_recharge_failure_count: 1,
+        auto_recharge_last_attempt_at: "2026-10-26T10:00:00.000Z",
+      },
+      error: null,
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.autoRecharge).toMatchObject({
+      enabled: true,
+      thresholdCredits: 5000,
+      amountUsd: 50,
+      failureCount: 1,
+      lastAttemptAt: "2026-10-26T10:00:00.000Z",
+    })
+    expect(typeof res.json().data.autoRecharge.active).toBe("boolean")
+  })
+
+  it("an unreadable auto-recharge status is null — unknown, and the balance still answers", async () => {
+    tableResults.set("deployment_payer_settings:single", { data: { low_balance_threshold_credits: null }, error: null })
+    tableResults.set("profiles:single", { data: null, error: { message: "boom" } })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.autoRecharge).toBeNull()
+    expect(res.json().data.balanceCredits).toBe(41_250)
   })
 
   it("has lowBalance FALSE while no threshold is set — never a fabricated default", async () => {

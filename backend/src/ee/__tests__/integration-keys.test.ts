@@ -189,7 +189,7 @@ async function buildApp(): Promise<FastifyInstance> {
     const kind = req.headers["x-auth-kind"]
     req.authKind = typeof kind === "string" ? (kind as "jwt" | "api_token" | "billing_key") : "jwt"
     if (req.authKind === "api_token") req.apiToken = { id: "tok", userId: String(userId) } as never
-    if (req.authKind === "billing_key") req.billingKey = { id: KEY_ID, name: "Back office" }
+    if (req.authKind === "billing_key") req.billingKey = { id: KEY_ID, name: "Back office", readOnly: false }
   })
   await instance.register(async (i) => {
     await deploymentBillingRoutes(i)
@@ -304,6 +304,46 @@ describe("POST /integration-keys", () => {
     expect(Object.values(payload).some((v) => typeof v === "string" && v.includes(token.slice(9)))).toBe(false)
   })
 
+  it("mints a READ-ONLY key on request: its kind is in the bearer and the stored prefix", async () => {
+    payerDeployment()
+    push(KEYS, [])
+    push(KEYS, row({ name: "Nodaro admin", token_prefix: "ndr_bill_ro_abc" }))
+
+    const res = await app.inject({
+      method: "POST",
+      url: KEYS_URL,
+      headers: AS_PAYER,
+      payload: { name: "Nodaro admin", readOnly: true },
+    })
+    expect(res.statusCode).toBe(201)
+    const token = res.json().data.token as string
+    expect(token).toMatch(/^ndr_bill_ro_[0-9a-f]{64}$/)
+    expect(res.json().data.readOnly).toBe(true)
+
+    const payload = rec.writes.find((w) => w.table === KEYS && w.op === "insert")!.payload as Record<string, unknown>
+    // The kind tag plus the same three hex a full key shows.
+    expect(payload.token_prefix).toBe(token.slice(0, 15))
+    expect(payload.token_hash).toBe(hashBillingKey(token))
+  })
+
+  it("a full key stays the default, and readOnly must be a boolean", async () => {
+    payerDeployment()
+    push(KEYS, [])
+    push(KEYS, row({ name: "Back office" }))
+    const full = await app.inject({ method: "POST", url: KEYS_URL, headers: AS_PAYER, payload: { name: "Back office" } })
+    expect(full.json().data.readOnly).toBe(false)
+    expect(full.json().data.token).toMatch(/^ndr_bill_[0-9a-f]{64}$/)
+
+    const bad = await app.inject({
+      method: "POST",
+      url: KEYS_URL,
+      headers: AS_PAYER,
+      payload: { name: "Back office", readOnly: "yes" },
+    })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error.code).toBe("invalid_read_only")
+  })
+
   it("refuses an empty or over-long name", async () => {
     payerDeployment()
     for (const name of ["", "   ", "x".repeat(81)]) {
@@ -383,6 +423,7 @@ describe("GET /integration-keys", () => {
       id: KEY_ID,
       name: "Back office",
       tokenPrefix: BEARER.slice(0, 12),
+      readOnly: false,
       createdAt: "2026-09-01T00:00:00.000Z",
       expiresAt: null,
       lastUsedAt: "2026-09-02T00:00:00.000Z",

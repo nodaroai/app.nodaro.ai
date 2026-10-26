@@ -40,7 +40,10 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false,
   hasAdmin: () => true,
 }))
-vi.mock("../auto-recharge.js", () => ({ attemptAutoRecharge: vi.fn() }))
+vi.mock("../auto-recharge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../auto-recharge.js")>()),
+  attemptAutoRecharge: vi.fn(),
+}))
 
 import { CreditsService, invalidateModelPricingCache, type CreditProfile } from "../credits.js"
 import type { BillingContext } from "../../../lib/billing-context.js"

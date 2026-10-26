@@ -57,6 +57,7 @@ import {
   countLiveBillingKeys,
   listBillingKeys,
   MAX_LIVE_BILLING_KEYS,
+  isReadOnlyBillingKeyPrefix,
   mintBillingKey,
   normalizeCidr,
   revokeBillingKey,
@@ -68,6 +69,7 @@ import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { isModelDenied } from "../../lib/surface-deny.js"
 import { toUnits } from "../../lib/billing-display-unit.js"
 import { invalidateBalanceCache } from "./credits.js"
+import { readAutoRechargeStatus } from "../billing/auto-recharge.js"
 import {
   allowanceLedgerFor,
   allowanceLedgerOne,
@@ -1322,7 +1324,11 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const payerId = deploymentPayerId()
     if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
 
-    const [pool, threshold] = await Promise.all([readPool(payerId), readLowBalanceThreshold(payerId)])
+    const [pool, threshold, autoRecharge] = await Promise.all([
+      readPool(payerId),
+      readLowBalanceThreshold(payerId),
+      readAutoRechargeStatus(payerId),
+    ])
     const total = pool.balance?.total ?? null
 
     return reply.send({
@@ -1338,6 +1344,9 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         // already having a bad day.
         lowBalance: threshold !== null && total !== null && total < threshold,
         threshold,
+        // The payer's card top-up, read-only (configured on the billing page).
+        // Thresholds are RAW credits, like `balanceCredits`. `null` = unknown.
+        autoRecharge,
       },
     })
   })
@@ -1793,6 +1802,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     id: row.id,
     name: row.name,
     tokenPrefix: row.token_prefix,
+    readOnly: isReadOnlyBillingKeyPrefix(row.token_prefix),
     createdAt: row.created_at,
     expiresAt: row.expires_at ?? null,
     lastUsedAt: row.last_used_at ?? null,
@@ -1898,7 +1908,12 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         )
     }
 
-    const minted = await mintBillingKey({ name, expiresAt, allowedCidrs, createdBy: payerId })
+    if (body.readOnly !== undefined && typeof body.readOnly !== "boolean") {
+      return reply.status(400).send(err("invalid_read_only", "readOnly must be true or false."))
+    }
+    const readOnly = body.readOnly === true
+
+    const minted = await mintBillingKey({ name, expiresAt, allowedCidrs, createdBy: payerId, readOnly })
     if (!minted.ok) {
       return reply.status(500).send(err("key_write_failed", "The integration key could not be created."))
     }
@@ -1911,6 +1926,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         name: minted.row.name,
         token: minted.token,
         tokenPrefix: minted.row.token_prefix,
+        readOnly,
         expiresAt: minted.row.expires_at ?? null,
       },
     })
