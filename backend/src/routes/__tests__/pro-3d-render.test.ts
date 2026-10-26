@@ -70,7 +70,7 @@ import { pro3DRenderRoutes } from "../pro-3d-render.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://r2.example/uploads/ref.png"
-const KEY = "idem-key-abcdef0123"
+const KEY = "idem-key-abcdef0123" // gitleaks:allow — an idempotency-header fixture, not a credential
 const PROMPT_SOURCE = { kind: "prompt", prompt: "A red suitcase rolls behind a pillar" }
 const SCENE_SOURCE = { kind: "scene", revisionId: "rev-1", sourceJobId: "job-1" }
 
