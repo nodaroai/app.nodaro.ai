@@ -192,6 +192,7 @@ const FORBIDDEN: ReadonlyArray<{ method: "GET" | "POST"; url: string }> = [
   { method: "POST", url: "/v1/jobs" },
   { method: "GET", url: "/v1/user/credits" },
   { method: "GET", url: "/v1/credits/transactions" },
+  { method: "GET", url: "/v1/credits/usage-summary" },
   { method: "GET", url: "/v1/credits/history" },
   { method: "POST", url: "/v1/api-tokens" },
   { method: "POST", url: "/v1/developer-apps" },

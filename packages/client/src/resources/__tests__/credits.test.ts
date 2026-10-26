@@ -6,7 +6,7 @@ import {
   InsufficientCreditsError,
   StorageExceededError,
 } from "../../index.js"
-import type { CreditHistoryEntry, CreditHistoryPage, ModelCostResult, ModelCostsResult, UserBalance, WelcomeOfferClaimResult } from "../../index.js"
+import type { CreditHistoryEntry, CreditHistoryPage, ModelCostResult, ModelCostsResult, UsageSummary, UserBalance, WelcomeOfferClaimResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -66,6 +66,37 @@ describe("credits.transactions()", () => {
     expect(url.searchParams.get("limit")).toBe("50")
     expect(url.searchParams.get("cursor")).toBe("2026-10-13T20:00:00.000Z")
     expect(page).toEqual({ data: [], nextCursor: null })
+  })
+})
+
+describe("credits.usageSummary()", () => {
+  const SUMMARY: UsageSummary = {
+    period: { from: "2026-10-01T00:00:00.000Z", to: "2026-10-27T00:00:00.000Z", bucket: "week" },
+    totals: { used: 110, purchased: 3000, granted: 100, refunded: 7, runs: 4, avgPerRun: 27.5 },
+    mostUsed: { model: "kling-3:video", provider: "kie", credits: 80, runs: 1, share: 0.727 },
+    byModel: [{ model: "kling-3:video", provider: "kie", credits: 80, runs: 1, share: 0.727 }],
+    byCategory: [{ category: "video", credits: 80, runs: 1 }],
+    overTime: [{ bucket: "2026-10-26", used: 110, purchased: 3000, runs: 4 }],
+    bySession: [{ id: "s1", name: "Rapper portraits", tool: "image", credits: 27, runs: 2, models: ["nano-banana"], lastAt: "2026-10-26T16:07:00.000Z" }],
+    byWorkflow: [],
+    truncated: false,
+    partial: false,
+  }
+
+  it("GETs /v1/credits/usage-summary with the period and bucket as query, and unwraps data", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: SUMMARY }))
+    const client = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    expect(await client.credits.usageSummary({ from: "2026-10-01T00:00:00Z", to: "2026-10-27T00:00:00Z", bucket: "week" })).toEqual(SUMMARY)
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe("/v1/credits/usage-summary")
+    expect(Object.fromEntries(url.searchParams)).toEqual({ from: "2026-10-01T00:00:00Z", to: "2026-10-27T00:00:00Z", bucket: "week" })
+  })
+
+  it("sends no query by default — the server's last 30 days by day", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: SUMMARY }))
+    const client = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await client.credits.usageSummary()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/credits/usage-summary")
   })
 })
 

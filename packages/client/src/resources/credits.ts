@@ -212,6 +212,90 @@ export interface CreditTransactionsOptions {
   cursor?: string
 }
 
+/** How `credits.usageSummary()` groups the series over time. */
+export type UsageSummaryBucket = "day" | "week" | "month"
+
+export interface UsageSummaryOptions {
+  /** An ISO-8601 timestamp, or a date alone (`"2026-10-01"`: that whole UTC day), inclusive; default the last 30 days up to now. A period of at most a year. */
+  from?: string
+  to?: string
+  /** Default `"day"`. Buckets are UTC. */
+  bucket?: UsageSummaryBucket
+}
+
+export interface UsageSummaryTotals {
+  /** Credits spent on runs in the period: each run's charge (a running hold counts; a refunded run does not). */
+  used: number
+  /** Credits bought: packs, loads, subscription grants. */
+  purchased: number
+  /** Credits granted free, net: sign-up and admin adjustments, a grant taken back subtracted. */
+  granted: number
+  /** Credits given back for a refunded run or by Stripe (a hold released when a run settled below it is not a refund). */
+  refunded: number
+  /** Runs that were charged or are still running. */
+  runs: number
+  /** `used / runs`, one decimal; 0 with no runs. */
+  avgPerRun: number
+}
+
+export interface UsageByModel {
+  model: string
+  provider: string | null
+  credits: number
+  runs: number
+  /** Of `totals.used`, 0–1. */
+  share: number
+}
+
+export interface UsageByCategory {
+  /** `"image"`, `"video"`, `"audio"` or `"other"`. */
+  category: string
+  credits: number
+  runs: number
+}
+
+export interface UsageOverTime {
+  /** The bucket's first day in UTC (`"2026-10-26"`; a week by its Monday; a month as `"2026-10"`). The first bucket of a period may be a partial week or month. */
+  bucket: string
+  used: number
+  purchased: number
+  runs: number
+}
+
+/** The spend of one session or one workflow. */
+export interface UsageByGroup {
+  id: string
+  /** The session's title or the workflow's name; `null` when it has none or is gone. */
+  name: string | null
+  /** The tool the session belongs to; `null` on a workflow. */
+  tool: string | null
+  credits: number
+  runs: number
+  /** The models used, by spend. */
+  models: string[]
+  /** ISO-8601: the latest run. */
+  lastAt: string
+}
+
+/** The answer of `credits.usageSummary()`. */
+export interface UsageSummary {
+  period: { from: string; to: string; bucket: UsageSummaryBucket }
+  totals: UsageSummaryTotals
+  /** The model with the most spend; `null` with no runs. */
+  mostUsed: UsageByModel | null
+  /** By spend. */
+  byModel: UsageByModel[]
+  byCategory: UsageByCategory[]
+  /** Every bucket of the period, empty ones included, oldest first. */
+  overTime: UsageOverTime[]
+  bySession: UsageByGroup[]
+  byWorkflow: UsageByGroup[]
+  /** A read hit the server's row cap: the figures under-report; narrow the period. */
+  truncated: boolean
+  /** A side read failed on the server (the jobs, or a session's or workflow's name): a grouping is missing or unnamed; the totals are whole. */
+  partial: boolean
+}
+
 /** What a movement of the balance was; `app` is credits earned from, or paid for, a published app. */
 export type CreditHistoryKind = "usage" | "purchase" | "grant" | "refund" | "app" | "adjustment" | "expiry"
 
@@ -319,6 +403,21 @@ export class CreditsResource {
     return this.client.request<CreditTransactionsPage>("GET", "/v1/credits/transactions", {
       query: { limit: options.limit, cursor: options.cursor },
     })
+  }
+
+  /**
+   * `GET /v1/credits/usage-summary` → the period's credit usage summed the
+   * way a billing screen draws it: totals, the spend by model and by
+   * category, a series over time (`bucket`: day, week or month, no holes),
+   * and the spend by session and by workflow. The last 30 days unless
+   * `from` / `to` say otherwise; a period of at most a year (400 beyond).
+   * Cloud-only route: a self-hosted instance answers 404.
+   */
+  async usageSummary(options: UsageSummaryOptions = {}): Promise<UsageSummary> {
+    const res = await this.client.request<{ data: UsageSummary }>("GET", "/v1/credits/usage-summary", {
+      query: { from: options.from, to: options.to, bucket: options.bucket },
+    })
+    return res.data
   }
 
   /**

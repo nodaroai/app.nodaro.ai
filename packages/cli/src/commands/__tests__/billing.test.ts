@@ -8,6 +8,7 @@ const mocks = {
   subscription: vi.fn(),
   surface: vi.fn(),
   account: vi.fn(),
+  usageSummary: vi.fn(),
   history: vi.fn(),
   exportHistory: vi.fn(),
 }
@@ -65,8 +66,47 @@ describe("billing command", () => {
     vi.mocked(info).mockReset()
   })
 
-  it("registers plans, subscription, account, history and surface", () => {
-    expect(billingCommand().commands.map((c) => c.name()).sort()).toEqual(["account", "history", "plans", "subscription", "surface"])
+
+  const SUMMARY = {
+    period: { from: "2026-10-01T00:00:00.000Z", to: "2026-10-27T00:00:00.000Z", bucket: "week" },
+    totals: { used: 110, purchased: 3000, granted: 100, refunded: 7, runs: 4, avgPerRun: 27.5 },
+    mostUsed: { model: "kling-3:video", provider: "kie", credits: 80, runs: 1, share: 0.727 },
+    byModel: [{ model: "kling-3:video", provider: "kie", credits: 80, runs: 1, share: 0.727 }, { model: "nano-banana", provider: "kie", credits: 30, runs: 3, share: 0.273 }],
+    byCategory: [{ category: "video", credits: 80, runs: 1 }],
+    overTime: [{ bucket: "2026-10-19", used: 0, purchased: 0, runs: 0 }, { bucket: "2026-10-26", used: 110, purchased: 3000, runs: 4 }],
+    bySession: [{ id: "s1", name: "Rapper portraits", tool: "image", credits: 27, runs: 2, models: ["nano-banana"], lastAt: "2026-10-26T16:07:00.000Z" }],
+    byWorkflow: [{ id: "w1", name: null, tool: null, credits: 80, runs: 1, models: ["kling-3:video"], lastAt: "2026-10-13T13:42:00.000Z" }],
+    truncated: false,
+    partial: false,
+  }
+
+  it("summary passes the period and bucket to the SDK and prints the totals, the models, the series, the sessions and the workflows", async () => {
+    mocks.usageSummary.mockResolvedValueOnce(SUMMARY)
+    await runCmd("billing", "summary", "--since", "2026-10-01T00:00:00Z", "--until", "2026-10-27T00:00:00Z", "--bucket", "week")
+    expect(mocks.usageSummary).toHaveBeenCalledWith({ from: "2026-10-01T00:00:00Z", to: "2026-10-27T00:00:00Z", bucket: "week" })
+    expect(info).toHaveBeenCalledWith("2026-10-01 to 2026-10-27: 110 credits on 4 runs (avg 27.5); bought 3000, granted 100, refunded 7")
+    const calls = vi.mocked(table).mock.calls
+    expect(calls[0]![1]).toEqual(["model", "credits", "runs", "share"])
+    expect(calls[0]![0][0]).toEqual({ model: "kling-3:video", credits: 80, runs: 1, share: "73%" })
+    expect(calls[1]![1]).toEqual(["week", "used", "purchased", "runs"])
+    expect(calls[1]![0][1]).toEqual({ week: "2026-10-26", used: 110, purchased: 3000, runs: 4 })
+    expect(calls[2]![0][0]).toEqual({ session: "Rapper portraits", tool: "image", credits: 27, runs: 2 })
+    expect(calls[3]![0][0]).toEqual({ workflow: "w1", credits: 80, runs: 1 }) // a gone workflow shows its id
+  })
+
+  it("summary --json emits the SDK answer whole; an unknown --bucket is refused before the SDK is called", async () => {
+    mocks.usageSummary.mockResolvedValueOnce(SUMMARY)
+    await runCmd("billing", "summary", "--json")
+    expect(emit).toHaveBeenCalledWith(SUMMARY, expect.objectContaining({ json: true }))
+    expect(mocks.usageSummary).toHaveBeenCalledWith({ from: undefined, to: undefined, bucket: undefined })
+
+    mocks.usageSummary.mockReset()
+    await expect(runCmd("billing", "summary", "--bucket", "hour")).rejects.toThrow(/--bucket/)
+    expect(mocks.usageSummary).not.toHaveBeenCalled()
+  })
+
+  it("registers plans, subscription, account, history, summary and surface", () => {
+    expect(billingCommand().commands.map((c) => c.name()).sort()).toEqual(["account", "history", "plans", "subscription", "summary", "surface"])
   })
 
   const ENTRY = {

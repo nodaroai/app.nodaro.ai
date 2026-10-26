@@ -3460,6 +3460,32 @@ are not registered and return 404.
 | `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
 | `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
+| `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
+
+**`UsageSummary`** (`GET /v1/credits/usage-summary`): `{ period: { from, to,
+bucket }, totals, mostUsed, byModel, byCategory, overTime, bySession,
+byWorkflow, truncated, partial }`. Personal money only: a workspace-paid run
+and an organization's ledger are another wallet. `totals` is `{ used,
+purchased, granted, refunded, runs, avgPerRun }` — `used` sums each run's
+charge (a running hold counts, a refunded run does not), `purchased` the
+packs, loads and subscription grants, `granted` the free credits net (a grant
+taken back subtracted), `refunded` what came back for a refunded run or from
+Stripe (a hold released when a run settled below it is not a refund), `runs`
+the runs charged or still running (a side hold beside a run is not a run).
+`byModel` rows are `{ model, provider, credits, runs, share }` (by spend,
+`share` of `used`, 0–1; `mostUsed` is the first, `null` with no runs);
+`byCategory` rows `{ category, credits, runs }` with `image`, `video`, `audio`
+or `other` (from the job's node type, else the model id); `overTime` one row
+per bucket of the period, empty ones included, oldest first: `{ bucket, used,
+purchased, runs }` where `bucket` is the UTC day (`2026-10-26`), the week's
+Monday, or the month (`2026-10`) — the first bucket may be a partial week or
+month. `bySession` and `byWorkflow` are `{ id, name, tool, credits, runs,
+models, lastAt }` by spend — what each "project" cost (`name` is the session's
+title or the workflow's name, `null` when it has none or is gone; `tool` on a
+session only). `truncated` is `true` when a read hit the server's row cap
+(5,000) and the figures under-report: narrow the period. `partial` is `true`
+when a side read failed (the jobs, or a session's or workflow's name): a
+grouping is missing or unnamed, the totals are whole.
 | `GET` | `/v1/credits/history` | `limit` (1–100, default 50), `cursor` (the previous page's `nextCursor`, opaque; another string is `400`), `kind` (`usage` / `purchase` / `grant` / `refund` / `app` / `adjustment` / `expiry`), `model` (a model identifier, exactly), `from` / `to` (ISO timestamps, inclusive), `q` (words in the description), `format` (`json`, or `csv` for the whole filtered history as a file, at most 5,000 rows, no paging) | Every movement of the balance, newest first: `{ data: HistoryEntry[], nextCursor }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens), like every balance read. |
 
 **`HistoryEntry`** (`GET /v1/credits/history`) is one movement of the

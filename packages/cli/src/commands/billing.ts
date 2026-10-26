@@ -1,8 +1,18 @@
 import { Command } from "commander"
 import type { BillingMoney, BillingPlan, BillingPriceCredits } from "@nodaro/sdk/billing"
+import type { UsageSummaryBucket } from "@nodaro/sdk/credits"
 import type { CreditHistoryEntry, CreditHistoryKind, CreditHistoryOptions } from "@nodaro/sdk/credits"
 import { buildClient, buildPublicClient, handleError } from "../client.js"
 import { detail, dim, emit, info, table, type OutputOpts } from "../output.js"
+
+const SUMMARY_BUCKETS: readonly UsageSummaryBucket[] = ["day", "week", "month"]
+
+interface SummaryOpts extends OutputOpts {
+  profile?: string
+  since?: string
+  until?: string
+  bucket?: string
+}
 
 const HISTORY_KINDS: readonly CreditHistoryKind[] = ["usage", "purchase", "grant", "refund", "app", "adjustment", "expiry"]
 
@@ -183,6 +193,37 @@ Examples:
           return
         }
         detail(account)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("summary")
+    .description("your credit usage over a period: totals, by model, by category, over time, by session and by workflow (Nodaro Cloud)")
+    .option("--profile <name>")
+    .option("--since <when>", "from this time: an ISO-8601 timestamp, or a date (2026-10-01, that whole UTC day); default 30 days ago")
+    .option("--until <when>", "up to this time, the same way; default now")
+    .option("--bucket <bucket>", "the series over time by day, week or month, in UTC (default day)")
+    .option("--json")
+    .action(async (opts: SummaryOpts) => {
+      try {
+        const bucket = opts.bucket as UsageSummaryBucket | undefined
+        if (bucket !== undefined && !SUMMARY_BUCKETS.includes(bucket)) throw new Error(`--bucket must be one of ${SUMMARY_BUCKETS.join(", ")}`)
+        const client = buildClient(opts.profile)
+        const summary = await client.credits.usageSummary({ from: opts.since, to: opts.until, bucket })
+        if (opts.json) {
+          emit(summary, opts)
+          return
+        }
+        const { totals } = summary
+        info(`${summary.period.from.slice(0, 10)} to ${summary.period.to.slice(0, 10)}: ${totals.used} credits on ${totals.runs} runs (avg ${totals.avgPerRun}); bought ${totals.purchased}, granted ${totals.granted}, refunded ${totals.refunded}`)
+        if (summary.truncated) dim("(cut at the row cap: the figures under-report; narrow the period)")
+        if (summary.partial) dim("(a side read failed: a grouping is missing or unnamed; the totals are whole)")
+        table(summary.byModel.map((m) => ({ model: m.model, credits: m.credits, runs: m.runs, share: `${Math.round(m.share * 100)}%` })), ["model", "credits", "runs", "share"])
+        table(summary.overTime.map((b) => ({ [summary.period.bucket]: b.bucket, used: b.used, purchased: b.purchased, runs: b.runs })), [summary.period.bucket, "used", "purchased", "runs"])
+        if (summary.bySession.length > 0) table(summary.bySession.map((s) => ({ session: s.name ?? s.id, tool: s.tool ?? "", credits: s.credits, runs: s.runs })), ["session", "tool", "credits", "runs"])
+        if (summary.byWorkflow.length > 0) table(summary.byWorkflow.map((w) => ({ workflow: w.name ?? w.id, credits: w.credits, runs: w.runs })), ["workflow", "credits", "runs"])
       } catch (err) {
         handleError(err)
       }

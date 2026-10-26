@@ -149,6 +149,18 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   ...(["cli", "mcp"] as const).flatMap((surface) =>
     WELCOME_OFFER_SESSION_ONLY.map((atom) => ({ feature: "credits", surface, atom, reason: WELCOME_OFFER_REASONS[surface] })),
   ),
+  {
+    feature: "credits",
+    surface: "mcp",
+    atom: "GET /v1/credits/history",
+    reason: "a person's billing screen (every movement of the balance with the balance after each, filters, a CSV); an agent reads the same runs and purchases through credit_transactions",
+  },
+  {
+    feature: "credits",
+    surface: "mcp",
+    atom: "GET /v1/credits/usage-summary",
+    reason: "a person's analytics view (spend by model, over time, by session); an agent reads the runs through credit_transactions and sums what it needs",
+  },
   ...BILLING_SESSION_ONLY.map((atom) => ({ feature: "billing", surface: "cli" as const, atom, reason: BILLING_SESSION_ONLY_REASONS.cli })),
   // The purchase history reaches agents through credit_transactions, which reads the same rows.
   ...BILLING_SESSION_ONLY.filter((atom) => atom !== "GET /v1/billing/transactions").map((atom) => ({

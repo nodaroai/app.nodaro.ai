@@ -6772,6 +6772,40 @@ do {
 console.log(`${spent} credits charged`)
 ```
 
+#### `usageSummary(options?)`
+
+```ts
+usageSummary(options?: { from?: string; to?: string; bucket?: "day" | "week" | "month" }): Promise<UsageSummary>
+```
+
+`GET /v1/credits/usage-summary` → the period's credit usage summed the way a
+billing screen draws it, personal money only. The last 30 days up to now
+unless `from` / `to` (an ISO-8601 timestamp, or a date alone — `"2026-10-01"`
+is that whole UTC day; inclusive) say otherwise; at most a year apart (a
+`NodaroError` with status 400 beyond). `bucket` groups the series over time
+(default `"day"`; UTC). Cloud edition only; on a deployment-payer instance the
+billing account's own session alone (`ForbiddenError`, `payer_balance_jwt_only`,
+to its tokens).
+
+**`UsageSummary`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `period` | `{ from, to, bucket }` | The period as the server took it. |
+| `totals` | `UsageSummaryTotals` | `{ used, purchased, granted, refunded, runs, avgPerRun }` — `used` sums each run's charge (a running hold counts, a refunded run does not); `purchased` the packs, loads and subscription grants; `granted` the free credits net (a grant taken back subtracted); `refunded` what came back for a refunded run or from Stripe (a hold released when a run settled below it is not a refund); `runs` the runs charged or still running (a side hold beside a run is not a run); `avgPerRun` = `used / runs`, one decimal. |
+| `mostUsed` | `UsageByModel \| null` | The model with the most spend; `null` with no runs. |
+| `byModel` | `UsageByModel[]` | `{ model, provider, credits, runs, share }` by spend; `share` is of `used`, 0–1. |
+| `byCategory` | `UsageByCategory[]` | `{ category, credits, runs }` — `"image"`, `"video"`, `"audio"` or `"other"`. |
+| `overTime` | `UsageOverTime[]` | One row per bucket of the period, empty ones included, oldest first: `{ bucket, used, purchased, runs }`; `bucket` is the UTC day (`"2026-10-26"`), the week's Monday, or the month (`"2026-10"`); the first may be a partial week or month. |
+| `bySession` / `byWorkflow` | `UsageByGroup[]` | What each session / workflow cost, by spend: `{ id, name, tool, credits, runs, models, lastAt }` (`name` the session's title or the workflow's name, `null` when it has none or is gone; `tool` on a session only; `models` by spend). |
+| `truncated` | `boolean` | A read hit the server's row cap (5,000): the figures under-report; narrow the period. |
+| `partial` | `boolean` | A side read failed on the server (the jobs, or a session's or workflow's name): a grouping is missing or unnamed; the totals are whole. |
+
+```ts
+// The analytics view of a billing screen.
+const s = await client.credits.usageSummary({ bucket: "week" })
+console.log(s.totals.used, "credits this month;", s.mostUsed?.model, "most used")
+for (const w of s.overTime) console.log(w.bucket, w.used)
 #### `history(options?)`
 
 ```ts
@@ -8983,6 +9017,7 @@ not two.
 
 - `UserBalance` — full balance + tier record (see `balance()` table above)
 - `ModelCostsResult` — `{ data: Record<string, number>; missing: string[]; errors: string[] }`
+- `UsageSummary` / `UsageSummaryOptions` / `UsageSummaryBucket` / `UsageSummaryTotals` / `UsageByModel` / `UsageByCategory` / `UsageOverTime` / `UsageByGroup` — `credits.usageSummary()` (see its table above)
 - `CreditHistoryEntry` / `CreditHistoryJob` / `CreditHistoryKind` / `CreditHistoryPage` / `CreditHistoryFilters` / `CreditHistoryOptions` — `credits.history()` / `credits.exportHistory()`: every movement of the balance (see the `history()` table above)
 
 ### Uploads
