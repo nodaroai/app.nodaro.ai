@@ -50,7 +50,10 @@ vi.mock("@/lib/access-blocks.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/access-blocks.js")>()),
   refuseBlockedReservation: async () => {},
 }))
-vi.mock("@/ee/billing/auto-recharge.js", () => ({ attemptAutoRecharge: async () => {} }))
+vi.mock("@/ee/billing/auto-recharge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/billing/auto-recharge.js")>()),
+  attemptAutoRecharge: async () => {},
+}))
 vi.mock("@/ee/lib/welcome-offer-config.js", () => ({ getWelcomeOfferConfig: async () => ({ enabled: false }) }))
 vi.mock("@/lib/supabase.js", () => {
   const PROFILE = {
