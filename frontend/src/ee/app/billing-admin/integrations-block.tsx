@@ -323,7 +323,7 @@ function KeyRow({
             {k.readOnly && (
               <span
                 data-testid={`integration-key-read-only-${k.id}`}
-                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
               >
                 {t("billingAdmin.integrationsReadOnlyBadge")}
               </span>
