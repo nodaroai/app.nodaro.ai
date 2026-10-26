@@ -1,5 +1,7 @@
 // tools/test-select/annotations.mjs
 // @reads-none parses only the source text it is given; SCANNER below names read calls, it makes none
+import { memoBySource } from "./source-memo.mjs"
+
 // A test that reads files at run time (a guard that scans the source, a test
 // that loads a fixture or a migration) has no import edge to what it reads,
 // so the import graph can never select it. It declares what it reads instead:
@@ -63,19 +65,20 @@ const firstReason = (source, re) => {
   return null
 }
 
-export function parseAnnotations(source) {
+// Each parser below is a pure function of the text, memoised per distinct
+// source (source-memo.mjs): the graph asks about the same module once per test
+// that loads it.
+export const parseAnnotations = memoBySource("parseAnnotations", (source) => {
   const watches = [...source.matchAll(WATCH)].flatMap((m) => globsOf(m[1]))
   return { watches, always: firstReason(source, ALWAYS), forCaller: firstReason(source, FOR_CALLER), readsNone: firstReason(source, TEST_READS_NONE) }
-}
+})
 
-export function parseReads(source) {
+export const parseReads = memoBySource("parseReads", (source) => {
   const reads = [...source.matchAll(READS)].flatMap((m) => globsOf(m[1]))
   return { reads, readsNone: firstReason(source, READS_NONE) }
-}
+})
 
-export function isScanner(source) {
-  return SCANNER.test(source)
-}
+export const isScanner = memoBySource("isScanner", (source) => SCANNER.test(source))
 
 // Registries (§5.8 B, decided 2026-10-16). A generated aggregate of node
 // units declares which of its imports are MEMBER edges and the collections it
@@ -95,7 +98,7 @@ const REGISTRY_ENUMERATES = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@registry-enumerates[
 const UNITS_BY_NAME = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@test-units-by-name[ \t]+([^ \t\n].*?)[ \t]*(?:\*\/)?[ \t]*$/gm
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 
-export function parseRegistryAnnotations(source) {
+export const parseRegistryAnnotations = memoBySource("parseRegistryAnnotations", (source) => {
   const members = [...source.matchAll(REGISTRY)].flatMap((m) => globsOf(m[1]))
   const exports = []
   for (const m of source.matchAll(REGISTRY_EXPORTS)) {
@@ -109,4 +112,4 @@ export function parseRegistryAnnotations(source) {
     enumerates: firstReason(source, REGISTRY_ENUMERATES),
     unitsByName: firstReason(source, UNITS_BY_NAME),
   }
-}
+})

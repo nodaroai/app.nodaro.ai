@@ -38,6 +38,7 @@
 // miss"); the selection itself stays today's. Pure: graph.mjs feeds it.
 import { matchesAny } from "./glob.mjs"
 import { parseRegistryAnnotations } from "./annotations.mjs"
+import { memoBySource } from "./source-memo.mjs"
 import { sideEffectProblems } from "../units/structure.mjs"
 
 /** The aggregates' directories (tools/units/seams.mjs GENERATED_DIRS). */
@@ -229,12 +230,12 @@ function takePattern(code, text, bound, namespaces) {
 
 /**
  * The bindings a module makes of other modules' exports: `bound` (names
- * imported or destructured by name) and `namespaces` (module objects). The last
- * source is memoised: enumeratorsIn asks once per registry of the same file.
+ * imported or destructured by name) and `namespaces` (module objects). Memoised
+ * per distinct source (source-memo.mjs): enumeratorsIn asks once per registry
+ * for every module of every test that reaches an aggregate, and the tests share
+ * their modules. The Sets are this module's own: namesUsed only reads them.
  */
-let memo = { source: null, value: null }
-function bindingsOf(source) {
-  if (memo.source === source) return memo.value
+const bindingsOf = memoBySource("bindingsOf", (source) => {
   const bound = new Set()
   // Namespace bindings: `import * as m from …`, the module object of a
   // dynamic import / vi.importActual, and the `...rest` of a destructured one —
@@ -281,8 +282,18 @@ function bindingsOf(source) {
   // also with a type argument, which may itself hold parentheses:
   // `(await vi.importActual<typeof import("x")>("x")).x`.
   for (const m of source.matchAll(/\(\s*await\s+(?:import|importOriginal|vi\.importActual|vi\.importMock)\s*(?:<[^>]*>)?\s*\([^)]*\)\s*\)\s*\.\s*([\w$]+)/g)) bound.add(m[1])
-  memo = { source, value: { bound, namespaces } }
-  return memo.value
+  return { bound, namespaces }
+}, { freeze: false })
+
+// Whether a module uses one name: a pure function of (source, name), so each
+// source keeps the verdicts it was asked for — the member-read RegExps scan
+// the whole text, once per registry export, for every test that loads it.
+const nameVerdictsOf = memoBySource("nameVerdicts", () => new Map(), { freeze: false })
+function usesName(source, n) {
+  const { bound, namespaces } = bindingsOf(source)
+  if (bound.has(n)) return true
+  if (UPPER.test(n) && new RegExp(`\\.${escape(n)}\\b`).test(source)) return true
+  return [...namespaces].some((ns) => new RegExp(`\\b${escape(ns)}\\??\\.${escape(n)}\\b`).test(source))
 }
 
 /**
@@ -296,11 +307,10 @@ function bindingsOf(source) {
 export function namesUsed(source, names) {
   const used = new Set()
   if (!source || names.size === 0) return used
-  const { bound, namespaces } = bindingsOf(source)
+  const verdicts = nameVerdictsOf(source)
   for (const n of names) {
-    if (bound.has(n)) used.add(n)
-    else if (UPPER.test(n) && new RegExp(`\\.${escape(n)}\\b`).test(source)) used.add(n)
-    else if ([...namespaces].some((ns) => new RegExp(`\\b${escape(ns)}\\??\\.${escape(n)}\\b`).test(source))) used.add(n)
+    if (!verdicts.has(n)) verdicts.set(n, usesName(source, n))
+    if (verdicts.get(n)) used.add(n)
   }
   return used
 }
