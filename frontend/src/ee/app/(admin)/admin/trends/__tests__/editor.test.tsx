@@ -489,6 +489,22 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await waitFor(() => expect(sentTo(`POST ${BASE}/examples`)).toEqual([{ jobId: RUN_ID }]))
   })
 
+  it("plays a run in a tall frame, with Fullscreen and Copy link", async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+    HTMLVideoElement.prototype.requestFullscreen = requestFullscreen
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /copy link/i }))
+    expect(writeText).toHaveBeenCalledWith("https://cdn.test/out.mp4")
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Link copied"))
+    await user.click(screen.getByRole("button", { name: /fullscreen/i }))
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    const video = document.querySelector(`video[src="https://cdn.test/out.mp4"]`)
+    expect(video).toHaveClass("h-52", "object-contain")
+  })
+
   it("shows a refused promotion's message", async () => {
     const user = userEvent.setup()
     routes[`POST ${BASE}/examples`] = () => ({
