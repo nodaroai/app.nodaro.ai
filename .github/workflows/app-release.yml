@@ -119,12 +119,27 @@ jobs:
             exit 0
           fi
           for _ in $(seq 1 60); do
-            sha=$(curl -sf -H "Authorization: Bearer $TOK" \
-              "https://api.github.com/repos/nodaroai/app.nodaro.ai/commits/main" \
-              | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).sha" 2>/dev/null || echo "")
-            if [ "$sha" = "$GITHUB_SHA" ]; then
-              echo "public mirror carries $sha"
+            # Read public main with git, not the API: an ancestry check is what
+            # answers both "already carries this SHA" (a later release may have
+            # mirrored past it) and "can never carry it". The -c clears the
+            # checkout's internal-token header, which public reads do not need.
+            pub=""
+            if git -c http.https://github.com/.extraheader= fetch -q \
+                https://github.com/nodaroai/app.nodaro.ai.git main 2>/dev/null; then
+              pub=$(git rev-parse FETCH_HEAD)
+            fi
+            if [ -n "$pub" ] && git merge-base --is-ancestor "$GITHUB_SHA" "$pub"; then
+              echo "public mirror carries $GITHUB_SHA (public main at $pub)"
               echo "public=true" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            # Public main carries a commit internal lacks, so the fast-forward
+            # mirror reports it (mirror-failure issue) instead of publishing.
+            # Waiting cannot help, and failing here would make Railway skip the
+            # production deploy over the public repo (decided 2026-10-25).
+            if [ -n "$pub" ] && ! git merge-base --is-ancestor "$pub" "$GITHUB_SHA"; then
+              echo "::warning::public main ($pub) has diverged from internal main, so $GITHUB_SHA cannot reach it. The public tag + Release are skipped: once the divergence is adopted and the mirror catches up, release the public half manually (push the tag + gh release create) or re-run this workflow."
+              echo "public=false" >> "$GITHUB_ENV"
               exit 0
             fi
             sleep 30
