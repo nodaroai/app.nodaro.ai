@@ -22,7 +22,7 @@ vi.mock("../private-plugins/load.js", () => ({ getPluginServices: () => h.servic
 // The leaf the consumers read from forwards to the mock above.
 vi.mock("../private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../private-plugins/load.js")).getPluginServices }))
 
-const { resolveBillingContext, registerBillingContextHook, personalPayer, billingService } =
+const { resolveBillingContext, registerBillingContextHook, personalPayer, billingService, isInAppSession, isDeploymentBillingContext } =
   await import("../billing-context.js")
 
 const WF_UUID = "d0d0d0d0-1111-4222-8333-000000000001"
@@ -296,6 +296,49 @@ describe("deployment payer rung — resolveBillingContext", () => {
   it("inactive (mainline): byte-identical personal answers — the inert invariant", async () => {
     expect(await resolveBillingContext({ userId: "u-1" })).toEqual({ payer: "user", userId: "u-1" })
   })
+
+  it("stamps the auto-recharge consent ONLY when the resolve point vouches for an in-app session", async () => {
+    __setDeploymentPayerForTests("payer-acct")
+    expect(await resolveBillingContext({ userId: "u-1" })).not.toHaveProperty("autoRecharge")
+    expect(await resolveBillingContext({ userId: "u-1" }, { inAppSession: false })).not.toHaveProperty("autoRecharge")
+    expect(await resolveBillingContext({ userId: "u-1" }, { inAppSession: true })).toMatchObject({
+      payer: "deployment",
+      payerId: "payer-acct",
+      autoRecharge: true,
+    })
+  })
+
+  it("the in-app flag is meaningless without a payer — mainline answers stay byte-identical", async () => {
+    expect(await resolveBillingContext({ userId: "u-1" }, { inAppSession: true })).toEqual({ payer: "user", userId: "u-1" })
+  })
+})
+
+describe("isInAppSession — only a person in the product itself", () => {
+  it("a Supabase session JWT with no third-party app ⇒ true", () => {
+    expect(isInAppSession({ authKind: "jwt", appAuthorization: undefined })).toBe(true)
+  })
+
+  it("every machine credential and loopback ⇒ false", () => {
+    for (const authKind of ["api_token", "app_token", "billing_key", "internal", undefined] as const) {
+      expect(isInAppSession({ authKind, appAuthorization: undefined })).toBe(false)
+    }
+    expect(
+      isInAppSession({ authKind: "jwt", appAuthorization: { appId: "a", authorizationId: "z", scopes: [] } as never }),
+    ).toBe(false)
+  })
+})
+
+describe("isDeploymentBillingContext — the stored auto-recharge consent is a literal", () => {
+  const base = { payer: "deployment", userId: "u-1", payerId: "payer-acct", entitlements: DEP_ENT }
+  it("absent or `true` is admitted", () => {
+    expect(isDeploymentBillingContext(base)).toBe(true)
+    expect(isDeploymentBillingContext({ ...base, autoRecharge: true })).toBe(true)
+  })
+  it("anything else rides in from a row ⇒ rejected", () => {
+    for (const v of [false, "true", 1, null, {}]) {
+      expect(isDeploymentBillingContext({ ...base, autoRecharge: v })).toBe(false)
+    }
+  })
 })
 
 describe("deployment payer rung — the per-request hook (real Fastify)", () => {
@@ -313,6 +356,8 @@ describe("deployment payer rung — the per-request hook (real Fastify)", () => 
     app.addHook("preHandler", async (req) => {
       const userId = req.headers["x-user-id"]
       if (typeof userId === "string") req.userId = userId
+      const authKind = req.headers["x-auth-kind"]
+      if (typeof authKind === "string") req.authKind = authKind as typeof req.authKind
     })
     registerBillingContextHook(app)
     app.post("/probe", async (req) => ({ ctx: req.billingContext ?? null }))
@@ -328,6 +373,34 @@ describe("deployment payer rung — the per-request hook (real Fastify)", () => 
     const res = await app.inject({ method: "POST", url: "/probe", headers: { "x-user-id": "u-1" }, payload: {} })
     expect(res.json().ctx).toEqual({ payer: "deployment", userId: "u-1", payerId: "payer-acct", entitlements: DEP_ENT })
     expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it("an in-app (JWT) request carries the payer's auto-recharge consent", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/probe",
+      headers: { "x-user-id": "u-1", "x-auth-kind": "jwt" },
+      payload: {},
+    })
+    expect(res.json().ctx).toEqual({
+      payer: "deployment",
+      userId: "u-1",
+      payerId: "payer-acct",
+      entitlements: DEP_ENT,
+      autoRecharge: true,
+    })
+  })
+
+  it("an API-token, OAuth-app or loopback request never does", async () => {
+    for (const kind of ["api_token", "app_token", "internal"]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/probe",
+        headers: { "x-user-id": "u-1", "x-auth-kind": kind },
+        payload: {},
+      })
+      expect(res.json().ctx).not.toHaveProperty("autoRecharge")
+    }
   })
 
   it("GET stays unstamped — reads never spend, deployment payer or not", async () => {

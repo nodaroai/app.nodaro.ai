@@ -392,8 +392,14 @@ export function deploymentPayerId(): string | null {
  * cached grade (boot-guaranteed non-null while active); a stale TTL kicks a
  * background refresh and answers with the current value, so the billing hook
  * costs zero awaited queries per request (its personal-path budget).
+ *
+ * `inAppSession` stamps `autoRecharge: true` — pass it only from a resolve
+ * point that has verified the caller (`isInAppSession` in billing-context.ts).
  */
-export function deploymentBillingContext(requesterId: string): DeploymentBillingContext {
+export function deploymentBillingContext(
+  requesterId: string,
+  opts?: { inAppSession?: boolean },
+): DeploymentBillingContext {
   if (!payerId || !entitlements) {
     throw new Error("[deployment-payer] context requested while inactive — callers must gate on deploymentPayerActive()")
   }
@@ -405,7 +411,13 @@ export function deploymentBillingContext(requesterId: string): DeploymentBilling
         refreshInflight = null
       })
   }
-  return { payer: "deployment", userId: requesterId, payerId, entitlements }
+  return {
+    payer: "deployment",
+    userId: requesterId,
+    payerId,
+    entitlements,
+    ...(opts?.inAppSession === true ? { autoRecharge: true as const } : {}),
+  }
 }
 
 /** Test hook: reset to the pristine inactive state. */

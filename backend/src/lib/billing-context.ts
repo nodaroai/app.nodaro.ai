@@ -67,6 +67,14 @@ export interface DeploymentBillingContext {
   /** The deployment payer account — the DEBIT user. */
   payerId: string
   entitlements: DeploymentEntitlements
+  /**
+   * Present (always `true`) only when the work was started from an in-app
+   * session — see `isInAppSession`. It is the payer's auto-recharge consent
+   * for THIS work: `autoRechargeTargetFor` (ee/billing/auto-recharge.ts)
+   * recharges the payer only for a stamped context. Absent = never; every
+   * producer that cannot vouch for an in-app session omits it.
+   */
+  autoRecharge?: true
 }
 
 export type BillingContext = PluginBillingContext | DeploymentBillingContext
@@ -133,6 +141,8 @@ export function isDeploymentBillingContext(v: unknown): v is DeploymentBillingCo
   const c = v as Record<string, unknown>
   if (c.payer !== "deployment") return false
   if (typeof c.userId !== "string" || typeof c.payerId !== "string") return false
+  // The auto-recharge consent is a literal `true` or absent — nothing else.
+  if (c.autoRecharge !== undefined && c.autoRecharge !== true) return false
   const ent = c.entitlements as Record<string, unknown> | undefined
   return (
     !!ent &&
@@ -231,17 +241,36 @@ export function payloadBillingContext(payload: { userId: string; billingContext?
 }
 
 /**
+ * True only for a person in the product itself: a Supabase session JWT with
+ * no third-party app attached. API tokens, OAuth app tokens, billing keys,
+ * internal loopbacks and public trigger routes are all false. It decides
+ * whether a deployment context carries the payer's auto-recharge consent
+ * (`DeploymentBillingContext.autoRecharge`).
+ */
+export function isInAppSession(req: Pick<FastifyRequest, "authKind" | "appAuthorization">): boolean {
+  return req.authKind === "jwt" && !req.appAuthorization
+}
+
+/**
  * Resolve once. Callers are the RESOLVE POINTS only: the preHandler below,
  * run-creation routes, and enqueue sites for req-less lanes — never workers,
  * never anything that already received a context.
+ *
+ * `opts.inAppSession` matters only on a deployment-payer instance (see
+ * `isInAppSession`); req-less resolve points never pass it.
  */
-export async function resolveBillingContext(input: BillingResolveInput): Promise<BillingContext> {
+export async function resolveBillingContext(
+  input: BillingResolveInput,
+  opts?: { inAppSession?: boolean },
+): Promise<BillingContext> {
   // Deployment payer (item 9) — the TOP rung, before the plugin gate: on
   // the instance this exists for there IS no orgs plugin, so any placement
   // after `if (!svc)` would be dead code exactly where it matters. When one
   // account pays for the whole instance there is nothing left to resolve —
   // the answer is the same for every request, workspace headers included.
-  if (deploymentPayerActive()) return deploymentBillingContext(input.userId)
+  if (deploymentPayerActive()) {
+    return deploymentBillingContext(input.userId, { inAppSession: opts?.inAppSession === true })
+  }
   const svc = billingService()
   if (!svc) return personalPayer(input.userId)
   // The internal-lane rung-1 strip is a CORE invariant, not a plugin promise:
@@ -299,6 +328,7 @@ export function registerBillingContextHook(app: FastifyInstance): void {
       workflowId,
       isAppRun: req.isAppRun === true,
       internal,
+      inAppSession: isInAppSession(req),
     })
     if (ctx) req.billingContext = ctx
   })
@@ -313,6 +343,9 @@ export interface RequestBillingInput {
   workflowId?: string
   isAppRun: boolean
   internal: boolean
+  /** `isInAppSession(req)` — on a deployment-payer instance, whether this
+   *  request carries the payer's auto-recharge consent. Absent = no. */
+  inAppSession?: boolean
 }
 
 /**
@@ -345,7 +378,9 @@ export async function requestBillingContext(input: RequestBillingInput): Promise
   // instance has no orgs plugin, and `if (!svc) return` would otherwise
   // leave every request personal exactly where the payer is configured.
   // Sync + zero queries (cached grade, background-refreshed).
-  if (deploymentPayerActive()) return deploymentBillingContext(input.userId)
+  if (deploymentPayerActive()) {
+    return deploymentBillingContext(input.userId, { inAppSession: input.inAppSession === true })
+  }
 
   const svc = billingService()
   if (!svc) return undefined

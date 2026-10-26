@@ -3527,6 +3527,13 @@ billing account owns it. `POST /v1/deployment-billing/checkout` answers
 `503 stripe_not_configured` on a deployment that takes no card; the
 account is then topped up by the platform operator instead.
 
+A billing integration key (`ndr_bill_…`, minted on `/billing-admin`)
+reaches only `/v1/deployment-billing/*`. A **read-only** key
+(`ndr_bill_ro_…`) may only `GET` there — any other verb answers
+`403 billing_key_read_only` before the route runs. `GET
+/v1/deployment-billing/balance` includes the billing account's
+auto top-up status (`autoRecharge`, or `null` when it cannot be read).
+
 ### A model with no price yet (`llm_model_unpriced`)
 
 An LLM node is charged per model, at the rate of the lane that serves it. A
