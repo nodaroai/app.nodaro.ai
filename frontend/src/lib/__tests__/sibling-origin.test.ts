@@ -92,15 +92,27 @@ describe("rememberSiblingOrigin — the site the user came from", () => {
 
   it("survives blocked storage", () => {
     setup({ host: "studio.b.example", referrer: "https://gur.b.example/" })
-    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
-      throw new Error("blocked")
+    // A private window / blocked site data: the accessor itself throws. Swap
+    // the whole property — jsdom's Storage turns an assigned method into a
+    // stored KEY, so spying on setItem/getItem would not block anything there.
+    const own = Object.getOwnPropertyDescriptor(window, "localStorage")
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("blocked", "SecurityError")
+      },
     })
-    vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
-      throw new Error("blocked")
-    })
-    expect(() => rememberSiblingOrigin()).not.toThrow()
-    expect(resolveSiblingUrl(CHAT)).toBe("https://b.example")
+    try {
+      expect(() => rememberSiblingOrigin()).not.toThrow()
+      expect(rememberedSiblingOrigin()).toBeNull()
+      expect(resolveSiblingUrl(CHAT)).toBe("https://b.example")
+      expect(ssoEntryPath("librechat")).toBe("/v1/sso/librechat")
+    } finally {
+      if (own) Object.defineProperty(window, "localStorage", own)
+      else delete (window as { localStorage?: Storage }).localStorage
+    }
   })
+
 })
 
 describe("otherNodaroApps — the sidebar list", () => {
