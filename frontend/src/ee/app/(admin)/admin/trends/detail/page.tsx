@@ -27,7 +27,14 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { hasAdmin } from "@/lib/edition"
 import { cn } from "@/lib/utils"
-import { TrendPublishBlockedError, type AdminTrendDetail, type TrendPublishBlocker } from "@/lib/api"
+import {
+  TrendPublishBlockedError,
+  type AdminTrendDetail,
+  type AdminTrendFaceMasking,
+  type AdminTrendFaceMaskMark,
+  type AdminTrendFaceMaskState,
+  type TrendPublishBlocker,
+} from "@/lib/api"
 import {
   isDraftConflict,
   useAdminTrend,
@@ -62,6 +69,13 @@ import { PublishBar } from "../components/PublishBar"
 import { StaleUpscales, UpscalePanel, type UpscaleApplied } from "../components/UpscalePanel"
 
 const CONFLICT_MESSAGE = "This trend changed elsewhere — reloaded."
+const MARKS_CLEARED = "Erase marks were cleared because the source clip changed"
+
+/** The masking without its marks (a new object). */
+function withoutMarks(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
+  const { marks: _marks, ...rest } = m
+  return rest
+}
 
 /** What would be saved, as a string: equal strings = nothing to save. */
 const snapshot = (form: TrendForm) => JSON.stringify(fromForm(form))
@@ -82,6 +96,8 @@ export default function AdminTrendEditorPage() {
   const [revision, setRevision] = useState("")
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [blockers, setBlockers] = useState<TrendPublishBlocker[] | null>(null)
+  /** The last save cleared the face mask's marks (a new source clip). */
+  const [marksCleared, setMarksCleared] = useState(false)
   /** The form's state as of the latest render, for replies that land after more edits. */
   const latest = useRef({ baseline: "", dirty: false })
   const promptRoomId = useId()
@@ -143,16 +159,57 @@ export default function AdminTrendEditorPage() {
       {
         onSuccess: (w) => {
           setRevision(w.revision)
-          setBaseline(JSON.stringify(data))
+          // A new source clip: the server cleared the face mask's marks (they were drawn on the old clip).
+          const cleared = w.marksCleared === true && !!data.faceMasking
+          const savedData = cleared ? { ...data, faceMasking: withoutMarks(data.faceMasking!) } : data
+          setBaseline(JSON.stringify(savedData))
           // Saved keys are fixed from now on.
-          setForm((f) => (f ? { ...f, slots: f.slots.map((s) => ({ ...s, isNew: false })) } : f))
+          setForm((f) =>
+            f
+              ? {
+                  ...f,
+                  slots: f.slots.map((s) => ({ ...s, isNew: false })),
+                  ...(cleared && f.faceMasking ? { faceMasking: withoutMarks(f.faceMasking) } : {}),
+                }
+              : f,
+          )
           setBlockers(null)
+          setMarksCleared(cleared)
+          if (cleared) toast.warning(MARKS_CLEARED)
           toast.success("Draft saved")
         },
         onError: onWriteError,
       },
     )
   }
+
+  /**
+   * Save the face mask's marks: the draft as this screen holds it (no unsaved
+   * edits — the panel waits for those) with these marks, through the same
+   * save as Save, so the form keeps them. The new revision, or null.
+   */
+  const onSaveMarks = (marks: AdminTrendFaceMaskMark[]) =>
+    new Promise<{ revision: string; faceMaskState?: AdminTrendFaceMaskState } | null>((resolve) => {
+      if (!form.faceMasking) return resolve(null)
+      const { marks: _old, ...rest } = form.faceMasking
+      const next: TrendForm = { ...form, faceMasking: marks.length > 0 ? { ...rest, marks } : rest }
+      const data = fromForm(next)
+      save.mutate(
+        { data, revision },
+        {
+          onSuccess: (w) => {
+            setRevision(w.revision)
+            setForm(next)
+            setBaseline(JSON.stringify(data))
+            resolve({ revision: w.revision, ...(w.faceMaskState ? { faceMaskState: w.faceMaskState } : {}) })
+          },
+          onError: (e) => {
+            onWriteError(e)
+            resolve(null)
+          },
+        },
+      )
+    })
 
   /**
    * After a server-side write this screen's revision does not guard (a
@@ -324,6 +381,11 @@ export default function AdminTrendEditorPage() {
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
             <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
+            {marksCleared && (
+              <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                {MARKS_CLEARED}.
+              </p>
+            )}
             {(form.faceMasking?.mode ?? "off") !== "off" && (
               <FaceMaskPanel
                 trendId={id}
@@ -336,6 +398,9 @@ export default function AdminTrendEditorPage() {
                 onRevision={setRevision}
                 onReload={() => void reload()}
                 onWriteError={onWriteError}
+                marks={server.draft.faceMasking?.marks}
+                onSaveMarks={onSaveMarks}
+                marksSupported={server.faceMaskMarksSupported === true}
               />
             )}
           </Section>

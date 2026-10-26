@@ -664,6 +664,41 @@ function dropMaskRegionsInFrame(
   return { rle: kept.join(" "), droppedBySize, droppedByZone, covered }
 }
 
+/** A region's bounding box as the labelling finds it: rows inclusive, columns right-exclusive. */
+export interface MaskRegionBox { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number }
+
+/**
+ * Drop the regions `drop` picks from one frame's RLE, by the same labelling
+ * pass the size and zone filters use (`labelMaskRegions`): each region is
+ * asked once, by its bounding box, and every kept region is kept exactly.
+ * Returns the frame unchanged (the same string) when nothing is dropped, and
+ * `covered` = its white pixels before. The predicate any other region filter
+ * (the mask erase's boxes, `mask-erase.ts`) applies. Pure apart from the
+ * shared working buffers.
+ */
+export function dropMaskRegionsWhere(
+  rle: string,
+  width: number,
+  height: number,
+  drop: (box: MaskRegionBox) => boolean,
+): { readonly rle: string; readonly dropped: number; readonly covered: number } {
+  const { m, covered } = labelMaskRegions(rle, width, height)
+  if (m === 0) return { rle, dropped: 0, covered }
+  const { row, x0, x1, parent, top, bottom, left, right } = filterScratch
+  if (filterScratch.drop.length < m) filterScratch.drop = new Uint8Array(Math.max(m, filterScratch.drop.length * 2))
+  const marked = filterScratch.drop
+  let dropped = 0
+  for (let i = 0; i < m; i++) {
+    marked[i] = 0
+    if (bottom[i]! < 0) continue
+    if (drop({ top: top[i]!, bottom: bottom[i]!, left: left[i]!, right: right[i]! })) { marked[i] = 1; dropped++ }
+  }
+  if (dropped === 0) return { rle, dropped: 0, covered }
+  const kept: string[] = []
+  for (let i = 0; i < m; i++) if (!marked[parent[i]!]) kept.push(`${row[i]! * width + x0[i]! + 1} ${x1[i]! - x0[i]!}`)
+  return { rle: kept.join(" "), dropped, covered }
+}
+
 /**
  * Drop the subjects outside a height band from one frame's RLE
  * (`minSubjectHeightPct` / `maxSubjectHeightPct`): a region whose bounding

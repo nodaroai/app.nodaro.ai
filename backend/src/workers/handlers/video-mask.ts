@@ -20,6 +20,10 @@
  *
  * mask-composite: local ffmpeg (providers/video/mask-composite.ts), finished
  * through the shared ffmpeg completion like every other processing node.
+ *
+ * mask-erase: local ffmpeg (providers/video/mask-erase.ts) — an internal
+ * child step (routes/mask-erase.ts): a mask with the regions centred in its
+ * boxes dropped, same frames, never watermarked.
  */
 
 import { dirname, join } from "node:path"
@@ -52,6 +56,7 @@ import {
   type MaskGeometry,
 } from "../../providers/video/video-mask.js"
 import { maskComposite } from "../../providers/video/mask-composite.js"
+import { eraseMaskVideo, type MaskEraseBoxInput } from "../../providers/video/mask-erase.js"
 import {
   commitJobCredits,
   completeFfmpegVideoJob,
@@ -354,7 +359,34 @@ const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, c
   }
 }
 
+const handleMaskErase: HandlerFn = async function handleMaskErase(job, ctx) {
+  const data = job.data as { jobId: string; maskUrl?: string; erase?: MaskEraseBoxInput[] }
+  if (!data.maskUrl || !Array.isArray(data.erase) || data.erase.length === 0) {
+    throw new DeterministicJobError("Mask Erase needs a mask video and at least one box.")
+  }
+  console.log(`[worker] mask-erase ${ctx.jobId}: ${data.erase.length} box(es)`)
+  const workDir = await createWorkDir("mask-erase")
+  try {
+    const result = await eraseMaskVideo(data.maskUrl, data.erase, workDir)
+    await setJobProgress(job, ctx.jobId, 80)
+    // Uploaded as it is: a watermark would corrupt the mask.
+    await completeFfmpegVideoJob(result.outputPath, ctx, {
+      width: result.width,
+      height: result.height,
+      frames: result.frames,
+      coverage: Number(result.coveredFraction.toFixed(4)),
+      droppedRegions: result.droppedRegions,
+      // Exact (`coverage` is rounded): false only when the erase left nothing.
+      kept: result.kept,
+    })
+    console.log(`[worker] mask-erase ${ctx.jobId}: dropped ${result.droppedRegions} region(s) over ${result.frames} frames${result.kept ? "" : " — none left"}`)
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
+}
+
 export const videoMaskHandlers: Record<string, HandlerFn> = {
   "video-mask": handleVideoMask,
   "mask-composite": handleMaskComposite,
+  "mask-erase": handleMaskErase,
 }

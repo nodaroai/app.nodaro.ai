@@ -15,7 +15,7 @@ import {
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
 } from "@nodaro/shared/models"
-import { faceMaskingSchema } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
 import type {
   Choice,
   LocalizedText,
@@ -166,9 +166,14 @@ const trendFaceMaskSchema = z.strictObject({
   recipe: z.strictObject({ core: z.string().min(1).max(100).nullable(), plugin: z.string().min(1).max(100) }),
   settingsKey: z.string().min(1).max(200),
   jobId: z.string().min(1),
-  stats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative }),
+  stats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative, erasedRegions: nonNegative.optional() }),
   approvedAt: z.string().min(1),
   approvedBy: z.string().min(1),
+  rawMaskUrl: httpUrl.optional(),
+  depthUrl: httpUrl.optional(),
+  baseKey: z.string().min(1).max(200).optional(),
+  baseStats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative }).optional(),
+  fps: z.number().positive().max(1000).optional(),
 })
 
 /** The face mask being made (`TrendFaceMaskJob`): written by the face mask routes only. */
@@ -233,7 +238,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     references: z.array(trendReferenceSchema).max(5),
     trendPrompt: z.string().max(TREND_PROMPT_LIMITS.trendPromptMax).optional(),
     prePrompt: z.string().max(TREND_PROMPT_LIMITS.prePromptMax).optional(),
-    faceMasking: faceMaskingSchema.optional(),
+    faceMasking: faceMaskingWithMarksSchema.optional(),
     faceMask: trendFaceMaskSchema.optional(),
     faceMaskJob: trendFaceMaskJobSchema.optional(),
     upscaleJobs: z.array(trendUpscaleJobSchema).max(MAX_UPSCALE_JOBS).optional(),

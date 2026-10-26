@@ -11142,6 +11142,26 @@ export interface AdminTrendFaceMasking {
   blurStrengthPct?: number
   /** 0.05–0.95; default 0.5. Lower finds more faces. */
   threshold?: number
+  /**
+   * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
+   * centred in the box, on its frames, are left unmasked. Only the stored mask
+   * is made with them: a trend with marks runs on its approved mask only.
+   */
+  marks?: AdminTrendFaceMaskMark[]
+}
+
+/** What a face mask mark says about the faces in its box; `"erased"` (left unmasked) is the only one. */
+export type AdminTrendFaceMaskMarkLabel = "erased"
+
+/** A box on the face mask over a range of frames: frames 0-based and inclusive, edges in % of the frame from its left / top. */
+export interface AdminTrendFaceMaskMark {
+  label: AdminTrendFaceMaskMarkLabel
+  fromFrame: number
+  toFrame: number
+  leftPct: number
+  topPct: number
+  rightPct: number
+  bottomPct: number
 }
 
 /** A trend's approved face mask: its whole source clip, masked once and stored in trend storage. */
@@ -11154,6 +11174,13 @@ export interface AdminTrendFaceMask {
   stats: AdminTrendFaceMaskStats
   approvedAt: string
   approvedBy: string
+  /** The mask before any mark (the base the next edit of the marks is made from), when kept. Absent: the first edit makes the mask whole. */
+  rawMaskUrl?: string
+  depthUrl?: string
+  baseKey?: string
+  baseStats?: Omit<AdminTrendFaceMaskStats, "erasedRegions">
+  /** The masked clip's video frame rate, when it was read: marks count frames on it. */
+  fps?: number
 }
 
 export interface AdminTrendFaceMaskStats {
@@ -11162,6 +11189,8 @@ export interface AdminTrendFaceMaskStats {
   /** The share of the picture covered, 0–1. */
   coverage: number
   droppedRegions: number
+  /** The faces the "erased" marks left out (absent = 0). */
+  erasedRegions?: number
 }
 
 /** Why a stored face mask is out of date. */
@@ -11262,6 +11291,8 @@ export interface AdminTrendDetail {
   faceMaskJob?: AdminTrendPendingFaceMaskJob | null
   /** The upscales to 1080p in the making (absent from an older server). */
   upscaleJobs?: AdminTrendPendingUpscale[]
+  /** Whether this environment's Cast Swap engine makes a face mask with marks (the marks editor is offered only then). */
+  faceMaskMarksSupported?: boolean
 }
 
 /**
@@ -11292,6 +11323,10 @@ export interface AdminTrendPendingFaceMaskJob {
 export interface TrendDraftWrite {
   version: number
   revision: string
+  /** A draft save: the face mask's state after it (the server's reading). */
+  faceMaskState?: AdminTrendFaceMaskState
+  /** A draft save with a new source clip: the face mask's marks were cleared (they were drawn on the old clip). */
+  marksCleared?: true
 }
 
 export interface AdminTrendRunSlot {
@@ -11362,6 +11397,8 @@ export interface TrendEngineEnvironment {
       storedFaceMask?: boolean
       faceMaskRecipe?: string
       faceMaskTargets?: AdminTrendFaceMaskingTarget[]
+      faceMaskErase?: boolean
+      storedFaceMaskRequired?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string

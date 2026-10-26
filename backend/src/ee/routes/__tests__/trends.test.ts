@@ -673,6 +673,15 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(res.json().error.code).toBe("trend_unavailable")
   })
 
+  it("a published trend with marks whose stored face mask does not match is a 503 trend_unavailable, with no internal POST", async () => {
+    const mark = { label: "erased" as const, fromFrame: 0, toFrame: 10, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 50 }
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: { ...MASKING, marks: [mark] } })
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error).toEqual({ code: "trend_unavailable", message: "This trend is not available right now." })
+    expect(engine.calls).toHaveLength(0)
+  })
+
   it("an engine lacking pet is a 503 engine_unsupported, with no internal POST", async () => {
     mem.trends.push(trend(T_PET, "pet-party", "published", 1, versionData({
       slots: [{ key: "dog", label: { en: "Dog" }, kind: "pet", required: true, roleName: "HIDDEN-ROLE the dog" }],

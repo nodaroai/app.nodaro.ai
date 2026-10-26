@@ -16,14 +16,22 @@
 // since replaced) is shown as made from older settings, with Make again only.
 //
 // It acts on the SAVED draft, so it waits while the form has unsaved edits.
+//
+// Marks (decided 2026-10-26): on the mask shown, boxes over faces the mask
+// should leave uncovered, each over a range of frames (FaceMaskMarks.tsx).
+// "Apply edits" saves them on the draft and makes the mask again; while the
+// approved mask kept its mask from before any mark, the faces are not found
+// again (a cheaper re-make). One approved before marks existed kept none, so
+// the first edit makes the whole mask once, and the panel says so.
 
 import { useEffect, useState } from "react"
-import { Check, Loader2, RefreshCw, ScanFace, Trash2 } from "lucide-react"
+import { Check, Eraser, Loader2, RefreshCw, ScanFace, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type {
   AdminTrendFaceMask,
+  AdminTrendFaceMaskMark,
   AdminTrendFaceMaskState,
   AdminTrendFaceMaskStats,
   AdminTrendPendingFaceMaskJob,
@@ -35,6 +43,7 @@ import {
   useTrendFaceMaskJob,
 } from "@/ee/hooks/queries/use-admin-queries"
 import { describeFaceMaskOutOfDate } from "../model"
+import { FaceMaskMarksEditor } from "./FaceMaskMarks"
 
 interface Props {
   readonly trendId: string
@@ -53,6 +62,15 @@ interface Props {
   /** Another write landed while the job was recorded: reload the trend. */
   readonly onReload: () => void
   readonly onWriteError: (err: Error) => void
+  /** The SAVED draft's marks (faces left unmasked). */
+  readonly marks?: readonly AdminTrendFaceMaskMark[]
+  /**
+   * Save `marks` on the draft (the page's save, so the form keeps them): the
+   * new revision and the face mask's state after the save, or null when it did not save.
+   */
+  readonly onSaveMarks?: (marks: AdminTrendFaceMaskMark[]) => Promise<{ revision: string; faceMaskState?: AdminTrendFaceMaskState } | null>
+  /** Whether this environment's engine makes a face mask with marks (false: the editor is shown disabled, with why). */
+  readonly marksSupported?: boolean
 }
 
 const CHIP: Readonly<Record<AdminTrendFaceMaskState["status"], { label: string; className: string }>> = {
@@ -63,7 +81,23 @@ const CHIP: Readonly<Record<AdminTrendFaceMaskState["status"], { label: string; 
 
 const IN_FLIGHT = new Set(["pending", "queued", "processing", "running"])
 
-export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty, revision, onRevision, onReload, onWriteError }: Props) {
+const NO_MARKS: readonly AdminTrendFaceMaskMark[] = []
+
+export function FaceMaskPanel({
+  trendId,
+  faceMask,
+  state,
+  pending,
+  ready,
+  dirty,
+  revision,
+  onRevision,
+  onReload,
+  onWriteError,
+  marks: savedMarks = NO_MARKS,
+  onSaveMarks,
+  marksSupported = false,
+}: Props) {
   const start = useStartTrendFaceMask(trendId)
   const approve = useApproveTrendFaceMask(trendId)
   const clear = useClearTrendFaceMask(trendId)
@@ -81,8 +115,15 @@ export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty,
   const status = state?.status ?? (faceMask ? "approved" : "none")
   const chip = CHIP[status]
 
-  const make = () =>
-    start.mutate(revision, {
+  // The marks being edited here, from the saved ones (and again whenever those change).
+  const savedKey = JSON.stringify(savedMarks)
+  const [marks, setMarks] = useState<AdminTrendFaceMaskMark[]>(() => savedMarks.map((m) => ({ ...m })))
+  useEffect(() => setMarks(JSON.parse(savedKey) as AdminTrendFaceMaskMark[]), [savedKey])
+  const marksEdited = JSON.stringify(marks) !== savedKey
+  const [applying, setApplying] = useState(false)
+
+  const make = (at: string = revision) =>
+    start.mutate(at, {
       onSuccess: (r) => {
         setStarted(r.jobId)
         if (r.draftMoved || !r.revision) onReload()
@@ -96,8 +137,35 @@ export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty,
   const maskedUrl = j?.status === "completed" ? (j.output_data?.maskedUrl ?? null) : null
   const approvable = !!maskedUrl && current
   // A job made from older settings never holds back a new one.
-  const busy = start.isPending || (running && current) || approve.isPending || clear.isPending
+  const busy = start.isPending || (running && current) || approve.isPending || clear.isPending || applying
   const canMake = ready && !dirty && !busy
+  // The mask the marks are drawn on: the new one when it is for these settings, else the approved one.
+  const shown = maskedUrl && current
+    ? { url: maskedUrl, frames: typeof j?.output_data?.frames === "number" ? j.output_data.frames : (faceMask?.frames ?? 0), fps: undefined, label: "The new face mask" }
+    : faceMask && (!jobId || !current)
+      ? { url: faceMask.url, frames: faceMask.frames, fps: faceMask.fps, label: "The approved face mask" }
+      : null
+  const editable = !!onSaveMarks && !!shown && shown.frames > 0
+  // An approved mask that kept no mask from before the marks: the first edit finds the faces again.
+  const fullMakeFirst = !!faceMask && !faceMask.rawMaskUrl
+
+  const applyEdits = async () => {
+    if (!onSaveMarks) return
+    setApplying(true)
+    try {
+      const saved = await onSaveMarks(marks)
+      if (!saved) return
+      // Every mark removed and the approved mask already the one for that (made without marks): saved, nothing to make.
+      if (marks.length === 0 && saved.faceMaskState?.status === "approved") {
+        onRevision(saved.revision)
+        toast.success("Marks removed: the approved face mask already leaves no face unmasked")
+        return
+      }
+      make(saved.revision)
+    } finally {
+      setApplying(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3 rounded-md border p-3" aria-label="Face mask">
@@ -121,7 +189,7 @@ export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty,
       )}
 
       {faceMask && (!jobId || !current) && (
-        <MaskResult url={faceMask.url} stats={faceMask.stats} label="The approved face mask" />
+        <MaskResult url={faceMask.url} stats={faceMask.stats} label="The approved face mask" editor={editable} />
       )}
 
       {jobId && running && (
@@ -142,7 +210,35 @@ export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty,
         </p>
       )}
       {jobId && maskedUrl && (
-        <MaskResult url={maskedUrl} stats={statsOf(j?.output_data?.stats)} label="The new face mask" />
+        <MaskResult url={maskedUrl} stats={statsOf(j?.output_data?.stats)} label="The new face mask" editor={editable && current} />
+      )}
+      {editable && shown && (
+        <div className="flex flex-col gap-2 rounded-md border border-dashed p-2" aria-label="Face mask marks">
+          <span className="text-xs font-medium">Faces left unmasked</span>
+          <FaceMaskMarksEditor url={shown.url} label={shown.label} frames={shown.frames} fps={shown.fps} marks={marks} onChange={setMarks} disabled={busy || !marksSupported} />
+          {!marksSupported && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              This environment's Cast Swap engine cannot leave faces unmasked yet, so marks can't be added or changed here.
+            </p>
+          )}
+          {marksEdited && fullMakeFirst && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              This approved mask kept no copy from before the marks, so the first edit makes the whole mask again (the faces are found once more).
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" className="min-h-9" disabled={!marksEdited || !ready || dirty || busy || !marksSupported} onClick={() => void applyEdits()}>
+              {applying ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Eraser className="mr-1 h-4 w-4" />}
+              Apply edits
+            </Button>
+            {marksEdited && (
+              <Button type="button" variant="ghost" className="min-h-9" disabled={busy} onClick={() => setMarks(JSON.parse(savedKey) as AdminTrendFaceMaskMark[])}>
+                Discard
+              </Button>
+            )}
+            {marksEdited && <span className="text-xs text-muted-foreground">Saves the marks on the draft, then makes the mask again (billed to your account).</span>}
+          </div>
+        </div>
       )}
       {jobId && !current && (
         <p className="text-sm text-amber-700 dark:text-amber-400">
@@ -174,7 +270,7 @@ export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty,
             Approve
           </Button>
         )}
-        <Button type="button" variant={jobId || faceMask ? "outline" : "default"} className="min-h-9" disabled={!canMake} onClick={make}>
+        <Button type="button" variant={jobId || faceMask ? "outline" : "default"} className="min-h-9" disabled={!canMake} onClick={() => make()}>
           {start.isPending ? (
             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
           ) : jobId || faceMask ? (
@@ -210,13 +306,15 @@ export function FaceMaskPanel({ trendId, faceMask, state, pending, ready, dirty,
   )
 }
 
-function MaskResult({ url, stats, label }: { readonly url: string; readonly stats: AdminTrendFaceMaskStats; readonly label: string }) {
+/** The mask's player and stats; with `editor`, the marks editor (below) plays it, so only the stats show here. */
+function MaskResult({ url, stats, label, editor }: { readonly url: string; readonly stats: AdminTrendFaceMaskStats; readonly label: string; readonly editor?: boolean }) {
   return (
     <div className="flex flex-col gap-2">
-      <video src={url} controls muted playsInline aria-label={label} className="max-h-80 w-full rounded-md bg-black object-contain" />
+      {!editor && <video src={url} controls muted playsInline aria-label={label} className="max-h-80 w-full rounded-md bg-black object-contain" />}
       <p className="text-xs tabular-nums text-muted-foreground" data-testid="face-mask-stats">
         {plural(stats.shots, "shot")} · {plural(stats.heldFrames, "held frame")} · {(stats.coverage * 100).toFixed(1)} % covered
         {stats.droppedRegions > 0 ? ` · ${plural(stats.droppedRegions, "region")} left out` : ""}
+        {(stats.erasedRegions ?? 0) > 0 ? ` · ${plural(stats.erasedRegions ?? 0, "face")} left unmasked` : ""}
       </p>
     </div>
   )
@@ -227,5 +325,11 @@ const capitalize = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s)
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0)
 
 function statsOf(s: Partial<AdminTrendFaceMaskStats> | undefined): AdminTrendFaceMaskStats {
-  return { shots: num(s?.shots), heldFrames: num(s?.heldFrames), coverage: num(s?.coverage), droppedRegions: num(s?.droppedRegions) }
+  return {
+    shots: num(s?.shots),
+    heldFrames: num(s?.heldFrames),
+    coverage: num(s?.coverage),
+    droppedRegions: num(s?.droppedRegions),
+    ...(s?.erasedRegions !== undefined ? { erasedRegions: num(s.erasedRegions) } : {}),
+  }
 }

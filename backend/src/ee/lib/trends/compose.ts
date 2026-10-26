@@ -26,6 +26,10 @@
  * run masks per run. (An engine that does not take it gets the body without
  * it: `withoutUnsupportedStoredMask`, run-helpers.ts.)
  *
+ * A trend whose face masking has marks (`faceMasking.marks`) runs only on
+ * that approved mask: without one made from these settings the run is refused
+ * (`face_mask_required`). The marks themselves are never sent.
+ *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
@@ -40,10 +44,17 @@ import {
   castSwapEngineHasDraft,
 } from "@nodaro/shared/models"
 import { castSwapImagesSent } from "@nodaro/render-rules"
-import { faceMaskTargetOf, faceMaskingOn, withResolvedZone, type FaceMasking, type FaceMaskingTarget } from "../../../lib/cast-swap-face-masking.js"
+import {
+  faceMaskTargetOf,
+  faceMaskingOn,
+  withResolvedZone,
+  withoutMarks,
+  type FaceMasking,
+  type FaceMaskingTarget,
+} from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
-import { storedFaceMaskFor } from "./face-mask.js"
+import { faceMaskHasMarks, storedFaceMaskFor } from "./face-mask.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
@@ -70,6 +81,7 @@ export type TrendRunErrorCode =
   | "draft_unsupported"
   | "resolution_unsupported"
   | "too_many_images"
+  | "face_mask_required"
   | "validation_error"
 
 export class TrendRunError extends Error {
@@ -117,8 +129,12 @@ export interface TrendRunBody {
   prePrompt?: string
   postPrompt?: string
   faceMasking?: FaceMasking
-  /** The trend's approved face mask, while it matches the masking sent (never without `faceMasking`). */
-  storedFaceMask?: { url: string; frames: number }
+  /**
+   * The trend's approved face mask, while it matches the masking sent (never
+   * without `faceMasking`). `required: true` (a trend with marks): the engine
+   * fails the run rather than masking per run (`castSwap.storedFaceMaskRequired`).
+   */
+  storedFaceMask?: { url: string; frames: number; required?: true }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
@@ -139,6 +155,12 @@ export interface ComposedTrendRun {
     faceMasking: boolean
     /** What the masks cover (left out = the head), or null when the trend does not mask. */
     faceMaskTarget: FaceMaskingTarget | null
+    /**
+     * The run must carry its stored face mask (the trend has marks): an engine
+     * that takes none would mask per run and cover the faces the marks leave
+     * out, so it is refused rather than sent the body without it.
+     */
+    storedFaceMask: boolean
     trendPrePrompt: boolean
     /** The trend's video engine (Seedance 2.5 when it names none). */
     engine: CastSwapEngine
@@ -290,8 +312,14 @@ export function composeTrendRun(
     )
   }
 
-  const masking = faceMaskingOn(data.faceMasking) ? data.faceMasking : undefined
+  // The run's masking never carries the marks: they shape the STORED mask only (face-mask.ts).
+  const masking = faceMaskingOn(data.faceMasking) ? withoutMarks(data.faceMasking) : undefined
   const stored = masking ? storedFaceMaskFor(data) : undefined
+  // A trend with marks runs on its approved mask, made with them, and nothing else: masking per
+  // run would mask the faces the marks leave out (decided 2026-10-26).
+  if (faceMaskHasMarks(data) && !stored) {
+    throw new TrendRunError("face_mask_required", "This trend leaves some faces unmasked: make and approve its face mask first.")
+  }
   const engine = engineOf(data)
   const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
   if (req.draft === true && !castSwapEngineHasDraft(engine)) {
@@ -339,7 +367,8 @@ export function composeTrendRun(
     // the margins the trend means. A run that follows its masked preview takes the preview's
     // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
     ...(masking ? { faceMasking: withResolvedZone(structuredClone(masking)) } : {}),
-    ...(stored ? { storedFaceMask: stored } : {}),
+    // A trend with marks: the run must use it — the engine fails rather than masks per run.
+    ...(stored ? { storedFaceMask: faceMaskHasMarks(data) ? { ...stored, required: true as const } : stored } : {}),
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
@@ -358,6 +387,7 @@ export function composeTrendRun(
       fixedReferences: data.references.length > 0,
       faceMasking: masking !== undefined,
       faceMaskTarget: masking ? faceMaskTargetOf(masking) : null,
+      storedFaceMask: faceMaskHasMarks(data),
       trendPrePrompt: !!data.prePrompt,
       engine,
     },

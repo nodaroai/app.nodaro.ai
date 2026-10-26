@@ -9,11 +9,16 @@ import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { withResolvedZone } from "../../../../lib/cast-swap-face-masking.js"
 import type { EngineEnvironment } from "../../engine-environments.js"
 import {
+  faceMaskBaseKey,
+  faceMaskBaseStats,
+  faceMaskHasMarks,
+  faceMaskMarksMatch,
   faceMaskSettingsKey,
   faceMaskSettingsKeyOf,
   faceMaskState,
   faceMaskStats,
   pendingFaceMaskJob,
+  reusableFaceMaskBase,
   storedFaceMaskFor,
 } from "../face-mask.js"
 import { publishBlockers } from "../publish-check.js"
@@ -172,6 +177,113 @@ describe("faceMaskStats", () => {
     expect(faceMaskStats({ shots: 3, heldFrames: 4, coverage: 0.5, droppedRegions: 2 })).toEqual({ shots: 3, heldFrames: 4, coverage: 0.5, droppedRegions: 2 })
     expect(faceMaskStats({ shots: "3", heldFrames: -1 })).toEqual({ shots: 0, heldFrames: 0, coverage: 0, droppedRegions: 0 })
     expect(faceMaskStats(undefined)).toEqual({ shots: 0, heldFrames: 0, coverage: 0, droppedRegions: 0 })
+  })
+
+  it("carries erasedRegions only when the engine reports it", () => {
+    expect(faceMaskStats({ shots: 1, heldFrames: 0, coverage: 0.1, droppedRegions: 0, erasedRegions: 7 })).toEqual({
+      shots: 1, heldFrames: 0, coverage: 0.1, droppedRegions: 0, erasedRegions: 7,
+    })
+    expect(faceMaskStats({ erasedRegions: "x" })).toMatchObject({ erasedRegions: 0 })
+  })
+
+  it("faceMaskBaseStats: the raw mask's four stats, or undefined when the engine sent none", () => {
+    expect(faceMaskBaseStats({ shots: 1, heldFrames: 2, coverage: 0.3, droppedRegions: 4, erasedRegions: 9 })).toEqual({ shots: 1, heldFrames: 2, coverage: 0.3, droppedRegions: 4 })
+    expect(faceMaskBaseStats(undefined)).toBeUndefined()
+    expect(faceMaskBaseStats([1])).toBeUndefined()
+  })
+})
+
+const MARK = { label: "erased" as const, fromFrame: 0, toFrame: 359, leftPct: 60, topPct: 10, rightPct: 90, bottomPct: 50 }
+const MARK2 = { label: "erased" as const, fromFrame: 30, toFrame: 60, leftPct: 0, topPct: 0, rightPct: 20, bottomPct: 20 }
+
+describe("marks", () => {
+  it("hash exactly as before marks existed when there are none (absent or empty): every approved mask stays up to date", () => {
+    // The pinned pre-marks keys (see the target test above): a change here outdates every approved mask.
+    const PINNED = "v2:30fe1719eed0a90b8414b6daa6687eec33939a17d106d8bdd5ec2b1b278f8e07"
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [] })).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "head", marks: [] })).toBe(PINNED)
+    const NO_MARGINS = "v2:b2684dd62a46298a370db5b03d244da8a6e5c246e98727217377415a3886dfc5"
+    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null, marks: [] })).toBe(NO_MARGINS)
+    expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, marks: [] } }), ENVS, REQUIRED).status).toBe("approved")
+  })
+
+  it("change the key when there are some, in any order the same; the base key is the key without them", () => {
+    const plain = faceMaskSettingsKeyOf(SRC, MASKING)
+    const one = faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK] })
+    expect(one).not.toBe(plain)
+    expect(one.startsWith("v2:")).toBe(true)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK, MARK2] })).toBe(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK2, MARK] }))
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [{ ...MARK, toFrame: 358 }] })).not.toBe(one)
+    const marked = data({ faceMasking: { ...MASKING, marks: [MARK] } })
+    expect(faceMaskSettingsKey(marked)).toBe(one)
+    expect(faceMaskBaseKey(marked)).toBe(plain)
+    expect(faceMaskBaseKey(data())).toBe(plain)
+    expect(faceMaskBaseKey(data({ source: null }))).toBeNull()
+    expect(faceMaskHasMarks(marked)).toBe(true)
+    expect(faceMaskHasMarks(data({ faceMasking: { ...MASKING, marks: [] } }))).toBe(false)
+    expect(faceMaskHasMarks(data({ faceMasking: { mode: "off", marks: [MARK] } }))).toBe(false)
+    // An approved mask without the marks is out of date once they are added.
+    expect(faceMaskState({ ...marked, faceMask: mask() }, ENVS, REQUIRED).reasons).toEqual([{ why: "settings" }])
+    expect(storedFaceMaskFor({ ...marked, faceMask: mask() })).toBeUndefined()
+  })
+
+  it("faceMaskMarksMatch: the job's recorded marks are the draft's, in any order (absent = none)", () => {
+    expect(faceMaskMarksMatch(undefined, [])).toBe(true)
+    expect(faceMaskMarksMatch([], [])).toBe(true)
+    expect(faceMaskMarksMatch([MARK2, MARK], [MARK, MARK2])).toBe(true)
+    // An engine that dropped the marks recorded none.
+    expect(faceMaskMarksMatch(undefined, [MARK])).toBe(false)
+    expect(faceMaskMarksMatch([MARK], [])).toBe(false)
+    expect(faceMaskMarksMatch([{ ...MARK, leftPct: 61 }], [MARK])).toBe(false)
+    expect(faceMaskMarksMatch("nonsense", [])).toBe(false)
+  })
+})
+
+describe("reusableFaceMaskBase", () => {
+  const base = (over: Partial<TrendFaceMask> = {}) =>
+    mask({ rawMaskUrl: "https://cdn.example/trends/t1/raw.mp4", baseKey: faceMaskBaseKey(data())!, ...over })
+  const marked = (faceMask: TrendFaceMask, masking: TrendVersionData["faceMasking"] = { ...MASKING, marks: [MARK] }) =>
+    data({ faceMasking: masking, faceMask })
+
+  it("is the approved mask's raw mask with its core recipe and the raw mask's stats, so the engine records them again", () => {
+    const baseStats = { shots: 2, heldFrames: 1, coverage: 0.05, droppedRegions: 3 }
+    expect(reusableFaceMaskBase(marked(base({ baseStats, stats: { ...baseStats, coverage: 0.02, erasedRegions: 4 } })), "1")).toEqual({
+      maskUrl: "https://cdn.example/trends/t1/raw.mp4",
+      recipe: VIDEO_MASK_RECIPE,
+      stats: baseStats,
+    })
+    // Marks taken away again: the same base.
+    expect(reusableFaceMaskBase(marked(base(), MASKING), "1")?.maskUrl).toBe("https://cdn.example/trends/t1/raw.mp4")
+  })
+
+  it("without baseStats (approved before them): its own stats stand in when nothing was erased, else it is no base", () => {
+    const plain = { shots: 2, heldFrames: 1, coverage: 0.05, droppedRegions: 3 }
+    expect(reusableFaceMaskBase(marked(base({ stats: plain })), "1")?.stats).toEqual(plain)
+    expect(reusableFaceMaskBase(marked(base({ stats: { ...plain, erasedRegions: 0 } })), "1")?.stats).toEqual(plain)
+    // Its coverage is the erased mask's, not the raw one's: a whole make instead.
+    expect(reusableFaceMaskBase(marked(base({ stats: { ...plain, erasedRegions: 2 } })), "1")).toBeUndefined()
+  })
+
+  it("adds the depth view for a depth fill, and is none without one", () => {
+    const depth = { ...MASKING, fill: "depth" as const, marks: [MARK] }
+    const baseKey = faceMaskBaseKey(data({ faceMasking: depth }))!
+    expect(reusableFaceMaskBase(marked(base({ baseKey, depthUrl: "https://cdn.example/d.mp4" }), depth), "1")).toMatchObject({
+      maskUrl: "https://cdn.example/trends/t1/raw.mp4",
+      depthUrl: "https://cdn.example/d.mp4",
+    })
+    expect(reusableFaceMaskBase(marked(base({ baseKey }), depth), "1")).toBeUndefined()
+    // A blur fill never sends a depth view, even one kept.
+    expect(reusableFaceMaskBase(marked(base({ depthUrl: "https://cdn.example/d.mp4" })), "1")).not.toHaveProperty("depthUrl")
+  })
+
+  it("is none for a mask without a raw mask, made from other base settings, or by another masking", () => {
+    expect(reusableFaceMaskBase(marked(mask()), "1")).toBeUndefined()
+    expect(reusableFaceMaskBase(marked(base({ baseKey: "v2:other" })), "1")).toBeUndefined()
+    expect(reusableFaceMaskBase(marked(base(), { ...MASKING, threshold: 0.6, marks: [MARK] }), "1")).toBeUndefined()
+    expect(reusableFaceMaskBase(marked(base({ recipe: { core: null, plugin: "1" } })), "1")).toBeUndefined()
+    expect(reusableFaceMaskBase(marked(base()), "2")).toBeUndefined()
+    expect(reusableFaceMaskBase(marked(base()), undefined)).toBeUndefined()
+    expect(reusableFaceMaskBase(data({ faceMasking: { mode: "off" }, faceMask: base() }), "1")).toBeUndefined()
   })
 })
 

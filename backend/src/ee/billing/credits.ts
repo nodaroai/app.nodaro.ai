@@ -1923,6 +1923,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // Mask Composite: local ffmpeg, ONE pricing unit = 5 s of the result
   // (`maskCompositeUnits`), like the video-utility nodes' CREDIT_UNIT.
   "mask-composite": 10,
+  // Mask Erase (an internal step of a trend face mask's marks): local ffmpeg,
+  // ONE pricing unit = 5 s of the mask (`maskEraseUnits`), the video-utility unit.
+  "mask-erase": 10,
   "transcribe": 10,
   // ── Web Scrape (Apify + direct RSS) ──
   "web-scrape": 20,

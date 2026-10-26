@@ -417,6 +417,7 @@ describe("composeTrendRun — display and needs", () => {
       fixedReferences: true,
       faceMasking: false,
       faceMaskTarget: null,
+      storedFaceMask: false,
       trendPrePrompt: false,
       engine: "seedance-2-5",
     })
@@ -641,5 +642,49 @@ describe("composeTrendRun — the stored face mask", () => {
   it("a version with a stored mask still validates", () => {
     expect(trendVersionDataSchema.safeParse({ ...data, faceMask }).success).toBe(true)
     expect(trendVersionDataSchema.safeParse({ ...data, faceMask: { ...faceMask, extra: 1 } }).success).toBe(false)
+  })
+
+  describe("with marks", () => {
+    const MARK = { label: "erased" as const, fromFrame: 0, toFrame: 100, leftPct: 50, topPct: 0, rightPct: 100, bottomPct: 50 }
+    const marked = version({ faceMasking: { ...MASKING, marks: [MARK] } })
+    const markedMask = { ...faceMask, settingsKey: faceMaskSettingsKey(marked)! }
+
+    it("runs on the approved mask made with them, and never sends the marks", () => {
+      for (const r of [req(), req({ preview: true })]) {
+        const { body, needs } = composeTrendRun(trend({ ...marked, faceMask: markedMask }), r)
+        // The engine must take a stored mask (engineSupports): never masked per run.
+        expect(needs.storedFaceMask).toBe(true)
+        // Required: an engine that honours it fails the run rather than masking per run.
+        expect(body.storedFaceMask).toEqual({ url: faceMask.url, frames: 360, required: true })
+        expect(body.faceMasking).toEqual(withResolvedZone(MASKING))
+        expect(body.faceMasking).not.toHaveProperty("marks")
+      }
+    })
+
+    it("refuses the run (face_mask_required) with no approved mask, or one made without these marks", () => {
+      expect(codeOf(() => composeTrendRun(trend(marked), req()))).toMatchObject({ code: "face_mask_required" })
+      // The mask approved before the marks were added: masking per run would cover the faces they leave out.
+      expect(codeOf(() => composeTrendRun(trend({ ...marked, faceMask }), req()))).toMatchObject({ code: "face_mask_required" })
+    })
+
+    it("a trend without marks sends its stored mask as before (not required)", () => {
+      expect(composeTrendRun(trend({ ...data, faceMask }), req()).body.storedFaceMask).toEqual({ url: faceMask.url, frames: 360 })
+    })
+
+    it("empty marks run as before marks existed (per run when no mask matches)", () => {
+      const { body } = composeTrendRun(trend(version({ faceMasking: { ...MASKING, marks: [] } })), req())
+      expect(body).not.toHaveProperty("storedFaceMask")
+      expect(body.faceMasking).toEqual(withResolvedZone(MASKING))
+    })
+
+    it("a version with marks validates; a mark with another label, a stray key or more than 50 does not", () => {
+      expect(trendVersionDataSchema.safeParse(marked).success).toBe(true)
+      const bad = (marks: unknown) => trendVersionDataSchema.safeParse({ ...marked, faceMasking: { ...MASKING, marks } }).success
+      expect(bad([{ ...MARK, label: "keep" }])).toBe(false)
+      expect(bad([{ ...MARK, extra: 1 }])).toBe(false)
+      expect(bad([{ ...MARK, topPct: 60 }])).toBe(false)
+      expect(bad(Array.from({ length: 51 }, () => MARK))).toBe(false)
+      expect(bad(Array.from({ length: 50 }, () => MARK))).toBe(true)
+    })
   })
 })

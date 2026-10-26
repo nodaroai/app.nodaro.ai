@@ -373,6 +373,9 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   // An engine that does not declare the target strips it and masks heads: never send it a face-only trend.
   if (composed.needs.faceMaskTarget && !faceMaskTargetsOf(cs).includes(composed.needs.faceMaskTarget)) return false
   if (composed.needs.trendPrePrompt && cs.trendPrePrompt !== true) return false
+  // A trend with marks runs on its stored mask only, never masked per run: the engine must take it
+  // (`withoutUnsupportedStoredMask` would strip it) and honour `required` (an older one strips that too).
+  if (composed.needs.storedFaceMask && (cs.storedFaceMask !== true || cs.storedFaceMaskRequired !== true)) return false
   return cs.resolutions.includes(composed.body.resolution)
 }
 

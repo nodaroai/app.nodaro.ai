@@ -27,7 +27,7 @@ function composed(preview: boolean): ComposedTrendRun {
       trendRun: { display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] } },
     },
     display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] },
-    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, faceMaskTarget: "head", trendPrePrompt: false, engine: "seedance-2-5" },
+    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, faceMaskTarget: "head", storedFaceMask: false, trendPrePrompt: false, engine: "seedance-2-5" },
     maskingZoneLeftOut: true,
   } as ComposedTrendRun
 }
@@ -109,6 +109,25 @@ describe("the stored face mask on the wire", () => {
     const c = withStored({ mode: "auto", target: "face" })
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(c.body.faceMasking).toMatchObject({ mode: "always", target: "face" })
+  })
+})
+
+describe("engineSupports — a trend with marks", () => {
+  beforeEach(() => _resetPluginSupportsForTests())
+  const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true, faceMasking: true }
+  it("runs only on an engine that takes the stored mask (else it would mask per run, covering the faces the marks leave out)", () => {
+    const c = composed(false)
+    c.needs.storedFaceMask = true
+    setPluginSupports({ castSwap: BASE })
+    expect(engineSupports(c)).toBe(false)
+    // Taking a stored mask is not enough: an engine that strips `required` would mask per run.
+    setPluginSupports({ castSwap: { ...BASE, storedFaceMask: true } })
+    expect(engineSupports(c)).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, storedFaceMask: true, storedFaceMaskRequired: true } })
+    expect(engineSupports(c)).toBe(true)
+    c.needs.storedFaceMask = false
+    setPluginSupports({ castSwap: BASE })
+    expect(engineSupports(c)).toBe(true)
   })
 })
 

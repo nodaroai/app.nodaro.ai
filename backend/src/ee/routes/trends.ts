@@ -359,6 +359,9 @@ function trendRunError(reply: FastifyReply, e: TrendRunError) {
       // The composed length would tell the hidden trend prompt's length.
       return err(reply, 400, e.code, "Your details are too long for this trend. Shorten them and try again.")
     case "source_missing":
+    // Its stored face mask does not match (publishing requires one): nothing the caller can change,
+    // answered as the documented `503 trend_unavailable` (docs/api-integration.md).
+    case "face_mask_required":
       return err(reply, 503, "trend_unavailable", "This trend is not available right now.")
     default:
       return err(reply, 400, e.code, e.message, {

@@ -14,13 +14,29 @@
  *   - the recipes: core's `VIDEO_MASK_RECIPE` (Video Mask's algorithm) and the
  *     engine's `faceMaskRecipe` (its own masking parameters), per environment.
  * Editing the source or the settings, or a recipe bump, makes it OUT OF DATE
- * (`faceMaskState`). Publishing a masked trend needs an approved, up-to-date
+ * (`faceMaskState`). The settings include the marks (`faceMasking.marks`,
+ * decided 2026-10-26): an `"erased"` mark's box leaves the faces centred in it
+ * out of the mask. A mask also keeps what it was made from before any mark
+ * was applied (`rawMaskUrl`, `depthUrl`, `baseKey`: the BASE key, the
+ * settings without the marks), so editing only the marks re-makes it from
+ * that (`reusableFaceMaskBase`) without running the face finder again. A
+ * trend with marks runs on its approved mask only (compose.ts refuses the
+ * run otherwise). Publishing a masked trend needs an approved, up-to-date
  * one (publish-check.ts); a run sends it while its settings key matches
  * (compose.ts), and masks per run otherwise.
  */
 import { createHash } from "node:crypto"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
-import { faceMaskTargetOf, faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
+import {
+  faceMaskMarksOf,
+  faceMaskTargetOf,
+  faceMaskingOn,
+  withResolvedZone,
+  withoutMarks,
+  type FaceMaskMark,
+  type FaceMaskingWithMarks,
+} from "../../../lib/cast-swap-face-masking.js"
 import type { EngineEnvironment } from "../engine-environments.js"
 import type { TrendFaceMask, TrendVersionData } from "./types.js"
 
@@ -50,11 +66,22 @@ function stableJson(v: unknown): string {
  * says "head" hash exactly as every setting did before the target existed,
  * so the masks approved then (all made of heads) stay up to date, while
  * switching between face and head makes a stored mask out of date.
+ *
+ * The marks likewise: hashed only when there are some (in a fixed order, so
+ * the same marks in another order are the same mask), so a setting with none
+ * — left out or empty — hashes exactly as every setting did before marks
+ * existed, and every mask approved then stays up to date.
  */
-export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMasking): string {
-  const { mode: _mode, target: _target, ...settings } = withResolvedZone(masking)
+export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks): string {
+  const { mode: _mode, target: _target, ...settings } = withResolvedZone(withoutMarks(masking))
   const target = faceMaskTargetOf(masking)
-  const text = stableJson({ videoUrl, faceMasking: target === "head" ? settings : { ...settings, target } })
+  const marks = faceMaskMarksOf(masking).map(stableJson).sort()
+  const faceMasking = {
+    ...settings,
+    ...(target === "head" ? {} : { target }),
+    ...(marks.length > 0 ? { marks: marks.map((mark) => JSON.parse(mark) as unknown) } : {}),
+  }
+  const text = stableJson({ videoUrl, faceMasking })
   return `v2:${createHash("sha256").update(text).digest("hex")}`
 }
 
@@ -62,6 +89,79 @@ export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMasking): s
 export function faceMaskSettingsKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
   if (!data.source || !faceMaskingOn(data.faceMasking)) return null
   return faceMaskSettingsKeyOf(data.source.videoUrl, data.faceMasking)
+}
+
+/**
+ * The draft's BASE key: its settings key with the marks left out (with none,
+ * its settings key), or null like `faceMaskSettingsKey`. A mask's raw mask
+ * (before any mark) is made from exactly this.
+ */
+export function faceMaskBaseKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
+  if (!data.source || !faceMaskingOn(data.faceMasking)) return null
+  return faceMaskSettingsKeyOf(data.source.videoUrl, withoutMarks(data.faceMasking))
+}
+
+/**
+ * Whether a face mask job was made with exactly `marks` (in any order): its
+ * recorded `input_data.faceMasking.marks` (`recorded`, absent = none). An
+ * engine that does not take marks strips them, so its mask would cover the
+ * faces they leave out: approving checks this first.
+ */
+export function faceMaskMarksMatch(recorded: unknown, marks: readonly FaceMaskMark[]): boolean {
+  const list = recorded === undefined ? [] : recorded
+  if (!Array.isArray(list)) return false
+  const key = (xs: readonly unknown[]) => xs.map(stableJson).sort().join("\n")
+  return key(list) === key(marks)
+}
+
+/** Whether the draft's face masking has marks (masking on, and at least one). */
+export function faceMaskHasMarks(data: Pick<TrendVersionData, "faceMasking">): boolean {
+  return faceMaskingOn(data.faceMasking) && faceMaskMarksOf(data.faceMasking).length > 0
+}
+
+/**
+ * The raw mask a make may start from instead of finding the faces again
+ * (`fromMask` of `POST /v1/cast-swap/face-mask`), or undefined (a whole make).
+ * The approved mask's own only (decided 2026-10-26), and only when:
+ *   - it was made from the draft's current BASE settings (`baseKey` =
+ *     `faceMaskBaseKey`) and kept its raw mask (`rawMaskUrl`), and its depth
+ *     view (`depthUrl`) when the fill is depth;
+ *   - it was made by the masking that runs now: core's `VIDEO_MASK_RECIPE`
+ *     and the loaded engine's `faceMaskRecipe` (`engineRecipe`), so a stale
+ *     raw mask is never re-used again and again.
+ * `recipe` is the approved mask's and `stats` its raw mask's (`baseStats`; a
+ * mask approved before them: its `stats` when nothing was erased, else it is
+ * no base), which the engine carries onto the new mask (its coverage then the
+ * erase's, when one runs).
+ */
+export interface FaceMaskBase {
+  maskUrl: string
+  depthUrl?: string
+  recipe: string | null
+  stats: { shots: number; heldFrames: number; coverage: number; droppedRegions: number }
+}
+
+export function reusableFaceMaskBase(
+  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">,
+  engineRecipe: string | undefined,
+): FaceMaskBase | undefined {
+  const mask = data.faceMask
+  const base = faceMaskBaseKey(data)
+  if (!mask || base === null || mask.baseKey !== base || !mask.rawMaskUrl) return undefined
+  if (mask.recipe.core !== VIDEO_MASK_RECIPE || engineRecipe === undefined || mask.recipe.plugin !== engineRecipe) return undefined
+  const fill = data.faceMasking?.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill
+  if (fill === "depth" && !mask.depthUrl) return undefined
+  // The raw mask's stats; a mask approved before they were kept stands in its own only when nothing was
+  // erased from it (then they ARE the raw mask's), else it is no base.
+  const raw = mask.baseStats ?? ((mask.stats.erasedRegions ?? 0) === 0 ? mask.stats : undefined)
+  if (!raw) return undefined
+  const { shots, heldFrames, coverage, droppedRegions } = raw
+  return {
+    maskUrl: mask.rawMaskUrl,
+    ...(fill === "depth" ? { depthUrl: mask.depthUrl } : {}),
+    recipe: mask.recipe.core,
+    stats: { shots, heldFrames, coverage, droppedRegions },
+  }
 }
 
 /** Why a stored mask is out of date: settings changed, Video Mask's recipe moved, or an environment's engine recipe. */
@@ -115,10 +215,27 @@ export function storedFaceMaskFor(data: Pick<TrendVersionData, "source" | "faceM
 
 const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0)
 
-/** A finished face mask job's stats, each a number (one the engine left out is 0). */
+/** A finished face mask job's raw-mask stats (`output.baseStats`), each a number, or undefined when the engine sent none. */
+export function faceMaskBaseStats(v: unknown): TrendFaceMask["baseStats"] {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined
+  const { shots, heldFrames, coverage, droppedRegions } = faceMaskStats(v)
+  return { shots, heldFrames, coverage, droppedRegions }
+}
+
+/**
+ * A finished face mask job's stats, each a number (one the engine left out is
+ * 0). `erasedRegions` only when the engine reports it (an engine that takes
+ * marks always does): absent reads as 0.
+ */
 export function faceMaskStats(v: unknown): TrendFaceMask["stats"] {
   const s = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
-  return { shots: count(s.shots), heldFrames: count(s.heldFrames), coverage: count(s.coverage), droppedRegions: count(s.droppedRegions) }
+  return {
+    shots: count(s.shots),
+    heldFrames: count(s.heldFrames),
+    coverage: count(s.coverage),
+    droppedRegions: count(s.droppedRegions),
+    ...(s.erasedRegions !== undefined ? { erasedRegions: count(s.erasedRegions) } : {}),
+  }
 }
 
 /** The face mask job being made, as the editor shows it: `current` = made from the draft's current settings. */

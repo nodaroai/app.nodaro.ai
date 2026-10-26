@@ -177,6 +177,7 @@ import { faceSwapRoutes } from "./routes/face-swap.js"
 import { generateMaskRoutes } from "./routes/generate-mask.js"
 import { videoMaskRoutes } from "./routes/video-mask.js"
 import { maskCompositeRoutes } from "./routes/mask-composite.js"
+import { maskEraseRoutes } from "./routes/mask-erase.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
@@ -695,6 +696,7 @@ export async function buildApp() {
   await app.register(generateMaskRoutes)
   await app.register(videoMaskRoutes)
   await app.register(maskCompositeRoutes)
+  await app.register(maskEraseRoutes)
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)

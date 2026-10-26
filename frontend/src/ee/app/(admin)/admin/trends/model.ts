@@ -193,6 +193,8 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     ...(zone !== undefined ? { zone } : {}),
     ...(maskingUsesBlur(m) && num(m.blurStrengthPct) ? { blurStrengthPct: m.blurStrengthPct } : {}),
     ...(num(m.threshold) ? { threshold: m.threshold } : {}),
+    // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
+    ...(m.marks && m.marks.length > 0 ? { marks: m.marks.map((mark) => ({ ...mark })) } : {}),
   }
 }
 
@@ -418,6 +420,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   fixedReferences: "fixed references",
   faceMasking: "face masking",
   storedFaceMask: "stored face masks",
+  storedFaceMaskRequired: "stored face masks a run must use (marks)",
   "faceMaskTarget:face": "face-only masks",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Lite (Kling 4)",

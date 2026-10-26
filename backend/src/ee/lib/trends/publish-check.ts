@@ -43,7 +43,7 @@ import {
 import { castSwapImagesSent } from "@nodaro/render-rules"
 import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
 import { promptBudget, TREND_DETAILS_MAX } from "./prompt-budget.js"
-import { faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
+import { faceMaskHasMarks, faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
 export interface PublishBlocker {
@@ -99,6 +99,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...kinds,
     ...(data.references.length > 0 ? ["fixedReferences"] : []),
     ...(faceMaskingOn(data.faceMasking) ? ["faceMasking", "storedFaceMask"] : []),
+    // Marks: every run must use the stored mask, and the engine must refuse to mask per run instead.
+    ...(faceMaskHasMarks(data) ? ["storedFaceMaskRequired"] : []),
     // The head (the default) is every masking engine's: only the face alone is a need of its own.
     ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "face" ? [FACE_ONLY_NEED] : []),
     ...(data.prePrompt ? ["trendPrePrompt"] : []),
@@ -118,6 +120,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === "fixedReferences") return cs.fixedReferences !== true
     if (need === "faceMasking") return cs.faceMasking !== true
     if (need === "storedFaceMask") return cs.storedFaceMask !== true
+    if (need === "storedFaceMaskRequired") return cs.storedFaceMaskRequired !== true
     if (need === FACE_ONLY_NEED) return !faceMaskTargetsOf(cs).includes("face")
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)

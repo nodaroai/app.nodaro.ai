@@ -100,7 +100,7 @@ import {
 } from "../lib/trends/run-helpers.js"
 import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
-import { draftFaceMaskState, registerTrendFaceMaskRoutes } from "./admin-trends-face-mask.js"
+import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes, withMarksForSource } from "./admin-trends-face-mask.js"
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
 import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
@@ -364,6 +364,8 @@ async function saveValidDraft(
 }
 
 function trendRunError(reply: FastifyReply, e: TrendRunError) {
+  // The draft is not ready to run yet, not a bad request.
+  if (e.code === "face_mask_required") return err(reply, 409, e.code, e.message)
   // Admins see the real reason (the public route masks some of them).
   return err(reply, 400, e.code, e.message, {
     ...(e.slot !== undefined ? { slot: e.slot } : {}),
@@ -500,7 +502,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
             : await getVersion(trend.id, trend.publishedVersion)
       return {
         data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft),
-          upscaleJobs: pendingUpscaleJobs(draft) },
+          upscaleJobs: pendingUpscaleJobs(draft),
+          // Whether a face mask with marks can be made here (the marks editor is offered only then).
+          faceMaskMarksSupported: loadedEngineMakesMarks() },
       }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read the trend")
@@ -541,16 +545,19 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // revision the client read) are kept.
       const { faceMask: _mask, faceMaskJob: _job, upscaleJobs: _upscales, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
       const { faceMask, faceMaskJob, upscaleJobs } = loaded.draft
-      const data = {
+      const merged = {
         ...edited,
         examples: loaded.draft.examples,
         ...(faceMask ? { faceMask } : {}),
         ...(faceMaskJob ? { faceMaskJob } : {}),
         ...(upscaleJobs ? { upscaleJobs } : {}),
       } as unknown as TrendVersionData
+      // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
+      const { data, cleared } = withMarksForSource(merged, loaded.draft)
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
       if (!saved) return reply
-      return { data: saved }
+      // The face mask's state after the save: the editor starts no make when the saved settings already match it.
+      return { data: { ...saved, faceMaskState: await draftFaceMaskState(req, data), ...(cleared ? { marksCleared: true } : {}) } }
     } catch (e) {
       if (e instanceof DraftConflictError) return draftConflict(reply)
       return unavailableOrInternal(reply, req, e, "Failed to save the draft")

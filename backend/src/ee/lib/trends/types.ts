@@ -17,9 +17,9 @@
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
-import type { FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 
-export type { CastSwapEngine, CastSwapKlingLength, FaceMasking }
+export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
 
 /** The platform's interface languages (the same set `/v1/user/settings` accepts). */
 export type Locale = LocaleId
@@ -86,10 +86,38 @@ export interface TrendFaceMask {
   settingsKey: string
   /** The job that made it. */
   jobId: string
-  stats: { shots: number; heldFrames: number; coverage: number; droppedRegions: number }
+  /** `erasedRegions`: the regions its `"erased"` marks dropped (absent on a mask approved before marks = 0). */
+  stats: { shots: number; heldFrames: number; coverage: number; droppedRegions: number; erasedRegions?: number }
   approvedAt: string
   /** The admin who approved it. */
   approvedBy: string
+  /**
+   * The raw mask, made from the base settings (`faceMaskBaseKey`: the
+   * settings with the marks left out) BEFORE any mark was applied, copied into
+   * the trend's storage like `url`, with `baseKey` the base it was made from
+   * and `depthUrl` the depth view (fill "depth" only). While the draft's base
+   * key is still `baseKey` (and the recipes are current), editing the marks
+   * re-makes the mask from these (`fromMask`, `reusableFaceMaskBase`) instead
+   * of finding the faces again. All three absent on a mask approved before
+   * marks, or by an engine that keeps no raw mask: the first edit makes it whole.
+   */
+  rawMaskUrl?: string
+  depthUrl?: string
+  baseKey?: string
+  /**
+   * The raw mask's own stats (before any mark was applied; `stats.coverage` is
+   * the delivered mask's), what a make from it (`fromMask.stats`) carries on.
+   * Absent on a mask approved before it: its `stats` stand in when nothing was
+   * erased from it, else the mask is no base (`reusableFaceMaskBase`).
+   */
+  baseStats?: { shots: number; heldFrames: number; coverage: number; droppedRegions: number }
+  /**
+   * The stored masked clip's video frame rate, probed when it was approved:
+   * the editor counts a mark's frames on it (a container's duration can run
+   * past the picture, with the sound). Absent: not read (the editor then
+   * counts on the clip's duration).
+   */
+  fps?: number
 }
 
 /**
@@ -178,7 +206,7 @@ export interface TrendVersionData {
    * `mode: "off"` = no masking. With `"auto"`, a full run whose preview was
    * masked (`TrendRunRequest.previewJobId`) is sent as `"always"`.
    */
-  faceMasking?: FaceMasking
+  faceMasking?: FaceMaskingWithMarks
   /** HIDDEN. The approved face mask (see `TrendFaceMask`); absent = none. */
   faceMask?: TrendFaceMask
   /** HIDDEN. The face mask job started last and not approved yet (see `TrendFaceMaskJob`). */

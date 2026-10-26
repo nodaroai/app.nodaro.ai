@@ -3434,6 +3434,17 @@ export interface PluginSupports {
    *   Additive-optional: absent ⇒ `["head"]`, what every 0.392.0 engine does
    *   (it strips a `target` it does not know), so a trend that masks `"face"`
    *   is held back from publishing and running there (`faceMaskTargetsOf`).
+   * - `faceMaskErase`: a stored face mask's make (`POST /v1/cast-swap/face-mask`)
+   *   takes `faceMasking.marks` (its `"erased"` marks' faces left out of the
+   *   mask, through the core `mask-erase` job) and `fromMask` (an earlier raw
+   *   mask, so the faces are not found again), and its result carries the raw
+   *   mask (`maskUrl`, `depthUrl`) and `stats.erasedRegions`.
+   *   Additive-optional: absent ⇒ `false` (a make with marks is held back, and
+   *   `fromMask` is never sent).
+   * - `storedFaceMaskRequired`: a trend run's `storedFaceMask` takes
+   *   `required: true`, and with it the engine fails the run rather than
+   *   masking per run (a trend with marks). Additive-optional: absent ⇒ an
+   *   engine that strips `required`, so a trend with marks is not run there.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3451,6 +3462,8 @@ export interface PluginSupports {
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string
     readonly faceMaskTargets?: readonly ("face" | "head")[]
+    readonly faceMaskErase?: boolean
+    readonly storedFaceMaskRequired?: boolean
   }
 }
 
