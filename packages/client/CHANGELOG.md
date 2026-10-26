@@ -1,5 +1,35 @@
 # @nodaro/sdk
 
+## 2.46.0
+
+### Minor Changes
+
+- 0c8270a: Cast Swap is now **Nodaro Motion**, with two engines: **Nodaro Motion Pro** (`"motion-pro"`) and **Nodaro Motion Lite** (`"motion-lite"`). Face masking is set by Nodaro per engine; a run no longer sets it.
+
+  `@nodaro/shared/models`: `NODARO_MOTION_ENGINES`, `NodaroMotionEngine`, `NODARO_MOTION_ENGINE_NAMES`, `CAST_SWAP_ENGINE_OF_NODARO_MOTION` / `NODARO_MOTION_ENGINE_OF_CAST_SWAP`, `nodaroMotionEngineOf`, `nodaroMotionEngineName`, `castSwapEngineFrom` (reads either id) and `CAST_SWAP_ENGINE_IDS_ACCEPTED`.
+
+  `@nodaro/sdk`: `CastSwapEngine` is now `"motion-pro" | "motion-lite"`, the id every response names (a trend's `engine`, a trend run's `engine`, a quote's `engine`), with `engineName` beside it on trends and trend runs. A request still takes the old ids (`CastSwapEngineLegacyId`, deprecated). `CastSwapParams.faceMasking` and `CastSwapFaceMasking` are deprecated: the server accepts and ignores them. TypeScript code that compares a response's `engine` with `"seedance-2-5"` or `"kling-4"` must compare with the new ids.
+
+  Quote and completion keys get neutral names: `breakdown.motion` (was `seedance` / `kling`), `breakdown.motionExpected` (was `seedanceExpected`), `breakdown.motionHd` (was `seedanceHd`), `breakdown.privacy` (was `masking`), `privacyCredits` (was `maskingCredits`) and the completion's `privacy` (was `faceMasking`). A Lite run's length fit is `motionLength` (`CastSwapMotionLength`; `klingLength` / `CastSwapKlingLength` still accepted, deprecated). `@nodaro/sdk` types the new names (`maskingCredits` stays, deprecated, for an older server).
+
+  `@nodaro/cli`: help text says Nodaro Motion; quotes list their parts by label, and its `--json` answers the neutral names (an older server's old ones renamed).
+
+- 125054e: The Trash, Move and "everything in this project" for generation sessions and jobs.
+
+  - `client.trash.list(params?: ListTrashParams): Promise<TrashPage>` lists the Trash (`GET /v1/trash`), newest first: `TrashEntry` is `{ kind: "removed", removedAt, session: TrashSession, job }` (an item removed from a session) or `{ kind: "deleted", deletedAt, purgeAt, job }` (a deleted job, kept 30 days). Scope it with `projectId` (`"none"` for the sessions with no project and General), `tool` and `type`.
+  - `client.sessions.removeItem(id, jobId, { forever? })` now moves the item to the session's Trash; `{ forever: true }` deletes an item already removed for good (a 409 `NodaroError` `not_in_trash` on a live one). `client.sessions.restoreItem(id, jobId)` brings it back. `client.sessions.moveItems(targetId, { jobIds, fromSessionId })` moves items between sessions in one transaction (the source keeps them as removed, so a move is undoable) — a session in another project is how an item moves to another project. `client.sessions.items(id, { removed: true })` lists a session's removed items; `ListSessionsParams.projectId` takes `"none"`; `GenerationSession.removedCount` and `SessionItem.removedAt` are new; `importItems` revives a removed item.
+  - **Behavior change for `client.jobs.delete` callers:** `DELETE /v1/jobs/:id` now answers `404` (a `NotFoundError`) for a job that is not yours or does not exist — it used to answer success whatever the id — and an OAuth app now needs the `assets:write` scope to delete or restore a job (it needed none).
+  - `client.jobs.delete(id, { forever? })` now moves the job to the Trash (hidden from every read, restorable for 30 days, then deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays)); `{ forever: true }` deletes a job already in the Trash now. `client.jobs.restore(id)` brings it back into every session it was in. `ListJobsParams` takes `projectId` (`string | "none"`), `inSession` (`false` = General) and `withSessions`; `Job.sessions?: JobSessionRef[]` and `Job.deleted_at?` are new.
+
+- 84ee89f: `VideoUpscaleParams` takes `targetResolution` ("720p" | "1080p" | "4k") and `targetFps` (15–60) for Topaz; `upscaleFactor` is deprecated (still accepted, mapped over the source's size).
+
+### Patch Changes
+
+- Updated dependencies [6f9d4f8]
+- Updated dependencies [0c8270a]
+- Updated dependencies [84ee89f]
+  - @nodaro/shared@3.44.0
+
 ## 2.45.1
 
 ### Patch Changes
