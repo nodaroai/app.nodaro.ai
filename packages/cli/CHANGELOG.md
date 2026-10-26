@@ -1,5 +1,17 @@
 # @nodaro/cli
 
+## 1.44.0
+
+### Minor Changes
+
+- 40d4696: `client.credits.history()` lists every movement of the balance, newest first — runs, purchases, grants, refunds, adjustments, expiries — with the balance after each one, the model, the settled charge and the job on a usage row, filters (`kind`, `model`, `from`, `to`, `q`) and a cursor; `client.credits.exportHistory()` is the same as a CSV file. The CLI gains `nodaro billing history` (`--csv` for the file).
+
+### Patch Changes
+
+- Updated dependencies [65430eb]
+- Updated dependencies [40d4696]
+  - @nodaro/sdk@2.50.0
+
 ## 1.43.0
 
 ### Minor Changes
