@@ -1210,6 +1210,7 @@ const PICKER_LABELS_PT_BR: Record<string, string> = {
   "Editorial / Fashion": "Editorial / moda",
   "Documentary / Street": "Documental / rua",
   "Cinematographer": "Diretor de fotografia",
+  "Film Director": "Diretor de cinema",
   "Concept / Digital": "Conceitual / digital",
   "Illustrator / Animator": "Ilustrador / animador",
   "Documentary / Candid": "Documental / espontâneo",

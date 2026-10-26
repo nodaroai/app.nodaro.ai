@@ -1210,6 +1210,7 @@ const PICKER_LABELS_KO: Record<string, string> = {
   "Editorial / Fashion": "에디토리얼 / 패션",
   "Documentary / Street": "다큐멘터리 / 스트리트",
   "Cinematographer": "촬영 감독",
+  "Film Director": "영화 감독",
   "Concept / Digital": "콘셉트 / 디지털",
   "Illustrator / Animator": "일러스트레이터 / 애니메이터",
   "Documentary / Candid": "다큐멘터리 / 캔디드",

@@ -26,6 +26,7 @@ export type PhotographerCategory =
   | "editorial"
   | "documentary"
   | "cinematographer"
+  | "director"
   | "concept"
   | "illustrator"
 
@@ -635,6 +636,280 @@ export const PHOTOGRAPHERS: ReadonlyArray<Photographer> = [
       "in the style of Guido van Helten, monumental muralist portraiture with weathered concrete texture and quiet grayscale tonality",
     term: "by guido van helten, monumental muralist portraiture",
   },
+
+  // ── Cinematographers (wave 2, 2026-10-26: each rendered on the one shared scene) ──
+  {
+    id: "hoyte-van-hoytema",
+    label: "Hoyte van Hoytema",
+    category: "cinematographer",
+    description: "Large-format natural clarity",
+    promptHint:
+      "in the cinematic style of Hoyte van Hoytema, large-format 65mm clarity with shallow depth, natural available light, cool desaturated tones with soft warm skin and grounded understated grandeur",
+    term: "shot by hoyte van hoytema, large-format natural clarity",
+  },
+  {
+    id: "gordon-willis",
+    label: "Gordon Willis",
+    category: "cinematographer",
+    description: "Underexposed amber New Hollywood",
+    promptHint:
+      "in the cinematic style of Gordon Willis, 1970s underexposed low-key lighting, deep warm amber tones, top-lit faces with shadows that hide the eyes and rich golden-brown darkness",
+    term: "shot by gordon willis, underexposed amber low-key",
+  },
+  {
+    id: "bradford-young",
+    label: "Bradford Young",
+    category: "cinematographer",
+    description: "Soft low-contrast naturalism",
+    promptHint:
+      "in the cinematic style of Bradford Young, soft low-contrast naturalism, deep rich dark skin tones with gentle shadow detail, muted desaturated color and diffused window-like light",
+    term: "shot by bradford young, soft low-contrast naturalism",
+  },
+  {
+    id: "robert-richardson",
+    label: "Robert Richardson",
+    category: "cinematographer",
+    description: "Hot white top-light halos",
+    promptHint:
+      "in the cinematic style of Robert Richardson, a hard hot white top-light halo blooming on hair and surfaces, high-contrast glowing highlights against deep shadows and saturated theatrical color",
+    term: "shot by robert richardson, hot top-light halos",
+  },
+  {
+    id: "janusz-kaminski",
+    label: "Janusz Kaminski",
+    category: "cinematographer",
+    description: "Diffused bleach-bypass backlight",
+    promptHint:
+      "in the cinematic style of Janusz Kaminski, heavy diffused backlight blooming through haze, desaturated bleach-bypass tones with silvery highlights, smoke in the air and luminous overexposed windows",
+    term: "shot by janusz kaminski, diffused bleach-bypass backlight",
+  },
+  {
+    id: "vittorio-storaro",
+    label: "Vittorio Storaro",
+    category: "cinematographer",
+    description: "Painterly symbolic warm-cool color",
+    promptHint:
+      "in the cinematic style of Vittorio Storaro, painterly symbolic color with warm oranges against cool blues divided across the frame, bold saturated theatrical light and sculpted shadows",
+    term: "shot by vittorio storaro, painterly symbolic color",
+  },
+  {
+    id: "linus-sandgren",
+    label: "Linus Sandgren",
+    category: "cinematographer",
+    description: "Candy-colored romantic 35mm",
+    promptHint:
+      "in the cinematic style of Linus Sandgren, vivid candy-colored Technicolor-inspired palette, magic-hour glow, glossy romantic 35mm film with saturated magenta and teal skies",
+    term: "shot by linus sandgren, candy-colored romantic 35mm",
+  },
+  {
+    id: "darius-khondji",
+    label: "Darius Khondji",
+    category: "cinematographer",
+    description: "Rain-soaked bleach-bypass noir",
+    promptHint:
+      "in the cinematic style of Darius Khondji, moody rain-soaked darkness, sickly green-and-sepia bleach-bypass tones with silver-retained shadows, grimy urban texture and a single cold practical light",
+    term: "shot by darius khondji, rain-soaked bleach-bypass noir",
+  },
+
+  // ── Directors (2026-10-26: the signature look of a filmmaker, rendered on the one shared scene) ──
+  {
+    id: "wes-anderson",
+    label: "Wes Anderson",
+    category: "director",
+    description: "Symmetrical pastel storybook",
+    promptHint:
+      "in the style of Wes Anderson, perfectly centered symmetrical composition, flat frontal framing, a pastel palette of pink, mustard and mint, meticulously arranged vintage props and deadpan storybook precision",
+    term: "by wes anderson, symmetrical pastel storybook",
+  },
+  {
+    id: "wong-kar-wai",
+    label: "Wong Kar-wai",
+    category: "director",
+    description: "Neon longing with smeared motion",
+    promptHint:
+      "in the style of Wong Kar-wai, saturated neon greens and reds, smeared slow-shutter motion blur, rain-slick surfaces, handheld intimacy and a step-printed dreamy texture of longing",
+    term: "by wong kar-wai, neon smeared longing",
+  },
+  {
+    id: "christopher-nolan",
+    label: "Christopher Nolan",
+    category: "director",
+    description: "IMAX clarity, steel-blue and amber",
+    promptHint:
+      "in the style of Christopher Nolan, large-format IMAX clarity, a cool desaturated steel-blue and amber palette, monumental scale, practical realism, crisp deep focus and a ticking tense atmosphere",
+    term: "by christopher nolan, IMAX steel-blue and amber",
+  },
+  {
+    id: "denis-villeneuve",
+    label: "Denis Villeneuve",
+    category: "director",
+    description: "Vast minimalist dread",
+    promptHint:
+      "in the style of Denis Villeneuve, vast minimalist scale with the figure small against a huge empty space, muted monochrome earth tones with one soft light source, heavy atmospheric haze and slow meditative dread",
+    term: "by denis villeneuve, vast minimalist dread",
+  },
+  {
+    id: "stanley-kubrick",
+    label: "Stanley Kubrick",
+    category: "director",
+    description: "One-point clinical symmetry",
+    promptHint:
+      "in the style of Stanley Kubrick, rigid one-point perspective, cold clinical symmetry, a wide-angle lens, eerie stillness, stark practical lighting and unsettling precision",
+    term: "by stanley kubrick, one-point clinical symmetry",
+  },
+  {
+    id: "quentin-tarantino",
+    label: "Quentin Tarantino",
+    category: "director",
+    description: "Grindhouse 35mm swagger",
+    promptHint:
+      "in the style of Quentin Tarantino, punchy saturated 1970s grindhouse color, a low trunk-shot angle looking up, bold pulpy framing, warm grainy 35mm film and a cool swaggering attitude",
+    term: "by quentin tarantino, grindhouse 35mm swagger",
+  },
+  {
+    id: "david-fincher",
+    label: "David Fincher",
+    category: "director",
+    description: "Cold green-yellow clinical menace",
+    promptHint:
+      "in the style of David Fincher, a cold sickly green-yellow grade, immaculate controlled composition, low-key shadows with crushed blacks, digital sharpness and clinical detached menace",
+    term: "by david fincher, cold green-yellow menace",
+  },
+  {
+    id: "tim-burton",
+    label: "Tim Burton",
+    category: "director",
+    description: "Gothic whimsy with stripes",
+    promptHint:
+      "in the style of Tim Burton, gothic whimsy, exaggerated crooked architecture, pale skin with dark circles, a swirling grey sky, black-and-white stripes, a touch of purple and a playful macabre fairy tale",
+    term: "by tim burton, gothic striped whimsy",
+  },
+  {
+    id: "ridley-scott",
+    label: "Ridley Scott",
+    category: "director",
+    description: "Hazy backlit painterly epic",
+    promptHint:
+      "in the style of Ridley Scott, dense atmospheric haze cut by shafts of hard backlight, smoke and steam, rich textured production design, rain, deep blue and amber contrast and epic painterly grandeur",
+    term: "by ridley scott, hazy backlit epic",
+  },
+  {
+    id: "david-lynch",
+    label: "David Lynch",
+    category: "director",
+    description: "Uncanny velvet-red Americana",
+    promptHint:
+      "in the style of David Lynch, uncanny dreamlike unease, deep velvet reds and inky shadows, a single flickering fluorescent light, 1950s Americana details slightly wrong, surreal stillness and heavy grain",
+    term: "by david lynch, uncanny velvet-red Americana",
+  },
+  {
+    id: "terrence-malick",
+    label: "Terrence Malick",
+    category: "director",
+    description: "Magic-hour floating poetry",
+    promptHint:
+      "in the style of Terrence Malick, natural magic-hour backlight, a wide-angle lens close to the subject, wind in the grass and hair, lens flare, floating handheld poetry and a warm reverent golden haze",
+    term: "by terrence malick, magic-hour floating poetry",
+  },
+  {
+    id: "hayao-miyazaki",
+    label: "Hayao Miyazaki",
+    category: "director",
+    description: "Hand-painted Ghibli-like warmth",
+    promptHint:
+      "in the style of Hayao Miyazaki, a hand-painted anime animation frame, lush watercolor clouds in a vast sky, soft gouache greens, gentle nostalgic light and a quiet contemplative Studio-Ghibli-like warmth",
+    term: "by hayao miyazaki, hand-painted anime warmth",
+  },
+  {
+    id: "bong-joon-ho",
+    label: "Bong Joon-ho",
+    category: "director",
+    description: "Layered social-realist calm",
+    promptHint:
+      "in the style of Bong Joon-ho, precise social-realist staging, clean wide compositions with layered depth, cool rainy greys and greens, understated naturalistic light and a quiet tension between calm and chaos",
+    term: "by bong joon-ho, layered social-realist calm",
+  },
+  {
+    id: "park-chan-wook",
+    label: "Park Chan-wook",
+    category: "director",
+    description: "Baroque crimson and emerald",
+    promptHint:
+      "in the style of Park Chan-wook, lush baroque color with deep crimson and emerald, ornate symmetrical framing, elegant camera precision, polished glossy surfaces and sensual operatic intensity",
+    term: "by park chan-wook, baroque crimson and emerald",
+  },
+  {
+    id: "paul-thomas-anderson",
+    label: "Paul Thomas Anderson",
+    category: "director",
+    description: "Warm 1970s anamorphic nostalgia",
+    promptHint:
+      "in the style of Paul Thomas Anderson, a warm 1970s anamorphic film look with soft halation, long-lens compression, naturalistic tungsten and sodium light, rich skin tones and melancholy Californian nostalgia",
+    term: "by paul thomas anderson, warm 70s anamorphic nostalgia",
+  },
+  {
+    id: "coen-brothers",
+    label: "Coen Brothers",
+    category: "director",
+    description: "Deadpan bleak Americana",
+    promptHint:
+      "in the style of the Coen Brothers, dry deadpan Americana, a wide-angle lens with slightly comic framing, bleak flat winter light, muted browns and greys with snow, odd telling details and quiet absurdity",
+    term: "by the coen brothers, deadpan bleak Americana",
+  },
+  {
+    id: "nicolas-winding-refn",
+    label: "Nicolas Winding Refn",
+    category: "director",
+    description: "Neon pink synth-noir stillness",
+    promptHint:
+      "in the style of Nicolas Winding Refn, hyper-stylized neon pink and electric blue light, slow hypnotic stillness, a glossy synth-noir mood, hard fluorescent practicals and deep black shadows",
+    term: "by nicolas winding refn, neon synth-noir stillness",
+  },
+  {
+    id: "baz-luhrmann",
+    label: "Baz Luhrmann",
+    category: "director",
+    description: "Maximalist theatrical glamour",
+    promptHint:
+      "in the style of Baz Luhrmann, maximalist theatrical glamour, glittering lights and confetti, saturated jewel colors, a dynamic tilted camera, lavish costume detail and operatic romantic energy",
+    term: "by baz luhrmann, maximalist theatrical glamour",
+  },
+  {
+    id: "alfred-hitchcock",
+    label: "Alfred Hitchcock",
+    category: "director",
+    description: "Technicolor suspense, high vantage",
+    promptHint:
+      "in the style of Alfred Hitchcock, classic 1950s Technicolor suspense, a high ominous vantage point, elegant restrained composition, a glance toward something unseen off-frame and tense stillness",
+    term: "by alfred hitchcock, Technicolor suspense",
+  },
+  {
+    id: "yorgos-lanthimos",
+    label: "Yorgos Lanthimos",
+    category: "director",
+    description: "Fisheye deadpan absurdism",
+    promptHint:
+      "in the style of Yorgos Lanthimos, a distorted ultra-wide fisheye lens, cold symmetrical formality, natural pale light, an unnervingly blank deadpan stare, sterile absurdist detachment and washed muted color",
+    term: "by yorgos lanthimos, fisheye deadpan absurdism",
+  },
+  {
+    id: "guillermo-del-toro",
+    label: "Guillermo del Toro",
+    category: "director",
+    description: "Dark fairy-tale amber and teal",
+    promptHint:
+      "in the style of Guillermo del Toro, dark fairy-tale gothic, a rich amber and teal palette, ornate insect-and-clockwork production details, rain and lantern light and a sense of something magical lurking in the shadows",
+    term: "by guillermo del toro, dark fairy-tale amber",
+  },
+  {
+    id: "sofia-coppola",
+    label: "Sofia Coppola",
+    category: "director",
+    description: "Hazy pastel melancholy",
+    promptHint:
+      "in the style of Sofia Coppola, soft hazy pastel light, dreamy feminine melancholy, shallow focus, gentle film grain, a lonely contemplative mood, muted pinks and creams and quiet intimacy",
+    term: "by sofia coppola, hazy pastel melancholy",
+  },
 ] as const
 
 const photographerById = new Map<string, Photographer>(
@@ -737,6 +1012,7 @@ export const PHOTOGRAPHER_CATEGORY_LABELS: Readonly<Record<PhotographerCategory,
   editorial: "Editorial / Fashion",
   documentary: "Documentary / Street",
   cinematographer: "Cinematographer",
+  director: "Film Director",
   concept: "Concept / Digital",
   illustrator: "Illustrator / Animator",
 }
@@ -745,6 +1021,7 @@ export const PHOTOGRAPHER_CATEGORY_ORDER: ReadonlyArray<PhotographerCategory> = 
   "editorial",
   "documentary",
   "cinematographer",
+  "director",
   "concept",
   "illustrator",
 ]

@@ -1210,6 +1210,7 @@ const PICKER_LABELS_JA: Record<string, string> = {
   "Editorial / Fashion": "エディトリアル／ファッション",
   "Documentary / Street": "ドキュメンタリー／ストリート",
   "Cinematographer": "撮影監督",
+  "Film Director": "映画監督",
   "Concept / Digital": "コンセプト／デジタル",
   "Illustrator / Animator": "イラストレーター／アニメーター",
   "Documentary / Candid": "ドキュメンタリー／スナップ",

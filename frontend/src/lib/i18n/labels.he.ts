@@ -1231,6 +1231,7 @@ const PICKER_LABELS_HE: Record<string, string> = {
   "Editorial / Fashion": "אדיטוריאל / אופנה",
   "Documentary / Street": "דוקומנטרי / רחוב",
   "Cinematographer": "צלם קולנוע",
+  "Film Director": "במאי קולנוע",
   "Concept / Digital": "קונספט / דיגיטלי",
   "Illustrator / Animator": "מאייר / אנימטור",
   "Documentary / Candid": "דוקומנטרי / ספונטני",
