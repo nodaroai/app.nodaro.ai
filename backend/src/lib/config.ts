@@ -411,6 +411,12 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** Hosted deployments whose billing status the admin page reads (JSON array
+   *  of `{ "name", "url", "key" }`; `key` must be a READ-ONLY billing
+   *  integration key, `ndr_bill_ro_…`, minted by that deployment's billing
+   *  account). Parsed and validated by `ee/routes/admin-hosted-deployments.ts`;
+   *  unset = the page lists none. */
+  HOSTED_DEPLOYMENTS: z.string().optional(),
   /** Length-based speech pricing (decided 2026-10-06): Text to Speech and Text
    *  to Dialogue reserve per started 100 characters instead of the flat row.
    *  Default OFF — the two seams (route guards, orchestrator override) are

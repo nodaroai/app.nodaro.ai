@@ -230,6 +230,7 @@ import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
 import { adminCopilotGapsRoutes } from "./ee/routes/admin-copilot-gaps.js"
 import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
+import { adminHostedDeploymentsRoutes } from "./ee/routes/admin-hosted-deployments.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
@@ -778,6 +779,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminCopilotGapsRoutes)
   if (hasAdmin()) await app.register(adminAppReportsRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
+  if (hasAdmin()) await app.register(adminHostedDeploymentsRoutes)
   if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
   if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
