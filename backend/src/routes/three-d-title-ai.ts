@@ -26,6 +26,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
+import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -58,8 +59,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
       // code, so forward the body and pass its answer straight back.
       if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/3d-title/generate", "3d-title")) return
 
-      req.raw.setTimeout(60000)
-      reply.raw.setTimeout(60000)
+      extendSocketTimeout(req, reply, 60000)
 
       const parsed = generateBody.safeParse(req.body)
       if (!parsed.success) {

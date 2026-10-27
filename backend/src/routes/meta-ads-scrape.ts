@@ -54,6 +54,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { config, llmMeteredPricing } from "../lib/config.js"
 import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
 import { callCloudRoute, createCloudJob, waitForCloudJob } from "../providers/nodaro/client.js"
+import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 
 const ROUTE_PATH = "/v1/meta-ads-scrape"
 const ADVERTISERS_ROUTE_PATH = "/v1/meta-ads-scrape/advertisers"
@@ -234,8 +235,7 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
     preHandler: creditGuard((req) => resolveMetaAdsScrapeCreditId(req.body)),
     config: { requestTimeout: 600_000 } as Record<string, unknown>,
   }, async (req, reply) => {
-    req.raw.setTimeout(600_000)
-    reply.raw.setTimeout(600_000)
+    extendSocketTimeout(req, reply, 600_000)
     const startedAt = Date.now()
 
     const parsed = metaAdsScrapeBody.safeParse(req.body)

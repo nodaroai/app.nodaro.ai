@@ -19,3 +19,25 @@
  * kept dying at 121 s (2026-10-08, three scheduled runs on production).
  */
 export const LLM_ROUTE_REQUEST_TIMEOUT_MS = 10 * 60 * 1000
+
+/** Anything whose `raw` may carry a socket idle timeout (a Fastify request or reply). */
+interface WithRaw {
+  raw: unknown
+}
+
+/**
+ * Sets the socket idle timeout of a request and its reply to `ms`, when there
+ * is a socket to set. A request a plugin worker sends from inside the server
+ * (`app.inject`, through the toolkit's worker request) has no socket: its
+ * `raw` objects carry no `setTimeout`, and calling it threw "req.raw.setTimeout
+ * is not a function", a 500 for every such call (the cast-swap scene
+ * description on staging, 2026-10-27). Such a request has no idle timeout to
+ * raise, so it is left as it is.
+ */
+export function extendSocketTimeout(req: WithRaw, reply: WithRaw, ms: number): void {
+  for (const target of [req.raw, reply.raw]) {
+    const setTimeout = (target as { setTimeout?: unknown } | null)?.setTimeout
+    if (typeof setTimeout === "function") setTimeout.call(target, ms)
+  }
+}
+

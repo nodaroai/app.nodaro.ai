@@ -19,6 +19,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { config } from "../lib/config.js"
 import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
 import { createCloudJob, waitForCloudJob } from "../providers/nodaro/client.js"
+import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 
 const ROUTE_PATH = "/v1/web-scrape"
 
@@ -91,8 +92,7 @@ export async function webScrapeRoutes(app: FastifyInstance) {
     preHandler: creditGuard((req) => resolveScraperCreditId(req.body)),
     config: { requestTimeout: 600_000 } as Record<string, unknown>,
   }, async (req, reply) => {
-    req.raw.setTimeout(600_000)
-    reply.raw.setTimeout(600_000)
+    extendSocketTimeout(req, reply, 600_000)
 
     const parsed = webScrapeBody.safeParse(req.body)
     if (!parsed.success) {
