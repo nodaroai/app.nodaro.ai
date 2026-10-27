@@ -40,7 +40,7 @@ describe("kling-4 / kling-4-keyframes catalog", () => {
 
   it("reference: subjects, voices and reference videos; keyframes: in-between frames on their own channel", () => {
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"]).toEqual({ images: 10, videos: 5, audio: 3, characters: 7, materials: 15 })
-    expect(VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4"]).toEqual({ minSec: 2, maxSec: 30 })
+    expect(VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4"]).toEqual({ minSec: 2, maxSec: 30, maxTotalSec: 30 })
     expect(hasFeature("kling-4", "character-subjects")).toBe(true)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4-keyframes"]).toEqual({ images: 8 })
     expect(hasFeature("kling-4-keyframes", "keyframes")).toBe(true)

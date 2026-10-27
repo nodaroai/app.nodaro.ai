@@ -121,6 +121,34 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toContain("confirm: true")
   })
 
+  it("forwards style to the quote and the run, and sends none when it is left out", async () => {
+    const { fastify, calls } = stubFastify({
+      "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000001" } },
+    })
+    const server = serverWith(fastify)
+    for (const style of ["precise", "motion"] as const) {
+      await callTool(server, "cast_swap", { ...ARGS, style })
+      await callTool(server, "cast_swap", { ...ARGS, style, confirm: true })
+    }
+    expect(calls.map((c) => `${c.url} ${(c.payload as { style?: string }).style}`)).toEqual([
+      "/v1/cast-swap/estimate precise",
+      "/v1/cast-swap precise",
+      "/v1/cast-swap/estimate motion",
+      "/v1/cast-swap motion",
+    ])
+    calls.length = 0
+    await callTool(server, "cast_swap", ARGS)
+    expect(calls[0]!.payload).not.toHaveProperty("style")
+  })
+
+  it("refuses a style it does not list", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, style: "loose" })
+    expect(res.isError).toBe(true)
+    expect(calls).toEqual([])
+  })
+
   it("says when the final charge is expected to come out lower", async () => {
     const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: { ...QUOTE, settlesLower: true } } })
     const res = await callTool(serverWith(fastify), "cast_swap", ARGS)

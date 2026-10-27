@@ -711,12 +711,12 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(res.json().error.code).toBe("trend_unavailable")
   })
 
-  it("a published trend with marks whose stored face mask does not match is a 503 trend_unavailable, with no internal POST", async () => {
+  it("a published trend with marks whose stored face mask does not match is a 409 trend_unavailable, with no internal POST", async () => {
     const mark = { label: "erased" as const, fromFrame: 0, toFrame: 10, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 50 }
     mem.trends[0]!.versions[2] = versionData({ faceMasking: { ...MASKING, marks: [mark] } })
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
-    expect(res.statusCode).toBe(503)
-    expect(res.json().error).toEqual({ code: "trend_unavailable", message: "This trend is not available right now." })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toEqual({ code: "trend_unavailable", message: "This trend cannot run until it is updated." })
     expect(engine.calls).toHaveLength(0)
   })
 
@@ -1013,6 +1013,30 @@ describe("a Kling 4 trend", () => {
   it("a Seedance 2.5 trend sends no engine key", async () => {
     await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
     expect(engine.calls[0]!.body).not.toHaveProperty("engine")
+  })
+})
+
+describe("a trend's prompt style", () => {
+  const T_STYLE = "00000000-0000-4000-8000-0000000000a6"
+  beforeEach(() => {
+    mem.trends.push(trend(T_STYLE, "style-dance", "published", 1, versionData({ promptStyle: "flexible" })))
+  })
+
+  it("never shows on its page", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/trends/style-dance", headers: as() })
+    expect(res.statusCode).toBe(200)
+    expect(res.body).not.toContain("promptStyle")
+    expect(res.body).not.toContain("flexible")
+    expectNoHidden(res.body)
+  })
+
+  it("is sent resolved to an engine that declares prompt styles, and never to one that does not", async () => {
+    await app.inject({ method: "POST", url: "/v1/trends/style-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(engine.calls.at(-1)!.body).not.toHaveProperty("promptStyle")
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], promptStyles: ["precise", "flexible"] } as never })
+    await app.inject({ method: "POST", url: "/v1/trends/style-dance/estimate", headers: as(), payload: RUN_BODY })
+    await app.inject({ method: "POST", url: "/v1/trends/style-dance/runs", headers: as(), payload: RUN_BODY })
+    for (const c of engine.calls.slice(-2)) expect(c.body).toMatchObject({ promptStyle: "flexible" })
   })
 })
 

@@ -3,6 +3,8 @@ import { supabase } from "./supabase.js"
 import type { GalleryWordEntry } from "./gallery-word-filter.js"
 import { MODEL_MAKER_LOGOS_KEY, parseModelMakerLogos } from "./maker-logo-settings.js"
 import { NODARO_MOTION_MASKING_KEY, parseNodaroMotionMasking, type NodaroMotionMasking } from "./nodaro-motion-masking.js"
+import { NODARO_MOTION_PROMPT_PARTS_KEY, parseNodaroMotionPromptParts, type NodaroMotionPromptParts } from "./nodaro-motion-prompt-parts.js"
+import { NODARO_MOTION_MOTION_KEY, parseNodaroMotionMotion, type NodaroMotionMotion } from "./nodaro-motion-motion.js"
 import {
   GALLERY_BANNED_EMAIL_PATTERNS_KEY,
   GALLERY_BANNED_USERS_KEY,
@@ -73,6 +75,20 @@ export interface AppSettings {
    * validated on its own; an invalid one is dropped.
    */
   nodaro_motion_masking: NodaroMotionMasking | null
+  /**
+   * Nodaro Motion's prompt part overrides per engine and style
+   * (nodaro-motion-prompt-parts.ts), for direct runs. null = never saved (the
+   * engine's defaults). Each engine's entry is validated on its own; an
+   * invalid one is dropped.
+   */
+  nodaro_motion_prompt_parts: NodaroMotionPromptParts | null
+  /**
+   * Nodaro Motion's Motion setting per engine (nodaro-motion-motion.ts), for
+   * direct runs with `style: "motion"`. null = never saved (the Precise
+   * masking with the Flexible prompt). Each engine's entry is validated on
+   * its own; an invalid one is dropped.
+   */
+  nodaro_motion_motion: NodaroMotionMotion | null
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -119,7 +135,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null }
     readFailures.add(fallback)
     return fallback
   }
@@ -142,11 +158,21 @@ async function refreshSettings(): Promise<AppSettings> {
     gallery_banned_email_patterns: [],
     model_maker_logos: [],
     nodaro_motion_masking: null,
+    nodaro_motion_prompt_parts: null,
+    nodaro_motion_motion: null,
   }
 
   for (const row of data ?? []) {
     if (row.key === NODARO_MOTION_MASKING_KEY) {
       settings.nodaro_motion_masking = parseNodaroMotionMasking(row.value)
+      continue
+    }
+    if (row.key === NODARO_MOTION_MOTION_KEY) {
+      settings.nodaro_motion_motion = parseNodaroMotionMotion(row.value)
+      continue
+    }
+    if (row.key === NODARO_MOTION_PROMPT_PARTS_KEY) {
+      settings.nodaro_motion_prompt_parts = parseNodaroMotionPromptParts(row.value)
       continue
     }
     if (row.key === MODEL_MAKER_LOGOS_KEY) {

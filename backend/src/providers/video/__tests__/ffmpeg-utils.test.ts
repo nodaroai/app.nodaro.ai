@@ -450,6 +450,29 @@ describe("ffmpegFailureMessage", () => {
     expect(ffmpegFailureMessage("", "")).toBe("ffmpeg failed: no output")
   })
 
+  it("leads with the codec library's own error line when ffmpeg's last lines push it out (an x265 refusal)", () => {
+    // The shape a trend crop failed with on staging (2026-10-27): x265 names the cause, then ffmpeg's banner of consequences.
+    const stderr = [
+      "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'original':",
+      ...Array.from({ length: 30 }, (_, i) => `  Stream #0:${i} metadata line that fills the budget ${"x".repeat(30)}`),
+      "x265 [error]: frameNumThreads (--frame-threads) must be [0 .. X265_MAX_FRAME_THREADS)",
+      "[vost#0:0/libx265 @ 0x56242e44d580] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.",
+      "[vf#0:0 @ 0x56242e44d000] Error sending frames to consumers: Invalid argument",
+      "[vost#0:0/libx265 @ 0x56242e44d580] Terminating thread with return code -22 (Invalid argument)",
+      "[out#0/null @ 0x56242e4309c0] Nothing was written into output file, because at least one of its streams received no packets.",
+      "frame=    0 fps=0.0 q=0.0 Lsize=       0KiB time=N/A bitrate=N/A speed=N/A elapsed=0:00:00.21",
+      "Conversion failed!",
+    ].join("\n")
+    const msg = ffmpegFailureMessage(stderr, "unused")
+    expect(msg).toMatch(/^ffmpeg failed: x265 \[error\]: frameNumThreads/)
+    expect(msg).toMatch(/Conversion failed!$/)
+    expect(msg.length).toBeLessThan(500)
+  })
+
+  it("leaves the tail as it was when it already holds the library's error line", () => {
+    expect(ffmpegFailureMessage("one\nx265 [error]: bad\nthree\n", "unused")).toBe("ffmpeg failed: one\nx265 [error]: bad\nthree")
+  })
+
   it("tail-cuts a single over-long line instead of dropping it", () => {
     const line = `Error: ${"x".repeat(900)}END`
     const msg = ffmpegFailureMessage(line, "unused")

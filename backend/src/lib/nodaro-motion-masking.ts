@@ -25,14 +25,9 @@
  * `invalidateSettingsCache()` after a write), parsed here.
  */
 import { z } from "zod"
-import {
-  NODARO_MOTION_ENGINES,
-  NODARO_MOTION_LEGACY_ENGINES,
-  NODARO_MOTION_LEGACY_ENGINE_OF,
-  type NodaroMotionEngine,
-  type NodaroMotionLegacyEngine,
-} from "@nodaro/shared/models"
+import type { NodaroMotionEngine, NodaroMotionLegacyEngine } from "@nodaro/shared/models"
 import { faceMaskingSchema, type FaceMasking } from "./cast-swap-face-masking.js"
+import { parseByEngine, withEarlierEngineKeys } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_MASKING_KEY = "nodaro_motion_masking"
 
@@ -52,22 +47,11 @@ export const nodaroMotionMaskingSchema: z.ZodType<NodaroMotionMasking> = z.stric
 export type NodaroMotionMaskingForPlugin = Partial<Record<NodaroMotionEngine | NodaroMotionLegacyEngine, FaceMasking>>
 
 /**
- * TRANSITION SHIM (the 2026-10-26 rename): the setting with every entry also
- * under its earlier key (`"motion-pro"` beside `"motion-prism"`,
- * `"motion-lite"` beside `"motion-pulse"`), because a plugin up to 0.397.0
- * looks only for the earlier keys, and a newer one for the current keys.
- * Remove once every environment pins a plugin that reads the current keys.
- * Returns new objects (each copy its own).
+ * TRANSITION SHIM (the 2026-10-26 rename): each entry also under its earlier
+ * key, for plugins up to 0.397.0 (`withEarlierEngineKeys`).
  */
 export function withEarlierMaskingKeys(masking: NodaroMotionMasking): NodaroMotionMaskingForPlugin {
-  const out: NodaroMotionMaskingForPlugin = {}
-  for (const engine of NODARO_MOTION_ENGINES) {
-    const entry = masking[engine]
-    if (!entry) continue
-    out[engine] = structuredClone(entry)
-    out[NODARO_MOTION_LEGACY_ENGINE_OF[engine]] = structuredClone(entry)
-  }
-  return out
+  return withEarlierEngineKeys(masking)
 }
 
 /**
@@ -81,31 +65,5 @@ export function parseNodaroMotionMasking(
   value: unknown,
   warn: (msg: string) => void = (msg) => console.warn(msg),
 ): NodaroMotionMasking | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    if (value !== undefined && value !== null) warn(`[${NODARO_MOTION_MASKING_KEY}] not an object; read as never saved`)
-    return null
-  }
-  const out: NodaroMotionMasking = {}
-  const entries = Object.entries(value as Record<string, unknown>)
-  // A current key wins over its earlier one when a row has both, whatever their order.
-  const current = new Set(entries.map(([key]) => key).filter((key) => (NODARO_MOTION_ENGINES as readonly string[]).includes(key)))
-  for (const [key, entry] of entries) {
-    const engine: NodaroMotionEngine | undefined = (NODARO_MOTION_ENGINES as readonly string[]).includes(key)
-      ? (key as NodaroMotionEngine)
-      : Object.hasOwn(NODARO_MOTION_LEGACY_ENGINES, key)
-        ? NODARO_MOTION_LEGACY_ENGINES[key as NodaroMotionLegacyEngine]
-        : undefined
-    if (!engine) {
-      warn(`[${NODARO_MOTION_MASKING_KEY}] unknown engine "${key}" dropped`)
-      continue
-    }
-    if (engine !== key && current.has(engine)) continue
-    const parsed = faceMaskingSchema.safeParse(entry)
-    if (!parsed.success) {
-      warn(`[${NODARO_MOTION_MASKING_KEY}] invalid setting for "${key}" dropped: ${parsed.error.issues[0]?.message ?? "invalid"}`)
-      continue
-    }
-    out[engine] = parsed.data
-  }
-  return out
+  return parseByEngine(value, NODARO_MOTION_MASKING_KEY, faceMaskingSchema, warn)
 }

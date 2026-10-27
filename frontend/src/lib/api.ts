@@ -21,6 +21,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 import type { EditPlanMode } from "@nodaro/shared/edl"
+import type { CastSwapPromptPartId } from "@nodaro/render-rules"
 import type {
   VideoDepthProvider,
   VideoDepthModelSize,
@@ -360,6 +361,12 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
     throw new CredentialUnboundError(
       message,
       Array.isArray(errObj.details) ? (errObj.details as UnboundCredentialUse[]) : [],
+    )
+  }
+  if (errObj?.code === "prompt_parts_invalid") {
+    throw new PromptPartsInvalidError(
+      message,
+      Array.isArray(errObj.problems) ? (errObj.problems as PromptPartProblem[]) : [],
     )
   }
   if (errObj?.code === "publish_blocked") {
@@ -11121,8 +11128,26 @@ export interface AdminTrendSource {
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
 export type AdminTrendFaceMaskingFill = "blur" | "depth"
-/** What a mask covers: "head" (the default; hair and people seen from behind too) or "face" (the face only). */
-export type AdminTrendFaceMaskingTarget = "face" | "head"
+/**
+ * What a mask covers: "head" (the default; hair and people seen from behind
+ * too), "face" (the face only), or "body" (the whole person: Keep people only,
+ * and its default).
+ */
+export type AdminTrendFaceMaskingTarget = "face" | "head" | "body"
+/**
+ * How a trend's clip is prepared (absent = "faces"): the faces hidden, the
+ * whole clip as one depth video ("full-depth"), or the people kept as filmed
+ * and the rest depth ("keep-people"). The depth modes need mode "always".
+ */
+export type AdminTrendFaceMaskingSource = "faces" | "full-depth" | "keep-people"
+/**
+ * Full depth only: where a run's scene comes from (absent = "description"):
+ * a description the engine writes per run, the original clip as a second
+ * video (clips up to 27.5 s), or none (the admin writes it).
+ */
+export type AdminTrendFullDepthScene = "description" | "original" | "none"
+/** How the engine words a run's prompt. */
+export type CastSwapPromptStyleId = "precise" | "flexible"
 
 /** Frame margins (0–49 % each); a face centred in one is not masked. */
 export interface AdminTrendFaceMaskingZone {
@@ -11138,7 +11163,11 @@ export interface AdminTrendFaceMaskingZone {
  */
 export interface AdminTrendFaceMasking {
   mode: AdminTrendFaceMaskingMode
-  /** Left out = "head" (the engine's default). */
+  /** A trend's clip preparation; left out = "faces". Admin → Nodaro Motion never sets it. */
+  source?: AdminTrendFaceMaskingSource
+  /** Full depth only: where the scene comes from (left out = "description"). */
+  scene?: AdminTrendFullDepthScene
+  /** Left out = "head" (the engine's default); in Keep people, "body". */
   target?: AdminTrendFaceMaskingTarget
   fill?: AdminTrendFaceMaskingFill
   /** 0–100 % of the frame's height; default 15. */
@@ -11166,10 +11195,11 @@ export interface AdminTrendFaceMasking {
 
 /**
  * What a face mask mark says about the faces in its box: `"erased"` (left
- * unmasked on every run), or `{ slot }` (an optional person slot's key: left
+ * unmasked on every run), `"main"` (Keep people only: the main character, the
+ * only one kept as filmed), or `{ slot }` (an optional person slot's key: left
  * unmasked only when a run leaves that person empty).
  */
-export type AdminTrendFaceMaskMarkLabel = "erased" | { slot: string }
+export type AdminTrendFaceMaskMarkLabel = "erased" | "main" | { slot: string }
 
 /** A box on the face mask over a range of frames: frames 0-based and inclusive, edges in % of the frame from its left / top. */
 export interface AdminTrendFaceMaskMark {
@@ -11304,6 +11334,14 @@ export interface AdminTrendData {
   engine?: AdminTrendEngine
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
   klingLength?: AdminTrendKlingLength
+  /**
+   * The engine prompt's overrides (hidden; written only by the prompt parts
+   * route, kept by a draft save): per part, its text and the hash of the
+   * default it replaced.
+   */
+  promptParts?: AdminTrendPromptPartOverrides
+  /** How the engine words the prompt (hidden). Absent = Flexible for full depth, Precise otherwise. */
+  promptStyle?: CastSwapPromptStyleId
   examples: AdminTrendExample[]
 }
 
@@ -11504,6 +11542,18 @@ export interface TrendEngineEnvironment {
       faceMaskTargets?: AdminTrendFaceMaskingTarget[]
       faceMaskErase?: boolean
       storedFaceMaskRequired?: boolean
+      /** The clip preparations a trend may use (absent = faces only). */
+      sourceModes?: AdminTrendFaceMaskingSource[]
+      /** The mark labels a stored clip's make takes (absent = "erased" only). */
+      faceMaskMarkLabels?: Array<"erased" | "main">
+      /** The engine shows and checks its prompt parts, and a trend run takes overrides of them. */
+      promptParts?: boolean
+      /** What a direct run's `style` may name. */
+      styles?: Array<"precise" | "motion">
+      /** What a trend's `promptStyle` may name (absent: the clip preparation picks it). */
+      promptStyles?: CastSwapPromptStyleId[]
+      /** What full depth's `scene` may name (absent: the original only). */
+      fullDepthScenes?: AdminTrendFullDepthScene[]
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11519,6 +11569,8 @@ export interface TrendPublishBlocker {
   message?: string
   /** `face_mask_out_of_date`: why. */
   why?: AdminTrendFaceMaskOutOfDate["why"]
+  /** `prompt_parts_invalid`: what the engine finds wrong with the engine prompt changes (`mode: "preview"` = the 4 s preview's only). */
+  problems?: Array<{ part?: string; code: string; message: string; mode?: "full" | "preview" }>
 }
 
 /** `POST /v1/admin/trends/:id/publish` refused: every reason, to list on the screen. */
@@ -11984,4 +12036,183 @@ export async function fetchAdminTrendUpscaleJob(jobId: string): Promise<AdminTre
 
 export async function fetchTrendEngineEnvironments(): Promise<TrendEngineEnvironment[]> {
   return (await apiRequest<{ data: TrendEngineEnvironment[] }>(`${ADMIN_TRENDS}/engine-environments`, "apiErr.loadTrends")).data
+}
+
+// ---- Admin: the Cast Swap engine's prompt parts (EE; a trend's, admin-trends-prompt-parts.ts, and direct runs', admin-nodaro-motion-prompt-parts.ts) ----
+
+export type { CastSwapPromptPartId }
+
+/** One part of the engine's prompt, as the engine answers it. */
+export interface PromptPart {
+  id: CastSwapPromptPartId
+  /** The engine's own text for it. */
+  default: string
+  /** The first 16 hex of the default's sha256: an override that names another one was made against an older default. */
+  defaultHash: string
+  /** The placeholders the part may use. */
+  placeholders: string[]
+  /** The placeholders it must keep. */
+  required: string[]
+  /** False: this clip preparation or style does not use the part. */
+  applies: boolean
+}
+
+/** What the engine finds wrong with an override (or with the whole prompt, when `part` is absent). */
+export interface PromptPartProblem {
+  part?: CastSwapPromptPartId
+  code: string
+  message: string
+  /** Admin → Nodaro Motion's save: the engine and style it is about. */
+  engine?: NodaroMotionEngine
+  style?: CastSwapStyleId
+}
+
+/** The engine's answer: every part, the prompt it assembles (with its length and limit) and its problems. */
+export interface PromptPartsAnswer {
+  /** The engine's name for the set of defaults it used (shown as it comes: an engine may name new ones). */
+  set: string
+  parts: PromptPart[]
+  assembled: string
+  length: number
+  max: number
+  problems: PromptPartProblem[]
+}
+
+/** Override texts per part: empty = the default, `"-"` removes the part. */
+export type PromptPartTexts = Partial<Record<CastSwapPromptPartId, string>>
+
+/** A trend's stored overrides: per part, its text and the hash of the default it replaced. */
+export type AdminTrendPromptPartOverrides = Partial<Record<CastSwapPromptPartId, { text: string; defaultHash: string }>>
+
+/** `PUT …/prompt-parts` refused (422 `prompt_parts_invalid`): nothing was saved; every problem the engine found. */
+export class PromptPartsInvalidError extends Error {
+  readonly code = "prompt_parts_invalid"
+  constructor(
+    message: string,
+    readonly problems: PromptPartProblem[],
+  ) {
+    super(message)
+    this.name = "PromptPartsInvalidError"
+  }
+}
+
+/** The engine cannot show or check its prompt parts (503 `engine_unsupported`, or 502 `engine_error`: an answer off the contract). */
+export function isPromptPartsEngineOutOfDate(err: unknown): boolean {
+  const code = err instanceof Error ? (err as { code?: unknown }).code : undefined
+  return code === "engine_unsupported" || code === "engine_error"
+}
+
+/** A trend's engine prompt: the engine's answer for the saved draft, the stored overrides and the draft's revision. */
+export interface AdminTrendEnginePrompt extends PromptPartsAnswer {
+  overrides: AdminTrendPromptPartOverrides
+  revision: string
+}
+
+export async function fetchAdminTrendEnginePrompt(id: string): Promise<AdminTrendEnginePrompt> {
+  return (await apiRequest<{ data: AdminTrendEnginePrompt }>(`${trendPath(id)}/prompt-parts`, "apiErr.loadTrends")).data
+}
+
+/** Save the trend's overrides at `revision` (empty texts = the defaults); the engine checks them first. */
+export async function saveAdminTrendEnginePrompt(
+  id: string,
+  parts: PromptPartTexts,
+  revision: string,
+): Promise<TrendDraftWrite & Partial<PromptPartsAnswer> & { overrides: AdminTrendPromptPartOverrides }> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite & Partial<PromptPartsAnswer> & { overrides: AdminTrendPromptPartOverrides } }>(
+      `${trendPath(id)}/prompt-parts`,
+      "apiErr.saveTrend",
+      { method: "PUT", body: { parts, revision } },
+    )
+  ).data
+}
+
+/** How a direct run follows its clip. */
+export type CastSwapStyleId = "precise" | "motion"
+
+/** Nodaro Motion's direct-run overrides: per engine (public id), per style, the text per part. */
+export type NodaroMotionPromptParts = Partial<Record<NodaroMotionEngine, Partial<Record<CastSwapStyleId, PromptPartTexts>>>>
+
+export interface NodaroMotionPromptPartsView {
+  /** null = never saved: every run uses the engine's defaults. */
+  promptParts: NodaroMotionPromptParts | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  styles: CastSwapStyleId[]
+}
+
+const ADMIN_NODARO_MOTION_PROMPT_PARTS = "/v1/admin/nodaro-motion/prompt-parts"
+
+export async function fetchNodaroMotionPromptParts(): Promise<NodaroMotionPromptPartsView> {
+  return (await apiRequest<{ data: NodaroMotionPromptPartsView }>(ADMIN_NODARO_MOTION_PROMPT_PARTS, "apiErr.loadNodaroMotion")).data
+}
+
+/** Save the whole setting; every engine and style with overrides is checked by the engine first. */
+export async function saveNodaroMotionPromptParts(promptParts: NodaroMotionPromptParts): Promise<NodaroMotionPromptPartsView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPromptPartsView }>(ADMIN_NODARO_MOTION_PROMPT_PARTS, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { promptParts },
+    })
+  ).data
+}
+
+/** The engine's parts and assembled prompt for a sample direct run of `engine` and `style`; `overrides` left out = the saved ones. */
+export async function previewNodaroMotionPromptParts(input: {
+  engine: NodaroMotionEngine
+  style: CastSwapStyleId
+  overrides?: PromptPartTexts
+}): Promise<PromptPartsAnswer> {
+  return (
+    await apiRequest<{ data: PromptPartsAnswer }>(`${ADMIN_NODARO_MOTION_PROMPT_PARTS}/preview`, "apiErr.loadNodaroMotion", {
+      method: "POST",
+      body: input,
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Motion setting (/v1/admin/nodaro-motion/motion, admin-nodaro-motion-motion.ts) ----
+
+/** One engine's Motion setting: its masking (a face mask, or full depth) and prompt style; each left out takes its default. */
+export interface NodaroMotionMotionEntry {
+  /** Left out = the engine's Precise masking. Never Keep people. */
+  masking?: AdminTrendFaceMasking
+  /** Left out = "flexible". */
+  promptStyle?: CastSwapPromptStyleId
+}
+
+export type NodaroMotionMotion = Partial<Record<NodaroMotionEngine, NodaroMotionMotionEntry>>
+
+export interface NodaroMotionMotionView {
+  /** null = never saved: every engine runs Motion on its Precise masking with the Flexible prompt. */
+  motion: NodaroMotionMotion | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  promptStyles: CastSwapPromptStyleId[]
+  /** What this environment's Cast Swap engine declares of what the setting uses (each absent = an engine from before it). */
+  supports?: NodaroMotionEngineSupports
+}
+
+/** This environment's Cast Swap engine, as far as the Motion setting needs it. */
+export interface NodaroMotionEngineSupports {
+  styles?: Array<"precise" | "motion">
+  sourceModes?: AdminTrendFaceMaskingSource[]
+  promptStyles?: CastSwapPromptStyleId[]
+  fullDepthScenes?: AdminTrendFullDepthScene[]
+}
+
+const ADMIN_NODARO_MOTION_MOTION = "/v1/admin/nodaro-motion/motion"
+
+export async function fetchNodaroMotionMotion(): Promise<NodaroMotionMotionView> {
+  return (await apiRequest<{ data: NodaroMotionMotionView }>(ADMIN_NODARO_MOTION_MOTION, "apiErr.loadNodaroMotion")).data
+}
+
+/** Save the whole setting. */
+export async function saveNodaroMotionMotion(motion: NodaroMotionMotion): Promise<NodaroMotionMotionView> {
+  return (
+    await apiRequest<{ data: NodaroMotionMotionView }>(ADMIN_NODARO_MOTION_MOTION, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { motion },
+    })
+  ).data
 }

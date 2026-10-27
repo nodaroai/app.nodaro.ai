@@ -533,12 +533,15 @@ export function getModelIdentifier(
   // Video Depth: the duration bucket of the wired clip, through the SAME
   // provider resolution and bucket rule the backend estimator and the route
   // reserve by (`resolveVideoDepthProvider` + `videoDepthCreditId`) — the node's
-  // own badge reads the same upstream length. Unknown length → the provider's
-  // highest reachable row (fal 300 s, Replicate 120 s), never the cheapest.
+  // own badge reads the same upstream length: the producer's own length field,
+  // else the clip's metadata the node caches as `probedVideo`. Unknown length →
+  // the provider's highest reachable row (fal 300 s, Replicate 120 s), never the
+  // cheapest.
   if (nodeType === "video-depth") {
+    const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
     return videoDepthCreditId(
       resolveVideoDepthProvider(data.provider),
-      upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []),
+      upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []) ?? probedVideo?.durationSec,
     )
   }
 

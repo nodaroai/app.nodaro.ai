@@ -268,6 +268,8 @@ describe("the run's pick (composeTrendRun)", () => {
       references: [],
       faceMasking: { mode: "always", threshold: 0.4, zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } },
       storedFaceMask: { url: "https://cdn.example.com/trends/t-1/mask.mp4", frames: 360 },
+      // Resolved, and dropped for an engine that does not declare prompt styles (prompt-style.test.ts).
+      promptStyle: "precise",
       preview: false,
       previewStart: 0,
       resolution: "480p",

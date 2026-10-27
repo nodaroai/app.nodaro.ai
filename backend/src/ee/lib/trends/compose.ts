@@ -46,6 +46,23 @@
  * (`face_mask_required`). A run that leaves no marked person empty is sent
  * exactly what it was before slot marks existed.
  *
+ * A trend that prepares its clip in a depth mode (`faceMasking.source`
+ * `"full-depth"` or `"keep-people"`) runs on its approved stored clip only
+ * (`storedFaceMask` with `required: true`; none made from these settings:
+ * `face_mask_required`), and is sent `faceMasking` as that mode reads it
+ * (`faceMaskingSent`: full depth, `{ mode, source }`; keep people, all but the
+ * fill, its target named). Per-person variants are a face mask's alone.
+ *
+ * A trend with prompt part overrides (`promptParts`, prompt-parts-store.ts)
+ * sends their texts as `promptParts`; one with none sends no such key.
+ *
+ * Every run sends its prompt style resolved (`promptStyle`, prompt-style.ts:
+ * left out = its clip preparation's default), and a full-depth run its scene
+ * source resolved (`faceMasking.scene`, `faceMaskingRunSent`). Both are
+ * dropped for an engine that does not declare them
+ * (`withoutUnsupportedPromptStyle`, run-helpers.ts), so such an engine gets
+ * exactly the body it got before.
+ *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
@@ -63,16 +80,22 @@ import { castSwapImagesSent } from "@nodaro/render-rules"
 import {
   faceMaskTargetOf,
   faceMaskingOn,
-  withResolvedZone,
+  faceMaskingRunSent,
+  faceMaskingSourceOf,
   withoutMarks,
   type FaceMasking,
+  type FaceMaskingSource,
   type FaceMaskingTarget,
 } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
-import { faceMaskHasErasedMarks, storedFaceMaskFor } from "./face-mask.js"
+import { faceMaskHasErasedMarks, faceMaskStoredRequired, storedFaceMaskFor } from "./face-mask.js"
 import { faceMaskVariantFor, markedPeople } from "./face-mask-variants.js"
 import { withPromptsFor } from "./prompt-parts.js"
+import { promptPartTexts } from "./prompt-parts-store.js"
+import { promptStyleOf } from "./prompt-style.js"
+import type { CastSwapPromptStyle } from "@nodaro/render-rules"
+import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
@@ -157,6 +180,17 @@ export interface TrendRunBody {
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
   klingLength?: CastSwapKlingLength
+  /**
+   * The trend's prompt part overrides, text only (`{ [part]: text }`; `"-"`
+   * removes a part), only when it has some. Dropped for an engine that does
+   * not take them (`withoutUnsupportedPromptParts`, run-helpers.ts).
+   */
+  promptParts?: PromptPartTexts
+  /**
+   * The trend's prompt style, resolved. Dropped for an engine that does not
+   * declare it (`withoutUnsupportedPromptStyle`, run-helpers.ts).
+   */
+  promptStyle?: CastSwapPromptStyle
   preview: boolean
   previewStart: number
   resolution: TrendResolution
@@ -171,8 +205,10 @@ export interface ComposedTrendRun {
     roleKinds: Set<TrendSlotKind>
     fixedReferences: boolean
     faceMasking: boolean
-    /** What the masks cover (left out = the head), or null when the trend does not mask. */
+    /** What the masks cover (left out = the head; keep people, the whole person), or null when the trend does not mask, or masks no one (full depth). */
     faceMaskTarget: FaceMaskingTarget | null
+    /** How the clip is prepared (`"faces"` when it names none), or null when the trend does not mask. */
+    faceMaskSource: FaceMaskingSource | null
     /**
      * The run must carry its stored face mask (the trend has marks): an engine
      * that takes none would mask per run and cover the faces the marks leave
@@ -336,9 +372,15 @@ export function composeTrendRun(
   const masking = faceMaskingOn(data.faceMasking) ? withoutMarks(data.faceMasking) : undefined
   const stored = masking ? storedFaceMaskFor(data) : undefined
   // A trend with erased marks runs on its approved mask, made with them, and nothing else: masking per
-  // run would mask the faces the marks leave out (decided 2026-10-26).
-  if (faceMaskHasErasedMarks(data) && !stored) {
-    throw new TrendRunError("face_mask_required", "This trend leaves some faces unmasked: make and approve its face mask first.")
+  // run would mask the faces the marks leave out (decided 2026-10-26). A depth mode's clip likewise:
+  // it is made once and approved, never per run.
+  if (faceMaskStoredRequired(data) && !stored) {
+    throw new TrendRunError(
+      "face_mask_required",
+      faceMaskHasErasedMarks(data)
+        ? "This trend leaves some faces unmasked: make and approve its face mask first."
+        : "This trend prepares its clip ahead of time: make and approve it first.",
+    )
   }
   // The marked optional people this run leaves empty (only a trend with no examples has any: an
   // example fills every empty slot). Each one stays as in the clip, so the run is sent the variant
@@ -356,7 +398,7 @@ export function composeTrendRun(
     variant && variant !== "unmasked"
       ? { ...variant, required: true as const }
       : variant === undefined && stored
-        ? faceMaskHasErasedMarks(data) ? { ...stored, required: true as const } : stored
+        ? faceMaskStoredRequired(data) ? { ...stored, required: true as const } : stored
         : undefined
   const engine = engineOf(data)
   const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
@@ -388,6 +430,8 @@ export function composeTrendRun(
   const resolution: TrendResolution = req.resolution ?? offered[0]!
   const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && (req.draft ?? true)
 
+  const parts = promptPartTexts(data.promptParts)
+
   const display: TrendRunDisplay = {
     trend: { id: trend.id, slug: trend.slug, version: trend.version, name: pickText(data.name, "en")! },
     example,
@@ -404,13 +448,18 @@ export function composeTrendRun(
     // The zone resolved here (left out = the default margins), so the estimate and the run send
     // the margins the trend means. A run that follows its masked preview takes the preview's
     // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
-    ...(runMasking ? { faceMasking: withResolvedZone(structuredClone(runMasking)) } : {}),
+    // A depth mode is sent what it reads (`faceMaskingRunSent`: full depth with its scene, resolved);
+    // faces exactly as before modes existed.
+    ...(runMasking ? { faceMasking: faceMaskingRunSent(structuredClone(runMasking)) } : {}),
     // A trend with erased marks, or a person variant: the run must use it — the engine fails rather
     // than masks per run.
     ...(storedFaceMask ? { storedFaceMask } : {}),
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
+    // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
+    ...(parts ? { promptParts: parts } : {}),
+    promptStyle: promptStyleOf(data),
     preview: req.preview ?? false,
     previewStart: data.previewStart ?? 0,
     resolution,
@@ -426,10 +475,12 @@ export function composeTrendRun(
       fixedReferences: data.references.length > 0,
       faceMasking: runMasking !== undefined,
       faceMaskTarget: runMasking ? faceMaskTargetOf(runMasking) : null,
+      faceMaskSource: runMasking ? faceMaskingSourceOf(runMasking) : null,
       storedFaceMask: storedFaceMask !== undefined && "required" in storedFaceMask,
       trendPrePrompt: !!texts.prePrompt,
       engine,
     },
-    maskingZoneLeftOut: runMasking !== undefined && runMasking.zone === undefined,
+    // Full depth reads no zone at all.
+    maskingZoneLeftOut: runMasking !== undefined && runMasking.zone === undefined && faceMaskingSourceOf(runMasking) !== "full-depth",
   }
 }

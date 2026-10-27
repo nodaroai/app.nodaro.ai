@@ -62,7 +62,7 @@ import {
   engineRequest,
   engineSupports,
   followPreviewMasking,
-  withoutUnsupportedStoredMask,
+  withoutUnsupportedFields,
   isRec,
   jobIdOf,
   listedRunsPage,
@@ -359,10 +359,12 @@ function trendRunError(reply: FastifyReply, e: TrendRunError) {
       // The composed length would tell the hidden trend prompt's length.
       return err(reply, 400, e.code, "Your details are too long for this trend. Shorten them and try again.")
     case "source_missing":
-    // Its stored face mask does not match (publishing requires one): nothing the caller can change,
-    // answered as the documented `503 trend_unavailable` (docs/api-integration.md).
-    case "face_mask_required":
       return err(reply, 503, "trend_unavailable", "This trend is not available right now.")
+    // Its stored face mask does not match its marks (publishing requires one): nothing the caller
+    // can change and nothing a retry fixes until the trend is updated — the documented
+    // `409 trend_unavailable` (docs/api-integration.md), never the internal code.
+    case "face_mask_required":
+      return err(reply, 409, "trend_unavailable", "This trend cannot run until it is updated.")
     default:
       return err(reply, 400, e.code, e.message, {
         ...(e.slot !== undefined ? { slot: e.slot } : {}),
@@ -414,7 +416,7 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
     previewJobId: parsed.data.previewJobId,
     log: req.log,
   })
-  withoutUnsupportedStoredMask(composed)
+  withoutUnsupportedFields(composed)
   return { composed, ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}) }
 }
 

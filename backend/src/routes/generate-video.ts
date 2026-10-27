@@ -42,6 +42,7 @@ import { applyPromptPoliciesToCharacterReferences } from "../lib/character-refer
 import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
+import { generateVideoChildFields, seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
@@ -60,7 +61,7 @@ const dialogueLineSchema = z.object({
   line: z.string().min(1).max(500),
 })
 
-export const generateVideoBody = z.object({
+const generateVideoPublicFields = z.object({
   /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
   origin: clientOriginSchema.optional(),
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
@@ -197,7 +198,9 @@ export const generateVideoBody = z.object({
   // ignored with a non-fatal warning (the clip still generates, just silent).
   characterVoices: z.array(characterVoiceSpecSchema).max(8).optional(),
   dialogue: z.array(dialogueLineSchema).max(50).optional(),
-}).superRefine((b, ctx) => {
+})
+
+function refineTrimWindow(b: { videoTrimStart?: number; videoTrimEnd?: number }, ctx: z.RefinementCtx): void {
   // Validate the EFFECTIVE trim window when EITHER bound is supplied — a one-sided
   // value still resolves a window at the provider (start ?? 0, ends ?? start+10),
   // so e.g. videoTrimEnd:30 alone (→ 0..30) must be rejected here, not at KIE.
@@ -210,7 +213,14 @@ export const generateVideoBody = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "trim window must be ≤ 10 seconds", path: ["videoTrimEnd"] })
     }
   }
-})
+}
+
+/** The documented body (OpenAPI): the public fields only. */
+const generateVideoPublicBody = generateVideoPublicFields.superRefine(refineTrimWindow)
+
+/** The body the route parses: the public fields plus a server-side child job's
+ *  own (`generateVideoChildFields` — never documented). */
+export const generateVideoBody = generateVideoPublicFields.extend(generateVideoChildFields).superRefine(refineTrimWindow)
 
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
@@ -597,7 +607,7 @@ openApiRegistry.registerPath({
     "Omitting provider uses the platform default. Returns a jobId — poll " +
     "GET /v1/jobs/{id}/status.",
   security: [{ bearerAuth: [] }],
-  request: { body: { content: { "application/json": { schema: generateVideoBody } } } },
+  request: { body: { content: { "application/json": { schema: generateVideoPublicBody } } } },
   responses: {
     200: {
       description: "Job created (may include non-fatal warnings)",
@@ -941,6 +951,13 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // Platform default when the request omits provider/duration — the SAME
     // helper the DAG payload builder uses, so the two paths cannot drift.
     const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
+    // A child job's own fields leave `parsed.data` here, so `input_data` never
+    // records what was not honoured: the container is added back below by name
+    // (absent on the mp4 path, which stays byte-identical), and the reword
+    // opt-out is a no-op on this route.
+    const outputFormat = seedance25OutputFormatFor(req, provider, parsed.data.outputFormat)
+    delete parsed.data.outputFormat
+    delete parsed.data.contentPolicyRewrite
     // Recomputed rather than read off `req` so the handler is correct even when
     // credits are disabled (community edition never runs the guard). Pure, so it
     // agrees with the preHandler by construction.
@@ -1330,6 +1347,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               // (worker, or the reconcile cron) prices from the SAME numbers
               // the reservation did instead of probing again.
               ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}),
+              // Only when honoured, so a reader can tell the child asked for mov.
+              ...(outputFormat ? { outputFormat } : {}),
             },
             "image-to-video",
           ),
@@ -1410,6 +1429,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       enableTranslation,
       videoTrimStart,
       videoTrimEnd,
+      ...(outputFormat ? { outputFormat } : {}),
       // `dialogueProvider`: the model the multi-speaker track renders on —
       // chosen HERE (the reservation above named its row) and passed through,
       // so the worker never re-derives what it was billed for.

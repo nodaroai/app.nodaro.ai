@@ -2983,6 +2983,10 @@ export type VideoDepthData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  // url-bound length of the wired clip, read from its own metadata, so the
+  // quote is the clip's bucket instead of the :300s ceiling — same shape and
+  // trust rule as video-analysis's `probedVideo`.
+  probedVideo?: ProbedVideoInfo
 }
 
 // Extend Video: Continue a VEO or Runway video with a new prompt

@@ -8,6 +8,7 @@ import {
   CAST_SWAP_FACE_MASKING_BOUNDS,
   CAST_SWAP_FACE_MASKING_DEFAULTS,
   CAST_SWAP_FACE_MASK_TARGETS,
+  CAST_SWAP_STYLES,
   CAST_SWAP_ENGINE_WHEN_OMITTED,
   CAST_SWAP_ENGINES,
   CAST_SWAP_POST_PROMPT_MAX,
@@ -62,10 +63,14 @@ describe("Cast Swap limits", () => {
     expect(CAST_SWAP_FACE_MASKING_DEFAULTS.fill).toBe("blur")
   })
 
-  it("masks the face or the whole head, the head by default", () => {
-    expect(CAST_SWAP_FACE_MASK_TARGETS).toEqual(["face", "head"])
+  it("masks the face, the whole head or the whole person, the head by default", () => {
+    expect(CAST_SWAP_FACE_MASK_TARGETS).toEqual(["face", "head", "body"])
     expect(CAST_SWAP_FACE_MASKING_DEFAULTS.target).toBe("head")
     expect(CAST_SWAP_FACE_MASK_TARGETS).toContain(CAST_SWAP_FACE_MASKING_DEFAULTS.target)
+  })
+
+  it("offers a direct run two styles, Precise and Motion", () => {
+    expect(CAST_SWAP_STYLES).toEqual(["precise", "motion"])
   })
 
   it("leaves 10 % margins at the left and right when the zone is left out", () => {

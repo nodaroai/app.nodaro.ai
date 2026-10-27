@@ -45,6 +45,7 @@ import {
   useStartTrendFaceMask,
   useTrendFaceMaskJob,
 } from "@/ee/hooks/queries/use-admin-queries"
+import { faceMaskMarkSlot } from "@nodaro/render-rules"
 import { describeFaceMaskOutOfDate } from "../model"
 import { FaceMaskMarksEditor, type MarkPerson } from "./FaceMaskMarks"
 import { FaceMaskVariants } from "./FaceMaskVariants"
@@ -79,6 +80,8 @@ interface Props {
   readonly people?: readonly MarkPerson[]
   /** The saved draft has examples (an empty optional slot then takes an example's person). */
   readonly hasExamples?: boolean
+  /** The clip keeps its people (Keep people): the marks leave a person out, or mark the main character. */
+  readonly keepPeople?: boolean
 }
 
 /**
@@ -87,7 +90,7 @@ interface Props {
  * person keeps their face). Publishing is not held for it.
  */
 export function unmarkedPeople(people: readonly MarkPerson[], marks: readonly AdminTrendFaceMaskMark[]): MarkPerson[] {
-  return people.filter((p) => !marks.some((m) => m.label !== "erased" && m.label.slot === p.key))
+  return people.filter((p) => !marks.some((m) => faceMaskMarkSlot(m) === p.key))
 }
 
 const NO_PEOPLE: readonly MarkPerson[] = []
@@ -118,6 +121,7 @@ export function FaceMaskPanel({
   marksSupported = false,
   people = NO_PEOPLE,
   hasExamples = false,
+  keepPeople = false,
 }: Props) {
   const start = useStartTrendFaceMask(trendId)
   const approve = useApproveTrendFaceMask(trendId)
@@ -250,8 +254,8 @@ export function FaceMaskPanel({
       )}
       {editable && shown && (
         <div className="flex flex-col gap-2 rounded-md border border-dashed p-2" aria-label="Face mask marks">
-          <span className="text-xs font-medium">Faces left unmasked</span>
-          <FaceMaskMarksEditor url={shown.url} label={shown.label} frames={shown.frames} fps={shown.fps} marks={marks} onChange={setMarks} disabled={busy || !marksSupported} people={people} />
+          <span className="text-xs font-medium">{keepPeople ? "Marked people" : "Faces left unmasked"}</span>
+          <FaceMaskMarksEditor url={shown.url} label={shown.label} frames={shown.frames} fps={shown.fps} marks={marks} onChange={setMarks} disabled={busy || !marksSupported} people={people} keepPeople={keepPeople} />
           {!marksSupported && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
               This environment's Cast Swap engine cannot leave faces unmasked yet, so marks can't be added or changed here.

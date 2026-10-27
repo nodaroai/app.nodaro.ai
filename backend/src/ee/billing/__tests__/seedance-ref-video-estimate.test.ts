@@ -40,7 +40,7 @@ vi.mock("../../../lib/config.js", async (importOriginal) => ({
 
 import { CreditsService, estimateWorkflowListingCredits, STATIC_CREDIT_COSTS } from "../credits.js"
 import { seedance2RefVideoChargedQuote } from "../seedance2-ref-video-quote.js"
-import { __forgetRefVideoClipLengths } from "../seedance-ref-video-estimate.js"
+import { __forgetUploadClipLengths } from "../upload-clip-lengths.js"
 import { applyServiceMarkup } from "../service-margin.js"
 
 const CLIP = "https://cdn.example/clip-10.mp4"
@@ -56,7 +56,7 @@ const quote = (args: { duration: number; durationsSec: number[]; unknownClips?: 
 beforeEach(() => {
   probe.durations = new Map([[CLIP, 10.04]])
   probe.calls = []
-  __forgetRefVideoClipLengths()
+  __forgetUploadClipLengths()
 })
 
 describe("server run estimate — Seedance reference-video runs", () => {

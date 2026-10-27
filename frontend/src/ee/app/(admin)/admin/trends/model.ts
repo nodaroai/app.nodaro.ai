@@ -24,6 +24,7 @@ import {
 } from "@nodaro/shared/models"
 import {
   castSwapImagesSent,
+  faceMaskMarkSlot,
   promptModesOf,
   TREND_DETAILS_MAX,
   trendPromptBudget,
@@ -31,6 +32,8 @@ import {
   type TrendPromptBudget,
   type TrendPromptSource,
 } from "@nodaro/render-rules"
+import { clipPreparationIssues, clipPreparationName, clipPreparationOf } from "./clip-preparation"
+import { FULL_DEPTH_SCENES } from "./prompt-style"
 import type {
   AdminTrendData,
   AdminTrendEngine,
@@ -44,6 +47,7 @@ import type {
   TrendLocalizedText,
   TrendPublishBlocker,
   TrendSlotKind,
+  CastSwapPromptStyleId,
 } from "@/lib/api"
 
 export const MAX_TREND_IMAGES = 30
@@ -143,6 +147,8 @@ export interface TrendForm {
   engine: AdminTrendEngine | undefined
   /** As stored: undefined = none set ("cut-end"). Saved only while the engine is Kling 4. */
   klingLength: AdminTrendKlingLength | undefined
+  /** As stored: undefined = the clip preparation's default (prompt-style.ts). */
+  promptStyle: CastSwapPromptStyleId | undefined
 }
 
 let uidSeq = 0
@@ -163,6 +169,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     faceMasking: draft.faceMasking ? structuredClone(draft.faceMasking) : undefined,
     engine: draft.engine,
     klingLength: draft.klingLength,
+    promptStyle: draft.promptStyle,
   }
 }
 
@@ -192,6 +199,10 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
   const num = (v: number | undefined) => typeof v === "number" && Number.isFinite(v)
   return {
     mode: m.mode,
+    // A trend's clip preparation; Faces hidden (the default) is saved as no key, as before it existed.
+    ...(m.source && m.source !== "faces" ? { source: m.source } : {}),
+    // Full depth's scene source (left out = a description); no other preparation takes it.
+    ...(m.source === "full-depth" && m.scene ? { scene: m.scene } : {}),
     ...(m.target ? { target: m.target } : {}),
     ...(m.fill ? { fill: m.fill } : {}),
     ...(num(m.minFaceHeightPct) ? { minFaceHeightPct: m.minFaceHeightPct } : {}),
@@ -292,6 +303,8 @@ export function fromForm(form: TrendForm): Omit<AdminTrendData, "examples"> {
     ...(form.engine ? { engine: form.engine } : {}),
     // Read only on Kling 4: kept out of a Seedance draft.
     ...(form.engine === "kling-4" && form.klingLength ? { klingLength: form.klingLength } : {}),
+    // Left out = the clip preparation's default, so loading an old draft is no change.
+    ...(form.promptStyle ? { promptStyle: form.promptStyle } : {}),
   }
 }
 
@@ -387,7 +400,7 @@ export function formIssues(form: TrendForm): string[] {
   // The preview's texts are held to the budget only while the trend offers a preview and has
   // text of its own (else it sends the full run's): the server's publish check (`promptModesOf`).
   if (promptModesOf(form).includes("preview")) out.push(...promptIssues(withPreviewPrompts(form), " in the 4 s preview"))
-  if (form.faceMasking) out.push(...maskingIssues(form.faceMasking), ...personMarkIssues(form))
+  if (form.faceMasking) out.push(...clipPreparationIssues(form.faceMasking), ...maskingIssues(form.faceMasking), ...personMarkIssues(form))
   if (form.source && form.previewStart !== null && form.previewStart + PREVIEW_SECONDS > form.source.durationSec) {
     out.push(`The ${PREVIEW_SECONDS} s preview must fit inside the ${form.source.durationSec.toFixed(1)} s clip.`)
   }
@@ -433,8 +446,8 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
   const out: string[] = []
   const counted = new Set<string>()
   for (const mark of form.faceMasking?.marks ?? []) {
-    if (mark.label === "erased" || counted.has(mark.label.slot)) continue
-    const key = mark.label.slot
+    const key = faceMaskMarkSlot(mark)
+    if (key === null || counted.has(key)) continue
     counted.add(key)
     const slot = form.slots.find((s) => s.key === key)
     if (slot && slot.kind === "person" && !slot.required) continue
@@ -449,6 +462,8 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
 /** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Nodaro Motion's. */
 export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   const out: string[] = []
+  // Full depth reads the mode only: whatever else is kept (from Faces hidden) is neither shown nor sent.
+  if (clipPreparationOf(m) === "full-depth") return out
   const outside = (v: number | undefined, [lo, hi]: readonly [number, number]) => v !== undefined && !(v >= lo && v <= hi)
   const range = ([lo, hi]: readonly [number, number]) => `${lo}–${hi}`
   const { faceHeightPct, zonePct, blurStrengthPct, threshold } = FACE_MASKING_BOUNDS
@@ -461,7 +476,8 @@ export function maskingIssues(m: AdminTrendFaceMasking): string[] {
     }
   }
   if (ZONE_SIDES.some((side) => outside(m.zone?.[side], zonePct))) out.push(`Face masking: each margin is ${range(zonePct)} %.`)
-  if (maskingUsesBlur(m) && outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
+  // Keep people has no fill (outside the people is always depth): no blur strength either.
+  if (clipPreparationOf(m) !== "keep-people" && maskingUsesBlur(m) && outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
   if (outside(m.threshold, threshold)) out.push(`Face masking: the detection threshold is ${range(threshold)}.`)
   return out
 }
@@ -476,6 +492,8 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   storedFaceMask: "stored face masks",
   storedFaceMaskRequired: "stored face masks a run must use (marks, person masks)",
   "faceMaskTarget:face": "face-only masks",
+  "faceMaskTarget:body": "whole-person masks (Keep people)",
+  promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",
   fullQuality: "Full Quality",
@@ -508,6 +526,20 @@ export function describeBlocker(r: TrendPublishBlocker): string {
         : (r.message ?? "Make the person masks (6. Face masking).")
     case "face_mask_variant_out_of_date":
       return `The person mask for runs without ${(r.slots ?? []).join(", ")} is out of date: make the person masks again (6. Face masking).`
+    case "face_mask_source_unsupported":
+      return `${r.env ?? "?"}: the clip preparation ${clipPreparationName(r.need ?? "?")} not supported yet. Choose Faces hidden, or wait for the engine (6. Face masking).`
+    case "prompt_style_unsupported":
+      return `${r.env ?? "?"}: the ${r.need === "promptStyle:flexible" ? "Flexible" : "Precise"} prompt style not supported yet for this clip preparation. Choose the default, or wait for the engine (4. Prompts).`
+    case "full_depth_scene_unsupported":
+      return `${r.env ?? "?"}: the Full depth scene "${FULL_DEPTH_SCENES.find((s) => `scene:${s.value}` === r.need)?.label ?? r.need ?? "?"}" not supported yet. Choose another scene, or wait for the engine (6. Face masking).`
+    case "full_depth_clip_too_long":
+      return r.message ?? "The clip is too long to send the original as a second video: use a shorter clip, or take the scene from a description (6. Face masking)."
+    case "prompt_parts_invalid": {
+      const problems = (r.problems ?? []).map((p) => `${p.mode === "preview" ? "4 s preview: " : ""}${p.part ? `${p.part}: ` : ""}${p.message}`)
+      return `The engine prompt changes no longer fit this trend${problems.length ? `: ${problems.join(" ")}` : "."} Change or reset them (4. Prompts → Engine prompt).`
+    }
+    case "prompt_parts_unsupported":
+      return `${r.env ?? "?"}: engine prompt changes not supported yet. Reset them (4. Prompts → Engine prompt), or wait for the engine.`
     case "engine_unknown":
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {
@@ -535,17 +567,4 @@ export function describeFaceMaskOutOfDate(r: { why: string; env?: string }): str
 
 export function formatSeconds(s: number): string {
   return `${s.toFixed(1)} s`
-}
-
-/** The short side of a video upscaled to 1080p (the server resizes Topaz's 2x to it). */
-export const UPSCALE_SHORT_SIDE = 1080
-
-/**
- * Whether a video of this size is offered an upscale to 1080p: its short side
- * is under 1080 (the server's own rule; it refuses the rest). An unknown size
- * is offered one.
- */
-export function needsUpscale(width: number | undefined, height: number | undefined): boolean {
-  if (!width || !height) return true
-  return Math.min(width, height) < UPSCALE_SHORT_SIDE
 }

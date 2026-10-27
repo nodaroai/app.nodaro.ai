@@ -9,6 +9,16 @@
 // so what is saved is what the fields show; "No margins" saves `zone: null`.
 // Covers: the whole head (the default: also hides the hair and people seen from
 // behind) or the face alone (the hair stays visible); shown as Head when left out.
+//
+// A trend's clip preparation (`source`, chosen above it: ClipPreparationSelect)
+// decides which fields apply. Faces hidden: all of them. Full depth: none (it
+// always runs, and nothing else is read). Keep people: always runs, no fill;
+// what is kept is the whole person by default (Body, offered only there), the
+// head or the face. Admin → Nodaro Motion's Precise setting masks faces only
+// and passes none; its Motion setting may pass Full depth.
+//
+// Full depth shows where the run's scene comes from (FullDepthSceneSelect):
+// a description (the default), the original clip, or none.
 
 import { useId } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -21,13 +31,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type {
+  TrendEngineEnvironment,
   AdminTrendFaceMasking,
   AdminTrendFaceMaskingFill,
   AdminTrendFaceMaskingMode,
+  AdminTrendFaceMaskingSource,
   AdminTrendFaceMaskingTarget,
   AdminTrendFaceMaskingZone,
 } from "@/lib/api"
 import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
+import { defaultTargetFor, isDepthPreparation } from "../clip-preparation"
+import { FullDepthSceneSelect } from "./FullDepthSceneSelect"
 
 const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hint: string }> = [
   { value: "off", label: "Off", hint: "Runs as before: the clip goes to the video model as it is." },
@@ -42,6 +56,13 @@ const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hi
 const TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: string; hint: string }> = [
   { value: "head", label: "Head (default)", hint: "Covers the whole head: also hides the hair and people seen from behind (a bigger mask)." },
   { value: "face", label: "Face", hint: "Covers the face only: the hair stays visible, and people turned away are not covered." },
+]
+
+/** Keep people: what stays as filmed (the rest becomes depth). */
+const KEEP_TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: string; hint: string }> = [
+  { value: "body", label: "Whole person (default)", hint: "Keeps each whole person as filmed; everything around them becomes depth." },
+  { value: "head", label: "Head", hint: "Keeps only the heads as filmed (hair included); the bodies become depth with the rest." },
+  { value: "face", label: "Face", hint: "Keeps only the faces as filmed; everything else becomes depth." },
 ]
 
 const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> = [
@@ -65,10 +86,24 @@ interface Props {
    * Motion: a direct run has no preview that carries over).
    */
   readonly autoHint?: string
+  /** The trend's clip preparation (left out: Faces hidden, the only one Admin → Nodaro Motion has). */
+  readonly source?: AdminTrendFaceMaskingSource
+  /**
+   * The targets some environment's engine declares (`castSwap.faceMaskTargets`);
+   * unknown when left out. Keep people's whole person is offered greyed out
+   * while no engine declares it.
+   */
+  readonly supportedTargets?: readonly AdminTrendFaceMaskingTarget[]
+  /** The source clip's length, when known: Full depth's original scene takes up to 27.5 s. */
+  readonly clipSec?: number
+  /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
+  readonly envs?: readonly TrendEngineEnvironment[]
 }
 
-export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
-  const mode = value?.mode ?? "off"
+export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces", supportedTargets, clipSec, envs }: Props) {
+  const depth = isDepthPreparation(source)
+  const keepPeople = source === "keep-people"
+  const mode = depth ? "always" : (value?.mode ?? "off")
   // A key set to undefined (a field emptied, "No margins" unticked) is removed, never kept as
   // `key: undefined`, so the draft holds only what is set.
   const set = (patch: Partial<AdminTrendFaceMasking>) => onChange(definedOnly({ ...(value ?? { mode: "off" }), ...patch }))
@@ -86,13 +121,21 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
     if (m === "off" && (!value || Object.keys(definedOnly(value)).length === 1)) onChange(undefined)
     else set({ mode: m })
   }
-  const hint = mode === "auto" && autoHint ? autoHint : MODES.find((m) => m.value === mode)?.hint
+  const hint = depth
+    ? "Always: the clip is prepared once, approved and stored, and every run uses it."
+    : mode === "auto" && autoHint
+      ? autoHint
+      : MODES.find((m) => m.value === mode)?.hint
   // A fill left out is the engine's default. The blur strength belongs to the blur fill only: hidden
   // otherwise, and then neither checked nor saved (`maskingUsesBlur`), so it never holds Save.
   const fill = value?.fill ?? FACE_MASKING_DEFAULTS.fill
-  // A target left out is the engine's default (the head), shown as such.
-  const target = value?.target ?? FACE_MASKING_DEFAULTS.target
-  const targetHint = TARGETS.find((t) => t.value === target)?.hint
+  // A target left out is the engine's default (the head; Keep people's: the whole person), shown as such.
+  const targets = keepPeople ? KEEP_TARGETS : TARGETS
+  const target = value?.target ?? (keepPeople ? defaultTargetFor(source) : FACE_MASKING_DEFAULTS.target)
+  const targetHint = targets.find((t) => t.value === target)?.hint
+  // Only the whole person is ever greyed out: the head is every engine's, and the face is held at publish.
+  const bodyUnsupported = keepPeople && !!supportedTargets && !supportedTargets.includes("body")
+  const word = keepPeople ? "person" : "face"
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
@@ -104,6 +147,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
+        {!depth && (
         <div className="flex flex-col gap-1 text-sm">
           <label htmlFor={modeId} className="font-medium">
             Mode
@@ -121,7 +165,8 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
             </SelectContent>
           </Select>
         </div>
-        {mode !== "off" && (
+        )}
+        {mode !== "off" && !depth && (
           <div className="flex flex-col gap-1 text-sm">
             <label htmlFor={fillId} className="font-medium">
               Fill
@@ -147,19 +192,23 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
         </p>
       )}
 
-      {mode !== "off" && (
+      {source === "full-depth" && (
+        <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} onChange={(scene) => set({ scene })} />
+      )}
+
+      {mode !== "off" && source !== "full-depth" && (
         <>
           <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
             <label htmlFor={targetId} className="font-medium">
-              Covers
+              {keepPeople ? "Keeps" : "Covers"}
             </label>
             <Select value={target} onValueChange={(t) => set({ target: t as AdminTrendFaceMaskingTarget })}>
               <SelectTrigger id={targetId} className="h-9" aria-describedby={targetHint ? targetHintId : undefined}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TARGETS.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
+                {targets.map((t) => (
+                  <SelectItem key={t.value} value={t.value} disabled={t.value === "body" && bodyUnsupported && target !== "body"}>
                     {t.label}
                   </SelectItem>
                 ))}
@@ -170,11 +219,16 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
                 {targetHint}
               </span>
             )}
+            {bodyUnsupported && (
+              <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                No environment's Cast Swap engine keeps whole people yet: the engine is out of date.
+              </span>
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <NumberField
-              label="Smallest face height (%)"
-              help="Only faces at least this tall are covered."
+              label={`Smallest ${word} height (%)`}
+              help={keepPeople ? "Only people at least this tall are kept as filmed." : "Only faces at least this tall are covered."}
               value={value?.minFaceHeightPct}
               placeholder={FACE_MASKING_DEFAULTS.minFaceHeightPct}
               bounds={FACE_MASKING_BOUNDS.faceHeightPct}
@@ -182,7 +236,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
               onChange={(v) => set({ minFaceHeightPct: v })}
             />
             <NumberField
-              label="Largest face height (%)"
+              label={`Largest ${word} height (%)`}
               help="0 = no limit."
               value={value?.maxFaceHeightPct}
               placeholder={FACE_MASKING_DEFAULTS.maxFaceHeightPct}
@@ -190,7 +244,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
               step={1}
               onChange={(v) => set({ maxFaceHeightPct: v })}
             />
-            {maskingUsesBlur({ fill }) && (
+            {!keepPeople && maskingUsesBlur({ fill }) && (
               <NumberField
                 label="Blur strength (%)"
                 help="Of the frame's width, for the blur fill."
@@ -203,7 +257,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
             )}
             <NumberField
               label="Detection threshold"
-              help="Lower finds more faces."
+              help={keepPeople ? "Lower finds more people." : "Lower finds more faces."}
               value={value?.threshold}
               placeholder={FACE_MASKING_DEFAULTS.threshold}
               bounds={FACE_MASKING_BOUNDS.threshold}
@@ -214,8 +268,9 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
           <fieldset className="flex flex-col gap-2 rounded-md border p-3">
             <legend className="px-1 text-sm font-medium">Margins (%)</legend>
             <p className="text-xs text-muted-foreground">
-              A face centred inside a margin is left as it is. Left empty: {FACE_MASKING_DEFAULTS.zone.leftPct} % at the
-              left and right (the default), so people at the edges of the frame are not covered.
+              {keepPeople
+                ? `A person centred inside a margin becomes depth with the rest. Left empty: ${FACE_MASKING_DEFAULTS.zone.leftPct} % at the left and right (the default), so people at the edges of the frame are not kept.`
+                : `A face centred inside a margin is left as it is. Left empty: ${FACE_MASKING_DEFAULTS.zone.leftPct} % at the left and right (the default), so people at the edges of the frame are not covered.`}
             </p>
             <div className="flex min-h-11 items-center gap-2 text-sm">
               <Checkbox
@@ -223,7 +278,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint }: Props) {
                 checked={noMargins}
                 onCheckedChange={(checked) => set({ zone: checked === true ? null : undefined })}
               />
-              <label htmlFor={noMarginsId}>No margins: cover faces anywhere in the frame</label>
+              <label htmlFor={noMarginsId}>{keepPeople ? "No margins: keep people anywhere in the frame" : "No margins: cover faces anywhere in the frame"}</label>
             </div>
             {!noMargins && (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

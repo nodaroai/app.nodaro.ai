@@ -309,6 +309,27 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(stray, [wire], [clip, stray])).toBe("video-depth-anything:60s")
   })
 
+  it("prices Video Depth from the clip's probed length when its producer stores none", () => {
+    const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip" } as any })
+    const wire = makeEdge({ source: "clip", target: "vd", targetHandle: "video" })
+    const probed = makeNode({
+      id: "vd",
+      type: "video-depth",
+      data: { label: "Video Depth", modelSize: "large", probedVideo: { url: "https://cdn.example/clip.mp4", durationSec: 12 } } as any,
+    })
+    expect(getModelIdentifier(probed, [wire], [clip, probed])).toBe("video-depth-anything:15s")
+    // The producer's own length wins over the probe.
+    const known = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", durationSeconds: 40 } as any })
+    expect(getModelIdentifier(probed, [wire], [known, probed])).toBe("video-depth-anything:60s")
+    // A failed probe (no length) keeps the ceiling.
+    const failed = makeNode({
+      id: "vd",
+      type: "video-depth",
+      data: { label: "Video Depth", modelSize: "large", probedVideo: { url: "https://cdn.example/clip.mp4", error: true } } as any,
+    })
+    expect(getModelIdentifier(failed, [wire], [clip, failed])).toBe("video-depth-anything:300s")
+  })
+
   it("prices Video Retake at its per-second row (the estimate multiplies by the window)", () => {
     const node = makeNode({ type: "video-retake", data: { label: "Retake", provider: "ltx-2.3-pro", retakeDuration: 4 } as any })
     expect(getModelIdentifier(node)).toBe("ltx-2.3-pro-retake:per-second")

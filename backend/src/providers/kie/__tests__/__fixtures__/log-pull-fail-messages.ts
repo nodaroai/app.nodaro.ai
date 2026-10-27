@@ -111,3 +111,23 @@ export const TRANSIENT_500_WITH_VALIDATION_WORDING: readonly { readonly internal
 export const MODERATOR_NOUN_MESSAGES: readonly string[] = [
   "Your prompt was caught by our AI moderator. Please adjust it and try again!",
 ]
+
+/**
+ * A 4xx that carries NO reason: KIE's own catch-all `failMsg`. Prod 2026-10-26,
+ * job 4064e12e (Kling 4.0 `kling-4.0/reference-to-video`), from Railway:
+ * `task failed: [400] Generation failed. Please try again later.` The real
+ * cause was the reference video's pixel size, which KIE never named. The
+ * request-reject branch told the user "rejected these settings… Retrying the
+ * same request will fail again", which claims a verdict KIE never gave.
+ * `Unknown error` is pollKieTask's own default for a fail with no `failMsg`.
+ *
+ * DO NOT paraphrase. Provider's own words, provider's own status.
+ */
+export const GENERIC_4XX_NO_REASON: readonly { readonly internalMessage: string; readonly status: number | string }[] = [
+  { internalMessage: "task failed: [400] Generation failed. Please try again later.", status: "400" },
+  { internalMessage: "task failed: [400] Unknown error", status: "400" },
+  {
+    internalMessage: 'createTask error (code 422): {"code":422,"msg":"Generation failed. Please try again later.","data":null}',
+    status: 422,
+  },
+]

@@ -48,10 +48,22 @@ export const CAST_SWAP_FACE_MASKING_BOUNDS = {
  * - `"head"` (the default): the whole head, hair included, and people seen
  *   from behind or turned away, with a bigger mask.
  * - `"face"`: the face only; the hair, and a person turned away, stay visible.
+ * - `"body"`: the whole person. Only a trend clip that keeps its people as
+ *   they are (the rest of the frame prepared) takes it; a face mask does not.
  */
-export const CAST_SWAP_FACE_MASK_TARGETS = ["face", "head"] as const
+export const CAST_SWAP_FACE_MASK_TARGETS = ["face", "head", "body"] as const
 
 export type CastSwapFaceMaskTarget = (typeof CAST_SWAP_FACE_MASK_TARGETS)[number]
+
+/**
+ * How a direct Nodaro Motion run follows its clip (`style`, a public run
+ * field): `"precise"` (the default) follows the clip exactly; `"motion"`
+ * follows only the clip's movement and takes every look from the photos. A
+ * trend run ignores it (its trend decides).
+ */
+export const CAST_SWAP_STYLES = ["precise", "motion"] as const
+
+export type CastSwapStyle = (typeof CAST_SWAP_STYLES)[number]
 
 /** What Cast Swap uses for a `faceMasking` setting left out. */
 export const CAST_SWAP_FACE_MASKING_DEFAULTS = {

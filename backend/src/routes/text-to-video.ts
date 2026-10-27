@@ -31,7 +31,7 @@ import { applyPromptPoliciesToCharacterReferences } from "../lib/character-refer
 import { subjectSchema } from "../lib/subject-schema.js"
 import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { createsChildJob } from "../lib/job-submission-context.js"
+import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
 
 export const textToVideoBody = z.object({
   /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
@@ -111,22 +111,6 @@ export const textToVideoBody = z.object({
   outputFormat: z.enum(["mp4", "mov"]).optional(),
   userId: z.string().uuid().optional(),
 })
-
-/**
- * The container a t2v request's video is asked for in: `"mov"` (H.264
- * yuv444p + PCM) only when the caller asked for it, the model is Seedance
- * 2.5, and the request creates a CHILD job (`createsChildJob`: internal auth
- * plus a server-only parent job id). A MOV does not play in browsers; only a
- * child job's video is never shown to its owner and is re-encoded by its
- * parent before delivery. Everything else → undefined (mp4, sent as no field).
- */
-export function seedance25OutputFormatFor(
-  req: FastifyRequest,
-  provider: string | undefined,
-  requested: "mp4" | "mov" | undefined,
-): "mov" | undefined {
-  return requested === "mov" && provider === "seedance-2-5" && createsChildJob(req) ? "mov" : undefined
-}
 
 /**
  * Everything /v1/text-to-video prices a request with — registered as the

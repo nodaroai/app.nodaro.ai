@@ -3,20 +3,31 @@
 // the SDK, MCP `cast_swap`). People never set it. A trend keeps its own
 // setting (Admin → Trends). Until an admin saves here, no engine masks.
 //
-// One setting per engine (Prism, Pulse), edited with the trend editor's own
-// controls, saved together (PUT /v1/admin/nodaro-motion/masking): the
-// deployment's whole setting, read by the Cast Swap engine within a minute.
+// Each engine (Prism, Pulse) has two columns, edited with the trend editor's
+// own controls:
+// - Precise: the face masking of a Precise run (PUT /v1/admin/nodaro-motion/masking).
+// - Motion: a Motion run's masking (Same as Precise, Faces hidden, or Full
+//   depth with its scene source) and its prompt style (left out: Flexible),
+//   PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
+// Save sends each setting that changed, whole; the Cast Swap engine reads
+// them within a minute.
+//
+// Below it, the engine prompt per engine and style (PromptPartsTabs.tsx),
+// saved on its own.
 
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
-import type { AdminTrendEngine, NodaroMotionMasking } from "@/lib/api"
+import type { AdminTrendEngine, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
 import { useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
+import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
 import { maskingIssues } from "../trends/model"
-import { toSaved } from "./model"
+import { motionIssues, motionToSaved, toSaved } from "./model"
+import { PromptPartsTabs } from "./components/PromptPartsTabs"
+import { MotionColumn } from "./components/MotionColumn"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -30,28 +41,44 @@ const AUTO_HINT =
 export default function AdminNodaroMotionPage() {
   const { data, isLoading, error } = useNodaroMotionMasking()
   const save = useSaveNodaroMotionMasking()
+  const motionQuery = useNodaroMotionMotion()
+  const saveMotion = useSaveNodaroMotionMotion()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
+  const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
 
-  // The draft starts from what is stored, and again after each save.
+  // The drafts start from what is stored, and again after each save.
   useEffect(() => {
     if (data) setDraft(structuredClone(data.masking ?? {}))
   }, [data])
+  useEffect(() => {
+    if (motionQuery.data) setMotionDraft(structuredClone(motionQuery.data.motion ?? {}))
+  }, [motionQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
   const changed = JSON.stringify(next) !== saved
+  const savedMotion = useMemo(() => JSON.stringify(motionToSaved(motionQuery.data?.motion ?? {})), [motionQuery.data])
+  const nextMotion = motionToSaved(motionDraft)
+  // Until the Motion setting has loaded there is nothing of it to save.
+  const motionChanged = !!motionQuery.data && JSON.stringify(nextMotion) !== savedMotion
   const issues = (data?.engines ?? []).flatMap((e) => {
     const m = draft[e.id]
-    return m ? maskingIssues(m).map((i) => `${e.name}: ${i}`) : []
+    return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
   })
+  const pending = save.isPending || saveMotion.isPending
 
   if (!hasAdmin()) return null
 
-  const onSave = () =>
-    save.mutate(next, {
-      onSuccess: () => toast.success("Saved. Runs pick it up within a minute."),
-      onError: (err) => toast.error(err instanceof Error ? err.message : String(err)),
-    })
+  // Each setting that changed, the Precise one first; a refusal of either is said and stops there.
+  const onSave = async () => {
+    try {
+      if (changed) await save.mutateAsync(next)
+      if (motionChanged) await saveMotion.mutateAsync(nextMotion)
+      toast.success("Saved. Runs pick it up within a minute.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
@@ -59,12 +86,12 @@ export default function AdminNodaroMotionPage() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold">Nodaro Motion</h1>
           <p className="text-sm text-muted-foreground">
-            Face masking for every run people start themselves (the API, the SDK and MCP), per engine. People never
-            see or set it. A trend keeps its own setting.
+            How each engine prepares the clip for every run people start themselves (the API, the SDK and MCP), in the
+            Precise and the Motion style. People never see or set it. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={!changed || issues.length > 0 || save.isPending} onClick={onSave}>
-          {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+          {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
       </div>
@@ -91,18 +118,37 @@ export default function AdminNodaroMotionPage() {
                 <h2 id={`engine-${engine.id}`} className="mb-3 text-base font-semibold">
                   {engine.name} <span className="font-normal text-muted-foreground">({INTERNAL_NAMES[engine.internal] ?? engine.internal})</span>
                 </h2>
-                <FaceMaskingEditor
-                  value={draft[engine.id]}
-                  autoHint={AUTO_HINT}
-                  onChange={(m) =>
-                    setDraft((d) => {
-                      const out = { ...d }
-                      if (m) out[engine.id] = m
-                      else delete out[engine.id]
-                      return out
-                    })
-                  }
-                />
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div role="group" aria-label={`${engine.name} Precise`} className="flex min-w-0 flex-col gap-2">
+                    <h3 className="text-sm font-semibold">Precise</h3>
+                    <FaceMaskingEditor
+                      value={draft[engine.id]}
+                      autoHint={AUTO_HINT}
+                      onChange={(m) =>
+                        setDraft((d) => {
+                          const out = { ...d }
+                          if (m) out[engine.id] = m
+                          else delete out[engine.id]
+                          return out
+                        })
+                      }
+                    />
+                  </div>
+                  <div role="group" aria-label={`${engine.name} Motion`} className="flex min-w-0 flex-col gap-2">
+                    <h3 className="text-sm font-semibold">Motion</h3>
+                    {motionQuery.data ? (
+                      <MotionColumn
+                        value={motionDraft[engine.id]}
+                        supports={motionQuery.data.supports}
+                        onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
+                      />
+                    ) : motionQuery.error ? (
+                      <p className="text-xs text-destructive">{motionQuery.error.message}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Loading…</p>
+                    )}
+                  </div>
+                </div>
               </section>
             ))}
           </div>
@@ -115,6 +161,7 @@ export default function AdminNodaroMotionPage() {
           )}
         </>
       )}
+      <PromptPartsTabs internalNames={INTERNAL_NAMES} />
     </div>
   )
 }

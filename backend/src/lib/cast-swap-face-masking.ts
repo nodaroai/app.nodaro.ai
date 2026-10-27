@@ -18,12 +18,18 @@ import {
   CAST_SWAP_FACE_MASK_TARGETS,
   type CastSwapFaceMaskTarget,
 } from "@nodaro/shared/models"
-// Internal only (render-rules, not an Apache grant): a trend face mask's marks.
+// Internal only (render-rules, not an Apache grant): a trend face mask's marks and source modes.
 import {
   CAST_SWAP_FACE_MASK_MARK_LABELS,
   CAST_SWAP_FACE_MASK_MARK_LIMITS,
+  CAST_SWAP_FULL_DEPTH_SCENES,
+  CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT,
+  CAST_SWAP_SOURCE_MODES,
   faceMaskMarkSlot,
   isErasedFaceMaskMark,
+  isMainFaceMaskMark,
+  type CastSwapFullDepthScene,
+  type CastSwapSourceMode,
   type FaceMaskMark,
   type MaskEraseBox,
 } from "@nodaro/render-rules"
@@ -31,8 +37,22 @@ import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export type FaceMaskingMode = "off" | "always" | "auto"
 export type FaceMaskingFill = "blur" | "depth"
-/** What a mask covers: `"head"` (default: hair and people seen from behind too) or `"face"` (the hair stays visible). */
+/** What a mask covers: `"head"` (default: hair and people seen from behind too), `"face"` (the hair stays visible) or `"body"` (the whole person; a keep-people trend clip only). */
 export type FaceMaskingTarget = CastSwapFaceMaskTarget
+/**
+ * How a trend's clip is prepared (`source`, absent = `"faces"`): the faces
+ * hidden (`"faces"`), the whole clip as one grayscale depth video
+ * (`"full-depth"`), or the people kept as filmed and the rest depth
+ * (`"keep-people"`). The depth modes are a trend's alone (a direct run uses
+ * `style`), need `mode: "always"` and run on the approved stored clip only.
+ */
+export type FaceMaskingSource = CastSwapSourceMode
+/**
+ * Where a full-depth run's scene comes from (`scene`, full depth only; left
+ * out = `"description"`): a description the engine writes per run, the
+ * original clip as a second video (clips up to 27.5 s on a trend), or none.
+ */
+export type FaceMaskingScene = CastSwapFullDepthScene
 export type { FaceMaskMark, MaskEraseBox }
 
 export interface FaceMaskingZone {
@@ -45,9 +65,22 @@ export interface FaceMaskingZone {
 export interface FaceMasking {
   mode: FaceMaskingMode
   /**
+   * How the clip is prepared; left out = `"faces"`. `"full-depth"` reads
+   * `mode` only (every other key does not apply and is not sent);
+   * `"keep-people"` reads all but `fill` (outside the people is always depth).
+   */
+  source?: FaceMaskingSource
+  /**
+   * Full depth only: where the run's scene comes from (`FaceMaskingScene`;
+   * left out = `"description"`). Changes what a run sends, never the stored
+   * clip: it is not part of the settings key, and a make is never sent it.
+   */
+  scene?: FaceMaskingScene
+  /**
    * What a mask covers. Left out = `"head"` (`CAST_SWAP_FACE_MASKING_DEFAULTS.target`):
    * the whole head, hair included, and people seen from behind or turned away;
-   * `"face"` covers the face only and leaves the hair visible.
+   * `"face"` covers the face only and leaves the hair visible. `"body"` (the
+   * whole person, and keep-people's default) is keep-people's alone.
    */
   target?: FaceMaskingTarget
   fill?: FaceMaskingFill
@@ -127,6 +160,8 @@ export const faceMaskMarkSchema: z.ZodType<FaceMaskMark> = boxChecks(
 
 const faceMaskingShape = {
   mode: z.enum(["off", "always", "auto"]),
+  source: z.enum(CAST_SWAP_SOURCE_MODES).optional(),
+  scene: z.enum(CAST_SWAP_FULL_DEPTH_SCENES).optional(),
   target: z.enum(CAST_SWAP_FACE_MASK_TARGETS).optional(),
   fill: z.enum(["blur", "depth"]).optional(),
   minFaceHeightPct: pct.optional(),
@@ -142,15 +177,67 @@ const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHe
   m.maxFaceHeightPct >= (m.minFaceHeightPct ?? FACE_MASKING_DEFAULT_MIN_FACE_HEIGHT_PCT)
 const faceHeightsMessage = { path: ["maxFaceHeightPct"], message: "The largest face height must be at least the smallest (or 0 for no limit)." }
 
-/** A face masking setting without marks: what a run takes, and Nodaro Motion's defaults. */
+/**
+ * What a source mode allows: a depth mode needs `mode: "always"` (its clip is
+ * made once, approved and stored; "auto" and "off" have no meaning there), the
+ * whole-person target is keep-people's alone, and so is a `"main"` mark.
+ */
+function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
+  const source = faceMaskingSourceOf(m)
+  if (source !== "faces" && m.mode !== "always") {
+    ctx.addIssue({ code: "custom", path: ["mode"], message: `Clip preparation "${source}" needs mode "always".` })
+  }
+  if (m.scene !== undefined && source !== "full-depth") {
+    ctx.addIssue({ code: "custom", path: ["scene"], message: "Where the scene comes from is a Full depth setting only." })
+  }
+  if (m.target === "body" && source !== "keep-people") {
+    ctx.addIssue({ code: "custom", path: ["target"], message: 'The whole-person target ("body") is for Keep people only.' })
+  }
+  ;(m.marks ?? []).forEach((mark, i) => {
+    if (isMainFaceMaskMark(mark) && source !== "keep-people") {
+      ctx.addIssue({ code: "custom", path: ["marks", i, "label"], message: `Face mask box ${i + 1} marks the main character, which only Keep people takes.` })
+    }
+  })
+}
+
+/**
+ * A face masking setting without marks: what a run takes, and Nodaro Motion's
+ * defaults (`nodaro_motion_masking`). A direct run's setting masks faces only:
+ * a depth mode is a trend's (a direct run picks `style` instead), so any
+ * `source` but `"faces"` is refused here.
+ */
 export const faceMaskingSchema: z.ZodType<FaceMasking> = z
   .strictObject(faceMaskingShape)
   .refine(faceHeightsInOrder, faceHeightsMessage)
+  .superRefine(sourceModeRules)
+  .refine((m) => faceMaskingSourceOf(m) === "faces", { path: ["source"], message: 'A direct run masks faces only: clip preparation is a trend setting (a direct run uses "style").' })
 
-/** A trend's face masking setting: `faceMaskingSchema` plus `marks` (at most `CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks`). */
+/**
+ * A direct Motion run's masking (the `nodaro_motion_motion` setting's
+ * `masking`): a face mask, or full depth (with its `scene`), never keep
+ * people (a trend's alone) and never marks.
+ */
+export const faceMaskingMotionSchema: z.ZodType<FaceMasking> = z
+  .strictObject(faceMaskingShape)
+  .refine(faceHeightsInOrder, faceHeightsMessage)
+  .superRefine(sourceModeRules)
+  .refine((m) => faceMaskingSourceOf(m) !== "keep-people", { path: ["source"], message: "A direct Motion run hides faces or uses full depth: Keep people is a trend setting." })
+
+/** A trend's face masking setting: the setting (any source mode) plus `marks` (at most `CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks`). */
 export const faceMaskingWithMarksSchema: z.ZodType<FaceMaskingWithMarks> = z
   .strictObject({ ...faceMaskingShape, marks: z.array(faceMaskMarkSchema).max(CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks).optional() })
   .refine(faceHeightsInOrder, faceHeightsMessage)
+  .superRefine(sourceModeRules)
+
+/** How the setting prepares the clip; left out = `"faces"`. */
+export function faceMaskingSourceOf(m: Pick<FaceMasking, "source"> | undefined): FaceMaskingSource {
+  return m?.source ?? "faces"
+}
+
+/** A full-depth setting's scene source, its default resolved; null for any other source. */
+export function fullDepthSceneOf(m: Pick<FaceMasking, "source" | "scene"> | undefined): FaceMaskingScene | null {
+  return faceMaskingSourceOf(m) === "full-depth" ? (m?.scene ?? CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT) : null
+}
 
 /** The setting's marks; none (absent or empty) = `[]`. */
 export function faceMaskMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): readonly FaceMaskMark[] {
@@ -164,6 +251,17 @@ export function faceMaskMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefin
  */
 export function erasedMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): FaceMaskMark[] {
   return faceMaskMarksOf(m).filter(isErasedFaceMaskMark)
+}
+
+/**
+ * The marks a make of this setting applies, in the setting's order: faces —
+ * the `"erased"` ones (`erasedMarksOf`); keep people — the `"erased"` and the
+ * `"main"` ones; full depth — none (it finds no one). Slot marks never.
+ */
+export function makeMarksOf(m: Pick<FaceMaskingWithMarks, "marks" | "source"> | undefined): FaceMaskMark[] {
+  const source = faceMaskingSourceOf(m)
+  if (source === "full-depth") return []
+  return faceMaskMarksOf(m).filter((mark) => isErasedFaceMaskMark(mark) || (source === "keep-people" && isMainFaceMaskMark(mark)))
 }
 
 /** The setting's slot marks (`{ slot }`), each with the slot it names. */
@@ -196,9 +294,15 @@ export function faceMaskingOn(m: FaceMasking | undefined): m is FaceMasking {
   return !!m && m.mode !== "off"
 }
 
-/** What this setting's mask covers, its default resolved (left out = the whole head). */
-export function faceMaskTargetOf(m: Pick<FaceMasking, "target">): FaceMaskingTarget {
-  return m.target ?? CAST_SWAP_FACE_MASKING_DEFAULTS.target
+/**
+ * What this setting's mask covers, its default resolved: left out = the whole
+ * head (faces) or the whole person (keep people). Null for full depth, which
+ * masks no one.
+ */
+export function faceMaskTargetOf(m: Pick<FaceMasking, "target" | "source">): FaceMaskingTarget | null {
+  const source = faceMaskingSourceOf(m)
+  if (source === "full-depth") return null
+  return m.target ?? (source === "keep-people" ? "body" : CAST_SWAP_FACE_MASKING_DEFAULTS.target)
 }
 
 /**
@@ -235,4 +339,38 @@ export function withResolvedZone(m: FaceMasking): FaceMasking {
   if (m.zone === undefined) return { ...m, zone: defaultFaceMaskingZone() }
   if (m.zone === null) return { ...m, zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }
   return { ...m, zone: { ...m.zone } }
+}
+
+/**
+ * The setting as the engine is sent it (a new object; marks are the caller's):
+ *
+ * - faces: `withResolvedZone`, with no `source` key — exactly what a run and
+ *   a make sent before source modes existed;
+ * - full depth: `{ mode, source }` only (nothing else applies);
+ * - keep people: `withResolvedZone` without `fill`, with `source` and the
+ *   target resolved (`"body"` when left out), named so an engine never
+ *   applies a default of its own.
+ */
+export function faceMaskingSent(m: FaceMasking): FaceMasking {
+  const source = faceMaskingSourceOf(m)
+  // The scene is a run's, never a make's or the key's (`faceMaskingRunSent`).
+  const { source: _source, scene: _scene, ...rest } = m
+  if (source === "faces") return withResolvedZone(rest)
+  if (source === "full-depth") return { mode: m.mode, source }
+  const { fill: _fill, ...kept } = withResolvedZone(rest)
+  return { ...kept, source, target: faceMaskTargetOf(m)! }
+}
+
+/**
+ * The setting as a RUN is sent it: `faceMaskingSent`, plus full depth's
+ * `scene`, resolved (`"description"` when left out) so an engine never
+ * applies a default of its own. The scene shapes the run, not the clip, so
+ * the settings key and a make (both `faceMaskingSent`) never see it. A
+ * caller sending to an engine that does not declare scenes drops it
+ * (`withoutUnsupportedFields`, trends/run-helpers.ts).
+ */
+export function faceMaskingRunSent(m: FaceMasking): FaceMasking {
+  const sent = faceMaskingSent(m)
+  const scene = fullDepthSceneOf(m)
+  return scene ? { ...sent, scene } : sent
 }

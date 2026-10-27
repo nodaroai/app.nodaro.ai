@@ -245,19 +245,50 @@ const THREAD_OPTIONS: ReadonlySet<string> = new Set(["threads", "filter_threads"
  *  know, or a dangling one. */
 const OPTION_LIKE = /^-[A-Za-z_/?]/
 
+/**
+ * The encoder thread count a libx265 output is given: 0, x265 picks its own
+ * frame threads (4 on 16 CPUs, 5–6 on 32 or more). ffmpeg hands an output's
+ * `-threads` to x265 as its `--frame-threads`, and the budget is the wrong
+ * count for it twice over. Past 16 the encoder does not open (`frameNumThreads
+ * (--frame-threads) must be [0 .. X265_MAX_FRAME_THREADS)`, ffmpeg "Invalid
+ * argument" before a single frame — on the production pin
+ * n8.1.2-21-gce3c09c101-nodaro1, 2026-10-27, staging's 32-CPU quota failed
+ * every HEVC encode: a trend's HEVC source crop, Transcode Video at H.265).
+ * And each frame thread more encodes a frame with less of the frames before it
+ * finished to lean on, so the same bitrate buys a slightly worse picture and
+ * more memory; x265's own count is the one it tunes for quality. Its rows
+ * still run in parallel on its own pool (wavefront), so the CPUs are used.
+ */
+export const LIBX265_ENCODE_THREADS = 0
+
+/** The options that name an output's encoder (`-c:v`, `-codec:v:0`, `-vcodec`, a bare `-c`). */
+const CODEC_OPTIONS: ReadonlySet<string> = new Set(["c", "codec", "vcodec"])
+
+/** Whether a codec option (its name as written, `c:v:0`) sets the video encoder: a video stream specifier, or none (every stream). */
+const setsVideoCodec = (raw: string): boolean => {
+  const [name, spec] = raw.split(":")
+  return name === "vcodec" || spec === undefined || spec === "v" || spec === "V"
+}
+
 /** Where ffmpeg would see each file of `args`: the index of every `-i` and of
- *  every output path. Undefined when the argv must be left as given: an
- *  informational run, one that sets its own thread counts, one with no output,
- *  or one it cannot read for certain (`--`, a value that looks like an option,
- *  a dangling option). */
-function ffmpegFileTokens(args: readonly string[]): { inputs: number[]; outputs: number[] } | undefined {
+ *  every output path, and which of those outputs encode their picture with
+ *  libx265 (`LIBX265_ENCODE_THREADS`). Undefined when the argv must be
+ *  left as given: an informational run, one that sets its own thread counts,
+ *  one with no output, or one it cannot read for certain (`--`, a value that
+ *  looks like an option, a dangling option). */
+function ffmpegFileTokens(args: readonly string[]): { inputs: number[]; outputs: number[]; x265Outputs: Set<number> } | undefined {
   const inputs: number[] = []
   const outputs: number[] = []
+  const x265Outputs = new Set<number>()
+  // The video encoder the options since the last file name: they belong to the next output (or, before an `-i`, to that input's decoder).
+  let x265 = false
   for (let k = 0; k < args.length; k++) {
     const token = args[k]!
     if (token === "--") return undefined
     if (!token.startsWith("-") || token === "-") {
       outputs.push(k)
+      if (x265) x265Outputs.add(k)
+      x265 = false
       continue
     }
     const raw = token.slice(1)
@@ -266,18 +297,21 @@ function ffmpegFileTokens(args: readonly string[]): { inputs: number[]; outputs:
       const value = args[k + 1]
       if (value === undefined || OPTION_LIKE.test(value)) return undefined
       if (raw === "i") inputs.push(k)
+      x265 = false
       k++
       continue
     }
-    const name = (raw.startsWith("/") ? raw.slice(1) : raw).split(":")[0]!
+    const bare = raw.startsWith("/") ? raw.slice(1) : raw
+    const name = bare.split(":")[0]!
     if (FFMPEG_EXIT_OPTIONS.has(name) || THREAD_OPTIONS.has(name)) return undefined
     if (FFMPEG_BOOL_OPTIONS.has(name) || FFMPEG_VALUELESS_FUNC_OPTIONS.has(name)) continue
     if (name.startsWith("no") && FFMPEG_BOOL_OPTIONS.has(name.slice(2))) continue
     const value = args[k + 1]
     if (value === undefined || OPTION_LIKE.test(value)) return undefined
+    if (CODEC_OPTIONS.has(name) && setsVideoCodec(bare)) x265 = value === "libx265"
     k++
   }
-  return outputs.length > 0 ? { inputs, outputs } : undefined
+  return outputs.length > 0 ? { inputs, outputs, x265Outputs } : undefined
 }
 
 /**
@@ -285,7 +319,8 @@ function ffmpegFileTokens(args: readonly string[]): { inputs: number[]; outputs:
  * graphs' (`-filter_complex_threads` and `-filter_threads` for a simple
  * `-vf`/`-af` graph — global, first), each input's decoders (`-threads`
  * before its `-i`) and each output's encoders (`-threads` before its path —
- * libx264's frame threads, the count whose memory scales with the picture).
+ * libx264's frame threads, the count whose memory scales with the picture; a
+ * libx265 output's `LIBX265_ENCODE_THREADS`, x265's own count).
  * Without `threads` (no quota below the cores ffmpeg counts — `ffmpegThreads`),
  * or for an argv it leaves alone (`ffmpegFileTokens`), a copy of `args` as
  * given. Pure.
@@ -298,7 +333,7 @@ export function withFfmpegThreads(args: readonly string[], threads: FfmpegThread
   const out = ["-filter_complex_threads", String(threads.filter), "-filter_threads", String(threads.filter)]
   args.forEach((token, k) => {
     if (inputs.has(k)) out.push("-threads", String(threads.decode))
-    if (outputs.has(k)) out.push("-threads", String(threads.encode))
+    if (outputs.has(k)) out.push("-threads", String(files.x265Outputs.has(k) ? LIBX265_ENCODE_THREADS : threads.encode))
     out.push(token)
   })
   return out

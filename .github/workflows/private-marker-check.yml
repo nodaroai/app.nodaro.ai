@@ -9,10 +9,11 @@
 #
 # A second step reads the PR's COMMITS rather than its tree
 # (tools/check-history-surface.mjs): the lines each adds, the paths it writes,
-# its message, and the PR title (the squash commit's subject), against the
-# marker and symbol lists and the public-surface categories. The mirror
+# its message, the PR title (the squash commit's subject) and the PR
+# description (what the what's-new and social posts are written from), against
+# the marker and symbol lists and the public-surface categories. The mirror
 # publishes history, so a line added and later removed still goes public.
-# `edited` re-runs it on a retitle.
+# `edited` re-runs it when the title or the description changes.
 name: private-marker-check
 on:
   pull_request:
@@ -92,7 +93,7 @@ jobs:
         if: env.FROM_FORK != 'true'
         with:
           node-version: 22
-      - name: Check every commit this PR adds, and its title, for never-public content
+      - name: Check every commit this PR adds, and its title and description, for never-public content
         if: env.FROM_FORK != 'true'
         env:
           PRIVATE_LEAK_MARKERS: ${{ secrets.PRIVATE_LEAK_MARKERS }}
@@ -100,9 +101,11 @@ jobs:
           PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
           PRIVATE_LEAK_REQUIRE_SYMBOLS: "1"
           HISTORY_CHECKS: surface,internal-docs,markers,symbols
-          # Via env, never inline ${{ }} in the script: the title and the range
-          # are user-controlled input (script-injection surface).
+          # Via env, never inline ${{ }} in the script: the title, the
+          # description and the range are user-controlled input
+          # (script-injection surface).
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
           BASE: ${{ github.base_ref }}
           RANGE: ${{ inputs.range }}
         # Same base-branch-first rule as the tree gate above.

@@ -293,8 +293,11 @@ async function chainVeoBaseTo4k(
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   // A retired model in a queued job (any producer: a pipeline shot, an older
   // job) runs as the model it became — the one its credit id was priced on.
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft } = withRunningVideoProvider({ data: job.data }).data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
+    /** Seedance 2.5 container, set by the route only for a child job
+     *  (`seedance25OutputFormatFor`); absent = mp4. */
+    outputFormat?: "mov"
     /** Seedance Draft: render a 480p draft the 1080p finalize can re-render. */
     draft?: boolean
     imageUrl?: string
@@ -387,9 +390,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // chaining get-4k-video off the base task (see chainVeoBaseTo4k below).
   const wantsVeo4k = resolution === "4k" && isVeoProvider(provider)
   const baseResolution = wantsVeo4k ? VEO_4K_BASE_RESOLUTION : resolution
+  // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
+  // job): the mp4 options stay key-for-key what they were. This lane never
+  // rewords a refused prompt (that retry is the text-to-video worker's).
+  const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -490,9 +497,17 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // POST-PROVIDER: `providerOutputUrl` is the delivered i2v result; the bare
   // uploadToR2 here (audio-merge branch) is wrapped so an R2 failure skips the
   // refund (uploadVideoMaybeWatermark already wraps itself).
+  //
+  // A MOV the provider actually returned (decided by the result, never the
+  // request alone — the text-to-video lane's rule) is kept as it is, `.mov`:
+  // its parent re-encodes it, and the browser-safe transcode would undo the
+  // very container it asked for. A watermarked run, or one with an audio merge
+  // to follow, takes the mp4 path as before.
   let finalVideoUrl = audioUrl
     ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId))
-    : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
+      ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId, { ext: "mov" }))
+      : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 90)
 
   // If audio URL is provided, merge it with the video. ONE recipe, so a

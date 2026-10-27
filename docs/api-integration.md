@@ -1640,7 +1640,11 @@ reject**, where the provider answered the submission with a 4xx because the
 settings or input media are invalid for that model. That one has no structured
 hint, but its `error_message` says the provider *rejected these settings for
 this model* and `retryable` is `false`: change the settings or the media before
-re-running. A provider 5xx stays retryable however validation-shaped its
+re-running. When the provider's 4xx carries no reason at all (only its
+catch-all "Generation failed. Please try again later."), the `error_message`
+instead says the provider *gave no reason* and that the cause may be temporary
+or in the input media (such as its size or format); `retryable` is `true` for
+it — re-run it once, and change the input media if it fails again. A provider 5xx stays retryable however validation-shaped its
 wording is. For `safety-block`,
 `class` distinguishes a
 deterministic block (`copyright`, `likeness` — retrying the identical request
@@ -4329,7 +4333,7 @@ it out of a preview — not sent, prepared or charged; a full run ignores both),
 and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
-`previewStart`, `engine` (see below), `resolution` (`"480p"` — the default —
+`previewStart`, `engine` (see below), `style` (see below), `resolution` (`"480p"` — the default —
 `"720p"` or `"1080p"`; on Nodaro Motion Pulse `"720p"` — its default — or
 `"1080p"`), `draft` (on by default at 480p, off above it; `true` above 480p is
 refused, and Nodaro Motion Pulse has no draft), `prepareReferences` (default
@@ -4356,6 +4360,15 @@ route's quote, may still name it by the id it had before the rename (the
 SDK's `estimate()` answers the current id). Each
 engine's own limits apply (Pulse takes fewer images per run than the 30 Prism
 allows), and the route refuses what it cannot run.
+
+**Style.** `style` says how the run follows the clip: `"precise"` (the
+default when `style` is left out) follows the clip exactly; `"motion"` follows
+the clip's movement and takes the looks of the people, pets and products from
+your images, more freely than Precise. Both keep the clip's sound and length.
+Motion may cost a different amount than Precise: the estimate (sent with the
+same `style`) shows the exact price. The job records the `style` sent in
+`input_data.style` (absent when it was left out, which is Precise). A trend
+run ignores it: the trend decides.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
 for one, whether faces are hidden first, and whether a clip the model refuses
@@ -4410,7 +4423,7 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, Also an invalid `origin`. |
+| `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, an invalid `origin`, or a `style` other than `"precise"` or `"motion"`. |
 | `400` | `draft_unsupported` | `draft: true` with `engine: "motion-pulse"`, which has no draft. |
 | `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "motion-pulse"`. |
 | `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "motion-pulse"` (only a Nodaro Motion Prism edit can be one). |
@@ -4422,6 +4435,9 @@ Refusals, all before anything is charged (bodies are
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
+| `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Motion Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
+| `400` | `prompt_parts_not_allowed` | The body sends `promptParts`: only the Nodaro platform itself may (a trend's engine prompt). |
+| `400` | `prompt_style_not_allowed` | The body sends `promptStyle`: only the Nodaro platform itself may. A run's wording follows its `style`. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
 | `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
@@ -4576,6 +4592,7 @@ anything is charged:
 | `400` | `validation_error` | (`/runs`) The `Idempotency-Key` is not 8–200 characters. |
 | `401` | `unauthorized` | No authenticated user. |
 | `404` | `not_found` | The trend is not published, or `sessionId` names a session you may not use (`/runs` only). |
+| `409` | `trend_unavailable` | (estimate and run) The trend's setup is out of date: it cannot run until it is updated. A retry gets the same answer. |
 | `502` | `engine_error` | Nodaro Motion answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |
 | `503` | `trend_unavailable` | The trend cannot be run right now. |

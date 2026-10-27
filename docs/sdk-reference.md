@@ -2076,6 +2076,7 @@ interface CastSwapParams {
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
   engine?: CastSwapEngine          // "motion-prism" (default) | "motion-pulse" (see below)
+  style?: CastSwapStyle            // "precise" (default) | "motion" (see below)
   motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-pulse only; default "cut-end"
   resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-pulse: "720p" (default) or "1080p"
   draft?: boolean                  // default true at 480p, false above; true above 480p is a 400;
@@ -2088,6 +2089,7 @@ interface CastSwapParams {
 }
 
 type CastSwapEngine = "motion-prism" | "motion-pulse" // Nodaro Motion Prism / Pulse: what the trend routes and estimate() answer
+type CastSwapStyle = "precise" | "motion"            // how the run follows the clip (see below)
 type CastSwapEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
 
 interface CastSwapEstimate {
@@ -2147,6 +2149,15 @@ reference picture by an image model. It costs extra credits
 video then fails; it adds about a minute, and falls back to your own images
 for a role whose picture could not be made. Locations are not prepared.
 Pass `prepareReferences: false` to use your images as they are.
+
+**Style** (`style`, `CastSwapStyle`): `"precise"`, the default, follows the
+clip exactly; `"motion"` follows the clip's movement and takes the looks from
+your images, more freely than Precise. Motion may cost a different amount than
+Precise: `estimate()` with the same `style` shows the exact price. The job
+records the `style` sent in `input_data.style` (absent when it was left out).
+While the way Nodaro prepares Motion runs for the engine limits the clip, a
+full Motion run of a clip over 27.9 s is refused as `400
+clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 
 **Preparing the clip.** How the source clip is prepared for the video model
 (for one, whether faces are hidden first, and whether a clip the model
@@ -2395,8 +2406,9 @@ the trend fixes it; `err.details` is `{ slot, chip }`), `example_out_of_range`, 
 `{slot:<key>}` naming no slot), `prompt_too_long` and `validation_error`; the
 slot errors carry the key as `slot`. Other refusals: `401`, `404 not_found`
 (the trend is not published; for `run()` also a `sessionId` you may not use),
-`502 engine_error`, `503 engine_unsupported` / `trend_unavailable` /
-`not_available`. When the video engine refuses, `estimate()` / `run()` get the
+`409 trend_unavailable` (the trend's setup is out of date: it cannot run until
+it is updated), `502 engine_error`, `503 engine_unsupported` /
+`trend_unavailable` / `not_available`. When the video engine refuses, `estimate()` / `run()` get the
 trend routes' OWN codes with fixed messages, never the engine's text or
 `issues`: `400 trend_run_rejected` (or `clip_out_of_range`,
 `preview_out_of_range`, `video_unreadable`, `unsafe_url`,

@@ -357,6 +357,16 @@ describe("starting an upscale", () => {
     expect(detail.upscaleJobs).toEqual([{ jobId: UP_JOB, target: "example", fromUrl: ex(2).videoUrl, startedAt: expect.any(String), current: true, index: 1 }])
   })
 
+  it.each([
+    ["a source clip at 1080p", { target: "source" }, draftData({ source: { videoUrl: SRC, durationSec: 12, width: 1920, height: 1080, display: DISPLAY } })],
+    ["a portrait example at 1080p", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 1080, height: 1920 })] })],
+  ])("enhances %s: the same Topaz ask at 1080p, at the same size", async (_what, body, data) => {
+    seed({}, data as TrendVersionData)
+    expect((await start(body as Record<string, unknown>)).statusCode).toBe(202)
+    expect(upscaler.calls[0]!.body).toEqual(expect.objectContaining({ provider: "topaz", targetResolution: "1080p" }))
+    expect(draftNow().upscaleJobs).toHaveLength(1)
+  })
+
   it("upscales the source clip's uploaded video (what runs edit), not its display copy", async () => {
     seed()
     expect((await start({ target: "source" })).statusCode).toBe(202)
@@ -368,9 +378,9 @@ describe("starting an upscale", () => {
     ["a stale revision", { target: "example", index: 0, revision: "rev-stale" }, draftData(), 409, "draft_conflict"],
     ["an example that is not there", { target: "example", index: 2 }, draftData(), 404, "not_found"],
     ["a draft with no source clip", { target: "source" }, draftData({ source: null }), 409, "source_missing"],
-    ["an example already 1080p", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 1080, height: 1920 })] }), 409, "already_1080p"],
-    ["a landscape example already 1080p", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 1920, height: 1080 })] }), 409, "already_1080p"],
-    ["a source already 1080p", { target: "source" }, draftData({ source: { videoUrl: SRC, durationSec: 12, width: 1080, height: 1920, display: DISPLAY } }), 409, "already_1080p"],
+    ["an example above 1080p", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 1440, height: 2560 })] }), 409, "above_1080p"],
+    ["a landscape example at 4K", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 3840, height: 2160 })] }), 409, "above_1080p"],
+    ["a source above 1080p", { target: "source" }, draftData({ source: { videoUrl: SRC, durationSec: 12, width: 1440, height: 2560, display: DISPLAY } }), 409, "above_1080p"],
     ["a body with a stray field", { target: "source", index: 0 }, draftData(), 400, "validation_error"],
     ["an unknown target", { target: "poster" }, draftData(), 400, "validation_error"],
   ])("refuses %s before Video Upscale is asked (nothing is paid for)", async (_what, body, data, status, code) => {

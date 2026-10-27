@@ -180,6 +180,23 @@ describe("createSanitizedError", () => {
     )
   })
 
+  it("maps KIE's Kling 4 combined reference cap (a 422) to the size-or-duration message, non-retryable", () => {
+    const error = createSanitizedError(
+      '{"code":422,"msg":"video_urls total duration must not exceed 30 seconds"}',
+      "Video generation",
+      false,
+      false,
+      { upstreamStatus: 422 },
+    )
+    expect(error.message).toBe(
+      "Input file exceeds the size or duration limit. Please use a shorter or smaller file."
+    )
+    expect(isRetryableFailure(error.message)).toBe(false)
+    // "exceeds" as before; "exceeded" is no input limit.
+    expect(createSanitizedError("Video duration exceeds 30s", "Video generation").message).toMatch(/size or duration limit/)
+    expect(createSanitizedError("maximum retries exceeded", "Video generation").message).not.toMatch(/size or duration limit/)
+  })
+
   it("maps copyright-restriction failures to a copyright message, not the generic retry fallback", () => {
     // Verbatim prod failMsg (2026-08-03): the generic "please try again" answer
     // is actively wrong for this class — the block is deterministic on the same

@@ -380,9 +380,34 @@ export async function withFfmpegSlot<T>(
  */
 const FFMPEG_ERROR_TAIL_CHARS = 420
 
-/** Last non-empty lines of ffmpeg output, newest-last, within the budget. */
+/**
+ * A codec library's own error line (`x265 [error]: frameNumThreads … must be
+ * [0 .. X265_MAX_FRAME_THREADS)`). The library names the cause and ffmpeg's
+ * own last lines only the consequence ("Terminating thread with return code
+ * -22", "Conversion failed!"), which then fill the tail: a trend crop failed
+ * on staging with the cause cut (2026-10-27).
+ */
+const LIBRARY_ERROR_LINE = /\[error\]/i
+
+/**
+ * Last non-empty lines of ffmpeg output, newest-last, within the budget — led
+ * by the last library error line when the tail does not already hold it (that
+ * line given at most half the budget).
+ */
 function ffmpegOutputTail(text: string, maxChars = FFMPEG_ERROR_TAIL_CHARS): string {
   const lines = text.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim().length > 0)
+  const tail = lastLines(lines, maxChars)
+  let at = lines.length - 1
+  while (at >= 0 && !LIBRARY_ERROR_LINE.test(lines[at]!)) at--
+  const cause = lines[at]
+  if (!cause || tail.includes(cause)) return tail
+  const lead = cause.length > maxChars / 2 ? `${cause.slice(0, Math.floor(maxChars / 2))}…` : cause
+  const after = lines.slice(at + 1)
+  return [lead, lastLines(after, maxChars - lead.length - 1)].filter(Boolean).join("\n")
+}
+
+/** The last `lines`, newest-last, within `maxChars` (one over-long line tail-cut rather than dropped). */
+function lastLines(lines: readonly string[], maxChars: number): string {
   const kept: string[] = []
   let budget = maxChars
   for (let i = lines.length - 1; i >= 0; i--) {

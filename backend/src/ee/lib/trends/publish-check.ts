@@ -32,6 +32,33 @@
  * recipe, or under another engine recipe than an environment's, is
  * `face_mask_out_of_date` (one reason each).
  *
+ * A trend that prepares its clip in a depth mode (`faceMasking.source`
+ * `"full-depth"` or `"keep-people"`) needs, in every environment, an engine
+ * that declares that mode (`castSwap.sourceModes`; absent = faces only):
+ * `face_mask_source_unsupported` otherwise. A face mask (absent or `"faces"`)
+ * never needs it. Such a trend's runs use its stored clip only
+ * (`storedFaceMaskRequired`), and keep people's whole-person target is a need
+ * of its own (`faceMaskTarget:body`). The person-variant gates below are a
+ * face mask's alone.
+ *
+ * A trend whose prompt style is not its clip preparation's default
+ * (`promptStyle`), or a full-depth trend whose scene source an engine does not
+ * take (`faceMasking.scene`; an engine without `castSwap.fullDepthScenes`
+ * always sends the original), needs, in every environment, an engine that
+ * declares it: `prompt_style_unsupported` / `full_depth_scene_unsupported`
+ * otherwise (prompt-style.ts). A full-depth trend that sends the original as
+ * a second video with a source clip over `FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC`
+ * is `full_depth_clip_too_long`, always (the engines refuse it at run).
+ *
+ * A trend that overrides the engine's prompt parts (`promptParts`) needs, in
+ * every environment, an engine that takes them (`castSwap.promptParts`):
+ * `prompt_parts_unsupported` otherwise (it would run on the defaults). And
+ * the overrides must still fit the draft as it is now: the route asks this
+ * environment's engine (prompt-parts-check.ts) and passes its problems in
+ * (`promptPartProblems`); any is `prompt_parts_invalid` with every problem
+ * (`problems`; `part_not_used` for an override the trend's clip preparation,
+ * prompt style or scene no longer uses).
+ *
  * Per-person variants (decided 2026-10-27, face-mask-variants.ts): more than
  * `MAX_MARKED_PEOPLE` optional people with slot marks is
  * `face_mask_people_over_cap`, always. A trend whose runs can leave a marked
@@ -42,7 +69,7 @@
  * trend, like one with erased marks, needs `storedFaceMaskRequired`.
  */
 import type { EngineEnvironment } from "../engine-environments.js"
-import { faceMaskTargetOf, faceMaskTargetsOf, faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskTargetOf, faceMaskTargetsOf, faceMaskingOn, faceMaskingSourceOf, type FaceMaskingSource } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
 import {
   CAST_SWAP_ENGINES,
@@ -54,8 +81,11 @@ import { castSwapImagesSent } from "@nodaro/render-rules"
 import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
 import { promptBudget, promptModesOf, TREND_DETAILS_MAX } from "./prompt-budget.js"
 import { withPromptsFor } from "./prompt-parts.js"
-import { faceMaskHasErasedMarks, faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
+import { promptPartTexts } from "./prompt-parts-store.js"
+import { FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC, fullDepthClipTooLong, promptStyleBlockers } from "./prompt-style.js"
+import { faceMaskState, faceMaskStoredRequired, type FaceMaskOutOfDate } from "./face-mask.js"
 import { MAX_MARKED_PEOPLE, faceMaskVariantsApply, faceMaskVariantsState, markedPeople } from "./face-mask-variants.js"
+import type { TrendPromptPartProblem } from "./prompt-parts-check.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
 export interface PublishBlocker {
@@ -74,6 +104,12 @@ export interface PublishBlocker {
     | "face_mask_people_over_cap"
     | "face_mask_variant_missing"
     | "face_mask_variant_out_of_date"
+    | "face_mask_source_unsupported"
+    | "prompt_parts_unsupported"
+    | "prompt_parts_invalid"
+    | "prompt_style_unsupported"
+    | "full_depth_scene_unsupported"
+    | "full_depth_clip_too_long"
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
@@ -92,6 +128,8 @@ export interface PublishBlocker {
   message?: string
   /** Why the face mask is out of date: "settings", "core_recipe" or "plugin_recipe" (with `env`). */
   why?: FaceMaskOutOfDate["why"]
+  /** What the engine finds wrong with the trend's engine prompt changes, for `prompt_parts_invalid`. */
+  problems?: TrendPromptPartProblem[]
 }
 
 const OUT_OF_DATE_MESSAGES: Readonly<Record<FaceMaskOutOfDate["why"], string>> = {
@@ -105,6 +143,15 @@ const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
 /** The need of a trend whose masks cover the face only (`faceMasking.target: "face"`). */
 export const FACE_ONLY_NEED = "faceMaskTarget:face"
 
+/** The need of a keep-people trend whose masks cover the whole person (`faceMasking.target: "body"`, its default). */
+export const BODY_NEED = "faceMaskTarget:body"
+
+const SOURCE_MODE_NAMES: Readonly<Record<FaceMaskingSource, string>> = {
+  faces: "Faces hidden",
+  "full-depth": "Full depth",
+  "keep-people": "Keep people",
+}
+
 export { castSwapEnginesOf }
 
 /** What every environment's engine must support for this draft, in report order. */
@@ -117,11 +164,12 @@ function needsOf(data: TrendVersionData): string[] {
     ...kinds,
     ...(data.references.length > 0 ? ["fixedReferences"] : []),
     ...(faceMaskingOn(data.faceMasking) ? ["faceMasking", "storedFaceMask"] : []),
-    // Erased marks, or person variants: a run must use the stored mask (or variant) it is sent, and
-    // the engine must refuse to mask per run instead.
-    ...(faceMaskHasErasedMarks(data) || faceMaskVariantsApply(data) ? ["storedFaceMaskRequired"] : []),
-    // The head (the default) is every masking engine's: only the face alone is a need of its own.
+    // Erased marks, a depth mode, or person variants: a run must use the stored mask (or variant) it is
+    // sent, and the engine must refuse to mask per run instead.
+    ...(faceMaskStoredRequired(data) || faceMaskVariantsApply(data) ? ["storedFaceMaskRequired"] : []),
+    // The head (the default) is every masking engine's: only the face alone, or the whole person, is a need of its own.
     ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "face" ? [FACE_ONLY_NEED] : []),
+    ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "body" ? [BODY_NEED] : []),
     // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
     ...(promptModesOf(data).some((mode) => withPromptsFor(data, mode).prePrompt) ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
@@ -142,6 +190,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === "storedFaceMask") return cs.storedFaceMask !== true
     if (need === "storedFaceMaskRequired") return cs.storedFaceMaskRequired !== true
     if (need === FACE_ONLY_NEED) return !faceMaskTargetsOf(cs).includes("face")
+    if (need === BODY_NEED) return !faceMaskTargetsOf(cs).includes("body")
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)
@@ -161,6 +210,7 @@ export function publishBlockers(
   data: TrendVersionData,
   environments: readonly EngineEnvironment[],
   required: readonly string[],
+  promptPartProblems: readonly TrendPromptPartProblem[] = [],
 ): PublishBlocker[] {
   const out: PublishBlocker[] = []
   if (!data.source) out.push({ code: "source_missing" })
@@ -206,10 +256,29 @@ export function publishBlockers(
     })
   }
 
+  if (fullDepthClipTooLong(data)) {
+    out.push({
+      code: "full_depth_clip_too_long",
+      message: `The source clip is ${data.source!.durationSec.toFixed(1)} s: sending the original as a second video takes clips up to ${FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC} s. Use a shorter clip, or take the scene from a description or from nothing.`,
+    })
+  }
+
+  if (promptPartProblems.length > 0) {
+    out.push({
+      code: "prompt_parts_invalid",
+      problems: [...promptPartProblems],
+      message: `The engine prompt changes no longer fit this trend: ${promptPartProblems.map((p) => p.message).join(" ")}`,
+    })
+  }
+
+  const source = faceMaskingOn(data.faceMasking) ? faceMaskingSourceOf(data.faceMasking) : "faces"
   if (faceMaskingOn(data.faceMasking)) {
     const mask = faceMaskState(data, environments, required)
     if (mask.status === "none") {
-      out.push({ code: "face_mask_missing", message: "This trend masks faces: make its face mask and approve it." })
+      out.push({
+        code: "face_mask_missing",
+        message: source === "faces" ? "This trend masks faces: make its face mask and approve it." : "This trend prepares its clip ahead of time: make it and approve it.",
+      })
     }
     for (const r of mask.reasons) {
       out.push({ code: "face_mask_out_of_date", why: r.why, ...(r.why === "plugin_recipe" ? { env: r.env } : {}), message: OUT_OF_DATE_MESSAGES[r.why] })
@@ -224,6 +293,25 @@ export function publishBlockers(
       out.push({ code: "engine_unknown", env })
       continue
     }
+    // A depth mode an engine does not declare: it would strip `source` and mask faces (or refuse the run).
+    if (source !== "faces" && !(row.supports.castSwap?.sourceModes ?? []).includes(source)) {
+      out.push({
+        code: "face_mask_source_unsupported",
+        env,
+        need: source,
+        message: `${env}: this environment's Cast Swap engine cannot run the clip preparation "${SOURCE_MODE_NAMES[source]}" yet.`,
+      })
+    }
+    // Prompt part overrides an engine does not declare it takes: the run would be sent its defaults.
+    if (promptPartTexts(data.promptParts) && row.supports.castSwap?.promptParts !== true) {
+      out.push({
+        code: "prompt_parts_unsupported",
+        env,
+        need: "promptParts",
+        message: `${env}: this environment's Cast Swap engine cannot take the trend's engine prompt changes yet: reset them, or wait for the engine.`,
+      })
+    }
+    out.push(...promptStyleBlockers(data, env, row.supports.castSwap))
     for (const need of missingNeeds(row, needs)) out.push({ code: "engine_unsupported", env, need })
   }
   return out

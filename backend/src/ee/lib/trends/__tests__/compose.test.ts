@@ -417,6 +417,7 @@ describe("composeTrendRun — display and needs", () => {
       fixedReferences: true,
       faceMasking: false,
       faceMaskTarget: null,
+      faceMaskSource: null,
       storedFaceMask: false,
       trendPrePrompt: false,
       engine: "seedance-2-5",

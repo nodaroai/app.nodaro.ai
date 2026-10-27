@@ -12,9 +12,9 @@ import {
 import {
   withWiredSettings,
 } from "@nodaro/shared/nodes"
-import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import type { ChargedPriceTable, EstimateEdge, EstimateNode } from "./credits.js"
 import { seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
+import { knownClipUrl } from "./upload-clip-lengths.js"
 
 /**
  * Seedance reference-video runs in the server's workflow estimates (the run
@@ -27,8 +27,9 @@ import { seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
  * uses), from the clips' probed lengths:
  *
  *  - a clip whose file the estimate knows — an upload the run sends as it is —
- *    is probed by the async pre-pass (`withRefVideoClipLengths`), once per URL
- *    per {@link CLIP_LENGTH_TTL_MS} (a listing re-prices without re-probing);
+ *    is probed by the async pre-pass (`withUploadClipLengths`, fed
+ *    {@link refVideoClipSources}), once per URL (a listing re-prices without
+ *    re-probing);
  *  - any other clip (a generation's output, an upload the app user replaces,
  *    no pre-pass, as in the static base estimate) is priced at the provider's
  *    worst case — never below what the run reserves.
@@ -41,16 +42,6 @@ import { seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
 
 const VIDEO_GENERATION_TYPES = new Set(["generate-video", "image-to-video", "text-to-video"])
 
-/** How long a probed length is reused. A URL names its file; the TTL bounds memory, not staleness. */
-const CLIP_LENGTH_TTL_MS = 30 * 60_000
-const CLIP_LENGTH_CACHE_MAX = 2_000
-const clipLengths = new Map<string, { sec: number; at: number }>()
-
-/** Tests only: forget every probed length. */
-export function __forgetRefVideoClipLengths(): void {
-  clipLengths.clear()
-}
-
 interface RefVideoEstimateRequest {
   provider: string
   resolution?: string
@@ -58,13 +49,6 @@ interface RefVideoEstimateRequest {
   draft: boolean
   /** One entry per clip wire: the upstream node, when the estimate has it. */
   clipSources: ReadonlyArray<EstimateNode | undefined>
-}
-
-/** The clip a source hands the run unchanged — an upload's file — else undefined. */
-function knownClipUrl(source: EstimateNode | undefined): string | undefined {
-  if (source?.type !== "upload-video") return undefined
-  const url = (source.data as { url?: unknown } | undefined)?.url
-  return typeof url === "string" && url.trim() !== "" ? url.trim() : undefined
 }
 
 /** The request `node` (already read through its Settings input) makes, or undefined when its price does not follow reference clips. */
@@ -109,7 +93,7 @@ function refVideoEstimateRequest(
 
 /**
  * The charged credits of one run of `node` when its price follows reference
- * clips, else undefined. `prices.refVideoClipSec` holds the lengths the
+ * clips, else undefined. `prices.uploadClipSec` holds the lengths the
  * pre-pass probed; a clip not there is the worst case.
  */
 export function seedanceRefVideoEstimateCredits(
@@ -125,7 +109,7 @@ export function seedanceRefVideoEstimateCredits(
   let unknownClips = 0
   for (const source of request.clipSources) {
     const url = knownClipUrl(source)
-    const sec = url === undefined ? undefined : prices.refVideoClipSec?.get(url)
+    const sec = url === undefined ? undefined : prices.uploadClipSec?.get(url)
     if (sec === undefined) unknownClips += 1
     else durationsSec.push(sec)
   }
@@ -140,43 +124,14 @@ export function seedanceRefVideoEstimateCredits(
   }).credits
 }
 
-/** One URL's probed length (NaN = unreadable, which the quote counts as the worst case), cached. */
-async function clipLengthSec(url: string): Promise<number> {
-  const hit = clipLengths.get(url)
-  if (hit && Date.now() - hit.at < CLIP_LENGTH_TTL_MS) return hit.sec
-  const sec = await probeMediaDuration(url).catch(() => Number.NaN)
-  if (clipLengths.size >= CLIP_LENGTH_CACHE_MAX) clipLengths.delete(clipLengths.keys().next().value as string)
-  clipLengths.set(url, { sec, at: Date.now() })
-  return sec
-}
-
 /**
- * `prices` with the lengths of the reference clips the estimate can know:
- * every upload wired as a reference clip of a Seedance reference-video node,
- * except those in `replaceable` (an app's or component's media inputs — the
- * app user's file replaces them, so they stay the worst case). Probes run in
- * parallel and are cached per URL.
+ * The upstream nodes wired as reference clips of every Seedance
+ * reference-video node in the graph — what the estimate's pre-pass probes
+ * (`withUploadClipLengths` keeps only the uploads among them).
  */
-export async function withRefVideoClipLengths(
-  prices: ChargedPriceTable,
+export function refVideoClipSources(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-  replaceable?: ReadonlySet<string>,
-): Promise<ChargedPriceTable> {
-  const urls = new Set<string>()
-  for (const node of nodes) {
-    const request = refVideoEstimateRequest(withWiredSettings(node, nodes, edges) as EstimateNode, nodes, edges)
-    for (const source of request?.clipSources ?? []) {
-      const url = source?.id && replaceable?.has(source.id) ? undefined : knownClipUrl(source)
-      if (url) urls.add(url)
-    }
-  }
-  if (urls.size === 0) return prices
-  const lengths = await Promise.all([...urls].map(async (url) => [url, await clipLengthSec(url)] as const))
-  return {
-    base: (identifier) => prices.base(identifier),
-    charge: (identifier, baseCredits) => prices.charge(identifier, baseCredits),
-    editPlanPerMinute: prices.editPlanPerMinute,
-    refVideoClipSec: new Map(lengths),
-  }
+): Array<EstimateNode | undefined> {
+  return nodes.flatMap((node) => refVideoEstimateRequest(withWiredSettings(node, nodes, edges) as EstimateNode, nodes, edges)?.clipSources ?? [])
 }

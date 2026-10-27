@@ -1966,6 +1966,69 @@ describe("the stored face mask", () => {
       // Head named is the same mask as head left out: the same settings key.
       expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(KEY())
     })
+
+    describe("a depth clip (`source`)", () => {
+      const FULL = { mode: "always" as const, source: "full-depth" as const, threshold: 0.4 }
+      const KEEP = { mode: "always" as const, source: "keep-people" as const, fill: "blur" as const }
+      const MAIN = { label: "main" as const, fromFrame: 0, toFrame: 359, leftPct: 10, topPct: 10, rightPct: 50, bottomPct: 90 }
+      const DEPTH = { sourceModes: ["faces", "full-depth", "keep-people"], faceMaskTargets: ["face", "head", "body"], faceMaskMarkLabels: ["erased", "main"], faceMaskErase: true }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      const start = async () => call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+
+      it("is refused, before the engine is asked, on an engine that does not declare the mode", async () => {
+        for (const faceMasking of [FULL, KEEP]) {
+          mem.trends = []
+          seed({}, draftData({ faceMasking }))
+          supports({ ...DEPTH, sourceModes: undefined })
+          const res = await start()
+          expect(res.statusCode).toBe(503)
+          expect(res.json().error.code).toBe("engine_unsupported")
+        }
+        expect(engine.calls).toEqual([])
+      })
+
+      it("full depth asks the engine for the mode alone", async () => {
+        seed({}, draftData({ faceMasking: FULL }))
+        supports(DEPTH)
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: { mode: "always", source: "full-depth" } })
+        expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: FULL })))
+      })
+
+      it("keep people sends its target named, no fill, and its main marks", async () => {
+        seed({}, draftData({ faceMasking: { ...KEEP, marks: [MAIN] } }))
+        supports(DEPTH)
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({
+          videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+          faceMasking: { mode: "always", source: "keep-people", target: "body", zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }, marks: [MAIN] },
+        })
+      })
+
+      it("keep people is refused on an engine without the whole-person target, or without main marks", async () => {
+        seed({}, draftData({ faceMasking: KEEP }))
+        supports({ ...DEPTH, faceMaskTargets: ["face", "head"] })
+        expect((await start()).statusCode).toBe(503)
+        mem.trends = []
+        seed({}, draftData({ faceMasking: { ...KEEP, marks: [MAIN] } }))
+        supports({ ...DEPTH, faceMaskMarkLabels: undefined })
+        const res = await start()
+        expect(res.statusCode).toBe(503)
+        expect(res.json().error.message).toMatch(/main character/)
+        expect(engine.calls).toEqual([])
+      })
+
+      it("a face mask needs none of the new declarations", async () => {
+        seed({}, draftData({ faceMasking: { ...MASKING, source: "faces" } }))
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone(MASKING) })
+        expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(KEY())
+      })
+    })
   })
 
   describe("approving one", () => {
@@ -2031,6 +2094,54 @@ describe("the stored face mask", () => {
     it("a pending job made from older settings reads as not current", async () => {
       seed({}, making({ faceMasking: { ...MASKING, threshold: 0.6 } }))
       expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskJob).toMatchObject({ jobId: FACE_MASK_JOB, current: false })
+    })
+
+    describe("a depth clip", () => {
+      const FULL = { mode: "always" as const, source: "full-depth" as const }
+      const FKEY = () => faceMaskSettingsKey(draftData({ faceMasking: FULL }))!
+      const DEPTH = { ...FM_SUPPORTS, sourceModes: ["faces", "full-depth", "keep-people"] as Array<"faces" | "full-depth" | "keep-people"> }
+      beforeEach(() => {
+        setPluginSupports({ castSwap: { ...DEPTH, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+        world.envs = [envRow("production", DEPTH), envRow("staging", DEPTH)]
+      })
+      /** A full-depth make, as the engine completes it: no Video Mask step (`core: null`), no raw mask kept. */
+      const fullDepthJob = (input: Record<string, unknown> = {}) =>
+        fmJob({}, { faceMasking: FULL, ...input }, { recipe: { core: null, plugin: "1" }, stats: { coverage: 1 }, baseStats: { coverage: 1 }, maskUrl: "https://out.example/raw.mp4" })
+
+      it("a full-depth clip with no Video Mask recipe approves, and reads as up to date", async () => {
+        seed({}, draftData({ faceMasking: FULL, faceMaskJob: pendingJob({ settingsKey: FKEY() }) }))
+        world.jobs.set(FACE_MASK_JOB, fullDepthJob())
+        const res = await approve()
+        expect(res.statusCode).toBe(200)
+        const stored = mem.trends[0]!.versions[1]!.data.faceMask!
+        expect(stored.recipe).toEqual({ core: null, plugin: "1" })
+        // Always made whole: no raw mask is kept to start a later make from.
+        expect(stored).not.toHaveProperty("rawMaskUrl")
+        expect(stored).not.toHaveProperty("baseKey")
+        expect(res.json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
+      })
+
+      it("a make the engine recorded in another clip preparation is refused (an older engine stripped `source`)", async () => {
+        seed({}, draftData({ faceMasking: FULL, faceMaskJob: pendingJob({ settingsKey: FKEY() }) }))
+        world.jobs.set(FACE_MASK_JOB, fullDepthJob({ faceMasking: { mode: "always" } }))
+        const res = await approve()
+        expect(res.statusCode).toBe(409)
+        expect(res.json().error.code).toBe("face_mask_source_mismatch")
+        expect(mem.uploads).toEqual([])
+
+        // And the other way: a face mask trend sent a depth clip.
+        mem.trends = []
+        seed({}, making())
+        world.jobs.set(FACE_MASK_JOB, fmJob({}, { faceMasking: { ...withResolvedZone(MASKING), source: "keep-people" } }))
+        expect((await approve()).json().error.code).toBe("face_mask_source_mismatch")
+        expect(mem.trends[0]!.versions[1]!.data.faceMask).toBeUndefined()
+      })
+
+      it("a face mask that recorded `source: \"faces\"` is the trend's own", async () => {
+        seed({}, making())
+        world.jobs.set(FACE_MASK_JOB, fmJob({}, { faceMasking: { ...withResolvedZone(MASKING), source: "faces" } }))
+        expect((await approve()).statusCode).toBe(200)
+      })
     })
   })
 

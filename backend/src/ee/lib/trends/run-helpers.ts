@@ -30,6 +30,7 @@ import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { faceMaskTargetsOf, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError } from "./store.js"
+import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
@@ -373,7 +374,7 @@ export async function toTrendRuns(
  * Whether the loaded Cast Swap engine can run this: it declares trend runs,
  * every slot kind the trend uses, fixed references when the trend has some,
  * face masking when the trend masks (and what its masks cover,
- * `faceMaskTargets`), a trend pre prompt when it has one, the trend's video
+ * `faceMaskTargets`, and a depth mode, `sourceModes`), a trend pre prompt when it has one, the trend's video
  * engine, and the requested resolution.
  */
 export function engineSupports(composed: ComposedTrendRun): boolean {
@@ -385,6 +386,9 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   if (composed.needs.faceMasking && cs.faceMasking !== true) return false
   // An engine that does not declare the target strips it and masks heads: never send it a face-only trend.
   if (composed.needs.faceMaskTarget && !faceMaskTargetsOf(cs).includes(composed.needs.faceMaskTarget)) return false
+  // A depth mode the engine does not declare: it would strip `source` and mask faces instead.
+  const source = composed.needs.faceMaskSource
+  if (source && source !== "faces" && !(cs.sourceModes ?? []).includes(source)) return false
   if (composed.needs.trendPrePrompt && cs.trendPrePrompt !== true) return false
   // A trend with marks runs on its stored mask only, never masked per run: the engine must take it
   // (`withoutUnsupportedStoredMask` would strip it) and honour `required` (an older one strips that too).
@@ -403,6 +407,44 @@ export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
   if (composed.body.storedFaceMask && getPluginSupports().castSwap?.storedFaceMask !== true) {
     delete composed.body.storedFaceMask
   }
+}
+
+/**
+ * The body without `promptParts` when the loaded engine does not declare it
+ * takes them (`castSwap.promptParts`): such an engine would refuse a field it
+ * does not know, so the run is sent its defaults. Publishing holds a trend
+ * with overrides back from such an environment (`prompt_parts_unsupported`),
+ * so only a draft's test run (or a published one, mid-deploy) gets here.
+ * Mutates `composed.body`.
+ */
+export function withoutUnsupportedPromptParts(composed: ComposedTrendRun): void {
+  if (composed.body.promptParts && getPluginSupports().castSwap?.promptParts !== true) {
+    delete composed.body.promptParts
+  }
+}
+
+/**
+ * The body without `promptStyle` when the loaded engine does not declare that
+ * style (`castSwap.promptStyles`), and without full depth's
+ * `faceMasking.scene` when it does not declare that scene
+ * (`castSwap.fullDepthScenes`): such an engine picks the prompt from the clip
+ * preparation and always sends the original, so it gets exactly the body it
+ * got before either existed. Publishing holds back a trend such an engine
+ * would run otherwise than it says (prompt-style.ts). Mutates `composed.body`
+ * (its `faceMasking` is its own copy, from `composeTrendRun`).
+ */
+export function withoutUnsupportedPromptStyle(composed: ComposedTrendRun): void {
+  const cs = getPluginSupports().castSwap
+  const { body } = composed
+  if (body.promptStyle && !engineTakesPromptStyle(cs, body.promptStyle)) delete body.promptStyle
+  if (body.faceMasking?.scene && !engineTakesScene(cs, body.faceMasking.scene)) delete body.faceMasking.scene
+}
+
+/** Every field the loaded engine does not take, dropped (the stored mask, the prompt parts, the prompt style and scene): the estimate, the run and the admin test run alike. */
+export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
+  withoutUnsupportedStoredMask(composed)
+  withoutUnsupportedPromptParts(composed)
+  withoutUnsupportedPromptStyle(composed)
 }
 
 /**

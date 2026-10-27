@@ -31,6 +31,8 @@
  *   DELETE /v1/admin/trends/:id/upscale/:jobId       discard an upscale in the making
  *   POST   /v1/admin/trends/:id/crop                 crop the source to 16:9 / 9:16 (admin-trends-crop.ts, in the background) → 202
  *   DELETE /v1/admin/trends/:id/crop                 dismiss a failed source crop
+ *   GET    /v1/admin/trends/:id/prompt-parts         the engine's prompt parts for the draft (admin-trends-prompt-parts.ts)
+ *   PUT    /v1/admin/trends/:id/prompt-parts         save the draft's overrides, checked by the engine first
  *
  * Replies use the platform's `{ data }` envelope; errors `{ error: { code, message, … } }`.
  *
@@ -81,6 +83,8 @@ import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { TREND_SOURCE_SECONDS, TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
 import { publishBlockers } from "../lib/trends/publish-check.js"
+import { trendPromptPartProblems } from "../lib/trends/prompt-parts-check.js"
+import { replyPromptPartsFailure } from "../lib/cast-swap-prompt-parts.js"
 import { allTagUsage, readTagLabels, saveTagLabels, type TagLabels } from "../lib/trends/tags.js"
 import {
   RUN_JOB_COLS,
@@ -88,7 +92,7 @@ import {
   engineRequest,
   engineSupports,
   followPreviewMasking,
-  withoutUnsupportedStoredMask,
+  withoutUnsupportedFields,
   isRec,
   jobIdOf,
   listedRunsPage,
@@ -108,6 +112,8 @@ import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
 import { registerTrendPromptRoutes } from "./admin-trends-prompt.js"
 import { registerTrendCropRoutes } from "./admin-trends-crop.js"
+import { registerTrendPromptPartRoutes } from "./admin-trends-prompt-parts.js"
+import { withServerOwnedFields } from "../lib/trends/server-owned.js"
 import { pendingSourceCrop } from "../lib/trends/crop.js"
 import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
 
@@ -527,21 +533,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const loaded = await loadDraft(req, reply)
       if (!loaded) return reply
       if (loaded.revision !== body.data.revision) return draftConflict(reply)
-      // Examples are written only by the example routes, the face mask only
-      // by the face mask routes, the upscales in the making only by the
-      // upscale routes and the source crop only by the crop routes: the
-      // body's are ignored, and the row's own (at the revision the client
-      // read) are kept.
-      const { faceMask: _mask, faceMaskJob: _job, upscaleJobs: _upscales, sourceCrop: _crop, ...edited } = keepDisplayCopy(body.data.data, loaded.draft)
-      const { faceMask, faceMaskJob, upscaleJobs, sourceCrop } = loaded.draft
-      const merged = {
-        ...edited,
-        examples: loaded.draft.examples,
-        ...(faceMask ? { faceMask } : {}),
-        ...(faceMaskJob ? { faceMaskJob } : {}),
-        ...(upscaleJobs ? { upscaleJobs } : {}),
-        ...(sourceCrop ? { sourceCrop } : {}),
-      } as unknown as TrendVersionData
+      // The examples, face mask, upscales, source crop and prompt parts are each written only by their
+      // own routes: the body's are ignored, and the row's own (at the revision the client read) are kept.
+      const merged = withServerOwnedFields(keepDisplayCopy(body.data.data, loaded.draft), loaded.draft)
       // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
       const { data, cleared, abandoned } = withMarksForSource(merged, loaded.draft)
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
@@ -619,7 +613,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         previewJobId: parsed.data.previewJobId,
         log: req.log,
       })
-      withoutUnsupportedStoredMask(composed)
+      withoutUnsupportedFields(composed)
 
       const key = req.headers["idempotency-key"]
       const res = await engineRequest(
@@ -785,7 +779,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       if (body.data?.revision !== undefined && body.data.revision !== revision) return draftConflict(reply)
       // An outage reading the environments is a 500, never "unknown engine".
       const environments = await listEngineEnvironments()
-      const reasons = publishBlockers(draft, environments, TREND_PUBLISH_ENVIRONMENTS)
+      // The engine prompt changes, checked by this environment's engine against the draft as it is now.
+      const parts = await trendPromptPartProblems(app, req, draft)
+      if (parts && "failure" in parts) return replyPromptPartsFailure(reply, parts.failure)
+      const reasons = publishBlockers(draft, environments, TREND_PUBLISH_ENVIRONMENTS, parts?.problems)
       if (reasons.length > 0) {
         return err(reply, 409, "publish_blocked", "This trend cannot be published yet.", { reasons })
       }
@@ -817,4 +814,5 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendCropRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
+  registerTrendPromptPartRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

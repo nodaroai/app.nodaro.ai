@@ -3329,6 +3329,21 @@ export interface PluginCapabilities {
    * member: a plugin derives the hold itself.
    */
   readonly seedanceRefVideoQuote?: boolean
+  /**
+   * `tk.settings.nodaroMotionPromptParts()` exists: the prompt part overrides
+   * an admin set per Nodaro Motion engine and style, for every DIRECT Cast
+   * Swap run. An older host has no such member: a plugin reads that as never
+   * saved (the defaults).
+   */
+  readonly nodaroMotionPromptParts?: boolean
+  /**
+   * `tk.settings.nodaroMotionMotion()` exists: the setting an admin chose per
+   * Nodaro Motion engine for DIRECT runs with `style: "motion"` (its masking,
+   * which may be full depth, and its prompt style). An older host has no such
+   * member: a plugin reads that as never saved (the Precise masking with the
+   * Flexible prompt).
+   */
+  readonly nodaroMotionMotion?: boolean
 }
 
 /**
@@ -3339,7 +3354,16 @@ export interface PluginCapabilities {
  */
 export interface PluginFaceMasking {
   mode: "off" | "always" | "auto"
-  target?: "face" | "head"
+  /** A trend's clip preparation; a direct run's setting is always faces (absent or `"faces"`). */
+  source?: "faces" | "full-depth" | "keep-people"
+  /**
+   * Full depth only: where the run's scene comes from — `"description"` (the
+   * default: the engine describes the clip per run into the `scene` prompt
+   * part), `"original"` (the original clip as a second video; clips up to
+   * 27.9 s; a trend publishes with up to 27.5 s) or `"none"` (depth only). A trend run sends it resolved.
+   */
+  scene?: "description" | "original" | "none"
+  target?: "face" | "head" | "body"
   fill?: "blur" | "depth"
   minFaceHeightPct?: number
   maxFaceHeightPct?: number
@@ -3363,6 +3387,61 @@ export type PluginNodaroMotionMasking = Partial<
   Record<"motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite", PluginFaceMasking>
 >
 
+/** A Cast Swap prompt part's id (`@nodaro/render-rules` `CAST_SWAP_PROMPT_PART_IDS`; a mirror, pinned by a type test). */
+export type PluginPromptPartId =
+  | "opener"
+  | "original"
+  | "scene"
+  | "quality"
+  | "keep"
+  | "audio"
+  | "face"
+  | "depthGuard"
+  | "person"
+  | "pet"
+  | "product"
+  | "location"
+  | "avoid"
+  | "postHeader"
+
+/**
+ * Nodaro Motion's prompt part overrides per engine and style, keyed by the
+ * PUBLIC engine ids, each style's entry the override text per part
+ * (1–2000 characters; `"-"` removes the part). An engine or style left out
+ * uses the engine's defaults.
+ *
+ * TRANSITION SHIM (as `PluginNodaroMotionMasking`): every entry is answered
+ * under BOTH its current key and its earlier one (`"motion-pro"` beside
+ * `"motion-prism"`, `"motion-lite"` beside `"motion-pulse"`, the same value).
+ */
+export type NodaroMotionPromptParts = {
+  readonly [publicEngineId: string]: {
+    readonly precise?: Partial<Record<PluginPromptPartId, string>>
+    readonly motion?: Partial<Record<PluginPromptPartId, string>>
+  }
+}
+
+/**
+ * A direct Motion run's setting for one Nodaro Motion engine: its masking (a
+ * face mask, or full depth with its `scene`; never keep people) and its prompt
+ * style. `masking` left out = the engine's Precise masking
+ * (`nodaroMotionMasking`); `promptStyle` left out = `"flexible"`.
+ */
+export interface NodaroMotionMotionEntry {
+  readonly masking?: PluginFaceMasking & { readonly source?: "faces" | "full-depth" }
+  readonly promptStyle?: "precise" | "flexible"
+}
+
+/**
+ * Nodaro Motion's Motion setting per engine, keyed by the PUBLIC engine ids.
+ * An engine left out runs Motion on its Precise masking with the Flexible
+ * prompt. TRANSITION SHIM (as `PluginNodaroMotionMasking`): every entry is
+ * answered under BOTH its current key and its earlier one.
+ */
+export type NodaroMotionMotion = {
+  readonly [publicEngineId: string]: NodaroMotionMotionEntry
+}
+
 /**
  * Deployment-wide settings a plugin feature reads (host → plugin), each a
  * short in-process cached read of an `app_settings` row (about 60 s, cleared
@@ -3378,6 +3457,23 @@ export interface PluginSettingsToolkit {
    * "never saved".
    */
   nodaroMotionMasking?(): Promise<PluginNodaroMotionMasking | null>
+  /**
+   * The admin's prompt part overrides per Nodaro Motion engine and style, for
+   * direct runs (a trend run sends its own trend's): each engine's entry
+   * validated by the host (an invalid one is dropped and logged), or null
+   * when it was never saved (then every run uses the defaults). Returns a copy
+   * the plugin may change freely. REJECTS when the settings could not be
+   * read. Advertised as `capabilities.nodaroMotionPromptParts`.
+   */
+  nodaroMotionPromptParts?(): Promise<NodaroMotionPromptParts | null>
+  /**
+   * The admin's Motion setting per Nodaro Motion engine, for direct runs with
+   * `style: "motion"`: each engine's entry validated by the host (an invalid
+   * one is dropped and logged), or null when it was never saved. Returns a
+   * copy the plugin may change freely. REJECTS when the settings could not
+   * be read. Advertised as `capabilities.nodaroMotionMotion`.
+   */
+  nodaroMotionMotion?(): Promise<NodaroMotionMotion | null>
 }
 
 /**
@@ -3468,7 +3564,8 @@ export interface PluginSupports {
    *   Additive-optional: read only with `storedFaceMask`.
    * - `faceMaskTargets`: what a run's (and a stored face mask's)
    *   `faceMasking.target` may name: `"head"` (the whole head, hair and people
-   *   seen from behind included) and/or `"face"` (the face only).
+   *   seen from behind included), `"face"` (the face only) and/or `"body"`
+   *   (the whole person — a keep-people trend clip only).
    *   Additive-optional: absent ⇒ `["head"]`, what every 0.392.0 engine does
    *   (it strips a `target` it does not know), so a trend that masks `"face"`
    *   is held back from publishing and running there (`faceMaskTargetsOf`).
@@ -3483,6 +3580,37 @@ export interface PluginSupports {
    *   `required: true`, and with it the engine fails the run rather than
    *   masking per run (a trend with marks). Additive-optional: absent ⇒ an
    *   engine that strips `required`, so a trend with marks is not run there.
+   * - `sourceModes`: the clip preparations a trend's `faceMasking.source` may
+   *   name — `"faces"` (the face mask), `"full-depth"` and `"keep-people"`.
+   *   Additive-optional: absent ⇒ faces only, so a depth-mode trend is held
+   *   back from publishing and running there (a trend that masks faces never
+   *   needs it).
+   * - `faceMaskMarkLabels`: the mark labels a stored clip's make takes —
+   *   `"erased"`, and `"main"` (keep people's main character).
+   *   Additive-optional: absent ⇒ `["erased"]`.
+   * - `promptParts`: the engine answers the internal-only
+   *   `POST /v1/cast-swap/prompt-parts` (each prompt part's default, the
+   *   assembled prompt and the problems of a set of overrides), and a trend
+   *   run takes `promptParts` (an admin's override text per part).
+   *   Additive-optional: absent ⇒ `false` (the prompt editors say the engine
+   *   is out of date, a trend with overrides is held back from publishing, and
+   *   a run is sent without them).
+   * - `styles`: what a direct run's `style` may name (`"precise"`, `"motion"`).
+   *   Additive-optional: absent ⇒ precise only.
+   * - `generateVideoChildren`: the engine's video steps run on
+   *   `/v1/generate-video`. Additive-optional, informational.
+   * - `promptStyles`: what a trend run's `promptStyle` may name
+   *   (`"precise"`, `"flexible"`), and the prompt-parts route takes
+   *   `promptStyle` too. Additive-optional: absent ⇒ an engine that picks the
+   *   prompt from the clip preparation (faces and keep people Precise, full
+   *   depth Flexible), so a trend that names another style is held back from
+   *   publishing and is sent without the key.
+   * - `fullDepthScenes`: what a full-depth `faceMasking.scene` may name
+   *   (`"description"`, `"original"`, `"none"`), and the prompt-parts route
+   *   takes `scene` too. Additive-optional: absent ⇒ `["original"]` (an engine
+   *   that always sends the original as the second video), so a full-depth
+   *   trend whose scene is another one is held back from publishing and is
+   *   sent without the key.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3499,9 +3627,16 @@ export interface PluginSupports {
     readonly engineAliases?: boolean
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string
-    readonly faceMaskTargets?: readonly ("face" | "head")[]
+    readonly faceMaskTargets?: readonly ("face" | "head" | "body")[]
     readonly faceMaskErase?: boolean
     readonly storedFaceMaskRequired?: boolean
+    readonly sourceModes?: readonly ("faces" | "full-depth" | "keep-people")[]
+    readonly faceMaskMarkLabels?: readonly ("erased" | "main")[]
+    readonly promptParts?: boolean
+    readonly styles?: readonly ("precise" | "motion")[]
+    readonly generateVideoChildren?: boolean
+    readonly promptStyles?: readonly ("precise" | "flexible")[]
+    readonly fullDepthScenes?: readonly ("description" | "original" | "none")[]
   }
 }
 

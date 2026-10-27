@@ -48,7 +48,11 @@
 //   is full of commits the world already read on public/dev, and re-flagging
 //   them would abort the mirror with no fix left.
 //   (no argument: `origin/$GITHUB_BASE_REF..HEAD` in CI, else `origin/dev..HEAD`)
-//   PR_TITLE, when set, is read as one more message.
+//   PR_TITLE, when set, is read as one more message, and so is PR_BODY (the
+//   PR description). The description never enters git (the squash commit takes
+//   the commit messages, the release merge takes the title), but it is what
+//   the what's-new and social posts are written from, so it is held to the
+//   same lists. Editing either clears its finding; no pin can name them.
 
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -63,6 +67,8 @@ const MAX_COMMITS = 2000
 export const MESSAGE = ":message"
 /** The `sha` of a finding in the PR title, which no pin can name. */
 export const PR_TITLE_SHA = "PR-title"
+/** The `sha` of a finding in the PR description, which no pin can name either. */
+export const PR_BODY_SHA = "PR-description"
 /** Never tracked in this repo; scripts/check-internal-docs.sh holds the same list. */
 export const INTERNAL_DOC_DIRS = ["specs/", "docs/superpowers/"]
 export const CHECKS = ["surface", "internal-docs", "markers", "symbols", "secrets"]
@@ -279,13 +285,16 @@ export const pinKey = (v) => `${v.sha} ${v.ruleId} ${v.file}`
 
 /**
  * @param {string | string[]} revs  one range, or full rev-list arguments
- * @param {ScanOptions & {title?: string, gitleaks?: string}} [options]
+ * @param {ScanOptions & {title?: string, body?: string, gitleaks?: string}} [options]
  * @returns {HistoryViolation[]}  unpinned findings only
  */
 export function scanRange(revs, cwd, options = {}) {
   const checks = new Set(options.checks ?? ["surface", "internal-docs"])
   const commits = readCommits(revs, cwd)
   if (options.title) commits.push({ sha: PR_TITLE_SHA, subject: options.title, message: options.title, patch: "" })
+  // GitHub stores a description typed in the browser with CRLF line ends.
+  const body = options.body?.replace(/\r\n?/g, "\n").trim()
+  if (body) commits.push({ sha: PR_BODY_SHA, subject: body.split("\n")[0], message: body, patch: "" })
   const violations = findHistoryViolations(commits, options)
   if (checks.has("secrets")) {
     violations.push(...findMessageSecrets(commits, { gitleaks: options.gitleaks, config: join(cwd, ".gitleaks.toml") }))
@@ -368,10 +377,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const selection = revs.join(" ")
   const title = process.env.PR_TITLE?.trim() || undefined
-  const violations = scanRange(revs, process.cwd(), { ...options, title })
+  const body = process.env.PR_BODY?.trim() || undefined
+  const violations = scanRange(revs, process.cwd(), { ...options, title, body })
   const ran = [...options.checks].join(", ")
+  const pr = [title && "title", body && "description"].filter(Boolean).join(" and ")
+  const plus = pr ? ` + the PR ${pr}` : ""
   if (violations.length > 0) {
-    console.error(`History check FAILED — ${violations.length} never-public finding(s) in ${selection}${title ? " + the PR title" : ""}:\n`)
+    console.error(`History check FAILED — ${violations.length} never-public finding(s) in ${selection}${plus}:\n`)
     const byRule = new Map()
     for (const v of violations) {
       if (!byRule.has(v.ruleId)) byRule.set(v.ruleId, [])
@@ -388,10 +400,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error("Scrubbing the tip is not enough: the mirror publishes these COMMITS, their")
     console.error("messages included, where `git log -p` reads them and history can never be")
     console.error("re-scrubbed. Before merge: rewrite the branch so no commit ever carried it")
-    console.error("(rebase + amend or reword, then force-with-lease the feature branch; edit the")
-    console.error("PR title). Already merged: decide it may go public, then pin each line above")
-    console.error(`in ${PINS_FILE} as \`<full sha> <rule> <file>\` on a reviewed PR.`)
+    console.error("(rebase + amend or reword, then force-with-lease the feature branch). A")
+    console.error(`${PR_TITLE_SHA} or ${PR_BODY_SHA} finding needs only an edit of the PR title or`)
+    console.error("description; the edit re-runs this check. Already merged: decide it may go")
+    console.error(`public, then pin each line above in ${PINS_FILE} as \`<full sha> <rule> <file>\``)
+    console.error("on a reviewed PR.")
     process.exit(1)
   }
-  console.log(`History check passed — ${ran} (${RULES.length} surface categories) over ${selection}${title ? " + the PR title" : ""}`)
+  console.log(`History check passed — ${ran} (${RULES.length} surface categories) over ${selection}${plus}`)
 }

@@ -80,6 +80,16 @@ export type CastSwapEngine = "motion-prism" | "motion-pulse"
 export type CastSwapEngineLegacyId = "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4"
 
 /**
+ * How a run follows its clip. Left out = `"precise"`.
+ *
+ * - `"precise"`: follows the clip exactly.
+ * - `"motion"`: follows the clip's movement and takes the looks from your
+ *   photos, more freely than `"precise"`. Its price may differ from
+ *   `"precise"`'s: the estimate shows the exact price.
+ */
+export type CastSwapStyle = "precise" | "motion"
+
+/**
  * Where a Nodaro Motion Pulse run cuts the clip to whole seconds (Pulse renders
  * whole seconds; asked for more than the clip, it would stretch the motion):
  * - `"cut-end"` (the default): drop the fraction of a second at its end;
@@ -250,6 +260,11 @@ export interface CastSwapParams {
    * are still accepted.
    */
   engine?: CastSwapEngine | CastSwapEngineLegacyId
+  /**
+   * How the run follows the clip (see {@link CastSwapStyle}). Default
+   * `"precise"`; the job records it in `input_data.style`.
+   */
+  style?: CastSwapStyle
   /**
    * Nodaro Motion Pulse only (Prism ignores it): which end of the clip is cut to
    * whole seconds (see {@link CastSwapMotionLength}). Default `"cut-end"`.

@@ -29,7 +29,7 @@ Video Depth Anything accepts up to **2,400 frames** (≈80 s at 30 fps, 100 s at
 
 ## Credit Cost
 
-Billed by the input clip's length, rounded up to the next tier. The clip is measured before the run; the chip on the node updates once a video with a known length is connected.
+Billed by the input clip's length, rounded up to the next tier. The clip is measured before the run; the chip on the node shows the highest tier until a video with a known length is connected.
 
 | Provider | 15s | 30s | 1min | 2min | 5min |
 |----------|----:|----:|-----:|-----:|-----:|
@@ -40,7 +40,7 @@ Depth Anything (per frame) accepts clips up to 80 seconds, so its 2-minute tier 
 
 Worked examples: a 5 s clip → 15s tier; 15 s → 15s tier; 15.01 s → 30s tier; 61 s → 2min tier.
 
-The clip is always measured before the run. A clip that cannot be read is refused (`video_unreadable`) before any credits are reserved — the run is never priced at a guessed length. Until a connected video's length is known, the editor shows the 15s tier.
+The clip is always measured before the run. A clip that cannot be read is refused (`video_unreadable`) before any credits are reserved — the run is never priced at a guessed length. The editor reads a connected video's length from the clip itself, so the node and the run estimate show that clip's tier. The server's workflow estimates (`POST /v1/credits/estimate-workflow` and a published app's listed price) read an uploaded clip's length from the file too, unless the app's user replaces that upload. Until the length is known — nothing connected, the clip not read yet, or a clip that cannot be read — the node and the estimates show the highest tier, the most a run can cost; the run itself is always charged the measured clip's tier.
 
 ## Tips
 

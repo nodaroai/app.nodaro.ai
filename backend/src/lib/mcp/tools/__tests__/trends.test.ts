@@ -324,6 +324,15 @@ describe("estimate_trend", () => {
     expect(run.structuredContent).toMatchObject({ privacyCredits: 6, confirmed: false })
   })
 
+  it.each([503, 409])("a %i trend_unavailable is told as a trend that cannot run", async (statusCode) => {
+    const { fastify } = stubFastify({
+      "POST /v1/trends/dance-off/estimate": { statusCode, body: { error: { code: "trend_unavailable", message: "x" } } },
+    })
+    const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {} })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toBe("Nodaro: this trend cannot run right now. [trend_unavailable]")
+  })
+
   it("takes any id the route takes as a uuid (no version or variant check)", async () => {
     const LOOSE = "11111111-1111-1111-1111-111111111111"
     const { fastify, calls } = stubFastify({ "POST /v1/trends/dance-off/estimate": { statusCode: 200, body: QUOTE } })

@@ -44,6 +44,7 @@ import {
   useReorderExamples,
   useSaveTrendDraft,
   useUnpublishTrend,
+  useEngineEnvironments,
 } from "@/ee/hooks/queries/use-admin-queries"
 import {
   MAX_PRE_PROMPT,
@@ -62,6 +63,10 @@ import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
 import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
+import { ClipPreparationSelect } from "../components/ClipPreparationSelect"
+import { EnginePromptParts } from "../components/EnginePromptParts"
+import { PromptStyleSelect } from "../components/PromptStyleSelect"
+import { clipPreparationOf, withClipPreparation } from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
@@ -103,6 +108,7 @@ export default function AdminTrendEditorPage() {
   const removeExample = useRemoveExample(id)
   const publish = usePublishTrend(id)
   const unpublish = useUnpublishTrend(id)
+  const envs = useEngineEnvironments()
 
   const [form, setForm] = useState<TrendForm | null>(null)
   const [baseline, setBaseline] = useState("")
@@ -111,6 +117,8 @@ export default function AdminTrendEditorPage() {
   const [blockers, setBlockers] = useState<TrendPublishBlocker[] | null>(null)
   /** The face mask's marks were cleared by the last save (a new source clip) or by a crop. */
   const [marksCleared, setMarksCleared] = useState(false)
+  /** Main character boxes the last change of clip preparation removed (only Keep people takes them). */
+  const [mainRemoved, setMainRemoved] = useState(0)
   /** The form's state as of the latest render, for replies that land after more edits. */
   const latest = useRef({ baseline: "", dirty: false })
   const promptRoomId = useId()
@@ -260,6 +268,16 @@ export default function AdminTrendEditorPage() {
         ? "The source clip was upscaled while you edited; saving will reload the draft."
         : "This draft was also changed elsewhere; saving will reload it.",
     )
+  }
+
+  // How the clip is prepared (the form's), the saved draft's, and the targets some environment's engine declares.
+  const preparation = clipPreparationOf(form.faceMasking)
+  const savedPreparation = clipPreparationOf(server.draft.faceMasking)
+  const supportedTargets = envs.data ? [...new Set(envs.data.flatMap((e) => e.supports.castSwap?.faceMaskTargets ?? ["head" as const]))] : undefined
+  const onClipPreparation = (next: typeof preparation) => {
+    const { masking, removedMain } = withClipPreparation(form.faceMasking, next)
+    set({ faceMasking: masking })
+    setMainRemoved(removedMain)
   }
 
   // The 4 s preview's own prompt parts are edited only while the trend offers a preview (kept when it stops).
@@ -447,6 +465,8 @@ export default function AdminTrendEditorPage() {
             )}
             <PromptRoom id={promptRoomId} room={promptBudget(form).room} />
             {hasPreview && <PromptRoom id={previewRoomId} room={previewBudget.room} preview />}
+            <PromptStyleSelect value={form.promptStyle} faceMasking={form.faceMasking} envs={envs.data} onChange={(promptStyle) => set({ promptStyle })} />
+            <EnginePromptParts trendId={id} revision={revision} dirty={dirty} onRevision={setRevision} onWriteError={onWriteError} />
           </Section>
           <Section title="5. Model" description="The video model every run uses. People running the trend never choose it.">
             <EngineEditor
@@ -457,7 +477,21 @@ export default function AdminTrendEditorPage() {
             />
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
-            <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
+            <ClipPreparationSelect value={preparation} onChange={onClipPreparation} envs={envs.data} />
+            {mainRemoved > 0 && (
+              <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                {mainRemoved} main character box{mainRemoved === 1 ? " was" : "es were"} removed: only Keep people takes them. Leave without saving to keep{" "}
+                {mainRemoved === 1 ? "it" : "them"}.
+              </p>
+            )}
+            <FaceMaskingEditor
+              value={form.faceMasking}
+              source={preparation}
+              supportedTargets={supportedTargets}
+              clipSec={form.source?.durationSec}
+              envs={envs.data}
+              onChange={(faceMasking) => set({ faceMasking })}
+            />
             {marksCleared && (
               <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
                 {MARKS_CLEARED}.
@@ -476,11 +510,18 @@ export default function AdminTrendEditorPage() {
                 onReload={() => void reload()}
                 onWriteError={onWriteError}
                 marks={server.draft.faceMasking?.marks}
-                onSaveMarks={onSaveMarks}
+                // Full depth finds no one: nothing to mark.
+                onSaveMarks={savedPreparation === "full-depth" ? undefined : onSaveMarks}
                 marksSupported={server.faceMaskMarksSupported === true}
-                people={server.draft.slots
-                  .filter((slot) => slot.kind === "person" && !slot.required)
-                  .map((slot) => ({ key: slot.key, label: slot.label.en || slot.key }))}
+                // Person masks are a face mask's alone: in a depth mode a box is never one person's.
+                people={
+                  savedPreparation === "faces"
+                    ? server.draft.slots
+                        .filter((slot) => slot.kind === "person" && !slot.required)
+                        .map((slot) => ({ key: slot.key, label: slot.label.en || slot.key }))
+                    : []
+                }
+                keepPeople={savedPreparation === "keep-people"}
                 hasExamples={server.draft.examples.length > 0}
               />
             )}

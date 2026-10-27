@@ -11,6 +11,8 @@
  *   (shown, with Dismiss and Crop again).
  * - It waits while the form has unsaved edits, and warns that the face mask
  *   must be made again.
+ * - The preview plays and scrubs to any moment, the crop drawn over it, so the
+ *   kept frame is checked across the whole clip.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
@@ -77,6 +79,34 @@ describe("which crop a source clip is offered", () => {
   })
 })
 
+describe("checking the crop across the clip", () => {
+  it("scrubs the preview to any moment (pausing it) and plays it, the readout following", async () => {
+    serve(wide())
+    renderEditor()
+    const panel = await screen.findByRole("group", { name: "Crop the source clip" })
+    const video = within(panel).getByLabelText("The source clip") as HTMLVideoElement
+    const scrub = within(panel).getByRole("slider", { name: "Moment in the source clip" })
+    expect(scrub).toBeDisabled()
+
+    Object.defineProperty(video, "duration", { configurable: true, value: 12 })
+    const pause = vi.spyOn(video, "pause").mockImplementation(() => {})
+    fireEvent.loadedMetadata(video)
+    expect(scrub).toBeEnabled()
+    expect(within(panel).getByTestId("crop-time")).toHaveTextContent("0:00.0 / 0:12.0")
+
+    fireEvent.change(scrub, { target: { value: "7.5" } })
+    expect(video.currentTime).toBe(7.5)
+    expect(pause).toHaveBeenCalled()
+    expect(within(panel).getByTestId("crop-time")).toHaveTextContent("0:07.5 / 0:12.0")
+
+    const play = vi.spyOn(video, "play").mockResolvedValue(undefined)
+    fireEvent.click(within(panel).getByRole("button", { name: "Play" }))
+    expect(play).toHaveBeenCalled()
+    fireEvent.play(video)
+    expect(within(panel).getByRole("button", { name: "Pause" })).toBeInTheDocument()
+  })
+})
+
 describe("cropping", { timeout: 20_000 }, () => {
   it("shows the split (centered by default), sends the position, runs on the server and takes the cropped clip when done", async () => {
     const user = userEvent.setup()
@@ -91,7 +121,7 @@ describe("cropping", { timeout: 20_000 }, () => {
     expect(within(panel).getByTestId("crop-split")).toHaveTextContent("Cuts 324 px from the left (50 %) and 324 px from the right (50 %)")
 
     // The slider: ArrowLeft ×30 from 50 → 20.
-    const thumb = within(panel).getByRole("slider")
+    const thumb = within(panel).getByRole("slider", { name: /where the kept frame sits/i })
     thumb.focus()
     for (let i = 0; i < 30; i++) fireEvent.keyDown(thumb, { key: "ArrowLeft" })
     await waitFor(() => expect(within(panel).getByTestId("crop-split")).toHaveTextContent("Cuts 128 px from the left (20 %) and 520 px from the right (80 %)"))

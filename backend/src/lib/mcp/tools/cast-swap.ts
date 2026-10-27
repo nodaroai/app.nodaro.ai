@@ -43,6 +43,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
+  CAST_SWAP_STYLES,
   NODARO_MOTION_ENGINES,
   castSwapEngineFrom,
   nodaroMotionEngineName,
@@ -193,6 +194,10 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         engine: castSwapEngineArg
           .optional()
           .describe('Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take.'),
+        style: z
+          .enum(CAST_SWAP_STYLES)
+          .optional()
+          .describe('"precise" (default) follows the clip exactly; "motion" follows the clip\'s movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()
@@ -240,6 +245,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
         ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
         ...(engine !== undefined ? { engine } : {}),
+        ...(args.style !== undefined ? { style: args.style } : {}),
         // Under the key this environment's engine takes (`motionLength`, else the old `klingLength`).
         ...(length !== undefined ? { [castSwapLengthKey()]: length } : {}),
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),

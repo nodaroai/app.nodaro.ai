@@ -22,6 +22,19 @@
  * absent, `__faceMasking` (a trend run's saved `input_data`, which the row
  * readers — `lib/execution-budget.ts`, `cancel-inflight-jobs.ts` — pass in).
  *
+ * A run that may be a depth reference — a direct Motion run (`style:
+ * "motion"`) or a trend run whose clip is prepared as full depth
+ * (`faceMasking.source: "full-depth"`, read like the mode) — takes the "auto"
+ * bound: the SAFE UPPER BOUND, not always the plugin's own. Which one the
+ * plugin uses is decided from settings this row does not carry: a direct
+ * Motion run left on its Precise masking is no depth reference at all; a
+ * depth reference with one video (a description or no scene) keeps itself
+ * live for the "always" bound; only one that sends the original as a second
+ * video (which may retry once after a refusal: mask, then edit again) for the
+ * "auto" one (the plugin's handler.ts, `maskedHeartbeatMaxMs(twoVideos ?
+ * "auto" : "always")`). Any other `style` reads as Precise, and any other
+ * `source` as its mode: unchanged.
+ *
  * The masked bounds must match the cast-swap plugin's `maskedHeartbeatMaxMs`
  * (handler.ts: 90 + 60 min for "always", + 90 more for "auto").
  */
@@ -40,23 +53,31 @@ export const CAST_SWAP_MASK_ALWAYS_BUDGET_MS = 150 * MINUTE_MS
 /** A run with face masking "auto": the mask jobs and a possible second edit. */
 export const CAST_SWAP_MASK_AUTO_BUDGET_MS = 240 * MINUTE_MS
 
-/** The face-masking mode when it is "always" or "auto", else `undefined`:
- *  from `faceMasking`, or `__faceMasking` when `faceMasking` is absent. */
-function faceMaskingMode(data: object): "always" | "auto" | undefined {
+/** The face masking setting: `faceMasking`, or `__faceMasking` when `faceMasking` is absent; null when not an object. */
+function faceMaskingOf(data: object): Record<string, unknown> | null {
   const { faceMasking, __faceMasking } = data as { faceMasking?: unknown; __faceMasking?: unknown }
   const masking = faceMasking !== undefined ? faceMasking : __faceMasking
-  if (!masking || typeof masking !== "object") return undefined
-  const mode = (masking as { mode?: unknown }).mode
+  return masking && typeof masking === "object" ? (masking as Record<string, unknown>) : null
+}
+
+/** The face-masking mode when it is "always" or "auto", else `undefined`. */
+function faceMaskingMode(data: object): "always" | "auto" | undefined {
+  const mode = faceMaskingOf(data)?.mode
   return mode === "always" || mode === "auto" ? mode : undefined
 }
 
-/** The budget of one cast-swap job: the masking bound when face masking is
- *  "always" or "auto"; otherwise the preview bound only when
- *  `data.preview === true`, else the full-clip bound. */
+/** A run that may be a depth reference: a direct Motion run, or a trend run whose clip is full depth (the "auto" bound covers either). */
+function depthReference(data: object): boolean {
+  return (data as { style?: unknown }).style === "motion" || faceMaskingOf(data)?.source === "full-depth"
+}
+
+/** The budget of one cast-swap job: the "auto" bound when face masking is
+ *  "auto" or the run is a depth reference, then "always"; otherwise the
+ *  preview bound only when `data.preview === true`, else the full-clip bound. */
 export function castSwapJobBudgetMs(data: unknown): number | undefined {
   if (!data || typeof data !== "object") return CAST_SWAP_FULL_BUDGET_MS
   const mode = faceMaskingMode(data)
+  if (mode === "auto" || depthReference(data)) return CAST_SWAP_MASK_AUTO_BUDGET_MS
   if (mode === "always") return CAST_SWAP_MASK_ALWAYS_BUDGET_MS
-  if (mode === "auto") return CAST_SWAP_MASK_AUTO_BUDGET_MS
   return (data as { preview?: unknown }).preview === true ? CAST_SWAP_PREVIEW_BUDGET_MS : CAST_SWAP_FULL_BUDGET_MS
 }
