@@ -44,10 +44,11 @@ function VideoDepthNodeComponent({ id, data, selected }: NodeProps) {
   const provider = resolveVideoDepthProvider(nodeData.provider)
   // The producer's own length field, else the clip's metadata (cached on the
   // node, read by the run estimate too) — so the quote is the clip's bucket.
+  // Unknown (nothing wired, still reading, unreadable): the provider's highest
+  // reachable row, the most a run can be charged — as the run estimate quotes.
   const upstreamSec = useUpstreamVideoDuration(id, "video")
   const probedSec = useUpstreamVideoProbe(id, "video", nodeData.probedVideo, updateNodeData)
-  const clipSec = upstreamSec ?? probedSec
-  const creditId = clipSec ? videoDepthCreditId(provider, clipSec) : `${provider}:15s`
+  const creditId = videoDepthCreditId(provider, upstreamSec ?? probedSec)
   const credits = useModelCredits(creditId, 300)
 
   const hasResult = status !== "running" && !!activeUrl

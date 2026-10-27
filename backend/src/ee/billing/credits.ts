@@ -137,7 +137,8 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
-import { seedanceRefVideoEstimateCredits, withRefVideoClipLengths } from "./seedance-ref-video-estimate.js"
+import { refVideoClipSources, seedanceRefVideoEstimateCredits } from "./seedance-ref-video-estimate.js"
+import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
 import { listingCeiling, listingFieldDomains } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
@@ -3035,10 +3036,11 @@ export interface ChargedPriceTable {
    *  then quotes `edit-plan:<mode>:<tier>:<N>m` for the source's N started
    *  minutes, else the step its length rounds up to. Absent = steps. */
   readonly editPlanPerMinute?: boolean
-  /** Reference-clip lengths a workflow estimate probed, by URL (NaN = unreadable):
-   *  a Seedance reference-video run prices its clips from these, and a clip not
-   *  here at the worst case (`seedance-ref-video-estimate.ts`). */
-  readonly refVideoClipSec?: ReadonlyMap<string, number>
+  /** Uploaded-clip lengths a workflow estimate probed, by URL (NaN = unreadable;
+   *  `upload-clip-lengths.ts`): a Seedance reference-video run prices its clips
+   *  from these and Video Depth its source clip, and a clip not here at the
+   *  node's worst case. */
+  readonly uploadClipSec?: ReadonlyMap<string, number>
 }
 
 /**
@@ -5000,7 +5002,7 @@ async function estimateRunGraphFigures(
   // to read: the figure stays the static one these editions always showed.
   // With one, the uploaded reference clips of a Seedance reference-video
   // run are probed (cached per URL), as its reservation probes them.
-  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
+  const prices = hasCredits() ? await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges)) : STATIC_BASE_PRICES
   // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
   // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
   // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
@@ -5378,7 +5380,7 @@ function estimateNodeCredits(
     audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     editPlan: node.type === "edit-plan" ? { sourceSec: editPlanSourceSecOf(node, nodes, edges), perMinute: prices.editPlanPerMinute === true } : undefined,
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
-    videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, edges, wireSec) : undefined,
+    videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, wireSec, prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
@@ -5496,19 +5498,54 @@ function videoMaskClipSecOf(
  * chain of Trim / Loop / Combine Videos / Video SFX), else the first wire with
  * a known length — Video SFX's reading, without its 300-second clamp
  * (`videoDepthCreditId` already prices anything past the provider's limit at
- * its highest reachable row). Undefined when no wire's length is known: that
- * row stands in, the most a run can be charged.
+ * its highest reachable row). With no such length, an uploaded source clip is
+ * priced at its probed length (`withUploadClipLengths`), as the run's
+ * reservation measures it. Undefined when neither is known: that row stands
+ * in, the most a run can be charged.
  */
 function videoDepthClipSecOf(
   node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   wireSec: WireSecOf,
+  prices: ChargedPriceTable,
 ): number | undefined {
   if (node.id === undefined || !edges) return undefined
   const inputs = edges.filter((e) => e.target === node.id)
   const secs = inputs.map((e) => wireSec(e.source))
   const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
-  return videoWire >= 0 ? secs[videoWire] : secs.find((sec) => sec !== undefined)
+  const known = videoWire >= 0 ? secs[videoWire] : secs.find((sec) => sec !== undefined)
+  return known ?? uploadClipSec(prices, videoDepthSource(node, nodes, edges))
+}
+
+/**
+ * The node wired into a Video Depth node's `video` input, else its first wire's
+ * source — the clip the run measures. Undefined when nothing is wired.
+ */
+function videoDepthSource(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): EstimateNode | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const inputs = edges.filter((e) => e.target === node.id)
+  const wire = inputs.find((e) => e.targetHandle === "video") ?? inputs[0]
+  return wire && nodes.find((n) => n.id === wire.source)
+}
+
+/**
+ * The upstream nodes whose clip length prices a node of the graph before the
+ * run — Seedance reference clips and Video Depth's source. The estimate's
+ * pre-pass probes the uploads among them (`withUploadClipLengths`).
+ */
+function lengthPricedUploads(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): Array<EstimateNode | undefined> {
+  return [
+    ...refVideoClipSources(nodes, edges),
+    ...nodes.flatMap((n) => (n.type === "video-depth" ? [videoDepthSource(n, nodes, edges)] : [])),
+  ]
 }
 
 /**
@@ -6836,7 +6873,7 @@ export async function estimateRunSetCreditsWithoutUgc(
   viewer?: UseCaseViewerFlags,
 ): Promise<number> {
   const edges = bypassTeleports(nodes, rawEdges)
-  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
+  const prices = hasCredits() ? await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges)) : STATIC_BASE_PRICES
   const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
   return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds, ...usecaseExpandFlags(viewer) }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
 }
@@ -7009,7 +7046,7 @@ async function listingPricer(
   const replaced = options.publishType === "template" || !options.replaceableMediaNodeIds
     ? new Set(nodes.flatMap((n) => (n.id && n.type === "upload-video" ? [n.id] : [])))
     : options.replaceableMediaNodeIds
-  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges, replaced) : STATIC_BASE_PRICES
+  const prices = hasCredits() ? await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges), replaced) : STATIC_BASE_PRICES
   const memo: UgcAnswerMemo = new Map()
   // The UGC part of a graph, priced through its seam, in the preview part (it is the app run's), and
   // for each List the app's user fills, what one further item adds to it (a UGC node it fans out
