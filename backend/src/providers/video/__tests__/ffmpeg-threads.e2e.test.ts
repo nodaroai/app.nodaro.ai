@@ -20,7 +20,7 @@ import { tmpdir } from "node:os"
 import type { Edl } from "@nodaro/shared/edl"
 import { execFileSync } from "node:child_process"
 import { runFfmpeg, runFfprobe } from "../ffmpeg-utils.js"
-import { LIBX265_MAX_ENCODE_THREADS, withFfmpegThreads } from "../ffmpeg-threads.js"
+import { LIBX265_ENCODE_THREADS, withFfmpegThreads } from "../ffmpeg-threads.js"
 import { buildSliceCommand, sliceArgv } from "../apply-edl.js"
 import { ffmpegAvailable, makeSource } from "./apply-edl-e2e-helpers.js"
 
@@ -65,8 +65,8 @@ const x265Available = ffmpegAvailable && execFileSync("ffmpeg", ["-hide_banner",
  * A box whose CPU budget is past what x265 takes as `--frame-threads` (staging:
  * 32) — CI's runners have no quota, so nothing would place a count there and
  * an HEVC encode would pass for the wrong reason. The counts are placed here
- * by hand: the held x265 output encodes, and one thread more is refused by
- * the pinned build (when a pin bump moves x265's limit, this says so).
+ * by hand: the x265 output, given its own count, encodes; the budget itself
+ * would be refused by the pinned build, which takes 16 frame threads at most.
  */
 describe.skipIf(!x265Available)("libx265 under a CPU budget above its frame-thread limit, on the real ffmpeg", () => {
   const encode = (threads?: number) => [
@@ -75,14 +75,14 @@ describe.skipIf(!x265Available)("libx265 under a CPU budget above its frame-thre
     "-f", "null", ...(threads ? ["-threads", String(threads)] : []), "-",
   ]
 
-  it("encodes with the budget's counts placed (the x265 output held to its limit)", async () => {
+  it("encodes with the budget's counts placed (the x265 output at its own count)", async () => {
     const placed = withFfmpegThreads(encode(), { decode: 32, filter: 32, encode: 32 })
-    expect(placed.slice(-3)).toEqual(["-threads", String(LIBX265_MAX_ENCODE_THREADS), "-"])
+    expect(placed.slice(-3)).toEqual(["-threads", String(LIBX265_ENCODE_THREADS), "-"])
     await expect(runFfmpeg(placed, 60_000)).resolves.toBeDefined()
   }, 60_000)
 
-  it("the limit is x265's own: one encoder thread more is refused", async () => {
-    await expect(runFfmpeg(encode(LIBX265_MAX_ENCODE_THREADS), 60_000)).resolves.toBeDefined()
-    await expect(runFfmpeg(encode(LIBX265_MAX_ENCODE_THREADS + 1), 60_000)).rejects.toThrow(/ffmpeg failed/)
+  it("why the budget is never placed on it: 16 frame threads encode, 17 are refused", async () => {
+    await expect(runFfmpeg(encode(16), 60_000)).resolves.toBeDefined()
+    await expect(runFfmpeg(encode(17), 60_000)).rejects.toThrow(/ffmpeg failed/)
   }, 60_000)
 })

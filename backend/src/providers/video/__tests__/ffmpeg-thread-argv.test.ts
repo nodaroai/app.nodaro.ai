@@ -7,7 +7,7 @@
 // that reading, and that a box with no quota (no counts) runs the argv
 // exactly as given.
 import { describe, it, expect } from "vitest"
-import { LIBX265_MAX_ENCODE_THREADS, withFfmpegThreads, type FfmpegThreads } from "../ffmpeg-threads.js"
+import { LIBX265_ENCODE_THREADS, withFfmpegThreads, type FfmpegThreads } from "../ffmpeg-threads.js"
 
 const TWO: FfmpegThreads = { decode: 2, filter: 2, encode: 2 }
 /** Distinct counts, so a test can tell which slot a count landed in. */
@@ -95,35 +95,35 @@ describe("withFfmpegThreads — where each count goes", () => {
   })
 })
 
-describe("withFfmpegThreads — a libx265 output is held to the encoder threads x265 accepts", () => {
+describe("withFfmpegThreads — a libx265 output takes x265's own frame-thread count", () => {
   // staging's box: a 32-CPU quota on 48 cores. x265 takes an output's -threads as
   // --frame-threads and refuses more than 16 (the trend crop of an HEVC clip, 2026-10-27).
   const BOX: FfmpegThreads = { decode: 32, filter: 32, encode: 32 }
-  const MAX = String(LIBX265_MAX_ENCODE_THREADS)
+  const OWN = String(LIBX265_ENCODE_THREADS)
 
-  it("caps an x265 output's encode count; decode and filter keep the budget", () => {
+  it("gives an x265 output its own count; decode and filter keep the budget", () => {
     expect(withFfmpegThreads(["-y", "-i", "a.mp4", "-c:v", "libx265", "-b:v", "4M", "out.mp4"], BOX)).toEqual([
-      ...GLOBALS(32), "-y", "-threads", "32", "-i", "a.mp4", "-c:v", "libx265", "-b:v", "4M", "-threads", MAX, "out.mp4",
+      ...GLOBALS(32), "-y", "-threads", "32", "-i", "a.mp4", "-c:v", "libx265", "-b:v", "4M", "-threads", OWN, "out.mp4",
     ])
   })
 
   it("reads every spelling of the video encoder: -c:v, -c:v:0, -codec:v, -vcodec, a bare -c", () => {
     for (const opt of ["-c:v", "-c:v:0", "-codec:v", "-vcodec", "-c"]) {
       const out = withFfmpegThreads(["-i", "a.mp4", opt, "libx265", "-f", "null", "-"], BOX)
-      expect(out.slice(-3)).toEqual(["-threads", MAX, "-"])
+      expect(out.slice(-3)).toEqual(["-threads", OWN, "-"])
     }
   })
 
-  it("leaves a count under the cap as it is, and an x264 or audio-only output at the budget", () => {
-    expect(withFfmpegThreads(["-i", "a.mp4", "-c:v", "libx265", "out.mp4"], TWO).slice(-3)).toEqual(["-threads", "2", "out.mp4"])
+  it("x265's own count at any budget, and an x264 or audio-only output at the budget", () => {
+    expect(withFfmpegThreads(["-i", "a.mp4", "-c:v", "libx265", "out.mp4"], TWO).slice(-3)).toEqual(["-threads", OWN, "out.mp4"])
     expect(withFfmpegThreads(["-i", "a.mp4", "-c:v", "libx264", "out.mp4"], BOX).slice(-3)).toEqual(["-threads", "32", "out.mp4"])
     expect(withFfmpegThreads(["-i", "a.mp4", "-c:a", "libx265", "out.mp4"], BOX).slice(-3)).toEqual(["-threads", "32", "out.mp4"])
   })
 
-  it("caps only the x265 output of several, and the last encoder named for an output wins", () => {
+  it("only the x265 output of several takes it, and the last encoder named for an output wins", () => {
     expect(withFfmpegThreads(["-i", "a.mp4", "-c:v", "libx265", "h.mp4", "-c:v", "libx264", "x.mp4", "-c:v", "libx265", "-c:v", "libx264", "y.mp4"], BOX)).toEqual([
       ...GLOBALS(32), "-threads", "32", "-i", "a.mp4",
-      "-c:v", "libx265", "-threads", MAX, "h.mp4",
+      "-c:v", "libx265", "-threads", OWN, "h.mp4",
       "-c:v", "libx264", "-threads", "32", "x.mp4",
       "-c:v", "libx265", "-c:v", "libx264", "-threads", "32", "y.mp4",
     ])
