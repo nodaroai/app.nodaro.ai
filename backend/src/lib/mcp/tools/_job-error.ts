@@ -64,6 +64,10 @@ const INPUT_LIMIT_PATTERNS = [
   // the app-report sweep keeps filing it as `job-failure`, never as a
   // provider content block.
   "rejected these settings",
+  // NOT "gave no reason": the same branch when the 4xx carried only the
+  // provider's catch-all sentence ("Generation failed. Please try again
+  // later.", job 4064e12e) is retryable — the provider named no permanent
+  // cause, and its own words say to try again.
   // The UGC speech split's own deterministic failures: the take, its word
   // timings and the script disagree, or no set of pauses cuts the take within
   // the limits. Each message starts with an uppercase code, matched here

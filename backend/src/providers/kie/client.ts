@@ -117,6 +117,43 @@ export function isRequestRejectStatus(status: UpstreamStatus): boolean {
 }
 
 /**
+ * KIE's catch-all failure sentences: the provider failed the task and gave NO
+ * reason. Matched against the WHOLE of the provider's own words (anchored), so
+ * a generic opening followed by an actual reason ("Generation failed: duration
+ * must be…") is never treated as reasonless. `Unknown error` is pollKieTask's
+ * own default for a fail with no `failMsg`; an empty message also matches.
+ * Prod 2026-10-26, job 4064e12e: `[400] Generation failed. Please try again later.`
+ */
+const GENERIC_PROVIDER_FAILURE_RE =
+  /^(?:(?:generation|task|request) failed|unknown error)?(?:[.,!:]?\s*(?:please\s+)?try again(?:\s+later)?)?[.!]?$/i
+
+/** The provider's own words inside one of our wrapped internal messages:
+ *  `task failed: [400] <failMsg>` (pollKieTask) or
+ *  `<op> error (code 422): {"code":422,"msg":"<msg>",…}` (createTask paths).
+ *  Anything else is returned trimmed, as is. */
+function providerWordsOf(internalMessage: string): string {
+  const polled = /^task failed:\s*\[[^\]]*\]\s*([\s\S]*)$/i.exec(internalMessage)
+  if (polled) return polled[1]!.trim()
+  const brace = internalMessage.indexOf("{")
+  if (brace !== -1 && /\(code \d+\):\s*\{/.test(internalMessage)) {
+    try {
+      const body = JSON.parse(internalMessage.slice(brace)) as { msg?: unknown; message?: unknown }
+      const msg = typeof body.msg === "string" ? body.msg : typeof body.message === "string" ? body.message : null
+      if (msg !== null) return msg.trim()
+    } catch {
+      // Not JSON after all: fall through to the raw text.
+    }
+  }
+  return internalMessage.trim()
+}
+
+/** True when a failure carries only the provider's generic sentence: no named
+ *  parameter, limit or policy. Exported for tests. */
+export function isGenericProviderFailure(internalMessage: string): boolean {
+  return GENERIC_PROVIDER_FAILURE_RE.test(providerWordsOf(internalMessage).replace(/\s+/g, " "))
+}
+
+/**
  * Create a sanitized error for user display while logging full details.
  * In cloud edition, we don't want to expose "KIE.ai" provider name to customers.
  * Returns a KieError that carries both the sanitized message and internal details.
@@ -298,8 +335,19 @@ export function createSanitizedError(
     // transient internal error with a validation-shaped sentence
     // ("code 500: This field is required"), and the SAME payload succeeded
     // minutes later in production — the words lie there, the status does not.
-    sanitizedMessage =
-      `${context} failed: the provider rejected these settings for this model. ` +
+    //
+    // EXCEPT when the 4xx carries only KIE's catch-all sentence ("Generation
+    // failed. Please try again later.") — prod 2026-10-26, job 4064e12e, a
+    // Kling 4.0 reference video too large in pixels. KIE named no setting, so
+    // "rejected these settings… will fail again" claims a verdict it never gave
+    // and sends the user after duration/aspect/resolution. Say only what is
+    // known. The words "gave no reason" keep MCP `retryable: false` exactly as
+    // before (lib/mcp/tools/_job-error.ts) — that classification is unchanged.
+    sanitizedMessage = isGenericProviderFailure(internalMessage)
+      ? `${context} failed: the provider couldn't produce a result and gave no reason. ` +
+        "It may be a temporary problem on their side, or something about the input media " +
+        "(such as its size or format). Try again, or change the input media and try again."
+      : `${context} failed: the provider rejected these settings for this model. ` +
       "Retrying the same request will fail again — change the settings or the input media " +
       "(duration, aspect ratio, resolution, or the reference image/video/audio) and try again."
   } else {

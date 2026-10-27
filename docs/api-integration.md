@@ -1640,7 +1640,11 @@ reject**, where the provider answered the submission with a 4xx because the
 settings or input media are invalid for that model. That one has no structured
 hint, but its `error_message` says the provider *rejected these settings for
 this model* and `retryable` is `false`: change the settings or the media before
-re-running. A provider 5xx stays retryable however validation-shaped its
+re-running. When the provider's 4xx carries no reason at all (only its
+catch-all "Generation failed. Please try again later."), the `error_message`
+instead says the provider *gave no reason* and that the cause may be temporary
+or in the input media (such as its size or format); `retryable` is `true` for
+it — re-run it once, and change the input media if it fails again. A provider 5xx stays retryable however validation-shaped its
 wording is. For `safety-block`,
 `class` distinguishes a
 deterministic block (`copyright`, `likeness` — retrying the identical request

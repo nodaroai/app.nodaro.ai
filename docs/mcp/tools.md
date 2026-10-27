@@ -1610,7 +1610,12 @@ with a 4xx, so the combination of settings and input media is invalid for that
 model. It comes back `retryable: false` — change the settings or the input
 media (duration, aspect ratio, resolution, or the reference image/video/audio)
 before re-running, or pick a model whose `list_models` capability sheet allows
-the combination. A provider 5xx is the opposite case and stays `retryable`,
+the combination. When the 4xx carried no reason (only the provider's catch-all
+"Generation failed. Please try again later."), the `error_message` says the
+provider **gave no reason** instead, and names a temporary provider problem or
+the input media (such as its size or format) as the likely causes; that one is
+`retryable: true` — re-run it once, and change the input media if it fails
+again. A provider 5xx is the opposite case and stays `retryable`,
 even when its wording reads like a validation complaint. For a job in **`pending_review`** (a deployment's job
 policy held the output for human review) it returns `status: "pending_review"`,
 `outputUrl: null`, `retryable: false` and a `guidance` sentence: the status is
