@@ -510,6 +510,7 @@ All billing code lives under `backend/src/ee/billing/` and `backend/src/ee/route
 
 ### General
 - `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` env vars enable billing features
+- **Stripe documents are English** (decided 2026-10-27): a customer is created, a customer updated, a Checkout or a Billing Portal session opened ONLY through `ee/billing/stripe-english.ts` (`createStripeCustomer` sets `preferred_locales: ["en"]`; `createCheckoutSession` first sets an existing customer to English — one from before the rule may carry the browser's locale — then opens the Checkout with `locale: "en"`, since a Checkout otherwise writes the browser's locale onto the customer, and that locale is what every invoice PDF, receipt and credit note renders in; `createPortalSession` likewise). The payment page is English for everyone by decision. `__tests__/stripe-english.test.ts` fails the build on a raw `customers.create` / `customers.update` / `checkout.sessions.create` / `billingPortal.sessions.create` anywhere else.
 - Storage limits: Free=1GB, Basic=10GB, Standard=25GB, Pro=50GB, Business=200GB, Enterprise=500GB
 - Retention: Active = kept. Free/canceled = 60 days grace then delete media. Workflows never deleted.
 - Cleanup cron: hourly (expire subs at :00, renewal safety net at :30, monthly credits on yearly plans at :40), daily 3AM UTC (R2 media cleanup)

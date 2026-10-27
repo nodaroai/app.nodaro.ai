@@ -50,6 +50,7 @@ import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
 import { CreditsService, PriceNotConfiguredError } from "../billing/credits.js"
 import { getStripe } from "../billing/stripe-client.js"
+import { createStripeCustomer, createCheckoutSession } from "../billing/stripe-english.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
@@ -1259,7 +1260,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       if (existing) {
         stripeCustomerId = (existing as { stripe_customer_id: string }).stripe_customer_id
       } else {
-        const customer = await getStripe().customers.create({
+        const customer = await createStripeCustomer({
           email: payerEmail ?? undefined,
           metadata: { userId: payerId },
         })
@@ -1268,7 +1269,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       }
 
       const baseUrl = getOrigin(req)
-      const session = await getStripe().checkout.sessions.create({
+      const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
         mode: "payment",
         line_items: [
