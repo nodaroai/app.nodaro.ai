@@ -1,7 +1,7 @@
 ---
 node_type: video-depth
-generated_at: 2026-10-14T00:02:36.947Z
-generated_from: b83a9467d
+generated_at: 2026-10-27T09:33:08.696Z
+generated_from: 121af7c8e
 ---
 
 # Video Depth
@@ -30,6 +30,7 @@ generated_from: b83a9467d
 - `activeResultIndex?: number`
 - `currentJobId?: string`
 - `currentJobProgress?: number`
+- `probedVideo?: ProbedVideoInfo`
 
 **Default data:**
 ```json

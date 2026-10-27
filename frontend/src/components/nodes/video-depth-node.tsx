@@ -15,6 +15,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
+import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -41,8 +42,12 @@ function VideoDepthNodeComponent({ id, data, selected }: NodeProps) {
     useResultAspectRatio(id, results, activeIndex)
   const [previewOpen, setPreviewOpen] = useState(false)
   const provider = resolveVideoDepthProvider(nodeData.provider)
+  // The producer's own length field, else the clip's metadata (cached on the
+  // node, read by the run estimate too) — so the quote is the clip's bucket.
   const upstreamSec = useUpstreamVideoDuration(id, "video")
-  const creditId = upstreamSec ? videoDepthCreditId(provider, upstreamSec) : `${provider}:15s`
+  const probedSec = useUpstreamVideoProbe(id, "video", nodeData.probedVideo, updateNodeData)
+  const clipSec = upstreamSec ?? probedSec
+  const creditId = clipSec ? videoDepthCreditId(provider, clipSec) : `${provider}:15s`
   const credits = useModelCredits(creditId, 300)
 
   const hasResult = status !== "running" && !!activeUrl

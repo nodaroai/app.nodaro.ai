@@ -40,7 +40,7 @@ Depth Anything (per frame) accepts clips up to 80 seconds, so its 2-minute tier 
 
 Worked examples: a 5 s clip → 15s tier; 15 s → 15s tier; 15.01 s → 30s tier; 61 s → 2min tier.
 
-The clip is always measured before the run. A clip that cannot be read is refused (`video_unreadable`) before any credits are reserved — the run is never priced at a guessed length. Until a connected video's length is known, the editor shows the 15s tier.
+The clip is always measured before the run. A clip that cannot be read is refused (`video_unreadable`) before any credits are reserved — the run is never priced at a guessed length. The editor reads a connected video's length from the clip itself, so the node and the run estimate show that clip's tier. Until the length is known, or when the browser cannot read the clip, the node shows the 15s tier and the run estimate shows the highest tier.
 
 ## Tips
 
