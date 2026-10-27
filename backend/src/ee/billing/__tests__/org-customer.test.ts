@@ -21,7 +21,7 @@ vi.mock("../../../lib/supabase.js", () => ({ supabase: { from: h.from, rpc: h.rp
 vi.mock("../../../lib/deployment-urls.js", () => ({ appBaseUrl: () => "https://app.test" }))
 vi.mock("../stripe-client.js", () => ({
   getStripe: () => ({
-    customers: { create: h.customersCreate },
+    customers: { create: h.customersCreate, update: vi.fn(async () => ({})) },
     checkout: { sessions: { create: h.checkoutCreate } },
     billingPortal: { sessions: { create: h.portalCreate } },
   }),

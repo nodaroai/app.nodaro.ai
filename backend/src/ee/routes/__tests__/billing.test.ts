@@ -37,6 +37,7 @@ const mockStripe = {
   },
   customers: {
     retrieve: vi.fn(),
+    update: vi.fn().mockResolvedValue({}),
   },
   paymentMethods: {
     list: vi.fn(),

@@ -1016,7 +1016,7 @@ describe("POST /v1/deployment-billing/checkout", () => {
     sessionsCreate.mockResolvedValue({ url: "https://checkout.stripe.test/s/1" })
     mockGetStripe.mockReturnValue({
       checkout: { sessions: { create: sessionsCreate } },
-      customers: { create: vi.fn().mockResolvedValue({ id: "cus_new" }) },
+      customers: { create: vi.fn().mockResolvedValue({ id: "cus_new" }), update: vi.fn().mockResolvedValue({}) },
     })
     tableResults.set("stripe_customers", { data: { stripe_customer_id: "cus_1" }, error: null })
   })

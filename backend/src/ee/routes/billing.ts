@@ -22,6 +22,7 @@ import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { getStripe } from "../billing/stripe-client.js"
+import { createStripeCustomer, createCheckoutSession, createPortalSession } from "../billing/stripe-english.js"
 import { PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
 import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { readBillingPlans } from "../billing/plans.js"
@@ -272,7 +273,7 @@ export async function billingRoutes(app: FastifyInstance) {
           .eq("id", userId)
           .single()
 
-        const customer = await getStripe().customers.create({
+        const customer = await createStripeCustomer({
           email: profile?.email ?? undefined,
           metadata: { userId },
         })
@@ -298,7 +299,7 @@ export async function billingRoutes(app: FastifyInstance) {
           ? `${baseUrl}/checkout-complete?status=cancelled`
           : `${baseUrl}/pricing`
 
-      const session = await getStripe().checkout.sessions.create({
+      const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
         mode: checkoutMode,
         line_items: [{ price: priceId, quantity: 1 }],
@@ -365,7 +366,7 @@ export async function billingRoutes(app: FastifyInstance) {
           .select("email")
           .eq("id", userId)
           .single()
-        const customer = await getStripe().customers.create({
+        const customer = await createStripeCustomer({
           email: profile?.email ?? undefined,
           metadata: { userId },
         })
@@ -394,7 +395,7 @@ export async function billingRoutes(app: FastifyInstance) {
           ? `${baseUrl}/checkout-complete?status=cancelled`
           : `${baseUrl}/billing`
 
-      const session = await getStripe().checkout.sessions.create({
+      const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
         mode: "payment",
         line_items: [
@@ -541,7 +542,7 @@ export async function billingRoutes(app: FastifyInstance) {
     const { returnPath } = parsedReturn.data
 
     try {
-      const portalSession = await getStripe().billingPortal.sessions.create({
+      const portalSession = await createPortalSession({
         customer: customer.stripe_customer_id,
         return_url: `${getOrigin(req)}${returnPath ?? "/billing"}`,
       })

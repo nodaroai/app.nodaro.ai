@@ -16,7 +16,7 @@
  */
 import { supabase } from "../../lib/supabase.js"
 import { appBaseUrl } from "../../lib/deployment-urls.js"
-import { getStripe } from "./stripe-client.js"
+import { createStripeCustomer, createCheckoutSession, createPortalSession } from "./stripe-english.js"
 import { getOrgPack } from "./stripe-config.js"
 import { captureReceiptUrl, handleTopupClawback, type TopupClawbackData } from "./provision-credits.js"
 
@@ -60,7 +60,7 @@ export async function ensureOrgStripeCustomer(orgId: string, actorUserId: string
     .maybeSingle()
   if (!org) throw new Error(`ensureOrgStripeCustomer: no organization ${orgId}`)
 
-  const customer = await getStripe().customers.create({
+  const customer = await createStripeCustomer({
     name: org.name as string,
     description: `Nodaro organization ${org.slug as string}`,
     metadata: { orgId, createdByUserId: actorUserId },
@@ -232,7 +232,7 @@ export async function createOrgPackCheckout(
   if (!pack) return null
   const customerId = await ensureOrgStripeCustomer(orgId, actorUserId)
   const base = appBaseUrl()
-  const session = await getStripe().checkout.sessions.create({
+  const session = await createCheckoutSession({
     customer: customerId,
     mode: "payment",
     line_items: [{ price: pack.priceId, quantity: 1 }],
@@ -258,7 +258,7 @@ export async function getOrgCustomerPortalUrl(orgId: string): Promise<{ url: str
     .eq("id", orgId)
     .maybeSingle()
   const base = appBaseUrl()
-  const portal = await getStripe().billingPortal.sessions.create({
+  const portal = await createPortalSession({
     customer: customer.stripe_customer_id as string,
     return_url: org?.slug ? `${base}/org/${org.slug as string}` : base,
   })
