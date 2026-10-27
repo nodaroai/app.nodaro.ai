@@ -2406,8 +2406,9 @@ the trend fixes it; `err.details` is `{ slot, chip }`), `example_out_of_range`, 
 `{slot:<key>}` naming no slot), `prompt_too_long` and `validation_error`; the
 slot errors carry the key as `slot`. Other refusals: `401`, `404 not_found`
 (the trend is not published; for `run()` also a `sessionId` you may not use),
-`502 engine_error`, `503 engine_unsupported` / `trend_unavailable` /
-`not_available`. When the video engine refuses, `estimate()` / `run()` get the
+`409 trend_unavailable` (the trend's setup is out of date: it cannot run until
+it is updated), `502 engine_error`, `503 engine_unsupported` /
+`trend_unavailable` / `not_available`. When the video engine refuses, `estimate()` / `run()` get the
 trend routes' OWN codes with fixed messages, never the engine's text or
 `issues`: `400 trend_run_rejected` (or `clip_out_of_range`,
 `preview_out_of_range`, `video_unreadable`, `unsafe_url`,

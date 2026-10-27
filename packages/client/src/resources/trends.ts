@@ -39,6 +39,8 @@ import type { CastSwapEngine } from "./cast-swap.js"
  * - 401 `unauthorized`.
  * - 404 `not_found`: the trend is not published (every method), or `run()`'s
  *   `sessionId` is not a session you may use.
+ * - 409 `trend_unavailable` (`estimate()` / `run()`): the trend's setup is out
+ *   of date — it cannot run until it is updated, so a retry gets the same answer.
  * - 502 `engine_error` (`estimate()` / `run()`).
  * - 503 `engine_unsupported` (this platform version cannot run trends yet),
  *   `trend_unavailable` (`estimate()` / `run()`), `not_available` (this

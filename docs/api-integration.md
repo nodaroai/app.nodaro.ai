@@ -4592,6 +4592,7 @@ anything is charged:
 | `400` | `validation_error` | (`/runs`) The `Idempotency-Key` is not 8–200 characters. |
 | `401` | `unauthorized` | No authenticated user. |
 | `404` | `not_found` | The trend is not published, or `sessionId` names a session you may not use (`/runs` only). |
+| `409` | `trend_unavailable` | (estimate and run) The trend's setup is out of date: it cannot run until it is updated. A retry gets the same answer. |
 | `502` | `engine_error` | Nodaro Motion answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |
 | `503` | `trend_unavailable` | The trend cannot be run right now. |

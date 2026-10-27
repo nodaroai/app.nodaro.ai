@@ -273,7 +273,7 @@ function refusal(statusCode: number, body: string) {
   })()
   const err = isRec(parsed) && isRec(parsed.error) ? parsed.error : {}
   const code = str(err.code)
-  if (statusCode === 503 && (code === "trend_unavailable" || code === "engine_unsupported")) {
+  if ((statusCode === 503 || statusCode === 409) && (code === "trend_unavailable" || code === "engine_unsupported")) {
     return failure(`Nodaro: this trend cannot run right now. [${code}]`)
   }
   const slot = str(err.slot)
