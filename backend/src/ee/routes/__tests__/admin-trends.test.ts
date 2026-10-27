@@ -1934,6 +1934,7 @@ describe("access", () => {
     ["POST", `/v1/admin/trends/${T1}/face-mask`, { revision: "rev-1" }],
     ["POST", `/v1/admin/trends/${T1}/face-mask/approve`, { jobId: RUN, revision: "rev-1" }],
     ["DELETE", `/v1/admin/trends/${T1}/face-mask?revision=rev-1`],
+    ["PUT", `/v1/admin/trends/${T1}/face-mask/scene-description`, { which: "full", text: "A kitchen.", revision: "rev-1" }],
     ["POST", `/v1/admin/trends/${T1}/upscale`, { target: "source", revision: "rev-1" }],
     ["POST", `/v1/admin/trends/${T1}/upscale/apply`, { jobId: RUN, revision: "rev-1" }],
     ["DELETE", `/v1/admin/trends/${T1}/upscale/${RUN}?revision=rev-1`],
@@ -2260,6 +2261,40 @@ describe("the stored face mask", () => {
         expect(engine.calls).toEqual([])
       })
 
+      it("full depth on an engine that stores a scene description also sends the roles and the preview's start", async () => {
+        seed({}, draftData({ faceMasking: FULL }))
+        supports({ ...DEPTH, storedSceneDescription: true })
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({
+          videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+          faceMasking: { mode: "always", source: "full-depth" },
+          roles: [
+            { name: "the woman on the left", kind: "person" },
+            { name: "the dog", kind: "pet" },
+          ],
+          previewStart: 2,
+        })
+        // The roles never reach the settings key: the clip is the same clip.
+        expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: FULL })))
+      })
+
+      it("a trend with no preview sends no previewStart; keep people and faces get no roles even on such an engine", async () => {
+        seed({}, draftData({ faceMasking: FULL, previewStart: null }))
+        supports({ ...DEPTH, storedSceneDescription: true })
+        await start()
+        expect(engine.calls[0]!.body).toHaveProperty("roles")
+        expect(engine.calls[0]!.body).not.toHaveProperty("previewStart")
+        for (const faceMasking of [KEEP, MASKING]) {
+          mem.trends = []
+          engine.calls.length = 0
+          seed({}, draftData({ faceMasking }))
+          await start()
+          expect(engine.calls[0]!.body).not.toHaveProperty("roles")
+          expect(engine.calls[0]!.body).not.toHaveProperty("previewStart")
+        }
+      })
+
       it("a face mask needs none of the new declarations", async () => {
         seed({}, draftData({ faceMasking: { ...MASKING, source: "faces" } }))
         const res = await start()
@@ -2382,11 +2417,133 @@ describe("the stored face mask", () => {
         expect(mem.trends[0]!.versions[1]!.data.faceMask).toBeUndefined()
       })
 
+      it("stores the make's two scene descriptions, trimmed and capped, beside the clip", async () => {
+        seed({}, draftData({ faceMasking: FULL, faceMaskJob: pendingJob({ settingsKey: FKEY() }) }))
+        const job = fullDepthJob()
+        world.jobs.set(FACE_MASK_JOB, {
+          ...job,
+          input_data: { ...job.input_data, previewStart: 2 },
+          output_data: { ...job.output_data, sceneDescription: `  A neon kitchen. ${"x".repeat(5000)}`, previewSceneDescription: "\n0-4 s: the woman on the left spins.\n" },
+        })
+        const res = await approve()
+        expect(res.statusCode).toBe(200)
+        const stored = mem.trends[0]!.versions[1]!.data.faceMask!
+        expect(stored.sceneDescription).toHaveLength(4000)
+        expect(stored.sceneDescription!.startsWith("A neon kitchen.")).toBe(true)
+        expect(stored.previewSceneDescription).toBe("0-4 s: the woman on the left spins.")
+        // The preview start the make recorded: a preview run uses the text only while it is still the trend's.
+        expect(stored.previewSceneDescriptionStart).toBe(2)
+        expect(res.json().data.faceMask.previewSceneDescription).toBe("0-4 s: the woman on the left spins.")
+      })
+
+      it("a make with no (or an empty, or a non-text) description stores none", async () => {
+        seed({}, draftData({ faceMasking: FULL, faceMaskJob: pendingJob({ settingsKey: FKEY() }) }))
+        const job = fullDepthJob()
+        world.jobs.set(FACE_MASK_JOB, { ...job, output_data: { ...job.output_data, sceneDescription: "   ", previewSceneDescription: 42 } })
+        expect((await approve()).statusCode).toBe(200)
+        const stored = mem.trends[0]!.versions[1]!.data.faceMask!
+        expect(stored).not.toHaveProperty("sceneDescription")
+        expect(stored).not.toHaveProperty("previewSceneDescription")
+      })
+
+      it("a face mask never stores a description, whatever its job says", async () => {
+        seed({}, making())
+        world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { sceneDescription: "A kitchen." }))
+        expect((await approve()).statusCode).toBe(200)
+        expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("sceneDescription")
+      })
+
       it("a face mask that recorded `source: \"faces\"` is the trend's own", async () => {
         seed({}, making())
         world.jobs.set(FACE_MASK_JOB, fmJob({}, { faceMasking: { ...withResolvedZone(MASKING), source: "faces" } }))
         expect((await approve()).statusCode).toBe(200)
       })
+    })
+  })
+
+  describe("the stored scene description (full depth)", () => {
+    const FULL = { mode: "always" as const, source: "full-depth" as const }
+    const DEPTH = { ...FM_SUPPORTS, sourceModes: ["faces", "full-depth", "keep-people"] as Array<"faces" | "full-depth" | "keep-people"> }
+    const fullMask = (d: TrendVersionData): TrendFaceMask => ({
+      url: `https://cdn.test/trends/${T1}/depth.mp4`,
+      frames: 360,
+      recipe: { core: null, plugin: "1" },
+      settingsKey: faceMaskSettingsKey(d)!,
+      jobId: FACE_MASK_JOB,
+      stats: { shots: 0, heldFrames: 0, coverage: 1, droppedRegions: 0 },
+      approvedAt: "2026-10-28T09:00:00.000Z",
+      approvedBy: ADMIN,
+      sceneDescription: "A neon kitchen.",
+      previewSceneDescriptionStart: 2,
+    })
+    const withMask = (over: Partial<TrendVersionData> = {}) => {
+      const d = draftData({ faceMasking: FULL, ...over })
+      return { ...d, faceMask: fullMask(d) }
+    }
+    const edit = async (body: Record<string, unknown>, user = ADMIN) =>
+      call("PUT", `/v1/admin/trends/${T1}/face-mask/scene-description`, { revision: await revisionOf(), ...body }, user)
+
+    beforeEach(() => {
+      setPluginSupports({ castSwap: { ...DEPTH, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+      world.envs = [envRow("production", DEPTH), envRow("staging", DEPTH)]
+    })
+
+    it("writes either text on the draft, audits it, and leaves the clip up to date", async () => {
+      seed({}, withMask())
+      const before = mem.trends[0]!.versions[1]!.data.faceMask!
+      const full = await edit({ which: "full", text: "  A rainy rooftop.  " })
+      expect(full.statusCode).toBe(200)
+      const preview = await edit({ which: "preview", text: "0-4 s: the woman spins." })
+      expect(preview.statusCode).toBe(200)
+      const stored = mem.trends[0]!.versions[1]!.data.faceMask!
+      expect(stored).toEqual({ ...before, sceneDescription: "A rainy rooftop.", previewSceneDescription: "0-4 s: the woman spins." })
+      expect(preview.json().data).toMatchObject({ revision: mem.trends[0]!.versions[1]!.revision, faceMaskState: { status: "approved", reasons: [] } })
+      expect(preview.json().data.faceMask.previewSceneDescription).toBe("0-4 s: the woman spins.")
+      expect(audits()).toEqual([
+        expect.objectContaining({ admin_user_id: ADMIN, action: "edit_trend_scene_description", target_id: T1, payload: { slug: "neon-dance", jobId: FACE_MASK_JOB, which: "full", chars: 16 } }),
+        expect.objectContaining({ action: "edit_trend_scene_description", payload: expect.objectContaining({ which: "preview" }) }),
+      ])
+      const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
+      expect(detail.faceMaskState).toEqual({ status: "approved", reasons: [] })
+    })
+
+    it("a stale revision is a draft conflict, and nothing is written", async () => {
+      seed({}, withMask())
+      const res = await call("PUT", `/v1/admin/trends/${T1}/face-mask/scene-description`, { which: "full", text: "A rooftop.", revision: "rev-stale" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("draft_conflict")
+      expect(mem.trends[0]!.versions[1]!.data.faceMask!.sceneDescription).toBe("A neon kitchen.")
+      expect(audits()).toEqual([])
+    })
+
+    it("is a 409 without an approved full-depth clip", async () => {
+      seed({}, draftData({ faceMasking: FULL }))
+      expect((await edit({ which: "full", text: "A rooftop." })).json().error.code).toBe("no_full_depth_mask")
+      mem.trends = []
+      const faces = draftData({ faceMasking: MASKING })
+      seed({}, { ...faces, faceMask: { ...fullMask(faces), recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" } } })
+      const res = await edit({ which: "preview", text: "A rooftop." })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("no_full_depth_mask")
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("previewSceneDescription")
+      expect(audits()).toEqual([])
+    })
+
+    it("refuses an empty text, one over 4000 characters, and an unknown `which`", async () => {
+      seed({}, withMask())
+      for (const body of [{ which: "full", text: "   " }, { which: "full", text: "x".repeat(4001) }, { which: "both", text: "A rooftop." }]) {
+        const res = await edit(body)
+        expect(res.statusCode, JSON.stringify(body).slice(0, 40)).toBe(400)
+      }
+      expect(mem.trends[0]!.versions[1]!.data.faceMask!.sceneDescription).toBe("A neon kitchen.")
+    })
+
+    it("a draft save never overwrites it (the face mask is server-owned)", async () => {
+      seed({}, withMask())
+      const body = { ...withMask(), faceMask: { ...fullMask(withMask()), sceneDescription: "Hijacked." } }
+      const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: body, revision: await revisionOf() })
+      expect(res.statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask!.sceneDescription).toBe("A neon kitchen.")
     })
   })
 

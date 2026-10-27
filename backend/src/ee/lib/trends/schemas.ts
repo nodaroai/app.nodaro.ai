@@ -33,6 +33,8 @@ import type {
 export const MAX_TREND_IMAGES = 30
 export const MAX_IMAGES_PER_SLOT = 3
 export const PREVIEW_SECONDS = 4
+/** The most characters a stored scene description (`faceMask.sceneDescription`, `previewSceneDescription`) keeps. */
+export const SCENE_DESCRIPTION_MAX = 4000
 export const SLOT_CAPS: Readonly<Record<TrendSlotKind, number>> = { person: 6, location: 1, product: 3, pet: 3 }
 
 /** The chips each slot kind carries (Cast Swap's per-role traits). */
@@ -211,6 +213,9 @@ const trendFaceMaskSchema = z.strictObject({
   fps: z.number().positive().max(1000).optional(),
   variants: z.array(trendFaceMaskVariantSchema).max(MAX_VARIANTS).optional(),
   variantJobs: z.array(trendFaceMaskVariantJobSchema).max(MAX_VARIANTS).optional(),
+  sceneDescription: z.string().min(1).max(SCENE_DESCRIPTION_MAX).optional(),
+  previewSceneDescription: z.string().min(1).max(SCENE_DESCRIPTION_MAX).optional(),
+  previewSceneDescriptionStart: z.number().min(0).max(3600).optional(),
 })
 
 /** The face mask being made (`TrendFaceMaskJob`): written by the face mask routes only. */

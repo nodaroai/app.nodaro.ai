@@ -140,6 +140,27 @@ export interface TrendFaceMask {
   variants?: TrendFaceMaskVariant[]
   /** The variants in the making (one per set of people at most). Absent = none. */
   variantJobs?: TrendFaceMaskVariantJob[]
+  /**
+   * HIDDEN. Full depth only (decided 2026-10-28): the make's LLM description
+   * of the whole original clip (setting, light, props, then each shot with
+   * its integer-second range; people named by role), copied from its
+   * `output_data.sceneDescription` on approve, trimmed, ≤ 4000. The admin
+   * may edit it (`PUT …/face-mask/scene-description`); editing never puts
+   * the mask out of date (it is not part of the settings key). A full run
+   * sends it as `sceneDescription` (scene-description.ts). Absent: a clip
+   * made before descriptions existed (the run then describes the clip itself).
+   */
+  sceneDescription?: string
+  /** HIDDEN. The same for the 4 s preview window (`previewStart` + 4 s, only the roles in it): a preview run's. */
+  previewSceneDescription?: string
+  /**
+   * The `previewStart` the preview's text was made for (the make's recorded
+   * input). A preview run uses that text only while the trend's
+   * `previewStart` still is this; otherwise it sends the whole clip's text
+   * cut to the preview's window. Editing the text keeps it. Absent: not
+   * recorded (the text reads as made for another start).
+   */
+  previewSceneDescriptionStart?: number
 }
 
 /**

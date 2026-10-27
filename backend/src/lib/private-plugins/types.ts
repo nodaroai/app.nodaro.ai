@@ -3625,6 +3625,16 @@ export interface PluginSupports {
    *   absent ⇒ `false` — the host strips both fields and sends the whole
    *   source clip with `previewStart` as before, so the wire is byte-identical
    *   (`withPreparedPreview`, ee/lib/trends/run-helpers.ts).
+   * - `storedSceneDescription`: a full-depth make (`POST /v1/cast-swap/face-mask`)
+   *   takes `roles` (`[{ name, kind }]`, the trend's role names) and
+   *   `previewStart`, and its completion carries `sceneDescription` (the whole
+   *   original clip, people named by role) and `previewSceneDescription` (the
+   *   4 s preview window); a trend run takes `sceneDescription` (the stored
+   *   text, platform-only) with `sceneDescriptionWindow` (`{ fromSec, toSec }`
+   *   of the source it covers) and rewrites it for the new cast and the run's
+   *   window instead of describing the clip again. Additive-optional: absent ⇒
+   *   `false` — the make is sent neither key and a run neither field, so the
+   *   wire is byte-identical (ee/lib/trends/scene-description.ts).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3652,6 +3662,7 @@ export interface PluginSupports {
     readonly promptStyles?: readonly ("precise" | "flexible")[]
     readonly fullDepthScenes?: readonly ("description" | "original" | "none")[]
     readonly preparedPreview?: boolean
+    readonly storedSceneDescription?: boolean
   }
 }
 

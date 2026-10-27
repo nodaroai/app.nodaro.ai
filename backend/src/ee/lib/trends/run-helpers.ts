@@ -441,6 +441,23 @@ export function withoutUnsupportedPromptStyle(composed: ComposedTrendRun): void 
 }
 
 /**
+ * The body without the stored scene description (`sceneDescription` and its
+ * `sceneDescriptionWindow`, scene-description.ts) when the loaded engine does
+ * not declare it rewrites one (`castSwap.storedSceneDescription`), or when the
+ * body no longer asks for a described scene (an engine that does not take
+ * the scene had `faceMasking.scene` stripped first): such an engine describes
+ * the clip itself per run, exactly as before. Mutates `composed.body`.
+ */
+export function withoutUnsupportedSceneDescription(composed: ComposedTrendRun): void {
+  const { body } = composed
+  if (body.sceneDescription === undefined && body.sceneDescriptionWindow === undefined) return
+  if (getPluginSupports().castSwap?.storedSceneDescription !== true || body.faceMasking?.scene !== "description") {
+    delete body.sceneDescription
+    delete body.sceneDescriptionWindow
+  }
+}
+
+/**
  * A preview run's prepared input clip on the wire. On an engine that declares
  * `castSwap.preparedPreview`, a composed run that carries the candidate
  * (`composed.preparedPreview`, compose.ts: a preview of a version whose
@@ -494,7 +511,8 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
- * prompt parts, the prompt style and scene, the run's `sourceAsset`), and the
+ * prompt parts, the prompt style and scene, the stored scene description, the
+ * run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
  * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
  */
@@ -502,6 +520,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedStoredMask(composed)
   withoutUnsupportedPromptParts(composed)
   withoutUnsupportedPromptStyle(composed)
+  withoutUnsupportedSceneDescription(composed)
   withPreparedPreview(composed)
 }
 
