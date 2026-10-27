@@ -10,6 +10,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
+import { randomBytes } from "node:crypto"
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
@@ -20,6 +21,7 @@ import {
   INTERNAL_DOC_DIRS,
   MESSAGE,
   PINS_FILE,
+  PR_BODY_SHA,
   PR_TITLE_SHA,
   scanRange,
   writtenPathsFromPatch,
@@ -187,6 +189,45 @@ test("the PR title is read as one more message, on a real range", () => {
     assert.deepEqual(scanRange(`${r.base}..HEAD`, r.dir), [])
     const viaTitle = scanRange(`${r.base}..HEAD`, r.dir, { title: `feat: the ${COMPETITOR} look` })
     assert.deepEqual(viaTitle.map((v) => [v.sha, v.file]), [[PR_TITLE_SHA, MESSAGE]])
+  } finally {
+    r.done()
+  }
+})
+
+test("the PR description is read as one more message, CRLF line ends included", () => {
+  const r = tempRepo()
+  try {
+    r.write("a.ts", "// a\n"); r.git("add", "-A"); r.git("commit", "-qm", "clean subject")
+    for (const body of [undefined, "", "  \r\n  "]) assert.deepEqual(scanRange(`${r.base}..HEAD`, r.dir, { body }), [])
+    const body = `## Summary\r\n\r\nThe new look.\r\nModeled on ${COMPETITOR} Studio.\r\n`
+    const viaBody = scanRange(`${r.base}..HEAD`, r.dir, { body })
+    assert.deepEqual(viaBody.map((v) => [v.sha, v.file, v.ruleId, v.text]), [
+      [PR_BODY_SHA, MESSAGE, "competitor-citation", `Modeled on ${COMPETITOR} Studio.`],
+    ])
+  } finally {
+    r.done()
+  }
+})
+
+const hasGitleaks = (() => {
+  try {
+    execFileSync("gitleaks", ["version"], { stdio: "ignore" })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+test("gitleaks reads the PR description", { skip: !hasGitleaks && "gitleaks is not installed" }, () => {
+  const r = tempRepo()
+  try {
+    r.write("a.ts", "// a\n"); r.git("add", "-A"); r.git("commit", "-qm", "clean subject")
+    // Fresh and random, as tools/gitleaks-canary.sh makes it: a key-shaped
+    // literal in this file would trip the scan of its own diff.
+    const token = `ghp_${randomBytes(48).toString("base64").replace(/[^A-Za-z0-9]/g, "").slice(0, 36)}`
+    const found = scanRange(`${r.base}..HEAD`, r.dir, { checks: ["secrets"], body: `## Test plan\n\ntoken = "${token}"\n` })
+    assert.deepEqual(found.map((v) => [v.sha, v.file]), [[PR_BODY_SHA, MESSAGE]])
+    assert.match(found[0].ruleId, /^gitleaks:/)
   } finally {
     r.done()
   }

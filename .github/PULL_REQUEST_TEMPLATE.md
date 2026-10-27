@@ -15,7 +15,7 @@
 
 ## Related
 
-<!-- Link to issue, spec, or related PR -->
+<!-- Link to a public issue or PR. A link to a private repo or plan goes in a PR comment: this description is public text. -->
 
 ---
 
