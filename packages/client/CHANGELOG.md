@@ -1,5 +1,12 @@
 # @nodaro/sdk
 
+## 2.51.0
+
+### Minor Changes
+
+- 61bfa44: `billing.plans()` names each price's Stripe id: `prices.monthly.priceId` and `prices.yearly.priceId` on a plan (what `checkout()` and `changePlan()` take, and what the subscription's `stripe_price_id` matches), and `priceId` on a credit pack (`null` when the pack has no fixed Stripe price; a pack can always be bought as a load of its amount).
+- 61bfa44: `client.credits.usageSummary()` sums a period's credit usage the way a billing screen draws it: totals (used, purchased, granted, refunded, runs, the average per run), the spend by model and by category, a series over time by day, week or month with no holes, and the spend by session and by workflow. The CLI gains `nodaro billing summary`.
+
 ## 2.50.0
 
 ### Minor Changes
