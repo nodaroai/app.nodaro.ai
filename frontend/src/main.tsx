@@ -11,6 +11,11 @@ import "@/lib/i18n-bootstrap"
 import { bootstrapCatalogs } from "@/lib/catalog-bootstrap"
 // Rendered look previews (Cloud only; a self-hosted install keeps the drawn ones).
 import { bootstrapLookPreviews } from "@/lib/look-previews-bootstrap"
+// Which sibling site (e.g. a community's chat) the user arrived from — read
+// from the referrer before anything navigates. See lib/sibling-origin.ts.
+import { rememberSiblingOrigin } from "@/lib/sibling-origin"
+
+rememberSiblingOrigin()
 
 // Auto-reload on stale chunks after deployment.
 // Vite fires this when any preloaded JS/CSS dep returns 404.

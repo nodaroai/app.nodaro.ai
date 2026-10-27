@@ -52,6 +52,10 @@ export type AuthMethod = "email" | "google" | "sso"
 export interface SurfaceSibling {
   label: string
   url: string
+  /** Per-studio-host override of `url`, keyed by the bare lower-case hostname
+   *  the browser is on — one deployment answering on several hostnames can
+   *  point each at its own sibling site. A host it does not name uses `url`. */
+  urlByHost?: Record<string, string>
 }
 
 /**
@@ -168,6 +172,31 @@ const knownEnumArray = <T extends string>(values: readonly T[]) =>
  * the WHOLE field on one non-string, and `.catch([])` then dropped EVERY deny
  * entry — silently un-denying everything (a privacy/gating fail-open).
  */
+/**
+ * `siblings.apps[].urlByHost`, leniently: only entries whose key is a bare
+ * lower-case hostname (the shape `location.hostname` yields) and whose value is
+ * an absolute http(s) URL survive. A bad entry drops alone; nothing usable
+ * leaves the key absent, so the sibling falls back to its `url`.
+ */
+const HOSTNAME_KEY = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/
+const siblingUrlByHost = z
+  .unknown()
+  .optional()
+  .transform((raw): Record<string, string> | undefined => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
+    const out: Record<string, string> = {}
+    for (const [host, url] of Object.entries(raw)) {
+      if (!HOSTNAME_KEY.test(host) || typeof url !== "string") continue
+      try {
+        const u = new URL(url)
+        if (u.protocol === "https:" || u.protocol === "http:") out[host] = url
+      } catch {
+        // drop this entry only
+      }
+    }
+    return Object.keys(out).length ? out : undefined
+  })
+
 const stringArray = () =>
   z
     .array(z.unknown())
@@ -332,7 +361,15 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
     .object({ methods: knownEnumArray(AUTH_METHODS.options), ssoLabel: z.string().optional() })
     .catch({ methods: [] }),
   siblings: z
-    .object({ apps: z.array(z.object({ label: z.string(), url: z.string() })).catch([]) })
+    .object({
+      apps: z
+        .array(
+          z
+            .object({ label: z.string(), url: z.string(), urlByHost: siblingUrlByHost })
+            .transform(({ urlByHost, ...s }) => (urlByHost ? { ...s, urlByHost } : s)),
+        )
+        .catch([]),
+    })
     .catch({ apps: [] }),
   brand: z
     .object({ productName: z.string().min(1), description: z.string().optional(), wordmark: z.string().optional(), platformLinks: z.boolean().optional().catch(false) })
