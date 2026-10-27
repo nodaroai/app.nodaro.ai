@@ -20,24 +20,29 @@
  */
 export const LLM_ROUTE_REQUEST_TIMEOUT_MS = 10 * 60 * 1000
 
-/** Anything whose `raw` may carry a socket idle timeout (a Fastify request or reply). */
+/** A Fastify request or reply: its `raw` is the Node message, whose `socket` carries the idle timeout. */
 interface WithRaw {
   raw: unknown
 }
 
 /**
- * Sets the socket idle timeout of a request and its reply to `ms`, when there
- * is a socket to set. A request a plugin worker sends from inside the server
- * (`app.inject`, through the toolkit's worker request) has no socket: its
- * `raw` objects carry no `setTimeout`, and calling it threw "req.raw.setTimeout
- * is not a function", a 500 for every such call (the cast-swap scene
- * description on staging, 2026-10-27). Such a request has no idle timeout to
- * raise, so it is left as it is.
+ * Sets the socket idle timeout of a request to `ms` — on the connection's
+ * socket itself, which is what `req.raw.setTimeout` / `reply.raw.setTimeout`
+ * do underneath (request and reply share the one socket). A request a plugin
+ * worker sends from inside the server (`app.inject`, through the toolkit's
+ * worker request) has no real socket, so it is left as it is. Calling the
+ * message's own `setTimeout` there failed twice (2026-10-27, the cast-swap
+ * scene description on staging): first "req.raw.setTimeout is not a
+ * function", then light-my-request's reply, whose `setTimeout` requires a
+ * callback ("The listener argument must be of type function").
  */
 export function extendSocketTimeout(req: WithRaw, reply: WithRaw, ms: number): void {
-  for (const target of [req.raw, reply.raw]) {
-    const setTimeout = (target as { setTimeout?: unknown } | null)?.setTimeout
-    if (typeof setTimeout === "function") setTimeout.call(target, ms)
+  for (const message of [req.raw, reply.raw]) {
+    const socket = (message as { socket?: unknown } | null | undefined)?.socket
+    const setTimeout = (socket as { setTimeout?: unknown } | null | undefined)?.setTimeout
+    if (typeof setTimeout === "function") {
+      setTimeout.call(socket, ms)
+      return
+    }
   }
 }
-
