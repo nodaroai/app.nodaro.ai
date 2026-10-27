@@ -1347,6 +1347,142 @@ describe("trend face masking and pre prompt", () => {
 
 // ── engine refusals (never relayed verbatim) ───────────────────────────────
 
+describe("the preview's prepared input clip", () => {
+  const PREVIEW_CLIP = "https://cdn.example/trends/t1/HIDDEN-PREVIEW-CLIP.mp4"
+  const PREVIEW_MASK = "https://cdn.example/trends/t1/HIDDEN-PREVIEW-MASK.mp4"
+  const MASK_URL = "https://cdn.example/trends/t1/HIDDEN-MASK.mp4"
+  const CLIP = {
+    videoUrl: PREVIEW_CLIP,
+    durationSec: 5,
+    width: 720,
+    height: 1280,
+    frames: 150,
+    sha256: "b".repeat(64),
+    sourceVideoUrl: SOURCE,
+    startSec: 2,
+    recipe: "1",
+    madeAt: "2026-10-27T10:00:00.000Z",
+  }
+  const CLIP_MASK = { url: PREVIEW_MASK, frames: 150, sha256: "c".repeat(64), sourceMaskUrl: MASK_URL }
+  const supports = (over: Record<string, unknown> = {}) =>
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...over } })
+  const run = (payload: Record<string, unknown>, path = "runs") =>
+    app.inject({ method: "POST", url: `/v1/trends/neon-dance/${path}`, headers: as(), payload })
+  const maskOf = (data: TrendVersionData) => ({
+    url: MASK_URL,
+    frames: 360,
+    recipe: { core: "2026-10-25", plugin: "1" },
+    settingsKey: faceMaskSettingsKey(data)!,
+    jobId: "HIDDEN-MASK-JOB",
+    stats: { shots: 1, heldFrames: 0, coverage: 0.01, droppedRegions: 0 },
+    approvedAt: "2026-10-25T10:00:00.000Z",
+    approvedBy: "admin",
+  })
+
+  it("an engine without the capability gets today's body on estimate and run alike: the whole source, previewStart, no new field", async () => {
+    mem.trends[0]!.versions[2] = versionData({ previewClip: CLIP })
+    supports()
+    for (const path of ["estimate", "runs"]) {
+      engine.calls = []
+      const res = await run({ ...RUN_BODY, preview: true }, path)
+      expect(res.statusCode, path).toBeLessThan(300)
+      const body = engine.calls[0]!.body
+      expect(body.videoUrl, path).toBe(SOURCE)
+      expect(body.previewStart, path).toBe(2)
+      expect(body.preview, path).toBe(true)
+      expect(body, path).not.toHaveProperty("preparedPreview")
+      expect(body, path).not.toHaveProperty("sourceAsset")
+      expect(JSON.stringify(body), path).not.toContain("HIDDEN-PREVIEW-CLIP")
+      expectNoHidden(res.body)
+    }
+    // A full run on such an engine carries no sourceAsset either.
+    engine.calls = []
+    await run(RUN_BODY)
+    expect(engine.calls[0]!.body).not.toHaveProperty("sourceAsset")
+  })
+
+  it("an engine with the capability is sent the clip from 0 on estimate and run alike, with sourceAsset naming it; a full run names the source", async () => {
+    mem.trends[0]!.versions[2] = versionData({ previewClip: CLIP, source: { videoUrl: SOURCE, durationSec: 12, width: 720, height: 1280, display: DISPLAY, sha256: "a".repeat(64) } })
+    supports({ preparedPreview: true })
+    for (const path of ["estimate", "runs"]) {
+      engine.calls = []
+      const res = await run({ ...RUN_BODY, preview: true }, path)
+      expect(res.statusCode, path).toBeLessThan(300)
+      const body = engine.calls[0]!.body
+      expect(body.videoUrl, path).toBe(PREVIEW_CLIP)
+      expect(body.previewStart, path).toBe(0)
+      expect(body.preview, path).toBe(true)
+      expect(body.preparedPreview, path).toBe(true)
+      expect(body.sourceAsset, path).toEqual({ kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" })
+      // The preview's own prompt parts still ride.
+      expect(body.prePrompt, path).toBe(PREVIEW_PRE)
+      expectNoHidden(res.body)
+    }
+    engine.calls = []
+    const full = await run(RUN_BODY)
+    expect(full.statusCode).toBe(202)
+    const body = engine.calls[0]!.body
+    expect(body.videoUrl).toBe(SOURCE)
+    expect(body.previewStart).toBe(2)
+    expect(body).not.toHaveProperty("preparedPreview")
+    expect(body.sourceAsset).toEqual({ kind: "full", sha256: "a".repeat(64), durationSec: 12 })
+    // The page never shows any of it.
+    const page = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(page.body).not.toContain("previewClip")
+    expect(page.body).not.toContain("HIDDEN-PREVIEW")
+    expect(page.body).not.toContain("sha256")
+  })
+
+  it("a stale clip (the window moved since) is not sent even where the engine takes one", async () => {
+    mem.trends[0]!.versions[2] = versionData({ previewClip: { ...CLIP, startSec: 1 } })
+    supports({ preparedPreview: true })
+    const res = await run({ ...RUN_BODY, preview: true })
+    expect(res.statusCode).toBe(202)
+    const body = engine.calls[0]!.body
+    expect(body.videoUrl).toBe(SOURCE)
+    expect(body.previewStart).toBe(2)
+    expect(body).not.toHaveProperty("preparedPreview")
+    expect(body.sourceAsset).toEqual({ kind: "full", durationSec: 12 })
+  })
+
+  it("a masked trend sends the clip's own cut of its stored mask with the clip; without that cut the whole source rides as today", async () => {
+    const data = versionData({ faceMasking: { mode: "always" } })
+    const mask = maskOf(data)
+    mem.trends[0]!.versions[2] = { ...data, faceMask: mask, previewClip: { ...CLIP, faceMask: CLIP_MASK } }
+    supports({ preparedPreview: true, storedFaceMask: true })
+    for (const path of ["estimate", "runs"]) {
+      engine.calls = []
+      const res = await run({ ...RUN_BODY, preview: true }, path)
+      expect(res.statusCode, path).toBeLessThan(300)
+      const body = engine.calls[0]!.body
+      expect(body.videoUrl, path).toBe(PREVIEW_CLIP)
+      expect(body.storedFaceMask, path).toEqual({ url: PREVIEW_MASK, frames: 150 })
+      expect(body.preparedPreview, path).toBe(true)
+      expect(res.body, path).not.toContain("HIDDEN-PREVIEW")
+    }
+    // The same trend, its clip cut before the mask was approved: out of date, so the source and the whole mask.
+    mem.trends[0]!.versions[2] = { ...data, faceMask: mask, previewClip: CLIP }
+    engine.calls = []
+    await run({ ...RUN_BODY, preview: true })
+    const body = engine.calls[0]!.body
+    expect(body.videoUrl).toBe(SOURCE)
+    expect(body.storedFaceMask).toEqual({ url: MASK_URL, frames: 360 })
+    expect(body).not.toHaveProperty("preparedPreview")
+  })
+
+  it("an engine that takes prepared previews but no stored mask is sent the clip without any mask", async () => {
+    const data = versionData({ faceMasking: { mode: "always" } })
+    mem.trends[0]!.versions[2] = { ...data, faceMask: maskOf(data), previewClip: { ...CLIP, faceMask: CLIP_MASK } }
+    supports({ preparedPreview: true })
+    const res = await run({ ...RUN_BODY, preview: true })
+    expect(res.statusCode).toBe(202)
+    const body = engine.calls[0]!.body
+    expect(body.videoUrl).toBe(PREVIEW_CLIP)
+    expect(body).not.toHaveProperty("storedFaceMask")
+    expect(body.preparedPreview).toBe(true)
+  })
+})
+
 describe("an engine refusal on estimate and run", () => {
   const ROUTES = [
     { name: "estimate", url: "/v1/trends/neon-dance/estimate", set: (status: number, body: unknown) => { engine.estimateStatus = status; engine.estimateBody = body } },
@@ -1521,10 +1657,13 @@ describe("GET /v1/trends/runs", () => {
       input_data: runInput({ fullQualityOf: DRAFT_JOB, resolution: "1080p", draft: false, __draftJobId: DRAFT_JOB }),
       created_at: "2026-10-21T10:00:00.000000+00:00",
     })
+    // The engine's provenance stamp (`sourceAsset`, `preparedPreview`: visible keys, read as-is
+    // on GET /v1/jobs/:id) is not part of the run shape: the whitelist below leaves it out.
+    const provenance = { preparedPreview: true, sourceAsset: { kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" } }
     feed(
       [
         fqRow,
-        jobRow(DRAFT_JOB),
+        jobRow(DRAFT_JOB, { input_data: runInput(provenance), output_data: { videoUrl: `https://out.example/${DRAFT_JOB}.mp4`, preview: false, sourceAsset: provenance.sourceAsset } }),
         jobRow(HD_JOB, { input_data: runInput({ resolution: "720p", draft: false }), created_at: "2026-10-19T10:00:00.000000+00:00" }),
         jobRow(FAILED_JOB, {
           status: "failed", progress: 40, output_data: null, completed_at: null,
@@ -1603,6 +1742,8 @@ describe("GET /v1/trends/runs", () => {
     // Nothing hidden leaks (the Full Quality job's `__draftJobId` included).
     expectNoHidden(res.body)
     for (const r of runs) expect(r.videoUrl).not.toBe(SOURCE)
+    expect(res.body).not.toContain("sourceAsset")
+    expect(res.body).not.toContain("preparedPreview")
 
     // Two lookups, both the caller's own: whether the page's Full Quality try
     // is its draft's newest (by the try's draft), then the page's drafts'

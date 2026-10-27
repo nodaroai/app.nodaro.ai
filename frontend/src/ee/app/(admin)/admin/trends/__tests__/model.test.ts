@@ -7,7 +7,7 @@
  * - A publish blocker for an engine without face masking reads as a sentence.
  */
 import { describe, expect, it } from "vitest"
-import type { AdminTrendData, AdminTrendFaceMasking } from "@/lib/api"
+import type { AdminTrendData, AdminTrendFaceMasking, AdminTrendPreviewClip } from "@/lib/api"
 import {
   CAST_SWAP_FACE_MASKING_BOUNDS,
   CAST_SWAP_FACE_MASKING_DEFAULTS,
@@ -27,6 +27,7 @@ import {
   MAX_PRE_PROMPT,
   MAX_TREND_PROMPT,
   hasOwnPreviewPrompts,
+  previewClipStatus,
   promptBudget,
   shownChips,
   TREND_DETAILS_MAX,
@@ -60,11 +61,12 @@ const FULL: AdminTrendFaceMasking = {
   threshold: 0.4,
 }
 
-/** What a save sends for `draft()`: everything but the examples. */
-function savedOf(d: AdminTrendData): Omit<AdminTrendData, "examples"> {
+/** What a save sends for `draft()`: everything but the examples and the server-owned preview clip. */
+function savedOf(d: AdminTrendData): Omit<AdminTrendData, "examples" | "previewClip"> {
   const out: Partial<AdminTrendData> = { ...d }
   delete out.examples
-  return out as Omit<AdminTrendData, "examples">
+  delete out.previewClip
+  return out as Omit<AdminTrendData, "examples" | "previewClip">
 }
 
 describe("face masking and the pre prompt in the form", () => {
@@ -409,6 +411,57 @@ describe("the 4 s preview's own prompt parts in the form", () => {
     ])
     // No preview offered: kept, never run, so not held to the budget.
     expect(formIssues({ ...over, previewStart: null })).toEqual([])
+  })
+})
+
+describe("the 4 s preview's input clip (server-owned)", () => {
+  const CLIP: AdminTrendPreviewClip = {
+    videoUrl: "https://cdn.test/trends/a1/preview.mp4",
+    durationSec: 5,
+    width: 720,
+    height: 1280,
+    frames: 150,
+    sha256: "ab".repeat(32),
+    sourceVideoUrl: "https://cdn.test/src.mp4",
+    startSec: 2,
+    madeAt: "2026-10-27T10:00:00.000Z",
+  }
+
+  it("is carried on the form read-only and kept out of the PUT body (the server makes it on save)", () => {
+    const d = draft({ previewClip: CLIP })
+    const form = toForm(d)
+    expect(form.previewClip).toEqual(CLIP)
+    expect(form.previewClip).not.toBe(CLIP)
+    const out = fromForm(form)
+    expect(out).not.toHaveProperty("previewClip")
+    expect(out).toEqual(savedOf(d))
+    // Loading a draft with and without the clip saves the same body: it never makes the form dirty.
+    expect(JSON.stringify(fromForm(toForm(draft())))).toBe(JSON.stringify(out))
+  })
+
+  it("previewClipStatus mirrors the server's reading from what the client knows: source URL and start", () => {
+    expect(previewClipStatus(toForm(draft({ previewClip: CLIP })))).toBe("current")
+    expect(previewClipStatus(toForm(draft()))).toBe("none")
+    expect(previewClipStatus(toForm(draft({ previewClip: CLIP, previewStart: null })))).toBe("none")
+    expect(previewClipStatus(toForm(draft({ previewClip: CLIP, source: null })))).toBe("none")
+    expect(previewClipStatus({ ...toForm(draft({ previewClip: CLIP })), previewStart: 2.5 })).toBe("stale")
+    const moved = toForm(draft({ previewClip: CLIP, source: { videoUrl: "https://cdn.test/src-2.mp4", durationSec: 12 } }))
+    expect(previewClipStatus(moved)).toBe("stale")
+    // The server's draft reads the same way (the Test panel asks about the saved draft).
+    expect(previewClipStatus(draft({ previewClip: CLIP }))).toBe("current")
+  })
+
+  it("describes a missing and an out-of-date preview input clip, pointing at the save that makes it", () => {
+    expect(describeBlocker({ code: "preview_clip_missing" })).toBe(
+      "The 4 s preview's input clip is not prepared yet. Save the draft, or publish again, to make it (1. Source clip → Preview input).",
+    )
+    expect(describeBlocker({ code: "preview_clip_out_of_date", why: "start" })).toBe(
+      "The 4 s preview's input clip is out of date: the preview start moved since it was cut. Save the draft, or publish again, to make it again (1. Source clip → Preview input).",
+    )
+    expect(describeBlocker({ code: "preview_clip_out_of_date", why: "source" })).toMatch(/the source clip changed since it was cut/)
+    expect(describeBlocker({ code: "preview_clip_out_of_date", why: "face_mask" })).toMatch(/the face mask changed since it was cut/)
+    expect(describeBlocker({ code: "preview_clip_out_of_date", why: "recipe" })).toMatch(/cut differently since it was made/)
+    expect(describeBlocker({ code: "preview_clip_out_of_date" })).toMatch(/the draft changed since it was cut/)
   })
 })
 

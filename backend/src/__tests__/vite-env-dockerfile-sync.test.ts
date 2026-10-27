@@ -12,8 +12,8 @@
  * References are collected from BOTH `import.meta.env.VITE_*` in
  * `frontend/src/` AND `%VITE_*%` placeholders in the HTML entry
  * (`frontend/index.html`) — Vite substitutes both at build time. The
- * analytics snippet (Clarity/GA) lives ONLY in index.html, so scanning
- * src/ alone would wrongly report VITE_CLARITY_ID / VITE_GA_ID as orphan
+ * analytics snippet (Clarity/GTM) lives ONLY in index.html, so scanning
+ * src/ alone would wrongly report VITE_CLARITY_ID / VITE_GTM_ID as orphan
  * ARGs (and miss the requirement that they have ARG/ENV lines).
  *
  * Memory-noted bug class: this has bitten before. The error mode is

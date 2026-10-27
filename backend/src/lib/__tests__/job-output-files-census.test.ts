@@ -113,6 +113,10 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
     `${NOT_A_JOB} (a trend source clip's display copy, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
   'ee/lib/trends/media.ts :: trendMediaKey(trendId, "png") → posterUrl':
     `${NOT_A_JOB} (the display copy's poster, \`trends/<trendId>/<uuid>.png\`: the trend owns it, never a job)`,
+  'ee/lib/trends/preview-clip-media.ts :: trendMediaKey(trendId, "mp4") → videoUrl':
+    `${NOT_A_JOB} (a trend's preview input clip, \`trends/<trendId>/<uuid>.mp4\`, cut from its source once at save: the trend owns it, never a job)`,
+  'ee/lib/trends/preview-clip-media.ts :: trendMediaKey(trendId, "mp4")':
+    `${NOT_A_JOB} (the preview input clip's cut of the trend's stored face mask, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
   "lib/media-import.ts :: r2Key": UPLOAD,
   "lib/media-import.ts :: thumbKey": UPLOAD,

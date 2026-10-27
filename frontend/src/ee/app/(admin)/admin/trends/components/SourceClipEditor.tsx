@@ -2,15 +2,21 @@
 // clip, mark the window, play it back. Runs edit the uploaded clip; users see
 // its display copy (a browser-safe MP4 and poster the platform makes when the
 // clip is stored), shown on the trend's page beside the examples.
+//
+// The preview's INPUT clip (the window cut from the source, made by the server
+// when the draft is saved) is shown under the window: its length, frames and
+// hash, when it was made, and a Play of the stored file itself. The slider
+// stays the advanced override of where the window starts (0 by default).
 
 import { useEffect, useRef, useState } from "react"
 import { Crosshair, Play } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import type { AdminTrendSource } from "@/lib/api"
+import { formatRelative } from "@/lib/i18n"
+import type { AdminTrendPreviewClip, AdminTrendSource } from "@/lib/api"
 import { useTrendMedia } from "@/ee/hooks/queries/use-admin-queries"
-import { PREVIEW_SECONDS, clampPreview, formatSeconds } from "../model"
+import { PREVIEW_SECONDS, clampPreview, formatSeconds, previewClipStatus } from "../model"
 import { MediaPicker } from "./MediaPicker"
 import { uploadLocalFile } from "./uploads"
 
@@ -18,10 +24,12 @@ interface Props {
   readonly trendId: string
   readonly source: AdminTrendSource | null
   readonly previewStart: number | null
+  /** The 4 s preview's input clip as the server last read it (made on save; never edited here). */
+  readonly previewClip?: AdminTrendPreviewClip
   readonly onChange: (next: { source: AdminTrendSource | null; previewStart: number | null }) => void
 }
 
-export function SourceClipEditor({ trendId, source, previewStart, onChange }: Props) {
+export function SourceClipEditor({ trendId, source, previewStart, previewClip, onChange }: Props) {
   const media = useTrendMedia(trendId)
   const [uploading, setUploading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -30,6 +38,7 @@ export function SourceClipEditor({ trendId, source, previewStart, onChange }: Pr
   const busy = uploading || media.isPending
   const duration = source?.durationSec ?? 0
   const maxStart = Math.max(0, duration - PREVIEW_SECONDS)
+  const clipStatus = previewClipStatus({ source, previewStart, previewClip })
 
   const store = async (url: string) => {
     try {
@@ -40,6 +49,7 @@ export function SourceClipEditor({ trendId, source, previewStart, onChange }: Pr
         durationSec: stored.durationSec,
         ...(stored.width !== undefined ? { width: stored.width } : {}),
         ...(stored.height !== undefined ? { height: stored.height } : {}),
+        ...(stored.sha256 !== undefined ? { sha256: stored.sha256 } : {}),
         // A new clip never keeps the old clip's copy: only the one made for it.
         ...(stored.display ? { display: stored.display } : {}),
       }
@@ -190,6 +200,16 @@ export function SourceClipEditor({ trendId, source, previewStart, onChange }: Pr
                     <Play className="mr-1 h-4 w-4" /> Play the window
                   </Button>
                 </div>
+                {clipStatus === "current" && previewClip ? (
+                  <PreviewInputRow clip={previewClip} />
+                ) : (
+                  <p className="text-xs text-muted-foreground" data-preview-input={clipStatus}>
+                    <span className="font-medium text-foreground">Preview input:</span>{" "}
+                    {clipStatus === "stale"
+                      ? "the prepared clip was cut from another source clip or start. Prepared again on save: every preview run then edits that file."
+                      : "prepared on save. The preview window is cut from the source into its own file, and every preview run edits that file."}
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -203,6 +223,59 @@ export function SourceClipEditor({ trendId, source, previewStart, onChange }: Pr
         busy={busy}
         onFiles={(files) => void fromFile(files[0]!)}
         onUrl={(url) => void store(url)}
+      />
+    </div>
+  )
+}
+
+/**
+ * The stored preview input clip, current for this source and start: what a
+ * preview run edits. Play plays the stored file itself (not the source
+ * seeked to the window), so what is heard and seen is what the engine gets.
+ */
+function PreviewInputRow({ clip }: { readonly clip: AdminTrendPreviewClip }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const play = () => {
+    const v = videoRef.current
+    if (!v) return
+    v.currentTime = 0
+    void v.play()?.catch(() => {})
+  }
+  return (
+    <div className="flex flex-col gap-2 border-t pt-2 text-xs" data-preview-input="current">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-medium text-sm">Preview input</span>
+        <span className="tabular-nums">{formatSeconds(clip.durationSec)}</span>
+        <span className="tabular-nums">{clip.frames} frames</span>
+        <span className="tabular-nums">
+          {clip.width}×{clip.height}
+        </span>
+        <code title={clip.sha256} className="rounded bg-muted px-1">
+          {clip.sha256.slice(0, 12)}
+        </code>
+        <span className="text-muted-foreground" title={new Date(clip.madeAt).toLocaleString()}>
+          made {formatRelative(clip.madeAt)}
+        </span>
+        {clip.faceMask && <span className="text-muted-foreground">with its face mask ({clip.faceMask.frames} frames)</span>}
+        <Button type="button" variant="outline" size="sm" className="min-h-9" onClick={play}>
+          <Play className="mr-1 h-4 w-4" /> Play the prepared clip
+        </Button>
+        <a href={clip.videoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+          open
+        </a>
+      </div>
+      <span className="text-muted-foreground">
+        Cut from the source at the preview start when the draft was saved: every preview run edits this file as it is.
+      </span>
+      <video
+        ref={videoRef}
+        key={clip.videoUrl}
+        src={clip.videoUrl}
+        controls
+        playsInline
+        preload="none"
+        aria-label="Prepared preview clip"
+        className="max-h-48 w-full rounded-md bg-black sm:w-auto sm:max-w-[50%]"
       />
     </div>
   )

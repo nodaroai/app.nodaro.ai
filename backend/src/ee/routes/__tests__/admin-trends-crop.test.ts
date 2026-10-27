@@ -38,6 +38,10 @@ type MemTrend = TrendRow & { versions: Record<number, MemVersion> }
 const mem = vi.hoisted(() => ({
   revs: 0,
   trends: [] as MemTrend[],
+  /** Every preview input clip cut (`makePreviewClip`): what it was cut from, at which start, for how long, with which mask. */
+  clips: [] as Array<{ trendId: string; sourceUrl: string; startSec: number; durationSec: number; faceMask?: { url: string } }>,
+  /** When set, the next cut fails with it. */
+  clipFails: null as null | Error,
   admins: new Set<string>(),
   /** Every `storeCroppedSource` call. */
   cropped: [] as Array<{ trendId: string; sourceUrl: string; aspect: string; position: number }>,
@@ -82,6 +86,39 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
   }
 })
 
+vi.mock("../../lib/trends/preview-clip-media.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/trends/preview-clip-media.js")>()
+  const { PREVIEW_CLIP_RECIPE, previewClipDurationSec, previewClipState, withoutPreviewClip } = await import("../../lib/trends/preview-clip.js")
+  const { storedFaceMaskFor } = await import("../../lib/trends/face-mask.js")
+  // The cut itself is stubbed (preview-clip-media.test.ts pins it); the preparation runs as it is.
+  const makePreviewClip = async (trendId: string, args: { sourceUrl: string; startSec: number; durationSec: number; faceMask?: { url: string } }) => {
+    mem.clips.push({ trendId, ...args })
+    const fail = mem.clipFails
+    mem.clipFails = null
+    if (fail) throw fail
+    const n = mem.clips.length
+    return {
+      videoUrl: `https://cdn.test/trends/${trendId}/preview-${n}.mp4`, durationSec: args.durationSec, width: 1080, height: 1920, frames: Math.round(args.durationSec * 30),
+      sha256: String(n).padStart(64, "0"), sourceVideoUrl: args.sourceUrl, startSec: args.startSec, recipe: PREVIEW_CLIP_RECIPE,
+      ...(args.faceMask ? { faceMask: { url: `https://cdn.test/trends/${trendId}/preview-mask-${n}.mp4`, frames: Math.round(args.durationSec * 30), sha256: String(n).padStart(64, "1"), sourceMaskUrl: args.faceMask.url } } : {}),
+      madeAt: "2026-10-27T12:00:00.000Z",
+    }
+  }
+  const ensurePreviewClip: typeof actual.ensurePreviewClip = async (trendId, data, opts = {}) => {
+    const state = previewClipState(data)
+    if (state.kind === "not_offered") return withoutPreviewClip(data)
+    if (state.kind === "current") return data
+    if (opts.reuse && previewClipState({ ...data, previewClip: opts.reuse }).kind === "current") return { ...data, previewClip: opts.reuse }
+    const mask = storedFaceMaskFor(data)
+    const previewClip = await makePreviewClip(trendId, {
+      sourceUrl: data.source!.videoUrl, startSec: data.previewStart!, durationSec: previewClipDurationSec(data.source!.durationSec, data.previewStart!),
+      ...(mask ? { faceMask: { url: mask.url } } : {}),
+    })
+    return { ...data, previewClip }
+  }
+  return { ...actual, makePreviewClip, ensurePreviewClip }
+})
+
 vi.mock("../../../lib/admin-check.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../lib/admin-check.js")>()
   return { ...actual, checkIsAdmin: async (userId: string) => mem.admins.has(userId) }
@@ -102,6 +139,7 @@ vi.mock("../../lib/trends/media.js", async (importOriginal) => {
         width: 1920,
         height: 1080,
         durationSec: 9.5,
+        sha256: "e".repeat(64),
         display: { videoUrl: `https://cdn.test/trends/${trendId}/cropped-display.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/cropped-display.png`, width: 1920, height: 1080, durationSec: 9.5 },
       }
     },
@@ -148,6 +186,8 @@ beforeEach(async () => {
   db.log.length = 0
   mem.revs = 0
   mem.trends = []
+  mem.clips = []
+  mem.clipFails = null
   mem.admins = new Set([ADMIN])
   mem.cropped = []
   mem.onCrop = null
@@ -202,12 +242,40 @@ describe("starting a source crop", () => {
       width: 1920,
       height: 1080,
       display: { videoUrl: `https://cdn.test/trends/${T1}/cropped-display.mp4`, posterUrl: `https://cdn.test/trends/${T1}/cropped-display.png`, width: 1920, height: 1080, durationSec: 9.5 },
+      // The stored clip's hash, recorded for a full run's provenance.
+      sha256: "e".repeat(64),
     })
     // The preview kept inside the shorter clip (9.5 − 4).
     expect(d.previewStart).toBe(5.5)
+    // The preview input clip, cut again from the crop at the kept start (the window ends the clip: 4 s, no tail).
+    expect(mem.clips).toEqual([{ trendId: T1, sourceUrl: `https://cdn.test/trends/${T1}/cropped.mp4`, startSec: 5.5, durationSec: 4 }])
+    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/cropped.mp4`, startSec: 5.5, recipe: "1" })
     expect(d.sourceCrop).toBeUndefined()
     expect(audits().map((a) => a.action)).toEqual(["start_trend_source_crop", "crop_trend_source"])
     expect(await viewOf()).toBeNull()
+  })
+
+  it("replaces a stale preview clip in the draft (one cut from the old source is never kept), and a failed cut is the record's error", async () => {
+    const stale = {
+      videoUrl: `https://cdn.test/trends/${T1}/preview-old.mp4`, durationSec: 4, width: 2568, height: 1080, frames: 120, sha256: "b".repeat(64),
+      sourceVideoUrl: SRC, startSec: 8, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    }
+    seed(draftData({ previewClip: stale }))
+    expect((await start({ aspect: "16:9" })).statusCode).toBe(202)
+    await _settledSourceCropsForTests()
+    expect(draftNow().previewClip!.videoUrl).not.toBe(stale.videoUrl)
+    expect(draftNow().previewClip!.sourceVideoUrl).toBe(`https://cdn.test/trends/${T1}/cropped.mp4`)
+
+    mem.trends = []
+    mem.clips = []
+    seed(draftData({ previewClip: stale }))
+    mem.clipFails = new TrendMediaError("media_unreadable", "Could not cut the preview's input clip from the source clip.")
+    expect((await start({ aspect: "16:9" })).statusCode).toBe(202)
+    await _settledSourceCropsForTests()
+    // The draft is as it was: the old source, the old clip, the record carrying why.
+    expect(draftNow().source!.videoUrl).toBe(SRC)
+    expect(draftNow().previewClip).toEqual(stale)
+    expect(draftNow().sourceCrop?.error).toMatchObject({ code: "media_unreadable" })
   })
 
   it("carries the admin's position (the share of the cut from the left / top)", async () => {

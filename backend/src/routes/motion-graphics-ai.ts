@@ -28,6 +28,7 @@ import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, stampSy
 import type { LlmRequest } from "../lib/llm/types.js"
 import { buildLottieRequest } from "../lib/lottie-request.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -81,8 +82,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
       // code, so forward the body and pass its answer straight back (the
       // sibling lottie / 3d-title routes do the same; this one was missed).
       if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/motion-graphics/generate", "motion-graphics")) return
-      req.raw.setTimeout(60000)
-      reply.raw.setTimeout(60000)
+      extendSocketTimeout(req, reply, 60000)
 
       const parsed = generateBody.safeParse(req.body)
       if (!parsed.success) {

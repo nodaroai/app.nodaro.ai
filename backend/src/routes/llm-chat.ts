@@ -1,4 +1,4 @@
-import { LLM_ROUTE_REQUEST_TIMEOUT_MS } from "../lib/llm-route-timeout.js"
+import { LLM_ROUTE_REQUEST_TIMEOUT_MS, extendSocketTimeout } from "../lib/llm-route-timeout.js"
 import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
@@ -149,8 +149,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
 
       // The socket's idle timeout is what closes the connection on a long
       // answer — `config.requestTimeout` above is read by nothing.
-      req.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
-      reply.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+      extendSocketTimeout(req, reply, LLM_ROUTE_REQUEST_TIMEOUT_MS)
 
       const parsed = llmChatBody.safeParse(req.body)
       if (!parsed.success) {
@@ -304,8 +303,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
 
       // The socket's idle timeout is what closes the connection on a long
       // answer — `config.requestTimeout` above is read by nothing.
-      req.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
-      reply.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+      extendSocketTimeout(req, reply, LLM_ROUTE_REQUEST_TIMEOUT_MS)
 
       const parsed = llmChatBody.safeParse(req.body)
       if (!parsed.success) {

@@ -46,8 +46,11 @@ import {
   attachDisplayCopy,
   DisplayAttachConflictError,
   listVersionsLackingDisplay,
+  attachPreviewClip,
+  PreviewClipAttachConflictError,
+  listVersionsLackingPreviewClip,
 } from "../store.js"
-import type { TrendVersionData } from "../types.js"
+import type { TrendPreviewClip, TrendVersionData } from "../types.js"
 
 const T1 = "00000000-0000-4000-8000-0000000000a1"
 const T2 = "00000000-0000-4000-8000-0000000000a2"
@@ -788,6 +791,126 @@ describe("listVersionsLackingDisplay", () => {
       return ok(from === 0 ? page(0, 500) : page(500, 3))
     }
     expect(await listVersionsLackingDisplay()).toHaveLength(503)
+    expect(queries("trend_versions")).toHaveLength(2)
+  })
+})
+
+describe("attachPreviewClip — the second write a published version may get (preview clip backfill)", () => {
+  const REV = "11111111-1111-4111-8111-111111111111"
+  const CLIP: TrendPreviewClip = {
+    videoUrl: "https://cdn.example.com/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
+    sourceVideoUrl: "https://cdn.example.com/src.mp4", startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+  }
+  const FULL: TrendVersionData = {
+    ...DATA,
+    name: { en: "Dance off", he: "קרב ריקוד" },
+    source: { videoUrl: "https://cdn.example.com/src.mp4", durationSec: 12, width: 1080, height: 1920, display: { videoUrl: "https://cdn.example.com/d.mp4", posterUrl: "https://cdn.example.com/d.png", width: 1080, height: 1920, durationSec: 12 } },
+    previewStart: 0,
+    examples: [{ videoUrl: "https://cdn.example.com/ex.mp4", width: 1080, height: 1920, durationSec: 12, slots: {} }] as never,
+  }
+
+  it("writes data.previewClip on a PUBLISHED row and nothing else: same data otherwise, no revision, no published_at", async () => {
+    const before = structuredClone(FULL)
+    db.respond = (q) => (argOf(q, "update") ? ok([{ version: 2 }]) : ok({ data: FULL, revision: REV, published_at: "2026-10-20T10:00:00+00:00" }))
+    expect(await attachPreviewClip(T1, 2, CLIP)).toBe("set")
+
+    const write = queries("trend_versions", "update")
+    expect(write).toHaveLength(1)
+    const payload = argOf(write[0]!, "update")![0] as Record<string, unknown>
+    expect(Object.keys(payload)).toEqual(["data"])
+    const next = payload.data as TrendVersionData
+    expect(next.previewClip).toEqual(CLIP)
+    const { previewClip: _c, ...restNext } = next
+    expect(JSON.stringify(restNext)).toBe(JSON.stringify(before))
+    expect(FULL).toEqual(before)
+
+    // Guarded: the row read (its revision) and the clip still absent — never on published_at.
+    expect(has(write[0]!, "eq", "trend_id", T1) && has(write[0]!, "eq", "version", 2)).toBe(true)
+    expect(has(write[0]!, "eq", "revision", REV)).toBe(true)
+    expect(has(write[0]!, "is", "data->>previewClip", null)).toBe(true)
+    expect(write[0]!.ops.some((op) => op.m === "is" && op.a[0] === "published_at")).toBe(false)
+    expect(queries("trends", "update")).toHaveLength(0)
+  })
+
+  it("is 'already' and writes nothing when the version has a clip (the stored one wins: a run keeps editing the same bytes)", async () => {
+    db.respond = () => ok({ data: { ...FULL, previewClip: { ...CLIP, videoUrl: "https://cdn.example.com/earlier.mp4" } }, revision: REV, published_at: null })
+    expect(await attachPreviewClip(T1, 2, CLIP)).toBe("already")
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("retries on a moved revision, then gives up with PreviewClipAttachConflictError", async () => {
+    db.respond = (q) => (argOf(q, "update") ? ok([]) : ok({ data: FULL, revision: randomRevision(), published_at: null }))
+    const err = await attachPreviewClip(T1, 2, CLIP).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(PreviewClipAttachConflictError)
+    expect((err as PreviewClipAttachConflictError).reason).toBe("concurrent_write")
+    expect(queries("trend_versions", "update")).toHaveLength(3)
+  })
+
+  it("refuses a clip cut from another source, at another start, or for a row that offers no preview any more; a row gone is a conflict too", async () => {
+    const reasonOf = async (data: TrendVersionData | null, clip = CLIP) => {
+      db.respond = () => ok(data === null ? null : { data, revision: REV, published_at: null })
+      const err = await attachPreviewClip(T1, 2, clip).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(PreviewClipAttachConflictError)
+      return (err as PreviewClipAttachConflictError).reason
+    }
+    expect(await reasonOf(FULL, { ...CLIP, sourceVideoUrl: "https://cdn.example.com/old.mp4" })).toBe("source_changed")
+    expect(await reasonOf({ ...FULL, previewStart: 3 })).toBe("start_changed")
+    expect(await reasonOf({ ...FULL, previewStart: null })).toBe("not_offered")
+    expect(await reasonOf({ ...FULL, source: null })).toBe("not_offered")
+    expect(await reasonOf(null)).toBe("version_missing")
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("throws (a plain error) for a clip that IS the source clip and a non-http(s) address", async () => {
+    db.respond = () => ok({ data: FULL, revision: REV, published_at: null })
+    await expect(attachPreviewClip(T1, 2, { ...CLIP, videoUrl: FULL.source!.videoUrl })).rejects.toThrow(/own file/)
+    const notHttp = await attachPreviewClip(T1, 2, { ...CLIP, faceMask: { url: "/trends/m.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: "https://cdn.example.com/mask.mp4" } }).catch((e: unknown) => e)
+    expect((notHttp as Error).message).toMatch(/http\(s\)/)
+    expect(notHttp).not.toBeInstanceOf(PreviewClipAttachConflictError)
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+})
+
+describe("listVersionsLackingPreviewClip", () => {
+  const SRC = { videoUrl: "https://cdn.example.com/src.mp4", durationSec: 12 }
+  const row = (trendId: string, version: number, published: boolean, over: Partial<TrendVersionData>) => ({
+    trend_id: trendId, version, published_at: published ? "2026-10-20T10:00:00+00:00" : null, data: { ...DATA, source: SRC, ...over },
+  })
+  it("lists every version (published and draft) with a source, a preview offered and no clip, with its trend's slug and its whole data", async () => {
+    db.respond = (q) => {
+      if (q.table === "trends") return ok([{ id: T1, slug: "dance-off" }, { id: T2, slug: "jump" }])
+      return ok([
+        row(T1, 1, true, {}),
+        row(T1, 2, false, { previewStart: 3 }),
+        // What the database filters should already drop — filtered again here.
+        row(T2, 1, false, { previewClip: { videoUrl: "x" } as never }),
+        row(T2, 2, false, { previewStart: null }),
+        row(T2, 3, false, { source: null }),
+        row(T3, 1, false, {}),
+      ])
+    }
+    const listed = await listVersionsLackingPreviewClip()
+    expect(listed.map(({ data: _d, ...rest }) => rest)).toEqual([
+      { trendId: T1, slug: "dance-off", version: 1, published: true },
+      { trendId: T1, slug: "dance-off", version: 2, published: false },
+      { trendId: T3, slug: null, version: 1, published: false },
+    ])
+    expect(listed[1]!.data.previewStart).toBe(3)
+    const q = queries("trend_versions")[0]!
+    expect(has(q, "not", "data->>source", "is", null)).toBe(true)
+    expect(has(q, "not", "data->>previewStart", "is", null)).toBe(true)
+    expect(has(q, "is", "data->>previewClip", null)).toBe(true)
+    expect(argOf(q, "update")).toBeUndefined()
+  })
+
+  it("reads every page before returning", async () => {
+    const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => row(T1, from + i + 1, false, {}))
+    db.respond = (q) => {
+      if (q.table === "trends") return ok([{ id: T1, slug: "dance-off" }])
+      const [from] = argOf(q, "range") as [number, number]
+      return ok(from === 0 ? page(0, 500) : page(500, 3))
+    }
+    expect(await listVersionsLackingPreviewClip()).toHaveLength(503)
     expect(queries("trend_versions")).toHaveLength(2)
   })
 })

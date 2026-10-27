@@ -4353,7 +4353,13 @@ Pulse renders whole seconds, so the clip is cut to whole seconds:
 at its end is dropped) or `"cut-start"` (at its start); Prism ignores it. A
 preview is still 4 s from `previewStart`, and Pulse's Full Quality makes a new
 take at 1080p from a completed 720p run's inputs (see
-[Full Quality](#full-quality)). The job records its engine in
+[Full Quality](#full-quality)). A trend's preview run (see
+[Trends](#13g-trends-cloud-edition)) may instead send the trend's prepared
+preview input clip as `videoUrl` with `preparedPreview: true` — `preview`
+true and `previewStart` 0, the engine editing the clip as it is; only the
+platform's own trend runs do (the body also carries `sourceAsset`, which the
+job records as it is), and an engine without that capability keeps cutting
+the window from the whole clip. The job records its engine in
 `input_data.engine`, and a completed job's output in its `engine`. The trend
 routes name the engine by the ids above. For now a job's record, and this
 route's quote, may still name it by the id it had before the rename (the
@@ -4570,6 +4576,26 @@ The estimate and run body is
 An OAuth app needs `jobs:read` to read, `workflows:execute` to estimate or
 run (plus `assets:write` to pass a `sessionId`), and `assets:write` for
 favorites.
+
+**Preview input clip.** A trend that offers a preview keeps a prepared
+preview input clip: the 4 s window (plus up to a second of real footage
+after it), cut once from the trend's clip when the trend is saved or
+published, stored as its own file with a hash. A preview run edits that
+stored clip as it is, so every preview of a published version starts from
+exactly the same bytes; a full run edits the whole clip. Which one a run
+edited is recorded on its job, visible through `GET /v1/jobs/:id` as
+`input_data.sourceAsset` — `{ kind: "preview" | "full",
+sha256?, startSec?, durationSec?, recipe? }` (`sha256` is the file's hash;
+`startSec`, `durationSec` and `recipe` say where and how a preview clip was
+cut) — with `input_data.preparedPreview: true` on a preview that edited the
+stored clip, and copied to `output_data.sourceAsset` when the run completes.
+The stamp names no URL; it is provenance only, and it is not part of the
+`TrendRun` shape in `GET /v1/trends/runs`. On a platform version whose engine
+does not take a prepared clip, a preview is cut from the whole clip at run
+time as before and the job carries no `sourceAsset`. In the admin's trend
+editor the "Preview input" row shows the stored clip (its length, frame
+count, hash and when it was made) and plays it; it is prepared on save, and
+publishing waits for it.
 
 Refusals (bodies are `{ error: { code, message } }`; the slot errors also
 carry the slot's key as `slot`, and `chip_not_offered` the chip as `chip`). The `400`s on estimate and run come before

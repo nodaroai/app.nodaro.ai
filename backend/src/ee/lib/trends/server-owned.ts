@@ -9,10 +9,11 @@
  *   upscaleJobs   the upscale routes
  *   sourceCrop    the crop routes
  *   promptParts   the prompt parts route (checked by the engine first)
+ *   previewClip   the preview clip preparation (preview-clip.ts)
  */
 import type { TrendVersionData } from "./types.js"
 
-export const SERVER_OWNED_DRAFT_FIELDS = ["examples", "faceMask", "faceMaskJob", "upscaleJobs", "sourceCrop", "promptParts"] as const
+export const SERVER_OWNED_DRAFT_FIELDS = ["examples", "faceMask", "faceMaskJob", "upscaleJobs", "sourceCrop", "promptParts", "previewClip"] as const
 
 /** `edited` (a client's draft body) with every server-owned field taken from `stored`; one `stored` lacks stays absent. */
 export function withServerOwnedFields(edited: Record<string, unknown>, stored: TrendVersionData): TrendVersionData {

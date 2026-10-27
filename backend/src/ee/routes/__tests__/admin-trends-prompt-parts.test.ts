@@ -84,6 +84,26 @@ vi.mock("../../../lib/admin-check.js", async (importOriginal) => {
   return { ...actual, checkIsAdmin: async (userId: string) => mem.admins.has(userId) }
 })
 
+// A draft save (and publish) cuts the 4 s preview's input clip when it is missing; here the cut is a stand-in
+// (preview-clip-media.test.ts pins the real one): this file is about the prompt parts.
+vi.mock("../../lib/trends/preview-clip-media.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/trends/preview-clip-media.js")>()
+  const { previewClipState, withoutPreviewClip, PREVIEW_CLIP_RECIPE } = await import("../../lib/trends/preview-clip.js")
+  const ensurePreviewClip: typeof actual.ensurePreviewClip = async (trendId, data) => {
+    const state = previewClipState(data)
+    if (state.kind === "not_offered") return withoutPreviewClip(data)
+    if (state.kind === "current") return data
+    return {
+      ...data,
+      previewClip: {
+        videoUrl: `https://cdn.test/trends/${trendId}/preview.mp4`, durationSec: 5, width: 1920, height: 1080, frames: 150, sha256: "a".repeat(64),
+        sourceVideoUrl: data.source!.videoUrl, startSec: data.previewStart!, recipe: PREVIEW_CLIP_RECIPE, madeAt: "2026-10-27T12:00:00.000Z",
+      },
+    }
+  }
+  return { ...actual, ensurePreviewClip }
+})
+
 import { adminTrendsRoutes } from "../admin-trends.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { placeholderImageUrl } from "../../lib/trends/prompt-parts-store.js"

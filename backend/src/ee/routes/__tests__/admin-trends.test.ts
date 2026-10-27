@@ -53,10 +53,12 @@ const mem = vi.hoisted(() => ({
   uploads: [] as Array<{ key: string; contentType: string }>,
   downloads: new Map<string, string>(),
   durations: new Map<string, number>(),
-  /** Every ffmpeg run's arguments (the source's display copy is the only one). */
+  /** Every ffmpeg run's arguments: the source's display copy, and the preview input clip's cuts (`-ss` before `-i`). */
   ffmpegRuns: [] as string[][],
   /** When set, the next ffmpeg run fails with it. */
   ffmpegFails: null as null | Error,
+  /** The frame count a cut reads, by its output path (the preview clip's `clip.mp4`, its mask's `mask-clip.mp4`): one number for both when a number. */
+  frames: 150 as number | ((path: string) => number),
   /** When set, the next ffprobe of a video fails with it. */
   probeFails: null as null | Error,
   /** When set, the frame rate every ffprobe of a video reads. */
@@ -248,6 +250,8 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
       if (fail) throw fail
       return probed(path)
     },
+    // The preview clip's (and its mask's) frame count: the stand-in file has none to read.
+    probeVideoFrameCount: async (path: string) => (typeof mem.frames === "number" ? mem.frames : mem.frames(path)),
   }
 })
 
@@ -474,6 +478,7 @@ beforeEach(async () => {
   mem.durations = new Map()
   mem.ffmpegRuns = []
   mem.ffmpegFails = null
+  mem.frames = 150
   mem.probeFails = null
   mem.warns = []
   mem.missingTables = false
@@ -1340,6 +1345,43 @@ describe("test runs", () => {
     expect((body.trendRun as { display: { trend: unknown } }).display.trend).toEqual({ id: T1, slug: "neon-dance", version: 2, name: "Neon Dance II" })
   })
 
+  it("a preview test run edits the draft's prepared preview input clip where the engine takes one, and the source as today elsewhere", async () => {
+    const CLIP = {
+      videoUrl: `https://cdn.test/trends/${T1}/preview.mp4`,
+      durationSec: 5,
+      width: 720,
+      height: 1280,
+      frames: 150,
+      sha256: "b".repeat(64),
+      sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+      startSec: 2,
+      recipe: "1",
+      madeAt: "2026-10-27T10:00:00.000Z",
+    }
+    seed({}, draftData({ previewClip: CLIP, examples: [EXAMPLE] }))
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+
+    // Today's engine: the whole source from previewStart, and neither new field.
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, preview: true })).statusCode).toBe(202)
+    expect(engine.calls[0]!.body).toMatchObject({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, previewStart: 2, preview: true })
+    expect(engine.calls[0]!.body).not.toHaveProperty("preparedPreview")
+    expect(engine.calls[0]!.body).not.toHaveProperty("sourceAsset")
+
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, preparedPreview: true } })
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, preview: true })).statusCode).toBe(202)
+    expect(engine.calls[1]!.body).toMatchObject({
+      videoUrl: CLIP.videoUrl,
+      previewStart: 0,
+      preview: true,
+      preparedPreview: true,
+      sourceAsset: { kind: "preview", sha256: CLIP.sha256, startSec: 2, durationSec: 5, recipe: "1" },
+    })
+    // A full test run on that engine edits the source and says so.
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+    expect(engine.calls[2]!.body).toMatchObject({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, previewStart: 2, preview: false, sourceAsset: { kind: "full", durationSec: 12 } })
+    expect(engine.calls[2]!.body).not.toHaveProperty("preparedPreview")
+  })
+
   it("a 4 s preview test runs the draft's preview prompt parts; a full test run the full run's", async () => {
     seed({}, draftData({
       slots: [
@@ -1665,6 +1707,203 @@ describe("tag labels", () => {
     const save = await call("PUT", "/v1/admin/trends/tags", { tag: "dance", labels: { en: "Dance" } })
     expect(save.statusCode).toBe(503)
     expect(save.json().error.code).toBe("not_available")
+  })
+})
+
+// ── the preview's input clip ───────────────────────────────────────────────
+
+describe("the preview's input clip (prepared on save and publish)", () => {
+  const CLIP_RE = new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.mp4$`)
+  const draftNow = () => mem.trends[0]!.versions[mem.trends[0]!.draftVersion]!.data
+  /** The ffmpeg runs that cut a preview clip (an input seek before the input). */
+  const cuts = () => mem.ffmpegRuns.filter((args) => args.indexOf("-ss") !== -1 && args.indexOf("-ss") < args.indexOf("-i"))
+  /** A clip current for the fixture draft (source src.mp4, start 2). */
+  const CLIP = {
+    videoUrl: `https://cdn.test/trends/${T1}/preview.mp4`, durationSec: 5, width: 720, height: 1280, frames: 150, sha256: "b".repeat(64),
+    sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+  }
+
+  it("a draft save cuts the clip from the saved source at previewStart (4 s + 1 s tail, frame-accurate args, no scaling), stores it under the trend's key and records it on the draft", async () => {
+    seed()
+    const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData(), revision: await revisionOf() })
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(cuts()).toHaveLength(1)
+    const args = cuts()[0]!.join(" ")
+    expect(args).toContain("-y -ss 2.000 -i ")
+    expect(args).toContain("-t 5.000 -map 0:v:0 -map 0:a:0? -c:v libx264 -preset medium -crf 16 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart")
+    expect(args).not.toMatch(/scale|-vf|-r /)
+    // Cut from the hidden source clip, never its display copy.
+    expect(mem.downloads.get(cuts()[0]![cuts()[0]!.indexOf("-i") + 1]!)).toBe(`https://cdn.test/trends/${T1}/src.mp4`)
+    expect(draftNow().previewClip).toEqual({
+      videoUrl: expect.stringMatching(CLIP_RE),
+      durationSec: 12, // the stubbed probe's
+      width: 720,
+      height: 1280,
+      frames: 150,
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+      startSec: 2,
+      recipe: "1",
+      madeAt: expect.any(String),
+    })
+    expect(mem.uploads).toEqual([{ key: expect.stringMatching(/\.mp4$/), contentType: "video/mp4" }])
+    // The clip is server-owned: the detail shows it, and the next save (same window) keeps it without cutting again.
+    const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data as { draft: TrendVersionData; revision: string }
+    expect(detail.draft.previewClip).toEqual(draftNow().previewClip)
+    const again = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), name: { en: "Renamed" } }, revision: detail.revision })
+    expect(again.statusCode).toBe(200)
+    expect(cuts()).toHaveLength(1)
+    expect(draftNow().previewClip).toEqual(detail.draft.previewClip)
+    expect(draftNow().name.en).toBe("Renamed")
+  })
+
+  it("a moved previewStart re-cuts; a body carrying a previewClip of its own is ignored; previewStart null drops the clip without cutting", async () => {
+    seed({}, draftData({ previewClip: CLIP }))
+    const moved = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), previewStart: 5, previewClip: { ...CLIP, startSec: 5 } }, revision: await revisionOf() })
+    expect(moved.statusCode).toBe(200)
+    expect(cuts()).toHaveLength(1)
+    expect(cuts()[0]!.join(" ")).toContain("-ss 5.000 -i ")
+    expect(draftNow().previewClip).toMatchObject({ startSec: 5, videoUrl: expect.stringMatching(CLIP_RE) })
+    expect(draftNow().previewClip!.videoUrl).not.toBe(CLIP.videoUrl)
+
+    const off = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), previewStart: null }, revision: await revisionOf() })
+    expect(off.statusCode).toBe(200)
+    expect(draftNow()).not.toHaveProperty("previewClip")
+    expect(draftNow().previewStart).toBeNull()
+    expect(cuts()).toHaveLength(1)
+
+    // Offered again: cut again.
+    expect((await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData(), revision: await revisionOf() })).statusCode).toBe(200)
+    expect(cuts()).toHaveLength(2)
+    expect(draftNow().previewClip).toMatchObject({ startSec: 2 })
+  })
+
+  it("a save naming ANOTHER source clip cuts from it (the old clip's cut is never kept)", async () => {
+    seed({}, draftData({ previewClip: CLIP }))
+    const source = { videoUrl: `https://cdn.test/trends/${T1}/other.mp4`, durationSec: 10, width: 720, height: 1280 }
+    expect((await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source }, revision: await revisionOf() })).statusCode).toBe(200)
+    expect(cuts()).toHaveLength(1)
+    expect(mem.downloads.get(cuts()[0]![cuts()[0]!.indexOf("-i") + 1]!)).toBe(source.videoUrl)
+    expect(draftNow().previewClip).toMatchObject({ sourceVideoUrl: source.videoUrl, startSec: 2 })
+  })
+
+  it("an invalid draft is refused BEFORE anything is cut; a cut that fails never loses the save: the draft is saved without the clip and the answer says why (a stopped launch too)", async () => {
+    seed()
+    const bad = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source: { videoUrl: "https://x.example/a.mp4", durationSec: 3 } }, revision: await revisionOf() })
+    expect(bad.statusCode).toBe(400)
+    expect(cuts()).toHaveLength(0)
+
+    mem.ffmpegFails = new Error("ffmpeg failed: Invalid data found when processing input")
+    const unreadable = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), name: { en: "Saved anyway" } }, revision: await revisionOf() })
+    expect(unreadable.statusCode, JSON.stringify(unreadable.json())).toBe(200)
+    expect(unreadable.json().data.previewClipError).toMatch(/Could not cut the preview's input clip/)
+    expect(draftNow().name.en).toBe("Saved anyway")
+    expect(draftNow()).not.toHaveProperty("previewClip")
+    expect(mem.uploads).toEqual([])
+
+    mem.ffmpegFails = Object.assign(new Error("ffmpeg failed: killed"), { killed: true, timedOut: true })
+    const busy = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData({ name: { en: "Saved too" } }), revision: await revisionOf() })
+    expect(busy.statusCode).toBe(200)
+    expect(busy.json().data.previewClipError).toMatch(/could not be processed right now/)
+    expect(draftNow().name.en).toBe("Saved too")
+
+    // The clip a save could not cut blocks publish, not the save.
+    const publish = await call("POST", `/v1/admin/trends/${T1}/publish`, { revision: await revisionOf() })
+    expect([200, 409]).toContain(publish.statusCode)
+  })
+
+  it("the stored source clip's hash is the server's: a save naming the same clip keeps it whatever the body says; a new clip takes the body's", async () => {
+    seed({}, draftData({ source: { ...draftData().source!, sha256: "a".repeat(64) } }))
+    const dropped = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData(), revision: await revisionOf() })
+    expect(dropped.statusCode, JSON.stringify(dropped.json())).toBe(200)
+    expect(draftNow().source?.sha256).toBe("a".repeat(64))
+
+    const forged = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData({ source: { ...draftData().source!, sha256: "f".repeat(64) } }), revision: await revisionOf() })
+    expect(forged.statusCode).toBe(200)
+    expect(draftNow().source?.sha256).toBe("a".repeat(64))
+
+    const other = await call("PUT", `/v1/admin/trends/${T1}/draft`, {
+      data: draftData({ source: { videoUrl: `https://cdn.test/trends/${T1}/other.mp4`, durationSec: 12, sha256: "c".repeat(64) } }),
+      revision: await revisionOf(),
+    })
+    expect(other.statusCode, JSON.stringify(other.json())).toBe(200)
+    expect(draftNow().source?.sha256).toBe("c".repeat(64))
+  })
+
+  it("publish self-heals: a draft with no clip (or a stale one) gets it cut and saved, then publishes that revision; the stored clip is what publishes", async () => {
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`, { revision: await revisionOf() })
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(cuts()).toHaveLength(1)
+    const published = mem.trends[0]!.versions[1]!
+    expect(published.published).toBe(true)
+    expect(published.data.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2 })
+
+    // On a published trend, the self-heal writes a NEW version (the published row is never touched) and publishes it.
+    mem.trends = []
+    mem.ffmpegRuns = []
+    seed({ status: "published", publishedVersion: 1 }, draftData({ examples: [EXAMPLE], previewClip: { ...CLIP, startSec: 7 } }))
+    mem.trends[0]!.versions[1]!.published = true
+    const again = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(again.statusCode, JSON.stringify(again.json())).toBe(200)
+    expect(again.json().data).toMatchObject({ publishedVersion: 2, draftVersion: 2 })
+    expect(mem.trends[0]!.versions[1]!.data.previewClip).toEqual({ ...CLIP, startSec: 7 })
+    expect(mem.trends[0]!.versions[2]!.data.previewClip).toMatchObject({ startSec: 2 })
+    expect(cuts()).toHaveLength(1)
+  })
+
+  it("publish with a current clip cuts nothing; without a preview offered, needs none", async () => {
+    seed({}, draftData({ examples: [EXAMPLE], previewClip: CLIP }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+    expect(cuts()).toHaveLength(0)
+    mem.trends = []
+    seed({}, draftData({ examples: [EXAMPLE], previewStart: null }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+    expect(cuts()).toHaveLength(0)
+  })
+
+  it("publish is blocked with preview_clip_missing (why the cut failed) when the clip cannot be cut, leaving the draft as it was; a stale one that cannot be re-cut is preview_clip_out_of_date with why", async () => {
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    mem.ffmpegFails = new Error("ffmpeg failed: moov atom not found")
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("publish_blocked")
+    expect(reasonsOf(res)).toEqual([{ code: "preview_clip_missing", message: expect.stringMatching(/not prepared yet.*Making it failed: Could not cut/) }])
+    expect(mem.trends[0]!.status).toBe("draft")
+    expect(draftNow()).not.toHaveProperty("previewClip")
+
+    mem.trends = []
+    seed({}, draftData({ examples: [EXAMPLE], previewClip: { ...CLIP, startSec: 7 } }))
+    mem.ffmpegFails = new Error("ffmpeg failed: moov atom not found")
+    const stale = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(stale.statusCode).toBe(409)
+    expect(reasonsOf(stale)).toEqual([{ code: "preview_clip_out_of_date", why: "start", message: expect.stringMatching(/preview start moved.*Making it failed/) }])
+    expect(draftNow().previewClip).toEqual({ ...CLIP, startSec: 7 })
+  })
+
+  it("the source upload (POST /:id/media) does not cut it: the clip is cut on save, from the saved source", async () => {
+    seed()
+    expect((await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/clip.mp4", kind: "source" })).statusCode).toBe(200)
+    expect(cuts()).toHaveLength(0)
+  })
+
+  it("the stored source clip records its hash (a full run's provenance)", async () => {
+    seed()
+    const res = await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/clip.mp4", kind: "source" })
+    expect(res.statusCode).toBe(200)
+    // The media route answers what the builder saves on `source`: its hash rides along (a picture has none).
+    const { url, durationSec, width, height, sha256 } = res.json().data
+    expect(sha256).toMatch(/^[0-9a-f]{64}$/)
+    expect((await call("POST", `/v1/admin/trends/${T1}/media`, { url: "https://u.example/ref.png", kind: "reference" })).json().data).not.toHaveProperty("sha256")
+    const saved = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source: { videoUrl: url, durationSec, width, height, sha256 } }, revision: await revisionOf() })
+    expect(saved.statusCode, JSON.stringify(saved.json())).toBe(200)
+    expect(draftNow().source).toMatchObject({ videoUrl: url, sha256 })
+    // The same clip's hash is the server's: whatever the body says, the stored one stays. A NEW clip's that is not a hash: refused.
+    const same = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source: { videoUrl: url, durationSec, width, height, sha256: "nope" } }, revision: await revisionOf() })
+    expect(same.statusCode).toBe(200)
+    expect(draftNow().source?.sha256).toBe(sha256)
+    const bad = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), source: { videoUrl: `https://cdn.test/trends/${T1}/new.mp4`, durationSec, width, height, sha256: "nope" } }, revision: await revisionOf() })
+    expect(bad.statusCode).toBe(400)
   })
 })
 
@@ -2050,7 +2289,13 @@ describe("the stored face mask", () => {
         approvedAt: expect.any(String),
         approvedBy: ADMIN,
       })
-      expect(mem.uploads).toEqual([expect.objectContaining({ contentType: "video/mp4" })])
+      // The masked clip, then the preview input clip cut again with the mask's cut beside it.
+      expect(mem.uploads).toEqual([
+        expect.objectContaining({ contentType: "video/mp4" }),
+        expect.objectContaining({ contentType: "video/mp4" }),
+        expect.objectContaining({ contentType: "video/mp4" }),
+      ])
+      expect(data.previewClip).toMatchObject({ sourceVideoUrl: data.source!.videoUrl, startSec: 2, faceMask: { sourceMaskUrl: data.faceMask!.url, frames: 150 } })
       expect(res.json().data).toMatchObject({ faceMask: data.faceMask, faceMaskState: { status: "approved", reasons: [] } })
       expect(res.json().data.revision).toBe(mem.trends[0]!.versions[1]!.revision)
       expect(audits()).toEqual([expect.objectContaining({ action: "approve_trend_face_mask", target_id: T1 })])
@@ -2238,8 +2483,8 @@ describe("the stored face mask", () => {
         rawMaskUrl: expect.stringMatching(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]+\\.mp4$`)),
       })
       expect(fm.depthUrl).toBeUndefined()
-      // The masked clip and the raw mask, both copied into the trend's storage.
-      expect(mem.uploads).toHaveLength(2)
+      // The masked clip and the raw mask, both copied into the trend's storage; then the preview clip and its mask cut.
+      expect(mem.uploads).toHaveLength(4)
 
       // A make from that mask echoes its raw mask back: kept, not copied again.
       mem.trends = []
@@ -2248,7 +2493,8 @@ describe("the stored face mask", () => {
       world.jobs.set(FACE_MASK_JOB, { ...job, output_data: { ...job.output_data, maskUrl: RAW } })
       expect((await approve()).statusCode).toBe(200)
       expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ rawMaskUrl: RAW, baseKey: BASE_KEY() })
-      expect(mem.uploads).toHaveLength(1)
+      // The masked clip, then the preview clip and its mask cut.
+      expect(mem.uploads).toHaveLength(3)
     })
 
     it("refuses, with marks, a mask whose job reports no raw mask or no count of faces left unmasked (an older engine)", async () => {
@@ -2421,6 +2667,59 @@ describe("the stored face mask", () => {
       expect(res.json().data.faceMaskState).toEqual({ status: "none", reasons: [] })
       expect(mem.trends[0]!.versions[1]!.data).not.toHaveProperty("faceMask")
       expect(audits().map((a) => a.action)).toEqual(["approve_trend_face_mask", "clear_trend_face_mask"])
+    })
+
+    it("approving cuts the preview input clip again WITH the mask's cut (identical arguments, the mask fetched from the stored copy); clearing cuts it again WITHOUT", async () => {
+      const cuts = () => mem.ffmpegRuns.filter((args) => args.indexOf("-ss") !== -1 && args.indexOf("-ss") < args.indexOf("-i"))
+      const input = (args: string[]) => mem.downloads.get(args[args.indexOf("-i") + 1]!)
+      // A clip cut before the mask was approved: current for the source and start, no mask cut.
+      const before = {
+        videoUrl: `https://cdn.test/trends/${T1}/preview-before.mp4`, durationSec: 5, width: 720, height: 1280, frames: 150, sha256: "b".repeat(64),
+        sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+      }
+      seed({}, making({ examples: [EXAMPLE], previewClip: before }))
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      expect((await approve()).statusCode).toBe(200)
+      const data = mem.trends[0]!.versions[1]!.data
+      expect(cuts()).toHaveLength(2)
+      const [clipCut, maskCut] = cuts()
+      expect(input(clipCut!)).toBe(`https://cdn.test/trends/${T1}/src.mp4`)
+      // The mask is cut from the copy in the trend's storage, never the engine's own file.
+      expect(input(maskCut!)).toBe(data.faceMask!.url)
+      expect(input(maskCut!)).not.toBe(MASKED)
+      const shape = (args: string[]) => args.map((a, i) => (i === args.indexOf("-i") + 1 || i === args.length - 1 ? "<path>" : a))
+      expect(shape(maskCut!)).toEqual(shape(clipCut!))
+      expect(data.previewClip).toMatchObject({
+        startSec: 2,
+        faceMask: { url: expect.stringMatching(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.mp4$`)), frames: 150, sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sourceMaskUrl: data.faceMask!.url },
+      })
+      expect(data.previewClip!.videoUrl).not.toBe(before.videoUrl)
+      expect(data.previewClip!.faceMask!.url).not.toBe(data.previewClip!.videoUrl)
+
+      // Clear: the mask's cut goes, the clip is cut again from the source alone.
+      mem.ffmpegRuns = []
+      const cleared = await call("DELETE", `/v1/admin/trends/${T1}/face-mask?revision=${await revisionOf()}`)
+      expect(cleared.statusCode).toBe(200)
+      expect(cuts()).toHaveLength(1)
+      const after = mem.trends[0]!.versions[1]!.data
+      expect(after).not.toHaveProperty("faceMask")
+      expect(after.previewClip).toMatchObject({ startSec: 2 })
+      expect(after.previewClip).not.toHaveProperty("faceMask")
+      expect(after.previewClip!.videoUrl).not.toBe(data.previewClip!.videoUrl)
+    })
+
+    it("approving refuses a mask whose cut does not match the clip's frames (a mask made from another clip), storing no clip and no mask", async () => {
+      seed({}, making({ examples: [EXAMPLE] }))
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      mem.frames = (path) => (path.endsWith("mask-clip.mp4") ? 149 : 150)
+      const res = await approve()
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("media_unreadable")
+      expect(res.json().error.message).toMatch(/149 frames.*150/)
+      expect(mem.trends[0]!.versions[1]!.data).not.toHaveProperty("faceMask")
+      expect(mem.trends[0]!.versions[1]!.data).not.toHaveProperty("previewClip")
+      // The masked clip was copied before the cut; the cuts themselves were not stored.
+      expect(mem.uploads).toHaveLength(1)
     })
   })
 })

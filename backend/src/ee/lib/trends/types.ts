@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `promptParts` and `promptStyle` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -295,7 +295,15 @@ export interface TrendVersionData {
    * made when it is uploaded (absent on a version saved before that; such a
    * draft cannot publish: `source_display_missing`).
    */
-  source: { videoUrl: string; durationSec: number; width?: number; height?: number; display?: TrendSourceDisplay } | null
+  source: {
+    videoUrl: string
+    durationSec: number
+    width?: number
+    height?: number
+    display?: TrendSourceDisplay
+    /** HIDDEN. SHA-256 (hex) of the stored clip, recorded as it is stored (a full run's `sourceAsset`); absent on a clip stored before. */
+    sha256?: string
+  } | null
   /** Where the 4 s preview starts; null = no preview offered. */
   previewStart: number | null
   slots: TrendSlot[]
@@ -353,7 +361,52 @@ export interface TrendVersionData {
    * when absent, or `"cut-start"`). Read only on a Kling 4 trend.
    */
   klingLength?: CastSwapKlingLength
+  /**
+   * HIDDEN. The 4 s preview's INPUT clip, cut ahead of time from the source at
+   * `previewStart` (see `TrendPreviewClip`); absent while the draft offers no
+   * preview or has not been saved since the window moved. Server-owned:
+   * written only by the preview clip preparation (preview-clip.ts), never by
+   * a client's draft body.
+   */
+  previewClip?: TrendPreviewClip
   examples: TrendExample[]
+}
+
+/**
+ * HIDDEN. The preview's input clip: the source clip's preview window, cut
+ * once by the server (ffmpeg, frame-accurate re-encode) into its own file
+ * under `trends/<id>/`, so every preview run of a published version edits
+ * exactly the same bytes and the admin can see what those bytes are. A
+ * preview run sends it in place of the whole source (with `previewStart` 0)
+ * to an engine that declares `castSwap.preparedPreview`; an engine without
+ * it still gets the whole source and cuts the window itself.
+ *
+ * It is pinned to what it was cut from — `sourceVideoUrl` (the source
+ * clip's hidden URL, which changes on every upload, upscale and crop),
+ * `startSec` (the `previewStart` at the cut) and `recipe` — and is out of
+ * date the moment any of them differs from the draft (`previewClipState`).
+ * `faceMask`, when present, is the trend's approved stored face mask cut with
+ * the SAME arguments, so its frame count matches the clip's and the engine
+ * can use it as the preview's stored mask; it is pinned to the mask it was
+ * cut from (`sourceMaskUrl`).
+ */
+export interface TrendPreviewClip {
+  /** The cut clip, in the trend's storage. */
+  videoUrl: string
+  /** Its container length: the 4 s window plus up to `PREVIEW_CLIP_TAIL_SECONDS` of real footage after it. */
+  durationSec: number
+  width: number
+  height: number
+  /** Its video frame count. */
+  frames: number
+  /** SHA-256 (hex) of the stored file: what a run's `sourceAsset` carries. */
+  sha256: string
+  sourceVideoUrl: string
+  startSec: number
+  /** `PREVIEW_CLIP_RECIPE` at the cut; a recipe change puts every clip out of date. */
+  recipe: string
+  faceMask?: { url: string; frames: number; sha256: string; sourceMaskUrl: string }
+  madeAt: string
 }
 
 /** `archived`: put away by an admin — off the catalog, kept with its runs (migration 559). */

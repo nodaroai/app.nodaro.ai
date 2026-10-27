@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 
+import { storedFaceMaskFor } from "../face-mask.js"
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { composeTrendRun } from "../compose.js"
 import { publishBlockers } from "../publish-check.js"
@@ -26,13 +27,27 @@ import { withServerOwnedFields } from "../server-owned.js"
 import { withoutUnsupportedFields } from "../run-helpers.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
 import type { PromptPartsAnswer } from "../../../../lib/cast-swap-prompt-parts-contract.js"
-import type { TrendVersionData } from "../types.js"
+import type { TrendVersionData, TrendPreviewClip } from "../types.js"
+
+/**
+ * A preview input clip current for the fixture's source at start 0, carrying
+ * the matching cut of the data's current stored face mask when it has one:
+ * publishing needs one (preview-clip.test.ts holds its rules).
+ */
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+  const mask = storedFaceMaskFor(d)
+  return {
+    videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
+    sourceVideoUrl: "https://cdn.example/src.mp4", startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    ...(mask ? { faceMask: { url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: mask.url } } : {}),
+  }
+}
 
 const HASH = "0123456789abcdef"
 const FACE = { text: "Keep each face exactly as in {image}'s picture.", defaultHash: HASH }
 
 function data(over: Partial<TrendVersionData> = {}): TrendVersionData {
-  return {
+  return withClip({
     name: { en: "Dance" },
     source: {
       videoUrl: "https://cdn.example/src.mp4",
@@ -49,8 +64,11 @@ function data(over: Partial<TrendVersionData> = {}): TrendVersionData {
     trendPrompt: "Dance hard.",
     examples: [],
     ...over,
-  }
+  })
 }
+
+/** `d` with a preview input clip current for it (its mask's cut when it has a current mask). */
+const withClip = (d: TrendVersionData): TrendVersionData => ({ ...d, previewClip: previewClipFor(d) })
 
 const ALL = {
   roleKinds: ["person", "pet"],

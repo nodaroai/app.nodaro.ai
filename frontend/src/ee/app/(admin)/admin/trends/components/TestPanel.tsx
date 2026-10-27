@@ -58,7 +58,7 @@ import {
   useTrendRunPrompt,
   useTrendTestRuns,
 } from "@/ee/hooks/queries/use-admin-queries"
-import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips } from "../model"
+import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips, type PreviewClipStatus } from "../model"
 import { MediaPicker } from "./MediaPicker"
 import { trendRunCreditLine } from "../../jobs/admin-job-credits"
 import { uploadLocalFile } from "./uploads"
@@ -75,6 +75,12 @@ interface Props {
   /** The SAVED draft's slots: a test run runs what is saved. */
   readonly slots: AdminTrendSlot[]
   readonly hasPreview: boolean
+  /**
+   * The SAVED draft's preview input clip: `"current"` = a preview run edits
+   * the prepared clip (on an engine that takes one); else it cuts the window
+   * from the source itself. Absent (an older caller): nothing is said.
+   */
+  readonly previewInput?: PreviewClipStatus
   /** The SAVED draft's engine: its resolutions are offered, and a draft only where it has one. */
   readonly engine: AdminTrendEngine
   /** Unsaved edits: a run would not test them, so it waits for a save. */
@@ -83,7 +89,7 @@ interface Props {
   readonly onPromote: (jobId: string) => void
 }
 
-export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promotingId, onPromote }: Props) {
+export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, dirty, promotingId, onPromote }: Props) {
   const resolutions: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
   const hasDraft = castSwapEngineHasDraft(engine)
   const start = useStartTrendTestRun(trendId)
@@ -275,6 +281,13 @@ export function TestPanel({ trendId, slots, hasPreview, engine, dirty, promoting
             {hasPreview && preview && (
               <span className="basis-full text-xs text-muted-foreground">
                 A preview run sends the preview's own role names, reference lines and prompts (each left empty: the full run's).
+              </span>
+            )}
+            {hasPreview && preview && previewInput && (
+              <span className="basis-full text-xs text-muted-foreground" data-preview-input={previewInput}>
+                {previewInput === "current"
+                  ? "It edits the prepared preview input (1. Source clip → Preview input) on an engine that takes one; an older engine cuts the window from the source."
+                  : "No prepared preview input is stored for the saved draft: the run cuts the window from the source. Save the draft to prepare it."}
               </span>
             )}
             <div className="flex items-center gap-1" role="group" aria-label="Resolution">

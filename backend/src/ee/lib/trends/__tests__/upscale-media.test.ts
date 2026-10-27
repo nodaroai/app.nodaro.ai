@@ -145,7 +145,15 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
       .mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10.04 })
       .mockResolvedValue({ width: 1080, height: 1920, durationSeconds: 10 })
     const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false })
-    expect(stored).toEqual({ url: expect.stringMatching(KEY_RE("mp4")), posterUrl: expect.stringMatching(KEY_RE("png")), width: 1080, height: 1920, durationSec: 10 })
+    expect(stored).toEqual({
+      url: expect.stringMatching(KEY_RE("mp4")),
+      posterUrl: expect.stringMatching(KEY_RE("png")),
+      width: 1080,
+      height: 1920,
+      durationSec: 10,
+      // Hashed as stored, for the provenance a run records.
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    })
     expect(runFfmpeg).toHaveBeenCalledTimes(1)
     const [args, , launch] = vi.mocked(runFfmpeg).mock.calls[0]!
     expect(args.join(" ")).toContain("-t 10.000")

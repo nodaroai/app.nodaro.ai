@@ -11124,6 +11124,8 @@ export interface AdminTrendSource {
   height?: number
   /** Absent on a clip stored before display copies existed: such a draft cannot publish (`source_display_missing`). */
   display?: AdminTrendSourceDisplay
+  /** SHA-256 of the stored clip, as the media route reported it (absent on a clip stored before it was recorded). */
+  sha256?: string
 }
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
@@ -11342,8 +11344,44 @@ export interface AdminTrendData {
   promptParts?: AdminTrendPromptPartOverrides
   /** How the engine words the prompt (hidden). Absent = Flexible for full depth, Precise otherwise. */
   promptStyle?: CastSwapPromptStyleId
+  /**
+   * The 4 s preview's input clip (hidden; server-owned: made on a draft save,
+   * an upscale or crop applied, a face mask approved or cleared, and on
+   * publish). Never in a draft body (`TrendDraftBody`); the server ignores it if sent.
+   */
+  previewClip?: AdminTrendPreviewClip
   examples: AdminTrendExample[]
 }
+
+/** What a draft save sends: the draft without its examples (the example routes write them) and its server-owned preview clip. */
+export type TrendDraftBody = Omit<AdminTrendData, "examples" | "previewClip">
+
+/**
+ * The 4 s preview's input clip: the preview window (plus up to 1 s of real
+ * footage after it) cut once from the source into its own file, so every
+ * preview run of a published version edits the same bytes. It is pinned to
+ * what it was cut from (`sourceVideoUrl`, `startSec`): a draft whose source
+ * or preview start differs has an out-of-date clip, remade on the next save.
+ */
+export interface AdminTrendPreviewClip {
+  videoUrl: string
+  durationSec: number
+  width: number
+  height: number
+  frames: number
+  /** SHA-256 (hex) of the stored file: what a preview run's job records as its input. */
+  sha256: string
+  /** The hidden source URL it was cut from (changes on every upload, upscale and crop). */
+  sourceVideoUrl: string
+  /** The `previewStart` it was cut at. */
+  startSec: number
+  madeAt: string
+  /** The approved face mask cut to the same window, when the trend had one. */
+  faceMask?: { url: string; frames: number }
+}
+
+/** Why a stored preview clip is out of date (`preview_clip_out_of_date`). */
+export type AdminTrendPreviewClipOutOfDate = "source" | "start" | "recipe" | "face_mask"
 
 /** Which end of the clip a Kling 4 run cuts to whole seconds: the end (default) or the start. */
 export type AdminTrendKlingLength = "cut-end" | "cut-start"
@@ -11464,6 +11502,8 @@ export interface TrendDraftWrite {
   faceMaskState?: AdminTrendFaceMaskState
   /** A draft save with a new source clip: the face mask's marks were cleared (they were drawn on the old clip). */
   marksCleared?: true
+  /** A draft save whose preview input clip could not be cut: saved without it (publish is blocked until it can be), and why. */
+  previewClipError?: string
 }
 
 export interface AdminTrendRunSlot {
@@ -11559,7 +11599,12 @@ export interface TrendEngineEnvironment {
   updatedAt: string
 }
 
-/** One reason a trend cannot be published (`409 publish_blocked`). */
+/**
+ * One reason a trend cannot be published (`409 publish_blocked`). Among the
+ * codes: `preview_clip_missing` / `preview_clip_out_of_date` (the 4 s
+ * preview's input clip is not stored, or not cut from this draft's source
+ * and window; the server remakes it on save and on publish).
+ */
 export interface TrendPublishBlocker {
   code: string
   env?: string
@@ -11567,8 +11612,8 @@ export interface TrendPublishBlocker {
   example?: number
   slots?: string[]
   message?: string
-  /** `face_mask_out_of_date`: why. */
-  why?: AdminTrendFaceMaskOutOfDate["why"]
+  /** `face_mask_out_of_date` / `preview_clip_out_of_date`: why. */
+  why?: AdminTrendFaceMaskOutOfDate["why"] | AdminTrendPreviewClipOutOfDate
   /** `prompt_parts_invalid`: what the engine finds wrong with the engine prompt changes (`mode: "preview"` = the 4 s preview's only). */
   problems?: Array<{ part?: string; code: string; message: string; mode?: "full" | "preview" }>
 }
@@ -11663,7 +11708,7 @@ export async function patchAdminTrend(
 /** Save the draft (its examples are kept server-side; only the example routes write them). */
 export async function saveAdminTrendDraft(
   id: string,
-  data: Omit<AdminTrendData, "examples">,
+  data: TrendDraftBody,
   revision: string,
 ): Promise<TrendDraftWrite> {
   return (
@@ -11683,6 +11728,8 @@ export interface AdminTrendStoredMedia {
   width?: number
   height?: number
   display?: AdminTrendSourceDisplay
+  /** The stored source clip's SHA-256 (a source only). */
+  sha256?: string
 }
 
 /** Copy a URL (an upload, a library asset) into the trend's own storage: the source clip, a reference or a slot's hint picture. */

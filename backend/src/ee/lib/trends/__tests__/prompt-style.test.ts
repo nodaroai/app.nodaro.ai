@@ -25,15 +25,28 @@ import { FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC, fullDepthClipTooLong, promptStyleO
 import { publishBlockers } from "../publish-check.js"
 import { withoutUnsupportedFields } from "../run-helpers.js"
 import { trendVersionDataSchema } from "../schemas.js"
-import type { TrendFaceMask, TrendVersionData } from "../types.js"
+import type { TrendFaceMask, TrendVersionData, TrendPreviewClip } from "../types.js"
 
 const SRC = "https://cdn.example/trends/t1/src.mp4"
+/**
+ * A preview input clip current for the fixture's source at start 0, carrying
+ * the matching cut of the data's current stored face mask when it has one:
+ * publishing needs one (preview-clip.test.ts holds its rules).
+ */
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+  const mask = storedFaceMaskFor(d)
+  return {
+    videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
+    sourceVideoUrl: SRC, startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    ...(mask ? { faceMask: { url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: mask.url } } : {}),
+  }
+}
 const FACES = { mode: "always" as const, threshold: 0.4 }
 const FULL = { mode: "always" as const, source: "full-depth" as const }
 const KEEP = { mode: "always" as const, source: "keep-people" as const }
 
 function data(over: Partial<TrendVersionData> = {}, durationSec = 12): TrendVersionData {
-  return {
+  return withClip({
     name: { en: "Dance" },
     source: {
       videoUrl: SRC,
@@ -46,8 +59,11 @@ function data(over: Partial<TrendVersionData> = {}, durationSec = 12): TrendVers
     examples: [],
     faceMasking: FACES,
     ...over,
-  }
+  })
 }
+
+/** `d` with a preview input clip current for it (its mask's cut when it has a current mask). */
+const withClip = (d: TrendVersionData): TrendVersionData => ({ ...d, previewClip: previewClipFor(d) })
 
 function withMask(d: TrendVersionData): TrendVersionData {
   const faceMask: TrendFaceMask = {
@@ -60,7 +76,7 @@ function withMask(d: TrendVersionData): TrendVersionData {
     approvedAt: "2026-10-27T10:00:00.000Z",
     approvedBy: "admin",
   }
-  return { ...d, faceMask }
+  return withClip({ ...d, faceMask })
 }
 
 const BASE = {
@@ -168,7 +184,8 @@ describe("a run", () => {
     setPluginSupports({ castSwap: BASE as never })
     for (const d of [data(), data({ promptStyle: "flexible" }), withMask(data({ faceMasking: { ...FULL, scene: "none" } }))]) {
       const composed = run(d)
-      const { promptStyle: _style, ...before } = structuredClone(composed.body)
+      // The run's `sourceAsset` is dropped for such an engine too (run-helpers.ts `withPreparedPreview`).
+      const { promptStyle: _style, sourceAsset: _asset, ...before } = structuredClone(composed.body)
       if (before.faceMasking) delete before.faceMasking.scene
       withoutUnsupportedFields(composed)
       expect(composed.body).toStrictEqual(before)

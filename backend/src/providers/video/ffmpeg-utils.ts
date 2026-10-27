@@ -730,6 +730,26 @@ export async function getVideoFps(filePath: string): Promise<number> {
   }
 }
 
+/**
+ * The frame count of a LOCAL file's first video stream: the container's own
+ * (`nb_frames`, which an MP4 records), else counted by DECODING the stream
+ * (`-count_frames` → `nb_read_frames`: a MOV or WebM need not record one).
+ * Exact, never duration × rate (which can be a frame or two off); throws when
+ * neither says. Local paths only (no network, no SSRF surface): what a
+ * frame-aligned cut (a trend's preview clip and its mask) is measured by.
+ */
+export async function probeVideoFrameCount(filePath: string): Promise<number> {
+  const read = async (args: readonly string[]): Promise<number> => {
+    const out = await runFfprobe(["-v", "error", "-select_streams", "v:0", ...args, "-of", "csv=p=0", filePath])
+    const text = csvFields(out)[0] ?? ""
+    return /^\d+$/.test(text) ? Number(text) : Number.NaN
+  }
+  let frames = await read(["-show_entries", "stream=nb_frames"])
+  if (!(frames > 0)) frames = await read(["-count_frames", "-show_entries", "stream=nb_read_frames"])
+  if (!(frames > 0)) throw new Error(`Could not count the video frames of: ${filePath}`)
+  return frames
+}
+
 export async function getVideoDuration(filePath: string): Promise<number> {
   const output = await runFfprobe([
     "-v", "error",

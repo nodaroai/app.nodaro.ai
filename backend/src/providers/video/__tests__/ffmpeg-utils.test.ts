@@ -171,6 +171,7 @@ import {
   getVideoDuration,
   getVideoStreamDuration,
   getVideoFps,
+  probeVideoFrameCount,
   probeVideoSource,
   probeVideoStream,
   probeMediaStreams,
@@ -823,6 +824,37 @@ describe("getVideoDuration", () => {
 // ===========================================================================
 // 4b) getVideoFps
 // ===========================================================================
+
+describe("probeVideoFrameCount", () => {
+  it("reads the container's nb_frames when it states one (one probe, no decode)", async () => {
+    execFileOnce("120\n")
+    expect(await probeVideoFrameCount("/tmp/clip.mp4")).toBe(120)
+    expect(mocks.execFile).toHaveBeenCalledTimes(1)
+    expect(execArgs()).toEqual(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames", "-of", "csv=p=0", "/tmp/clip.mp4"])
+  })
+
+  it("counts the frames by decoding (-count_frames → nb_read_frames) when the container does not say (N/A, empty, 0)", async () => {
+    for (const unsaid of ["N/A\n", "\n", "0\n"]) {
+      mocks.execFile.mockClear()
+      execFileOnce(unsaid)
+      execFileOnce("96\n")
+      expect(await probeVideoFrameCount("/tmp/clip.webm")).toBe(96)
+      expect(mocks.execFile).toHaveBeenCalledTimes(2)
+      expect(execArgs(1)).toEqual(["-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", "/tmp/clip.webm"])
+    }
+  })
+
+  it("reads the first row and drops a side-data field (a rotated phone MP4 answers '120,')", async () => {
+    execFileOnce("120,\n")
+    expect(await probeVideoFrameCount("/tmp/rotated.mp4")).toBe(120)
+  })
+
+  it("throws when neither the container nor a decode says", async () => {
+    execFileOnce("N/A\n")
+    execFileOnce("N/A\n")
+    await expect(probeVideoFrameCount("/tmp/broken.mp4")).rejects.toThrow(/Could not count the video frames/)
+  })
+})
 
 describe("getVideoFps", () => {
   it("parses a fractional r_frame_rate (e.g. 30000/1001)", async () => {

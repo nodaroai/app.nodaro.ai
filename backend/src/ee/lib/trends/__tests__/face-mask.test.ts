@@ -22,13 +22,26 @@ import {
   storedFaceMaskFor,
 } from "../face-mask.js"
 import { publishBlockers } from "../publish-check.js"
-import type { TrendFaceMask, TrendVersionData } from "../types.js"
+import type { TrendFaceMask, TrendVersionData, TrendPreviewClip } from "../types.js"
 
 const SRC = "https://cdn.example/trends/t1/src.mp4"
+/**
+ * A preview input clip current for the fixture's source at start 0, carrying
+ * the matching cut of the data's current stored face mask when it has one:
+ * publishing needs one (preview-clip.test.ts holds its rules).
+ */
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+  const mask = storedFaceMaskFor(d)
+  return {
+    videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
+    sourceVideoUrl: SRC, startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    ...(mask ? { faceMask: { url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: mask.url } } : {}),
+  }
+}
 const MASKING = { mode: "always" as const, threshold: 0.4 }
 
 function data(over: Partial<TrendVersionData> = {}): TrendVersionData {
-  return {
+  return withClip({
     name: { en: "Dance" },
     // A complete source: publishing also needs its display copy (source_display_missing).
     source: {
@@ -42,8 +55,11 @@ function data(over: Partial<TrendVersionData> = {}): TrendVersionData {
     examples: [{ videoUrl: "https://cdn.example/ex.mp4", width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots: { lead: ["https://cdn.example/l.png"] } }],
     faceMasking: MASKING,
     ...over,
-  }
+  })
 }
+
+/** `d` with a preview input clip current for it (its mask's cut when it has a current mask). */
+const withClip = (d: TrendVersionData): TrendVersionData => ({ ...d, previewClip: previewClipFor(d) })
 
 function mask(over: Partial<TrendFaceMask> = {}): TrendFaceMask {
   return {

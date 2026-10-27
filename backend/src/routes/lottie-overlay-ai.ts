@@ -25,6 +25,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
+import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -63,8 +64,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
       // code, so forward the body and pass its answer straight back.
       if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/lottie-overlay/generate", "lottie-overlay")) return
 
-      req.raw.setTimeout(60000)
-      reply.raw.setTimeout(60000)
+      extendSocketTimeout(req, reply, 60000)
 
       const parsed = generateBody.safeParse(req.body)
       if (!parsed.success) {

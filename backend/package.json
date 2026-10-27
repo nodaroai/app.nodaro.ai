@@ -29,6 +29,7 @@
     "backfill:listing-range": "tsx src/ee/scripts/backfill-listing-range.ts",
     "backfill:llm-listing-prices": "tsx src/ee/scripts/backfill-llm-listing-prices.ts",
     "backfill:trend-display": "tsx src/ee/scripts/backfill-trend-display.ts",
+    "backfill:trend-preview-clip": "tsx src/ee/scripts/backfill-trend-preview-clip.ts",
     "gen:skills": "tsx scripts/gen-skills.ts",
     "docs:prices": "tsx scripts/docs-prices.ts",
     "gen:vd-fallback": "tsx scripts/gen-video-director-fallback.ts",

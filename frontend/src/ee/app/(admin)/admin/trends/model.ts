@@ -40,10 +40,12 @@ import type {
   AdminTrendKlingLength,
   AdminTrendFaceMasking,
   AdminTrendFaceMaskingZone,
+  AdminTrendPreviewClip,
   AdminTrendReference,
   AdminTrendSlot,
   TrendChipKey,
   TrendChoice,
+  TrendDraftBody,
   TrendLocalizedText,
   TrendPublishBlocker,
   TrendSlotKind,
@@ -149,6 +151,12 @@ export interface TrendForm {
   klingLength: AdminTrendKlingLength | undefined
   /** As stored: undefined = the clip preparation's default (prompt-style.ts). */
   promptStyle: CastSwapPromptStyleId | undefined
+  /**
+   * The 4 s preview's input clip as loaded, READ-ONLY: server-owned (made on
+   * save), never sent by `fromForm`, so it never makes the form dirty. Read
+   * it through `previewClipStatus`.
+   */
+  previewClip: AdminTrendPreviewClip | undefined
 }
 
 let uidSeq = 0
@@ -170,7 +178,25 @@ export function toForm(draft: AdminTrendData): TrendForm {
     engine: draft.engine,
     klingLength: draft.klingLength,
     promptStyle: draft.promptStyle,
+    previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
   }
+}
+
+/**
+ * The 4 s preview's input clip against this draft: `"current"` = the stored
+ * clip was cut from this source at this preview start, so a preview run of
+ * the draft as it is edits it; `"stale"` = one is stored, but from another
+ * source clip or start (remade on save); `"none"` = none stored, or no
+ * preview offered. The server's `previewClipState` (backend preview-clip.ts),
+ * less what only it knows: the cut's recipe and the face mask's pin (a
+ * publish blocker says those).
+ */
+export type PreviewClipStatus = "none" | "current" | "stale"
+
+export function previewClipStatus(form: Pick<AdminTrendData, "source" | "previewStart" | "previewClip">): PreviewClipStatus {
+  const clip = form.previewClip
+  if (!clip || form.previewStart === null || !form.source) return "none"
+  return clip.sourceVideoUrl === form.source.videoUrl && clip.startSec === form.previewStart ? "current" : "stale"
 }
 
 /** The engine a run of this form uses: its own, else Seedance 2.5 (the server's `engineOf`). */
@@ -234,6 +260,7 @@ function cleanSource(s: AdminTrendData["source"]): AdminTrendData["source"] {
     durationSec: s.durationSec,
     ...(s.width !== undefined ? { width: s.width } : {}),
     ...(s.height !== undefined ? { height: s.height } : {}),
+    ...(s.sha256 !== undefined ? { sha256: s.sha256 } : {}),
     ...(d
       ? { display: { videoUrl: d.videoUrl, posterUrl: d.posterUrl, width: d.width, height: d.height, durationSec: d.durationSec } }
       : {}),
@@ -282,8 +309,11 @@ export function withChipShown(s: FormSlot, chip: TrendChipKey, show: boolean): F
   return next.length === all.length ? rest : { ...rest, chips: next }
 }
 
-/** The draft body to save (examples are never sent: only the example routes write them). */
-export function fromForm(form: TrendForm): Omit<AdminTrendData, "examples"> {
+/**
+ * The draft body to save (examples are never sent: only the example routes
+ * write them; nor the preview input clip, which the server makes on save).
+ */
+export function fromForm(form: TrendForm): TrendDraftBody {
   return {
     name: cleanText(form.name),
     ...(hasAnyText(form.description) ? { description: cleanText(form.description) } : {}),
@@ -510,6 +540,10 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return "At least one slot must be required."
     case "source_display_missing":
       return "The source clip has no display copy (the copy users see). Upload the clip again to make one."
+    case "preview_clip_missing":
+      return "The 4 s preview's input clip is not prepared yet. Save the draft, or publish again, to make it (1. Source clip → Preview input)."
+    case "preview_clip_out_of_date":
+      return `The 4 s preview's input clip is out of date: ${describePreviewClipOutOfDate(r.why)}. Save the draft, or publish again, to make it again (1. Source clip → Preview input).`
     case "example_slots_incomplete":
       return `Example ${r.example ?? "?"} has no pictures for: ${(r.slots ?? []).join(", ")}.`
     case "invalid_data":
@@ -562,6 +596,22 @@ export function describeFaceMaskOutOfDate(r: { why: string; env?: string }): str
       return `${r.env ?? "?"}'s Cast Swap engine masks faces differently since it was made. Make it again.`
     default:
       return "make it again."
+  }
+}
+
+/** Why the 4 s preview's input clip is out of date (`preview_clip_out_of_date`'s `why`), as a clause. */
+function describePreviewClipOutOfDate(why: string | undefined): string {
+  switch (why) {
+    case "source":
+      return "the source clip changed since it was cut"
+    case "start":
+      return "the preview start moved since it was cut"
+    case "recipe":
+      return "clips are cut differently since it was made"
+    case "face_mask":
+      return "the face mask changed since it was cut"
+    default:
+      return "the draft changed since it was cut"
   }
 }
 

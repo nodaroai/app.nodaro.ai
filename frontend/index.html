@@ -57,14 +57,21 @@
         } catch (e) {}
       })();
     </script>
-    <!-- Analytics (Microsoft Clarity + Google gtag) — opt-in via build-time env
-         (VITE_CLARITY_ID / VITE_GA_ID); empty/unset (the self-hosted
-         Community/Business default) is a no-op and nothing leaves the
-         deployment. Loaded on the first-party dashboard ONLY: skipped inside
+    <!-- Analytics (Microsoft Clarity + Google Tag Manager) — opt-in via
+         build-time env (VITE_CLARITY_ID / VITE_GTM_ID); empty/unset (the
+         self-hosted Community/Business default) is a no-op and nothing leaves
+         the deployment. The container is the SAME one nodaro.ai, studio,
+         person and tools load (GA4 is a tag INSIDE it; no gtag snippet and no
+         second measurement id here on purpose, so every Google tag stays
+         managed in one place and the GA cookie stays shared across the
+         subdomains). Clarity is loaded here, not from the container, on every
+         Nodaro surface alike — one project, so the recordings read as one
+         application. Loaded on the first-party dashboard ONLY: skipped inside
          iframes and on public app/present/embed/share/profile surfaces so that
          customer-embedded widgets don't load Clarity session recording + GA.
          Keep the public-surface prefix list in sync with the routes in
-         src/router.tsx. -->
+         src/router.tsx. No <noscript> container fallback: static markup could
+         not honour those gates, and this SPA renders nothing without JS. -->
     <script>
       (function () {
         // Bail out when rendered inside an iframe (embeds): a cross-origin
@@ -93,7 +100,7 @@
 
         function startAnalytics() {
           var clarityId = "%VITE_CLARITY_ID%";
-          var gaId = "%VITE_GA_ID%";
+          var gtmId = "%VITE_GTM_ID%";
           // Treat empty or unsubstituted ("%VITE_…%") values as disabled.
           var unset = function (v) { return !v || v.charAt(0) === "%"; };
 
@@ -108,17 +115,15 @@
             (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script",clarityId);
           }
 
-          // Google tag (gtag.js)
-          if (!unset(gaId) && isProdHost) {
-            var ga = document.createElement("script");
-            ga.async = true;
-            ga.src = "https://www.googletagmanager.com/gtag/js?id=" + gaId;
-            document.head.appendChild(ga);
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            window.gtag = gtag;
-            gtag('js', new Date());
-            gtag('config', gaId);
+          // Google Tag Manager. `dataLayer` is created either way so anything
+          // that pushes to it always has somewhere to go.
+          window.dataLayer = window.dataLayer || [];
+          if (!unset(gtmId) && isProdHost) {
+            (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer',gtmId);
           }
         }
       })();

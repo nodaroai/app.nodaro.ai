@@ -3,6 +3,8 @@ import { CAST_SWAP_POST_PROMPT_MAX, composeTrendRun, TrendRunError } from "../co
 import { trendRunRequestSchema, trendVersionDataSchema, MAX_TREND_IMAGES } from "../schemas.js"
 import type { TrendRunRequest, TrendSlot, TrendVersionData } from "../types.js"
 import { faceMaskSettingsKey } from "../face-mask.js"
+import { faceMaskVariantKey } from "../face-mask-variants.js"
+import { PREVIEW_CLIP_RECIPE } from "../preview-clip.js"
 import { withResolvedZone } from "../../../../lib/cast-swap-face-masking.js"
 
 const img = (n: string) => `https://cdn.example.com/${n}.jpg`
@@ -316,6 +318,133 @@ describe("composeTrendRun — preview, resolution, source", () => {
     const { body } = composeTrendRun(trend(), req())
     expect(body.videoUrl).toBe("https://cdn.example.com/source.mp4")
     expect(body.references).toEqual([{ images: [img("cloud1"), img("cloud2")], line: "the clouds in the opening dive" }])
+  })
+
+  it("names the whole source as what every run edits (sourceAsset full, its length, its hash once recorded)", () => {
+    expect(composeTrendRun(trend(), req()).body.sourceAsset).toEqual({ kind: "full", durationSec: 12 })
+    expect(composeTrendRun(trend(), req({ preview: true })).body.sourceAsset).toEqual({ kind: "full", durationSec: 12 })
+    const hashed = version({ source: { videoUrl: "https://cdn.example.com/source.mp4", durationSec: 12, sha256: "a".repeat(64) } })
+    expect(composeTrendRun(trend(hashed), req()).body.sourceAsset).toEqual({ kind: "full", sha256: "a".repeat(64), durationSec: 12 })
+    // Never sent as composed: the wire flag is the engine-aware step's (withPreparedPreview).
+    expect(composeTrendRun(trend(hashed), req({ preview: true })).body).not.toHaveProperty("preparedPreview")
+  })
+})
+
+describe("composeTrendRun — the preview's prepared input clip (a candidate)", () => {
+  const SOURCE = "https://cdn.example.com/source.mp4"
+  const CLIP = {
+    videoUrl: "https://cdn.example.com/trends/t-1/preview.mp4",
+    durationSec: 5,
+    width: 720,
+    height: 1280,
+    frames: 150,
+    sha256: "b".repeat(64),
+    sourceVideoUrl: SOURCE,
+    startSec: 2,
+    recipe: PREVIEW_CLIP_RECIPE,
+    madeAt: "2026-10-27T10:00:00.000Z",
+  }
+  const MASKING = { mode: "always" as const, threshold: 0.4 }
+  const MASK_URL = "https://cdn.example.com/trends/t-1/mask.mp4"
+  const faceMaskOf = (d: TrendVersionData) => ({
+    url: MASK_URL,
+    frames: 360,
+    recipe: { core: "2026-10-25", plugin: "1" },
+    settingsKey: faceMaskSettingsKey(d)!,
+    jobId: "fm-1",
+    stats: { shots: 1, heldFrames: 0, coverage: 0.01, droppedRegions: 0 },
+    approvedAt: "2026-10-25T10:00:00.000Z",
+    approvedBy: "admin",
+  })
+  const CLIP_MASK = { url: "https://cdn.example.com/trends/t-1/preview-mask.mp4", frames: 150, sha256: "c".repeat(64), sourceMaskUrl: MASK_URL }
+
+  it("a preview of a version with a current clip carries it; a full run, or no clip, carries none", () => {
+    const d = version({ previewClip: CLIP })
+    expect(composeTrendRun(trend(d), req({ preview: true })).preparedPreview).toEqual({ clip: CLIP })
+    expect(composeTrendRun(trend(d), req())).not.toHaveProperty("preparedPreview")
+    expect(composeTrendRun(trend(), req({ preview: true }))).not.toHaveProperty("preparedPreview")
+  })
+
+  it("the body is exactly today's either way: the whole source, the trend's previewStart, no wire flag", () => {
+    const withClip = composeTrendRun(trend(version({ previewClip: CLIP })), req({ preview: true })).body
+    const without = composeTrendRun(trend(), req({ preview: true })).body
+    expect(withClip).toEqual(without)
+    expect(withClip.videoUrl).toBe(SOURCE)
+    expect(withClip.previewStart).toBe(2)
+    expect(withClip).not.toHaveProperty("preparedPreview")
+    expect(withClip.sourceAsset).toEqual({ kind: "full", durationSec: 12 })
+  })
+
+  it("an out-of-date clip is no candidate (moved window, another source, another recipe)", () => {
+    const moved = version({ previewClip: { ...CLIP, startSec: 1 } })
+    expect(composeTrendRun(trend(moved), req({ preview: true }))).not.toHaveProperty("preparedPreview")
+    const other = version({ previewClip: { ...CLIP, sourceVideoUrl: "https://cdn.example.com/older.mp4" } })
+    expect(composeTrendRun(trend(other), req({ preview: true }))).not.toHaveProperty("preparedPreview")
+    const recipe = version({ previewClip: { ...CLIP, recipe: "0" } })
+    expect(composeTrendRun(trend(recipe), req({ preview: true }))).not.toHaveProperty("preparedPreview")
+  })
+
+  it("a run sent the base stored mask needs the clip's own cut of it: with one it is a candidate, without one it is not", () => {
+    const d = version({ faceMasking: MASKING })
+    const faceMask = faceMaskOf(d)
+    const withCut = { ...d, faceMask, previewClip: { ...CLIP, faceMask: CLIP_MASK } }
+    const run = composeTrendRun(trend(withCut), req({ preview: true }))
+    expect(run.body.storedFaceMask).toEqual({ url: MASK_URL, frames: 360 })
+    expect(run.preparedPreview).toEqual({ clip: { ...CLIP, faceMask: CLIP_MASK } })
+    // A clip cut before the mask was approved: out of date (preview-clip.ts), so no candidate.
+    const noCut = { ...d, faceMask, previewClip: CLIP }
+    const bare = composeTrendRun(trend(noCut), req({ preview: true }))
+    expect(bare.body.storedFaceMask).toEqual({ url: MASK_URL, frames: 360 })
+    expect(bare).not.toHaveProperty("preparedPreview")
+  })
+
+  it("a clip with a mask cut on a trend whose mask is out of date is no candidate either (the run masks per run)", () => {
+    const d = version({ faceMasking: MASKING })
+    const stale = { ...d, faceMasking: { ...MASKING, threshold: 0.6 }, faceMask: faceMaskOf(d), previewClip: { ...CLIP, faceMask: CLIP_MASK } }
+    const run = composeTrendRun(trend(stale), req({ preview: true }))
+    expect(run.body).not.toHaveProperty("storedFaceMask")
+    expect(run).not.toHaveProperty("preparedPreview")
+  })
+
+  it("a run sent a per-person variant of the mask carries no candidate (the clip holds the base mask's cut only)", () => {
+    // No examples, one marked optional person ("friend"), left empty: the run takes the variant for exactly them.
+    const mark = { label: { slot: "friend" }, fromFrame: 0, toFrame: 100, leftPct: 50, topPct: 0, rightPct: 100, bottomPct: 50 }
+    const d = version({ examples: [], faceMasking: { ...MASKING, marks: [mark] } })
+    const faceMask = { ...faceMaskOf(d), rawMaskUrl: "https://cdn.example.com/trends/t-1/raw.mp4" }
+    const withBase = { ...d, faceMask }
+    const variantKey = faceMaskVariantKey(withBase, ["friend"])!
+    const variants = [{ emptySlots: ["friend"], key: variantKey, url: "https://cdn.example.com/trends/t-1/v-friend.mp4", frames: 360, jobId: "v-1", stats: { coverage: 0.02, erasedRegions: 1 }, approvedAt: "2026-10-27T11:00:00.000Z" }]
+    const data = { ...withBase, faceMask: { ...faceMask, variants }, previewClip: { ...CLIP, faceMask: CLIP_MASK } }
+
+    const variantRun = composeTrendRun(trend(data), req({ preview: true }))
+    expect(variantRun.body.storedFaceMask).toEqual({ url: "https://cdn.example.com/trends/t-1/v-friend.mp4", frames: 360, required: true })
+    expect(variantRun).not.toHaveProperty("preparedPreview")
+
+    // The same trend with the friend filled: the base mask, so the clip (with its cut) is a candidate.
+    const baseRun = composeTrendRun(trend(data), req({ preview: true, slots: { lead: { images: [img("me")] }, friend: { images: [img("pal")] } } }))
+    expect(baseRun.body.storedFaceMask).toEqual({ url: MASK_URL, frames: 360 })
+    expect(baseRun.preparedPreview).toEqual({ clip: { ...CLIP, faceMask: CLIP_MASK } })
+  })
+
+  it("a variant that left nothing to cover runs unmasked, and the clip is still a candidate", () => {
+    const mark = { label: { slot: "friend" }, fromFrame: 0, toFrame: 100, leftPct: 50, topPct: 0, rightPct: 100, bottomPct: 50 }
+    const d = version({ examples: [], faceMasking: { ...MASKING, marks: [mark] } })
+    const faceMask = { ...faceMaskOf(d), rawMaskUrl: "https://cdn.example.com/trends/t-1/raw.mp4" }
+    const withBase = { ...d, faceMask }
+    const variants = [{ emptySlots: ["friend"], key: faceMaskVariantKey(withBase, ["friend"])!, frames: 360, jobId: "v-1", stats: { coverage: 0, erasedRegions: 1 }, approvedAt: "2026-10-27T11:00:00.000Z" }]
+    const data = { ...withBase, faceMask: { ...faceMask, variants }, previewClip: { ...CLIP, faceMask: CLIP_MASK } }
+    const run = composeTrendRun(trend(data), req({ preview: true }))
+    expect(run.body).not.toHaveProperty("storedFaceMask")
+    expect(run.body).not.toHaveProperty("faceMasking")
+    expect(run.preparedPreview).toEqual({ clip: { ...CLIP, faceMask: CLIP_MASK } })
+  })
+
+  it("a version with a preview clip validates, and the clip never reaches the display", () => {
+    const d = version({ previewClip: CLIP })
+    expect(trendVersionDataSchema.safeParse(d).success).toBe(true)
+    const { display, body } = composeTrendRun(trend(d), req({ preview: true }))
+    expect(JSON.stringify(display)).not.toContain("preview.mp4")
+    expect(JSON.stringify(body.trendRun)).not.toContain("preview.mp4")
   })
 })
 

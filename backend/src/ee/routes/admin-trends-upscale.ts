@@ -30,8 +30,9 @@
  *   - an example gets the new video, a fresh poster, and its size and length;
  *   - the source is replaced exactly as a new source clip is (stored with the
  *     source's length range and a new display copy; the preview start kept
- *     inside it). That makes a stored face mask out of date, by design: its
- *     settings key names the source clip.
+ *     inside it), and the preview's input clip is cut again from it
+ *     (`ensurePreviewClip`). That makes a stored face mask out of date, by
+ *     design: its settings key names the source clip.
  * It is applied to the draft as it is THEN (another write that landed
  * meanwhile is kept). Edits go to the draft only; a published version is
  * never touched, and republishing shows them.
@@ -60,8 +61,9 @@ import {
   withoutUpscaleJob,
   type UpscaleTarget,
 } from "../lib/trends/upscale.js"
+import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 import { engineRequest, isRec, jobIdOf, parseJson, str, unavailableOrInternal } from "../lib/trends/run-helpers.js"
-import type { TrendRow, TrendUpscaleJob, TrendVersionData } from "../lib/trends/types.js"
+import type { TrendPreviewClip, TrendRow, TrendUpscaleJob, TrendVersionData } from "../lib/trends/types.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -246,6 +248,8 @@ async function finishApply(run: ApplyRun): Promise<void> {
       asSource: made.target === "source",
       ...(run.shownAs ? { shownAs: run.shownAs } : {}),
     })
+    // The preview clip cut once (the first attempt's), re-used by a retry after a lost race while it still fits.
+    let clip: TrendPreviewClip | undefined
     for (let attempt = 0; attempt < APPLY_ATTEMPTS; attempt++) {
       const fresh = await getDraftState(trend.id)
       if (!fresh) return
@@ -260,8 +264,11 @@ async function finishApply(run: ApplyRun): Promise<void> {
       }
       const parsed = trendVersionDataSchema.safeParse(withoutUpscaleJob(applied(fresh.data, now, stored), jobId))
       if (!parsed.success) return await markFailed(run, "validation_error", "The draft would not be valid with this upscale in it.")
+      // A new source clip puts the preview's input clip out of date: cut again from the stored 1080p clip.
+      const next = await ensurePreviewClip(trend.id, parsed.data, clip ? { reuse: clip } : {})
+      clip = next.previewClip
       try {
-        await saveDraft(trend.id, parsed.data, { expectedRevision: fresh.revision })
+        await saveDraft(trend.id, next, { expectedRevision: fresh.revision })
       } catch (e) {
         if (e instanceof DraftConflictError) continue
         throw e

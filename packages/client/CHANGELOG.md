@@ -1,5 +1,11 @@
 # @nodaro/sdk
 
+## 2.53.1
+
+### Patch Changes
+
+- 33deac2: `client.trends.estimate()` / `run()` document `409 trend_unavailable`: the trend's setup is out of date, so it cannot run until it is updated and a retry gets the same answer (it was a `503`). It arrives as a `NodaroError` with `status` 409 and `code` `"trend_unavailable"`.
+
 ## 2.53.0
 
 ### Minor Changes

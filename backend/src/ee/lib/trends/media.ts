@@ -20,7 +20,8 @@
  * is resized to 1080p here and stored the same way, and so is an admin's
  * crop of the source clip to 16:9 or 9:16 (`storeCroppedSource`).
  */
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
+import { createReadStream } from "node:fs"
 import { mkdtemp, open, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -81,6 +82,15 @@ export interface StoredTrendMedia {
   fps?: number
   /** The video's display copy, when it was asked for (`display: true`). */
   display?: TrendSourceDisplay
+  /** SHA-256 (hex) of the stored file, a video's only: what a full run's `sourceAsset` names. */
+  sha256?: string
+}
+
+/** SHA-256 (hex) of the local file at `path`, streamed (a source clip can weigh hundreds of MB). */
+export async function sha256OfFile(path: string): Promise<string> {
+  const hash = createHash("sha256")
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer)
+  return hash.digest("hex")
 }
 
 /** The most a trend file may weigh: a 30 s source clip, a result video, a picture. */
@@ -257,6 +267,8 @@ export async function storeLocalTrendMedia(
     }
     measured = { width: probe.width, height: probe.height, durationSec: probe.durationSeconds, ...(probe.fps ? { fps: probe.fps } : {}) }
     if (opts.display) measured.display = await makeDisplayCopy(trendId, file, { canvas: { width: probe.width, height: probe.height } })
+    // Hashed as it is stored (the same bytes), for the provenance a run records (`sourceAsset`).
+    measured.sha256 = await sha256OfFile(file)
   } else {
     const dims = await imageDimensionsOf(file)
     if (dims) measured = { width: dims.width, height: dims.height }
@@ -276,6 +288,8 @@ export interface StoredUpscale {
   posterUrl?: string
   /** The source clip's fresh display copy. */
   display?: TrendSourceDisplay
+  /** SHA-256 (hex) of the stored file. */
+  sha256?: string
 }
 
 /** The ffmpeg arguments that resize `input` to `size` (short side 1080), the sound taken from `soundFrom`. */
@@ -435,7 +449,15 @@ export async function storeUpscaledVideo(
       args.asSource ? { durationSec: TREND_SOURCE_SECONDS, display: true } : {},
     )
     const { width = made.width, height = made.height, durationSec = made.durationSeconds } = stored
-    return { url: stored.url, width, height, durationSec, ...(posterUrl ? { posterUrl } : {}), ...(stored.display ? { display: stored.display } : {}) }
+    return {
+      url: stored.url,
+      width,
+      height,
+      durationSec,
+      ...(posterUrl ? { posterUrl } : {}),
+      ...(stored.display ? { display: stored.display } : {}),
+      ...(stored.sha256 ? { sha256: stored.sha256 } : {}),
+    }
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined)
   }
@@ -529,6 +551,8 @@ export interface StoredCrop {
   height: number
   durationSec: number
   display?: TrendSourceDisplay
+  /** SHA-256 (hex) of the stored file. */
+  sha256?: string
 }
 
 /**
@@ -588,7 +612,7 @@ export async function storeCroppedSource(
     }
     const stored = await storeLocalTrendMedia(trendId, cropped, "video", { durationSec: TREND_SOURCE_SECONDS, display: true })
     const { width = made.width, height = made.height, durationSec = made.durationSeconds } = stored
-    return { url: stored.url, width, height, durationSec, ...(stored.display ? { display: stored.display } : {}) }
+    return { url: stored.url, width, height, durationSec, ...(stored.display ? { display: stored.display } : {}), ...(stored.sha256 ? { sha256: stored.sha256 } : {}) }
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined)
   }

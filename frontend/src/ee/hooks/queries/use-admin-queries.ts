@@ -50,11 +50,11 @@ import {
   type AdminTrendCropAspect,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
-  type AdminTrendData,
   type AdminTrendMediaKind,
   type AdminTrendPromptMode,
   type AdminTrendRun,
   type TrendBadge,
+  type TrendDraftBody,
   type TrendLocalizedText,
   type TrendTestRunRequest,
 } from "@/lib/api"
@@ -1633,8 +1633,7 @@ export function useSaveTrendDraft(id: string) {
   const invalidate = useInvalidateTrend()
   return useMutation({
     onError: handledByScreen,
-    mutationFn: ({ data, revision }: { data: Omit<AdminTrendData, "examples">; revision: string }) =>
-      saveAdminTrendDraft(id, data, revision),
+    mutationFn: ({ data, revision }: { data: TrendDraftBody; revision: string }) => saveAdminTrendDraft(id, data, revision),
     onSuccess: () => {
       // "Show prompt" lists the trend's prompt parts as saved: a save may change them.
       void qc.invalidateQueries({ queryKey: queryKeys.admin.trendRunPrompts() })

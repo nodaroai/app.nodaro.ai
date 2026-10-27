@@ -10,9 +10,11 @@
  * - Each prompt part has its 4 s preview version, shown while the trend
  *   offers a preview (the fallback as placeholder) and kept when it does not.
  * - The image counter shows N / 30 and, above 30, an error and no Save.
+ * - The 4 s preview's input clip (server-made on save) is shown under the
+ *   window and played from its own file; it is never in a save's body.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 vi.mock("@/lib/edition", async (orig) => ({
@@ -22,7 +24,7 @@ vi.mock("@/lib/edition", async (orig) => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }))
 
 import { toast } from "sonner"
-import type { AdminTrendSlot } from "@/lib/api"
+import type { AdminTrendPreviewClip, AdminTrendSlot } from "@/lib/api"
 import {
   detail,
   ENVIRONMENTS,
@@ -1015,5 +1017,113 @@ describe("the 4 s preview's own prompt parts", { timeout: 20_000 }, () => {
     renderEditor()
     expect(await screen.findByRole("switch", { name: "4 s preview" })).toBeChecked()
     expect(screen.getByText(/A preview run sends the preview's own role names, reference lines and prompts/)).toBeInTheDocument()
+  })
+})
+
+describe("the 4 s preview's input clip", { timeout: 20_000 }, () => {
+  const CLIP: AdminTrendPreviewClip = {
+    videoUrl: "https://cdn.test/trends/a1/preview.mp4",
+    durationSec: 5,
+    width: 720,
+    height: 1280,
+    frames: 150,
+    sha256: "0123456789abcdef".repeat(4),
+    sourceVideoUrl: detail().draft.source!.videoUrl,
+    startSec: detail().draft.previewStart!,
+    // Three minutes before the FILE was collected; the test asserts the shape, not the number (a slow
+    // shard can run the test minutes later).
+    madeAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+  }
+  /** The current clip's row (the heading "Preview input" without a colon), or null while a note shows instead. */
+  const row = (): HTMLElement | null => screen.queryByText("Preview input")?.closest<HTMLElement>("[data-preview-input]") ?? null
+
+  it("shows the stored clip (length, frames, size, short hash, when made) and plays that file, not the source", async () => {
+    const user = userEvent.setup()
+    const play = vi.fn().mockResolvedValue(undefined)
+    HTMLMediaElement.prototype.play = play
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { previewClip: CLIP }) } })
+    renderEditor()
+
+    await screen.findByText("Preview input")
+    const current = row()!
+    expect(current).toHaveAttribute("data-preview-input", "current")
+    expect(within(current).getByText("5.0 s")).toBeInTheDocument()
+    expect(within(current).getByText("150 frames")).toBeInTheDocument()
+    expect(within(current).getByText("720×1280")).toBeInTheDocument()
+    expect(within(current).getByText("0123456789ab")).toHaveAttribute("title", CLIP.sha256)
+    expect(within(current).getByText(/^made \d+[mh] ago$/)).toBeInTheDocument()
+    expect(within(current).getByRole("link", { name: "open" })).toHaveAttribute("href", CLIP.videoUrl)
+    // Loading the clip is no change: it is the server's, never saved by the form.
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+
+    await user.click(within(current).getByRole("button", { name: /play the prepared clip/i }))
+    expect(play).toHaveBeenCalledTimes(1)
+    const played = play.mock.instances[0] as HTMLVideoElement
+    expect(played).toHaveAttribute("src", CLIP.videoUrl)
+    expect(played).toHaveAccessibleName("Prepared preview clip")
+    // The source player was not touched.
+    expect(document.querySelector(`video[src="${detail().draft.source!.videoUrl}"]`)).not.toBe(played)
+  })
+
+  it("says the clip is prepared on save while none is stored, and after the save shows what the server made", async () => {
+    const user = userEvent.setup()
+    let stored: AdminTrendPreviewClip | undefined
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, stored ? { previewClip: stored } : {}) } })
+    routes[`PUT ${BASE}/draft`] = () => {
+      stored = CLIP
+      return { body: { data: { version: 1, revision: "rev-2" } } }
+    }
+    renderEditor()
+
+    await screen.findByText("Preview input:")
+    expect(row()).toBeNull()
+    expect(screen.getByText(/prepared on save\. The preview window is cut from the source/)).toBeInTheDocument()
+    // The Test panel says a preview run cuts the window itself until then.
+    expect(screen.getByText(/No prepared preview input is stored for the saved draft: the run cuts the window from the source/)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(ROLE_NAME), "!")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).not.toHaveProperty("previewClip")
+
+    await screen.findByText("Preview input")
+    expect(row()).toHaveAttribute("data-preview-input", "current")
+    expect(screen.getByText(/It edits the prepared preview input/)).toBeInTheDocument()
+  })
+
+  it("a moved preview start makes the stored clip stale: prepared again on save", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { previewClip: CLIP }) } })
+    renderEditor()
+    await screen.findByText("Preview input")
+    fireEvent.change(screen.getByLabelText("Preview start"), { target: { value: "3" } })
+    expect(await screen.findByText(/the prepared clip was cut from another source clip or start\. Prepared again on save/)).toBeInTheDocument()
+    expect(row()).toBeNull()
+  })
+
+  it("a stale clip against the saved draft is said in the Test panel, and the window off shows nothing", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { previewClip: { ...CLIP, startSec: 9 } }) } })
+    renderEditor()
+    expect(await screen.findByText(/No prepared preview input is stored for the saved draft/)).toBeInTheDocument()
+    expect(screen.getByText(/the prepared clip was cut from another source clip or start/)).toBeInTheDocument()
+  })
+
+  it("a publish refused for the preview input clip says to save or publish again", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/publish`] = () => ({
+      status: 409,
+      body: {
+        error: {
+          code: "publish_blocked",
+          message: "This trend cannot be published yet.",
+          reasons: [{ code: "preview_clip_missing" }, { code: "preview_clip_out_of_date", why: "source" }],
+        },
+      },
+    })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /^publish$/i }))
+    const reasons = await screen.findByRole("list", { name: /why it can't be published/i })
+    expect(within(reasons).getByText(/input clip is not prepared yet\. Save the draft, or publish again/i)).toBeInTheDocument()
+    expect(within(reasons).getByText(/input clip is out of date: the source clip changed since it was cut/i)).toBeInTheDocument()
   })
 })

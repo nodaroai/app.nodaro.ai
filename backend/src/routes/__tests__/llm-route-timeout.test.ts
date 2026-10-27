@@ -29,11 +29,14 @@ describe("LLM route request timeout", () => {
     // idle timeout set in the handler is what closes a long call. Raising the
     // constant alone left `raw.setTimeout(120000)` behind, and the runs kept
     // dying at 121 s (2026-10-08) — so the socket sites are pinned too.
-    it(`${file}: every socket timeout (req/reply.raw.setTimeout) is the shared constant`, () => {
+    // The sites go through `extendSocketTimeout` (it skips a request with no
+    // socket, e.g. a plugin worker's app.inject call), so that is what is pinned.
+    it(`${file}: every socket timeout (extendSocketTimeout) is the shared constant`, () => {
       const src = readFileSync(resolve(__dirname, "..", file), "utf8")
-      const sites = [...src.matchAll(/raw\.setTimeout\(\s*([^)]+)\)/g)].map((m) => m[1]!.trim())
+      const sites = [...src.matchAll(/extendSocketTimeout\(\s*req,\s*reply,\s*([^)]+)\)/g)].map((m) => m[1]!.trim())
       expect(sites.length).toBeGreaterThanOrEqual(2)
       for (const site of sites) expect(site).toBe("LLM_ROUTE_REQUEST_TIMEOUT_MS")
+      expect(src).not.toMatch(/\braw\.setTimeout\(/)
     })
   }
 })
