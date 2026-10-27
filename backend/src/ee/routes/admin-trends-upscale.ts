@@ -10,9 +10,10 @@
  * Starting asks the core `POST /v1/video-upscale` (Topaz, `targetResolution`
  * "1080p": the short side) as the admin, through `engineRequest`: the job is
  * the admin's, billed as any upscale, and the core route refuses a clip it
- * cannot take (unreadable, too long) before anything is held. It is refused
- * here for a video whose short side is already 1080 or more (`needsUpscale`),
- * and while an upscale of the same video is still running. The job is written
+ * cannot take (unreadable, too long) before anything is held. A video at
+ * exactly 1080 on its short side is enhanced at that size (the same ask); one
+ * above 1080 is refused here (`offersUpscale`: a 1080p target would shrink it),
+ * and so is a start while an upscale of the same video is still running. The job is written
  * onto the draft (`upscaleJobs`, named by the video it was made from), so the
  * editor follows it across a reload, a reorder or a removal.
  *
@@ -51,7 +52,7 @@ import {
   UPSCALE_TOPAZ_RESOLUTION,
   currentUpscaleTarget,
   isApplying,
-  needsUpscale,
+  offersUpscale,
   pendingUpscaleJobs,
   upscaleSourceOf,
   withNewSourceClip,
@@ -309,8 +310,8 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
           ? err(reply, 409, "source_missing", "Add a source clip and save the draft first.")
           : err(reply, 404, "not_found", "Example not found")
       }
-      if (!needsUpscale(from.width, from.height)) {
-        return err(reply, 409, "already_1080p", `The video of ${targetName(target)} is already 1080p or more.`)
+      if (!offersUpscale(from.width, from.height)) {
+        return err(reply, 409, "above_1080p", `The video of ${targetName(target)} is above 1080p: a 1080p upscale would shrink it.`)
       }
       // One upscale of a video at a time: a second click would pay twice for the same result.
       const same = draft.upscaleJobs?.find((j) => j.target === target.target && j.fromUrl === from.fromUrl)

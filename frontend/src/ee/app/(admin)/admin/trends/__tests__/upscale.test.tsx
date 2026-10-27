@@ -2,7 +2,8 @@
  * Admin → Trends → one trend → upscaling the source clip and the examples to 1080p.
  *
  * - Each example below 1080p, and the saved source clip, offer "Upscale to
- *   1080p"; a video already 1080p (by its short side) offers nothing.
+ *   1080p"; a video at exactly 1080p (by its short side) offers "Enhance at
+ *   1080p" (the same Topaz run, at the same size); one above 1080p, nothing.
  * - Starting sends the target, the held revision and a per-click
  *   Idempotency-Key; the job is followed, the before and after play side by
  *   side, and "Use it" sends the job with the revision start returned. "Use
@@ -28,7 +29,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 import type { AdminTrendData, AdminTrendExample, AdminTrendFaceMask, AdminTrendPendingUpscale } from "@/lib/api"
 import { detail, ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, run, sentTo, TREND_ID } from "./harness"
 import AdminTrendEditorPage from "../detail/page"
-import { needsUpscale } from "../model"
+import { trendUpscaleOfferFor } from "@nodaro/render-rules"
 
 const BASE = `/v1/admin/trends/${TREND_ID}`
 const JOB = "00000000-0000-4000-8000-0000000000d1"
@@ -91,18 +92,19 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("needsUpscale", () => {
-  it("offers an upscale below a 1080 short side only (an unknown size is offered one)", () => {
-    expect(needsUpscale(720, 1280)).toBe(true)
-    expect(needsUpscale(1280, 720)).toBe(true)
-    expect(needsUpscale(1080, 1920)).toBe(false)
-    expect(needsUpscale(1920, 1080)).toBe(false)
-    expect(needsUpscale(undefined, undefined)).toBe(true)
+describe("trendUpscaleOfferFor", () => {
+  it("an upscale below a 1080 short side, an enhance at it, nothing above (an unknown size is offered an upscale)", () => {
+    expect(trendUpscaleOfferFor(720, 1280)).toBe("upscale")
+    expect(trendUpscaleOfferFor(1280, 720)).toBe("upscale")
+    expect(trendUpscaleOfferFor(1080, 1920)).toBe("enhance")
+    expect(trendUpscaleOfferFor(1920, 1080)).toBe("enhance")
+    expect(trendUpscaleOfferFor(1440, 2560)).toBeNull()
+    expect(trendUpscaleOfferFor(undefined, undefined)).toBe("upscale")
   })
 })
 
 describe("upscaling an example", { timeout: 20_000 }, () => {
-  it("is offered on a 720p example only; start, follow, before/after, Use it with the revision start returned", async () => {
+  it("upscales a 720p example (a 1080p one is offered an enhance); start, follow, before/after, Use it with the revision start returned", async () => {
     const user = userEvent.setup()
     serve({ examples: [example(1), example(2, { width: 1080, height: 1920 })] })
     startable("example", example(1).videoUrl, 0)
@@ -117,7 +119,9 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     renderEditor()
 
     const first = await screen.findByRole("group", { name: "Upscale example 1" })
-    expect(screen.queryByRole("group", { name: "Upscale example 2" })).not.toBeInTheDocument()
+    const second = screen.getByRole("group", { name: "Upscale example 2" })
+    expect(within(second).getByRole("button", { name: /enhance at 1080p/i })).toBeInTheDocument()
+    expect(within(second).queryByRole("button", { name: /upscale to 1080p/i })).not.toBeInTheDocument()
     await user.click(within(first).getByRole("button", { name: /upscale to 1080p/i }))
     await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "example", index: 0, revision: "rev-1" }]))
     // One Idempotency-Key per click.
@@ -129,9 +133,11 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     expect(screen.getByLabelText("Before: example 1")).toHaveAttribute("src", example(1).videoUrl)
     await user.click(screen.getByRole("button", { name: /use it/i }))
     await waitFor(() => expect(sentTo(`POST ${BASE}/upscale/apply`)).toEqual([{ jobId: JOB, revision: "rev-2" }]))
-    // The card now shows the 1080p video, and offers no further upscale.
+    // The card now shows the 1080p video, and offers an enhance of it, no further upscale.
     await waitFor(() => expect(screen.getAllByText(/1080×1920 · 10\.0 s/)).toHaveLength(2))
-    await waitFor(() => expect(screen.queryByRole("group", { name: "Upscale example 1" })).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(within(screen.getByRole("group", { name: "Upscale example 1" })).getByRole("button", { name: /enhance at 1080p/i })).toBeInTheDocument(),
+    )
 
     // The next draft write carries the revision the server holds now.
     await user.type(screen.getByLabelText("Trend prompt"), "!")
@@ -248,9 +254,11 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
 
     await user.click(screen.getByRole("button", { name: /use it/i }))
     await waitFor(() => expect(sentTo(`POST ${BASE}/upscale/apply`)).toEqual([{ jobId: JOB, revision: "rev-2" }]))
-    // The form took the server's draft once the poll found it done: the new clip, 1080p, and no further upscale offered.
+    // The form took the server's draft once the poll found it done: the new clip, 1080p, offered an enhance, no further upscale.
     expect(await screen.findByText("1080×1920", {}, { timeout: 5_000 })).toBeInTheDocument()
-    await waitFor(() => expect(screen.queryByRole("group", { name: "Upscale the source clip" })).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(within(screen.getByRole("group", { name: "Upscale the source clip" })).getByRole("button", { name: /enhance at 1080p/i })).toBeInTheDocument(),
+    )
 
     await user.type(screen.getByLabelText("Trend prompt"), "!")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
@@ -283,10 +291,21 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     expect(within(panel).getByText(/save first/i)).toBeInTheDocument()
   })
 
-  it("is not offered for a source clip already 1080p", async () => {
+  it("offers a source clip already 1080p an enhance at 1080p, sent as the same upscale", async () => {
+    const user = userEvent.setup()
     serve({ source: { videoUrl: SRC, durationSec: 12, width: 1920, height: 1080 } })
+    startable("source", SRC)
     renderEditor()
-    expect(await screen.findByText("1920×1080")).toBeInTheDocument()
+    const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
+    expect(within(panel).queryByRole("button", { name: /upscale to 1080p/i })).not.toBeInTheDocument()
+    await user.click(within(panel).getByRole("button", { name: /enhance at 1080p/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "source", revision: "rev-1" }]))
+  })
+
+  it("is not offered for a source clip above 1080p", async () => {
+    serve({ source: { videoUrl: SRC, durationSec: 12, width: 2560, height: 1440 } })
+    renderEditor()
+    expect(await screen.findByText("2560×1440")).toBeInTheDocument()
     expect(screen.queryByRole("group", { name: "Upscale the source clip" })).not.toBeInTheDocument()
   })
 })

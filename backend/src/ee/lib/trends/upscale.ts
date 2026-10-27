@@ -6,18 +6,21 @@
  * `POST /v1/video-upscale`, `targetResolution: "1080p"`, the short side; a
  * `video-upscale` job of the admin, billed as any upscale), then stored as it
  * is when it already is exactly 1080 on the short side, else resized so it is
- * (aspect kept, both sides even: yuv420p needs them even). A video whose short
- * side is already 1080 or more is not offered one.
+ * (aspect kept, both sides even: yuv420p needs them even). A video at exactly
+ * 1080 on its short side is offered an enhance instead (the same Topaz ask, at
+ * the same size); one above 1080 is offered nothing (`trendUpscaleOfferFor`,
+ * shared with the trend builder).
  *
  * The upscale in the making is recorded on the draft (`TrendUpscaleJob`),
  * named by the video it was made from, so it survives a reload, a reorder
  * and a removal: it applies only while that video is still the target's.
  */
+import { TREND_UPSCALE_SHORT_SIDE, trendUpscaleOfferFor } from "@nodaro/render-rules"
 import { MAX_UPSCALE_JOBS, PREVIEW_SECONDS } from "./schemas.js"
 import type { TrendUpscaleJob, TrendVersionData } from "./types.js"
 
-/** The short side of every upscaled video. */
-export const UPSCALE_SHORT_SIDE = 1080
+/** The short side of every upscaled (or enhanced) video. */
+export const UPSCALE_SHORT_SIDE = TREND_UPSCALE_SHORT_SIDE
 
 /** The Topaz target asked for: 1080p, the short side (portrait stays portrait). */
 export const UPSCALE_TOPAZ_RESOLUTION = "1080p"
@@ -53,13 +56,13 @@ export function upscaleTargetSize(width: number, height: number): { width: numbe
 }
 
 /**
- * Whether a video of this size is offered an upscale: its short side is
- * under `UPSCALE_SHORT_SIDE`. An unknown size (a source clip stored before
- * sizes were recorded) is offered one.
+ * Whether a video of this size is offered Topaz: an upscale when its short
+ * side is under `UPSCALE_SHORT_SIDE`, an enhance at the same size when it is
+ * exactly that, nothing above it (`trendUpscaleOfferFor`). An unknown size (a
+ * source clip stored before sizes were recorded) is offered an upscale.
  */
-export function needsUpscale(width: number | undefined, height: number | undefined): boolean {
-  if (!width || !height) return true
-  return Math.min(width, height) < UPSCALE_SHORT_SIDE
+export function offersUpscale(width: number | undefined, height: number | undefined): boolean {
+  return trendUpscaleOfferFor(width, height) !== null
 }
 
 /** What an upscale is for: the source clip, or the example at `index`. */

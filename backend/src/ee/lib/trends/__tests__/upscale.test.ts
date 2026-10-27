@@ -5,12 +5,13 @@
  *  - the resize makes the SHORT side exactly 1080, keeps the aspect and the
  *    orientation, and both sides even (720×1280 → 1080×1920, 1280×720 →
  *    1920×1080, odd sizes rounded to the nearest even long side);
- *  - a video whose short side is already 1080 or more is not offered one;
+ *  - a video at exactly 1080 on its short side is offered an enhance, one above it nothing;
  *  - an upscale in the making is named by the video it was made from, so it
  *    follows its example through a reorder and stops applying once that video
  *    is replaced or removed.
  */
 import { describe, expect, it } from "vitest"
+import { trendUpscaleOfferFor } from "@nodaro/render-rules"
 import type { TrendExample, TrendUpscaleJob, TrendVersionData } from "../types.js"
 import {
   UPSCALE_APPLY_STALE_MS,
@@ -18,7 +19,7 @@ import {
   clampPreviewStart,
   isApplying,
   currentUpscaleTarget,
-  needsUpscale,
+  offersUpscale,
   pendingUpscaleJobs,
   upscaleSourceOf,
   upscaleTargetSize,
@@ -88,19 +89,29 @@ describe("upscaleTargetSize", () => {
   })
 })
 
-describe("needsUpscale", () => {
-  it("offers one below a 1080 short side only", () => {
-    expect(needsUpscale(720, 1280)).toBe(true)
-    expect(needsUpscale(1280, 720)).toBe(true)
-    expect(needsUpscale(1079, 1920)).toBe(true)
-    expect(needsUpscale(1080, 1920)).toBe(false)
-    expect(needsUpscale(1920, 1080)).toBe(false)
-    expect(needsUpscale(2160, 3840)).toBe(false)
+describe("trendUpscaleOfferFor / offersUpscale", () => {
+  it("an upscale below a 1080 short side", () => {
+    expect(trendUpscaleOfferFor(720, 1280)).toBe("upscale")
+    expect(trendUpscaleOfferFor(1280, 720)).toBe("upscale")
+    expect(trendUpscaleOfferFor(1079, 1920)).toBe("upscale")
   })
 
-  it("offers one when the size is not known", () => {
-    expect(needsUpscale(undefined, undefined)).toBe(true)
-    expect(needsUpscale(1080, undefined)).toBe(true)
+  it("an enhance at exactly 1080, portrait, landscape or ultra-wide", () => {
+    expect(trendUpscaleOfferFor(1080, 1920)).toBe("enhance")
+    expect(trendUpscaleOfferFor(1920, 1080)).toBe("enhance")
+    expect(trendUpscaleOfferFor(2568, 1080)).toBe("enhance")
+    expect(offersUpscale(1920, 1080)).toBe(true)
+  })
+
+  it("nothing above 1080: a 1080p target would shrink it", () => {
+    expect(trendUpscaleOfferFor(1081, 1920)).toBeNull()
+    expect(trendUpscaleOfferFor(2160, 3840)).toBeNull()
+    expect(offersUpscale(2160, 3840)).toBe(false)
+  })
+
+  it("an upscale when the size is not known", () => {
+    expect(trendUpscaleOfferFor(undefined, undefined)).toBe("upscale")
+    expect(trendUpscaleOfferFor(1080, undefined)).toBe("upscale")
   })
 })
 

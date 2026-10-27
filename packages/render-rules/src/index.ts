@@ -802,6 +802,7 @@ export {
   trendCropTargetSize,
   type TrendCropAspect,
 } from "./trend-source-crop"
+export { TREND_UPSCALE_SHORT_SIDE, trendUpscaleOfferFor, type TrendUpscaleOffer } from "./trend-upscale-offer"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

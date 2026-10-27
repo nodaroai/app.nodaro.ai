@@ -3,8 +3,11 @@
 // SAVED video (billed to the admin; one key per click, so a repeat of the
 // click is never paid twice); the job is followed until it ends, then the
 // before and after play side by side: "Use it" puts the 1080p video in the
-// draft, "Discard" drops it. A video whose short side is already 1080 or more
-// is offered nothing.
+// draft, "Discard" drops it. A video at exactly 1080 on its short side is
+// offered "Enhance at 1080p" instead: the same Topaz run at the same size, for
+// a sharper, cleaner picture (and may be enhanced again). One above 1080 is
+// offered nothing: a 1080p target would shrink it (`trendUpscaleOfferFor`,
+// the server's own rule).
 //
 // "Use it" runs on the server, in the background (it outlasts a request): the
 // record reads `applying`, the trend is read again until the record is gone
@@ -21,11 +24,11 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Check, Loader2, Maximize2, X } from "lucide-react"
+import { trendUpscaleOfferFor } from "@nodaro/render-rules"
 import type { AdminTrendPendingUpscale, AdminTrendUpscaleTarget } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { generateIdempotencyKey } from "@/lib/idempotency-key"
 import { useApplyTrendUpscale, useDiscardTrendUpscale, useStartTrendUpscale, useTrendUpscaleJob } from "@/ee/hooks/queries/use-admin-queries"
-import { needsUpscale } from "../model"
 
 /** Where an upscale was put: the source clip, or the example at `index`. */
 export interface UpscaleApplied {
@@ -113,7 +116,9 @@ export function UpscalePanel({
     else wrote.current()
   }, [applyingHere, pending, recorded])
 
-  if (!jobId && !needsUpscale(video.width, video.height)) return null
+  const offer = trendUpscaleOfferFor(video.width, video.height)
+  if (!jobId && !offer) return null
+  const enhance = offer === "enhance"
 
   const j = job.data
   const running = !!jobId && (!j || IN_FLIGHT.has(j.status))
@@ -121,8 +126,7 @@ export function UpscalePanel({
   const upscaledUrl = j?.status === "completed" ? (j.output_data?.videoUrl ?? null) : null
   const applying = applyingHere !== null || serverApplying
   const busy = start.isPending || apply.isPending || discard.isPending || applying
-  const offer = needsUpscale(video.width, video.height)
-  const canStart = offer && !busy && !waitFor && (!jobId || failed || !current)
+  const canStart = !!offer && !busy && !waitFor && (!jobId || failed || !current)
   const applyError = !applying && pending?.jobId === jobId ? pending?.error : undefined
 
   const begin = () =>
@@ -171,7 +175,7 @@ export function UpscalePanel({
       {jobId && running && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Upscaling to 1080p…{typeof j?.progress === "number" && j.progress > 0 ? ` ${Math.round(j.progress)} %` : ""}
+          {enhance ? "Enhancing at 1080p…" : "Upscaling to 1080p…"}{typeof j?.progress === "number" && j.progress > 0 ? ` ${Math.round(j.progress)} %` : ""}
         </p>
       )}
       {jobId && job.error && <p className="text-sm text-destructive">{job.error.message}</p>}
@@ -224,7 +228,7 @@ export function UpscalePanel({
         {offer && (!jobId || failed || !current) && (
           <Button type="button" variant="outline" size="sm" className="min-h-9" disabled={!canStart} onClick={begin}>
             {start.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Maximize2 className="mr-1 h-4 w-4" />}
-            {jobId ? "Upscale again" : "Upscale to 1080p"}
+            {enhance ? (jobId ? "Enhance again" : "Enhance at 1080p") : jobId ? "Upscale again" : "Upscale to 1080p"}
           </Button>
         )}
         {jobId && !running && (
