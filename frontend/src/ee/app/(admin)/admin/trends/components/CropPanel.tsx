@@ -2,7 +2,9 @@
 // offered (the server's rule, shared through @nodaro/render-rules): a clip
 // wider than 16:9 is cut at the sides, one taller than 9:16 at the top and
 // bottom. The admin slides where the kept frame sits (centered by default);
-// the preview shades what is cut and says how many pixels go from each side.
+// the preview shades what is cut and says how many pixels go from each side,
+// and plays or scrubs to any moment so the kept frame is checked across the
+// whole clip.
 //
 // The crop runs on the server, in the background (it outlasts a request), and
 // keeps the original's quality (its codec family, bitrate, pixel format and
@@ -15,8 +17,8 @@
 // It replaces the source clip as uploading a new one does, so a stored face
 // mask must be made again: the panel says so first.
 
-import { useEffect, useRef, useState } from "react"
-import { Crop, Loader2, X } from "lucide-react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { Crop, Loader2, Pause, Play, X } from "lucide-react"
 import { TREND_CROP_DEFAULT_POSITION, trendCropAspectFor, trendCropCut, trendCropTargetSize } from "@nodaro/render-rules"
 import type { AdminTrendPendingSourceCrop } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -105,31 +107,22 @@ export function CropPanel({ trendId, shown, pending, revision, waitFor, faceMask
           <p className="text-sm">
             The source clip is {width}×{height}, {aspect === "16:9" ? "wider than 16:9" : "taller than 9:16"}. Crop it to {aspect} ({target.width}×{target.height}):
           </p>
-          <div
-            className="relative w-full max-w-md overflow-hidden rounded bg-black"
-            style={{ aspectRatio: `${width} / ${height}` }}
-            data-testid="crop-preview"
-          >
-            {shown.videoUrl ? (
-              <video src={shown.videoUrl} poster={shown.posterUrl} muted playsInline preload="metadata" aria-label="The source clip" className="absolute inset-0 h-full w-full object-fill" />
-            ) : shown.posterUrl ? (
-              <img src={shown.posterUrl} alt="The source clip" className="absolute inset-0 h-full w-full object-fill" />
-            ) : null}
+          <CropPreview videoUrl={shown.videoUrl} posterUrl={shown.posterUrl} width={width!} height={height!}>
             {/* What is cut, shaded; the kept frame outlined. */}
             {aspect === "16:9" ? (
               <>
-                <div className="absolute inset-y-0 left-0 bg-black/60" style={{ width: pct(cut.before) }} />
-                <div className="absolute inset-y-0 right-0 bg-black/60" style={{ width: pct(cut.after) }} />
-                <div className="absolute inset-y-0 border-2 border-white/90" style={{ left: pct(cut.before), right: pct(cut.after) }} />
+                <div className="pointer-events-none absolute inset-y-0 left-0 bg-black/60" style={{ width: pct(cut.before) }} />
+                <div className="pointer-events-none absolute inset-y-0 right-0 bg-black/60" style={{ width: pct(cut.after) }} />
+                <div className="pointer-events-none absolute inset-y-0 border-2 border-white/90" style={{ left: pct(cut.before), right: pct(cut.after) }} />
               </>
             ) : (
               <>
-                <div className="absolute inset-x-0 top-0 bg-black/60" style={{ height: pct(cut.before) }} />
-                <div className="absolute inset-x-0 bottom-0 bg-black/60" style={{ height: pct(cut.after) }} />
-                <div className="absolute inset-x-0 border-2 border-white/90" style={{ top: pct(cut.before), bottom: pct(cut.after) }} />
+                <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/60" style={{ height: pct(cut.before) }} />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60" style={{ height: pct(cut.after) }} />
+                <div className="pointer-events-none absolute inset-x-0 border-2 border-white/90" style={{ top: pct(cut.before), bottom: pct(cut.after) }} />
               </>
             )}
-          </div>
+          </CropPreview>
           <div className="flex max-w-md items-center gap-3">
             <span className="w-12 shrink-0 capitalize text-muted-foreground">{sides[0]}</span>
             <Slider
@@ -186,6 +179,90 @@ export function CropPanel({ trendId, shown, pending, revision, waitFor, faceMask
         )}
         {waitFor && <span className="text-muted-foreground">{waitFor}</span>}
       </div>
+    </div>
+  )
+}
+
+/** Seconds as m:ss.s (the scrub bar's readout). */
+const clock = (s: number) => {
+  const t = Math.max(0, s)
+  const m = Math.floor(t / 60)
+  return `${m}:${(t - m * 60).toFixed(1).padStart(4, "0")}`
+}
+
+/** One frame at 30 fps: the scrub bar's step (its arrow keys move one frame). */
+const SCRUB_STEP = 1 / 30
+
+/**
+ * The source clip with the crop drawn over it, played or scrubbed to any
+ * moment, so the admin checks the kept frame across the whole clip before
+ * cropping. The shading is drawn by `children`.
+ */
+function CropPreview({ videoUrl, posterUrl, width, height, children }: { videoUrl?: string; posterUrl?: string; width: number; height: number; children: ReactNode }) {
+  const video = useRef<HTMLVideoElement>(null)
+  const [duration, setDuration] = useState(0)
+  const [time, setTime] = useState(0)
+  const [playing, setPlaying] = useState(false)
+
+  const toggle = () => {
+    const el = video.current
+    if (!el) return
+    if (el.paused) void el.play()?.catch(() => undefined)
+    else el.pause()
+  }
+  const seek = (t: number) => {
+    const el = video.current
+    if (!el) return
+    el.pause()
+    el.currentTime = t
+    setTime(t)
+  }
+
+  return (
+    <div className="flex w-full max-w-md flex-col gap-2">
+      <div className="relative w-full overflow-hidden rounded bg-black" style={{ aspectRatio: `${width} / ${height}` }} data-testid="crop-preview">
+        {videoUrl ? (
+          <video
+            ref={video}
+            src={videoUrl}
+            poster={posterUrl}
+            muted
+            playsInline
+            preload="metadata"
+            aria-label="The source clip"
+            className="absolute inset-0 h-full w-full object-fill"
+            onLoadedMetadata={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
+            onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+          />
+        ) : posterUrl ? (
+          <img src={posterUrl} alt="The source clip" className="absolute inset-0 h-full w-full object-fill" />
+        ) : null}
+        {children}
+      </div>
+      {videoUrl && (
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" className="min-h-9" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
+            {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={SCRUB_STEP}
+            value={Math.min(time, duration || 0)}
+            disabled={!duration}
+            aria-label="Moment in the source clip"
+            className="flex-1"
+            onChange={(e) => seek(Number(e.target.value))}
+          />
+          <span className="tabular-nums text-muted-foreground" data-testid="crop-time">
+            {clock(time)} / {clock(duration)}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
