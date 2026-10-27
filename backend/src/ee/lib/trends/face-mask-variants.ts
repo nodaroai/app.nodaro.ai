@@ -31,7 +31,7 @@
 import { createHash } from "node:crypto"
 import { CAST_SWAP_FACE_MASK_MARK_LIMITS } from "@nodaro/render-rules"
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
-import { boxOf, erasedBoxesOf, faceMaskingOn, slotMarksOf, type MaskEraseBox } from "../../../lib/cast-swap-face-masking.js"
+import { boxOf, erasedBoxesOf, faceMaskingOn, faceMaskingSourceOf, slotMarksOf, type MaskEraseBox } from "../../../lib/cast-swap-face-masking.js"
 import { faceMaskSettingsKey, stableJson } from "./face-mask.js"
 import type { TrendFaceMaskVariant, TrendFaceMaskVariantJob, TrendVersionData } from "./types.js"
 
@@ -53,10 +53,11 @@ export function sameSlots(a: readonly string[], b: readonly string[]): boolean {
 /**
  * The optional person slots that carry at least one slot mark, sorted by key.
  * Only marks naming an optional person of this version count (the trend
- * schema refuses any other); none when the trend does not mask.
+ * schema refuses any other); none when the trend does not mask, or prepares
+ * its clip in a depth mode (per-person variants are a face mask's alone).
  */
 export function markedPeople(data: MarksData): string[] {
-  if (!faceMaskingOn(data.faceMasking)) return []
+  if (!faceMaskingOn(data.faceMasking) || faceMaskingSourceOf(data.faceMasking) !== "faces") return []
   const optional = new Set(data.slots.filter((s) => s.kind === "person" && !s.required).map((s) => s.key))
   return canonicalSlots(slotMarksOf(data.faceMasking).map((m) => m.slot).filter((k) => optional.has(k)))
 }

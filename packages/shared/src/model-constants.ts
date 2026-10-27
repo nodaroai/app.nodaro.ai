@@ -2593,10 +2593,15 @@ export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLim
   // audio side already declares in SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER
   // above, whose h3 row cites the same page.
   "minimax-h3": { minSec: 2, maxSec: 15, maxTotalSec: 15 },
-  // Kling 4.0 Reference — "up to 5 clips, each 2–30 seconds", no combined cap
+  // Kling 4.0 Reference — "up to 5 clips, each 2–30 seconds"
   // (docs.kie.ai/market/kling/v4-reference-to-video); KIE's own reject reads
-  // "video_1 duration must be between 2 and 30 seconds, got 45".
-  "kling-4": { minSec: 2, maxSec: 30 },
+  // "video_1 duration must be between 2 and 30 seconds, got 45". The doc names
+  // no COMBINED cap, but KIE enforces one at task creation: verified live on
+  // 2026-10-27, two 16 s references were refused with
+  // `{"code":422,"msg":"video_urls total duration must not exceed 30 seconds"}`
+  // while two 14 s ones were accepted (a production run with two 20 s
+  // references had reached users as the generic "rejected these settings").
+  "kling-4": { minSec: 2, maxSec: 30, maxTotalSec: 30 },
 }
 
 /**

@@ -1341,6 +1341,11 @@ const SESSIONS_TRASH_BYTES = 3_662
 // 508_641 total − 508_613 = 28 B; the 79 B of headroom carry across.
 const NODARO_MOTION_RENAME_BYTES = 28
 
+// RAISED 2026-10-27 by Nodaro Motion's style and nothing else: `cast_swap` takes `style`
+// ("precise" | "motion") with a one-sentence description. No tool was added, so the fixture does
+// NOT move. Measured by this suite: 509_243 total − 508_981 = 262 B; the headroom carries across.
+const CAST_SWAP_STYLE_BYTES = 262
+
 // A job's charge is its run's: the job envelope (`get_job` / `wait_for_job` outputSchema) gains
 // `creditsHeld` (the run's hold, its steps' included) and `creditsReleased`, and the get_job and
 // list_jobs descriptions say `creditsCharged` / `credits_charged` include the run's steps. No tool
@@ -1512,7 +1517,8 @@ export const TOOL_WIRE_BUDGET = {
     TOPAZ_VIDEO_TARGET_BYTES +
     SESSIONS_TRASH_BYTES +
     RUN_CHARGE_STEPS_BYTES +
-    NODARO_MOTION_RENAME_BYTES,
+    NODARO_MOTION_RENAME_BYTES +
+    CAST_SWAP_STYLE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

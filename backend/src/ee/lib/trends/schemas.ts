@@ -16,13 +16,15 @@ import {
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
 } from "@nodaro/shared/models"
-import { CAST_SWAP_FACE_MASK_MARK_LIMITS, faceMaskMarkSlot } from "@nodaro/render-rules"
+import { CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_PROMPT_PART_IDS, CAST_SWAP_PROMPT_STYLES, faceMaskMarkSlot } from "@nodaro/render-rules"
 import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
+import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
 import type {
   Choice,
   LocalizedText,
   TrendRunRequest,
   TrendSlot,
+  TrendPromptPartOverrides,
   TrendSlotKind,
   TrendVersionData,
 } from "./types.js"
@@ -255,6 +257,17 @@ export function maxImagesOf(data: Pick<TrendVersionData, "slots" | "references">
   return MAX_IMAGES_PER_SLOT * data.slots.length + data.references.reduce((n, r) => n + r.images.length, 0)
 }
 
+/** A stored override: its text (1–2000) and the default's hash (16 hex). */
+const overrideSchema = z.strictObject({
+  text: z.string().min(1).max(PROMPT_PART_TEXT_MAX),
+  defaultHash: z.string().regex(/^[0-9a-f]{16}$/, "A default's hash is 16 hex characters."),
+})
+
+/** `TrendVersionData.promptParts`: a strict record over the engine's part ids (prompt-parts-store.ts). */
+export const trendPromptPartsSchema = z.strictObject(
+  Object.fromEntries(CAST_SWAP_PROMPT_PART_IDS.map((id) => [id, overrideSchema.optional()])),
+) as unknown as z.ZodType<TrendPromptPartOverrides>
+
 export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
   .strictObject({
     name: localizedText(200),
@@ -290,6 +303,9 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     faceMaskJob: trendFaceMaskJobSchema.optional(),
     upscaleJobs: z.array(trendUpscaleJobSchema).max(MAX_UPSCALE_JOBS).optional(),
     sourceCrop: trendSourceCropSchema.optional(),
+    promptParts: trendPromptPartsSchema.optional(),
+    // Absent = the clip preparation's default (prompt-style.ts); stored as given.
+    promptStyle: z.enum(CAST_SWAP_PROMPT_STYLES).optional(),
     // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
     // names none is kept without the key, so re-saving an old draft is no change.
     // Nodaro Motion's public ids are taken too and stored as the internal id

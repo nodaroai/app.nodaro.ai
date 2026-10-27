@@ -68,6 +68,36 @@ describe("cast-swap job budget", () => {
     expect(declaredJobBudgetMs("cast-swap", { __faceMasking: { mode: "auto" } })).toBe(240 * MINUTE)
   })
 
+  it("a depth-reference run takes the \"auto\" bound — it may edit again after a refusal (mask, then a second edit)", () => {
+    // A direct Motion run.
+    expect(castSwapJobBudgetMs({ style: "motion" })).toBe(240 * MINUTE)
+    expect(castSwapJobBudgetMs({ style: "motion", preview: true })).toBe(240 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap", { style: "motion" })).toBe(240 * MINUTE)
+    expect(castSwapJobBudgetMs({ style: "motion", faceMasking: { mode: "always" } })).toBe(240 * MINUTE)
+    // A full-depth trend run: the queue payload, and its saved input_data.
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "always", source: "full-depth" } })).toBe(240 * MINUTE)
+    expect(castSwapJobBudgetMs({ __faceMasking: { mode: "always", source: "full-depth" }, preview: true })).toBe(240 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap-full-quality", { __faceMasking: { mode: "always", source: "full-depth" } })).toBe(240 * MINUTE)
+  })
+
+  it("a faces or keep-people trend run keeps its mode's bound", () => {
+    for (const source of ["faces", "keep-people", undefined, "FULL-DEPTH", 1]) {
+      expect(castSwapJobBudgetMs({ faceMasking: { mode: "always", source } })).toBe(150 * MINUTE)
+      expect(castSwapJobBudgetMs({ __faceMasking: { mode: "always", source } })).toBe(150 * MINUTE)
+    }
+    // `faceMasking` present wins over the saved one.
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "always" }, __faceMasking: { mode: "always", source: "full-depth" } })).toBe(150 * MINUTE)
+  })
+
+  it("Precise (or no style, or an unreadable one) leaves the budget exactly as it was", () => {
+    for (const style of ["precise", undefined, "MOTION", 1, null, {}]) {
+      expect(castSwapJobBudgetMs({ style })).toBe(120 * MINUTE)
+      expect(castSwapJobBudgetMs({ style, preview: true })).toBe(30 * MINUTE)
+      expect(castSwapJobBudgetMs({ style, faceMasking: { mode: "always" } })).toBe(150 * MINUTE)
+      expect(castSwapJobBudgetMs({ style, faceMasking: { mode: "auto" } })).toBe(240 * MINUTE)
+    }
+  })
+
   it("the Full Quality redo and the registry read face masking too", () => {
     expect(declaredJobBudgetMs("cast-swap", { faceMasking: { mode: "always" } })).toBe(150 * MINUTE)
     expect(declaredJobBudgetMs("cast-swap-full-quality", { faceMasking: { mode: "auto" } })).toBe(240 * MINUTE)

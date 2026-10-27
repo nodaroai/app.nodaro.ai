@@ -11,6 +11,7 @@ export {
   type CastSwapEngineLegacyId,
   type CastSwapKlingLength,
   type CastSwapMotionLength,
+  type CastSwapStyle,
   type CastSwapTraitSource,
   type CastSwapRolePreviewSettings,
   type CastSwapPersonRole,

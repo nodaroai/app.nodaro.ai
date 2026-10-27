@@ -4,6 +4,10 @@
  *
  *   GET /v1/admin/nodaro-motion/masking   the face masking per engine (null = never saved)
  *   PUT /v1/admin/nodaro-motion/masking   save it (the whole setting), audit-logged
+ *   GET/PUT /v1/admin/nodaro-motion/prompt-parts, POST …/prompt-parts/preview
+ *                                         the direct runs' prompt part overrides (admin-nodaro-motion-prompt-parts.ts)
+ *   GET/PUT /v1/admin/nodaro-motion/motion
+ *                                         the Motion style's masking and prompt style per engine (admin-nodaro-motion-motion.ts)
  *
  * The setting (`nodaro_motion_masking`, lib/nodaro-motion-masking.ts) is how
  * the Cast Swap engine masks faces on every DIRECT run of each engine —
@@ -27,6 +31,8 @@ import { nodaroMotionMaskingSchema, type NodaroMotionMasking } from "../../lib/n
 import { readNodaroMotionMasking, saveNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { audit } from "./admin-trends-lifecycle.js"
+import { registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
+import { registerNodaroMotionMotionRoutes } from "./admin-nodaro-motion-motion.js"
 
 /**
  * `admin_actions.target_id` is a NOT NULL uuid, and a deployment-wide setting
@@ -67,6 +73,8 @@ function badRequest(reply: FastifyReply, error: z.ZodError) {
 }
 
 export async function adminNodaroMotionRoutes(app: FastifyInstance) {
+  registerNodaroMotionPromptPartRoutes(app)
+  registerNodaroMotionMotionRoutes(app)
   app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }

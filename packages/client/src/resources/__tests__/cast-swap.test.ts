@@ -11,6 +11,7 @@ import {
   type CastSwapFullQualityResult,
   type CastSwapFaceMasking,
   type CastSwapParams,
+  type CastSwapStyle,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
@@ -165,6 +166,25 @@ describe("castSwap resource", () => {
     for (const call of fetchMock.mock.calls) {
       expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "motion-pulse", resolution: "720p", draft: false, motionLength: "cut-start" })
     }
+  })
+
+  it("run and estimate post style unchanged, and leave it out when it is not given", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ jobId: "job-m" }, 202))
+      .mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: {}, settlesLower: false }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-p" }, 202))
+    const client = make(fetchMock)
+    const motion: CastSwapParams = { ...params, style: "motion" }
+    await client.castSwap.run(motion)
+    await client.castSwap.estimate(motion)
+    await client.castSwap.run(params)
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse((call[1] as { body: string }).body) as { style?: string })
+    expect(bodies.map((b) => b.style)).toEqual(["motion", "motion", undefined])
+    const styles: CastSwapStyle[] = ["precise", "motion"]
+    // @ts-expect-error — not a style
+    const bad: CastSwapStyle = "loose"
+    expect([styles, bad]).toHaveLength(2)
   })
 
   it("answers an estimate's engine by its public id, whichever id the server named it by", async () => {

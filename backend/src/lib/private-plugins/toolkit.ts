@@ -124,6 +124,8 @@ import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideH
 import { appBaseUrl } from "../deployment-urls.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
+import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
+import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
@@ -1562,6 +1564,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   internalRequestProvenance: true,
   nodaroMotionMasking: true,
   seedanceRefVideoQuote: true,
+  nodaroMotionPromptParts: true,
+  nodaroMotionMotion: true,
 })
 
 export interface BuildToolkitOptions {
@@ -2112,6 +2116,22 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         // Under the current AND the earlier keys (a transition shim: a plugin up to
         // 0.397.0 reads only "motion-pro" / "motion-lite"), each a fresh copy.
         return masking ? withEarlierMaskingKeys(masking) : null
+      },
+      // Same rules: a failed read throws (null would put every direct run back on the defaults).
+      nodaroMotionPromptParts: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_prompt_parts: the app settings could not be read")
+        const parts = settings.nodaro_motion_prompt_parts
+        // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
+        return parts ? withEarlierPromptPartKeys(parts) : null
+      },
+      // Same rules: a failed read throws (null would put every Motion run back on the defaults).
+      nodaroMotionMotion: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_motion: the app settings could not be read")
+        const motion = settings.nodaro_motion_motion
+        // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
+        return motion ? withEarlierMotionKeys(motion) : null
       },
     },
     deployment: { publicUrl: appBaseUrl() },

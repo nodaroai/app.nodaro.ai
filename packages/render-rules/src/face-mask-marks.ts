@@ -27,10 +27,13 @@ export interface MaskEraseBox {
 }
 
 /**
- * What an `"erased"` face mask mark says (`FaceMaskMark.label`): the faces in
- * its box are left unmasked, on every run.
+ * What a face mask mark says (`FaceMaskMark.label`), on every run:
+ *
+ * - `"erased"`: the faces in its box are left unmasked.
+ * - `"main"` (a keep-people trend clip only): the person in its box is the
+ *   main character, the only one kept as filmed when any `"main"` mark exists.
  */
-export const CAST_SWAP_FACE_MASK_MARK_LABELS = ["erased"] as const
+export const CAST_SWAP_FACE_MASK_MARK_LABELS = ["erased", "main"] as const
 export type CastSwapFaceMaskMarkLabel = (typeof CAST_SWAP_FACE_MASK_MARK_LABELS)[number]
 
 /**
@@ -44,7 +47,7 @@ export interface FaceMaskSlotLabel {
   slot: string
 }
 
-/** What a face mask mark says about the faces centred in its box: `"erased"`, or `{ slot }`. */
+/** What a face mask mark says about the faces centred in its box: `"erased"`, `"main"`, or `{ slot }`. */
 export type FaceMaskMarkLabel = CastSwapFaceMaskMarkLabel | FaceMaskSlotLabel
 
 /**
@@ -58,12 +61,17 @@ export interface FaceMaskMark extends MaskEraseBox {
   label: FaceMaskMarkLabel
 }
 
+/** Whether a mark is a `"main"` one (a keep-people trend clip's main character). */
+export function isMainFaceMaskMark(mark: Pick<FaceMaskMark, "label">): boolean {
+  return mark.label === "main"
+}
+
 /** Whether a mark is an `"erased"` one (every run). */
 export function isErasedFaceMaskMark(mark: Pick<FaceMaskMark, "label">): boolean {
   return mark.label === "erased"
 }
 
-/** The slot a slot mark names, or null for an `"erased"` mark. */
+/** The slot a slot mark names, or null for an `"erased"` or `"main"` mark. */
 export function faceMaskMarkSlot(mark: Pick<FaceMaskMark, "label">): string | null {
   return typeof mark.label === "object" && mark.label !== null ? mark.label.slot : null
 }
@@ -80,3 +88,18 @@ export const CAST_SWAP_FACE_MASK_MARK_LIMITS = {
   edgePct: [0, 100],
   maxMarkedPeople: 3,
 } as const
+
+/**
+ * How a trend's clip is prepared before it is sent (`faceMasking.source`,
+ * absent = `"faces"`):
+ *
+ * - `"faces"`: today's face mask — the faces are hidden.
+ * - `"full-depth"`: the whole clip becomes one grayscale depth video.
+ * - `"keep-people"`: the people (the mask's `target`, `"body"` by default)
+ *   stay as filmed and everything else becomes depth; `"main"` marks keep
+ *   only the main character.
+ *
+ * The two depth modes need `mode: "always"`.
+ */
+export const CAST_SWAP_SOURCE_MODES = ["faces", "full-depth", "keep-people"] as const
+export type CastSwapSourceMode = (typeof CAST_SWAP_SOURCE_MODES)[number]

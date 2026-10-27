@@ -1016,6 +1016,30 @@ describe("a Kling 4 trend", () => {
   })
 })
 
+describe("a trend's prompt style", () => {
+  const T_STYLE = "00000000-0000-4000-8000-0000000000a6"
+  beforeEach(() => {
+    mem.trends.push(trend(T_STYLE, "style-dance", "published", 1, versionData({ promptStyle: "flexible" })))
+  })
+
+  it("never shows on its page", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/trends/style-dance", headers: as() })
+    expect(res.statusCode).toBe(200)
+    expect(res.body).not.toContain("promptStyle")
+    expect(res.body).not.toContain("flexible")
+    expectNoHidden(res.body)
+  })
+
+  it("is sent resolved to an engine that declares prompt styles, and never to one that does not", async () => {
+    await app.inject({ method: "POST", url: "/v1/trends/style-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(engine.calls.at(-1)!.body).not.toHaveProperty("promptStyle")
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], promptStyles: ["precise", "flexible"] } as never })
+    await app.inject({ method: "POST", url: "/v1/trends/style-dance/estimate", headers: as(), payload: RUN_BODY })
+    await app.inject({ method: "POST", url: "/v1/trends/style-dance/runs", headers: as(), payload: RUN_BODY })
+    for (const c of engine.calls.slice(-2)) expect(c.body).toMatchObject({ promptStyle: "flexible" })
+  })
+})
+
 // ── face masking, pre prompt and the preview a full run follows ────────────
 
 describe("trend face masking and pre prompt", () => {

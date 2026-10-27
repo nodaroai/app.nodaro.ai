@@ -28,7 +28,7 @@ function composed(preview: boolean): ComposedTrendRun {
       trendRun: { display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] } },
     },
     display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] },
-    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, faceMaskTarget: "head", storedFaceMask: false, trendPrePrompt: false, engine: "seedance-2-5" },
+    needs: { roleKinds: new Set(), fixedReferences: false, faceMasking: true, faceMaskTarget: "head", faceMaskSource: "faces", storedFaceMask: false, trendPrePrompt: false, engine: "seedance-2-5" },
     maskingZoneLeftOut: true,
   } as ComposedTrendRun
 }

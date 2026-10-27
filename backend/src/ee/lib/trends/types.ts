@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop` and `klingLength` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `promptParts` and `promptStyle` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -20,7 +20,7 @@
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
-import type { TrendCropAspect } from "@nodaro/render-rules"
+import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect } from "@nodaro/render-rules"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
 
@@ -274,6 +274,18 @@ export interface TrendSourceDisplay {
   durationSec: number
 }
 
+/**
+ * One prompt part's override: its text (1–2000; `"-"` removes the part) and
+ * the hash of the engine's default it replaced (16 hex), so the editor can
+ * say when that default has changed since.
+ */
+export interface TrendPromptPartOverride {
+  text: string
+  defaultHash: string
+}
+
+export type TrendPromptPartOverrides = Partial<Record<CastSwapPromptPartId, TrendPromptPartOverride>>
+
 export interface TrendVersionData {
   name: LocalizedText
   description?: LocalizedText
@@ -315,6 +327,20 @@ export interface TrendVersionData {
   upscaleJobs?: TrendUpscaleJob[]
   /** HIDDEN. The source crop in the making, or the one that failed (see `TrendSourceCrop`). */
   sourceCrop?: TrendSourceCrop
+  /**
+   * HIDDEN. The admin's overrides of the engine's prompt parts for this
+   * trend's runs (see `TrendPromptPartOverride`); absent = the engine's
+   * defaults. Written only by the prompt parts route, which has the engine
+   * check them first (admin-trends-prompt-parts.ts).
+   */
+  promptParts?: TrendPromptPartOverrides
+  /**
+   * HIDDEN. How the engine words this trend's prompt: `"precise"` or
+   * `"flexible"`. Absent = Flexible for a full-depth clip, Precise otherwise
+   * (`promptStyleOf`, prompt-style.ts). Stored as given; a run sends it
+   * resolved.
+   */
+  promptStyle?: CastSwapPromptStyle
   /**
    * The video engine every run of this trend uses; the person running it
    * never chooses. Absent = `"seedance-2-5"` (every version saved before the

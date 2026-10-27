@@ -258,12 +258,16 @@ export function createSanitizedError(
     sanitizedMessage =
       "That prompt is too long for this model. Shorten it, or pick a model with a larger prompt limit."
   } else if (
-    lowerMsg.includes("cannot exceed") ||
+    // "exceed(s)" covers "exceeds", "cannot exceed" and KIE's Kling 4 combined
+    // reference cap, `{"code":422,"msg":"video_urls total duration must not
+    // exceed 30 seconds"}` (refused at createTask, 2026-10-27), which used to
+    // fall through to the generic "rejected these settings". Not "exceeded":
+    // "max retries exceeded" and the like are no input limit.
+    /\bexceeds?\b/.test(lowerMsg) ||
     lowerMsg.includes("too long") ||
     lowerMsg.includes("too large") ||
     lowerMsg.includes("file size") ||
-    lowerMsg.includes("duration limit") ||
-    lowerMsg.includes("exceeds")
+    lowerMsg.includes("duration limit")
   ) {
     sanitizedMessage =
       "Input file exceeds the size or duration limit. Please use a shorter or smaller file."

@@ -12,6 +12,12 @@
 // is quick to mark across shots; each person has a colour, and the list counts
 // each one's boxes.
 //
+// Keep people (decided 2026-10-27): the clip keeps its people as filmed and
+// turns the rest to depth. A box is then either "Left out" (an erased mark: that
+// person goes to depth with the rest) or "Main character" (a main mark: when
+// any exists, only the main character is kept). Optional people's boxes do not
+// apply there (no person masks), so the picker offers just the two.
+//
 // Boxes are in % of the PICTURE, not of the player: the video is letterboxed
 // (object-contain), so the picture's own rectangle inside the element is what a
 // box is measured against (`pictureRect`).
@@ -20,7 +26,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Pause, Play, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { CAST_SWAP_FACE_MASK_MARK_LIMITS } from "@nodaro/render-rules"
+import { CAST_SWAP_FACE_MASK_MARK_LIMITS, faceMaskMarkSlot } from "@nodaro/render-rules"
 import type { AdminTrendFaceMaskMark, AdminTrendFaceMaskMarkLabel } from "@/lib/api"
 
 /** The most marks a face mask takes (the server's own limit). */
@@ -67,31 +73,71 @@ export interface MarkPerson {
   readonly label: string
 }
 
-/** The picker's value for a label: "erased", or `slot:<key>`. */
-export const labelValue = (label: AdminTrendFaceMaskMarkLabel): string => (label === "erased" ? "erased" : `slot:${label.slot}`)
-/** The label a picker value names (anything not `slot:<key>` is "erased"). */
-export const labelOf = (value: string): AdminTrendFaceMaskMarkLabel => (value.startsWith("slot:") ? { slot: value.slice(5) } : "erased")
+/** The slot a label names, or null for "erased" and "main". */
+const slotOf = (label: AdminTrendFaceMaskMarkLabel): string | null => faceMaskMarkSlot({ label })
+
+/** The picker's value for a label: "erased", "main", or `slot:<key>`. */
+export const labelValue = (label: AdminTrendFaceMaskMarkLabel): string => {
+  const slot = slotOf(label)
+  return slot === null ? (label as "erased" | "main") : `slot:${slot}`
+}
+/** The label a picker value names: `slot:<key>`, "main", else "erased". */
+export const labelOf = (value: string): AdminTrendFaceMaskMarkLabel =>
+  value.startsWith("slot:") ? { slot: value.slice(5) } : value === "main" ? "main" : "erased"
+
+/** A label's own copy (a slot label is a new object). */
+const copyLabel = (label: AdminTrendFaceMaskMarkLabel): AdminTrendFaceMaskMarkLabel => {
+  const slot = slotOf(label)
+  return slot === null ? label : { slot }
+}
 
 /** Each person's box colour, in the order the people are listed; "Everyone" is amber. */
 const PERSON_COLOURS = ["border-fuchsia-500", "border-emerald-500", "border-violet-500", "border-rose-500", "border-teal-500", "border-indigo-500"]
 
-/** The box colour of a mark: amber for everyone, else its person's (by their place in `people`). */
+/** The box colour of a mark: amber for everyone (left out), lime for the main character, else its person's (by their place in `people`). */
 export function markColour(label: AdminTrendFaceMaskMarkLabel, people: readonly MarkPerson[]): string {
   if (label === "erased") return "border-amber-400"
-  const i = people.findIndex((p) => p.key === label.slot)
+  if (label === "main") return "border-lime-400"
+  const slot = slotOf(label)
+  const i = people.findIndex((p) => p.key === slot)
   return PERSON_COLOURS[(i < 0 ? 0 : i) % PERSON_COLOURS.length]!
 }
 
-/** Who a mark is for, as the list says it. */
-export function markWho(label: AdminTrendFaceMaskMarkLabel, people: readonly MarkPerson[]): string {
-  if (label === "erased") return "Everyone"
-  return people.find((p) => p.key === label.slot)?.label ?? label.slot
+/** What a mark's label is called: an erased mark is "Everyone" on a face mask, "Left out" when the clip keeps its people. */
+export function markWho(label: AdminTrendFaceMaskMarkLabel, people: readonly MarkPerson[], keepPeople = false): string {
+  if (label === "erased") return keepPeople ? "Left out" : "Everyone"
+  if (label === "main") return "Main character"
+  const slot = slotOf(label) ?? ""
+  return people.find((p) => p.key === slot)?.label ?? slot
 }
 
-/** How many boxes each one has: "Everyone" first, then the people in order (only those with boxes). */
-export function markCounts(marks: readonly AdminTrendFaceMaskMark[], people: readonly MarkPerson[]): Array<{ who: string; count: number }> {
+/** How many boxes each one has: "Everyone" (or "Left out") first, the main character, then the people in order (only those with boxes). */
+export function markCounts(
+  marks: readonly AdminTrendFaceMaskMark[],
+  people: readonly MarkPerson[],
+  keepPeople = false,
+): Array<{ who: string; count: number }> {
   const count = (v: string) => marks.filter((m) => labelValue(m.label) === v).length
-  return [{ who: "Everyone", count: count("erased") }, ...people.map((p) => ({ who: p.label, count: count(`slot:${p.key}`) }))].filter((c) => c.count > 0)
+  return [
+    { who: markWho("erased", people, keepPeople), count: count("erased") },
+    { who: markWho("main", people), count: count("main") },
+    ...people.map((p) => ({ who: p.label, count: count(`slot:${p.key}`) })),
+  ].filter((c) => c.count > 0)
+}
+
+/** What a box can be for, in the pickers: none when every box is for everyone (a face mask with no optional people). */
+export function markChoices(people: readonly MarkPerson[], keepPeople: boolean): Array<{ value: string; label: string; short: string }> {
+  if (keepPeople) {
+    return [
+      { value: "erased", label: "Left out (turned to depth with the rest)", short: "Left out" },
+      { value: "main", label: "Main character (the only one kept as filmed)", short: "Main character" },
+    ]
+  }
+  if (people.length === 0) return []
+  return [
+    { value: "erased", label: "Everyone (unmasked on every run)", short: "Everyone" },
+    ...people.map((p) => ({ value: `slot:${p.key}`, label: `${p.label} (unmasked when left empty)`, short: p.label })),
+  ]
 }
 
 /** A mark from a drag between two points (% of the picture), over the whole clip; null when too small. */
@@ -106,7 +152,7 @@ export function markFromDrag(
   const topPct = clampPct(Math.min(a.y, b.y))
   const bottomPct = clampPct(Math.max(a.y, b.y))
   if (rightPct - leftPct < MIN_BOX_PCT || bottomPct - topPct < MIN_BOX_PCT) return null
-  return { label: label === "erased" ? "erased" : { slot: label.slot }, fromFrame: 0, toFrame: Math.max(0, frames - 1), leftPct, topPct, rightPct, bottomPct }
+  return { label: copyLabel(label), fromFrame: 0, toFrame: Math.max(0, frames - 1), leftPct, topPct, rightPct, bottomPct }
 }
 
 /** The mark starting (In) or ending (Out) at `frame`; the other end moves with it when it would cross. */
@@ -128,11 +174,13 @@ interface Props {
   readonly disabled?: boolean
   /** The trend's optional people a box can be for (none: every box is for everyone). */
   readonly people?: readonly MarkPerson[]
+  /** The clip keeps its people (Keep people): a box leaves a person out, or marks the main character. */
+  readonly keepPeople?: boolean
 }
 
 const NO_PEOPLE: readonly MarkPerson[] = []
 
-export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, disabled, people = NO_PEOPLE }: Props) {
+export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, disabled, people = NO_PEOPLE, keepPeople = false }: Props) {
   const video = useRef<HTMLVideoElement>(null)
   const surface = useRef<HTMLDivElement>(null)
   const [playing, setPlaying] = useState(false)
@@ -141,9 +189,10 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
   const [selected, setSelected] = useState<number | null>(null)
   const [drag, setDrag] = useState<{ a: { x: number; y: number }; b: { x: number; y: number } } | null>(null)
   const [box, setBox] = useState({ x: 0, y: 0, w: 0, h: 0 })
-  // Who a new box is for: the last choice (a person who is no longer optional falls back to everyone).
+  // Who a new box is for: the last choice (one no longer offered falls back to everyone / left out).
+  const choices = markChoices(people, keepPeople)
   const [who, setWho] = useState("erased")
-  const whoNow = who === "erased" || people.some((p) => `slot:${p.key}` === who) ? who : "erased"
+  const whoNow = choices.some((c) => c.value === who) ? who : "erased"
 
   // The picture's rectangle, kept in step with the element's size and the video's own.
   const measure = () => {
@@ -207,7 +256,8 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
     setSelected(null)
   }
   const dragged = drag ? markFromDrag(drag.a, drag.b, frames, labelOf(whoNow)) : null
-  const counts = markCounts(marks, people)
+  const counts = markCounts(marks, people, keepPeople)
+  const verb = keepPeople ? "Drag a box over a person to mark them." : "Drag a box over a face to leave it unmasked."
 
   return (
     <div className="flex flex-col gap-2">
@@ -231,7 +281,7 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
         <div
           ref={surface}
           data-testid="face-mask-marks-surface"
-          aria-label="Drag a box over a face to leave it unmasked"
+          aria-label={keepPeople ? "Drag a box over a person to mark them" : "Drag a box over a face to leave it unmasked"}
           className={cn("absolute touch-none", canDraw ? "cursor-crosshair" : "pointer-events-none")}
           style={box.w > 0 ? { left: box.x, top: box.y, width: box.w, height: box.h } : { inset: 0 }}
           onPointerDown={onDown}
@@ -281,10 +331,10 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
         </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        {playing ? "Pause to mark a face." : "Drag a box over a face to leave it unmasked."} A new box holds on the whole clip; set In and
+        {playing ? (keepPeople ? "Pause to mark a person." : "Pause to mark a face.") : verb} A new box holds on the whole clip; set In and
         Out from the frame shown.
       </p>
-      {people.length > 0 && (
+      {choices.length > 0 && (
         <label className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">New boxes are for</span>
           <select
@@ -294,23 +344,27 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
             disabled={disabled}
             onChange={(e) => setWho(e.target.value)}
           >
-            <option value="erased">Everyone (unmasked on every run)</option>
-            {people.map((p) => (
-              <option key={p.key} value={`slot:${p.key}`}>
-                {p.label} (unmasked when left empty)
+            {choices.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
               </option>
             ))}
           </select>
         </label>
       )}
-      {counts.length > 0 && people.length > 0 && (
+      {keepPeople && (
+        <p className="text-xs text-muted-foreground">
+          With a main character box, only the main character stays as filmed; everyone else is turned to depth with the rest.
+        </p>
+      )}
+      {counts.length > 0 && choices.length > 0 && (
         <p className="text-xs text-muted-foreground" data-testid="face-mask-mark-counts">
           {counts.map((c) => `${c.who}: ${c.count} box${c.count === 1 ? "" : "es"}`).join(" · ")}
         </p>
       )}
 
       {marks.length > 0 && (
-        <ul aria-label="Faces left unmasked" className="flex flex-col gap-1">
+        <ul aria-label={keepPeople ? "Marked people" : "Faces left unmasked"} className="flex flex-col gap-1">
           {marks.map((m, i) => (
             <li
               key={i}
@@ -319,9 +373,9 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
               <button type="button" className="flex-1 text-start tabular-nums" onClick={() => setSelected(i)}>
                 <span className={cn("me-1 inline-block h-2.5 w-2.5 rounded-sm border-2 align-middle", markColour(m.label, people))} />
                 Box {i + 1}: frames {m.fromFrame + 1}–{m.toFrame + 1}
-                {people.length > 0 || m.label !== "erased" ? ` · ${markWho(m.label, people)}` : ""}
+                {choices.length > 0 || m.label !== "erased" ? ` · ${markWho(m.label, people, keepPeople)}` : ""}
               </button>
-              {people.length > 0 && (
+              {choices.length > 0 && (
                 <select
                   aria-label={`Who box ${i + 1} is for`}
                   className="h-8 rounded border bg-background px-1"
@@ -329,14 +383,15 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
                   disabled={disabled}
                   onChange={(e) => update(i, { ...m, label: labelOf(e.target.value) })}
                 >
-                  <option value="erased">Everyone</option>
-                  {people.map((p) => (
-                    <option key={p.key} value={`slot:${p.key}`}>
-                      {p.label}
+                  {choices.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.short}
                     </option>
                   ))}
-                  {m.label !== "erased" && !people.some((p) => p.key === (m.label as { slot: string }).slot) && (
-                    <option value={labelValue(m.label)}>{markWho(m.label, people)} (not an optional person)</option>
+                  {!choices.some((c) => c.value === labelValue(m.label)) && (
+                    <option value={labelValue(m.label)}>
+                      {markWho(m.label, people, keepPeople)} ({slotOf(m.label) !== null ? "not an optional person" : "not used here"})
+                    </option>
                   )}
                 </select>
               )}

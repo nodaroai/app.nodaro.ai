@@ -31,10 +31,13 @@
 import { createHash } from "node:crypto"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
+import { isErasedFaceMaskMark } from "@nodaro/render-rules"
 import {
-  erasedMarksOf,
   faceMaskTargetOf,
   faceMaskingOn,
+  faceMaskingSent,
+  faceMaskingSourceOf,
+  makeMarksOf,
   withResolvedZone,
   withoutMarks,
   type FaceMaskMark,
@@ -76,19 +79,32 @@ export function stableJson(v: unknown): string {
  * hashes exactly as every setting did before marks existed, and every mask
  * approved then stays up to date. Slot marks never change the base mask, so
  * they never change its key (the variants key them: face-mask-variants.ts).
+ *
+ * The source mode (`source`) is hashed only when it is not `"faces"`, so a
+ * setting that names `"faces"` and one that leaves it out hash exactly as
+ * before source modes existed. A depth mode hashes what its make reads
+ * (`faceMaskingSent`: full depth, the mode alone; keep people, all but the
+ * fill, its target resolved) and its make's marks (erased and main,
+ * `makeMarksOf`), so a mask made under one mode is out of date under another.
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks): string {
-  const { mode: _mode, target: _target, ...settings } = withResolvedZone(withoutMarks(masking))
+  const marks = makeMarksOf(masking).map(stableJson).sort()
+  const withMarks = { ...(marks.length > 0 ? { marks: marks.map((mark) => JSON.parse(mark) as unknown) } : {}) }
+  if (faceMaskingSourceOf(masking) !== "faces") {
+    const { mode: _mode, ...settings } = faceMaskingSent(withoutMarks(masking))
+    return keyOf({ videoUrl, faceMasking: { ...settings, ...withMarks } })
+  }
+  const { mode: _mode, target: _target, source: _source, ...settings } = withResolvedZone(withoutMarks(masking))
   const target = faceMaskTargetOf(masking)
-  const marks = erasedMarksOf(masking).map(stableJson).sort()
   const faceMasking = {
     ...settings,
     ...(target === "head" ? {} : { target }),
-    ...(marks.length > 0 ? { marks: marks.map((mark) => JSON.parse(mark) as unknown) } : {}),
+    ...withMarks,
   }
-  const text = stableJson({ videoUrl, faceMasking })
-  return `v2:${createHash("sha256").update(text).digest("hex")}`
+  return keyOf({ videoUrl, faceMasking })
 }
+
+const keyOf = (v: unknown): string => `v2:${createHash("sha256").update(stableJson(v)).digest("hex")}`
 
 /** The draft's settings key, or null when it has no source clip or does not mask. */
 export function faceMaskSettingsKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
@@ -121,12 +137,22 @@ export function faceMaskMarksMatch(recorded: unknown, marks: readonly FaceMaskMa
 }
 
 /**
- * Whether the draft's face masking has `"erased"` marks (masking on, and at
- * least one): faces every run leaves unmasked, so every run must use the
- * stored mask. Slot marks alone are not (the base mask covers every face).
+ * Whether the draft's face masking has `"erased"` marks its make applies
+ * (masking on, and at least one; a full-depth clip applies none): faces every
+ * run leaves unmasked, so every run must use the stored mask. Slot marks alone
+ * are not (the base mask covers every face).
  */
 export function faceMaskHasErasedMarks(data: Pick<TrendVersionData, "faceMasking">): boolean {
-  return faceMaskingOn(data.faceMasking) && erasedMarksOf(data.faceMasking).length > 0
+  return faceMaskingOn(data.faceMasking) && makeMarksOf(data.faceMasking).some(isErasedFaceMaskMark)
+}
+
+/**
+ * Whether every run must use the draft's stored clip (`storedFaceMask` with
+ * `required: true`), never masking per run: a depth mode's clip (made once and
+ * approved, never per run), or a face mask with erased marks.
+ */
+export function faceMaskStoredRequired(data: Pick<TrendVersionData, "faceMasking">): boolean {
+  return faceMaskingOn(data.faceMasking) && (faceMaskingSourceOf(data.faceMasking) !== "faces" || faceMaskHasErasedMarks(data))
 }
 
 /**
@@ -157,6 +183,8 @@ export function reusableFaceMaskBase(
 ): FaceMaskBase | undefined {
   const mask = data.faceMask
   const base = faceMaskBaseKey(data)
+  // A face mask's raw mask only: a depth clip is always made whole.
+  if (faceMaskingSourceOf(data.faceMasking) !== "faces") return undefined
   if (!mask || base === null || mask.baseKey !== base || !mask.rawMaskUrl) return undefined
   if (mask.recipe.core !== VIDEO_MASK_RECIPE || engineRecipe === undefined || mask.recipe.plugin !== engineRecipe) return undefined
   const fill = data.faceMasking?.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill
@@ -191,7 +219,8 @@ export interface FaceMaskState {
  * known (a failed read): the engine recipes are then not checked. An
  * environment in `required` with no row, or whose engine makes no stored
  * masks, is not compared either: publishing already refuses it
- * (`engine_unknown` / `engine_unsupported`).
+ * (`engine_unknown` / `engine_unsupported`). A full-depth clip is made with
+ * no Video Mask step, so core's recipe is not compared for it.
  */
 export function faceMaskState(
   data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">,
@@ -202,7 +231,8 @@ export function faceMaskState(
   if (!mask) return { status: "none", reasons: [] }
   const reasons: FaceMaskOutOfDate[] = []
   if (mask.settingsKey !== faceMaskSettingsKey(data)) reasons.push({ why: "settings" })
-  if (mask.recipe.core !== VIDEO_MASK_RECIPE) reasons.push({ why: "core_recipe" })
+  // A full-depth clip runs no Video Mask (its make records `core: null`): only the engine's recipe applies.
+  if (faceMaskingSourceOf(data.faceMasking) !== "full-depth" && mask.recipe.core !== VIDEO_MASK_RECIPE) reasons.push({ why: "core_recipe" })
   for (const env of environments ? required : []) {
     const cs = environments!.find((e) => e.env === env)?.supports.castSwap
     if (cs?.storedFaceMask !== true) continue

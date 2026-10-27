@@ -163,6 +163,20 @@ describe("face masking and the pre prompt in the form", () => {
     expect(FACE_MASKING_DEFAULTS.zone).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
   })
 
+  it("lists the engine's problems with the trend's engine prompt changes", () => {
+    expect(
+      describeBlocker({
+        code: "prompt_parts_invalid",
+        problems: [
+          { part: "keep", code: "part_not_used", message: "The keep part is not used in this mode." },
+          { code: "prompt_too_long", message: "The prompt is too long.", mode: "preview" },
+        ],
+      }),
+    ).toBe(
+      "The engine prompt changes no longer fit this trend: keep: The keep part is not used in this mode. 4 s preview: The prompt is too long. Change or reset them (4. Prompts → Engine prompt).",
+    )
+  })
+
   it("describes an engine without Kling 4", () => {
     expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "kling-4" })).toBe("production: Nodaro Motion Pulse (Kling 4) not supported yet")
   })

@@ -62,7 +62,7 @@ import {
   engineRequest,
   engineSupports,
   followPreviewMasking,
-  withoutUnsupportedStoredMask,
+  withoutUnsupportedFields,
   isRec,
   jobIdOf,
   listedRunsPage,
@@ -414,7 +414,7 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
     previewJobId: parsed.data.previewJobId,
     log: req.log,
   })
-  withoutUnsupportedStoredMask(composed)
+  withoutUnsupportedFields(composed)
   return { composed, ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}) }
 }
 

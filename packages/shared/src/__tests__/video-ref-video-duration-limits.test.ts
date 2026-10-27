@@ -67,3 +67,23 @@ describe("minimax-h3 reference-video bounds", () => {
     expect(checkRefVideoDurations("minimax-h3", [Number.NaN, 10])).toEqual({ ok: true })
   })
 })
+
+describe("kling-4 reference-video bounds", () => {
+  it("declares the 30 s COMBINED cap KIE enforces at task creation", () => {
+    expect(VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4"]?.maxTotalSec).toBe(30)
+  })
+
+  it("accepts two 14 s references and refuses two 16 s ones (verified live), and two 20 s ones", () => {
+    expect(checkRefVideoDurations("kling-4", [14, 14])).toEqual({ ok: true })
+    for (const set of [[16, 16], [20, 20]]) {
+      const r = checkRefVideoDurations("kling-4", set)
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.message).toMatch(/must not exceed 30 seconds in total/)
+    }
+  })
+
+  it("keeps the per-clip 2–30 s bound", () => {
+    expect(checkRefVideoDurations("kling-4", [30])).toEqual({ ok: true })
+    expect(checkRefVideoDurations("kling-4", [45]).ok).toBe(false)
+  })
+})

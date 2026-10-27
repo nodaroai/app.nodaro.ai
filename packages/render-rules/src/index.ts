@@ -780,8 +780,20 @@ export {
   type TrendPromptMode,
   type TrendPromptSource,
 } from "./trend-prompts"
-export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, faceMaskMarkSlot, isErasedFaceMaskMark } from "./face-mask-marks"
-export type { CastSwapFaceMaskMarkLabel, FaceMaskMark, FaceMaskMarkLabel, FaceMaskSlotLabel, MaskEraseBox } from "./face-mask-marks"
+export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_SOURCE_MODES, faceMaskMarkSlot, isErasedFaceMaskMark, isMainFaceMaskMark } from "./face-mask-marks"
+export type { CastSwapFaceMaskMarkLabel, CastSwapSourceMode, FaceMaskMark, FaceMaskMarkLabel, FaceMaskSlotLabel, MaskEraseBox } from "./face-mask-marks"
+export {
+  CAST_SWAP_FULL_DEPTH_ORIGINAL_MAX_SEC,
+  CAST_SWAP_FULL_DEPTH_ORIGINAL_SLACK_SEC,
+  CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC,
+  CAST_SWAP_FULL_DEPTH_SCENES,
+  CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT,
+  CAST_SWAP_PROMPT_PART_IDS,
+  CAST_SWAP_PROMPT_PART_PLACEHOLDERS,
+  CAST_SWAP_PROMPT_STYLES,
+  defaultPromptStyleFor,
+} from "./cast-swap-prompt-parts"
+export type { CastSwapFullDepthScene, CastSwapPromptPartId, CastSwapPromptStyle } from "./cast-swap-prompt-parts"
 export {
   TREND_CROP_DEFAULT_POSITION,
   TREND_CROP_TOLERANCE,

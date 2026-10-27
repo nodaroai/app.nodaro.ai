@@ -443,6 +443,13 @@ export const queryKeys = {
     trendEngineEnvironments: () => ["admin", "trends", "engine-environments"] as const,
     /** Admin → Nodaro Motion: the face masking per engine. */
     nodaroMotionMasking: () => ["admin", "nodaro-motion", "masking"] as const,
+    /** A trend's engine prompt, as the engine reads the saved draft at `revision` (each write moves it, so a draft save refreshes it). */
+    trendPromptParts: (id: string, revision: string) => ["admin", "trends", "one", id, "prompt-parts", revision] as const,
+    /** Admin → Nodaro Motion: the direct runs' prompt part overrides, and one engine and style's preview of them. */
+    nodaroMotionPromptParts: () => ["admin", "nodaro-motion", "prompt-parts"] as const,
+    nodaroMotionMotion: () => ["admin", "nodaro-motion", "motion"] as const,
+    nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
+      ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
   },
 
   nodeDefaults: {
