@@ -149,6 +149,19 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   ...(["cli", "mcp"] as const).flatMap((surface) =>
     WELCOME_OFFER_SESSION_ONLY.map((atom) => ({ feature: "credits", surface, atom, reason: WELCOME_OFFER_REASONS[surface] })),
   ),
+  // The person's own settings: a screen in the app and in first-party apps (the SDK); the CLI has no settings screen.
+  ...(["GET /v1/user/settings", "PATCH /v1/user/settings"] as const).map((atom) => ({
+    feature: "userSettings",
+    surface: "cli" as const,
+    atom,
+    reason: "a person's own preferences, set on a settings screen in the app or a first-party app through the SDK; the CLI has no settings screen",
+  })),
+  {
+    feature: "userSettings",
+    surface: "mcp",
+    atom: "GET /v1/user/settings",
+    reason: "a person's own preferences on a settings screen; an agent's own defaults are written through save_image_defaults and read back by the tools that use them",
+  },
   {
     feature: "credits",
     surface: "mcp",

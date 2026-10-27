@@ -6806,6 +6806,8 @@ to its tokens).
 const s = await client.credits.usageSummary({ bucket: "week" })
 console.log(s.totals.used, "credits this month;", s.mostUsed?.model, "most used")
 for (const w of s.overTime) console.log(w.bucket, w.used)
+```
+
 #### `history(options?)`
 
 ```ts
@@ -8126,6 +8128,24 @@ figure). Totals cover the whole window even when a grouping is `truncated`.
 
 ---
 
+### `client.userSettings`
+
+The signed-in person's own settings: the interface language, the gallery
+visibility, the node-menu and canvas preferences, and the monthly credit
+statement opt-in. A first-party app renders the ones it cares about and sends
+back only the fields it changes.
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `get()` | `GET /v1/user/settings` | `UserSettings`: `{ tier, publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail }`. `UnauthorizedError` when signed out. |
+| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`); an invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
+
+```ts
+// The monthly statement toggle on a billing screen.
+const { monthlyStatementEmail } = await client.userSettings.get()
+await client.userSettings.update({ monthlyStatementEmail: !monthlyStatementEmail })
+```
+
 ### `client.workspaces`
 
 Workspaces — the inner tenancy axis, where work lives. Belonging to a
@@ -8812,6 +8832,10 @@ Every type used in a public method signature is re-exported from
 - `BillingPurchase` / `BillingDocument` / `BillingCard` / `BillingDetails` / `BillingPaymentMethod` — `billing.purchases()` / `billing.invoices()` / `billing.paymentMethod()`
 - `BillingAutoRecharge` / `BillingAutoRechargeInput` / `BillingAutoRechargeSaved` — `billing.autoRecharge()` / `billing.setAutoRecharge()`
 - `BillingCheckoutInput` / `BillingCheckoutSession` / `BillingLoadInput` / `BillingLoadSession` / `BillingPortalInput` / `BillingPortalSession` / `BillingChangePlanInput` / `BillingChangePlanResult` — the hand-offs to Stripe: `billing.checkout()` / `billing.loadCredits()` / `billing.portal()` / `billing.changePlan()`
+
+### User settings
+
+- `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
 
 ### Client identity
 

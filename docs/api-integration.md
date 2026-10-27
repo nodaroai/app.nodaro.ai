@@ -3538,6 +3538,18 @@ calendar month. Nodaro Cloud only, and only where the deployment has a
 statement template configured (`LOOPS_MONTHLY_STATEMENT_ID`); a deployment
 without one sends nothing.
 
+**User settings.** `GET /v1/user/settings` answers the signed-in person's own
+settings, `{ data: { tier, publicOutputs, promptTemplates, textTemplates,
+preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes,
+variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail } }`, and
+`PATCH /v1/user/settings` changes the fields sent (any subset of the same,
+without `tier`) and answers them as saved. `promptTemplates` and
+`textTemplates` replace the stored value whole; `mcpPreferences` merges one
+axis at a time. `publicOutputs: false` needs the Standard plan or above on
+Nodaro Cloud (`403`); an invalid value is `400 validation_error`, a patch with
+nothing to change `400`, a missing profile `404`. SDK:
+`client.userSettings.get()` / `update(patch)`.
+
 `Transaction` fields: `id`, `created_at`, `credits_charged`,
 `credits_reserved`, `credits_used`, `action`, `provider`, `status`,
 `metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`

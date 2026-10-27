@@ -24,6 +24,7 @@ import { MediaResource } from "./resources/media.js"
 import { AudioResource } from "./resources/audio.js"
 import { CreditsResource } from "./resources/credits.js"
 import { BillingResource } from "./resources/billing.js"
+import { UserSettingsResource } from "./resources/user-settings.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { GalleryResource } from "./resources/gallery.js"
@@ -86,6 +87,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly media: MediaResource
   readonly audio: AudioResource
   readonly credits: CreditsResource
+  /** The signed-in person's own settings (the interface language, the monthly statement opt-in, …). */
+  readonly userSettings: UserSettingsResource
   /** Plans and prices, the subscription, and how this deployment bills. */
   readonly billing: BillingResource
   readonly uploads: UploadsResource
@@ -146,6 +149,7 @@ export class NodaroClient extends NodaroClientCore {
     this.media = new MediaResource(this)
     this.audio = new AudioResource(this)
     this.credits = new CreditsResource(this)
+    this.userSettings = new UserSettingsResource(this)
     this.billing = new BillingResource(this)
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)

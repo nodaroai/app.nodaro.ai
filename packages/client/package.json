@@ -260,6 +260,11 @@
       "import": "./dist/entries/uploads.js",
       "require": "./dist/entries/uploads.cjs"
     },
+    "./user-settings": {
+      "types": "./dist/entries/user-settings.d.ts",
+      "import": "./dist/entries/user-settings.js",
+      "require": "./dist/entries/user-settings.cjs"
+    },
     "./video-pro": {
       "types": "./dist/entries/video-pro.d.ts",
       "import": "./dist/entries/video-pro.js",
