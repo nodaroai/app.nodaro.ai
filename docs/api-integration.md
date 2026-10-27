@@ -3529,12 +3529,14 @@ refuse an API token or an OAuth app token with `403 forbidden`. Both answer
 `client.credits.markWelcomeOfferSeen()`.
 
 **The monthly statement email.** A person who turns on `monthlyStatementEmail`
-(`GET` / `PATCH /v1/user/settings`, default `false`) gets, on the 1st of each
-month, last month's credit statement by email: credits used and on how many
-runs, the model used most, the spend by category, what was bought and
-refunded, the payments in dollars, and where the balance stands — the same
-figures `GET /v1/credits/usage-summary` answers for that month, as a UTC
-calendar month. Nodaro Cloud only, and only where the deployment has a
+(`GET` / `PATCH /v1/user/settings`, default `false`) gets, on the 1st, a short
+email with last month's payment documents, when they paid in that month: what
+was paid in dollars (net of refunds), the invoices and receipts by count, a
+link to the newest one that has a link (the Stripe invoice's PDF, or the
+receipt's page — the paid documents among those `GET /v1/billing/invoices`
+lists), and the balance.
+Months are UTC calendar months; a month with no payment sends nothing. Nodaro
+Cloud only, and only where the deployment has a
 statement template configured (`LOOPS_MONTHLY_STATEMENT_ID`); a deployment
 without one sends nothing.
 
