@@ -7020,16 +7020,19 @@ window.location.assign(url!)
 |-------|------|-------------|
 | `id` | `string` | `"free"`, `"basic"`, `"standard"`, `"pro"`, `"business"`. |
 | `name` | `string` | Display name. |
-| `prices` | `{ monthly, yearly } \| null` | `null` for the free plan. `monthly` is `{ amount, currency, credits }` (`BillingMonthlyPrice`); `yearly` adds `perMonth`, the yearly amount spread over its months (`BillingYearlyPrice`). `amount` is in the currency's major unit (`12` = 12.00) and `currency` is the ISO-4217 code (`"USD"`). Either may be `null` when Stripe cannot sell it right now (it could not be read, or it is archived) — show it as unavailable, never as free. |
+| `prices` | `{ monthly, yearly } \| null` | `null` for the free plan. `monthly` is `{ priceId, amount, currency, credits }` (`BillingMonthlyPrice`); `yearly` adds `perMonth`, the yearly amount spread over its months (`BillingYearlyPrice`). `priceId` is the Stripe price id: what `checkout()` and `changePlan()` take, and what the subscription's `stripe_price_id` matches (so the slot it matches is the current interval). `amount` is in the currency's major unit (`12` = 12.00) and `currency` is the ISO-4217 code (`"USD"`). Either may be `null` when Stripe cannot sell it right now (it could not be read, or it is archived) — show it as unavailable, never as free. |
 | `prices.*.credits` | `BillingPriceCredits \| null` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does. `null` when the price does not state it. |
 | `signupCredits` | `number \| null` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
 | `parallelism` | `number` | How many nodes of one workflow run at once. |
 | `storageBytes` | `number` | Storage for your media, in bytes. |
 
-`topUps` are the credit packs (`{ id, credits, price }`), smallest first —
-`price` is `null` when it cannot be stated right now; `topUpRange`
-(`{ min, max, currency }`) is the range of whole amounts that can be loaded as
-credits in the app, at the same rate as the packs.
+`topUps` are the credit packs (`{ id, credits, price, priceId }`), smallest
+first — `id` is the pack's own (`"topup-25"`), `price` is `null` when it cannot
+be stated right now, and `priceId` is the Stripe price id for `checkout()`
+(`null` with the price; a pack can always be bought as a load of
+`price.amount` through `loadCredits()`); `topUpRange` (`{ min, max, currency }`)
+is the range of whole amounts that can be loaded as credits, at the same rate
+as the packs.
 
 ---
 

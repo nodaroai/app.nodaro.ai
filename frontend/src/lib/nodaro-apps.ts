@@ -7,6 +7,7 @@
  * Flow entry tracks the platform origin they're built against.)
  */
 import { surfaceSiblings, surfacePlatformLinks } from "./surface-selectors"
+import { resolveSiblingUrl } from "./sibling-origin"
 import type { SurfaceSibling } from "./surface-profile"
 
 export type NodaroAppId = "flow" | "studio" | "person" | "voice" | "recast"
@@ -29,9 +30,11 @@ export const NODARO_APPS: readonly NodaroApp[] = [
  * The canonical family minus the app rendering it, narrowed by the deployment
  * surface profile: with no profile it is the Nodaro family (projected to the
  * {label,url} sibling shape); a profile's `siblings.apps` replaces it wholesale
- * (e.g. a white-label install pointing at its own sibling products).
+ * (e.g. a white-label install pointing at its own sibling products). Each
+ * URL is resolved for this hostname and the site the user came from
+ * (lib/sibling-origin.ts).
  */
 export function otherNodaroApps(current: NodaroAppId): readonly SurfaceSibling[] {
   const codeDefault = NODARO_APPS.filter((app) => app.id !== current).map((a) => ({ label: a.label, url: a.href }))
-  return surfaceSiblings(surfacePlatformLinks() ? codeDefault : [])
+  return surfaceSiblings(surfacePlatformLinks() ? codeDefault : []).map((s) => ({ label: s.label, url: resolveSiblingUrl(s) }))
 }

@@ -152,7 +152,7 @@ const HOSTED_JOBS = {
   'check-public-surface': ['ubuntu-slim', SHORT],
   'check-billing-dumps': ['ubuntu-slim', SHORT],
   'changeset-guard': ['ubuntu-slim', SHORT],
-  changes: ['ubuntu-slim', 'runs the gh CLI (the runner image has none) and heads every path'],
+  changes: [`\${{ github.base_ref == 'main' && 'ubuntu-latest' || 'ubuntu-slim' }}`, 'runs the gh CLI (the runner image has none) and heads every path; a PR into main waits longer than ubuntu-slim allows'],
   'attribute-dev-failure': ['ubuntu-latest', 'runs the gh CLI (the runner image has none)'],
   'remotion-tests': ['ubuntu-latest', "renders with the hosted runner's Chrome; the image has neither Chrome nor its shared libraries"],
   'ffmpeg-ledger-redis': ['ubuntu-latest', 'a Redis service container (no Docker on the pool)'],

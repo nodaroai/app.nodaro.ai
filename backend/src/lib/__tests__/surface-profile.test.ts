@@ -474,3 +474,43 @@ it("preserves required catalogs and disabled factory presets, with safe malforme
   expect(parseSurfaceProfile(JSON.stringify({ catalogs: { required: "invalid", factoryPresets: "invalid" } })).catalogs)
     .toEqual({ required: true, factoryPresets: false })
 })
+
+describe("siblings.apps[].urlByHost — per-studio-host sibling URL", () => {
+  const parse = (urlByHost: unknown) =>
+    parseSurfaceProfile(JSON.stringify({ siblings: { apps: [{ label: "Chat", url: "https://a.example", urlByHost }] } })).siblings.apps[0]
+
+  it("keeps a valid host → URL map", () => {
+    expect(parse({ "studio.b.example": "https://b.example" })).toEqual({
+      label: "Chat",
+      url: "https://a.example",
+      urlByHost: { "studio.b.example": "https://b.example" },
+    })
+  })
+
+  it("drops only the bad entries (mis-cased or ported key, non-URL or non-http value)", () => {
+    expect(
+      parse({
+        "studio.b.example": "https://b.example",
+        "Studio.C.example": "https://c.example",
+        "studio.d.example:443": "https://d.example",
+        "studio.e.example": "javascript:alert(1)",
+        "studio.f.example": "not a url",
+        "studio.g.example": 7,
+      })?.urlByHost,
+    ).toEqual({ "studio.b.example": "https://b.example" })
+  })
+
+  it.each([undefined, null, "https://b.example", ["x"], { "Bad Key": "https://b.example" }])(
+    "leaves the key absent when nothing usable is given (%j)",
+    (urlByHost) => {
+      expect(parse(urlByHost)).toEqual({ label: "Chat", url: "https://a.example" })
+    },
+  )
+})
+
+describe("siblings without urlByHost — existing profiles", () => {
+  it("parse exactly as before", () => {
+    const apps = [{ label: "SAI Chat", url: "https://sai.example" }]
+    expect(parseSurfaceProfile(JSON.stringify({ siblings: { apps } })).siblings.apps).toEqual(apps)
+  })
+})

@@ -150,6 +150,23 @@ describe("GET /v1/user/settings", () => {
     // New fields default to false when the columns are null/absent
     expect(body.data.showRecentNodes).toBe(false)
     expect(body.data.showMostUsedNodes).toBe(false)
+    expect(body.data.monthlyStatementEmail).toBe(false)
+  })
+
+  it("reads the monthly statement opt-in, and PATCH writes it", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { tier: "free", monthly_statement_email: true }, error: null })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+    const mockUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect, update: mockUpdate } as never)
+
+    const got = await app.inject({ method: "GET", url: `/v1/user/settings?userId=${TEST_USER_ID}` })
+    expect(got.json().data.monthlyStatementEmail).toBe(true)
+
+    const res = await app.inject({ method: "PATCH", url: "/v1/user/settings", payload: { userId: TEST_USER_ID, monthlyStatementEmail: false } })
+    expect(res.statusCode).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ monthly_statement_email: false }))
   })
 
   it("returns saved node-menu prefs when present", async () => {

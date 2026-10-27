@@ -242,6 +242,9 @@ export const envSchema = z.object({
    *  sync (ee/lib/loops-client.ts). Empty on community/self-host, where the
    *  sync no-ops. Not a provider key; not in PROVIDER_KEY_IDS. */
   LOOPS_API_KEY: z.string().default(""),
+  /** The Loops transactional template of the monthly credit statement
+   *  (ee/notifications/monthly-statement.ts). Empty = no statements are sent. */
+  LOOPS_MONTHLY_STATEMENT_ID: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

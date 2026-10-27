@@ -52,11 +52,15 @@ export interface PriceCredits {
 }
 
 export interface PlanMonthlyPrice extends PlanMoney {
+  /** The Stripe price id: what `POST /v1/billing/create-checkout-session` and `change-plan` take. */
+  priceId: string
   /** null when Stripe does not bill this price monthly (a misconfiguration, warned). */
   credits: PriceCredits | null
 }
 
 export interface PlanYearlyPrice extends PlanMoney {
+  /** The Stripe price id: what `POST /v1/billing/create-checkout-session` and `change-plan` take. */
+  priceId: string
   /** The yearly amount spread over the months Stripe bills it for; null when Stripe's interval is not months or years. */
   perMonth: number | null
   /** The plan's credits every month (YEARLY_PRICE_CREDITS_PER). */
@@ -273,8 +277,8 @@ function assemble(prices: PriceTable): BillingPlans {
     ([id, product]): BillingPlan => ({
       ...tierFacts(id),
       prices: {
-        monthly: monthlyOf(id, prices.get(product.monthly)),
-        yearly: yearlyOf(id, prices.get(product.yearly)),
+        monthly: monthlyOf(id, product.monthly, prices.get(product.monthly)),
+        yearly: yearlyOf(id, product.yearly, prices.get(product.yearly)),
       },
       signupCredits: null,
     }),
@@ -282,11 +286,10 @@ function assemble(prices: PriceTable): BillingPlans {
   const currency = LOAD_CURRENCY.toUpperCase()
   return {
     data: [{ ...tierFacts(FREE_PLAN), prices: null, signupCredits: TIER_CREDITS[FREE_PLAN]! }, ...paid],
-    topUps: LOAD_RATE_ANCHORS.map((anchor) => ({
-      id: `topup-${anchor.usd}`,
-      credits: anchor.credits,
-      price: packPrice(anchor, prices),
-    })),
+    topUps: LOAD_RATE_ANCHORS.map((anchor) => {
+      const pack = packPrice(anchor, prices)
+      return { id: `topup-${anchor.usd}`, credits: anchor.credits, price: pack.price, priceId: pack.priceId }
+    }),
     topUpRange: { min: MIN_LOAD_USD, max: MAX_LOAD_USD, currency },
   }
 }
@@ -300,30 +303,31 @@ function tierFacts(id: string): Pick<BillingPlan, "id" | "name" | "parallelism" 
   }
 }
 
-function monthlyOf(planId: string, facts: PriceFacts | null | undefined): PlanMonthlyPrice | null {
+function monthlyOf(planId: string, priceId: string, facts: PriceFacts | null | undefined): PlanMonthlyPrice | null {
   const money = moneyOf(facts)
   if (!money || !facts) return null
   // Credits renew with each Stripe billing period: per month only when Stripe bills monthly.
-  return { ...money, credits: priceCredits(planId, facts.months === 1 ? "month" : null) }
+  return { ...money, priceId, credits: priceCredits(planId, facts.months === 1 ? "month" : null) }
 }
 
-function yearlyOf(planId: string, facts: PriceFacts | null | undefined): PlanYearlyPrice | null {
+function yearlyOf(planId: string, priceId: string, facts: PriceFacts | null | undefined): PlanYearlyPrice | null {
   const money = moneyOf(facts)
   if (!money || !facts) return null
   const perMonth = facts.months ? roundTo(money.amount / facts.months, minorDigits(facts.currency)) : null
-  return { ...money, perMonth, credits: priceCredits(planId, YEARLY_PRICE_CREDITS_PER) }
+  return { ...money, priceId, perMonth, credits: priceCredits(planId, YEARLY_PRICE_CREDITS_PER) }
 }
 
 /**
  * A pack is sold two ways: the load checkout charges the anchor's amount, and
  * the fixed-pack checkout charges the Stripe price of the `TOP_UPS` id with the
- * same grant. Its price is published only when both say the same.
+ * same grant. Its price is published only when both say the same, and its
+ * Stripe price id (for the fixed-pack checkout) only with the price.
  */
-function packPrice(anchor: LoadRateAnchor, prices: PriceTable): PlanMoney | null {
+function packPrice(anchor: LoadRateAnchor, prices: PriceTable): { price: PlanMoney | null; priceId: string | null } {
   const currency = LOAD_CURRENCY.toUpperCase()
   const priceId = Object.entries(TOP_UPS).find(([, credits]) => credits === anchor.credits)?.[0]
   const sold = priceId ? moneyOf(prices.get(priceId)) : null
-  if (sold && sold.amount === anchor.usd && sold.currency === currency) return { amount: anchor.usd, currency }
+  if (priceId && sold && sold.amount === anchor.usd && sold.currency === currency) return { price: { amount: anchor.usd, currency }, priceId }
   // Every withheld price says why, once per read.
   const why = !priceId
     ? "no fixed-pack price grants it"
@@ -331,7 +335,7 @@ function packPrice(anchor: LoadRateAnchor, prices: PriceTable): PlanMoney | null
       ? `the load rate charges ${anchor.usd} ${currency}, the fixed-pack price ${priceId} charges ${sold.amount} ${sold.currency}`
       : `the fixed-pack price ${priceId} cannot be sold right now`
   console.warn(`[billing] credit pack ${anchor.credits}: ${why}; listed without a price`)
-  return null
+  return { price: null, priceId: null }
 }
 
 function moneyOf(facts: PriceFacts | null | undefined): PlanMoney | null {

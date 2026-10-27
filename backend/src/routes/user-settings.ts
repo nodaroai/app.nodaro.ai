@@ -75,12 +75,12 @@ const PROFILE_COLUMNS_BASE =
  * remove it once the migration is everywhere. Everything in this list degrades
  * to its default instead of taking the whole route down.
  */
-const PENDING_COLUMNS = ["variable_display_mode", "node_double_click_action"] as const
+const PENDING_COLUMNS = ["variable_display_mode", "node_double_click_action", "monthly_statement_email"] as const
 // Spelled out rather than joined from the array above: supabase-js infers the
 // row type from a STRING LITERAL, so a computed select() collapses every field
 // to `GenericStringError`. Keep this in sync with PENDING_COLUMNS by hand.
 const PROFILE_COLUMNS =
-  "tier, public_outputs, prompt_templates, text_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes, variable_display_mode, node_double_click_action"
+  "tier, public_outputs, prompt_templates, text_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes, variable_display_mode, node_double_click_action, monthly_statement_email"
 
 async function selectProfile(userId: string) {
   const full = await supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).single()
@@ -159,6 +159,8 @@ const updateSettingsBody = z.object({
   showMostUsedNodes: z.boolean().optional(),
   variableDisplayMode: VariableDisplayModeSchema.optional(),
   nodeDoubleClickAction: NodeDoubleClickActionSchema.optional(),
+  /** A statement of last month's credit usage by email on the 1st (ee/notifications/monthly-statement.ts). */
+  monthlyStatementEmail: z.boolean().optional(),
 })
 
 /** Generate Text user-defined template preset (stored on profiles.text_templates). */
@@ -193,6 +195,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         showMostUsedNodes: profile.show_most_used_nodes ?? false,
         variableDisplayMode: profile.variable_display_mode ?? "raw",
         nodeDoubleClickAction: profile.node_double_click_action ?? "settings",
+        monthlyStatementEmail: profile.monthly_statement_email ?? false,
       },
     })
   })
@@ -213,7 +216,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction } = parsed.data
+    const { publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
@@ -253,6 +256,9 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     }
     if (nodeDoubleClickAction !== undefined) {
       updates.node_double_click_action = nodeDoubleClickAction
+    }
+    if (monthlyStatementEmail !== undefined) {
+      updates.monthly_statement_email = monthlyStatementEmail
     }
 
     // Validate and filter prompt templates
@@ -347,6 +353,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         showMostUsedNodes: showMostUsedNodes ?? (profile.show_most_used_nodes ?? false),
         variableDisplayMode: variableDisplayMode ?? (profile.variable_display_mode ?? "raw"),
         nodeDoubleClickAction: nodeDoubleClickAction ?? (profile.node_double_click_action ?? "settings"),
+        monthlyStatementEmail: monthlyStatementEmail ?? (profile.monthly_statement_email ?? false),
       },
     })
   })
