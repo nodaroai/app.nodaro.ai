@@ -58,6 +58,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   // Plans and prices, the subscription, the billing surface; the browser-session
   // verbs (checkout, plan change, auto-recharge, portal) are exempt by name.
   { id: "billing", cli: ["billing"], routePrefixes: ["/v1/billing"], mcpFiles: [] },
+  // The person's own settings; a first-party app reads and changes them through the SDK.
+  { id: "userSettings", cli: [], routePrefixes: ["/v1/user/settings"], mcpFiles: [] },
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
   { id: "gallery", cli: ["gallery"], routePrefixes: ["/v1/gallery"], mcpFiles: ["gallery.ts"] },

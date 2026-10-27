@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/sdk",
-  "version": "2.51.0",
+  "version": "2.52.0",
   "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
@@ -259,6 +259,11 @@
       "types": "./dist/entries/uploads.d.ts",
       "import": "./dist/entries/uploads.js",
       "require": "./dist/entries/uploads.cjs"
+    },
+    "./user-settings": {
+      "types": "./dist/entries/user-settings.d.ts",
+      "import": "./dist/entries/user-settings.js",
+      "require": "./dist/entries/user-settings.cjs"
     },
     "./video-pro": {
       "types": "./dist/entries/video-pro.d.ts",
