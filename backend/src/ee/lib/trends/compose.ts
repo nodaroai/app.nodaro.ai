@@ -33,9 +33,18 @@
  * run masks per run. (An engine that does not take it gets the body without
  * it: `withoutUnsupportedStoredMask`, run-helpers.ts.)
  *
- * A trend whose face masking has marks (`faceMasking.marks`) runs only on
- * that approved mask: without one made from these settings the run is refused
- * (`face_mask_required`). The marks themselves are never sent.
+ * A trend whose face masking has `"erased"` marks (`faceMasking.marks`) runs
+ * only on that approved mask: without one made from these settings the run
+ * is refused (`face_mask_required`). The marks themselves are never sent.
+ *
+ * Per-person variants (decided 2026-10-27, face-mask-variants.ts): on a trend
+ * with no examples, a run that leaves optional people with slot marks empty
+ * is sent the variant made for exactly those people (`storedFaceMask` with
+ * `required: true`), so the people kept as in the clip keep their faces; a
+ * variant that left nothing to cover sends no `faceMasking` and no
+ * `storedFaceMask` (unmasked). No such variant, or one out of date: refused
+ * (`face_mask_required`). A run that leaves no marked person empty is sent
+ * exactly what it was before slot marks existed.
  *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
@@ -61,7 +70,8 @@ import {
 } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
 import { pickText } from "./localize.js"
-import { faceMaskHasMarks, storedFaceMaskFor } from "./face-mask.js"
+import { faceMaskHasErasedMarks, storedFaceMaskFor } from "./face-mask.js"
+import { faceMaskVariantFor, markedPeople } from "./face-mask-variants.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import type {
   CastSwapEngine,
@@ -325,11 +335,29 @@ export function composeTrendRun(
   // The run's masking never carries the marks: they shape the STORED mask only (face-mask.ts).
   const masking = faceMaskingOn(data.faceMasking) ? withoutMarks(data.faceMasking) : undefined
   const stored = masking ? storedFaceMaskFor(data) : undefined
-  // A trend with marks runs on its approved mask, made with them, and nothing else: masking per
+  // A trend with erased marks runs on its approved mask, made with them, and nothing else: masking per
   // run would mask the faces the marks leave out (decided 2026-10-26).
-  if (faceMaskHasMarks(data) && !stored) {
+  if (faceMaskHasErasedMarks(data) && !stored) {
     throw new TrendRunError("face_mask_required", "This trend leaves some faces unmasked: make and approve its face mask first.")
   }
+  // The marked optional people this run leaves empty (only a trend with no examples has any: an
+  // example fills every empty slot). Each one stays as in the clip, so the run is sent the variant
+  // made for exactly them, never the mask that covers their faces (decided 2026-10-27).
+  const marked = new Set(markedPeople(data))
+  const emptyPeople = slots.filter((s) => s.images.length === 0 && marked.has(s.key)).map((s) => s.key)
+  const variant = emptyPeople.length > 0 && stored ? faceMaskVariantFor(data, emptyPeople) : undefined
+  if (emptyPeople.length > 0 && !variant) {
+    throw new TrendRunError("face_mask_required", "This trend keeps some people as in the clip: make its person masks first.")
+  }
+  // The variant left nothing to cover: the run goes unmasked (no masking, no stored mask).
+  const unmasked = variant === "unmasked"
+  const runMasking = unmasked ? undefined : masking
+  const storedFaceMask =
+    variant && variant !== "unmasked"
+      ? { ...variant, required: true as const }
+      : variant === undefined && stored
+        ? faceMaskHasErasedMarks(data) ? { ...stored, required: true as const } : stored
+        : undefined
   const engine = engineOf(data)
   const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
   if (req.draft === true && !castSwapEngineHasDraft(engine)) {
@@ -376,9 +404,10 @@ export function composeTrendRun(
     // The zone resolved here (left out = the default margins), so the estimate and the run send
     // the margins the trend means. A run that follows its masked preview takes the preview's
     // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
-    ...(masking ? { faceMasking: withResolvedZone(structuredClone(masking)) } : {}),
-    // A trend with marks: the run must use it — the engine fails rather than masks per run.
-    ...(stored ? { storedFaceMask: faceMaskHasMarks(data) ? { ...stored, required: true as const } : stored } : {}),
+    ...(runMasking ? { faceMasking: withResolvedZone(structuredClone(runMasking)) } : {}),
+    // A trend with erased marks, or a person variant: the run must use it — the engine fails rather
+    // than masks per run.
+    ...(storedFaceMask ? { storedFaceMask } : {}),
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
@@ -395,12 +424,12 @@ export function composeTrendRun(
     needs: {
       roleKinds: new Set(data.slots.map((s) => s.kind)),
       fixedReferences: data.references.length > 0,
-      faceMasking: masking !== undefined,
-      faceMaskTarget: masking ? faceMaskTargetOf(masking) : null,
-      storedFaceMask: faceMaskHasMarks(data),
+      faceMasking: runMasking !== undefined,
+      faceMaskTarget: runMasking ? faceMaskTargetOf(runMasking) : null,
+      storedFaceMask: storedFaceMask !== undefined && "required" in storedFaceMask,
       trendPrePrompt: !!texts.prePrompt,
       engine,
     },
-    maskingZoneLeftOut: masking !== undefined && masking.zone === undefined,
+    maskingZoneLeftOut: runMasking !== undefined && runMasking.zone === undefined,
   }
 }

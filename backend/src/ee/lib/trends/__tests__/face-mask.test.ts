@@ -11,7 +11,7 @@ import type { EngineEnvironment } from "../../engine-environments.js"
 import {
   faceMaskBaseKey,
   faceMaskBaseStats,
-  faceMaskHasMarks,
+  faceMaskHasErasedMarks,
   faceMaskMarksMatch,
   faceMaskSettingsKey,
   faceMaskSettingsKeyOf,
@@ -219,12 +219,23 @@ describe("marks", () => {
     expect(faceMaskBaseKey(marked)).toBe(plain)
     expect(faceMaskBaseKey(data())).toBe(plain)
     expect(faceMaskBaseKey(data({ source: null }))).toBeNull()
-    expect(faceMaskHasMarks(marked)).toBe(true)
-    expect(faceMaskHasMarks(data({ faceMasking: { ...MASKING, marks: [] } }))).toBe(false)
-    expect(faceMaskHasMarks(data({ faceMasking: { mode: "off", marks: [MARK] } }))).toBe(false)
+    expect(faceMaskHasErasedMarks(marked)).toBe(true)
+    expect(faceMaskHasErasedMarks(data({ faceMasking: { ...MASKING, marks: [] } }))).toBe(false)
+    expect(faceMaskHasErasedMarks(data({ faceMasking: { mode: "off", marks: [MARK] } }))).toBe(false)
     // An approved mask without the marks is out of date once they are added.
     expect(faceMaskState({ ...marked, faceMask: mask() }, ENVS, REQUIRED).reasons).toEqual([{ why: "settings" }])
     expect(storedFaceMaskFor({ ...marked, faceMask: mask() })).toBeUndefined()
+  })
+
+  it("slot marks never touch the base: a draft with slot marks alone keys, bases and approves exactly as one with none", () => {
+    const SLOT_MARK = { ...MARK, label: { slot: "friend" } }
+    const PINNED = "v2:30fe1719eed0a90b8414b6daa6687eec33939a17d106d8bdd5ec2b1b278f8e07"
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [SLOT_MARK] })).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [SLOT_MARK, MARK] })).toBe(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK] }))
+    const slotOnly = data({ faceMasking: { ...MASKING, marks: [SLOT_MARK] } })
+    expect(faceMaskHasErasedMarks(slotOnly)).toBe(false)
+    expect(faceMaskState({ ...slotOnly, faceMask: mask() }, ENVS, REQUIRED).status).toBe("approved")
+    expect(storedFaceMaskFor({ ...slotOnly, faceMask: mask() })).toEqual({ url: mask().url, frames: 360 })
   })
 
   it("faceMaskMarksMatch: the job's recorded marks are the draft's, in any order (absent = none)", () => {

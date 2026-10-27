@@ -131,6 +131,56 @@ export interface TrendFaceMask {
    * counts on the clip's duration).
    */
   fps?: number
+  /**
+   * The per-person variants (decided 2026-10-27): this mask with the faces
+   * of a set of optional people (`emptySlots`) left out, for the runs that
+   * leave exactly those people empty (face-mask-variants.ts). Made from this
+   * mask's raw mask and approved as they finish. Absent = none.
+   */
+  variants?: TrendFaceMaskVariant[]
+  /** The variants in the making (one per set of people at most). Absent = none. */
+  variantJobs?: TrendFaceMaskVariantJob[]
+}
+
+/**
+ * HIDDEN. One per-person variant of a trend's face mask: the source clip
+ * masked with the faces of the optional people `emptySlots` (sorted slot
+ * keys) left out — their slot marks erased from the approved raw mask, the
+ * other marked people's kept (a blob a filled person shares stays covered) —
+ * then filled as the base is. Tied to `key` (`faceMaskVariantKey`): the
+ * base's settings key and raw mask, and every slot mark. `url` absent:
+ * nothing is left to cover, and a run that picks it goes unmasked.
+ */
+export interface TrendFaceMaskVariant {
+  emptySlots: string[]
+  key: string
+  /** The masked clip in the trend's storage, or absent: nothing left to cover. */
+  url?: string
+  /** Its frame count (the source clip's). */
+  frames: number
+  /** The variant's own job (its mask erase and fill are its steps). */
+  jobId: string
+  /** What the delivered mask covers (`coverage`, 0–1) and the regions its erase dropped. */
+  stats: { coverage: number; erasedRegions: number }
+  approvedAt: string
+}
+
+/**
+ * HIDDEN. A per-person variant in the making: its own job (`jobId`), the
+ * mask erase it asked for first (`eraseJobId`; absent: recorded, not asked
+ * for yet — the record is written before anything is paid), then the fill
+ * (`makeJobId`, the engine's face-mask make on the erased mask), advanced
+ * by `POST /v1/admin/trends/:id/face-mask/variants/advance`. `error`: it
+ * failed (make it again).
+ */
+export interface TrendFaceMaskVariantJob {
+  emptySlots: string[]
+  key: string
+  jobId: string
+  eraseJobId?: string
+  makeJobId?: string
+  startedAt: string
+  error?: { message: string; at: string }
 }
 
 /**

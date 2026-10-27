@@ -27,24 +27,56 @@ export interface MaskEraseBox {
 }
 
 /**
- * What a face mask mark says about the faces in its box (`FaceMaskMark.label`):
- * `"erased"` = left unmasked. The only label today; a later kind of mark adds
- * its own.
+ * What an `"erased"` face mask mark says (`FaceMaskMark.label`): the faces in
+ * its box are left unmasked, on every run.
  */
 export const CAST_SWAP_FACE_MASK_MARK_LABELS = ["erased"] as const
 export type CastSwapFaceMaskMarkLabel = (typeof CAST_SWAP_FACE_MASK_MARK_LABELS)[number]
 
 /**
- * A labelled box on a trend's face mask (`faceMasking.marks`): a
- * `MaskEraseBox` with what it says about the faces centred in it. `"erased"`:
- * those faces are left out of the mask.
+ * A slot mark's label (decided 2026-10-27): the faces in its box are the
+ * person of the trend's optional person slot `slot` (a `TrendSlot.key`). They
+ * are left unmasked only when a run leaves that person empty (it then stays
+ * as in the clip), through the trend's per-person mask variants; they never
+ * shape the base mask.
  */
-export interface FaceMaskMark extends MaskEraseBox {
-  label: CastSwapFaceMaskMarkLabel
+export interface FaceMaskSlotLabel {
+  slot: string
 }
 
-/** `faceMasking.marks`' limits: at most `maxMarks` marks, each edge within `edgePct` (inclusive). */
+/** What a face mask mark says about the faces centred in its box: `"erased"`, or `{ slot }`. */
+export type FaceMaskMarkLabel = CastSwapFaceMaskMarkLabel | FaceMaskSlotLabel
+
+/**
+ * A labelled box on a trend's face mask (`faceMasking.marks`): a
+ * `MaskEraseBox` with what it says about the faces centred in it. `"erased"`:
+ * those faces are left out of the mask. `{ slot }`: those faces are that
+ * optional person's, left out only of the mask a run that leaves the person
+ * empty is sent.
+ */
+export interface FaceMaskMark extends MaskEraseBox {
+  label: FaceMaskMarkLabel
+}
+
+/** Whether a mark is an `"erased"` one (every run). */
+export function isErasedFaceMaskMark(mark: Pick<FaceMaskMark, "label">): boolean {
+  return mark.label === "erased"
+}
+
+/** The slot a slot mark names, or null for an `"erased"` mark. */
+export function faceMaskMarkSlot(mark: Pick<FaceMaskMark, "label">): string | null {
+  return typeof mark.label === "object" && mark.label !== null ? mark.label.slot : null
+}
+
+/**
+ * `faceMasking.marks`' limits: at most `maxMarks` marks (erased and slot
+ * marks together, the most boxes one mask-erase job takes), each edge within
+ * `edgePct` (inclusive), and at most `maxMarkedPeople` optional people with
+ * slot marks (a trend with more cannot be published: each combination of
+ * them left empty is its own mask, 2^k − 1 of them).
+ */
 export const CAST_SWAP_FACE_MASK_MARK_LIMITS = {
   maxMarks: 50,
   edgePct: [0, 100],
+  maxMarkedPeople: 3,
 } as const

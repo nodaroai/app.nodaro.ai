@@ -14,13 +14,16 @@
  *   - the recipes: core's `VIDEO_MASK_RECIPE` (Video Mask's algorithm) and the
  *     engine's `faceMaskRecipe` (its own masking parameters), per environment.
  * Editing the source or the settings, or a recipe bump, makes it OUT OF DATE
- * (`faceMaskState`). The settings include the marks (`faceMasking.marks`,
- * decided 2026-10-26): an `"erased"` mark's box leaves the faces centred in it
- * out of the mask. A mask also keeps what it was made from before any mark
+ * (`faceMaskState`). The settings include the `"erased"` marks
+ * (`faceMasking.marks`, decided 2026-10-26): an erased mark's box leaves the
+ * faces centred in it out of the mask. Slot marks (`{ slot }`, decided
+ * 2026-10-27) never touch the base mask — not its key, its make or its
+ * approval: they shape the per-person variants only (face-mask-variants.ts).
+ * A mask also keeps what it was made from before any mark
  * was applied (`rawMaskUrl`, `depthUrl`, `baseKey`: the BASE key, the
- * settings without the marks), so editing only the marks re-makes it from
+ * settings without the marks), so editing only the erased marks re-makes it from
  * that (`reusableFaceMaskBase`) without running the face finder again. A
- * trend with marks runs on its approved mask only (compose.ts refuses the
+ * trend with erased marks runs on its approved mask only (compose.ts refuses the
  * run otherwise). Publishing a masked trend needs an approved, up-to-date
  * one (publish-check.ts); a run sends it while its settings key matches
  * (compose.ts), and masks per run otherwise.
@@ -29,7 +32,7 @@ import { createHash } from "node:crypto"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
 import {
-  faceMaskMarksOf,
+  erasedMarksOf,
   faceMaskTargetOf,
   faceMaskingOn,
   withResolvedZone,
@@ -44,7 +47,7 @@ import type { TrendFaceMask, TrendVersionData } from "./types.js"
 export const FACE_MASK_JOB_TYPE = "cast-swap-face-mask"
 
 /** JSON with every object's keys sorted and undefined values left out: equal settings, equal text. */
-function stableJson(v: unknown): string {
+export function stableJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`
   if (v && typeof v === "object") {
     const entries = Object.entries(v as Record<string, unknown>)
@@ -67,15 +70,17 @@ function stableJson(v: unknown): string {
  * so the masks approved then (all made of heads) stay up to date, while
  * switching between face and head makes a stored mask out of date.
  *
- * The marks likewise: hashed only when there are some (in a fixed order, so
- * the same marks in another order are the same mask), so a setting with none
- * — left out or empty — hashes exactly as every setting did before marks
- * existed, and every mask approved then stays up to date.
+ * The marks likewise: the `"erased"` ones only, hashed only when there are
+ * some (in a fixed order, so the same marks in another order are the same
+ * mask), so a setting with none — left out, empty, or slot marks alone —
+ * hashes exactly as every setting did before marks existed, and every mask
+ * approved then stays up to date. Slot marks never change the base mask, so
+ * they never change its key (the variants key them: face-mask-variants.ts).
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks): string {
   const { mode: _mode, target: _target, ...settings } = withResolvedZone(withoutMarks(masking))
   const target = faceMaskTargetOf(masking)
-  const marks = faceMaskMarksOf(masking).map(stableJson).sort()
+  const marks = erasedMarksOf(masking).map(stableJson).sort()
   const faceMasking = {
     ...settings,
     ...(target === "head" ? {} : { target }),
@@ -105,7 +110,8 @@ export function faceMaskBaseKey(data: Pick<TrendVersionData, "source" | "faceMas
  * Whether a face mask job was made with exactly `marks` (in any order): its
  * recorded `input_data.faceMasking.marks` (`recorded`, absent = none). An
  * engine that does not take marks strips them, so its mask would cover the
- * faces they leave out: approving checks this first.
+ * faces they leave out: approving checks this first, against the draft's
+ * `"erased"` marks (a make never sends slot marks).
  */
 export function faceMaskMarksMatch(recorded: unknown, marks: readonly FaceMaskMark[]): boolean {
   const list = recorded === undefined ? [] : recorded
@@ -114,9 +120,13 @@ export function faceMaskMarksMatch(recorded: unknown, marks: readonly FaceMaskMa
   return key(list) === key(marks)
 }
 
-/** Whether the draft's face masking has marks (masking on, and at least one). */
-export function faceMaskHasMarks(data: Pick<TrendVersionData, "faceMasking">): boolean {
-  return faceMaskingOn(data.faceMasking) && faceMaskMarksOf(data.faceMasking).length > 0
+/**
+ * Whether the draft's face masking has `"erased"` marks (masking on, and at
+ * least one): faces every run leaves unmasked, so every run must use the
+ * stored mask. Slot marks alone are not (the base mask covers every face).
+ */
+export function faceMaskHasErasedMarks(data: Pick<TrendVersionData, "faceMasking">): boolean {
+  return faceMaskingOn(data.faceMasking) && erasedMarksOf(data.faceMasking).length > 0
 }
 
 /**

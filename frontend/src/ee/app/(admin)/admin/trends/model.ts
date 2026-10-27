@@ -387,7 +387,7 @@ export function formIssues(form: TrendForm): string[] {
   // The preview's texts are held to the budget only while the trend offers a preview and has
   // text of its own (else it sends the full run's): the server's publish check (`promptModesOf`).
   if (promptModesOf(form).includes("preview")) out.push(...promptIssues(withPreviewPrompts(form), " in the 4 s preview"))
-  if (form.faceMasking) out.push(...maskingIssues(form.faceMasking))
+  if (form.faceMasking) out.push(...maskingIssues(form.faceMasking), ...personMarkIssues(form))
   if (form.source && form.previewStart !== null && form.previewStart + PREVIEW_SECONDS > form.source.durationSec) {
     out.push(`The ${PREVIEW_SECONDS} s preview must fit inside the ${form.source.durationSec.toFixed(1)} s clip.`)
   }
@@ -423,6 +423,28 @@ function promptIssues(form: TrendForm, where: string): string[] {
   return out
 }
 
+/**
+ * A face mark for a person whose slot is no longer an optional person (made
+ * required, made another kind, or removed — a rename is a removal), as
+ * sentences: the server refuses such a save rather than dropping the marks,
+ * so the editor says why first (Save is held).
+ */
+export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">): string[] {
+  const out: string[] = []
+  const counted = new Set<string>()
+  for (const mark of form.faceMasking?.marks ?? []) {
+    if (mark.label === "erased" || counted.has(mark.label.slot)) continue
+    const key = mark.label.slot
+    counted.add(key)
+    const slot = form.slots.find((s) => s.key === key)
+    if (slot && slot.kind === "person" && !slot.required) continue
+    const name = slot?.label.en || key
+    const why = !slot ? "is no longer a slot" : slot.kind !== "person" ? "is no longer a person" : "is now required"
+    out.push(`Face masking: "${name}" ${why}, but has face marks. Remove that person's face marks first (6. Face masking).`)
+  }
+  return out
+}
+
 /** What the server would refuse in a face masking setting, as sentences. */
 /** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Nodaro Motion's. */
 export function maskingIssues(m: AdminTrendFaceMasking): string[] {
@@ -452,7 +474,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   fixedReferences: "fixed references",
   faceMasking: "face masking",
   storedFaceMask: "stored face masks",
-  storedFaceMaskRequired: "stored face masks a run must use (marks)",
+  storedFaceMaskRequired: "stored face masks a run must use (marks, person masks)",
   "faceMaskTarget:face": "face-only masks",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",
@@ -478,6 +500,14 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return "This trend masks faces: make its face mask and approve it (6. Face masking)."
     case "face_mask_out_of_date":
       return `The face mask is out of date: ${describeFaceMaskOutOfDate({ why: r.why ?? "settings", env: r.env ?? "?" })}`
+    case "face_mask_people_over_cap":
+      return `More than 3 people have face marks (${(r.slots ?? []).join(", ")}): remove some of their marks (6. Face masking).`
+    case "face_mask_variant_missing":
+      return r.slots?.length
+        ? `The person mask for runs without ${r.slots.join(", ")} is not made yet: make the person masks (6. Face masking).`
+        : (r.message ?? "Make the person masks (6. Face masking).")
+    case "face_mask_variant_out_of_date":
+      return `The person mask for runs without ${(r.slots ?? []).join(", ")} is out of date: make the person masks again (6. Face masking).`
     case "engine_unknown":
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {

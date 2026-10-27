@@ -103,6 +103,7 @@ import {
 import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
 import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes, withMarksForSource } from "./admin-trends-face-mask.js"
+import { SUPERSEDED, closeAbandonedVariantJobs } from "./admin-trends-face-mask-variants.js"
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
 import { registerTrendPromptRoutes } from "./admin-trends-prompt.js"
@@ -542,9 +543,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         ...(sourceCrop ? { sourceCrop } : {}),
       } as unknown as TrendVersionData
       // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
-      const { data, cleared } = withMarksForSource(merged, loaded.draft)
+      const { data, cleared, abandoned } = withMarksForSource(merged, loaded.draft)
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
       if (!saved) return reply
+      await closeAbandonedVariantJobs(abandoned, SUPERSEDED)
       // The face mask's state after the save: the editor starts no make when the saved settings already match it.
       return { data: { ...saved, faceMaskState: await draftFaceMaskState(req, data), ...(cleared ? { marksCleared: true } : {}) } }
     } catch (e) {

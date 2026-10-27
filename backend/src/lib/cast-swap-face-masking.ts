@@ -19,7 +19,14 @@ import {
   type CastSwapFaceMaskTarget,
 } from "@nodaro/shared/models"
 // Internal only (render-rules, not an Apache grant): a trend face mask's marks.
-import { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, type FaceMaskMark, type MaskEraseBox } from "@nodaro/render-rules"
+import {
+  CAST_SWAP_FACE_MASK_MARK_LABELS,
+  CAST_SWAP_FACE_MASK_MARK_LIMITS,
+  faceMaskMarkSlot,
+  isErasedFaceMaskMark,
+  type FaceMaskMark,
+  type MaskEraseBox,
+} from "@nodaro/render-rules"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export type FaceMaskingMode = "off" | "always" | "auto"
@@ -63,8 +70,11 @@ export interface FaceMasking {
 /**
  * A trend's face masking setting: `FaceMasking` plus `marks`, labelled boxes
  * on its stored face mask (`FaceMaskMark`, at most 50; decided 2026-10-26).
- * The one label today, `"erased"`: the faces centred in the box, on its
- * frames, are left out of the mask. Marks belong to a trend's STORED face
+ * `"erased"`: the faces centred in the box, on its frames, are left out of
+ * the mask. `{ slot }` (decided 2026-10-27): the faces are that optional
+ * person's, left out only of the mask variants made for runs that leave the
+ * person empty — never of the base mask, its settings key or its make
+ * (`erasedMarksOf`). Marks belong to a trend's STORED face
  * mask only: `faceMaskingWithMarksSchema` is the one schema that takes them
  * (Nodaro Motion's defaults, through `faceMaskingSchema`, refuse the key), the
  * make route sends them to the engine, and a run never does (`withoutMarks`
@@ -104,9 +114,15 @@ function boxChecks<T extends z.ZodType<Box>>(schema: T) {
 /** One box of the core `mask-erase` job (`MaskEraseBox`), strict. */
 export const maskEraseBoxSchema: z.ZodType<MaskEraseBox> = boxChecks(z.strictObject(boxShape))
 
-/** One face mask mark (`FaceMaskMark`): a label and a box (`maskEraseBoxSchema`'s checks), strict. */
+/**
+ * A slot mark's label, `{ slot }`: a trend slot's key (whether it names an
+ * optional person slot of the same trend is the trend schema's check).
+ */
+const slotLabelSchema = z.strictObject({ slot: z.string().min(1).max(32) })
+
+/** One face mask mark (`FaceMaskMark`): a label (`"erased"` or `{ slot }`) and a box (`maskEraseBoxSchema`'s checks), strict. */
 export const faceMaskMarkSchema: z.ZodType<FaceMaskMark> = boxChecks(
-  z.strictObject({ label: z.enum(CAST_SWAP_FACE_MASK_MARK_LABELS), ...boxShape }),
+  z.strictObject({ label: z.union([z.enum(CAST_SWAP_FACE_MASK_MARK_LABELS), slotLabelSchema]), ...boxShape }),
 )
 
 const faceMaskingShape = {
@@ -141,11 +157,32 @@ export function faceMaskMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefin
   return m?.marks ?? []
 }
 
+/**
+ * The setting's `"erased"` marks: the only marks the base mask, its settings
+ * key, its make and its approval look at (slot marks shape the per-person
+ * variants only).
+ */
+export function erasedMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): FaceMaskMark[] {
+  return faceMaskMarksOf(m).filter(isErasedFaceMaskMark)
+}
+
+/** The setting's slot marks (`{ slot }`), each with the slot it names. */
+export function slotMarksOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): Array<{ slot: string; mark: FaceMaskMark }> {
+  return faceMaskMarksOf(m).flatMap((mark) => {
+    const slot = faceMaskMarkSlot(mark)
+    return slot === null ? [] : [{ slot, mark }]
+  })
+}
+
+/** A mark's box, its label dropped (a new object): what the core `mask-erase` job takes. */
+export function boxOf(mark: MaskEraseBox): MaskEraseBox {
+  const { fromFrame, toFrame, leftPct, topPct, rightPct, bottomPct } = mark
+  return { fromFrame, toFrame, leftPct, topPct, rightPct, bottomPct }
+}
+
 /** The boxes of the setting's `"erased"` marks (labels dropped): what the core `mask-erase` job takes. */
 export function erasedBoxesOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined): MaskEraseBox[] {
-  return faceMaskMarksOf(m)
-    .filter((mark) => mark.label === "erased")
-    .map(({ fromFrame, toFrame, leftPct, topPct, rightPct, bottomPct }) => ({ fromFrame, toFrame, leftPct, topPct, rightPct, bottomPct }))
+  return erasedMarksOf(m).map(boxOf)
 }
 
 /** The setting without its marks (a new object): what a run, and the base of a mask, are made from. */

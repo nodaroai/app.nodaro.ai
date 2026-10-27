@@ -11,6 +11,21 @@
  * region is kept exactly. The result is drawn with `renderMaskVideo` on the
  * mask's own geometry and frame rate, one frame for every frame decoded
  * (checked), so it still lines up with the clip it was made for.
+ *
+ * `keep` (decided 2026-10-27): boxes over frame ranges a region is NEVER
+ * dropped from — a region whose centre lies in a keep box on that frame stays,
+ * whatever erase box it is also centred in. A trend's per-person mask variant
+ * sends the boxes of the people a run fills here, so a blob two people share
+ * stays covered when only one of them is left as in the clip. Boxes in,
+ * boxes out: the job knows nothing of people. None = every erase box applies.
+ *
+ * `eraseAlways` (decided 2026-10-27): boxes whose centred regions are dropped
+ * WHATEVER keep says — the trend's "Everyone" marks, which a person variant
+ * must leave unmasked exactly as its base does. A region is dropped when it
+ * is centred in an `eraseAlways` box, or in an `erase` box and no `keep` box.
+ * With `keep` or `eraseAlways` the result reports `keptRegions` (the regions
+ * an erase box held that a keep box saved), so a caller can tell a worker
+ * that honoured them from one that predates them.
  */
 
 import { join } from "node:path"
@@ -65,9 +80,28 @@ export function maskEraseRects(boxes: readonly MaskEraseBoxInput[], width: numbe
 /**
  * Whether a region is erased on frame `frame`: its bounding-box centre (in
  * continuous coordinates, a pixel spanning [x, x + 1) — the zone filter's
- * reading) lies inside a box whose range holds the frame. Pure.
+ * reading) lies inside an `always` box whose range holds the frame, or
+ * inside a box whose range holds it and no `keep` box whose range holds it
+ * (keep beats a box, never an `always` one). Pure.
  */
-export function regionErased(box: MaskRegionBox, frame: number, rects: readonly MaskEraseRect[]): boolean {
+export function regionErased(
+  box: MaskRegionBox,
+  frame: number,
+  rects: readonly MaskEraseRect[],
+  keep: readonly MaskEraseRect[] = [],
+  always: readonly MaskEraseRect[] = [],
+): boolean {
+  return centredIn(box, frame, always) || (centredIn(box, frame, rects) && !centredIn(box, frame, keep))
+}
+
+/** The optional lists of a mask erase: `keep` (never dropped by an erase box) and `eraseAlways` (dropped whatever keep says). */
+export interface MaskEraseLists {
+  readonly keep?: readonly MaskEraseBoxInput[]
+  readonly eraseAlways?: readonly MaskEraseBoxInput[]
+}
+
+/** Whether the region's bounding-box centre lies inside one of `rects` whose range holds `frame` (edges included). */
+function centredIn(box: MaskRegionBox, frame: number, rects: readonly MaskEraseRect[]): boolean {
   const cx = (box.left + box.right) / 2
   const cy = (box.top + box.bottom + 1) / 2
   for (const r of rects) {
@@ -103,30 +137,44 @@ const SLICE_MS = 8
  * The erase over a whole mask's RLE, IN PLACE on `rle` (a frame that loses a
  * region is replaced; the others stay the same strings), yielding to the event
  * loop every few milliseconds. No box holding on a frame = that frame as it
- * is. `matched` / `kept`: whether any frame had white before / after;
- * `droppedRegions`: every region dropped, on every frame.
+ * is. A region centred in a `keep` box on its frame is never dropped by an
+ * erase box; one centred in an `eraseAlways` box always is.
+ * `matched` / `kept`: whether any frame had white before / after;
+ * `droppedRegions`: every region dropped, on every frame; `keptRegions`: the
+ * regions an erase box held that a keep box saved.
  */
 export async function eraseMaskRegions(
   rle: string[],
   geometry: Pick<MaskGeometry, "width" | "height">,
   boxes: readonly MaskEraseBoxInput[],
-): Promise<{ readonly rle: string[]; readonly droppedRegions: number; readonly matched: boolean; readonly kept: boolean }> {
+  lists: MaskEraseLists = {},
+): Promise<{ readonly rle: string[]; readonly droppedRegions: number; readonly keptRegions: number; readonly matched: boolean; readonly kept: boolean }> {
   const { width, height } = geometry
   const rects = maskEraseRects(boxes, width, height)
+  const keepRects = maskEraseRects(lists.keep ?? [], width, height)
+  const alwaysRects = maskEraseRects(lists.eraseAlways ?? [], width, height)
+  const holding = (list: readonly MaskEraseRect[], f: number) => list.filter((r) => f >= r.fromFrame && f <= r.toFrame)
   let droppedRegions = 0
+  let keptRegions = 0
   let matched = false
   let kept = false
   let sliceStart = performance.now()
   for (let f = 0; f < rle.length; f++) {
-    const active = rects.filter((r) => f >= r.fromFrame && f <= r.toFrame)
-    if (active.length === 0) {
+    const active = holding(rects, f)
+    const alwaysActive = holding(alwaysRects, f)
+    if (active.length === 0 && alwaysActive.length === 0) {
       if (rle[f] !== "") {
         // A frame with no box: the RLE as it is (white when it has any run).
         matched = true
         kept = true
       }
     } else {
-      const r = dropMaskRegionsWhere(rle[f]!, width, height, (box) => regionErased(box, f, active))
+      const keepActive = holding(keepRects, f)
+      const r = dropMaskRegionsWhere(rle[f]!, width, height, (box) => {
+        const drop = regionErased(box, f, active, keepActive, alwaysActive)
+        if (!drop && keepActive.length > 0 && regionErased(box, f, active)) keptRegions += 1
+        return drop
+      })
       if (r.covered > 0) matched = true
       if (r.dropped > 0) rle[f] = r.rle
       if (r.dropped === 0 ? r.covered > 0 : r.rle !== "") kept = true
@@ -137,7 +185,7 @@ export async function eraseMaskRegions(
       sliceStart = performance.now()
     }
   }
-  return { rle, droppedRegions, matched, kept }
+  return { rle, droppedRegions, keptRegions, matched, kept }
 }
 
 /** The decode's argv: the mask's first picture stream, every frame as it is, as raw gray bytes on stdout. Pure. */
@@ -195,6 +243,8 @@ export interface MaskEraseResult {
   readonly droppedRegions: number
   /** Whether any region is left on any frame. */
   readonly kept: boolean
+  /** The regions an erase box held that a keep box saved. */
+  readonly keptRegions: number
 }
 
 /**
@@ -202,9 +252,15 @@ export interface MaskEraseResult {
  * decode, drop, re-draw at its own geometry and rate, and check that the new
  * mask has exactly the frames decoded (and the container's count, when it
  * states one). An erase that leaves nothing draws an all-black mask
- * (`kept: false`) rather than failing.
+ * (`kept: false`) rather than failing. A region centred in a `keep` box is
+ * never dropped by an erase box; one in an `eraseAlways` box always is.
  */
-export async function eraseMaskVideo(maskUrl: string, boxes: readonly MaskEraseBoxInput[], workDir: string): Promise<MaskEraseResult> {
+export async function eraseMaskVideo(
+  maskUrl: string,
+  boxes: readonly MaskEraseBoxInput[],
+  workDir: string,
+  lists: MaskEraseLists = {},
+): Promise<MaskEraseResult> {
   const inputPath = join(workDir, "mask-in.mp4")
   await downloadFile(maskUrl, inputPath)
   const probe = await probeVideoOverlayBase(inputPath)
@@ -223,7 +279,7 @@ export async function eraseMaskVideo(maskUrl: string, boxes: readonly MaskEraseB
   if (stated !== undefined && stated !== rle.length) {
     throw new DeterministicJobError(`The mask video decoded to ${rle.length} frames, but holds ${stated}.`)
   }
-  const erased = await eraseMaskRegions(rle, geometry, boxes)
+  const erased = await eraseMaskRegions(rle, geometry, boxes, lists)
   const outputPath = join(workDir, "mask-erased.mp4")
   const { coveredFraction } = await renderMaskVideo(erased.rle, geometry, outputPath, { allowEmpty: true })
   const drawn = await countVideoFrames(outputPath)
@@ -237,6 +293,7 @@ export async function eraseMaskVideo(maskUrl: string, boxes: readonly MaskEraseB
     frames: rle.length,
     coveredFraction,
     droppedRegions: erased.droppedRegions,
+    keptRegions: erased.keptRegions,
     kept: coveredFraction > 0,
   }
 }

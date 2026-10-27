@@ -9,7 +9,8 @@
  * key, an app token, MCP and every other internal hop are refused 403 before
  * the mask is probed or anything is reserved (`createsChildJob`: internal auth
  * AND a server-only parent job in this very request's scope). It is not a
- * public API surface.
+ * public API surface. The trend editor's per-person mask variants reach it
+ * the same way (a child of the variant's own job, admin-billed), with `keep`.
  *
  * Local ffmpeg, no provider. Priced per started 5 seconds of the mask (the
  * `mask-erase` row is one unit, the video-utility unit), measured by the
@@ -31,11 +32,28 @@ import { createsChildJob } from "../lib/job-submission-context.js"
 import { maskEraseBoxSchema } from "../lib/cast-swap-face-masking.js"
 import { maskEraseBaseCredits, measureMaskEraseLength } from "../lib/mask-erase-length.js"
 
-export const maskEraseBody = z.object({
-  maskUrl: safeUrlSchema,
-  erase: z.array(maskEraseBoxSchema).min(1).max(CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks),
-  forcePrivate: z.literal(true).optional(),
-})
+const MAX_BOXES = CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks
+
+/**
+ * `erase`: the boxes whose centred regions are dropped. `keep` (optional):
+ * boxes whose centred regions are NEVER dropped, whatever erase box they are
+ * also centred in (a trend's per-person mask variant: the people a run fills).
+ * `eraseAlways` (optional): boxes whose centred regions are dropped whatever
+ * keep says (a trend's "Everyone" marks in a person variant). At most 50
+ * boxes in all — a trend's marks, every list together.
+ */
+export const maskEraseBody = z
+  .object({
+    maskUrl: safeUrlSchema,
+    erase: z.array(maskEraseBoxSchema).min(1).max(MAX_BOXES),
+    keep: z.array(maskEraseBoxSchema).max(MAX_BOXES).optional(),
+    eraseAlways: z.array(maskEraseBoxSchema).max(MAX_BOXES).optional(),
+    forcePrivate: z.literal(true).optional(),
+  })
+  .refine((b) => b.erase.length + (b.keep?.length ?? 0) + (b.eraseAlways?.length ?? 0) <= MAX_BOXES, {
+    path: ["keep"],
+    message: `At most ${MAX_BOXES} boxes in all (erase, keep and eraseAlways together).`,
+  })
 
 const INTERNAL_ONLY = { error: { code: "forbidden", message: "Mask Erase is an internal step of the platform's own jobs." } }
 
@@ -79,7 +97,13 @@ export async function maskEraseRoutes(app: FastifyInstance) {
     }
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
-    const { forcePrivate: _private, ...body } = parsed.data
+    // An empty list is no list: the job's input and queue payload stay exactly as before the lists existed.
+    const { forcePrivate: _private, keep, eraseAlways, ...rest } = parsed.data
+    const body = {
+      ...rest,
+      ...(keep && keep.length > 0 ? { keep } : {}),
+      ...(eraseAlways && eraseAlways.length > 0 ? { eraseAlways } : {}),
+    }
     const { data: job, error } = await insertJob(req, {
       force_private: extractForcePrivate(req.body) || undefined,
       user_id: userId,
