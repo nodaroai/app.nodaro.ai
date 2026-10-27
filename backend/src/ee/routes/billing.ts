@@ -31,6 +31,7 @@ import { tierColumns } from "../billing/tier-columns.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { deploymentPayerId } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
+import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -72,18 +73,6 @@ const checkoutSessionSchema = z.object({
   embedded: z.boolean().optional(),
   returnPath: returnPathSchema,
 })
-
-/** The customer Stripe knows this user as; `null` before a first purchase. Throws when the lookup fails (never "nothing on file"). */
-async function stripeCustomerIdOf(userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("stripe_customers")
-    .select("stripe_customer_id")
-    .eq("user_id", userId)
-    .maybeSingle()
-  if (error) throw new Error(`stripe_customers lookup failed: ${error.message}`)
-  const id = data?.stripe_customer_id
-  return typeof id === "string" && id ? id : null
-}
 
 const changePlanSchema = z.object({
   newPriceId: z.string(),
