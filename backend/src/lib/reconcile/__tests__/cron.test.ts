@@ -130,6 +130,8 @@ vi.mock("../hold-expiry.js", () => ({
 // use-case-wrapper-sweep.test.ts); here only its place in the tick matters.
 // R38's cancelled-hold pass has its own suite (cancelled-metered-holds.test.ts).
 vi.mock("../cancelled-metered-holds.js", () => ({ sweepCancelledMeteredHolds: vi.fn(async () => {}) }))
+// Its own sweep is pinned in trend-variant-anchor-sweep.test.ts.
+vi.mock("../trend-variant-anchor-sweep.js", () => ({ sweepIdleTrendVariantAnchors: vi.fn(async () => {}) }))
 vi.mock("../use-case-wrapper-sweep.js", () => ({
   sweepUseCaseWrappers: vi.fn().mockResolvedValue({ scanned: 0, swept: 0, recovered: 0, notStale: 0, errors: 0 }),
 }))

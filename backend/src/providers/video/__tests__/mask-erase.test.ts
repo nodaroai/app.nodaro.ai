@@ -47,6 +47,23 @@ describe("regionErased", () => {
     expect(regionErased(box, 1, rects)).toBe(false)
     expect(regionErased(box, 5, rects)).toBe(false)
   })
+  it("is false when the centre is also inside a keep box holding on that frame (keep wins)", () => {
+    const rects = maskEraseRects([{ fromFrame: 0, toFrame: 9, leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100 }], W, H)
+    const keep = maskEraseRects([{ fromFrame: 3, toFrame: 4, leftPct: 40, topPct: 40, rightPct: 60, bottomPct: 60 }], W, H)
+    expect(regionErased(box, 2, rects, keep)).toBe(true)
+    expect(regionErased(box, 3, rects, keep)).toBe(false)
+    expect(regionErased(box, 4, rects, keep)).toBe(false)
+    expect(regionErased(box, 5, rects, keep)).toBe(true)
+    // A keep box the centre is outside of keeps nothing.
+    const away = maskEraseRects([{ fromFrame: 0, toFrame: 9, leftPct: 0, topPct: 0, rightPct: 30, bottomPct: 30 }], W, H)
+    expect(regionErased(box, 3, rects, away)).toBe(true)
+  })
+  it("is true when the centre is inside an always box, whatever keep says", () => {
+    const keep = maskEraseRects([{ fromFrame: 0, toFrame: 9, leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100 }], W, H)
+    const always = maskEraseRects([{ fromFrame: 3, toFrame: 3, leftPct: 40, topPct: 40, rightPct: 60, bottomPct: 60 }], W, H)
+    expect(regionErased(box, 3, [], keep, always)).toBe(true)
+    expect(regionErased(box, 4, [], keep, always)).toBe(false)
+  })
   it("is false when the centre is outside the box, even if the region overlaps it", () => {
     const rects = maskEraseRects([{ fromFrame: 0, toFrame: 0, leftPct: 0, topPct: 0, rightPct: 49, bottomPct: 100 }], W, H)
     expect(regionErased(box, 0, rects)).toBe(false)
@@ -66,6 +83,39 @@ describe("eraseMaskRegions", () => {
     expect(rle[2]).toBe(both)
     expect(rle[1]).toBe(rleOf([[0, 0, 3]]))
     expect(rle).toHaveLength(3)
+  })
+
+  it("never drops a region centred in a keep box on its frames; the erase applies everywhere else", async () => {
+    const both = rleOf([[0, 0, 3], [6, 6, 3]])
+    const rle = [both, both, both]
+    const everything = [{ fromFrame: 0, toFrame: 2, leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100 }]
+    // Keep the bottom-right region (centre 7.5, 7.5) on frame 1 only.
+    const keep = [{ fromFrame: 1, toFrame: 1, leftPct: 60, topPct: 60, rightPct: 100, bottomPct: 100 }]
+    const r = await eraseMaskRegions(rle, { width: W, height: H }, everything, { keep })
+    expect(r.droppedRegions).toBe(5)
+    expect(r.keptRegions).toBe(1)
+    expect(r.kept).toBe(true)
+    expect(rle).toEqual(["", rleOf([[6, 6, 3]]), ""])
+  })
+
+  it("drops a region centred in an eraseAlways box whatever keep says; keep still saves it from an erase box", async () => {
+    const both = rleOf([[0, 0, 3], [6, 6, 3]])
+    const rle = [both]
+    const everywhere = [{ fromFrame: 0, toFrame: 0, leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100 }]
+    // Top-left region (centre 1.5, 1.5): erased always. Bottom-right (7.5, 7.5): erased by a box, saved by keep.
+    const topLeft = [{ fromFrame: 0, toFrame: 0, leftPct: 0, topPct: 0, rightPct: 30, bottomPct: 30 }]
+    const r = await eraseMaskRegions(rle, { width: W, height: H }, everywhere, { keep: everywhere, eraseAlways: topLeft })
+    expect(rle).toEqual([rleOf([[6, 6, 3]])])
+    expect(r.droppedRegions).toBe(1)
+    expect(r.keptRegions).toBe(1)
+  })
+
+  it("with an empty keep list erases exactly as without one", async () => {
+    const both = rleOf([[0, 0, 3], [6, 6, 3]])
+    const a = [both, both]
+    const b = [both, both]
+    const boxes = [{ fromFrame: 0, toFrame: 1, leftPct: 50, topPct: 50, rightPct: 100, bottomPct: 100 }]
+    expect(await eraseMaskRegions(a, { width: W, height: H }, boxes, { keep: [], eraseAlways: [] })).toEqual(await eraseMaskRegions(b, { width: W, height: H }, boxes))
   })
 
   it("leaves nothing (kept false) when every region is erased everywhere", async () => {

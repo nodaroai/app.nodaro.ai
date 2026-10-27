@@ -77,6 +77,19 @@ describe.skipIf(!ffmpegAvailable)("eraseMaskVideo (real ffmpeg)", () => {
     }
   }, 60_000)
 
+  it("keeps a face centred in a keep box, and drops one centred in an eraseAlways box whatever keep says", async () => {
+    const work = await fs.mkdtemp(join(dir, "work-"))
+    const everywhere = { fromFrame: 0, toFrame: FRAMES - 1, leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100 }
+    const topLeft = { fromFrame: 0, toFrame: FRAMES - 1, leftPct: 0, topPct: 0, rightPct: 40, bottomPct: 40 }
+    const r = await eraseMaskVideo(maskPath, [everywhere], work, { keep: [everywhere], eraseAlways: [topLeft] })
+    expect(r).toMatchObject({ frames: FRAMES, droppedRegions: FRAMES, keptRegions: FRAMES, kept: true })
+    const frames = grayFrames(r.outputPath)
+    for (let f = 0; f < FRAMES; f++) {
+      expect(white(frames[f]!, 10, 10), `face A on frame ${f}`).toBe(false)
+      expect(white(frames[f]!, 50, 36), `face B on frame ${f}`).toBe(true)
+    }
+  }, 60_000)
+
   it("draws an all-black mask (kept false) when every face is erased", async () => {
     const work = await fs.mkdtemp(join(dir, "work-"))
     const r = await eraseMaskVideo(maskPath, [{ fromFrame: 0, toFrame: FRAMES - 1, leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100 }], work)

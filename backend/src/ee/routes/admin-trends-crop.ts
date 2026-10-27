@@ -44,6 +44,7 @@ import type { TrendRow, TrendSourceCrop, TrendVersionData } from "../lib/trends/
 import type { TrendUpscaleDeps } from "./admin-trends-upscale.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { withMarksForSource } from "./admin-trends-face-mask.js"
+import { SUPERSEDED, closeAbandonedVariantJobs } from "./admin-trends-face-mask-variants.js"
 
 const revisionSchema = z.string().min(1).max(100)
 const startBody = z.strictObject({
@@ -123,7 +124,7 @@ async function finishCrop(run: CropRun): Promise<void> {
       if (fresh.data.source?.videoUrl !== crop.fromUrl) {
         return await markFailed(run, "source_changed", "The source clip was replaced meanwhile. Crop the new one.")
       }
-      const { data: next, cleared } = withMarksForSource(withoutSourceCrop(withNewSourceClip(fresh.data, stored)), fresh.data)
+      const { data: next, cleared, abandoned } = withMarksForSource(withoutSourceCrop(withNewSourceClip(fresh.data, stored)), fresh.data)
       const parsed = trendVersionDataSchema.safeParse(next)
       if (!parsed.success) return await markFailed(run, "validation_error", "The draft would not be valid with the cropped clip in it.")
       try {
@@ -132,6 +133,7 @@ async function finishCrop(run: CropRun): Promise<void> {
         if (e instanceof DraftConflictError) continue
         throw e
       }
+      await closeAbandonedVariantJobs(abandoned, SUPERSEDED)
       await audit(req, "crop_trend_source", "trend", trend.id, {
         slug: trend.slug,
         aspect: crop.aspect,

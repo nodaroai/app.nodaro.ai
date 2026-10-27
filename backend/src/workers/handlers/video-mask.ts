@@ -360,14 +360,19 @@ const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, c
 }
 
 const handleMaskErase: HandlerFn = async function handleMaskErase(job, ctx) {
-  const data = job.data as { jobId: string; maskUrl?: string; erase?: MaskEraseBoxInput[] }
+  const data = job.data as { jobId: string; maskUrl?: string; erase?: MaskEraseBoxInput[]; keep?: MaskEraseBoxInput[]; eraseAlways?: MaskEraseBoxInput[] }
   if (!data.maskUrl || !Array.isArray(data.erase) || data.erase.length === 0) {
     throw new DeterministicJobError("Mask Erase needs a mask video and at least one box.")
   }
-  console.log(`[worker] mask-erase ${ctx.jobId}: ${data.erase.length} box(es)`)
+  // Regions centred in a keep box are never dropped by an erase box (none = every erase box applies);
+  // those in an eraseAlways box always are.
+  const keep = Array.isArray(data.keep) ? data.keep : []
+  const eraseAlways = Array.isArray(data.eraseAlways) ? data.eraseAlways : []
+  const lists = keep.length > 0 || eraseAlways.length > 0
+  console.log(`[worker] mask-erase ${ctx.jobId}: ${data.erase.length} box(es)${keep.length > 0 ? `, ${keep.length} kept` : ""}${eraseAlways.length > 0 ? `, ${eraseAlways.length} always` : ""}`)
   const workDir = await createWorkDir("mask-erase")
   try {
-    const result = await eraseMaskVideo(data.maskUrl, data.erase, workDir)
+    const result = await eraseMaskVideo(data.maskUrl, data.erase, workDir, { keep, eraseAlways })
     await setJobProgress(job, ctx.jobId, 80)
     // Uploaded as it is: a watermark would corrupt the mask.
     await completeFfmpegVideoJob(result.outputPath, ctx, {
@@ -378,6 +383,8 @@ const handleMaskErase: HandlerFn = async function handleMaskErase(job, ctx) {
       droppedRegions: result.droppedRegions,
       // Exact (`coverage` is rounded): false only when the erase left nothing.
       kept: result.kept,
+      // Said whenever keep or eraseAlways was sent: a worker that predates them never says it.
+      ...(lists ? { keptRegions: result.keptRegions } : {}),
     })
     console.log(`[worker] mask-erase ${ctx.jobId}: dropped ${result.droppedRegions} region(s) over ${result.frames} frames${result.kept ? "" : " — none left"}`)
   } finally {

@@ -149,6 +149,41 @@ describe("POST /v1/mask-erase — a child step", () => {
     expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], usageLogId: "u-1" })
   })
 
+  it("takes keep boxes, recorded and queued with the erase boxes", async () => {
+    const KEEP = { ...BOX, leftPct: 50, rightPct: 90 }
+    const res = await asChild({ ...BODY, keep: [KEEP] })
+    expect(res.statusCode).toBe(202)
+    expect(inserted).toMatchObject({ input_data: { type: "mask-erase", erase: [BOX], keep: [KEEP] } })
+    expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], keep: [KEEP], usageLogId: "u-1" })
+  })
+
+  it("takes eraseAlways boxes, recorded and queued beside the others", async () => {
+    const ALWAYS = { ...BOX, leftPct: 0, rightPct: 5 }
+    expect((await asChild({ ...BODY, keep: [BOX], eraseAlways: [ALWAYS] })).statusCode).toBe(202)
+    expect(inserted).toMatchObject({ input_data: { erase: [BOX], keep: [BOX], eraseAlways: [ALWAYS] } })
+    expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], keep: [BOX], eraseAlways: [ALWAYS], usageLogId: "u-1" })
+  })
+
+  it("an empty keep list is no keep list: the job's input and queue payload are as without one", async () => {
+    await asChild({ ...BODY, keep: [], eraseAlways: [] })
+    expect(Object.keys(inserted!.input_data as object)).not.toContain("keep")
+    expect(Object.keys(inserted!.input_data as object)).not.toContain("eraseAlways")
+    expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], usageLogId: "u-1" })
+  })
+
+  it("refuses more than 50 boxes erase and keep together, or a bad keep box (400, nothing queued)", async () => {
+    for (const body of [
+      { ...BODY, erase: Array.from({ length: 30 }, () => BOX), keep: Array.from({ length: 21 }, () => BOX) },
+      { ...BODY, keep: [{ ...BOX, topPct: 80 }] },
+      { ...BODY, keep: [{ ...BOX, label: "erased" }] },
+    ]) {
+      const res = await asChild(body)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("refuses no boxes, more than 50, a box out of order or with a stray key (400, nothing queued)", async () => {
     for (const erase of [[], Array.from({ length: 51 }, () => BOX), [{ ...BOX, fromFrame: 5, toFrame: 4 }], [{ ...BOX, leftPct: 60 }], [{ ...BOX, label: "erased" }]]) {
       const res = await asChild({ ...BODY, erase })

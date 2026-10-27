@@ -478,6 +478,10 @@ export default function AdminTrendEditorPage() {
                 marks={server.draft.faceMasking?.marks}
                 onSaveMarks={onSaveMarks}
                 marksSupported={server.faceMaskMarksSupported === true}
+                people={server.draft.slots
+                  .filter((slot) => slot.kind === "person" && !slot.required)
+                  .map((slot) => ({ key: slot.key, label: slot.label.en || slot.key }))}
+                hasExamples={server.draft.examples.length > 0}
               />
             )}
           </Section>

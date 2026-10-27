@@ -16,6 +16,7 @@ import {
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
 } from "@nodaro/shared/models"
+import { CAST_SWAP_FACE_MASK_MARK_LIMITS, faceMaskMarkSlot } from "@nodaro/render-rules"
 import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
 import type {
   Choice,
@@ -164,6 +165,32 @@ const trendExampleSchema = z.strictObject({
 
 const nonNegative = z.number().min(0)
 
+/** Most per-person variants a mask keeps: one per non-empty set of the most marked people (2^3 − 1 = 7). */
+const MAX_VARIANTS = 2 ** CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarkedPeople - 1
+const emptySlotsSchema = z.array(slotKeySchema).min(1).max(SLOT_CAPS.person)
+
+/** A per-person variant of the face mask (`TrendFaceMaskVariant`): written by the face mask routes only. */
+const trendFaceMaskVariantSchema = z.strictObject({
+  emptySlots: emptySlotsSchema,
+  key: z.string().min(1).max(200),
+  url: httpUrl.optional(),
+  frames: z.int().positive(),
+  jobId: z.string().min(1),
+  stats: z.strictObject({ coverage: nonNegative, erasedRegions: nonNegative }),
+  approvedAt: z.string().min(1),
+})
+
+/** A per-person variant in the making (`TrendFaceMaskVariantJob`): written by the face mask routes only. */
+const trendFaceMaskVariantJobSchema = z.strictObject({
+  emptySlots: emptySlotsSchema,
+  key: z.string().min(1).max(200),
+  jobId: z.string().min(1),
+  eraseJobId: z.string().min(1).optional(),
+  makeJobId: z.string().min(1).optional(),
+  startedAt: z.string().min(1),
+  error: z.strictObject({ message: z.string().max(1000), at: z.string().min(1) }).optional(),
+})
+
 /** An approved face mask (`TrendFaceMask`): written by the face mask routes only. */
 const trendFaceMaskSchema = z.strictObject({
   url: httpUrl,
@@ -179,6 +206,8 @@ const trendFaceMaskSchema = z.strictObject({
   baseKey: z.string().min(1).max(200).optional(),
   baseStats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative }).optional(),
   fps: z.number().positive().max(1000).optional(),
+  variants: z.array(trendFaceMaskVariantSchema).max(MAX_VARIANTS).optional(),
+  variantJobs: z.array(trendFaceMaskVariantJobSchema).max(MAX_VARIANTS).optional(),
 })
 
 /** The face mask being made (`TrendFaceMaskJob`): written by the face mask routes only. */
@@ -297,6 +326,21 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
       for (const key of Object.keys(ex.slots)) {
         if (!seen.has(key)) ctx.addIssue({ code: "custom", path: ["examples", i, "slots", key], message: `Example ${i + 1} names an unknown slot "${key}".` })
       }
+    })
+
+    // A slot mark (decided 2026-10-27) names an OPTIONAL PERSON slot of this very version: a slot made
+    // required, deleted, made another kind or renamed is refused while it still has marks (never dropped).
+    ;(d.faceMasking?.marks ?? []).forEach((mark, i) => {
+      const key = faceMaskMarkSlot(mark)
+      if (key === null) return
+      const slot = d.slots.find((s) => s.key === key)
+      if (slot && slot.kind === "person" && !slot.required) return
+      const why = !slot ? "names no slot of this trend" : slot.kind !== "person" ? "names a slot that is not a person" : "names a required person"
+      ctx.addIssue({
+        code: "custom",
+        path: ["faceMasking", "marks", i, "label"],
+        message: `Face mask box ${i + 1} ${why} ("${key}"): face marks belong to optional people only. Remove that person's face marks first.`,
+      })
     })
 
     if (maxImagesOf(d) > MAX_TREND_IMAGES) {

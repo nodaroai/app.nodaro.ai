@@ -38,6 +38,8 @@ import {
   approveAdminTrendFaceMask,
   clearAdminTrendFaceMask,
   fetchAdminTrendFaceMaskJob,
+  startAdminTrendFaceMaskVariants,
+  advanceAdminTrendFaceMaskVariants,
   startAdminTrendUpscale,
   applyAdminTrendUpscale,
   discardAdminTrendUpscale,
@@ -1810,6 +1812,28 @@ export function useApproveTrendFaceMask(id: string) {
     onError: handledByScreen,
     mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => approveAdminTrendFaceMask(id, jobId, revision),
     onSuccess: () => invalidate(id),
+  })
+}
+
+/** Make every person mask not made yet (the admin pays); move them on with `useAdvanceTrendFaceMaskVariants`. */
+export function useStartTrendFaceMaskVariants(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (revision: string) => startAdminTrendFaceMaskVariants(id, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Move the person masks being made on; the trend reloads when one moved. */
+export function useAdvanceTrendFaceMaskVariants(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (revision: string) => advanceAdminTrendFaceMaskVariants(id, revision),
+    onSuccess: (r) => {
+      if (r.changed) invalidate(id)
+    },
   })
 }
 

@@ -31,6 +31,15 @@
  * other settings or a source clip since changed, under another Video Mask
  * recipe, or under another engine recipe than an environment's, is
  * `face_mask_out_of_date` (one reason each).
+ *
+ * Per-person variants (decided 2026-10-27, face-mask-variants.ts): more than
+ * `MAX_MARKED_PEOPLE` optional people with slot marks is
+ * `face_mask_people_over_cap`, always. A trend whose runs can leave a marked
+ * person empty (no examples) needs, once its face mask is approved, every
+ * variant made and up to date: `face_mask_variant_missing` (none yet, in the
+ * making, or failed; `slots` the people it leaves empty; no `slots` when the
+ * approved mask cannot make any) or `face_mask_variant_out_of_date`. Such a
+ * trend, like one with erased marks, needs `storedFaceMaskRequired`.
  */
 import type { EngineEnvironment } from "../engine-environments.js"
 import { faceMaskTargetOf, faceMaskTargetsOf, faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
@@ -45,7 +54,8 @@ import { castSwapImagesSent } from "@nodaro/render-rules"
 import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
 import { promptBudget, promptModesOf, TREND_DETAILS_MAX } from "./prompt-budget.js"
 import { withPromptsFor } from "./prompt-parts.js"
-import { faceMaskHasMarks, faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
+import { faceMaskHasErasedMarks, faceMaskState, type FaceMaskOutOfDate } from "./face-mask.js"
+import { MAX_MARKED_PEOPLE, faceMaskVariantsApply, faceMaskVariantsState, markedPeople } from "./face-mask-variants.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
 export interface PublishBlocker {
@@ -61,6 +71,9 @@ export interface PublishBlocker {
     | "too_many_images"
     | "face_mask_missing"
     | "face_mask_out_of_date"
+    | "face_mask_people_over_cap"
+    | "face_mask_variant_missing"
+    | "face_mask_variant_out_of_date"
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
@@ -70,7 +83,10 @@ export interface PublishBlocker {
   need?: string
   /** 1-based example, for `example_slots_incomplete`. */
   example?: number
-  /** The slot keys an example has no pictures for, for `example_slots_incomplete`. */
+  /**
+   * The slot keys an example has no pictures for, for `example_slots_incomplete`; the
+   * people a person variant leaves empty, for `face_mask_variant_*`.
+   */
   slots?: string[]
   /** What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images` and the face mask codes. */
   message?: string
@@ -101,8 +117,9 @@ function needsOf(data: TrendVersionData): string[] {
     ...kinds,
     ...(data.references.length > 0 ? ["fixedReferences"] : []),
     ...(faceMaskingOn(data.faceMasking) ? ["faceMasking", "storedFaceMask"] : []),
-    // Marks: every run must use the stored mask, and the engine must refuse to mask per run instead.
-    ...(faceMaskHasMarks(data) ? ["storedFaceMaskRequired"] : []),
+    // Erased marks, or person variants: a run must use the stored mask (or variant) it is sent, and
+    // the engine must refuse to mask per run instead.
+    ...(faceMaskHasErasedMarks(data) || faceMaskVariantsApply(data) ? ["storedFaceMaskRequired"] : []),
     // The head (the default) is every masking engine's: only the face alone is a need of its own.
     ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "face" ? [FACE_ONLY_NEED] : []),
     // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
@@ -197,6 +214,7 @@ export function publishBlockers(
     for (const r of mask.reasons) {
       out.push({ code: "face_mask_out_of_date", why: r.why, ...(r.why === "plugin_recipe" ? { env: r.env } : {}), message: OUT_OF_DATE_MESSAGES[r.why] })
     }
+    out.push(...variantBlockers(data, mask.status === "approved"))
   }
 
   const needs = needsOf(data)
@@ -209,4 +227,38 @@ export function publishBlockers(
     for (const need of missingNeeds(row, needs)) out.push({ code: "engine_unsupported", env, need })
   }
   return out
+}
+
+/**
+ * The person variants' blockers: the cap on marked people (always), then,
+ * when runs can leave a marked person empty and the base mask is approved
+ * and up to date (`baseApproved`; otherwise the base's own blocker says it),
+ * every variant missing or out of date.
+ */
+function variantBlockers(data: TrendVersionData, baseApproved: boolean): PublishBlocker[] {
+  const people = markedPeople(data)
+  if (people.length > MAX_MARKED_PEOPLE) {
+    return [{
+      code: "face_mask_people_over_cap",
+      slots: people,
+      message: `${people.length} optional people have face marks; at most ${MAX_MARKED_PEOPLE} may. Remove the face marks of ${people.length - MAX_MARKED_PEOPLE} of them.`,
+    }]
+  }
+  const state = faceMaskVariantsState(data)
+  if (!state.applies || !baseApproved) return []
+  if (state.baseProblem !== null) {
+    return [{
+      code: "face_mask_variant_missing",
+      message: "The approved face mask kept no copy from before its marks, so no person mask can be made from it. Make the face mask again, then the person masks.",
+    }]
+  }
+  return state.variants.flatMap((v): PublishBlocker[] => {
+    const who = v.emptySlots.join(", ")
+    if (v.status === "approved") return []
+    if (v.status === "out_of_date") {
+      return [{ code: "face_mask_variant_out_of_date", slots: v.emptySlots, message: `The face mask for runs without ${who} was made from older marks or another face mask. Make the person masks again.` }]
+    }
+    const what = v.status === "making" ? "is still being made" : v.status === "failed" ? "failed" : "has not been made"
+    return [{ code: "face_mask_variant_missing", slots: v.emptySlots, message: `The face mask for runs without ${who} ${what}. Make the person masks.` }]
+  })
 }

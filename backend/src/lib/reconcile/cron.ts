@@ -14,6 +14,7 @@ import {
   type ProviderKind,
 } from "./types.js"
 import { sweepStaleSyncJob } from "./sync-sweep.js"
+import { sweepIdleTrendVariantAnchors } from "./trend-variant-anchor-sweep.js"
 import { sweepExpiredHolds } from "./hold-expiry.js"
 import { markJobFailed } from "../job-failure.js"
 import { isUserQuietStopped } from "../access-blocks.js"
@@ -249,6 +250,8 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   await sweepStuckComponentWrappers(result)
   await sweepStuckUseCaseWrappers(result)
   await sweepStuckOrchestratorJobs(result)
+  // A trend person mask's own job, idle for a day (it waits for the editor; trend-variant-anchor-sweep.ts).
+  await sweepIdleTrendVariantAnchors(result)
   await sweepHeldJobsPastTtl(result)
   // R38: a cancelled job's reserved metered LLM hold (kept by the cancel when
   // its call had started) is settled from its ledger after the same grace.

@@ -22,7 +22,10 @@
 // "Apply edits" saves them on the draft and makes the mask again; while the
 // approved mask kept its mask from before any mark, the faces are not found
 // again (a cheaper re-make). One approved before marks existed kept none, so
-// the first edit makes the whole mask once, and the panel says so.
+// the first edit makes the whole mask once, and the panel says so. A box may be
+// for one optional person (decided 2026-10-27): those faces are left uncovered
+// only in the person masks (FaceMaskVariants.tsx) — saving them leaves the
+// approved face mask as it is.
 
 import { useEffect, useState } from "react"
 import { Check, Eraser, Loader2, RefreshCw, ScanFace, Trash2 } from "lucide-react"
@@ -43,7 +46,8 @@ import {
   useTrendFaceMaskJob,
 } from "@/ee/hooks/queries/use-admin-queries"
 import { describeFaceMaskOutOfDate } from "../model"
-import { FaceMaskMarksEditor } from "./FaceMaskMarks"
+import { FaceMaskMarksEditor, type MarkPerson } from "./FaceMaskMarks"
+import { FaceMaskVariants } from "./FaceMaskVariants"
 
 interface Props {
   readonly trendId: string
@@ -71,7 +75,22 @@ interface Props {
   readonly onSaveMarks?: (marks: AdminTrendFaceMaskMark[]) => Promise<{ revision: string; faceMaskState?: AdminTrendFaceMaskState } | null>
   /** Whether this environment's engine makes a face mask with marks (false: the editor is shown disabled, with why). */
   readonly marksSupported?: boolean
+  /** The trend's optional people (a box may be for one of them). */
+  readonly people?: readonly MarkPerson[]
+  /** The saved draft has examples (an empty optional slot then takes an example's person). */
+  readonly hasExamples?: boolean
 }
+
+/**
+ * The optional people with no face marks of their own: on a masked trend with
+ * no examples, each stays blurred when a run leaves them empty (only a marked
+ * person keeps their face). Publishing is not held for it.
+ */
+export function unmarkedPeople(people: readonly MarkPerson[], marks: readonly AdminTrendFaceMaskMark[]): MarkPerson[] {
+  return people.filter((p) => !marks.some((m) => m.label !== "erased" && m.label.slot === p.key))
+}
+
+const NO_PEOPLE: readonly MarkPerson[] = []
 
 const CHIP: Readonly<Record<AdminTrendFaceMaskState["status"], { label: string; className: string }>> = {
   none: { label: "No face mask", className: "bg-muted text-muted-foreground" },
@@ -97,6 +116,8 @@ export function FaceMaskPanel({
   marks: savedMarks = NO_MARKS,
   onSaveMarks,
   marksSupported = false,
+  people = NO_PEOPLE,
+  hasExamples = false,
 }: Props) {
   const start = useStartTrendFaceMask(trendId)
   const approve = useApproveTrendFaceMask(trendId)
@@ -155,10 +176,15 @@ export function FaceMaskPanel({
     try {
       const saved = await onSaveMarks(marks)
       if (!saved) return
-      // Every mark removed and the approved mask already the one for that (made without marks): saved, nothing to make.
-      if (marks.length === 0 && saved.faceMaskState?.status === "approved") {
+      // The approved mask already the one for these marks (every mark removed and it was made without any,
+      // or only people's boxes changed — they never shape it): saved, nothing to make.
+      if (saved.faceMaskState?.status === "approved") {
         onRevision(saved.revision)
-        toast.success("Marks removed: the approved face mask already leaves no face unmasked")
+        toast.success(
+          marks.length === 0
+            ? "Marks removed: the approved face mask already leaves no face unmasked"
+            : "Marks saved: the approved face mask already matches them. Make the person masks next.",
+        )
         return
       }
       make(saved.revision)
@@ -180,6 +206,16 @@ export function FaceMaskPanel({
         again, and the trend can't be published without one. Making it is billed to your account.
       </p>
 
+      {ready && !hasExamples && unmarkedPeople(people, savedMarks).length > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="face-mask-unmarked-people">
+          {unmarkedPeople(people, savedMarks)
+            .map((p) => p.label)
+            .join(", ")}{" "}
+          {unmarkedPeople(people, savedMarks).length === 1 ? "has" : "have"} no person marks, so a run that leaves{" "}
+          {unmarkedPeople(people, savedMarks).length === 1 ? "this person" : "one of them"} empty keeps them blurred. Mark their face as theirs
+          (New boxes are for → their name) to keep them as in the clip.
+        </p>
+      )}
       {status === "out_of_date" && state && state.reasons.length > 0 && (
         <ul aria-label="Why the face mask is out of date" className="list-disc space-y-0.5 pl-5 text-xs text-amber-700 dark:text-amber-400">
           {state.reasons.map((r, i) => (
@@ -215,7 +251,7 @@ export function FaceMaskPanel({
       {editable && shown && (
         <div className="flex flex-col gap-2 rounded-md border border-dashed p-2" aria-label="Face mask marks">
           <span className="text-xs font-medium">Faces left unmasked</span>
-          <FaceMaskMarksEditor url={shown.url} label={shown.label} frames={shown.frames} fps={shown.fps} marks={marks} onChange={setMarks} disabled={busy || !marksSupported} />
+          <FaceMaskMarksEditor url={shown.url} label={shown.label} frames={shown.frames} fps={shown.fps} marks={marks} onChange={setMarks} disabled={busy || !marksSupported} people={people} />
           {!marksSupported && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
               This environment's Cast Swap engine cannot leave faces unmasked yet, so marks can't be added or changed here.
@@ -240,6 +276,15 @@ export function FaceMaskPanel({
           </div>
         </div>
       )}
+      <FaceMaskVariants
+        trendId={trendId}
+        state={state?.variants}
+        people={people}
+        dirty={dirty || marksEdited}
+        revision={revision}
+        onRevision={onRevision}
+        onWriteError={onWriteError}
+      />
       {jobId && !current && (
         <p className="text-sm text-amber-700 dark:text-amber-400">
           This mask was made from older settings or another source clip, so it can't be approved. Make it again.

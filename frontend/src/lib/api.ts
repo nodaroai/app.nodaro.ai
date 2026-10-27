@@ -11157,13 +11157,19 @@ export interface AdminTrendFaceMasking {
   /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
-   * is made with them: a trend with marks runs on its approved mask only.
+   * is made with them: a trend with erased marks runs on its approved mask
+   * only. `{ slot }`: the faces are that optional person's, left unmasked only
+   * in the person masks made for runs that leave the person empty.
    */
   marks?: AdminTrendFaceMaskMark[]
 }
 
-/** What a face mask mark says about the faces in its box; `"erased"` (left unmasked) is the only one. */
-export type AdminTrendFaceMaskMarkLabel = "erased"
+/**
+ * What a face mask mark says about the faces in its box: `"erased"` (left
+ * unmasked on every run), or `{ slot }` (an optional person slot's key: left
+ * unmasked only when a run leaves that person empty).
+ */
+export type AdminTrendFaceMaskMarkLabel = "erased" | { slot: string }
 
 /** A box on the face mask over a range of frames: frames 0-based and inclusive, edges in % of the frame from its left / top. */
 export interface AdminTrendFaceMaskMark {
@@ -11193,6 +11199,53 @@ export interface AdminTrendFaceMask {
   baseStats?: Omit<AdminTrendFaceMaskStats, "erasedRegions">
   /** The masked clip's video frame rate, when it was read: marks count frames on it. */
   fps?: number
+  /** The person masks: this mask with some optional people's faces left out (approved as they finish). */
+  variants?: AdminTrendFaceMaskVariant[]
+  /** The person masks in the making. */
+  variantJobs?: AdminTrendFaceMaskVariantJob[]
+}
+
+/** One person mask: the face mask for runs that leave exactly the people `emptySlots` empty. */
+export interface AdminTrendFaceMaskVariant {
+  emptySlots: string[]
+  key: string
+  /** The masked clip; absent: nothing is left to cover (such a run goes unmasked). */
+  url?: string
+  frames: number
+  jobId: string
+  stats: { coverage: number; erasedRegions: number }
+  approvedAt: string
+}
+
+export interface AdminTrendFaceMaskVariantJob {
+  emptySlots: string[]
+  key: string
+  jobId: string
+  eraseJobId: string
+  makeJobId?: string
+  startedAt: string
+  error?: { message: string; at: string }
+}
+
+/** A person mask's state: approved, being made, failed, not made yet, or made from older marks. */
+export type AdminTrendFaceMaskVariantStatus = "approved" | "making" | "failed" | "missing" | "out_of_date"
+
+/** The draft's person masks, as the server judges them. */
+export interface AdminTrendFaceMaskVariantsState {
+  /** Runs can leave a marked person empty (the trend has no examples). */
+  applies: boolean
+  /** The optional people with face marks (slot keys). */
+  people: string[]
+  /** More than 3 people have face marks: the trend cannot be published. */
+  overCap: boolean
+  /** Why no person mask can be made from the approved face mask, or null. */
+  baseProblem: "no_base" | "base_out_of_date" | "no_raw_mask" | null
+  variants: Array<{
+    emptySlots: string[]
+    status: AdminTrendFaceMaskVariantStatus
+    variant?: AdminTrendFaceMaskVariant
+    job?: AdminTrendFaceMaskVariantJob
+  }>
 }
 
 export interface AdminTrendFaceMaskStats {
@@ -11212,6 +11265,8 @@ export type AdminTrendFaceMaskOutOfDate = { why: "settings" } | { why: "core_rec
 export interface AdminTrendFaceMaskState {
   status: "none" | "approved" | "out_of_date"
   reasons: AdminTrendFaceMaskOutOfDate[]
+  /** The person masks, when some optional person has face marks. */
+  variants?: AdminTrendFaceMaskVariantsState
 }
 
 export interface AdminTrendData {
@@ -11765,6 +11820,38 @@ export async function clearAdminTrendFaceMask(id: string, revision: string): Pro
       `${trendPath(id)}/face-mask?revision=${encodeURIComponent(revision)}`,
       "apiErr.saveTrend",
       { method: "DELETE" },
+    )
+  ).data
+}
+
+/**
+ * Make every person mask not made yet (billed to the admin), at `revision`: one per combination of
+ * marked optional people a run can leave empty, each approved as it finishes. Move them on with
+ * `advanceAdminTrendFaceMaskVariants` while any is being made.
+ */
+export async function startAdminTrendFaceMaskVariants(
+  id: string,
+  revision: string,
+): Promise<{ started: number; recorded?: boolean; version?: number; revision?: string; faceMaskState?: AdminTrendFaceMaskState }> {
+  return (
+    await apiRequest<{ data: { started: number; recorded?: boolean; version?: number; revision?: string; faceMaskState?: AdminTrendFaceMaskState } }>(
+      `${trendPath(id)}/face-mask/variants`,
+      "apiErr.saveTrend",
+      { method: "POST", body: { revision } },
+    )
+  ).data
+}
+
+/** Move each person mask being made on (its next step, or store it once done). `changed`: the draft moved. */
+export async function advanceAdminTrendFaceMaskVariants(
+  id: string,
+  revision: string,
+): Promise<{ changed: boolean; revision: string; faceMaskState: AdminTrendFaceMaskState }> {
+  return (
+    await apiRequest<{ data: { changed: boolean; revision: string; faceMaskState: AdminTrendFaceMaskState } }>(
+      `${trendPath(id)}/face-mask/variants/advance`,
+      "apiErr.saveTrend",
+      { method: "POST", body: { revision } },
     )
   ).data
 }

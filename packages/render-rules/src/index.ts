@@ -780,8 +780,8 @@ export {
   type TrendPromptMode,
   type TrendPromptSource,
 } from "./trend-prompts"
-export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS } from "./face-mask-marks"
-export type { CastSwapFaceMaskMarkLabel, FaceMaskMark, MaskEraseBox } from "./face-mask-marks"
+export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, faceMaskMarkSlot, isErasedFaceMaskMark } from "./face-mask-marks"
+export type { CastSwapFaceMaskMarkLabel, FaceMaskMark, FaceMaskMarkLabel, FaceMaskSlotLabel, MaskEraseBox } from "./face-mask-marks"
 export {
   TREND_CROP_DEFAULT_POSITION,
   TREND_CROP_TOLERANCE,
