@@ -68,6 +68,18 @@
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
  * trend sends `engine: "kling-4"` (and its `klingLength` when it sets one), renders 720p unless 1080p is asked, and
  * refuses a draft (`draft_unsupported`) and 480p (`resolution_unsupported`).
+ *
+ * Every run names what it edits (`sourceAsset`, provenance the engine stamps
+ * on the job): the whole source clip (`kind: "full"`, its length and, once
+ * recorded, its SHA-256). A preview run of a version whose preview INPUT CLIP
+ * is current (`currentPreviewClip`, preview-clip.ts) also carries that clip
+ * as a CANDIDATE (`preparedPreview: { clip }`, beside the body, never in it):
+ * the body itself still sends the whole source and `previewStart` as today,
+ * and only `withPreparedPreview` (run-helpers.ts) — on an engine that
+ * declares `castSwap.preparedPreview` — swaps the clip in (with its own cut of
+ * the stored face mask) and names it as the run's `sourceAsset`. No candidate
+ * when the run is sent a per-person variant of the mask (face-mask-variants.ts):
+ * the clip carries a cut of the base mask only.
  */
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -91,6 +103,7 @@ import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type Ch
 import { pickText } from "./localize.js"
 import { faceMaskHasErasedMarks, faceMaskStoredRequired, storedFaceMaskFor } from "./face-mask.js"
 import { faceMaskVariantFor, markedPeople } from "./face-mask-variants.js"
+import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
 import { promptStyleOf } from "./prompt-style.js"
@@ -100,6 +113,7 @@ import type {
   CastSwapEngine,
   CastSwapKlingLength,
   Choice,
+  TrendPreviewClip,
   TrendReference,
   TrendResolution,
   TrendRunRequest,
@@ -195,12 +209,50 @@ export interface TrendRunBody {
   previewStart: number
   resolution: TrendResolution
   draft: boolean
+  /**
+   * `videoUrl` IS the preview's prepared input clip (the 4 s window, cut
+   * ahead of time), so the engine edits it as it is: `preview` true and
+   * `previewStart` 0. Set only by `withPreparedPreview` (run-helpers.ts), for
+   * an engine that declares `castSwap.preparedPreview`; never composed here.
+   */
+  preparedPreview?: boolean
+  /**
+   * What the run edits, for the job's record (the engine stamps it on the job
+   * as it is): the whole source clip (`kind: "full"`, with its length and,
+   * once recorded, its SHA-256) or the preview's prepared input clip
+   * (`kind: "preview"`, its hash, where it was cut from, its length and the
+   * cut's recipe). Dropped for an engine that does not declare
+   * `castSwap.preparedPreview` (`withPreparedPreview`), so such an engine gets
+   * exactly the body it got before.
+   */
+  sourceAsset?: TrendRunSourceAsset
   trendRun: { display: TrendRunDisplay }
+}
+
+/** A run's `sourceAsset`: which input it edits (provenance only, visible on the job). */
+export interface TrendRunSourceAsset {
+  kind: "preview" | "full"
+  /** SHA-256 (hex) of the file; absent on a source clip stored before hashes were recorded. */
+  sha256?: string
+  /** Where the preview clip was cut from in the source (s). */
+  startSec?: number
+  durationSec?: number
+  /** The preview clip's cut recipe (`PREVIEW_CLIP_RECIPE`). */
+  recipe?: string
 }
 
 export interface ComposedTrendRun {
   body: TrendRunBody
   display: TrendRunDisplay
+  /**
+   * A preview run's prepared input clip, when the version has a current one
+   * (`currentPreviewClip`) and the run's stored face mask, if any, is the
+   * base mask the clip was cut with (never a per-person variant). A candidate
+   * only: `withPreparedPreview` (run-helpers.ts) puts it on the wire for an
+   * engine that declares `castSwap.preparedPreview`, and leaves the body as
+   * today for one that does not. Never sent as such.
+   */
+  preparedPreview?: { clip: TrendPreviewClip }
   needs: {
     roleKinds: Set<TrendSlotKind>
     fixedReferences: boolean
@@ -400,6 +452,12 @@ export function composeTrendRun(
       : variant === undefined && stored
         ? faceMaskStoredRequired(data) ? { ...stored, required: true as const } : stored
         : undefined
+  // A preview's prepared input clip (preview-clip.ts), as a candidate for `withPreparedPreview`:
+  // only with a current clip, and never beside a per-person variant (the clip carries a cut of
+  // the BASE mask alone); a run that sends the base mask needs the clip's cut of it.
+  const variantSent = variant !== undefined && variant !== "unmasked"
+  const clip = req.preview === true && !variantSent ? currentPreviewClip(data) : undefined
+  const preparedPreview = clip && (!storedFaceMask || clip.faceMask) ? { clip } : undefined
   const engine = engineOf(data)
   const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
   if (req.draft === true && !castSwapEngineHasDraft(engine)) {
@@ -464,12 +522,19 @@ export function composeTrendRun(
     previewStart: data.previewStart ?? 0,
     resolution,
     draft,
+    // What the run edits: the whole source (a prepared preview swaps the clip in, run-helpers.ts).
+    sourceAsset: {
+      kind: "full",
+      ...(data.source.sha256 ? { sha256: data.source.sha256 } : {}),
+      durationSec: data.source.durationSec,
+    },
     trendRun: { display },
   }
 
   return {
     body,
     display,
+    ...(preparedPreview ? { preparedPreview } : {}),
     needs: {
       roleKinds: new Set(data.slots.map((s) => s.kind)),
       fixedReferences: data.references.length > 0,

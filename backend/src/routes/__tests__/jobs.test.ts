@@ -1091,6 +1091,9 @@ describe("server-only `__` output keys are never returned", () => {
       resolution: "480p",
       draft: true,
       sourceDurationSec: 12,
+      // The engine's provenance stamp: which input the run edited. Visible by design (no `__`).
+      preparedPreview: true,
+      sourceAsset: { kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" },
       __videoUrl: source,
       __roles: [{ kind: "person", name: "HIDDEN-ROLE the woman on the left", images: [] }],
       __references: [{ images: ["https://cdn.example/HIDDEN-REF.png"], line: "HIDDEN-REF-LINE" }],
@@ -1114,6 +1117,8 @@ describe("server-only `__` output keys are never returned", () => {
     expect(res.statusCode).toBe(200)
     const input = res.json().data.input_data
     expect(input).toMatchObject({ type: "cast-swap", trend: trendRun.trend, slots: trendRun.slots, draft: true })
+    // The provenance stamp shows through as-is: it names the input's hash and cut, never its URL.
+    expect(input).toMatchObject({ preparedPreview: true, sourceAsset: trendRun.sourceAsset })
     for (const k of ["__videoUrl", "__roles", "__postPrompt", "__references"]) expect(input).not.toHaveProperty(k)
     for (const hidden of [source, "HIDDEN-ROLE", "HIDDEN-REF", "HIDDEN-PROMPT", "__"]) expect(res.body).not.toContain(hidden)
   })

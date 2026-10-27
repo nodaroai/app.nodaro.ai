@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
+import { storedFaceMaskFor } from "../face-mask.js"
 import type { FaceMaskMark } from "@nodaro/render-rules"
 import { composeTrendRun, TrendRunError } from "../compose.js"
 import { faceMaskSettingsKey } from "../face-mask.js"
@@ -26,9 +27,22 @@ import {
 import { publishBlockers } from "../publish-check.js"
 import { trendVersionDataSchema } from "../schemas.js"
 import type { EngineEnvironment } from "../../engine-environments.js"
-import type { TrendFaceMask, TrendFaceMaskVariant, TrendSlot, TrendVersionData } from "../types.js"
+import type { TrendFaceMask, TrendFaceMaskVariant, TrendSlot, TrendVersionData, TrendPreviewClip } from "../types.js"
 
 const SRC = "https://cdn.example.com/trends/t-1/source.mp4"
+/**
+ * A preview input clip current for the fixture's source at start 0, carrying
+ * the matching cut of the data's current stored face mask when it has one:
+ * publishing needs one (preview-clip.test.ts holds its rules).
+ */
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+  const mask = storedFaceMaskFor(d)
+  return {
+    videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
+    sourceVideoUrl: SRC, startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    ...(mask ? { faceMask: { url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: mask.url } } : {}),
+  }
+}
 const MASKING = { mode: "always" as const, threshold: 0.4 }
 const box = (leftPct: number, from = 0, to = 359) => ({ fromFrame: from, toFrame: to, leftPct, topPct: 10, rightPct: leftPct + 20, bottomPct: 60 })
 const slotMark = (slot: string, leftPct: number): FaceMaskMark => ({ label: { slot }, ...box(leftPct) })
@@ -52,7 +66,8 @@ function data(marks: FaceMaskMark[], over: Partial<TrendVersionData> = {}): Tren
     faceMasking: { ...MASKING, ...(marks.length > 0 ? { marks } : {}) },
     ...over,
   }
-  return { ...d, faceMask: over.faceMask ?? baseMask(d) }
+  const withMask = { ...d, faceMask: over.faceMask ?? baseMask(d) }
+  return { ...withMask, previewClip: previewClipFor(withMask) }
 }
 
 function baseMask(d: TrendVersionData, over: Partial<TrendFaceMask> = {}): TrendFaceMask {
@@ -274,6 +289,8 @@ describe("the run's pick (composeTrendRun)", () => {
       previewStart: 0,
       resolution: "480p",
       draft: true,
+      // Which input the run edits (compose.ts); dropped for an engine that does not take a prepared preview (run-helpers.ts).
+      sourceAsset: { kind: "full", durationSec: 12 },
       trendRun: {
         display: {
           trend: { id: "t-1", slug: "dance", version: 1, name: "Dance" },
@@ -359,7 +376,9 @@ describe("publishing (publishBlockers)", () => {
     const d = data(marks)
     const noRaw = { ...d, faceMask: { ...d.faceMask!, rawMaskUrl: undefined } }
     expect(codes(noRaw)).toEqual(["face_mask_variant_missing"])
-    const stale = { ...d, faceMask: { ...d.faceMask!, settingsKey: "v2:old" } }
+    // A stale mask is sent with no run, so the preview clip (cut with it) goes stale too: re-cut for the check.
+    const staleMask = { ...d, faceMask: { ...d.faceMask!, settingsKey: "v2:old" } }
+    const stale = { ...staleMask, previewClip: previewClipFor(staleMask) }
     expect(codes(stale)).toEqual(["face_mask_out_of_date"])
   })
 

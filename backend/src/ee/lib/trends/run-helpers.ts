@@ -440,11 +440,69 @@ export function withoutUnsupportedPromptStyle(composed: ComposedTrendRun): void 
   if (body.faceMasking?.scene && !engineTakesScene(cs, body.faceMasking.scene)) delete body.faceMasking.scene
 }
 
-/** Every field the loaded engine does not take, dropped (the stored mask, the prompt parts, the prompt style and scene): the estimate, the run and the admin test run alike. */
+/**
+ * A preview run's prepared input clip on the wire. On an engine that declares
+ * `castSwap.preparedPreview`, a composed run that carries the candidate
+ * (`composed.preparedPreview`, compose.ts: a preview of a version whose
+ * stored clip is current) is sent THAT clip as its `videoUrl`, from
+ * `previewStart` 0, with `preparedPreview: true`, the clip's own cut of the
+ * stored face mask in place of the whole-source one (the `required` flag
+ * kept), and `sourceAsset` naming the clip (`kind: "preview"`, its hash, where
+ * it was cut from, its length, the cut's recipe); the engine edits the clip
+ * as it is and records which input it edited. Any other run on such an
+ * engine keeps today's body and its `sourceAsset: { kind: "full", … }`.
+ *
+ * An engine that does not declare it gets exactly the body it got before
+ * either field existed: `preparedPreview` and `sourceAsset` are both dropped
+ * (it would drop them itself, unread; stripping them here keeps the wire
+ * byte-identical), and the whole source is sent with `previewStart` as today.
+ *
+ * Called by the estimate, the run and the admin test run alike, with
+ * `withoutUnsupportedFields` (the stored mask's own check runs first: a run
+ * whose mask the engine does not take sends no mask cut either). Mutates
+ * `composed.body`.
+ */
+export function withPreparedPreview(composed: ComposedTrendRun): void {
+  const { body } = composed
+  if (getPluginSupports().castSwap?.preparedPreview !== true) {
+    delete body.preparedPreview
+    delete body.sourceAsset
+    return
+  }
+  const clip = composed.preparedPreview?.clip
+  if (!clip || body.preview !== true) return
+  // The clip's cut of the base mask; a run sent no mask (the engine takes none, or the trend has none) gets none.
+  if (body.storedFaceMask && !clip.faceMask) return
+  body.videoUrl = clip.videoUrl
+  body.previewStart = 0
+  body.preparedPreview = true
+  if (body.storedFaceMask && clip.faceMask) {
+    body.storedFaceMask = {
+      url: clip.faceMask.url,
+      frames: clip.faceMask.frames,
+      ...(body.storedFaceMask.required ? { required: true as const } : {}),
+    }
+  }
+  body.sourceAsset = {
+    kind: "preview",
+    sha256: clip.sha256,
+    startSec: clip.startSec,
+    durationSec: clip.durationSec,
+    recipe: clip.recipe,
+  }
+}
+
+/**
+ * Every field the loaded engine does not take, dropped (the stored mask, the
+ * prompt parts, the prompt style and scene, the run's `sourceAsset`), and the
+ * preview's prepared input clip put on the wire where the engine takes it
+ * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
+ */
 export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedStoredMask(composed)
   withoutUnsupportedPromptParts(composed)
   withoutUnsupportedPromptStyle(composed)
+  withPreparedPreview(composed)
 }
 
 /**

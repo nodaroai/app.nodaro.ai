@@ -42,7 +42,9 @@
  * every known environment's engine recipe). It copies the masked clip into the
  * trend's storage, writes `data.faceMask` and clears `faceMaskJob` (guarded on
  * the draft's revision). Clearing removes the pointer only: the stored file
- * stays, since a published version may still point at it.
+ * stays, since a published version may still point at it. Both cut the
+ * preview's input clip again (`ensurePreviewClip`): approving adds the
+ * mask's matching cut to it, clearing takes it away.
  *
  * Each action writes an `admin_actions` row.
  */
@@ -56,7 +58,8 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, type EngineEnvironment } from "../lib/engine-environments.js"
 import { DraftConflictError, getDraftState, saveDraft } from "../lib/trends/store.js"
 import { trendVersionDataSchema } from "../lib/trends/schemas.js"
-import { TrendMediaError, copyToTrendStorage } from "../lib/trends/media.js"
+import { TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
+import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 import {
   FACE_MASK_JOB_TYPE,
   faceMaskBaseKey,
@@ -380,7 +383,11 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const faceMask: TrendFaceMask = { ...made, ...keptVariantsFor({ ...draft, faceMask: made }, draft) }
       // The pending job is done once approved; another (newer) pending job stays.
       const { faceMaskJob: _done, ...rest } = draft
-      const next: TrendVersionData = { ...(pending && pending.jobId !== faceMask.jobId ? draft : rest), faceMask }
+      const withMask: TrendVersionData = { ...(pending && pending.jobId !== faceMask.jobId ? draft : rest), faceMask }
+      const valid = trendVersionDataSchema.safeParse(withMask)
+      if (!valid.success) return deps.badRequest(reply, valid.error)
+      // The preview's input clip, cut again with this mask's matching cut beside it.
+      const next = await ensurePreviewClip(trend.id, valid.data)
       const saved = await deps.saveValidDraft(reply, trend.id, next, revision)
       if (!saved) return reply
       await audit(req, "approve_trend_face_mask", "trend", trend.id, { slug: trend.slug, jobId: faceMask.jobId, url: faceMask.url })
@@ -390,7 +397,11 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       return { data: { ...saved, faceMask, faceMaskState: withVariantsState(next, faceMaskState(next, environments, TREND_PUBLISH_ENVIRONMENTS)) } }
     } catch (e) {
       if (e instanceof DraftConflictError) return deps.draftConflict(reply)
-      if (e instanceof TrendMediaError) return err(reply, 400, e.code, e.message)
+      if (e instanceof TrendMediaError) {
+        if (e.cause !== undefined) req.log.warn({ err: e.cause, trendId: (req.params as { id: string }).id }, "admin-trends: the media could not be read or re-encoded")
+        return err(reply, 400, e.code, e.message)
+      }
+      if (isTransientMediaFailure(e)) return err(reply, 503, "media_busy", "The video could not be processed right now. Try again in a moment.")
       return unavailableOrInternal(reply, req, e, "Failed to approve the face mask")
     }
   })
@@ -406,13 +417,20 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       if (!draft.faceMask) return { data: { version: trend.draftVersion, revision, faceMaskState: faceMaskState(draft, null, []) } }
       // The pointer only: the file stays, a published version may still point at it.
       const { faceMask: removed, ...rest } = draft
-      const saved = await deps.saveValidDraft(reply, trend.id, rest, revision)
+      // The preview's input clip, cut again without the mask's cut beside it.
+      const next = await ensurePreviewClip(trend.id, rest)
+      const saved = await deps.saveValidDraft(reply, trend.id, next, revision)
       if (!saved) return reply
       await audit(req, "clear_trend_face_mask", "trend", trend.id, { slug: trend.slug, jobId: removed.jobId, url: removed.url })
       await closeAbandonedVariantJobs(removed.variantJobs ?? [], "The face mask was removed, so this person mask was not finished.")
-      return { data: { ...saved, faceMaskState: withVariantsState(rest, faceMaskState(rest, null, [])) } }
+      return { data: { ...saved, faceMaskState: withVariantsState(next, faceMaskState(next, null, [])) } }
     } catch (e) {
       if (e instanceof DraftConflictError) return deps.draftConflict(reply)
+      if (e instanceof TrendMediaError) {
+        if (e.cause !== undefined) req.log.warn({ err: e.cause, trendId: (req.params as { id: string }).id }, "admin-trends: the media could not be read or re-encoded")
+        return err(reply, 400, e.code, e.message)
+      }
+      if (isTransientMediaFailure(e)) return err(reply, 503, "media_busy", "The video could not be processed right now. Try again in a moment.")
       return unavailableOrInternal(reply, req, e, "Failed to clear the face mask")
     }
   })

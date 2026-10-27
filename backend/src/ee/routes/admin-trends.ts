@@ -49,8 +49,15 @@
  *
  * Every draft write goes through the store's `saveDraft`, so editing a
  * published trend writes a new version and users keep the published one until
- * the next publish. Examples are only ever written by the example routes,
- * which copy a run's media into trend storage: only runs by ADMIN
+ * the next publish. A write that can move the 4 s preview's window (the draft
+ * save: its source or `previewStart`; an upscale or crop put in; a face mask
+ * approved or cleared) first makes the preview's INPUT CLIP as the draft
+ * needs it (`ensurePreviewClip`, preview-clip-media.ts: cut once from the
+ * source, with the stored face mask's matching cut), and publish makes it
+ * too before its checks, so a stale clip never blocks on its own — only one
+ * that could not be made (`preview_clip_missing` / `preview_clip_out_of_date`,
+ * the failure in the message). Examples are only ever written by the example
+ * routes, which copy a run's media into trend storage: only runs by ADMIN
  * accounts (the role `requireAdmin` checks) may become examples.
  */
 import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
@@ -116,6 +123,7 @@ import { registerTrendPromptPartRoutes } from "./admin-trends-prompt-parts.js"
 import { withServerOwnedFields } from "../lib/trends/server-owned.js"
 import { pendingSourceCrop } from "../lib/trends/crop.js"
 import { pendingUpscaleJobs } from "../lib/trends/upscale.js"
+import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 
 // ── shapes ──────────────────────────────────────────────────────────────────
 
@@ -350,15 +358,29 @@ function exampleFor(draft: TrendVersionData, run: RunJobRow, media: CopiedRunMed
  * The draft's source as saved: the body's, with the stored display copy kept
  * when the body names the SAME clip and sends no `display` (an admin tab
  * opened before the backfill set it, or a builder that predates the field,
- * would otherwise drop it and block publishing). A different clip never keeps
- * the old clip's copy. A slot's `hintImageUrl` is NOT carried this way: the
+ * would otherwise drop it and block publishing), and its stored `sha256`
+ * whatever the body says. A different clip never keeps the old clip's copy or
+ * hash. A slot's `hintImageUrl` is NOT carried this way: the
  * builder removes a hint picture by leaving the key out.
  */
 function keepDisplayCopy(body: Record<string, unknown>, stored: TrendVersionData): Record<string, unknown> {
   const source = body.source
-  const kept = stored.source?.display
-  if (!kept || !isRec(source) || Object.hasOwn(source, "display") || source.videoUrl !== stored.source?.videoUrl) return body
-  return { ...body, source: { ...source, display: kept } }
+  const kept = stored.source
+  if (!kept || !isRec(source) || source.videoUrl !== kept.videoUrl) return body
+  const display = kept.display
+  // The stored clip's hash is the server's (recorded when the clip was stored): a body naming the same clip
+  // never sets it — a tab from before it was recorded would drop it, and a run's provenance must not be a
+  // client's word. A different clip takes the body's, which came from the media route.
+  const { sha256: _client, ...rest } = source
+  const hash = kept.sha256
+  return {
+    ...body,
+    source: {
+      ...rest,
+      ...(hash ? { sha256: hash } : {}),
+      ...(display && !Object.hasOwn(source, "display") ? { display } : {}),
+    },
+  }
 }
 
 async function saveValidDraft(
@@ -537,15 +559,37 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // own routes: the body's are ignored, and the row's own (at the revision the client read) are kept.
       const merged = withServerOwnedFields(keepDisplayCopy(body.data.data, loaded.draft), loaded.draft)
       // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
-      const { data, cleared, abandoned } = withMarksForSource(merged, loaded.draft)
+      const { data: marked, cleared, abandoned } = withMarksForSource(merged, loaded.draft)
+      // Validated BEFORE the preview clip is cut: a draft that cannot save pays for no ffmpeg run.
+      const valid = trendVersionDataSchema.safeParse(marked)
+      if (!valid.success) return badRequest(reply, valid.error)
+      // The preview's input clip, cut (again) when the source, the window or the face mask moved. A cut that
+      // fails never loses the save: the draft is saved as it is (its clip missing or stale, which blocks
+      // publish — the blocker carries the reason — but not the admin's other edits), and the answer says why.
+      let data = valid.data
+      let previewClipError: string | undefined
+      try {
+        data = await ensurePreviewClip(loaded.trend.id, valid.data)
+      } catch (e) {
+        if (!(e instanceof TrendMediaError) && !isTransientMediaFailure(e)) throw e
+        req.log.warn({ err: e instanceof TrendMediaError ? (e.cause ?? e) : e, trendId: loaded.trend.id }, "admin-trends: the preview input clip could not be made at save")
+        previewClipError = e instanceof TrendMediaError ? e.message : "The clip could not be processed right now. Try again in a moment."
+      }
       const saved = await saveValidDraft(reply, loaded.trend.id, data, body.data.revision)
       if (!saved) return reply
       await closeAbandonedVariantJobs(abandoned, SUPERSEDED)
       // The face mask's state after the save: the editor starts no make when the saved settings already match it.
-      return { data: { ...saved, faceMaskState: await draftFaceMaskState(req, data), ...(cleared ? { marksCleared: true } : {}) } }
+      return {
+        data: {
+          ...saved,
+          faceMaskState: await draftFaceMaskState(req, data),
+          ...(cleared ? { marksCleared: true } : {}),
+          ...(previewClipError ? { previewClipError } : {}),
+        },
+      }
     } catch (e) {
       if (e instanceof DraftConflictError) return draftConflict(reply)
-      return unavailableOrInternal(reply, req, e, "Failed to save the draft")
+      return mediaFailure(reply, req, e, (req.params as { id: string }).id) ?? unavailableOrInternal(reply, req, e, "Failed to save the draft")
     }
   })
 
@@ -566,6 +610,8 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
           ...(stored.height !== undefined ? { height: stored.height } : {}),
           // The source's display copy: the admin saves it on the draft's `source.display`.
           ...(stored.display ? { display: stored.display } : {}),
+          // The source's hash (`source.sha256`, a full run's provenance): saved on the draft the same way.
+          ...(source && stored.sha256 ? { sha256: stored.sha256 } : {}),
         },
       }
     } catch (e) {
@@ -774,20 +820,46 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
     try {
       const loaded = await loadDraft(req, reply)
       if (!loaded) return reply
-      const { trend, draft, revision } = loaded
+      const { trend } = loaded
       if (trend.status === "archived") return err(reply, 409, "archived", "Restore the trend before publishing it.")
-      if (body.data?.revision !== undefined && body.data.revision !== revision) return draftConflict(reply)
+      if (body.data?.revision !== undefined && body.data.revision !== loaded.revision) return draftConflict(reply)
+      // The preview's input clip, made (again) first so a stale or missing one never blocks on its own:
+      // saved as its own write (guarded on the revision read; on a published draft that is a new
+      // version), and the checks run on what was saved. A make that fails (a clip ffmpeg cannot cut, a
+      // stopped launch) leaves the draft as it was: the blocker below stays the gate, carrying why.
+      let { draft, revision } = loaded
+      let version = trend.draftVersion
+      let makeFailed: string | undefined
+      try {
+        // An invalid draft is refused by the checks below (`invalid_data`) before any ffmpeg run.
+        const prepared = trendVersionDataSchema.safeParse(draft).success ? await ensurePreviewClip(trend.id, draft) : draft
+        if (prepared !== draft) {
+          const saved = await saveValidDraft(reply, trend.id, prepared, revision)
+          if (!saved) return reply
+          draft = prepared
+          revision = saved.revision
+          version = saved.version
+        }
+      } catch (e) {
+        if (!(e instanceof TrendMediaError) && !isTransientMediaFailure(e)) throw e
+        req.log.warn({ err: e instanceof TrendMediaError ? (e.cause ?? e) : e, trendId: trend.id }, "admin-trends: the preview input clip could not be made at publish")
+        makeFailed = e instanceof TrendMediaError ? e.message : "The clip could not be processed right now. Try again in a moment."
+      }
       // An outage reading the environments is a 500, never "unknown engine".
       const environments = await listEngineEnvironments()
       // The engine prompt changes, checked by this environment's engine against the draft as it is now.
       const parts = await trendPromptPartProblems(app, req, draft)
       if (parts && "failure" in parts) return replyPromptPartsFailure(reply, parts.failure)
-      const reasons = publishBlockers(draft, environments, TREND_PUBLISH_ENVIRONMENTS, parts?.problems)
+      const reasons = publishBlockers(draft, environments, TREND_PUBLISH_ENVIRONMENTS, parts?.problems).map((r) =>
+        makeFailed && (r.code === "preview_clip_missing" || r.code === "preview_clip_out_of_date")
+          ? { ...r, message: `${r.message ?? ""} Making it failed: ${makeFailed}`.trim() }
+          : r,
+      )
       if (reasons.length > 0) {
         return err(reply, 409, "publish_blocked", "This trend cannot be published yet.", { reasons })
       }
-      // Publishes exactly the draft revision checked above, or nothing.
-      await publish(trend.id, { version: trend.draftVersion, revision })
+      // Publishes exactly the draft revision checked above (the one just saved, when the clip was made), or nothing.
+      await publish(trend.id, { version, revision })
       return { data: (await getTrendById(trend.id)) ?? trend }
     } catch (e) {
       if (e instanceof DraftConflictError) return draftConflict(reply)

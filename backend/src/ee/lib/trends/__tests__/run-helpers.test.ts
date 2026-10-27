@@ -7,9 +7,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const from = vi.fn()
 vi.mock("../../../../lib/supabase.js", () => ({ supabase: { from: (...a: unknown[]) => from(...a) } }))
 
-import { engineSupports, followPreviewMasking, fullQualityEligible, runEngineOf, toTrendRun, withoutUnsupportedStoredMask, type RunJobRow } from "../run-helpers.js"
+import {
+  engineSupports,
+  followPreviewMasking,
+  fullQualityEligible,
+  runEngineOf,
+  toTrendRun,
+  withPreparedPreview,
+  withoutUnsupportedFields,
+  withoutUnsupportedStoredMask,
+  type RunJobRow,
+} from "../run-helpers.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
+import { PREVIEW_CLIP_RECIPE } from "../preview-clip.js"
 import type { ComposedTrendRun } from "../compose.js"
+import type { TrendPreviewClip } from "../types.js"
 import type { RunCredits } from "../../../../lib/job-credit-status.js"
 
 const PREVIEW_JOB = "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10"
@@ -110,6 +122,120 @@ describe("the stored face mask on the wire", () => {
     const c = withStored({ mode: "auto", target: "face" })
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(c.body.faceMasking).toMatchObject({ mode: "always", target: "face" })
+  })
+})
+
+describe("withPreparedPreview — the preview's prepared input clip on the wire", () => {
+  beforeEach(() => _resetPluginSupportsForTests())
+  const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true, faceMasking: true, storedFaceMask: true, storedFaceMaskRequired: true }
+  const SOURCE = "https://cdn.example/clip.mp4"
+  const MASK = { url: "https://cdn.example/trends/t/mask.mp4", frames: 360 }
+  const CLIP: TrendPreviewClip = {
+    videoUrl: "https://cdn.example/trends/t/preview.mp4",
+    durationSec: 5,
+    width: 720,
+    height: 1280,
+    frames: 150,
+    sha256: "b".repeat(64),
+    sourceVideoUrl: SOURCE,
+    startSec: 2,
+    recipe: PREVIEW_CLIP_RECIPE,
+    madeAt: "2026-10-27T10:00:00.000Z",
+  }
+  const CLIP_MASK = { url: "https://cdn.example/trends/t/preview-mask.mp4", frames: 150, sha256: "c".repeat(64), sourceMaskUrl: MASK.url }
+  const FULL_ASSET = { kind: "full" as const, sha256: "a".repeat(64), durationSec: 12 }
+
+  /** A composed run as compose.ts hands it over: today's body, `sourceAsset` full, and the candidate when given. */
+  function run(opts: { preview: boolean; clip?: TrendPreviewClip; mask?: { url: string; frames: number; required?: true } }): ComposedTrendRun {
+    const c = composed(opts.preview)
+    c.body.previewStart = 2
+    c.body.sourceAsset = { ...FULL_ASSET }
+    if (opts.mask) c.body.storedFaceMask = { ...opts.mask }
+    if (opts.clip) c.preparedPreview = { clip: opts.clip }
+    return c
+  }
+  const wire = (c: ComposedTrendRun) => JSON.parse(JSON.stringify(c.body)) as Record<string, unknown>
+
+  it("an engine that does not declare it gets exactly today's body: no preparedPreview, no sourceAsset, the whole source from previewStart", () => {
+    setPluginSupports({ castSwap: BASE })
+    const c = run({ preview: true, clip: CLIP, mask: MASK })
+    const before = wire(c)
+    withPreparedPreview(c)
+    const { sourceAsset: _s, ...todays } = before
+    expect(wire(c)).toEqual(todays)
+    expect(c.body.videoUrl).toBe(SOURCE)
+    expect(c.body.previewStart).toBe(2)
+    expect(c.body.storedFaceMask).toEqual(MASK)
+    expect(c.body).not.toHaveProperty("preparedPreview")
+    expect(c.body).not.toHaveProperty("sourceAsset")
+    // A full run on such an engine likewise loses its sourceAsset and nothing else.
+    const full = run({ preview: false })
+    withPreparedPreview(full)
+    expect(full.body).not.toHaveProperty("sourceAsset")
+    expect(full.body.videoUrl).toBe(SOURCE)
+  })
+
+  it("an engine that declares it is sent the clip from 0, preparedPreview true, and sourceAsset naming the clip", () => {
+    setPluginSupports({ castSwap: { ...BASE, preparedPreview: true } })
+    const c = run({ preview: true, clip: CLIP })
+    withPreparedPreview(c)
+    expect(c.body.videoUrl).toBe(CLIP.videoUrl)
+    expect(c.body.previewStart).toBe(0)
+    expect(c.body.preview).toBe(true)
+    expect(c.body.preparedPreview).toBe(true)
+    expect(c.body.sourceAsset).toEqual({ kind: "preview", sha256: CLIP.sha256, startSec: 2, durationSec: 5, recipe: PREVIEW_CLIP_RECIPE })
+    expect(c.body).not.toHaveProperty("storedFaceMask")
+  })
+
+  it("on such an engine a run without a candidate (a full run, no current clip) keeps today's body and its sourceAsset full", () => {
+    setPluginSupports({ castSwap: { ...BASE, preparedPreview: true } })
+    for (const c of [run({ preview: false }), run({ preview: true }), run({ preview: false, clip: CLIP })]) {
+      withPreparedPreview(c)
+      expect(c.body.videoUrl).toBe(SOURCE)
+      expect(c.body.previewStart).toBe(2)
+      expect(c.body).not.toHaveProperty("preparedPreview")
+      expect(c.body.sourceAsset).toEqual(FULL_ASSET)
+    }
+  })
+
+  it("swaps the stored face mask for the clip's own cut, keeping `required`", () => {
+    setPluginSupports({ castSwap: { ...BASE, preparedPreview: true } })
+    const plain = run({ preview: true, clip: { ...CLIP, faceMask: CLIP_MASK }, mask: MASK })
+    withPreparedPreview(plain)
+    expect(plain.body.storedFaceMask).toEqual({ url: CLIP_MASK.url, frames: 150 })
+    expect(plain.body.preparedPreview).toBe(true)
+    const required = run({ preview: true, clip: { ...CLIP, faceMask: CLIP_MASK }, mask: { ...MASK, required: true } })
+    withPreparedPreview(required)
+    expect(required.body.storedFaceMask).toEqual({ url: CLIP_MASK.url, frames: 150, required: true })
+  })
+
+  it("a run sent the whole-source mask on a clip with no mask cut keeps today's body (never a clip beside the wrong mask)", () => {
+    setPluginSupports({ castSwap: { ...BASE, preparedPreview: true } })
+    const c = run({ preview: true, clip: CLIP, mask: MASK })
+    withPreparedPreview(c)
+    expect(c.body.videoUrl).toBe(SOURCE)
+    expect(c.body.previewStart).toBe(2)
+    expect(c.body.storedFaceMask).toEqual(MASK)
+    expect(c.body).not.toHaveProperty("preparedPreview")
+    expect(c.body.sourceAsset).toEqual(FULL_ASSET)
+  })
+
+  it("a run whose mask the engine does not take sends the clip without a mask cut (withoutUnsupportedFields order)", () => {
+    // Takes prepared previews but no stored mask: the mask goes first, then the clip rides with none.
+    setPluginSupports({ castSwap: { ...BASE, storedFaceMask: false, storedFaceMaskRequired: false, preparedPreview: true } })
+    const c = run({ preview: true, clip: { ...CLIP, faceMask: CLIP_MASK }, mask: MASK })
+    withoutUnsupportedFields(c)
+    expect(c.body).not.toHaveProperty("storedFaceMask")
+    expect(c.body.videoUrl).toBe(CLIP.videoUrl)
+    expect(c.body.preparedPreview).toBe(true)
+  })
+
+  it("the candidate itself is never on the wire", () => {
+    setPluginSupports({ castSwap: { ...BASE, preparedPreview: true } })
+    const c = run({ preview: true, clip: CLIP })
+    withPreparedPreview(c)
+    expect(JSON.stringify(c.body)).not.toContain("madeAt")
+    expect(JSON.stringify(c.body)).not.toContain("sourceVideoUrl")
   })
 })
 

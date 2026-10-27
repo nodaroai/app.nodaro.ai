@@ -3611,6 +3611,20 @@ export interface PluginSupports {
    *   that always sends the original as the second video), so a full-depth
    *   trend whose scene is another one is held back from publishing and is
    *   sent without the key.
+   * - `preparedPreview`: a trend run takes `preparedPreview: true` — its
+   *   `videoUrl` IS the preview's input clip, cut ahead of time by the host
+   *   (the 4 s window plus up to 1 s of real footage), so the engine edits it
+   *   as it is: `preview` must be true and `previewStart` 0 (else
+   *   `400 prepared_preview_mismatch`), a clip slightly short of 4 s is
+   *   admitted, and a `storedFaceMask` sent with it is already the preview's
+   *   cut (its frames equal the clip's). The run also takes `sourceAsset`
+   *   (`{ kind: "preview" | "full", sha256?, startSec?, durationSec?,
+   *   recipe? }`, provenance only), stamped VISIBLY on the job as
+   *   `input_data.sourceAsset` (copied to `output_data.sourceAsset` at
+   *   completion) beside `input_data.preparedPreview`. Additive-optional:
+   *   absent ⇒ `false` — the host strips both fields and sends the whole
+   *   source clip with `previewStart` as before, so the wire is byte-identical
+   *   (`withPreparedPreview`, ee/lib/trends/run-helpers.ts).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3637,6 +3651,7 @@ export interface PluginSupports {
     readonly generateVideoChildren?: boolean
     readonly promptStyles?: readonly ("precise" | "flexible")[]
     readonly fullDepthScenes?: readonly ("description" | "original" | "none")[]
+    readonly preparedPreview?: boolean
   }
 }
 

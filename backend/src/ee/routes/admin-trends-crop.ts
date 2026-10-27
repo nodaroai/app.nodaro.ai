@@ -22,9 +22,10 @@
  * stores the crop exactly as a new source clip is (`storeCroppedSource`: the
  * source's length range, a new display copy) and puts it in the draft as it
  * is THEN (another write that landed meanwhile is kept), the preview start
- * kept inside it — only while the source is still the clip it was made from.
- * That makes a stored face mask out of date, by design: its settings key
- * names the source clip. It also clears the face mask's marks, as any new
+ * kept inside it and the preview's input clip cut again from the crop
+ * (`ensurePreviewClip`) — only while the source is still the clip it was
+ * made from. That makes a stored face mask out of date, by design: its
+ * settings key names the source clip. It also clears the face mask's marks, as any new
  * source clip does (`withMarksForSource`): they are boxes in % of the old
  * frame, and the crop moves it. Edits go to the draft only; a published version is
  * never touched, and republishing shows them.
@@ -39,8 +40,9 @@ import { trendVersionDataSchema } from "../lib/trends/schemas.js"
 import { TrendMediaError, isTransientMediaFailure, storeCroppedSource } from "../lib/trends/media.js"
 import { DEFAULT_CROP_POSITION, cropAspectFor, isCropping, pendingSourceCrop, shownSourceSize, withoutSourceCrop } from "../lib/trends/crop.js"
 import { withNewSourceClip } from "../lib/trends/upscale.js"
+import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 import { unavailableOrInternal } from "../lib/trends/run-helpers.js"
-import type { TrendRow, TrendSourceCrop, TrendVersionData } from "../lib/trends/types.js"
+import type { TrendPreviewClip, TrendRow, TrendSourceCrop, TrendVersionData } from "../lib/trends/types.js"
 import type { TrendUpscaleDeps } from "./admin-trends-upscale.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { withMarksForSource } from "./admin-trends-face-mask.js"
@@ -113,6 +115,8 @@ async function finishCrop(run: CropRun): Promise<void> {
   const { req, trend, crop } = run
   try {
     const stored = await storeCroppedSource(trend.id, { sourceUrl: crop.fromUrl, aspect: crop.aspect, position: crop.position })
+    // The preview clip cut once (the first attempt's), re-used by a retry after a lost race while it still fits.
+    let clip: TrendPreviewClip | undefined
     for (let attempt = 0; attempt < APPLY_ATTEMPTS; attempt++) {
       const fresh = await getDraftState(trend.id)
       if (!fresh) return
@@ -124,11 +128,14 @@ async function finishCrop(run: CropRun): Promise<void> {
       if (fresh.data.source?.videoUrl !== crop.fromUrl) {
         return await markFailed(run, "source_changed", "The source clip was replaced meanwhile. Crop the new one.")
       }
-      const { data: next, cleared, abandoned } = withMarksForSource(withoutSourceCrop(withNewSourceClip(fresh.data, stored)), fresh.data)
-      const parsed = trendVersionDataSchema.safeParse(next)
+      const { data: marked, cleared, abandoned } = withMarksForSource(withoutSourceCrop(withNewSourceClip(fresh.data, stored)), fresh.data)
+      const parsed = trendVersionDataSchema.safeParse(marked)
       if (!parsed.success) return await markFailed(run, "validation_error", "The draft would not be valid with the cropped clip in it.")
+      // A new source clip puts the preview's input clip out of date: cut again from the crop.
+      const next = await ensurePreviewClip(trend.id, parsed.data, clip ? { reuse: clip } : {})
+      clip = next.previewClip
       try {
-        await saveDraft(trend.id, parsed.data, { expectedRevision: fresh.revision })
+        await saveDraft(trend.id, next, { expectedRevision: fresh.revision })
       } catch (e) {
         if (e instanceof DraftConflictError) continue
         throw e

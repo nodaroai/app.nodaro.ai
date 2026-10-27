@@ -54,6 +54,7 @@ import {
   fromForm,
   imagesSentAtMost,
   maxImagesFor,
+  previewClipStatus,
   toForm,
   withPreviewPrompts,
   type TrendForm,
@@ -198,6 +199,7 @@ export default function AdminTrendEditorPage() {
           setBlockers(null)
           setMarksCleared(cleared)
           if (cleared) toast.warning(MARKS_CLEARED)
+          if (w.previewClipError) toast.warning(`Saved, but the preview's input clip could not be cut: ${w.previewClipError}`)
           toast.success("Draft saved")
         },
         onError: onWriteError,
@@ -358,6 +360,8 @@ export default function AdminTrendEditorPage() {
               trendId={id}
               source={form.source}
               previewStart={form.previewStart}
+              // The server's latest reading, not the form's copy: a save makes the clip and refetches the trend.
+              previewClip={server.draft.previewClip}
               onChange={(next) => set(next)}
             />
             {savedSource && (
@@ -592,6 +596,7 @@ export default function AdminTrendEditorPage() {
               trendId={id}
               slots={server.draft.slots}
               hasPreview={server.draft.previewStart !== null}
+              previewInput={previewClipStatus(server.draft)}
               engine={server.draft.engine ?? "seedance-2-5"}
               dirty={dirty}
               promotingId={promote.isPending ? (promote.variables ?? null) : null}

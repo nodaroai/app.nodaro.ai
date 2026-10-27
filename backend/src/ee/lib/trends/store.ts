@@ -8,22 +8,26 @@
  *   - a version row that was ever published (`published_at` set) is never
  *     written again: saving a trend whose draft IS its published version
  *     writes version + 1 and moves the draft pointer (copy-on-write), and every
- *     data write is guarded on `published_at IS NULL`. The ONE exception is
+ *     data write is guarded on `published_at IS NULL`. The TWO exceptions are
  *     {@link attachDisplayCopy} (trends "show the original", S7): it adds
  *     `data.source.display` — derived display media a run never reads — to a
- *     version that lacks it, published or not, and leaves every other byte of
- *     `data`, the `revision` and `published_at` as they were ("byte" as JSONB
- *     keeps it: key order, whitespace and number spelling are Postgres's);
+ *     version that lacks it, published or not, and {@link attachPreviewClip}:
+ *     it adds `data.previewClip` — a deterministic cut of the version's own
+ *     source at its own `previewStart`, which a preview run then edits in
+ *     place of cutting the same window itself — to a version that lacks one;
+ *     each leaves every other byte of `data`, the `revision` and
+ *     `published_at` as they were ("byte" as JSONB keeps it: key order,
+ *     whitespace and number spelling are Postgres's);
  *   - unpublishing keeps `published_version`, so the next save still copies;
- *   - every write of a version's data gives it a new `revision` (except
- *     `attachDisplayCopy`, above), so a write or publish conditioned on the
+ *   - every write of a version's data gives it a new `revision` (except the
+ *     two attaches above), so a write or publish conditioned on the
  *     revision the caller read fails when it moved;
  *   - every write to `trends` sets `updated_at`.
  */
 import { randomUUID } from "node:crypto"
 import { supabase } from "../../../lib/supabase.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import type { TrendBadge, TrendRow, TrendSourceDisplay, TrendStatus, TrendVersionData } from "./types.js"
+import type { TrendBadge, TrendPreviewClip, TrendRow, TrendSourceDisplay, TrendStatus, TrendVersionData } from "./types.js"
 
 const TREND_COLS = "id, slug, status, tags, badges, sort_order, draft_version, published_version, created_at, updated_at"
 
@@ -546,6 +550,134 @@ export async function listVersionsLackingDisplay(): Promise<VersionLackingDispla
     version: r.version,
     published: r.published_at !== null,
     sourceVideoUrl: r.source!.videoUrl,
+  }))
+}
+
+// ── Preview input clips (backfill) ────────────────────────────────────────
+
+export type PreviewClipAttachConflict = "source_changed" | "start_changed" | "not_offered" | "version_missing" | "concurrent_write"
+
+const CLIP_CONFLICT_TEXT: Record<PreviewClipAttachConflict, string> = {
+  source_changed: "its source clip changed since the preview clip was cut",
+  start_changed: "its preview start moved since the preview clip was cut",
+  not_offered: "it offers no preview (or has no source clip) since the preview clip was cut",
+  version_missing: "the version is gone (its trend was deleted?)",
+  concurrent_write: "it kept changing while the preview clip was attached",
+}
+
+/** The row moved under a preview clip (its source or start changed, the preview turned off, the row gone, or it kept being written). Nothing was written. */
+export class PreviewClipAttachConflictError extends Error {
+  constructor(readonly trendId: string, readonly version: number, readonly reason: PreviewClipAttachConflict) {
+    super(`Trend ${trendId} version ${version}: ${CLIP_CONFLICT_TEXT[reason]}.`)
+    this.name = "PreviewClipAttachConflictError"
+  }
+}
+
+/**
+ * Attach `clip` as `data.previewClip` of one version row — published or draft
+ * — where it has none: the second documented exception to "a published
+ * version is never written" (header), because a preview run of that version
+ * then edits the stored cut of the SAME window it would otherwise cut itself.
+ * `"already"` when the row has one (nothing is written, the existing clip
+ * wins: a run of a published version must keep editing the same bytes).
+ *
+ * As `attachDisplayCopy`: the row is read and its whole `data` written back,
+ * `{ ...data, previewClip: clip }` and nothing else, as a compare-and-set on
+ * the `revision` read and on `data->>previewClip` still absent, setting
+ * neither `revision` nor `published_at`. The clip must have been cut from the
+ * row's source at the row's `previewStart` (`clip.sourceVideoUrl`,
+ * `clip.startSec`): a row whose source or start moved since is refused, and
+ * so is one that offers no preview any more.
+ */
+export async function attachPreviewClip(trendId: string, version: number, clip: TrendPreviewClip): Promise<"set" | "already"> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const { data: row, error } = await supabase
+      .from("trend_versions")
+      .select("data, revision")
+      .eq("trend_id", trendId)
+      .eq("version", version)
+      .maybeSingle()
+    if (error) fail(`read trend ${trendId} version ${version}`, error)
+    if (!row) throw new PreviewClipAttachConflictError(trendId, version, "version_missing")
+    const { data, revision } = row as { data: TrendVersionData; revision: string }
+    if (data.previewClip) return "already"
+    if (!data.source || data.previewStart === null) throw new PreviewClipAttachConflictError(trendId, version, "not_offered")
+    if (data.source.videoUrl !== clip.sourceVideoUrl) throw new PreviewClipAttachConflictError(trendId, version, "source_changed")
+    if (data.previewStart !== clip.startSec) throw new PreviewClipAttachConflictError(trendId, version, "start_changed")
+    if (clip.videoUrl === data.source.videoUrl) {
+      throw new Error(`Trend ${trendId} version ${version}: the preview clip must be its own file, never the source clip.`)
+    }
+    if (![clip.videoUrl, ...(clip.faceMask ? [clip.faceMask.url] : [])].every((u) => /^https?:\/\//i.test(u))) {
+      throw new Error(`Trend ${trendId} version ${version}: the preview clip's addresses must be http(s) (is R2_PUBLIC_URL set?).`)
+    }
+
+    const next: TrendVersionData = { ...data, previewClip: clip }
+    const { data: written, error: writeError } = await supabase
+      .from("trend_versions")
+      .update({ data: next })
+      .eq("trend_id", trendId)
+      .eq("version", version)
+      .eq("revision", revision)
+      .is("data->>previewClip", null)
+      .select("version")
+    if (writeError) fail(`attach a preview clip to trend ${trendId} version ${version}`, writeError)
+    if ((written ?? []).length > 0) return "set"
+  }
+  throw new PreviewClipAttachConflictError(trendId, version, "concurrent_write")
+}
+
+/** A version that offers a preview and has no `previewClip` (`slug` null: no trend row found; `published`: `published_at` set). */
+export interface VersionLackingPreviewClip {
+  trendId: string
+  slug: string | null
+  version: number
+  published: boolean
+  /** What to cut: the version's own source, start and current stored face mask (`storedFaceMaskFor`, resolved by the caller). */
+  data: TrendVersionData
+}
+
+/**
+ * Every version row with a source clip, a preview offered (`previewStart` not
+ * null) and no preview clip, published or draft (a draft without one cannot
+ * publish either), in (trend, version) order, all pages read before it
+ * returns. The database filters by JSON path (`->>`, so a JSON `null` counts
+ * as none); the rows are checked again here. Only the versions a run can
+ * reach matter in practice (the published ones); drafts are listed so the
+ * next publish does not have to cut.
+ */
+export async function listVersionsLackingPreviewClip(): Promise<VersionLackingPreviewClip[]> {
+  const rows: Array<{ trend_id: string; version: number; published_at: string | null; data: TrendVersionData }> = []
+  for (let from = 0; ; from += LACKING_PAGE) {
+    const { data, error } = await supabase
+      .from("trend_versions")
+      .select("trend_id, version, published_at, data")
+      .not("data->>source", "is", null)
+      .not("data->>previewStart", "is", null)
+      .is("data->>previewClip", null)
+      .order("trend_id", { ascending: true })
+      .order("version", { ascending: true })
+      .range(from, from + LACKING_PAGE - 1)
+    if (error) fail("list trend versions lacking a preview clip", error)
+    const page = (data ?? []) as typeof rows
+    rows.push(...page)
+    if (page.length < LACKING_PAGE) break
+  }
+  const lacking = rows.filter((r) => r.data?.source && typeof r.data.source.videoUrl === "string" && typeof r.data.previewStart === "number" && !r.data.previewClip)
+  if (lacking.length === 0) return []
+
+  const slugs = new Map<string, string>()
+  const ids = [...new Set(lacking.map((r) => r.trend_id))]
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase.from("trends").select("id, slug").in("id", ids.slice(i, i + 100))
+    if (error) fail("read trend slugs", error)
+    for (const t of (data ?? []) as Array<{ id: string; slug: string }>) slugs.set(t.id, t.slug)
+  }
+  return lacking.map((r) => ({
+    trendId: r.trend_id,
+    slug: slugs.get(r.trend_id) ?? null,
+    version: r.version,
+    published: r.published_at !== null,
+    data: r.data,
   }))
 }
 

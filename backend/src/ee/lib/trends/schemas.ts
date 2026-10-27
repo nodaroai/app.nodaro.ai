@@ -27,6 +27,7 @@ import type {
   TrendPromptPartOverrides,
   TrendSlotKind,
   TrendVersionData,
+  TrendPreviewClip,
 } from "./types.js"
 
 export const MAX_TREND_IMAGES = 30
@@ -268,6 +269,24 @@ export const trendPromptPartsSchema = z.strictObject(
   Object.fromEntries(CAST_SWAP_PROMPT_PART_IDS.map((id) => [id, overrideSchema.optional()])),
 ) as unknown as z.ZodType<TrendPromptPartOverrides>
 
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/)
+
+/** Server-written (preview-clip.ts); a client body never carries it (`SERVER_OWNED_DRAFT_FIELDS`). */
+export const trendPreviewClipSchema: z.ZodType<TrendPreviewClip> = z.strictObject({
+  videoUrl: httpUrl,
+  // The cut can run a frame short of the 4 s window; the tail is bounded by `PREVIEW_CLIP_TAIL_SECONDS`.
+  durationSec: z.number().positive(),
+  width: z.int().positive(),
+  height: z.int().positive(),
+  frames: z.int().positive(),
+  sha256: sha256Hex,
+  sourceVideoUrl: httpUrl,
+  startSec: z.number().min(0),
+  recipe: z.string().min(1).max(16),
+  faceMask: z.strictObject({ url: httpUrl, frames: z.int().positive(), sha256: sha256Hex, sourceMaskUrl: httpUrl }).optional(),
+  madeAt: z.string().min(1),
+})
+
 export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
   .strictObject({
     name: localizedText(200),
@@ -288,6 +307,8 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
             durationSec: z.number().positive(),
           })
           .optional(),
+        // Recorded as the clip is stored (media.ts); absent on a clip stored before.
+        sha256: sha256Hex.optional(),
       })
       .nullable(),
     previewStart: z.number().min(0).nullable(),
@@ -316,6 +337,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
       .optional(),
     // Absent = "cut-end". Read only on a Kling 4 trend.
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
+    previewClip: trendPreviewClipSchema.optional(),
     examples: z.array(trendExampleSchema),
   })
   .superRefine((d, ctx) => {
@@ -336,6 +358,10 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
 
     if (d.source && d.previewStart !== null && d.previewStart + PREVIEW_SECONDS > d.source.durationSec) {
       ctx.addIssue({ code: "custom", path: ["previewStart"], message: `The ${PREVIEW_SECONDS} s preview must fit inside the source clip.` })
+    }
+
+    if (d.previewClip && d.source && d.previewClip.videoUrl === d.source.videoUrl) {
+      ctx.addIssue({ code: "custom", path: ["previewClip", "videoUrl"], message: "The preview clip must be its own file, never the uploaded clip." })
     }
 
     d.examples.forEach((ex, i) => {

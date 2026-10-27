@@ -54,6 +54,10 @@ type MemTrend = TrendRow & { versions: Record<number, MemVersion> }
 const mem = vi.hoisted(() => ({
   revs: 0,
   trends: [] as MemTrend[],
+  /** Every preview input clip cut (`makePreviewClip`): what it was cut from, at which start, for how long, with which mask. */
+  clips: [] as Array<{ trendId: string; sourceUrl: string; startSec: number; durationSec: number; faceMask?: { url: string } }>,
+  /** When set, the next cut fails with it. */
+  clipFails: null as null | Error,
   admins: new Set<string>(),
   /** This many draft saves lose to a concurrent write, as if someone always saved first. */
   conflictSaves: 0,
@@ -114,6 +118,39 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
   }
 })
 
+vi.mock("../../lib/trends/preview-clip-media.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/trends/preview-clip-media.js")>()
+  const { PREVIEW_CLIP_RECIPE, previewClipDurationSec, previewClipState, withoutPreviewClip } = await import("../../lib/trends/preview-clip.js")
+  const { storedFaceMaskFor } = await import("../../lib/trends/face-mask.js")
+  // The cut itself is stubbed (preview-clip-media.test.ts pins it); the preparation runs as it is.
+  const makePreviewClip = async (trendId: string, args: { sourceUrl: string; startSec: number; durationSec: number; faceMask?: { url: string } }) => {
+    mem.clips.push({ trendId, ...args })
+    const fail = mem.clipFails
+    mem.clipFails = null
+    if (fail) throw fail
+    const n = mem.clips.length
+    return {
+      videoUrl: `https://cdn.test/trends/${trendId}/preview-${n}.mp4`, durationSec: args.durationSec, width: 1080, height: 1920, frames: Math.round(args.durationSec * 30),
+      sha256: String(n).padStart(64, "0"), sourceVideoUrl: args.sourceUrl, startSec: args.startSec, recipe: PREVIEW_CLIP_RECIPE,
+      ...(args.faceMask ? { faceMask: { url: `https://cdn.test/trends/${trendId}/preview-mask-${n}.mp4`, frames: Math.round(args.durationSec * 30), sha256: String(n).padStart(64, "1"), sourceMaskUrl: args.faceMask.url } } : {}),
+      madeAt: "2026-10-27T12:00:00.000Z",
+    }
+  }
+  const ensurePreviewClip: typeof actual.ensurePreviewClip = async (trendId, data, opts = {}) => {
+    const state = previewClipState(data)
+    if (state.kind === "not_offered") return withoutPreviewClip(data)
+    if (state.kind === "current") return data
+    if (opts.reuse && previewClipState({ ...data, previewClip: opts.reuse }).kind === "current") return { ...data, previewClip: opts.reuse }
+    const mask = storedFaceMaskFor(data)
+    const previewClip = await makePreviewClip(trendId, {
+      sourceUrl: data.source!.videoUrl, startSec: data.previewStart!, durationSec: previewClipDurationSec(data.source!.durationSec, data.previewStart!),
+      ...(mask ? { faceMask: { url: mask.url } } : {}),
+    })
+    return { ...data, previewClip }
+  }
+  return { ...actual, makePreviewClip, ensurePreviewClip }
+})
+
 vi.mock("../../../lib/admin-check.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../lib/admin-check.js")>()
   return { ...actual, checkIsAdmin: async (userId: string) => mem.admins.has(userId) }
@@ -136,6 +173,7 @@ vi.mock("../../lib/trends/media.js", async (importOriginal) => {
             width: 1080,
             height: 1920,
             durationSec: 11.96,
+            sha256: "d".repeat(64),
             display: { videoUrl: `https://cdn.test/trends/${trendId}/up-display-${n}.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/up-display-${n}.png`, width: 1080, height: 1920, durationSec: 11.96 },
           }
         : { url: `https://cdn.test/trends/${trendId}/up-ex-${n}.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/up-ex-${n}.png`, width: 1080, height: 1920, durationSec: 10 }
@@ -262,6 +300,8 @@ beforeEach(async () => {
   db.respond = respond
   mem.revs = 0
   mem.trends = []
+  mem.clips = []
+  mem.clipFails = null
   mem.admins = new Set([ADMIN, ADMIN2])
   mem.conflictSaves = 0
   mem.saveFails = null
@@ -522,6 +562,56 @@ describe("using an upscale", () => {
     ])
   })
 
+  it("an example's upscale cuts no preview clip (the source did not change), and keeps a current one", async () => {
+    const CLIP = {
+      videoUrl: `https://cdn.test/trends/${T1}/preview.mp4`, durationSec: 4, width: 720, height: 1280, frames: 120, sha256: "b".repeat(64),
+      sourceVideoUrl: SRC, startSec: 8, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    }
+    seed({}, draftData({ upscaleJobs: [pending()], previewClip: CLIP }))
+    world.jobs.set(UP_JOB, upJob(ex(2).videoUrl))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(mem.clips).toEqual([])
+    expect(draftNow().previewClip).toEqual(CLIP)
+    expect(draftNow().examples[1]!.width).toBe(1080)
+  })
+
+  it("a source upscale whose stale preview clip survives in the draft (a save that forgot) is still replaced: a new clip never keeps the old one's cut", async () => {
+    const stale = {
+      videoUrl: `https://cdn.test/trends/${T1}/preview-old.mp4`, durationSec: 4, width: 720, height: 1280, frames: 120, sha256: "b".repeat(64),
+      sourceVideoUrl: SRC, startSec: 8, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    }
+    seed({}, draftData({ upscaleJobs: [pending({ target: "source", fromUrl: SRC })], previewClip: stale }))
+    world.jobs.set(UP_JOB, upJob(SRC))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(mem.clips).toHaveLength(1)
+    expect(draftNow().previewClip!.videoUrl).not.toBe(stale.videoUrl)
+    expect(draftNow().previewClip!.sourceVideoUrl).toBe(`https://cdn.test/trends/${T1}/up-src-1.mp4`)
+  })
+
+  it("a cut that fails after the resize is written on the record as its error (the draft untouched), and a retry after a lost race re-uses the clip cut once", async () => {
+    seed({}, draftData({ upscaleJobs: [pending({ target: "source", fromUrl: SRC })] }))
+    world.jobs.set(UP_JOB, upJob(SRC))
+    mem.clipFails = new TrendMediaError("media_unreadable", "Could not cut the preview's input clip from the source clip.")
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(draftNow().source!.videoUrl).toBe(SRC)
+    expect(draftNow().upscaleJobs![0]!.error).toMatchObject({ code: "media_unreadable" })
+    expect(draftNow().upscaleJobs![0]).not.toHaveProperty("applying")
+
+    // Tried again, with another write landing while the resize ran (the first put-in loses): one cut, re-used.
+    mem.trends = []
+    mem.clips = []
+    mem.stored = []
+    seed({}, draftData({ upscaleJobs: [pending({ target: "source", fromUrl: SRC })] }))
+    // Once the record is marked and the resize runs: the first put-in's save loses (a write landed under it).
+    mem.onStore = () => {
+      mem.conflictSaves = 1
+    }
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(draftNow().source!.videoUrl).toBe(`https://cdn.test/trends/${T1}/up-src-1.mp4`)
+    expect(mem.clips).toHaveLength(1)
+    expect(draftNow().previewClip).toMatchObject({ videoUrl: `https://cdn.test/trends/${T1}/preview-1.mp4`, sourceVideoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4` })
+  })
+
   it("follows its example through a reorder made after it started", async () => {
     seed({}, draftData({ examples: [ex(2), ex(1)], upscaleJobs: [pending()] }))
     world.jobs.set(UP_JOB, upJob(ex(2).videoUrl))
@@ -550,12 +640,18 @@ describe("using an upscale", () => {
       width: 1080,
       height: 1920,
       display: { videoUrl: `https://cdn.test/trends/${T1}/up-display-1.mp4`, posterUrl: `https://cdn.test/trends/${T1}/up-display-1.png`, width: 1080, height: 1920, durationSec: 11.96 },
+      // The stored clip's hash, recorded for a full run's provenance.
+      sha256: "d".repeat(64),
     })
     // 8 + 4 s no longer fits 11.96 s: the preview moved to the latest start that does.
     expect(d.previewStart).toBeCloseTo(7.96)
     expect(d.examples).toEqual(draftData().examples)
     // The mask stays stored, out of date by design (it names the old clip).
     expect(d.faceMask).toEqual(faceMask)
+    // The preview input clip is cut again from the NEW clip at the kept start — without the (now stale) mask's cut.
+    expect(mem.clips).toEqual([{ trendId: T1, sourceUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, startSec: d.previewStart, durationSec: 4 }])
+    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, startSec: d.previewStart, recipe: "1" })
+    expect(d.previewClip).not.toHaveProperty("faceMask")
     const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
     expect(detail.faceMaskState).toEqual({ status: "out_of_date", reasons: [{ why: "settings" }] })
   })

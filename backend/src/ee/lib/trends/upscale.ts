@@ -17,6 +17,7 @@
  */
 import { TREND_UPSCALE_SHORT_SIDE, trendUpscaleOfferFor } from "@nodaro/render-rules"
 import { MAX_UPSCALE_JOBS, PREVIEW_SECONDS } from "./schemas.js"
+import { withoutPreviewClip } from "./preview-clip.js"
 import type { TrendUpscaleJob, TrendVersionData } from "./types.js"
 
 /** The short side of every upscaled (or enhanced) video. */
@@ -159,13 +160,16 @@ export function clampPreviewStart(start: number | null, durationSec: number): nu
 
 /**
  * `data` with `stored` as its source clip, as a new source clip is set (an
- * upscale or a crop put in): the stored clip, its size and length, and its
- * own display copy, with the preview start kept inside it. A stored face mask
- * goes out of date by design: its settings key names the source clip.
+ * upscale or a crop put in): the stored clip, its size, length and hash, and
+ * its own display copy, with the preview start kept inside it. A stored face
+ * mask goes out of date by design: its settings key names the source clip.
+ * The stored preview clip is DROPPED (`withoutPreviewClip`): it was cut from
+ * the old clip, and the caller makes it again (`ensurePreviewClip`) — dropped
+ * here so a stale one never survives a caller that forgets.
  */
-export function withNewSourceClip<T extends Pick<TrendVersionData, "source" | "previewStart">>(
+export function withNewSourceClip<T extends Pick<TrendVersionData, "source" | "previewStart" | "previewClip">>(
   data: T,
-  stored: { url: string; durationSec: number; width: number; height: number; display?: NonNullable<TrendVersionData["source"]>["display"] },
+  stored: { url: string; durationSec: number; width: number; height: number; display?: NonNullable<TrendVersionData["source"]>["display"]; sha256?: string },
 ): T {
   const source: NonNullable<TrendVersionData["source"]> = {
     videoUrl: stored.url,
@@ -173,6 +177,7 @@ export function withNewSourceClip<T extends Pick<TrendVersionData, "source" | "p
     width: stored.width,
     height: stored.height,
     ...(stored.display ? { display: stored.display } : {}),
+    ...(stored.sha256 ? { sha256: stored.sha256 } : {}),
   }
-  return { ...data, source, previewStart: clampPreviewStart(data.previewStart, source.durationSec) }
+  return withoutPreviewClip({ ...data, source, previewStart: clampPreviewStart(data.previewStart, source.durationSec) })
 }

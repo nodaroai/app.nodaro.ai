@@ -8,7 +8,12 @@
  * location's 3, plus the fixed references).
  *
  * The draft needs a source clip with its display copy (`source.display`, made
- * at upload: the trend's page shows it as the original), at least one
+ * at upload: the trend's page shows it as the original), its preview input
+ * clip when it offers a preview (`previewClip`, cut from THIS source at THIS
+ * `previewStart` with the current recipe and the current stored face mask,
+ * `previewClipState`: none is `preview_clip_missing`, a stale one
+ * `preview_clip_out_of_date` with `why`; the publish route makes it first,
+ * so these block only when making it failed), at least one
  * required slot, pictures for every slot in every example (a trend may have
  * no example at all: it shows only its original), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
@@ -84,6 +89,7 @@ import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
 import { FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC, fullDepthClipTooLong, promptStyleBlockers } from "./prompt-style.js"
 import { faceMaskState, faceMaskStoredRequired, type FaceMaskOutOfDate } from "./face-mask.js"
+import { previewClipState, type PreviewClipState } from "./preview-clip.js"
 import { MAX_MARKED_PEOPLE, faceMaskVariantsApply, faceMaskVariantsState, markedPeople } from "./face-mask-variants.js"
 import type { TrendPromptPartProblem } from "./prompt-parts-check.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
@@ -92,6 +98,8 @@ export interface PublishBlocker {
   code:
     | "source_missing"
     | "source_display_missing"
+    | "preview_clip_missing"
+    | "preview_clip_out_of_date"
     | "no_required_slot"
     | "example_slots_incomplete"
     | "invalid_data"
@@ -126,8 +134,11 @@ export interface PublishBlocker {
   slots?: string[]
   /** What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images` and the face mask codes. */
   message?: string
-  /** Why the face mask is out of date: "settings", "core_recipe" or "plugin_recipe" (with `env`). */
-  why?: FaceMaskOutOfDate["why"]
+  /**
+   * Why the face mask is out of date: "settings", "core_recipe" or "plugin_recipe" (with `env`);
+   * why the preview clip is: "source", "start", "recipe" or "face_mask".
+   */
+  why?: FaceMaskOutOfDate["why"] | PreviewClipOutOfDate
   /** What the engine finds wrong with the trend's engine prompt changes, for `prompt_parts_invalid`. */
   problems?: TrendPromptPartProblem[]
 }
@@ -136,6 +147,16 @@ const OUT_OF_DATE_MESSAGES: Readonly<Record<FaceMaskOutOfDate["why"], string>> =
   settings: "The source clip or the face masking settings changed since the face mask was made. Make it again.",
   core_recipe: "Video Mask changed since the face mask was made. Make it again.",
   plugin_recipe: "This environment's Cast Swap engine masks faces differently since the face mask was made. Make it again.",
+}
+
+/** Why a stored preview input clip is out of date (`preview_clip_out_of_date`). */
+export type PreviewClipOutOfDate = Extract<PreviewClipState, { kind: "out_of_date" }>["why"]
+
+const PREVIEW_CLIP_OUT_OF_DATE_MESSAGES: Readonly<Record<PreviewClipOutOfDate, string>> = {
+  source: "The source clip changed since the preview's input clip was cut. Save the draft, or publish again, to cut it again.",
+  start: "The preview start moved since the preview's input clip was cut. Save the draft, or publish again, to cut it again.",
+  recipe: "The preview's input clip is cut differently since it was made. Save the draft, or publish again, to cut it again.",
+  face_mask: "The face mask changed since the preview's input clip was cut. Save the draft, or publish again, to cut it again.",
 }
 
 const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
@@ -215,6 +236,13 @@ export function publishBlockers(
   const out: PublishBlocker[] = []
   if (!data.source) out.push({ code: "source_missing" })
   else if (!data.source.display) out.push({ code: "source_display_missing" })
+  // The preview's input clip, cut ahead of time: a trend that offers a preview publishes with a current one only.
+  const clip = previewClipState(data)
+  if (clip.kind === "missing") {
+    out.push({ code: "preview_clip_missing", message: "The 4 s preview's input clip is not prepared yet. Save the draft, or publish again, to cut it." })
+  } else if (clip.kind === "out_of_date") {
+    out.push({ code: "preview_clip_out_of_date", why: clip.why, message: PREVIEW_CLIP_OUT_OF_DATE_MESSAGES[clip.why] })
+  }
   if (!data.slots.some((s) => s.required)) out.push({ code: "no_required_slot" })
   data.examples.forEach((ex, i) => {
     const missing = data.slots
