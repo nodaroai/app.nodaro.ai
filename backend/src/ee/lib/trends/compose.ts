@@ -63,6 +63,13 @@
  * (`withoutUnsupportedPromptStyle`, run-helpers.ts), so such an engine gets
  * exactly the body it got before.
  *
+ * A full-depth run whose scene is a description, on a trend whose stored clip
+ * carries the make's description (scene-description.ts), sends it as
+ * `sceneDescription` with the source window it covers
+ * (`sceneDescriptionWindow`): a preview run the preview's text, a full run the
+ * whole clip's. Without one the keys are left out (the engine describes the
+ * clip per run, as before).
+ *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
@@ -107,6 +114,7 @@ import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
 import { promptStyleOf } from "./prompt-style.js"
+import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
 import type {
@@ -205,6 +213,17 @@ export interface TrendRunBody {
    * declare it (`withoutUnsupportedPromptStyle`, run-helpers.ts).
    */
   promptStyle?: CastSwapPromptStyle
+  /**
+   * Full depth with its scene from a description: the trend's stored
+   * description (scene-description.ts) — a preview run's of the 4 s window,
+   * a full run's of the whole clip — which the engine rewrites for the new
+   * cast and window. Only with `sceneDescriptionWindow`; dropped, both, for
+   * an engine that does not declare `castSwap.storedSceneDescription`
+   * (`withoutUnsupportedSceneDescription`, run-helpers.ts).
+   */
+  sceneDescription?: string
+  /** The window of the SOURCE clip `sceneDescription` covers (seconds). */
+  sceneDescriptionWindow?: SceneDescriptionWindow
   preview: boolean
   previewStart: number
   resolution: TrendResolution
@@ -489,6 +508,8 @@ export function composeTrendRun(
   const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && (req.draft ?? true)
 
   const parts = promptPartTexts(data.promptParts)
+  // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
+  const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
 
   const display: TrendRunDisplay = {
     trend: { id: trend.id, slug: trend.slug, version: trend.version, name: pickText(data.name, "en")! },
@@ -518,6 +539,7 @@ export function composeTrendRun(
     // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
     ...(parts ? { promptParts: parts } : {}),
     promptStyle: promptStyleOf(data),
+    ...(scene ?? {}),
     preview: req.preview ?? false,
     previewStart: data.previewStart ?? 0,
     resolution,

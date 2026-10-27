@@ -6,6 +6,8 @@
  *   POST   /v1/admin/trends/:id/face-mask            { revision }: mask the draft's whole source clip once → 202
  *   POST   /v1/admin/trends/:id/face-mask/approve    { jobId, revision }: store that mask on the draft
  *   DELETE /v1/admin/trends/:id/face-mask?revision=  clear the draft's face mask
+ *   PUT    /v1/admin/trends/:id/face-mask/scene-description  edit a full-depth clip's stored description
+ *          (admin-trends-face-mask-scene.ts)
  *
  * Making one asks the Cast Swap engine (`POST /v1/cast-swap/face-mask`, an
  * internal-only plugin route, reached as the admin through `engineRequest`)
@@ -75,7 +77,9 @@ import {
 import { engineRequest, isRec, jobIdOf, relay, str, unavailableOrInternal } from "../lib/trends/run-helpers.js"
 import type { TrendFaceMask, TrendFaceMaskVariantJob, TrendRow, TrendVersionData } from "../lib/trends/types.js"
 import { keptVariantsFor, withCurrentVariants, type FaceMaskVariantsState } from "../lib/trends/face-mask-variants.js"
+import { sceneDescriptionsOf, sceneMakeFields } from "../lib/trends/scene-description.js"
 import { audit } from "./admin-trends-lifecycle.js"
+import { registerTrendSceneDescriptionRoutes } from "./admin-trends-face-mask-scene.js"
 import { SUPERSEDED, closeAbandonedVariantJobs, registerTrendFaceMaskVariantRoutes, withVariantsState } from "./admin-trends-face-mask-variants.js"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -184,6 +188,7 @@ async function auditedSettingsKey(trendId: string, jobId: string, userId: string
 
 export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFaceMaskDeps): void {
   registerTrendFaceMaskVariantRoutes(app, deps)
+  registerTrendSceneDescriptionRoutes(app, deps)
   app.post("/v1/admin/trends/:id/face-mask", { preHandler: requireAdmin }, async (req, reply) => {
     const body = startBody.safeParse(req.body)
     if (!body.success) return deps.badRequest(reply, body.error)
@@ -244,11 +249,14 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const faceMasking = { ...faceMaskingSent(withoutMarks(draft.faceMasking)), ...(marks.length > 0 ? { marks: structuredClone([...marks]) } : {}) }
       // The approved mask's raw mask, when it is still the base of this one: no new face finding.
       const fromMask = takesMarks ? reusableFaceMaskBase(draft, castSwap.faceMaskRecipe) : undefined
+      // Full depth on an engine that describes the original clip as it makes it: the roles to name
+      // its people by, and the preview's start (scene-description.ts). Any other make is sent as before.
+      const describe = source === "full-depth" && castSwap.storedSceneDescription === true ? sceneMakeFields(draft) : {}
       const res = await engineRequest(
         app,
         req,
         "/v1/cast-swap/face-mask",
-        { videoUrl: draft.source.videoUrl, faceMasking, ...(fromMask ? { fromMask } : {}) },
+        { videoUrl: draft.source.videoUrl, faceMasking, ...(fromMask ? { fromMask } : {}), ...describe },
         typeof key === "string" && key ? { "idempotency-key": key } : {},
         { origin: "trends-admin", source: deriveJobSource(req) },
       )
@@ -352,6 +360,8 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         stats: faceMaskStats(output.stats),
         approvedAt: new Date().toISOString(),
         approvedBy: req.userId!,
+        // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts).
+        ...(source === "full-depth" ? sceneDescriptionsOf(output, input) : {}),
       }
       // Stale on arrival helps no one: the recipes are checked before anything is stored.
       const environments = await environmentsOrNull(req)

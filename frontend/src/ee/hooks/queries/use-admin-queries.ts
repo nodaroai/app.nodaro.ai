@@ -40,6 +40,7 @@ import {
   fetchAdminTrendFaceMaskJob,
   startAdminTrendFaceMaskVariants,
   advanceAdminTrendFaceMaskVariants,
+  saveAdminTrendSceneDescription,
   startAdminTrendUpscale,
   applyAdminTrendUpscale,
   discardAdminTrendUpscale,
@@ -47,6 +48,7 @@ import {
   dismissAdminTrendCrop,
   fetchAdminTrendUpscaleJob,
   type AdminTrendUpscaleTarget,
+  type AdminTrendSceneDescriptionWhich,
   type AdminTrendCropAspect,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
@@ -1810,6 +1812,17 @@ export function useApproveTrendFaceMask(id: string) {
   return useMutation({
     onError: handledByScreen,
     mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => approveAdminTrendFaceMask(id, jobId, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Save a full-depth clip's stored scene description (full run or preview) on the draft. */
+export function useSaveTrendSceneDescription(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ which, text, revision }: { which: AdminTrendSceneDescriptionWhich; text: string; revision: string }) =>
+      saveAdminTrendSceneDescription(id, which, text, revision),
     onSuccess: () => invalidate(id),
   })
 }

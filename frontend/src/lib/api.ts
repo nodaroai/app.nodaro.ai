@@ -11235,6 +11235,12 @@ export interface AdminTrendFaceMask {
   variants?: AdminTrendFaceMaskVariant[]
   /** The person masks in the making. */
   variantJobs?: AdminTrendFaceMaskVariantJob[]
+  /** Full depth: the make's description of the whole original clip (each run rewrites it for its cast). Absent: made before descriptions. */
+  sceneDescription?: string
+  /** Full depth: the same for the 4 s preview window. */
+  previewSceneDescription?: string
+  /** The `previewStart` the preview's text was made for (a preview run uses it only while it is the trend's). */
+  previewSceneDescriptionStart?: number
 }
 
 /** One person mask: the face mask for runs that leave exactly the people `emptySlots` empty. */
@@ -11920,6 +11926,24 @@ export async function clearAdminTrendFaceMask(id: string, revision: string): Pro
       "apiErr.saveTrend",
       { method: "DELETE" },
     )
+  ).data
+}
+
+/** Which stored scene description: the full run's (whole clip) or the preview's (4 s window). */
+export type AdminTrendSceneDescriptionWhich = "full" | "preview"
+
+/** Save a full-depth clip's stored scene description `which` on the draft at `revision` (never puts the clip out of date). */
+export async function saveAdminTrendSceneDescription(
+  id: string,
+  which: AdminTrendSceneDescriptionWhich,
+  text: string,
+  revision: string,
+): Promise<TrendFaceMaskWrite> {
+  return (
+    await apiRequest<{ data: TrendFaceMaskWrite }>(`${trendPath(id)}/face-mask/scene-description`, "apiErr.saveTrend", {
+      method: "PUT",
+      body: { which, text, revision },
+    })
   ).data
 }
 

@@ -26,6 +26,9 @@
 // for one optional person (decided 2026-10-27): those faces are left uncovered
 // only in the person masks (FaceMaskVariants.tsx) — saving them leaves the
 // approved face mask as it is.
+//
+// Full depth with its scene from a description: the approved clip's stored
+// scene descriptions, editable (SceneDescriptionEditor.tsx).
 
 import { useEffect, useState } from "react"
 import { Check, Eraser, Loader2, RefreshCw, ScanFace, Trash2 } from "lucide-react"
@@ -49,6 +52,7 @@ import { faceMaskMarkSlot } from "@nodaro/render-rules"
 import { describeFaceMaskOutOfDate } from "../model"
 import { FaceMaskMarksEditor, type MarkPerson } from "./FaceMaskMarks"
 import { FaceMaskVariants } from "./FaceMaskVariants"
+import { SceneDescriptionEditor } from "./SceneDescriptionEditor"
 
 interface Props {
   readonly trendId: string
@@ -82,6 +86,12 @@ interface Props {
   readonly hasExamples?: boolean
   /** The clip keeps its people (Keep people): the marks leave a person out, or mark the main character. */
   readonly keepPeople?: boolean
+  /**
+   * Full depth with its scene from a description: the approved clip's stored
+   * descriptions are shown for editing (SceneDescriptionEditor.tsx);
+   * `previewStart`, the saved draft's (null: no preview). Absent: not shown.
+   */
+  readonly sceneDescription?: { readonly previewStart: number | null }
 }
 
 /**
@@ -122,6 +132,7 @@ export function FaceMaskPanel({
   people = NO_PEOPLE,
   hasExamples = false,
   keepPeople = false,
+  sceneDescription,
 }: Props) {
   const start = useStartTrendFaceMask(trendId)
   const approve = useApproveTrendFaceMask(trendId)
@@ -230,6 +241,17 @@ export function FaceMaskPanel({
 
       {faceMask && (!jobId || !current) && (
         <MaskResult url={faceMask.url} stats={faceMask.stats} label="The approved face mask" editor={editable} />
+      )}
+      {faceMask && sceneDescription && (
+        <SceneDescriptionEditor
+          trendId={trendId}
+          faceMask={faceMask}
+          previewStart={sceneDescription.previewStart}
+          dirty={dirty}
+          revision={revision}
+          onRevision={onRevision}
+          onWriteError={onWriteError}
+        />
       )}
 
       {jobId && running && (

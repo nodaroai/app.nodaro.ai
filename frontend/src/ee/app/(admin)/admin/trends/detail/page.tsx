@@ -527,6 +527,12 @@ export default function AdminTrendEditorPage() {
                 }
                 keepPeople={savedPreparation === "keep-people"}
                 hasExamples={server.draft.examples.length > 0}
+                // Full depth's scene from a description (the default): the clip's stored descriptions.
+                sceneDescription={
+                  savedPreparation === "full-depth" && (server.draft.faceMasking?.scene ?? "description") === "description"
+                    ? { previewStart: server.draft.previewStart }
+                    : undefined
+                }
               />
             )}
           </Section>
