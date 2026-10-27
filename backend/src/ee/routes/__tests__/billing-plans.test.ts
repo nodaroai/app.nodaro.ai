@@ -192,6 +192,7 @@ describe("every figure comes from what charges or grants it", () => {
     const body = (await getPlans()).json()
     for (const [id, product] of PLANS) {
       expect(planOf(body, id).prices!.monthly, id).toEqual({
+        priceId: product.monthly,
         amount: UNIT_AMOUNT.get(product.monthly)! / 100,
         currency: "USD",
         credits: { amount: TIER_CREDITS[id], per: "month" },
@@ -203,6 +204,7 @@ describe("every figure comes from what charges or grants it", () => {
     const body = (await getPlans()).json()
     for (const [id, product] of PLANS) {
       const yearly = planOf(body, id).prices!.yearly!
+      expect(yearly.priceId, id).toBe(product.yearly) // what checkout and change-plan take
       expect(yearly.amount, id).toBe(UNIT_AMOUNT.get(product.yearly)! / 100)
       expect(yearly.currency, id).toBe("USD")
       expect(yearly.perMonth, id).toBe(UNIT_AMOUNT.get(product.yearly)! / 100 / 12)
@@ -227,6 +229,8 @@ describe("every figure comes from what charges or grants it", () => {
       LOAD_RATE_ANCHORS.map((a) => [a.usd, a.credits]),
     )
     for (const t of body.topUps) expect(t.price.currency).toBe(CURRENCY)
+    // Each priced pack names the Stripe price its fixed-pack checkout takes, and that price grants the pack.
+    for (const t of body.topUps as Array<{ credits: number; priceId: string | null }>) expect(t.priceId && TOP_UPS[t.priceId], String(t.credits)).toBe(t.credits)
     expect(body.topUpRange).toEqual({ min: MIN_LOAD_USD, max: MAX_LOAD_USD, currency: CURRENCY })
     expect(new Set(body.topUps.map((t: { id: string }) => t.id)).size).toBe(LOAD_RATE_ANCHORS.length)
   })

@@ -26,12 +26,16 @@ export interface BillingPriceCredits {
 
 /** A monthly price, and what it grants. */
 export interface BillingMonthlyPrice extends BillingMoney {
+  /** The Stripe price id: pass it to {@link BillingResource.checkout} or {@link BillingResource.changePlan}; match the subscription's `stripe_price_id` to it to learn the interval. */
+  priceId: string
   /** `null` when the price does not state it. */
   credits: BillingPriceCredits | null
 }
 
 /** A yearly price, what it comes to per month, and what it grants. */
 export interface BillingYearlyPrice extends BillingMoney {
+  /** The Stripe price id: pass it to {@link BillingResource.checkout} or {@link BillingResource.changePlan}; match the subscription's `stripe_price_id` to it to learn the interval. */
+  priceId: string
   /** The yearly amount spread over the months it pays for; `null` when that cannot be said. */
   perMonth: number | null
   /** What the price grants — the plan's credits every month, as a monthly price; `null` when the price does not state it. */
@@ -61,10 +65,13 @@ export interface BillingPlan {
 
 /** A credit pack: this many credits for this price. */
 export interface BillingTopUp {
+  /** The pack's own id (`"topup-25"`), not a Stripe id. */
   id: string
   credits: number
   /** `null` when the pack's price cannot be stated right now: show it as unavailable. */
   price: BillingMoney | null
+  /** The Stripe price id for {@link BillingResource.checkout} (mode `"payment"`); `null` with the price. A pack can always be bought as a load of `price.amount` through {@link BillingResource.loadCredits}. */
+  priceId: string | null
 }
 
 /** The answer of `GET /v1/billing/plans`. */

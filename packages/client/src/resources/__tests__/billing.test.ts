@@ -32,8 +32,8 @@ const PLANS: BillingPlansResult = {
       id: "basic",
       name: "Basic",
       prices: {
-        monthly: { amount: 12, currency: "USD", credits: { amount: 400, per: "month" } },
-        yearly: { amount: 120, currency: "USD", perMonth: 10, credits: { amount: 400, per: "month" } },
+        monthly: { priceId: "price_basic_m", amount: 12, currency: "USD", credits: { amount: 400, per: "month" } },
+        yearly: { priceId: "price_basic_y", amount: 120, currency: "USD", perMonth: 10, credits: { amount: 400, per: "month" } },
       },
       signupCredits: null,
       parallelism: 4,
@@ -41,8 +41,8 @@ const PLANS: BillingPlansResult = {
     },
   ],
   topUps: [
-    { id: "topup-10", credits: 300, price: { amount: 10, currency: "USD" } },
-    { id: "topup-25", credits: 800, price: null },
+    { id: "topup-10", credits: 300, price: { amount: 10, currency: "USD" }, priceId: "price_pack_10" },
+    { id: "topup-25", credits: 800, price: null, priceId: null },
   ],
   topUpRange: { min: 5, max: 1000, currency: "USD" },
 }

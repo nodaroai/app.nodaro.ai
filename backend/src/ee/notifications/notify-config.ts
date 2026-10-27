@@ -120,6 +120,8 @@ export type NotifyStateKey =
   | "notify_last_digest_date"
   | "notify_last_credits_digest_date"
   | "notify_last_loops_pull_date"
+  /** The last month (`YYYY-MM`) whose statement went to every opted-in person (monthly-statement.ts). */
+  | "notify_last_statement_month"
 
 export async function readNotifyState(key: NotifyStateKey): Promise<string | null> {
   const { data, error } = await supabase

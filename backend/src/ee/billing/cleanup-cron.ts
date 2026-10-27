@@ -19,6 +19,8 @@ import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
 import { runFounderNotifyTick } from "../notifications/founder-notify.js"
+import { maybeSendMonthlyStatements } from "../notifications/monthly-statement.js"
+import { getNotifyConfig } from "../notifications/notify-config.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -84,6 +86,14 @@ export function startCleanupCron(): void {
       await runFounderNotifyTick()
     } catch (err) {
       console.error("[cron] founder notify tick failed:", err)
+    }
+    // The monthly credit statement to each person who opted in: from the digest
+    // hour of the 1st (Israel time) until the month is closed. Dormant without
+    // LOOPS_MONTHLY_STATEMENT_ID, and on the standby sender; never throws.
+    try {
+      await maybeSendMonthlyStatements(new Date(), (await getNotifyConfig()).digestHour)
+    } catch (err) {
+      console.error("[cron] monthly statement tick failed:", err)
     }
   })
 

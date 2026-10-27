@@ -3528,6 +3528,16 @@ refuse an API token or an OAuth app token with `403 forbidden`. Both answer
 `client.credits.claimWelcomeOffer(input)` and
 `client.credits.markWelcomeOfferSeen()`.
 
+**The monthly statement email.** A person who turns on `monthlyStatementEmail`
+(`GET` / `PATCH /v1/user/settings`, default `false`) gets, on the 1st of each
+month, last month's credit statement by email: credits used and on how many
+runs, the model used most, the spend by category, what was bought and
+refunded, the payments in dollars, and where the balance stands — the same
+figures `GET /v1/credits/usage-summary` answers for that month, as a UTC
+calendar month. Nodaro Cloud only, and only where the deployment has a
+statement template configured (`LOOPS_MONTHLY_STATEMENT_ID`); a deployment
+without one sends nothing.
+
 `Transaction` fields: `id`, `created_at`, `credits_charged`,
 `credits_reserved`, `credits_used`, `action`, `provider`, `status`,
 `metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`
