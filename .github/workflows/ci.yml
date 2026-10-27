@@ -86,9 +86,11 @@ jobs:
   # `!= 'false'`, so a gate that failed or wrote nothing runs it.
   changes:
     name: Diff Gate
-    runs-on: ubuntu-slim
     # A PR into main waits here (bounded at 45 minutes by ci-mode.mjs) for the
     # dev run on its head, so it can reuse that run instead of repeating it.
+    # ubuntu-slim stops every job at 15 minutes whatever timeout-minutes says,
+    # which cancelled that wait, so a PR into main takes ubuntu-latest.
+    runs-on: ${{ github.base_ref == 'main' && 'ubuntu-latest' || 'ubuntu-slim' }}
     timeout-minutes: ${{ github.base_ref == 'main' && 55 || 10 }}
     permissions:
       pull-requests: read

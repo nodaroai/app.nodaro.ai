@@ -297,3 +297,11 @@ test("a hung gate cannot hold the Diff Gate", () => {
   assert.match(jobs.changes, /^    timeout-minutes: (?:\d+|\$\{\{ github\.base_ref == 'main' && \d+ \|\| \d+ \}\})$/m)
   assert.match(jobs.changes.match(/- name: Decide the gated jobs\n((?: {8}.*\n)+)/)[1], /^ {8}timeout-minutes: \d+$/m)
 })
+
+test("a PR into main's Diff Gate is not cut off by ubuntu-slim's 15-minute job limit", () => {
+  // ubuntu-slim cancels any job at 15 minutes, ignoring timeout-minutes, so a
+  // wait longer than that has to run on a runner without the limit.
+  const runsOn = jobs.changes.match(/^    runs-on: (.+)$/m)[1]
+  const wait = Number(jobs.changes.match(/^    timeout-minutes: \$\{\{ github\.base_ref == 'main' && (\d+) \|\|/m)?.[1] ?? 0)
+  if (wait > 15) assert.equal(runsOn, "${{ github.base_ref == 'main' && 'ubuntu-latest' || 'ubuntu-slim' }}")
+})
