@@ -1,5 +1,23 @@
 # @nodaro/cli
 
+## 1.45.1
+
+### Patch Changes
+
+- f2edcc5: `nodaro trends run --example` help: a Full depth trend never fills an empty optional slot from an example; it uses the trend's default image for that role if one is set, otherwise the original's look.
+- Updated dependencies [ad5e6c5]
+- Updated dependencies [ad5e6c5]
+- Updated dependencies [ea34461]
+- Updated dependencies [f4e983e]
+- Updated dependencies [f4e983e]
+- Updated dependencies [ae4a043]
+- Updated dependencies [54c3869]
+- Updated dependencies [bf23be9]
+- Updated dependencies [f2edcc5]
+  - @nodaro/prompts@1.46.0
+  - @nodaro/sdk@2.54.0
+  - @nodaro/shared@3.47.0
+
 ## 1.45.0
 
 ### Minor Changes

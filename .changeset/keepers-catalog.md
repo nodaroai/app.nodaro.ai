@@ -1,5 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-Nodaro Keepers — a shared catalog of characters, creatures, locations and objects. `client.keepers.catalog({ kind?, cursor?, limit? })` reads the shelf (public: display fields only, cursor-paginated, in shelf order), `client.keepers.copy(kind, id)` puts a copy of an item into the caller's own account through the same rule as cloning a community listing (their own row with the public text, the main image and the variant assets, every file copied into their own storage; a custom voice reduced to its name and sample; editable in Studio; the same copy on every later call; no credits; 413 `storage_limit_exceeded` when the files do not fit), and the admin-only `client.characters.setCatalog(id, { catalog, sort?, category? })` — and the same on `creatures`, `locations` and `objects` — puts one of the admin's own items on the shelf or takes it off. Types: `KeeperKind`, `KeeperCatalogItem`, `KeeperCatalogPage`, `CopyKeeperResult`, `SetKeeperCatalogInput`, `SetKeeperCatalogResult`; subpath `@nodaro/sdk/keepers`.

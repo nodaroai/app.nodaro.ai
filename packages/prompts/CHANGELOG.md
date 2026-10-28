@@ -1,5 +1,18 @@
 # @nodaro/prompts
 
+## 1.46.0
+
+### Minor Changes
+
+- ad5e6c5: `buildCreaturePrompt` takes optional `subjectHints` — already-rendered clauses of a request's `subject` catalog ids (`renderSubjectHints`, image surface) — and places them after the prose, before the style line, each once. Absent or empty, the prompt is byte-identical.
+- 54c3869: Create Image factory catalog: the 152 Studio presets (Reference Sheet, Characters, Edits, Photography & Cinematic and the other 16 pro groups) now carry an example picture. `GET /v1/node-presets/factory?nodeType=generate-image` answers `previewUrl` and `previewSrcSet` for every one of them, as it already did for the 316 content tiles and use cases. 468 tiles with pictures.
+
+### Patch Changes
+
+- Updated dependencies [f4e983e]
+- Updated dependencies [ae4a043]
+  - @nodaro/shared@3.47.0
+
 ## 1.45.0
 
 ### Minor Changes
