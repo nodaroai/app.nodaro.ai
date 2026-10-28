@@ -82,8 +82,12 @@ interface Props {
   readonly marksSupported?: boolean
   /** The trend's optional people (a box may be for one of them). */
   readonly people?: readonly MarkPerson[]
-  /** The saved draft has examples (an empty optional slot then takes an example's person). */
-  readonly hasExamples?: boolean
+  /**
+   * The optional people a run can leave empty: with examples, only those some
+   * example has no pictures for (an example fills every other empty slot with
+   * its own person). Absent: every one of `people` (a trend with no examples).
+   */
+  readonly emptiablePeople?: readonly string[]
   /** The clip keeps its people (Keep people): the marks leave a person out, or mark the main character. */
   readonly keepPeople?: boolean
   /**
@@ -95,9 +99,9 @@ interface Props {
 }
 
 /**
- * The optional people with no face marks of their own: on a masked trend with
- * no examples, each stays blurred when a run leaves them empty (only a marked
- * person keeps their face). Publishing is not held for it.
+ * The optional people with no face marks of their own: on a masked trend, each
+ * stays blurred when a run leaves them empty (only a marked person keeps their
+ * face). Publishing is not held for it.
  */
 export function unmarkedPeople(people: readonly MarkPerson[], marks: readonly AdminTrendFaceMaskMark[]): MarkPerson[] {
   return people.filter((p) => !marks.some((m) => faceMaskMarkSlot(m) === p.key))
@@ -130,10 +134,11 @@ export function FaceMaskPanel({
   onSaveMarks,
   marksSupported = false,
   people = NO_PEOPLE,
-  hasExamples = false,
+  emptiablePeople,
   keepPeople = false,
   sceneDescription,
 }: Props) {
+  const unmarked = unmarkedPeople(emptiablePeople ? people.filter((p) => emptiablePeople.includes(p.key)) : people, savedMarks)
   const start = useStartTrendFaceMask(trendId)
   const approve = useApproveTrendFaceMask(trendId)
   const clear = useClearTrendFaceMask(trendId)
@@ -221,13 +226,11 @@ export function FaceMaskPanel({
         again, and the trend can't be published without one. Making it is billed to your account.
       </p>
 
-      {ready && !hasExamples && unmarkedPeople(people, savedMarks).length > 0 && (
+      {ready && unmarked.length > 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="face-mask-unmarked-people">
-          {unmarkedPeople(people, savedMarks)
-            .map((p) => p.label)
-            .join(", ")}{" "}
-          {unmarkedPeople(people, savedMarks).length === 1 ? "has" : "have"} no person marks, so a run that leaves{" "}
-          {unmarkedPeople(people, savedMarks).length === 1 ? "this person" : "one of them"} empty keeps them blurred. Mark their face as theirs
+          {unmarked.map((p) => p.label).join(", ")}{" "}
+          {unmarked.length === 1 ? "has" : "have"} no person marks, so a run that leaves{" "}
+          {unmarked.length === 1 ? "this person" : "one of them"} empty keeps them blurred. Mark their face as theirs
           (New boxes are for → their name) to keep them as in the clip.
         </p>
       )}

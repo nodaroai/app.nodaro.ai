@@ -30,7 +30,7 @@
  * paid step.
  *
  * Only a trend whose runs can leave a marked person empty needs variants (no
- * examples), at most `MAX_MARKED_PEOPLE` marked people, and an approved,
+ * examples, or an example without pictures for that person), at most `MAX_MARKED_PEOPLE` marked people, and an approved,
  * up-to-date face mask that kept its raw mask. Each action writes an
  * `admin_actions` row.
  */
@@ -240,7 +240,7 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
         return err(reply, 409, "face_mask_people_over_cap", `At most ${MAX_MARKED_PEOPLE} optional people may have face marks. Remove some of their marks first.`)
       }
       if (!state.applies) {
-        return err(reply, 409, "person_masks_not_needed", "This trend has examples: an optional person left empty takes an example's person, so no person mask is needed.")
+        return err(reply, 409, "person_masks_not_needed", "Every example has pictures for the marked people: an optional person left empty takes an example's person, so no person mask is needed.")
       }
       const base = await faceMaskStateWithVariants(req, draft)
       if (base.status !== "approved" || state.baseProblem === "no_base" || state.baseProblem === "base_out_of_date") {

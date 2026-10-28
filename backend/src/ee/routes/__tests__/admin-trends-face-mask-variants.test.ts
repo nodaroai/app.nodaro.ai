@@ -298,10 +298,10 @@ describe("POST /face-mask/variants", () => {
     expect(res.json().data.faceMaskState.variants.variants.map((v: { status: string }) => v.status)).toEqual(["making", "making", "making"])
   })
 
-  it("asks for nothing over the cap, with examples, with no marked person, without an approved raw mask, or on an engine without erase", async () => {
+  it("asks for nothing over the cap, with examples that fill every marked person, with no marked person, without an approved raw mask, or on an engine without erase", async () => {
     const cases: Array<[TrendVersionData, string, (() => void)?]> = [
       [draft([slotMark("amy", 10)], { faceMask: undefined }), "face_mask_not_approved"],
-      [draft([slotMark("amy", 10)], { examples: [{ videoUrl: SRC, width: 1, height: 1, durationSec: 12, sourceJobId: "j", slots: {} }] }), "person_masks_not_needed"],
+      [draft([slotMark("amy", 10)], { examples: [{ videoUrl: SRC, width: 1, height: 1, durationSec: 12, sourceJobId: "j", slots: { amy: [SRC] } }] }), "person_masks_not_needed"],
       [draft([]), "no_person_marks"],
       [{ ...draft([slotMark("amy", 10)]), faceMask: { ...draft([slotMark("amy", 10)]).faceMask!, rawMaskUrl: undefined } }, "no_raw_mask"],
       [draft([slotMark("amy", 10)]), "engine_unsupported", () => setPluginSupports({ castSwap: { ...SUPPORTS, faceMaskErase: false } as never })],

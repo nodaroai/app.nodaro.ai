@@ -17,7 +17,7 @@
  * shows as the original. Runs keep editing the uploaded clip.
  *
  * An admin's upscale of the source clip or of an example (`storeUpscaledVideo`)
- * is resized to 1080p here and stored the same way, and so is an admin's
+ * is resized to its target (720p or 1080p) here and stored the same way, and so is an admin's
  * crop of the source clip to 16:9 or 9:16 (`storeCroppedSource`).
  */
 import { createHash, randomUUID } from "node:crypto"
@@ -43,7 +43,8 @@ import { reencodePeakMemoryMiB } from "../../../providers/video/video-file-stage
 import { thumbnailFromLocalVideo } from "../../../utils/thumbnail.js"
 import type { TrendCropAspect, TrendSourceDisplay } from "./types.js"
 import { cropEncodeArgs, cropFilter, cropTargetSize, sourceBitRate, type SourceVideoStream } from "./crop.js"
-import { UPSCALE_SHORT_SIDE, upscaleTargetSize } from "./upscale.js"
+import type { TrendUpscaleResolution } from "@nodaro/render-rules"
+import { upscaleShortSide, upscaleTargetSize } from "./upscale.js"
 
 export type TrendMediaKind = "video" | "image"
 
@@ -280,7 +281,7 @@ export async function storeLocalTrendMedia(
   return { url, kind: expect, ...measured }
 }
 
-/** A video upscaled to 1080p and stored in the trend's storage, measured there. */
+/** A video upscaled to its target (720p or 1080p) and stored in the trend's storage, measured there. */
 export interface StoredUpscale {
   url: string
   width: number
@@ -294,7 +295,7 @@ export interface StoredUpscale {
   sha256?: string
 }
 
-/** The ffmpeg arguments that resize `input` to `size` (short side 1080), the sound taken from `soundFrom`. */
+/** The ffmpeg arguments that resize `input` to `size` (its short side the target's), the sound taken from `soundFrom`. */
 export function upscaleResizeArgs(input: string, soundFrom: string, size: { width: number; height: number }, maxSec: number, audio: "copy" | "aac", out: string): string[] {
   const short = Math.min(size.width, size.height)
   const long = Math.max(size.width, size.height)
@@ -332,7 +333,7 @@ const sameWayRound = (a: { width: number; height: number }, b: { width: number; 
 
 /**
  * Whether Topaz's output can be stored as it is, with no re-encode: exactly
- * 1080 on its short side with even sides, the same way round as the original
+ * `shortSide` (the target's) on its short side with even sides, the same way round as the original
  * is shown (when that is known), no longer than the original, browser-safe
  * H.264 / yuv420p, and carrying sound whenever the original has some.
  */
@@ -341,8 +342,9 @@ async function storableAsIs(
   original: string,
   probe: { width: number; height: number; durationSeconds: number },
   args: { durationSec: number; shownAs?: { width: number; height: number } },
+  shortSide: number,
 ): Promise<boolean> {
-  if (Math.min(probe.width, probe.height) !== UPSCALE_SHORT_SIDE || probe.width % 2 !== 0 || probe.height % 2 !== 0) return false
+  if (Math.min(probe.width, probe.height) !== shortSide || probe.width % 2 !== 0 || probe.height % 2 !== 0) return false
   if (args.shownAs && !sameWayRound(args.shownAs, probe)) return false
   if (probe.durationSeconds > args.durationSec + UPSCALE_LENGTH_SLACK_SEC) return false
   try {
@@ -357,10 +359,11 @@ async function storableAsIs(
 }
 
 /**
- * Store a Topaz upscale (`upscaledUrl`, asked for at 1080p) of `originalUrl`
- * as 1080p. When Topaz's output already is exactly that (`storableAsIs`) it
- * is stored as it is; otherwise it is resized so its short side is exactly
- * `UPSCALE_SHORT_SIDE` (aspect kept, even sides; `upscaleTargetSize`), no
+ * Store a Topaz upscale (`upscaledUrl`, asked for at `resolution`: 720p or
+ * 1080p, the short side) of `originalUrl` at that target. When Topaz's output
+ * already is exactly that (`storableAsIs`) it is stored as it is; otherwise it
+ * is resized so its short side is exactly the target's (720 or 1080; aspect
+ * kept, even sides; `upscaleTargetSize`), no
  * longer than `durationSec`, with the ORIGINAL's sound copied (re-encoded to
  * AAC only when the MP4 cannot hold it as it is). Then:
  *   - `asSource`: stored exactly as a new source clip is (`storeLocalTrendMedia`
@@ -371,18 +374,27 @@ async function storableAsIs(
  * comes out the other way round (Topaz dropping a phone clip's rotation tag)
  * is refused rather than stored sideways.
  * Throws `TrendMediaError` for a file that cannot be fetched or resized, or
- * that does not come out at 1080p the right way round, before anything is
+ * that does not come out at its target the right way round, before anything is
  * stored; a launch the platform killed or could not admit, and a storage
  * failure, are thrown as they are.
  */
 export async function storeUpscaledVideo(
   trendId: string,
-  args: { upscaledUrl: string; originalUrl: string; durationSec: number; asSource: boolean; shownAs?: { width: number; height: number } },
+  args: {
+    upscaledUrl: string
+    originalUrl: string
+    durationSec: number
+    asSource: boolean
+    /** The target Topaz was asked for, which the stored video is held to. */
+    resolution: TrendUpscaleResolution
+    shownAs?: { width: number; height: number }
+  },
 ): Promise<StoredUpscale> {
+  const shortSide = upscaleShortSide(args.resolution)
   const dir = await mkdtemp(join(tmpdir(), "trend-upscale-"))
   const up = join(dir, "upscaled")
   const original = join(dir, "original")
-  const resized = join(dir, "1080p.mp4")
+  const resized = join(dir, `${args.resolution}.mp4`)
   try {
     await fetchTo(args.upscaledUrl, up, "video")
     await fetchTo(args.originalUrl, original, "video")
@@ -396,10 +408,10 @@ export async function storeUpscaledVideo(
 
     let out = up
     let made: { width: number; height: number; durationSeconds: number } = probe
-    if (!(await storableAsIs(up, original, probe, args))) {
+    if (!(await storableAsIs(up, original, probe, args, shortSide))) {
       out = resized
-      const size = upscaleTargetSize(probe.width, probe.height)
-      // Admitted at the larger of the two canvases: the decode of the upscale, or the encode at 1080p.
+      const size = upscaleTargetSize(probe.width, probe.height, shortSide)
+      // Admitted at the larger of the two canvases: the decode of the upscale, or the encode at the target.
       const canvas = probe.width * probe.height >= size.width * size.height ? { width: probe.width, height: probe.height } : size
       const launch = { peakMemoryMiB: reencodePeakMemoryMiB(canvas) }
       try {
@@ -412,7 +424,7 @@ export async function storeUpscaledVideo(
         }
       } catch (e) {
         if (isTransientMediaFailure(e)) throw e
-        throw new TrendMediaError("media_unreadable", "Could not resize the upscaled video to 1080p.", { cause: e })
+        throw new TrendMediaError("media_unreadable", `Could not resize the upscaled video to ${args.resolution}.`, { cause: e })
       }
       // Checked before anything is stored. The resize applied any rotation, so its size is the shown one.
       try {
@@ -422,8 +434,8 @@ export async function storeUpscaledVideo(
         throw new TrendMediaError("media_unreadable", "Could not read the resized video's size.", { cause: e })
       }
     }
-    if (Math.min(made.width, made.height) !== UPSCALE_SHORT_SIDE) {
-      throw new TrendMediaError("media_unreadable", `The upscaled video came out at ${made.width}×${made.height}, not 1080p.`)
+    if (Math.min(made.width, made.height) !== shortSide) {
+      throw new TrendMediaError("media_unreadable", `The upscaled video came out at ${made.width}×${made.height}, not ${args.resolution}.`)
     }
     const shown = args.shownAs
     if (shown && !sameWayRound(shown, made)) {

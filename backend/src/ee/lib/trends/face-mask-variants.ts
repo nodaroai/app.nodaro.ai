@@ -23,10 +23,15 @@
  * (`faceMaskVariantKey`): the base's settings key and raw mask, and every
  * slot mark, so any edit of them makes it out of date.
  *
- * Only a trend with NO examples has truly empty optional slots: with
+ * On a trend with NO examples a run can leave any marked person empty. With
  * examples, an empty slot takes the chosen example's pictures (compose.ts),
- * so that person is replaced and the mask stays whole. Slot marks are then
- * allowed but do nothing at run time (`faceMaskVariantsApply`).
+ * so that person is replaced and the mask stays whole, except for a person
+ * the example itself has no pictures for: that one stays as in the clip too.
+ * So the sets a run can leave empty are every non-empty subset of the marked
+ * people with no examples, and with examples every non-empty subset of the
+ * marked people some example leaves empty (`faceMaskVariantSets`). A trend
+ * whose examples fill every marked person needs no variant; its slot marks
+ * are allowed but do nothing at run time (`faceMaskVariantsApply`).
  */
 import { createHash } from "node:crypto"
 import { CAST_SWAP_FACE_MASK_MARK_LIMITS } from "@nodaro/render-rules"
@@ -68,25 +73,73 @@ export function faceMaskVariantsOverCap(data: MarksData): boolean {
 }
 
 /**
- * Whether this trend's runs can leave a marked person empty, so it needs its
- * variants: it masks, has marked people, and has NO examples (with examples,
- * an empty slot takes an example's pictures).
+ * The marked people a run can leave empty, sorted: every one on a trend with
+ * no examples; with examples, those some example has no pictures for (the
+ * example fills every other one).
  */
-export function faceMaskVariantsApply(data: MarksData & Pick<TrendVersionData, "examples">): boolean {
-  return data.examples.length === 0 && markedPeople(data).length > 0
+function emptiablePeople(data: MarksData & Pick<TrendVersionData, "examples">): string[] {
+  const people = markedPeople(data)
+  if (data.examples.length === 0) return people
+  return people.filter((k) => data.examples.some((ex) => !exampleHasPictures(ex, k)))
+}
+
+/** Whether `example` has pictures for slot `key`. */
+function exampleHasPictures(example: TrendVersionData["examples"][number], key: string): boolean {
+  return Object.hasOwn(example.slots, key) && (example.slots[key]?.length ?? 0) > 0
 }
 
 /**
- * Every set of marked people a run can leave empty (each non-empty subset,
- * canonical, in a fixed order: by size, then by key), or none when the
- * variants do not apply or the trend has more marked people than the cap.
+ * Whether this trend's runs can leave a marked person empty, so it needs its
+ * variants: it masks, has marked people, and either has NO examples or has an
+ * example without pictures for a marked person (an example fills only the
+ * slots it has pictures for).
+ */
+export function faceMaskVariantsApply(data: MarksData & Pick<TrendVersionData, "examples">): boolean {
+  return emptiablePeople(data).length > 0
+}
+
+/**
+ * Every set of marked people a run can leave empty (canonical, in a fixed
+ * order: by size, then by key), or none when the variants do not apply or the
+ * trend has more marked people than the cap. With no examples: each non-empty
+ * subset of the marked people. With examples: for each example, each
+ * non-empty subset of the marked people it has no pictures for (the person
+ * running it may fill any of those), each set once.
  */
 export function faceMaskVariantSets(data: MarksData & Pick<TrendVersionData, "examples">): string[][] {
   if (!faceMaskVariantsApply(data) || faceMaskVariantsOverCap(data)) return []
+  const groups =
+    data.examples.length === 0
+      ? [markedPeople(data)]
+      : data.examples.map((ex) => markedPeople(data).filter((k) => !exampleHasPictures(ex, k)))
+  const seen = new Set<string>()
+  const sets: string[][] = []
+  for (const people of groups) {
+    for (let bits = 1; bits < 1 << people.length; bits++) {
+      const set = people.filter((_, i) => bits & (1 << i))
+      const id = set.join(",")
+      if (seen.has(id)) continue
+      seen.add(id)
+      sets.push(set)
+    }
+  }
+  return sets.sort((a, b) => a.length - b.length || a.join(",").localeCompare(b.join(",")))
+}
+
+/**
+ * The sets whose variants a draft keeps: every non-empty subset of the marked
+ * people (none over the cap), even one no run can leave empty now. With
+ * examples the reachable sets (`faceMaskVariantSets`) are only those an
+ * example leaves empty, and they change as examples are added and removed;
+ * a variant made for the others is paid for, so it is kept and matches again
+ * once a run can use it.
+ */
+function keptSets(data: MarksData): string[][] {
+  if (faceMaskVariantsOverCap(data)) return []
   const people = markedPeople(data)
   const sets: string[][] = []
   for (let bits = 1; bits < 1 << people.length; bits++) sets.push(people.filter((_, i) => bits & (1 << i)))
-  return sets.sort((a, b) => a.length - b.length || a.join(",").localeCompare(b.join(",")))
+  return sets
 }
 
 /**
@@ -171,7 +224,7 @@ export interface FaceMaskVariantEntry {
 }
 
 export interface FaceMaskVariantsState {
-  /** Runs can leave a marked person empty (no examples, marked people). */
+  /** Runs can leave a marked person empty (marked people, and no examples or an example without pictures for one). */
   applies: boolean
   /** The optional people with slot marks (sorted keys). */
   people: string[]
@@ -219,13 +272,13 @@ export function faceMaskVariantFor(data: VariantData, emptySlots: readonly strin
 }
 
 /**
- * `data` with its face mask's person variants held to the sets a run can
- * leave empty now (`faceMaskVariantSets`): a variant for a set that no longer
- * exists is dropped (an out-of-date one for a current set stays, shown as
+ * `data` with its face mask's person variants held to the sets of its marked
+ * people (`keptSets`: with no examples, exactly the sets a run can leave
+ * empty): a variant for a set that no longer exists is dropped (an out-of-date one for a current set stays, shown as
  * such); a job record (in the making or failed) is kept only while it is for
  * a current set and that set's current key.
  *
- * While the person masks do not apply at all — masking off, examples, or more
+ * While the person masks do not apply at all — masking off, examples that fill every marked person, or more
  * marked people than the cap — the trend may only be passing through (an
  * example added and removed, a fourth person marked by mistake), so its
  * variants are left as they are and match again once it is back; only the
@@ -237,7 +290,7 @@ export function withCurrentVariants<T extends VariantData>(data: T): { data: T; 
   const mask = data.faceMask
   if (!mask || (!mask.variants && !mask.variantJobs)) return { data, abandoned: [] }
   const paused = !faceMaskVariantsApply(data) || faceMaskVariantsOverCap(data)
-  const sets = faceMaskVariantSets(data)
+  const sets = keptSets(data)
   const current = (set: readonly string[]) => paused || sets.some((s) => sameSlots(s, set))
   const variants = (mask.variants ?? []).filter((v) => current(v.emptySlots))
   const keptJobs = (mask.variantJobs ?? []).filter((j) => current(j.emptySlots) && faceMaskVariantKey(data, j.emptySlots) === j.key)
@@ -250,14 +303,15 @@ export function withCurrentVariants<T extends VariantData>(data: T): { data: T; 
 
 /**
  * The variants and variant jobs of `data`'s face mask still worth keeping on
- * `next` (a new approved base, or after a variant edit): those whose set a
- * run can still leave empty and whose key is still the current one. New arrays.
+ * `next` (a new approved base, or after a variant edit): those whose set is
+ * still one of its marked people's (`keptSets`) and whose key is still the
+ * current one. New arrays.
  */
 export function keptVariantsFor(
   next: VariantData,
   from: Pick<TrendVersionData, "faceMask">,
 ): { variants?: TrendFaceMaskVariant[]; variantJobs?: TrendFaceMaskVariantJob[] } {
-  const sets = faceMaskVariantSets(next)
+  const sets = keptSets(next)
   const current = (set: readonly string[], key: string) =>
     sets.some((s) => sameSlots(s, set)) && faceMaskVariantKey(next, set) === key
   const variants = (from.faceMask?.variants ?? []).filter((v) => current(v.emptySlots, v.key))

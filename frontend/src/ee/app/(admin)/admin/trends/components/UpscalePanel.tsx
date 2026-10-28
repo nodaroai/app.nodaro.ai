@@ -1,13 +1,14 @@
-// Upscale one of the trend's videos to 1080p: the source clip or an example,
-// made at 720p to cost less. "Upscale to 1080p" starts a Topaz upscale of the
-// SAVED video (billed to the admin; one key per click, so a repeat of the
-// click is never paid twice); the job is followed until it ends, then the
-// before and after play side by side: "Use it" puts the 1080p video in the
-// draft, "Discard" drops it. A video at exactly 1080 on its short side is
-// offered "Enhance at 1080p" instead: the same Topaz run at the same size, for
-// a sharper, cleaner picture (and may be enhanced again). One above 1080 is
-// offered nothing: a 1080p target would shrink it (`trendUpscaleOfferFor`,
-// the server's own rule).
+// Upscale one of the trend's videos: the source clip or an example, made at
+// 720p to cost less. "Topaz 720p" / "Topaz 1080p" starts a Topaz upscale of
+// the SAVED video to that target, the short side (billed to the admin; one
+// key per click, so a repeat of the click is never paid twice); the job is
+// followed until it ends, then the before and after play side by side: "Use
+// it" puts the video in the draft at the target it was made at, "Discard"
+// drops it. A target the video already is on its short side is offered as an
+// enhance ("Topaz 720p (enhance)" on a 720p clip): the same Topaz run at the
+// same size, for a sharper, cleaner picture. A target below the video's short
+// side is not offered: it would shrink it (`trendUpscaleOffersFor`, the
+// server's own rule), so a clip above 1080p is offered nothing.
 //
 // "Use it" runs on the server, in the background (it outlasts a request): the
 // record reads `applying`, the trend is read again until the record is gone
@@ -24,8 +25,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Check, Loader2, Maximize2, X } from "lucide-react"
-import { trendUpscaleOfferFor } from "@nodaro/render-rules"
-import type { AdminTrendPendingUpscale, AdminTrendUpscaleTarget } from "@/lib/api"
+import { trendUpscaleOfferFor, trendUpscaleOffersFor, type TrendUpscaleOffer } from "@nodaro/render-rules"
+import type { AdminTrendPendingUpscale, AdminTrendUpscaleResolution, AdminTrendUpscaleTarget } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { generateIdempotencyKey } from "@/lib/idempotency-key"
 import { useApplyTrendUpscale, useDiscardTrendUpscale, useStartTrendUpscale, useTrendUpscaleJob } from "@/ee/hooks/queries/use-admin-queries"
@@ -34,6 +35,8 @@ import { useApplyTrendUpscale, useDiscardTrendUpscale, useStartTrendUpscale, use
 export interface UpscaleApplied {
   readonly target: "source" | "example"
   readonly index?: number
+  /** The target it was made at. */
+  readonly resolution: AdminTrendUpscaleResolution
 }
 
 interface Props {
@@ -64,6 +67,11 @@ interface Props {
 
 const IN_FLIGHT = new Set(["pending", "queued", "processing", "running"])
 
+/** A start button's label: the target, and "(enhance)" when the video already is that size. */
+export function upscaleOptionLabel(resolution: AdminTrendUpscaleResolution, offer: TrendUpscaleOffer): string {
+  return `Topaz ${resolution}${offer === "enhance" ? " (enhance)" : ""}`
+}
+
 export function UpscalePanel({
   trendId,
   target,
@@ -82,12 +90,17 @@ export function UpscalePanel({
   const start = useStartTrendUpscale(trendId)
   const apply = useApplyTrendUpscale(trendId)
   const discard = useDiscardTrendUpscale(trendId)
-  // The job just started, until the trend's refetch carries it as `pending`.
-  const [started, setStarted] = useState<string | null>(null)
+  // The job just started (and the target it was asked for), until the trend's refetch carries it as `pending`.
+  const [started, setStarted] = useState<{ jobId: string; resolution: AdminTrendUpscaleResolution } | null>(null)
   useEffect(() => {
-    if (started !== null && pending?.jobId === started) setStarted(null)
+    if (started !== null && pending?.jobId === started.jobId) setStarted(null)
   }, [started, pending?.jobId])
-  const jobId = started ?? pending?.jobId ?? null
+  const jobId = started?.jobId ?? pending?.jobId ?? null
+  // The target the job in view was asked for (a record from before the choice reads 1080p), kept
+  // past the record's end so the "in the draft" notice names the target it was put in at.
+  const lastResolution = useRef<AdminTrendUpscaleResolution>("1080p")
+  const resolution: AdminTrendUpscaleResolution = started?.resolution ?? pending?.resolution ?? lastResolution.current
+  if (jobId) lastResolution.current = resolution
   const current = started !== null || pending?.current !== false
   const job = useTrendUpscaleJob(jobId)
   const what = target.target === "source" ? "the source clip" : `example ${target.index + 1}`
@@ -102,8 +115,13 @@ export function UpscalePanel({
   done.current = onApplied
   const wrote = useRef(onServerWrite)
   wrote.current = onServerWrite
-  const doneTarget = useRef<UpscaleApplied>({ target: target.target, ...(target.target === "example" ? { index: target.index } : {}) })
-  doneTarget.current = { target: target.target, ...(target.target === "example" ? { index: target.index } : {}) }
+  const appliedAs = (): UpscaleApplied => ({
+    target: target.target,
+    ...(target.target === "example" ? { index: target.index } : {}),
+    resolution,
+  })
+  const doneTarget = useRef<UpscaleApplied>(appliedAs())
+  doneTarget.current = appliedAs()
   useEffect(() => {
     const watched = applyingHere ?? watching.current
     if (!watched) return
@@ -116,9 +134,9 @@ export function UpscalePanel({
     else wrote.current()
   }, [applyingHere, pending, recorded])
 
-  const offer = trendUpscaleOfferFor(video.width, video.height)
-  if (!jobId && !offer) return null
-  const enhance = offer === "enhance"
+  const offers = trendUpscaleOffersFor(video.width, video.height)
+  if (!jobId && offers.length === 0) return null
+  const enhance = trendUpscaleOfferFor(video.width, video.height, resolution) === "enhance"
 
   const j = job.data
   const running = !!jobId && (!j || IN_FLIGHT.has(j.status))
@@ -126,15 +144,15 @@ export function UpscalePanel({
   const upscaledUrl = j?.status === "completed" ? (j.output_data?.videoUrl ?? null) : null
   const applying = applyingHere !== null || serverApplying
   const busy = start.isPending || apply.isPending || discard.isPending || applying
-  const canStart = !!offer && !busy && !waitFor && (!jobId || failed || !current)
+  const canStart = offers.length > 0 && !busy && !waitFor && (!jobId || failed || !current)
   const applyError = !applying && pending?.jobId === jobId ? pending?.error : undefined
 
-  const begin = () =>
+  const begin = (to: AdminTrendUpscaleResolution) =>
     start.mutate(
-      { target, revision, idempotencyKey: generateIdempotencyKey() },
+      { target, resolution: to, revision, idempotencyKey: generateIdempotencyKey() },
       {
         onSuccess: (r) => {
-          setStarted(r.jobId)
+          setStarted({ jobId: r.jobId, resolution: to })
           if (r.draftMoved || !r.revision) onReload()
           else onRevision(r.revision)
         },
@@ -175,7 +193,7 @@ export function UpscalePanel({
       {jobId && running && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Loader2 className="h-4 w-4 animate-spin" />
-          {enhance ? "Enhancing at 1080p…" : "Upscaling to 1080p…"}{typeof j?.progress === "number" && j.progress > 0 ? ` ${Math.round(j.progress)} %` : ""}
+          {enhance ? `Enhancing at ${resolution}…` : `Upscaling to ${resolution}…`}{typeof j?.progress === "number" && j.progress > 0 ? ` ${Math.round(j.progress)} %` : ""}
         </p>
       )}
       {jobId && job.error && <p className="text-sm text-destructive">{job.error.message}</p>}
@@ -196,7 +214,7 @@ export function UpscalePanel({
             </figure>
             <figure className="flex min-w-0 flex-col gap-1">
               <video src={upscaledUrl} controls muted playsInline preload="metadata" aria-label={`After: ${what} upscaled`} className="max-h-56 w-full rounded bg-black object-contain" />
-              <figcaption className="text-muted-foreground">After · stored at 1080p</figcaption>
+              <figcaption className="text-muted-foreground">After · Topaz {resolution}{enhance ? " (enhance)" : ""} · stored at {resolution}</figcaption>
             </figure>
           </div>
           {target.target === "source" && (
@@ -210,7 +228,7 @@ export function UpscalePanel({
 
       {applying && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status" data-testid="upscale-applying">
-          <Loader2 className="h-4 w-4 animate-spin" /> Putting the 1080p video in the draft…
+          <Loader2 className="h-4 w-4 animate-spin" /> Putting the {resolution} video in the draft…
         </p>
       )}
       {pending?.applying?.stale && (
@@ -225,12 +243,25 @@ export function UpscalePanel({
             {applyError ? "Try Use it again" : "Use it"}
           </Button>
         )}
-        {offer && (!jobId || failed || !current) && (
-          <Button type="button" variant="outline" size="sm" className="min-h-9" disabled={!canStart} onClick={begin}>
-            {start.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Maximize2 className="mr-1 h-4 w-4" />}
-            {enhance ? (jobId ? "Enhance again" : "Enhance at 1080p") : jobId ? "Upscale again" : "Upscale to 1080p"}
-          </Button>
-        )}
+        {(!jobId || failed || !current) &&
+          offers.map((o) => (
+            <Button
+              key={o.resolution}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-9"
+              disabled={!canStart}
+              onClick={() => begin(o.resolution)}
+            >
+              {start.isPending && start.variables?.resolution === o.resolution ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Maximize2 className="mr-1 h-4 w-4" />
+              )}
+              {upscaleOptionLabel(o.resolution, o.offer)}
+            </Button>
+          ))}
         {jobId && !running && (
           <Button type="button" variant="ghost" size="sm" className="min-h-9" disabled={busy} onClick={drop}>
             <X className="mr-1 h-4 w-4" /> Discard
@@ -270,7 +301,9 @@ export function StaleUpscales({
       <ul className="flex flex-col gap-1">
         {stale.map((u) => (
           <li key={u.jobId} className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 break-all text-muted-foreground">Job {u.jobId}</span>
+            <span className="min-w-0 break-all text-muted-foreground">
+              Job {u.jobId} · {u.resolution}
+            </span>
             <Button
               type="button"
               variant="ghost"

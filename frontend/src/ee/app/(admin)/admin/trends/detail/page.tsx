@@ -1,8 +1,8 @@
 // Admin → Trends → one trend: build its draft (source clip and preview window,
 // slots, fixed references, pre and trend prompts, model, face masking and its
 // stored face mask, texts), test
-// it, promote admin runs to examples, upscale the source clip and the
-// examples to 1080p, and publish it.
+// it, promote admin runs to examples, upscale (or enhance) the source clip and
+// the examples to 720p or 1080p, and publish it.
 //
 // Like the rest of the admin trend screens, its text is English only.
 //
@@ -264,7 +264,7 @@ export default function AdminTrendEditorPage() {
   }
 
   const onUpscaleApplied = (w: UpscaleApplied) => {
-    toast.success(w.target === "source" ? "Source clip upscaled to 1080p" : `Example ${(w.index ?? 0) + 1} upscaled to 1080p`)
+    toast.success(w.target === "source" ? `Source clip upscaled to ${w.resolution}` : `Example ${(w.index ?? 0) + 1} upscaled to ${w.resolution}`)
     adoptServerDraft(
       w.target === "source"
         ? "The source clip was upscaled while you edited; saving will reload the draft."
@@ -542,7 +542,14 @@ export default function AdminTrendEditorPage() {
                     : []
                 }
                 keepPeople={savedPreparation === "keep-people"}
-                hasExamples={server.draft.examples.length > 0}
+                // With examples, a run leaves empty only the optional people some example has no pictures for.
+                emptiablePeople={
+                  server.draft.examples.length > 0
+                    ? server.draft.slots
+                        .filter((slot) => server.draft.examples.some((ex) => !(ex.slots[slot.key]?.length ?? 0)))
+                        .map((slot) => slot.key)
+                    : undefined
+                }
                 // Full depth's scene from a description (the default): the clip's stored descriptions.
                 sceneDescription={
                   savedPreparation === "full-depth" && (server.draft.faceMasking?.scene ?? "description") === "description"

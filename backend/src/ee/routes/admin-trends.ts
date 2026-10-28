@@ -26,7 +26,7 @@
  *   POST   /v1/admin/trends/:id/face-mask            make the trend's face mask (admin-trends-face-mask.ts) → 202 { jobId, revision }
  *   POST   /v1/admin/trends/:id/face-mask/approve    approve a finished one: stored on the draft
  *   DELETE /v1/admin/trends/:id/face-mask            clear the draft's face mask
- *   POST   /v1/admin/trends/:id/upscale              upscale the source or an example to 1080p (admin-trends-upscale.ts) → 202
+ *   POST   /v1/admin/trends/:id/upscale              upscale the source or an example to 720p / 1080p (admin-trends-upscale.ts) → 202
  *   POST   /v1/admin/trends/:id/upscale/apply        use a finished upscale (in the background) → 202: replaces that video on the draft
  *   DELETE /v1/admin/trends/:id/upscale/:jobId       discard an upscale in the making
  *   POST   /v1/admin/trends/:id/crop                 crop the source to 16:9 / 9:16 (admin-trends-crop.ts, in the background) → 202
@@ -335,15 +335,26 @@ async function copyRunMedia(req: FastifyRequest, trendId: string, run: RunJobRow
   }
 }
 
-/** The draft slots the run has no pictures for. */
-function slotsMissing(draft: TrendVersionData, used: Map<string, string[]>): string[] {
-  return draft.slots.filter((s) => (used.get(s.key)?.length ?? 0) === 0).map((s) => s.key)
+/**
+ * The draft's REQUIRED slots the run has no pictures for. An optional slot
+ * may be left without: the example then has no key for it, and a run that
+ * leaves it empty with this example keeps that role as in the clip.
+ */
+function requiredSlotsMissing(draft: TrendVersionData, used: Map<string, string[]>): string[] {
+  return draft.slots.filter((s) => s.required && (used.get(s.key)?.length ?? 0) === 0).map((s) => s.key)
 }
 
-/** The example for `draft`: the copied video and, for each of the draft's slots, the copies of the run's pictures. */
+/**
+ * The example for `draft`: the copied video and, for each of the draft's
+ * slots the run has pictures for, the copies of them (a slot without any has
+ * no key: never an empty list).
+ */
 function exampleFor(draft: TrendVersionData, run: RunJobRow, media: CopiedRunMedia, used: Map<string, string[]>): TrendExample {
   const slots: Record<string, string[]> = {}
-  for (const s of draft.slots) slots[s.key] = used.get(s.key)!.map((u) => media.images.get(u)!)
+  for (const s of draft.slots) {
+    const pictures = used.get(s.key) ?? []
+    if (pictures.length > 0) slots[s.key] = pictures.map((u) => media.images.get(u)!)
+  }
   return {
     videoUrl: media.video.url,
     ...(media.posterUrl ? { posterUrl: media.posterUrl } : {}),
@@ -745,9 +756,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         return err(reply, 409, "not_admin_run", "Only a run made by an admin account can be an example.")
       }
       const used = new Map(displaySlots(input.slots).map((s) => [s.key, s.images]))
-      const missing = slotsMissing(draft, used)
+      const missing = requiredSlotsMissing(draft, used)
       if (missing.length > 0) {
-        return err(reply, 409, "slots_incomplete", "This run has no pictures for every slot of the draft.", { slots: missing })
+        return err(reply, 409, "slots_incomplete", "This run has no pictures for every required slot of the draft.", { slots: missing })
       }
 
       // The copies take a while: the draft is read again afterwards, so an
@@ -756,9 +767,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       for (let attempt = 0; attempt < PROMOTE_ATTEMPTS; attempt++) {
         const fresh = await getDraftState(trend.id)
         if (!fresh) return notFound(reply)
-        const stillMissing = slotsMissing(fresh.data, used)
+        const stillMissing = requiredSlotsMissing(fresh.data, used)
         if (stillMissing.length > 0) {
-          return err(reply, 409, "slots_incomplete", "This run has no pictures for every slot of the draft.", { slots: stillMissing })
+          return err(reply, 409, "slots_incomplete", "This run has no pictures for every required slot of the draft.", { slots: stillMissing })
         }
         const example = exampleFor(fresh.data, run, media, used)
         try {

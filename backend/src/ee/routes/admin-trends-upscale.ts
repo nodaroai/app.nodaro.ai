@@ -1,21 +1,24 @@
 /**
- * Upscaling a trend's source clip or one of its examples to 1080p. Registered
+ * Upscaling a trend's source clip or one of its examples to 720p or 1080p. Registered
  * by `adminTrendsRoutes` (admin-trends.ts), so it shares its `requireAdmin`
  * door and its edition gate; every route here is admin-only.
  *
- *   POST   /v1/admin/trends/:id/upscale                 { target, index?, revision }: start a Topaz upscale → 202
+ *   POST   /v1/admin/trends/:id/upscale                 { target, index?, resolution?, revision }: start a Topaz upscale → 202
  *   POST   /v1/admin/trends/:id/upscale/apply           { jobId, revision }: use the finished upscale → 202 (runs in the background)
  *   DELETE /v1/admin/trends/:id/upscale/:jobId?revision=  discard an upscale in the making
  *
  * Starting asks the core `POST /v1/video-upscale` (Topaz, `targetResolution`
- * "1080p": the short side) as the admin, through `engineRequest`: the job is
- * the admin's, billed as any upscale, and the core route refuses a clip it
- * cannot take (unreadable, too long) before anything is held. A video at
- * exactly 1080 on its short side is enhanced at that size (the same ask); one
- * above 1080 is refused here (`offersUpscale`: a 1080p target would shrink it),
- * and so is a start while an upscale of the same video is still running. The job is written
- * onto the draft (`upscaleJobs`, named by the video it was made from), so the
- * editor follows it across a reload, a reorder or a removal.
+ * = the `resolution` asked for, "720p" or "1080p" (the default): the short
+ * side) as the admin, through `engineRequest`: the job is the admin's, billed
+ * as any upscale, and the core route refuses a clip it cannot take
+ * (unreadable, too long) before anything is held. A video at exactly the
+ * target on its short side is enhanced at that size (the same ask: a 720p clip
+ * asked for 720p only gets a cleaner picture); one above the target is refused
+ * here (`offersUpscale`: 409 `above_720p` / `above_1080p`, the target would
+ * shrink it), and so is a start while an upscale of the same video is still
+ * running. The job is written onto the draft (`upscaleJobs`, named by the
+ * video it was made from, with the target it was asked for), so the editor
+ * follows it across a reload, a reorder or a removal.
  *
  * Applying takes the draft's own pending upscale only: the caller's finished
  * Topaz job of exactly that video, while the video is still the target's. It
@@ -25,8 +28,9 @@
  * is gone (applied) or carries an `error`. One applying for longer than
  * `UPSCALE_APPLY_STALE_MS` (a restart) may be tried again; a second "Use it"
  * meanwhile is 409 `apply_in_progress`. The work:
- *   - stores the upscale at 1080p (short side; `storeUpscaledVideo`) under
- *     the trend;
+ *   - stores the upscale at its target (short side; `storeUpscaledVideo`)
+ *     under the trend: the job's own `targetResolution`, else the record's,
+ *     else 1080p;
  *   - an example gets the new video, a fresh poster, and its size and length;
  *   - the source is replaced exactly as a new source clip is (stored with the
  *     source's length range and a new display copy; the preview start kept
@@ -48,13 +52,14 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { DraftConflictError, getDraftState, saveDraft } from "../lib/trends/store.js"
 import { trendVersionDataSchema } from "../lib/trends/schemas.js"
 import { TrendMediaError, isTransientMediaFailure, storeUpscaledVideo } from "../lib/trends/media.js"
+import { TREND_UPSCALE_RESOLUTIONS, isTrendUpscaleResolution, type TrendUpscaleResolution } from "@nodaro/render-rules"
 import {
   UPSCALE_JOB_TYPE,
-  UPSCALE_TOPAZ_RESOLUTION,
   currentUpscaleTarget,
   isApplying,
   offersUpscale,
   pendingUpscaleJobs,
+  upscaleResolutionOf,
   upscaleSourceOf,
   withNewSourceClip,
   withUpscaleJob,
@@ -68,9 +73,11 @@ import { audit } from "./admin-trends-lifecycle.js"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const revisionSchema = z.string().min(1).max(100)
+/** The target Topaz is asked for (the short side); absent: 1080p, as before the choice. */
+const resolutionSchema = z.enum(TREND_UPSCALE_RESOLUTIONS).default("1080p")
 const startBody = z.discriminatedUnion("target", [
-  z.strictObject({ target: z.literal("source"), revision: revisionSchema }),
-  z.strictObject({ target: z.literal("example"), index: z.int().min(0), revision: revisionSchema }),
+  z.strictObject({ target: z.literal("source"), resolution: resolutionSchema, revision: revisionSchema }),
+  z.strictObject({ target: z.literal("example"), index: z.int().min(0), resolution: resolutionSchema, revision: revisionSchema }),
 ])
 const applyBody = z.strictObject({ jobId: z.string().regex(UUID_RE, "Not a job id."), revision: revisionSchema })
 const revisionQuery = z.object({ revision: revisionSchema })
@@ -155,11 +162,16 @@ async function auditedPayload(action: string, trendId: string, jobId: string, us
  * own `upscale_trend_video` audit row of it, or null. Only for a job the draft
  * holds no record of (`recorded: false`, or applied already).
  */
-async function auditedUpscale(trendId: string, jobId: string, userId: string): Promise<Pick<TrendUpscaleJob, "target" | "fromUrl"> | null> {
+async function auditedUpscale(
+  trendId: string,
+  jobId: string,
+  userId: string,
+): Promise<Pick<TrendUpscaleJob, "target" | "fromUrl" | "resolution"> | null> {
   const payload = await auditedPayload("upscale_trend_video", trendId, jobId, userId)
   const fromUrl = str(payload?.fromUrl)
   const target = payload?.target === "source" || payload?.target === "example" ? payload.target : null
-  return fromUrl && target ? { target, fromUrl } : null
+  const resolution = isTrendUpscaleResolution(payload?.resolution) ? payload.resolution : undefined
+  return fromUrl && target ? { target, fromUrl, ...(resolution ? { resolution } : {}) } : null
 }
 
 /** Where the draft holds `url` as the `target`'s video now (the source, or an example's index), or null. */
@@ -167,7 +179,7 @@ function holding(data: TrendVersionData, target: TrendUpscaleJob["target"], url:
   return currentUpscaleTarget(data, { target, fromUrl: url })
 }
 
-/** `data` with the upscale applied to `target` (the stored 1080p video and what goes with it). */
+/** `data` with the upscale applied to `target` (the stored video and what goes with it). */
 function applied(
   data: TrendVersionData,
   target: UpscaleTarget,
@@ -202,6 +214,8 @@ interface ApplyRun {
   trend: TrendRow
   jobId: string
   made: Pick<TrendUpscaleJob, "target" | "fromUrl">
+  /** The target the stored video is held to (720p or 1080p, the short side). */
+  resolution: TrendUpscaleResolution
   /** The `applying.startedAt` this run owns: a run whose mark was taken over (a stale retry) stops. */
   mark: string
   upscaledUrl: string
@@ -237,7 +251,7 @@ async function markFailed(run: ApplyRun, code: string, message: string): Promise
   }
 }
 
-/** "Use it", in the background: store the 1080p video, then put it in the draft as it is then. Never throws. */
+/** "Use it", in the background: store the video at its target, then put it in the draft as it is then. Never throws. */
 async function finishApply(run: ApplyRun): Promise<void> {
   const { req, trend, jobId, made } = run
   try {
@@ -246,6 +260,7 @@ async function finishApply(run: ApplyRun): Promise<void> {
       originalUrl: made.fromUrl,
       durationSec: run.durationSec,
       asSource: made.target === "source",
+      resolution: run.resolution,
       ...(run.shownAs ? { shownAs: run.shownAs } : {}),
     })
     // The preview clip cut once (the first attempt's), re-used by a retry after a lost race while it still fits.
@@ -264,7 +279,7 @@ async function finishApply(run: ApplyRun): Promise<void> {
       }
       const parsed = trendVersionDataSchema.safeParse(withoutUpscaleJob(applied(fresh.data, now, stored), jobId))
       if (!parsed.success) return await markFailed(run, "validation_error", "The draft would not be valid with this upscale in it.")
-      // A new source clip puts the preview's input clip out of date: cut again from the stored 1080p clip.
+      // A new source clip puts the preview's input clip out of date: cut again from the stored clip.
       const next = await ensurePreviewClip(trend.id, parsed.data, clip ? { reuse: clip } : {})
       clip = next.previewClip
       try {
@@ -277,6 +292,7 @@ async function finishApply(run: ApplyRun): Promise<void> {
         slug: trend.slug,
         jobId,
         target: made.target,
+        resolution: run.resolution,
         fromUrl: made.fromUrl,
         url: stored.url,
         width: stored.width,
@@ -311,14 +327,15 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
       // Before anything is paid for: a stale screen reloads first.
       if (revision !== body.data.revision) return deps.draftConflict(reply)
       const target: UpscaleTarget = body.data.target === "source" ? { target: "source" } : { target: "example", index: body.data.index }
+      const resolution = body.data.resolution
       const from = upscaleSourceOf(draft, target)
       if (!from) {
         return target.target === "source"
           ? err(reply, 409, "source_missing", "Add a source clip and save the draft first.")
           : err(reply, 404, "not_found", "Example not found")
       }
-      if (!offersUpscale(from.width, from.height)) {
-        return err(reply, 409, "above_1080p", `The video of ${targetName(target)} is above 1080p: a 1080p upscale would shrink it.`)
+      if (!offersUpscale(from.width, from.height, resolution)) {
+        return err(reply, 409, `above_${resolution}`, `The video of ${targetName(target)} is above ${resolution}: a ${resolution} upscale would shrink it.`)
       }
       // One upscale of a video at a time: a second click would pay twice for the same result.
       const same = draft.upscaleJobs?.find((j) => j.target === target.target && j.fromUrl === from.fromUrl)
@@ -331,26 +348,27 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
       const placeholder: TrendUpscaleJob = {
         jobId: "00000000-0000-4000-8000-000000000000",
         target: target.target,
+        resolution,
         fromUrl: from.fromUrl,
         startedAt: new Date().toISOString(),
       }
       const valid = trendVersionDataSchema.safeParse({ ...draft, upscaleJobs: withUpscaleJob(draft, placeholder) })
       if (!valid.success) return deps.badRequest(reply, valid.error)
       const key = req.headers["idempotency-key"]
-      // Topaz's own target: 1080p is the short side, a portrait clip stays portrait; the frame rate is
-      // the clip's own. A clip Topaz cannot take is refused by the core route before anything is held.
+      // Topaz's own target: 720p / 1080p is the short side, a portrait clip stays portrait; the frame rate
+      // is the clip's own. A clip Topaz cannot take is refused by the core route before anything is held.
       const res = await engineRequest(
         app,
         req,
         "/v1/video-upscale",
-        { videoUrl: from.fromUrl, provider: "topaz", targetResolution: UPSCALE_TOPAZ_RESOLUTION },
+        { videoUrl: from.fromUrl, provider: "topaz", targetResolution: resolution },
         typeof key === "string" && key ? { "idempotency-key": key } : {},
         { origin: "trends-admin", source: deriveJobSource(req) },
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       jobId = jobIdOf(res.body)
       if (!jobId) return err(reply, 502, "upscale_error", "Video Upscale did not return a job id.")
-      await audit(req, "upscale_trend_video", "trend", trend.id, { slug: trend.slug, jobId, target: target.target, fromUrl: from.fromUrl })
+      await audit(req, "upscale_trend_video", "trend", trend.id, { slug: trend.slug, jobId, target: target.target, resolution, fromUrl: from.fromUrl })
 
       // The job is paid for: record it on the draft even when another write
       // landed meanwhile (re-read, keep that write), and say so (`draftMoved`).
@@ -430,6 +448,12 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
       if (input.type !== UPSCALE_JOB_TYPE || (input.provider ?? "topaz") !== "topaz" || input.videoUrl !== made.fromUrl) {
         return err(reply, 409, "not_an_upscale", "That job is not a Topaz upscale of this video.")
       }
+      // The target it was MADE at: the job's own (what Topaz was asked), else the record's, else 1080p.
+      const asked = input.targetResolution
+      if (asked !== undefined && !isTrendUpscaleResolution(asked)) {
+        return err(reply, 409, "not_an_upscale", "That job is not a Topaz upscale to 720p or 1080p.")
+      }
+      const resolution: TrendUpscaleResolution = asked ?? upscaleResolutionOf(made)
       if (job.status !== "completed") return err(reply, 409, "not_completed", "Only a finished upscale can be used.")
       if (job.should_watermark === true) {
         return err(reply, 409, "watermarked", "This upscale carries a watermark, so it can't go into a trend.")
@@ -450,6 +474,7 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
       const marked: TrendUpscaleJob = {
         jobId,
         target: made.target,
+        resolution,
         fromUrl: made.fromUrl,
         startedAt: record?.startedAt ?? mark,
         applying: { startedAt: mark, by: req.userId! },
@@ -459,7 +484,7 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
         : { ...draft, upscaleJobs: withUpscaleJob(draft, marked) }
       const saved = await deps.saveValidDraft(reply, trend.id, next, revision)
       if (!saved) return reply
-      const run: ApplyRun = { req, trend, jobId, made, mark, upscaledUrl, durationSec: from.durationSec, ...(shownAs ? { shownAs } : {}) }
+      const run: ApplyRun = { req, trend, jobId, made, resolution, mark, upscaledUrl, durationSec: from.durationSec, ...(shownAs ? { shownAs } : {}) }
       const work = finishApply(run).finally(() => inFlight.delete(work))
       inFlight.add(work)
       return reply.status(202).send({ data: { jobId, ...saved, applying: true, upscaleJobs: pendingUpscaleJobs(next) } })
@@ -485,7 +510,13 @@ export function registerTrendUpscaleRoutes(app: FastifyInstance, deps: TrendUpsc
       const next = withoutUpscaleJob(draft, jobId)
       const saved = await deps.saveValidDraft(reply, trend.id, next, revision)
       if (!saved) return reply
-      await audit(req, "discard_trend_upscale", "trend", trend.id, { slug: trend.slug, jobId, target: pending.target, fromUrl: pending.fromUrl })
+      await audit(req, "discard_trend_upscale", "trend", trend.id, {
+        slug: trend.slug,
+        jobId,
+        target: pending.target,
+        resolution: upscaleResolutionOf(pending),
+        fromUrl: pending.fromUrl,
+      })
       return { data: { ...saved, upscaleJobs: pendingUpscaleJobs(next) } }
     } catch (e) {
       if (e instanceof DraftConflictError) return deps.draftConflict(reply)

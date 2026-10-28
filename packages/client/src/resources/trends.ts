@@ -21,8 +21,7 @@ import type { CastSwapEngine } from "./cast-swap.js"
  * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`):
  * - 400 `validation_error` (the body, a query, or a bad `cursor`);
  *   `estimate()` / `run()` only, before anything is charged:
- *   `missing_slot` (a required slot without pictures, or an optional one
- *   left empty that the chosen example has no pictures for), `unknown_slot`,
+ *   `missing_slot` (a required slot without pictures), `unknown_slot`,
  *   `invalid_choice` (a chip the slot's kind does not take),
  *   `chip_not_offered` (a chip of the kind that the slot's
  *   {@link TrendDetailSlot.chips} does not list: the trend fixes it),
@@ -145,7 +144,8 @@ export interface TrendDetailSlot {
   kind: TrendSlotKind
   /**
    * A required slot needs pictures; an optional one left empty takes the
-   * chosen example's, or, on a trend with no example, stays as in the original;
+   * chosen example's, or, on a trend with no example (or when that example has
+   * none for it), stays as in the original;
    * except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
    */
   required: boolean
@@ -172,7 +172,11 @@ export interface TrendExample {
   posterUrl?: string
   width: number
   height: number
-  /** Slot key → the pictures this example used for it. */
+  /**
+   * Slot key → the pictures this example used for it. An optional slot the
+   * example kept as in the original has no key; a run that leaves that slot
+   * empty with this example keeps it as in the original too.
+   */
   slots: Record<string, string[]>
 }
 
@@ -232,7 +236,7 @@ export interface TrendRunRequest {
   /**
    * Slot key → what you put in it. Every required slot needs pictures; an
    * optional slot left out takes the chosen example's, or, on a trend with no
-   * example, stays as in the original; except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
+   * example (or when that example has none for it), stays as in the original; except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
    * 1–3 pictures per slot.
    */
   slots: Record<string, TrendRunSlot>
@@ -324,8 +328,8 @@ export interface TrendRunDisplaySlot extends TrendChips {
   images: string[]
   /**
    * `true` when the slot was left empty and the example's pictures filled it.
-   * `false` with no `images`: left empty on a trend with no example, so it
-   * stayed as in the original.
+   * `false` with no `images`: left empty on a trend with no example, or the
+   * chosen example has no pictures for it, so it stayed as in the original.
    */
   fromExample: boolean
   /**

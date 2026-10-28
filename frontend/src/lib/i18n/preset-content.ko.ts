@@ -137,6 +137,7 @@ export const PRESET_CONTENT_KO: Record<string, PresetCopy> = {
   "generate-image/faceless-3d-head": { name: "얼굴 없음 · 3D 마네킹 두상", description: "인물의 얼굴 → 이목구비 없는 매끈한 흰색 3D 두상으로 바뀝니다. 나머지는 그대로 유지됩니다." },
   "generate-image/remove-faces": { name: "얼굴 지우기", description: "인물의 얼굴을 완전히 지웁니다. 나머지는 그대로 유지됩니다." },
   "generate-image/transparent-faces": { name: "얼굴 투명 처리", description: "인물의 얼굴이 투명해집니다. 나머지는 그대로 유지됩니다." },
+  "generate-image/remove-people": { name: "인물 지우기", description: "사진에서 모든 인물을 지웁니다. 배경은 그대로 유지됩니다." },
   "generate-video/slow-push-in": { name: "슬로 푸시 인", description: "피사체를 향해 천천히 다가가는 돌리 샷입니다." },
   "generate-video/dolly-out": { name: "돌리 아웃(드러내기)", description: "카메라가 뒤로 물러나며 장면 전체를 드러냅니다." },
   "generate-video/orbit-360": { name: "360° 오비트", description: "카메라가 피사체 주위를 한 바퀴 돕니다." },

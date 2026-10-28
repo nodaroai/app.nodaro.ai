@@ -922,12 +922,33 @@ describe("POST /:id/examples (D16)", () => {
     expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
   })
 
-  it("a run missing a slot of the draft is 409 slots_incomplete", async () => {
+  it("a run missing a REQUIRED slot of the draft is 409 slots_incomplete, and nothing is copied", async () => {
     seed()
-    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ slots: [runInput().slots[0]] }) }))
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ slots: [runInput().slots[1]] }) }))
     const res = await call("POST", `/v1/admin/trends/${T1}/examples`, { jobId: RUN })
     expect(res.statusCode).toBe(409)
-    expect(res.json().error).toMatchObject({ code: "slots_incomplete", slots: ["dog"] })
+    expect(res.json().error).toMatchObject({ code: "slots_incomplete", slots: ["lead"] })
+    expect(mem.uploads).toEqual([])
+    expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
+  })
+
+  it("a run that left an OPTIONAL slot without pictures becomes an example with no key for that slot", async () => {
+    seed()
+    const [lead, dog] = runInput().slots
+    // As a run records it: left empty on a trend with no example, so it stayed as filmed.
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ example: 0, slots: [lead, { ...dog, images: [] }] }) }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/examples`, { jobId: RUN })
+    expect(res.statusCode).toBe(201)
+    const [example] = mem.trends[0]!.versions[1]!.data.examples
+    expect(Object.keys(example!.slots)).toEqual(["lead"])
+    expect(example!.slots.lead![0]!.startsWith(`https://cdn.test/trends/${T1}/`)).toBe(true)
+    expect(res.json().data.example.slots).toEqual(example!.slots)
+    // The same when the run's record has no entry for the slot at all.
+    const RUN_B = "00000000-0000-4000-8000-0000000000b3"
+    world.jobs.set(RUN_B, jobRow(RUN_B, ADMIN, { input_data: runInput({ slots: [lead] }) }))
+    const again = await call("POST", `/v1/admin/trends/${T1}/examples`, { jobId: RUN_B })
+    expect(again.statusCode).toBe(201)
+    expect(Object.keys(mem.trends[0]!.versions[1]!.data.examples[1]!.slots)).toEqual(["lead"])
   })
 
   it("an unfinished run is 409 not_completed; another trend's run is a 404", async () => {
@@ -1004,7 +1025,20 @@ describe("draft revisions (concurrent writes are never silently undone)", () => 
     expect(res.json().data).toMatchObject({ version: 1, revision: mem.trends[0]!.versions[1]!.revision, index: 0 })
   })
 
-  it("a slot added during the copy that the run has no picture for is slots_incomplete, not a broken example", async () => {
+  it("a required slot added during the copy that the run has no picture for is slots_incomplete, not a broken example", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    mem.onUpload = async () => {
+      const slots = [...draftData().slots, { key: "car", label: { en: "Car" }, kind: "product" as const, required: true, roleName: "the car" }]
+      await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), slots }, revision: await revisionOf() })
+    }
+    const res = await call("POST", `/v1/admin/trends/${T1}/examples`, { jobId: RUN })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "slots_incomplete", slots: ["car"] })
+    expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
+  })
+
+  it("an optional slot added during the copy is left out of the example (it stays as filmed)", async () => {
     seed()
     world.jobs.set(RUN, jobRow(RUN, ADMIN))
     mem.onUpload = async () => {
@@ -1012,9 +1046,8 @@ describe("draft revisions (concurrent writes are never silently undone)", () => 
       await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), slots }, revision: await revisionOf() })
     }
     const res = await call("POST", `/v1/admin/trends/${T1}/examples`, { jobId: RUN })
-    expect(res.statusCode).toBe(409)
-    expect(res.json().error).toMatchObject({ code: "slots_incomplete", slots: ["car"] })
-    expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
+    expect(res.statusCode).toBe(201)
+    expect(Object.keys(mem.trends[0]!.versions[1]!.data.examples[0]!.slots)).toEqual(["lead", "dog"])
   })
 
   it("two concurrent promotions both land", async () => {
@@ -1281,10 +1314,17 @@ describe("POST /:id/publish — engine check", () => {
     expect(mem.trends[0]!.status).toBe("published")
   })
 
-  it("an example without pictures for a slot blocks publishing", async () => {
+  it("an example without pictures for a required slot blocks publishing", async () => {
+    seed({}, draftData({ examples: [{ ...EXAMPLE, slots: { dog: EXAMPLE.slots.dog } }] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(reasonsOf(res)).toEqual([{ code: "example_slots_incomplete", example: 1, slots: ["lead"] }])
+  })
+
+  it("an example without pictures for an optional slot publishes (that slot stays as filmed)", async () => {
     seed({}, draftData({ examples: [{ ...EXAMPLE, slots: { lead: EXAMPLE.slots.lead } }] }))
     const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
-    expect(reasonsOf(res)).toEqual([{ code: "example_slots_incomplete", example: 1, slots: ["dog"] }])
+    expect(res.statusCode).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
   })
 
   it("an engine-environments read failure is a 500, never 'unknown'", async () => {

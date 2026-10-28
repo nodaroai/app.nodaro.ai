@@ -681,7 +681,7 @@ const { data: cards } = await client.trends.list({ q: "dance" })
 const trend = await client.trends.get(cards[0].slug)
 
 const request: TrendRunRequest = {
-  // Every required slot needs 1–3 pictures; optional slots left out take the example's.
+  // Every required slot needs 1–3 pictures; optional slots left out take the example's (or stay as in the original where it has none).
   slots: Object.fromEntries(
     trend.slots.filter((s) => s.required).map((s) => [s.key, { images: [myPhotoUrl] }]),
   ),

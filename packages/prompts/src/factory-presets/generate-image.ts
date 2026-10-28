@@ -293,10 +293,10 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     },
   },
   // ── Face Privacy (connect the photo → {image:1}) ─────────────────────────
-  // gpt-image-2 + aspectRatio "auto" so the output keeps the input photo's
-  // shape. NOTE: KIE's gpt-image-2 spec forces resolution 1K when aspect is
-  // "auto" (the config panel's fail-safe snaps any other value back), so
-  // these pin 1K explicitly rather than shipping a self-contradicting 2K.
+  // aspectRatio "auto" so the output keeps the input photo's shape. NOTE:
+  // KIE's gpt-image-2 spec forces resolution 1K when aspect is "auto" (the
+  // config panel's fail-safe snaps any other value back), so the gpt-image-2
+  // presets pin 1K explicitly rather than shipping a self-contradicting 2K.
   {
     id: "generate-image/faceless-3d-head",
     name: "Faceless · 3D Blank Head",
@@ -338,6 +338,20 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       promptPrefix: "make faces transparent in {image:1}, keep everything else the same",
       negativePrompt:
         "opaque faces, visible facial features, eyes, nose, mouth, changing the background, altering clothing, hair or body, restyling the scene, relighting, changing pose or framing, distorted anatomy, watermark, blurry",
+    },
+  },
+  // GPT Image 2.5 Flare has no auto x resolution restriction, so this one keeps
+  // the photo's shape AND renders 2K.
+  {
+    id: "generate-image/remove-people",
+    name: "Remove People",
+    description: "Remove every person from the photo; the background stays exactly the same.",
+    group: "Face Privacy",
+    data: {
+      provider: "gpt-image-2-5-flare",
+      aspectRatio: "auto",
+      resolution: "2K",
+      promptPrefix: "remove all people from {image:1}\nkeep background exactly the same",
     },
   },
   // ── Photography & Cinematic ──────────────────────────────────────────────

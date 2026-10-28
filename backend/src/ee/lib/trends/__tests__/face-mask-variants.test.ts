@@ -121,12 +121,32 @@ describe("which people are marked, and which sets a run can leave empty", () => 
     expect(three).toEqual([["amy"], ["ben"], ["cat"], ["amy", "ben"], ["amy", "cat"], ["ben", "cat"], ["amy", "ben", "cat"]])
   })
 
-  it("applies only to a trend with no examples (an example fills every empty slot)", () => {
+  it("with examples, applies only to the marked people some example has no pictures for", () => {
     const d = data([slotMark("amy", 10)])
     expect(faceMaskVariantsApply(d)).toBe(true)
-    const withExample = { ...d, examples: [{ videoUrl: img("ex"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots: {} }] }
-    expect(faceMaskVariantsApply(withExample)).toBe(false)
-    expect(faceMaskVariantSets(withExample)).toEqual([])
+    const ex = (slots: Record<string, string[]>) => ({ videoUrl: img("ex"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots })
+    // Every example has amy: an empty slot takes the example's person, so no run leaves her empty.
+    const filled = { ...d, examples: [ex({ lead: [img("x")], amy: [img("xa")] })] }
+    expect(faceMaskVariantsApply(filled)).toBe(false)
+    expect(faceMaskVariantSets(filled)).toEqual([])
+    // An example without amy keeps her as in the clip: her variant is needed.
+    const kept = { ...d, examples: [ex({ lead: [img("x")], amy: [img("xa")] }), ex({ lead: [img("y")] })] }
+    expect(faceMaskVariantsApply(kept)).toBe(true)
+    expect(faceMaskVariantSets(kept)).toEqual([["amy"]])
+  })
+
+  it("with examples, the sets are each example's empty marked people and their subsets, each once", () => {
+    const three = data([slotMark("amy", 10), slotMark("ben", 40), slotMark("cat", 70)])
+    const ex = (slots: Record<string, string[]>) => ({ videoUrl: img("ex"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots })
+    const d = {
+      ...three,
+      examples: [
+        ex({ lead: [img("x")], cat: [img("xc")] }), // amy and ben kept
+        ex({ lead: [img("y")], amy: [img("ya")], ben: [img("yb")] }), // cat kept
+        ex({ lead: [img("z")], ben: [img("zb")], cat: [img("zc")] }), // amy kept (already a set)
+      ],
+    }
+    expect(faceMaskVariantSets(d)).toEqual([["amy"], ["ben"], ["cat"], ["amy", "ben"]])
   })
 
   it("has no sets over the cap of 3 marked people", () => {
@@ -184,6 +204,29 @@ describe("withCurrentVariants (a save of the marks, the slots or the examples)",
     // The failed one needs no closing; the one in the making does.
     expect(abandoned.map((j) => j.jobId)).toEqual(["a"])
     expect(faceMaskVariantsState(next).variants.map((v) => v.status)).toEqual(["out_of_date"])
+  })
+
+  it("keeps every paid variant when an example that fills some marked people is added, and asks only for the reachable sets", () => {
+    const d = withVariants(data([slotMark("amy", 10), slotMark("ben", 40)]), [["amy"], ["ben"], ["amy", "ben"]])
+    const example = { videoUrl: img("ex"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots: { lead: [img("x")], ben: [img("xb")] } }
+    const withExample = { ...d, examples: [example] }
+    const { data: next, abandoned } = withCurrentVariants(withExample)
+    expect(next).toBe(withExample)
+    expect(abandoned).toEqual([])
+    expect(next.faceMask!.variants!.map((v) => v.emptySlots)).toEqual([["amy"], ["ben"], ["amy", "ben"]])
+    expect(faceMaskVariantsState(next).variants.map((v) => [v.emptySlots, v.status])).toEqual([[["amy"], "approved"]])
+    expect(keptVariantsFor(next, next).variants).toHaveLength(3)
+    // Publishing needs only amy's, which is made.
+    const ENVS: EngineEnvironment[] = ["staging", "production"].map((env) => ({
+      env,
+      pluginBuildId: "b",
+      supports: { castSwap: { roleKinds: ["person"], fullQuality: true, resolutions: ["480p", "720p", "1080p"], trendRun: true, faceMasking: true, storedFaceMask: true, storedFaceMaskRequired: true, faceMaskRecipe: "1" } as never },
+      updatedAt: "2026-10-27T00:00:00Z",
+    }))
+    expect(publishBlockers(next, ENVS, ["staging", "production"])).toEqual([])
+    // Without amy's variant, publishing names it.
+    const noAmy = { ...next, faceMask: { ...next.faceMask!, variants: next.faceMask!.variants!.filter((v) => v.emptySlots.join() !== "amy") } }
+    expect(publishBlockers(noAmy, ENVS, ["staging", "production"]).map((b) => [b.code, b.slots])).toEqual([["face_mask_variant_missing", ["amy"]]])
   })
 
   it("never lets a change of people grow past the 7 sets: old sets go, the new ones fit", () => {
@@ -315,6 +358,20 @@ describe("the run's pick (composeTrendRun)", () => {
     const withExample = { ...d, examples: [example] }
     const { body } = composeTrendRun(trend(withExample), fill())
     expect(body.storedFaceMask).toEqual({ url: "https://cdn.example.com/trends/t-1/mask.mp4", frames: 360 })
+  })
+
+  it("a trend whose chosen example has no pictures for a marked person sends that person's variant", () => {
+    const example = { videoUrl: img("ex"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots: { lead: [img("x")], ben: [img("xb")] } }
+    const withExample = { ...d, examples: [example] }
+    const { body, display } = composeTrendRun(trend(withExample), fill())
+    // Amy is kept as in the clip (no pictures, not from the example); ben takes the example's.
+    expect(display.slots.map((s) => [s.key, s.images, s.fromExample])).toEqual([
+      ["lead", [img("lead")], false],
+      ["amy", [], false],
+      ["ben", [img("xb")], true],
+      ["cat", [], false],
+    ])
+    expect(body.storedFaceMask).toEqual({ url: "https://cdn.example.com/trends/t-1/v0.mp4", frames: 360, required: true })
   })
 
   it("faceMaskVariantFor reads the set in any order", () => {

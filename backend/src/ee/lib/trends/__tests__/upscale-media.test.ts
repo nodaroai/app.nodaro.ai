@@ -1,9 +1,10 @@
 // @test-reads-none reads only the temp clips it makes with ffmpeg and the copies the stubbed upload keeps
 /**
- * Storing a Topaz upscale as 1080p (ee/lib/trends/media.ts `storeUpscaledVideo`).
+ * Storing a Topaz upscale at its target, 720p or 1080p (ee/lib/trends/media.ts
+ * `storeUpscaledVideo`).
  *
  * What must hold:
- *  - the stored video's SHORT side is exactly 1080, the aspect and the
+ *  - the stored video's SHORT side is exactly the target's (720 or 1080), the aspect and the
  *    orientation kept, both sides even — a rotation tag included (the size is
  *    picked from the decoded frame);
  *  - Topaz's output is stored AS IT IS (no re-encode) only when it already is
@@ -14,7 +15,7 @@
  *    longer than the clip it replaces;
  *  - an example's gets a fresh poster; the source's is stored exactly as a
  *    new source clip is, with a new display copy;
- *  - a result that is not 1080p, or that cannot be resized, is a
+ *  - a result that is not at its target, or that cannot be resized, is a
  *    `media_unreadable` and nothing is stored; a launch the platform stopped
  *    is thrown as it is.
  *
@@ -144,7 +145,7 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
     vi.mocked(probeVideoSource)
       .mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10.04 })
       .mockResolvedValue({ width: 1080, height: 1920, durationSeconds: 10 })
-    const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false })
+    const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p" })
     expect(stored).toEqual({
       url: expect.stringMatching(KEY_RE("mp4")),
       posterUrl: expect.stringMatching(KEY_RE("png")),
@@ -167,14 +168,14 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
     vi.mocked(probeVideoSource)
       .mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10 })
       .mockResolvedValue({ width: 1080, height: 1920, durationSeconds: 10 })
-    await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false })
+    await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p" })
     expect(vi.mocked(runFfmpeg).mock.calls.map((c) => (c[0].join(" ").includes("-c:a copy") ? "copy" : "aac"))).toEqual(["copy", "aac"])
   })
 
   it("an upscale that cannot be resized is media_unreadable, not retried (only a refused sound copy is), and nothing is stored", async () => {
     vi.mocked(runFfmpeg).mockRejectedValue(new Error("ffmpeg failed: Invalid data found when processing input"))
     vi.mocked(probeVideoSource).mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10 })
-    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false }).catch((x: unknown) => x)
+    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p" }).catch((x: unknown) => x)
     expect(e).toBeInstanceOf(TrendMediaError)
     expect((e as TrendMediaError).code).toBe("media_unreadable")
     expect(runFfmpeg).toHaveBeenCalledTimes(1)
@@ -198,13 +199,13 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
 
   it("stores Topaz's output as it is when it already is exactly 1080p, the right way round, no longer, browser-safe and with its sound", async () => {
     asIs({ width: 1080, height: 1920, durationSeconds: 10.02 })
-    const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, shownAs: { width: 720, height: 1280 } })
+    const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p", shownAs: { width: 720, height: 1280 } })
     expect(runFfmpeg).not.toHaveBeenCalled()
     expect(stored).toMatchObject({ width: 1080, height: 1920, posterUrl: expect.stringMatching(KEY_RE("png")) })
     // A silent original needs no sound from Topaz either.
     vi.mocked(runFfmpeg).mockClear()
     asIs({ width: 1920, height: 1080, durationSeconds: 10 }, undefined, { up: false, original: false })
-    await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false })
+    await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p" })
     expect(runFfmpeg).not.toHaveBeenCalled()
   })
 
@@ -218,7 +219,7 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
   ])("re-encodes an output that is %s", async (_what, probe, stream, sound, shownAs) => {
     asIs(probe, stream, sound)
     // The resize's own result is what the stub probe answers: only the decision is pinned here.
-    await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, ...(shownAs ? { shownAs } : {}) }).catch(() => undefined)
+    await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p", ...(shownAs ? { shownAs } : {}) }).catch(() => undefined)
     expect(runFfmpeg).toHaveBeenCalledTimes(1)
     expect(vi.mocked(runFfmpeg).mock.calls[0]![0].join(" ")).toContain("-t 10.000")
   })
@@ -227,7 +228,7 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
     const killed = Object.assign(new Error("ffmpeg failed: killed"), { killed: true, timedOut: true })
     vi.mocked(runFfmpeg).mockRejectedValueOnce(killed)
     vi.mocked(probeVideoSource).mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10 })
-    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false }).catch((x: unknown) => x)
+    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p" }).catch((x: unknown) => x)
     expect(e).toBe(killed)
     expect(runFfmpeg).toHaveBeenCalledTimes(1)
     expect(uploads.list).toEqual([])
@@ -239,12 +240,12 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
     vi.mocked(probeVideoSource)
       .mockResolvedValueOnce({ width: 2560, height: 1440, durationSeconds: 10 })
       .mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 10 })
-    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: true, shownAs: { width: 720, height: 1280 } }).catch((x: unknown) => x)
+    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: true, resolution: "1080p", shownAs: { width: 720, height: 1280 } }).catch((x: unknown) => x)
     expect(e).toBeInstanceOf(TrendMediaError)
     expect((e as TrendMediaError).message).toContain("lost its rotation")
     expect(uploads.list).toEqual([])
     // The same upscale of a landscape original is fine.
-    const ok = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, shownAs: { width: 1280, height: 720 } })
+    const ok = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p", shownAs: { width: 1280, height: 720 } })
     expect(ok).toMatchObject({ width: 1920, height: 1080 })
   })
 
@@ -253,10 +254,44 @@ describe("storeUpscaledVideo (ffmpeg stubbed)", () => {
     vi.mocked(probeVideoSource)
       .mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10 })
       .mockResolvedValue({ width: 720, height: 1280, durationSeconds: 10 })
-    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false }).catch((x: unknown) => x)
+    const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "1080p" }).catch((x: unknown) => x)
     expect(e).toBeInstanceOf(TrendMediaError)
     expect((e as TrendMediaError).message).toContain("720×1280")
     expect(uploads.list).toEqual([])
+  })
+
+  describe("at a 720p target", () => {
+    it("a 720p clip enhanced at 720p is stored as it is (the same size), never resized up to 1080", async () => {
+      asIs({ width: 720, height: 1280, durationSeconds: 10 })
+      const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "720p", shownAs: { width: 720, height: 1280 } })
+      expect(runFfmpeg).not.toHaveBeenCalled()
+      expect(stored).toMatchObject({ width: 720, height: 1280 })
+    })
+
+    it("an output that is not 720 on its short side is resized to 720, the aspect and orientation kept", async () => {
+      asIs({ width: 1080, height: 1920, durationSeconds: 10 })
+      vi.mocked(probeVideoSource)
+        .mockReset()
+        .mockResolvedValueOnce({ width: 1080, height: 1920, durationSeconds: 10 })
+        .mockResolvedValue({ width: 720, height: 1280, durationSeconds: 10 })
+      const stored = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "720p" })
+      expect(runFfmpeg).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(runFfmpeg).mock.calls[0]![0][vi.mocked(runFfmpeg).mock.calls[0]![0].indexOf("-vf") + 1]).toBe(
+        "scale='if(lte(iw,ih),720,1280)':'if(lte(iw,ih),1280,720)':flags=lanczos,setsar=1",
+      )
+      expect(stored).toMatchObject({ width: 720, height: 1280 })
+    })
+
+    it("a result that came out at 1080p for a 720p ask is media_unreadable, and nothing is stored", async () => {
+      stubRun()
+      vi.mocked(probeVideoSource)
+        .mockResolvedValueOnce({ width: 1440, height: 2560, durationSeconds: 10 })
+        .mockResolvedValue({ width: 1080, height: 1920, durationSeconds: 10 })
+      const e = await storeUpscaledVideo(TREND, { ...(await inputs()), durationSec: 10, asSource: false, resolution: "720p" }).catch((x: unknown) => x)
+      expect(e).toBeInstanceOf(TrendMediaError)
+      expect((e as TrendMediaError).message).toBe("The upscaled video came out at 1080×1920, not 720p.")
+      expect(uploads.list).toEqual([])
+    })
   })
 })
 
@@ -296,7 +331,7 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   it("an example: 1080×1920 from a silent 2x upscale, the original's sound, no longer than the original, and a fresh poster", async () => {
     const up = clip("up-portrait.mp4", "1440x2560", { seconds: 2.5 })
     const orig = clip("orig-portrait.mp4", "720x1280", { sound: true, seconds: 2 })
-    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false })
+    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })
     expect(stored).toMatchObject({ width: 1080, height: 1920 })
     expect(stored.url).toMatch(KEY_RE("mp4"))
     expect(stored.posterUrl).toMatch(KEY_RE("png"))
@@ -312,7 +347,7 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   it("an upscale already 1080p H.264 with sound is stored as it is, with no re-encode", async () => {
     const up = clip("up-asis.mp4", "1080x1920", { sound: true, seconds: 2 })
     const orig = clip("orig-asis.mp4", "720x1280", { sound: true, seconds: 2 })
-    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2.1, asSource: false, shownAs: { width: 720, height: 1280 } })
+    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2.1, asSource: false, resolution: "1080p", shownAs: { width: 720, height: 1280 } })
     expect(runFfmpeg).not.toHaveBeenCalled()
     expect(stored).toMatchObject({ width: 1080, height: 1920 })
     const video = uploads.list.find((u) => u.contentType === "video/mp4")!
@@ -322,21 +357,21 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   it("a landscape upscale comes out 1920×1080; an odd one keeps an even long side", async () => {
     const up = clip("up-land.mp4", "2560x1440")
     const orig = clip("orig-land.mp4", "1280x720", { sound: true })
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false })).toMatchObject({ width: 1920, height: 1080 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1920, height: 1080 })
     const odd = clip("up-odd.mp4", "1442x2562")
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(odd), originalUrl: url(orig), durationSec: 2, asSource: false })).toMatchObject({ width: 1080, height: 1918 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(odd), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1080, height: 1918 })
   }, 60_000)
 
   it("a rotated upscale (landscape frames tagged 90°) comes out portrait, by its decoded frame", async () => {
     const up = clip("up-rot.mp4", "2560x1440", { rotate: 90 })
     const orig = clip("orig-rot.mp4", "720x1280", { sound: true })
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false })).toMatchObject({ width: 1080, height: 1920 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1080, height: 1920 })
   }, 60_000)
 
   it("the source: stored as a new source clip is, with a new display copy at 1080p and no poster of its own", async () => {
     const up = clip("up-src.mp4", "1440x2560", { seconds: 4.2 })
     const orig = clip("orig-src.mp4", "720x1280", { sound: true, seconds: 4.2 })
-    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 4.2, asSource: true })
+    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 4.2, asSource: true, resolution: "1080p" })
     expect(stored).toMatchObject({ width: 1080, height: 1920 })
     expect(stored).not.toHaveProperty("posterUrl")
     expect(stored.display).toEqual({
@@ -347,5 +382,17 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
       durationSec: expect.any(Number),
     })
     expect(stored.display!.videoUrl).not.toBe(stored.url)
+  }, 60_000)
+
+  it("at a 720p target: a landscape upscale comes out 1280×720, and a 720p source's display copy is 720p too", async () => {
+    const up = clip("up-720-land.mp4", "1920x1080")
+    const orig = clip("orig-720-land.mp4", "1280x720", { sound: true })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "720p" })).toMatchObject({ width: 1280, height: 720 })
+    // A source clip is 4–30 s.
+    const upSrc = clip("up-720-src.mp4", "1920x1080", { seconds: 4.2 })
+    const origSrc = clip("orig-720-src.mp4", "1280x720", { sound: true, seconds: 4.2 })
+    const src = await storeUpscaledVideo(TREND, { upscaledUrl: url(upSrc), originalUrl: url(origSrc), durationSec: 4.2, asSource: true, resolution: "720p" })
+    expect(src).toMatchObject({ width: 1280, height: 720 })
+    expect(src.display).toMatchObject({ width: 1280, height: 720 })
   }, 60_000)
 })

@@ -148,10 +148,28 @@ describe("composeTrendRun — slots", () => {
     expect(display.slots.map((s) => s.images.length)).toEqual([1, 0, 0])
   })
 
-  it("names an empty optional slot the example has no pictures for", () => {
+  it("sends no pictures for an empty optional slot the chosen example has none for (kept as in the clip)", () => {
     const data = version()
     data.examples[0]!.slots = { lead: [img("ex1-lead")], place: [img("ex1-place")] }
-    expect(codeOf(() => composeTrendRun(trend(data), req()))).toEqual({ code: "missing_slot", slot: "friend" })
+    const { body, display } = composeTrendRun(trend(data), req())
+    expect(display.example).toBe(1)
+    expect(display.slots.map((s) => [s.key, s.images, s.fromExample])).toEqual([
+      ["lead", [img("me")], false],
+      ["friend", [], false],
+      ["place", [img("ex1-place")], true],
+    ])
+    expect((body.roles as Array<{ name: string; images: string[] }>).map((r) => [r.name, r.images])).toEqual([
+      ["the woman on the left", [img("me")]],
+      ["the man on the right", []],
+      ["the dance floor", [img("ex1-place")]],
+    ])
+    // The person's own pictures still win over the example's gap.
+    const own = composeTrendRun(trend(data), req({ slots: { lead: { images: [img("me")] }, friend: { images: [img("pal")] } } }))
+    expect(own.display.slots[1]).toMatchObject({ images: [img("pal")], fromExample: false })
+  })
+
+  it("still refuses a required slot left empty when the example has pictures for it", () => {
+    expect(codeOf(() => composeTrendRun(trend(), req({ slots: {} })))).toEqual({ code: "missing_slot", slot: "lead" })
   })
 
   it("rejects a chip that is not the slot kind's own", () => {

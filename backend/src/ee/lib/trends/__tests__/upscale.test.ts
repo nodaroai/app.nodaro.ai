@@ -1,17 +1,19 @@
 /**
- * Upscaling a trend's videos to 1080p: the pure half (ee/lib/trends/upscale.ts).
+ * Upscaling a trend's videos to 720p or 1080p: the pure half (ee/lib/trends/upscale.ts).
  *
  * What must hold:
- *  - the resize makes the SHORT side exactly 1080, keeps the aspect and the
- *    orientation, and both sides even (720×1280 → 1080×1920, 1280×720 →
- *    1920×1080, odd sizes rounded to the nearest even long side);
- *  - a video at exactly 1080 on its short side is offered an enhance, one above it nothing;
+ *  - the resize makes the SHORT side exactly the target's (1080 unless named;
+ *    720 at 720p), keeps the aspect and the orientation, and both sides even
+ *    (720×1280 → 1080×1920, 1280×720 → 1920×1080, odd sizes rounded to the
+ *    nearest even long side);
+ *  - a video at exactly the target on its short side is offered an enhance,
+ *    one above it nothing (1080p is the default target);
  *  - an upscale in the making is named by the video it was made from, so it
  *    follows its example through a reorder and stops applying once that video
  *    is replaced or removed.
  */
 import { describe, expect, it } from "vitest"
-import { trendUpscaleOfferFor } from "@nodaro/render-rules"
+import { trendUpscaleOfferFor, trendUpscaleOffersFor } from "@nodaro/render-rules"
 import type { TrendExample, TrendUpscaleJob, TrendVersionData } from "../types.js"
 import {
   UPSCALE_APPLY_STALE_MS,
@@ -21,6 +23,8 @@ import {
   currentUpscaleTarget,
   offersUpscale,
   pendingUpscaleJobs,
+  upscaleResolutionOf,
+  upscaleShortSide,
   upscaleSourceOf,
   upscaleTargetSize,
   withUpscaleJob,
@@ -86,6 +90,38 @@ describe("upscaleTargetSize", () => {
   it("refuses a size that is no size", () => {
     expect(() => upscaleTargetSize(0, 720)).toThrow(RangeError)
     expect(() => upscaleTargetSize(720, Number.NaN)).toThrow(RangeError)
+  })
+})
+
+describe("a 720p target", () => {
+  it("resizes to a 720 short side, the aspect and orientation kept", () => {
+    expect(upscaleShortSide("720p")).toBe(720)
+    expect(upscaleShortSide("1080p")).toBe(1080)
+    expect(upscaleTargetSize(1080, 1920, 720)).toEqual({ width: 720, height: 1280 })
+    expect(upscaleTargetSize(1920, 1080, 720)).toEqual({ width: 1280, height: 720 })
+    expect(upscaleTargetSize(1442, 2562, 720)).toEqual({ width: 720, height: 1280 })
+  })
+
+  it("offers an upscale under 720, an enhance at exactly 720 (the same size), nothing above", () => {
+    expect(trendUpscaleOfferFor(540, 960, "720p")).toBe("upscale")
+    expect(trendUpscaleOfferFor(720, 1280, "720p")).toBe("enhance")
+    expect(trendUpscaleOfferFor(1280, 720, "720p")).toBe("enhance")
+    expect(trendUpscaleOfferFor(1080, 1920, "720p")).toBeNull()
+    expect(offersUpscale(1080, 1920, "720p")).toBe(false)
+    expect(offersUpscale(720, 1280, "720p")).toBe(true)
+    expect(trendUpscaleOfferFor(undefined, undefined, "720p")).toBe("upscale")
+  })
+
+  it("names every target a size is offered, smallest first", () => {
+    expect(trendUpscaleOffersFor(540, 960)).toEqual([{ resolution: "720p", offer: "upscale" }, { resolution: "1080p", offer: "upscale" }])
+    expect(trendUpscaleOffersFor(720, 1280)).toEqual([{ resolution: "720p", offer: "enhance" }, { resolution: "1080p", offer: "upscale" }])
+    expect(trendUpscaleOffersFor(1080, 1920)).toEqual([{ resolution: "1080p", offer: "enhance" }])
+    expect(trendUpscaleOffersFor(1440, 2560)).toEqual([])
+  })
+
+  it("a record with no target was asked for 1080p (every one before the choice)", () => {
+    expect(upscaleResolutionOf(job())).toBe("1080p")
+    expect(upscaleResolutionOf(job({ resolution: "720p" }))).toBe("720p")
   })
 })
 
@@ -165,10 +201,11 @@ describe("the draft's upscales in the making", () => {
   })
 
   it("the editor's view says where each applies now, and which no longer do", () => {
-    const views = pendingUpscaleJobs(data({ examples: [ex(2)], upscaleJobs: [job(), job({ jobId: "j2", fromUrl: ex(1).videoUrl })] }))
+    const views = pendingUpscaleJobs(data({ examples: [ex(2)], upscaleJobs: [job(), job({ jobId: "j2", fromUrl: ex(1).videoUrl, resolution: "720p" })] }))
     expect(views).toEqual([
-      { jobId: "j1", target: "example", fromUrl: ex(2).videoUrl, startedAt: job().startedAt, current: true, index: 0 },
-      { jobId: "j2", target: "example", fromUrl: ex(1).videoUrl, startedAt: job().startedAt, current: false },
+      // A record from before the choice reads 1080p; one asked for 720p says so.
+      { jobId: "j1", target: "example", resolution: "1080p", fromUrl: ex(2).videoUrl, startedAt: job().startedAt, current: true, index: 0 },
+      { jobId: "j2", target: "example", resolution: "720p", fromUrl: ex(1).videoUrl, startedAt: job().startedAt, current: false },
     ])
     expect(pendingUpscaleJobs(data())).toEqual([])
   })

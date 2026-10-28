@@ -137,6 +137,7 @@ export const PRESET_CONTENT_PT_BR: Record<string, PresetCopy> = {
   "generate-image/faceless-3d-head": { name: "Sem rosto · Cabeça 3D lisa", description: "Rostos das pessoas → cabeça 3D branca, lisa e genérica; todo o resto fica intacto." },
   "generate-image/remove-faces": { name: "Remover rostos", description: "Apaga completamente os rostos das pessoas; todo o resto fica intacto." },
   "generate-image/transparent-faces": { name: "Rostos transparentes", description: "Os rostos das pessoas ficam transparentes; todo o resto fica intacto." },
+  "generate-image/remove-people": { name: "Remover pessoas", description: "Remove todas as pessoas da foto; o fundo continua exatamente igual." },
   "generate-video/slow-push-in": { name: "Aproximação lenta", description: "Dolly gradual em direção ao assunto." },
   "generate-video/dolly-out": { name: "Dolly out (revelação)", description: "Recua para revelar a cena." },
   "generate-video/orbit-360": { name: "Órbita 360°", description: "A câmera gira ao redor do assunto." },

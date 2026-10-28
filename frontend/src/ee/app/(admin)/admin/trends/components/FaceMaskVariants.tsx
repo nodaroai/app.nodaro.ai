@@ -7,8 +7,9 @@
 // moves them on while they are being made, and each is approved as it
 // finishes. Each plays here. Publishing needs every one made and up to date.
 //
-// Only a trend with no examples has truly empty optional slots: with examples,
-// an empty slot takes an example's person, so the people's face marks have no
+// With examples, an empty slot takes the chosen example's person, so only the
+// marked people some example has no pictures for can stay as in the clip; when
+// every example has pictures for every marked person, the face marks have no
 // effect on runs (the panel says so).
 
 import { useEffect } from "react"
@@ -86,7 +87,7 @@ export function FaceMaskVariants({ trendId, state, people, dirty, revision, onRe
       )}
       {!state.applies && (
         <p className="text-xs text-amber-700 dark:text-amber-400">
-          This trend has examples: an optional person left empty takes an example's person, so these face marks have no effect on runs.
+          Every example has pictures for these people: an optional person left empty takes an example's person, so these face marks have no effect on runs.
         </p>
       )}
       {state.applies && state.baseProblem === "no_raw_mask" && (

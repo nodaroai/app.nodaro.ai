@@ -16,7 +16,7 @@ import {
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
 } from "@nodaro/shared/models"
-import { CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_PROMPT_PART_IDS, CAST_SWAP_PROMPT_STYLES, faceMaskMarkSlot } from "@nodaro/render-rules"
+import { CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_PROMPT_PART_IDS, CAST_SWAP_PROMPT_STYLES, TREND_UPSCALE_RESOLUTIONS, faceMaskMarkSlot } from "@nodaro/render-rules"
 import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapPulseAudioSchema } from "../../../lib/cast-swap-pulse-audio.js"
 import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
@@ -235,6 +235,7 @@ export const MAX_UPSCALE_JOBS = 20
 const trendUpscaleJobSchema = z.strictObject({
   jobId: z.string().min(1),
   target: z.enum(["source", "example"]),
+  resolution: z.enum(TREND_UPSCALE_RESOLUTIONS).optional(),
   fromUrl: httpUrl,
   startedAt: z.string().min(1),
   applying: z.strictObject({ startedAt: z.string().min(1), by: z.string().min(1) }).optional(),

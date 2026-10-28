@@ -555,6 +555,43 @@ describe("a run of a trend with no example", () => {
   })
 })
 
+describe("a trend whose example kept an optional slot as in the original", () => {
+  beforeEach(() => {
+    const [ex1] = versionData().examples
+    mem.trends[0]!.versions[2] = versionData({ examples: [{ ...ex1!, slots: { lead: ex1!.slots.lead! } }] })
+  })
+
+  it("shows the example with no key for that slot", async () => {
+    const d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    expect(d.examples).toEqual([
+      { videoUrl: "https://cdn.example/ex1.mp4", posterUrl: "https://cdn.example/ex1.jpg", width: 720, height: 1280, slots: { lead: ["https://cdn.example/ex1-lead.png"] } },
+    ])
+    expectNoHidden(JSON.stringify(d))
+  })
+
+  it("runs with that slot left empty sent with no pictures (kept as in the original), recording example 1", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(res.statusCode).toBe(202)
+    const call = engine.calls[0]!
+    expect((call.body.roles as Array<{ kind: string; images: string[] }>).map((r) => [r.kind, r.images])).toEqual([
+      ["person", ["https://u.example/me.png"]],
+      ["location", []],
+    ])
+    const display = (call.body.trendRun as { display: Record<string, unknown> }).display
+    expect(display.example).toBe(1)
+    expect(display.slots).toMatchObject([
+      { key: "lead", images: ["https://u.example/me.png"], fromExample: false },
+      { key: "place", images: [], fromExample: false },
+    ])
+  })
+
+  it("quotes the same run", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: RUN_BODY })
+    expect(res.statusCode).toBe(200)
+    expect((engine.calls[0]!.body.roles as Array<{ images: string[] }>)[1]!.images).toEqual([])
+  })
+})
+
 // ── favorites ──────────────────────────────────────────────────────────────
 
 describe("favorites", () => {
