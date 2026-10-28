@@ -229,6 +229,16 @@ describe("trendVersionDataSchema", () => {
     expect(trendVersionDataSchema.safeParse(data({ examples: [example] })).success).toBe(false)
     expect(trendVersionDataSchema.safeParse(data({ examples: [{ ...example, slots: { dancer: [IMG] } }] })).success).toBe(true)
   })
+
+  it("accepts an example with no key for an optional slot it kept as in the original, never an empty list", () => {
+    const example = {
+      videoUrl: "https://cdn.example.com/ex.mp4", width: 720, height: 1280, durationSec: 10,
+      slots: { dancer: [IMG] }, sourceJobId: "00000000-0000-4000-8000-000000000001",
+    }
+    const slots = [slot("dancer", "person"), slot("room", "location", { required: false })]
+    expect(trendVersionDataSchema.safeParse(data({ slots, examples: [example] })).success).toBe(true)
+    expect(trendVersionDataSchema.safeParse(data({ slots, examples: [{ ...example, slots: { dancer: [IMG], room: [] } }] })).success).toBe(false)
+  })
 })
 
 describe("trendVersionDataSchema — the source's display copy and the slot hint picture", () => {

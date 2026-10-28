@@ -59,7 +59,9 @@ export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove, rend
     <>
       <ol className="flex flex-col gap-3">
         {examples.map((ex, i) => {
-          const missing = slots.filter((s) => !(ex.slots[s.key]?.length ?? 0)).map((s) => s.key)
+          // Only a required slot must have pictures: an optional one without stays as in the original.
+          const missing = slots.filter((s) => s.required && !(ex.slots[s.key]?.length ?? 0)).map((s) => s.key)
+          const kept = slots.filter((s) => !s.required && !(ex.slots[s.key]?.length ?? 0)).map((s) => labelOf(s.key))
           return (
             <li key={`${ex.sourceJobId}-${i}`} className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row">
               <video
@@ -90,8 +92,9 @@ export function ExamplesPanel({ examples, slots, busy, onReorder, onRemove, rend
                     </div>
                   ))}
                 </div>
+                {kept.length > 0 && <p className="text-muted-foreground">As in the original: {kept.join(", ")} (no pictures).</p>}
                 {missing.length > 0 && (
-                  <p className="text-destructive">No pictures for: {missing.join(", ")} (a new slot needs one in every example).</p>
+                  <p className="text-destructive">No pictures for: {missing.join(", ")} (a required slot needs them in every example).</p>
                 )}
                 <p className="break-all text-muted-foreground">From run {ex.sourceJobId}</p>
                 <div className="flex gap-1">

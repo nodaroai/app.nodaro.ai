@@ -2312,7 +2312,7 @@ interface TrendDetail extends TrendCard {
   resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p" (draft), "720p", "1080p"], motion-pulse ["720p", "1080p"]
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy
   slots: TrendDetailSlot[]
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots
 }
 
 // A browser-safe copy (H.264 MP4) of the clip the trend recasts
@@ -2396,7 +2396,8 @@ else your profile's language, else English).
 
 A required slot left empty is refused with `400 missing_slot`; an optional one
 left out takes the chosen example's pictures (`fromExample: true` on the run),
-or is refused with `missing_slot` when that example has none for it
+or stays as in the original when that example has none for it (no pictures,
+`fromExample: false`; an example's `slots` then has no key for that slot)
 (`example_out_of_range` when the trend has no such example), except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look
 (`fromDefault: true` on the run when the default was used; such a run records
 `example: 0`). On a trend with

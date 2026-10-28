@@ -128,7 +128,7 @@ export interface PublishBlocker {
   /** 1-based example, for `example_slots_incomplete`. */
   example?: number
   /**
-   * The slot keys an example has no pictures for, for `example_slots_incomplete`; the
+   * The required slot keys an example has no pictures for, for `example_slots_incomplete`; the
    * people a person variant leaves empty, for `face_mask_variant_*`.
    */
   slots?: string[]
@@ -244,9 +244,10 @@ export function publishBlockers(
     out.push({ code: "preview_clip_out_of_date", why: clip.why, message: PREVIEW_CLIP_OUT_OF_DATE_MESSAGES[clip.why] })
   }
   if (!data.slots.some((s) => s.required)) out.push({ code: "no_required_slot" })
+  // A required slot needs pictures in every example; an optional one an example has none for stays as in the clip.
   data.examples.forEach((ex, i) => {
     const missing = data.slots
-      .filter((s) => !(Object.hasOwn(ex.slots, s.key) && (ex.slots[s.key]?.length ?? 0) > 0))
+      .filter((s) => s.required && !(Object.hasOwn(ex.slots, s.key) && (ex.slots[s.key]?.length ?? 0) > 0))
       .map((s) => s.key)
     if (missing.length > 0) out.push({ code: "example_slots_incomplete", example: i + 1, slots: missing })
   })

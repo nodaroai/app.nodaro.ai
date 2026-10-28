@@ -9,7 +9,7 @@
  * - The person masks list each combination with its state; "Make person
  *   masks" starts the missing ones with the screen's revision; while any is
  *   being made the panel moves them on.
- * - A trend with examples says the people's marks have no run effect; more
+ * - A trend whose examples have pictures for every marked person says the people's marks have no run effect; more
  *   than 3 marked people says it can't be published.
  * - The new publish blockers read as sentences.
  */
@@ -117,14 +117,24 @@ describe("the hint for optional people without person marks", { timeout: 20_000 
     expect(await screen.findByTestId("face-mask-unmarked-people")).toHaveTextContent(/Ben has no person marks, so a run that leaves this person empty keeps them blurred/)
   })
 
-  it("says nothing on a trend with examples", async () => {
-    const example = { videoUrl: "https://cdn.test/ex.mp4", width: 720, height: 1280, durationSec: 12, slots: {}, sourceJobId: "j" }
+  it("says nothing on a trend whose examples have pictures for every optional person", async () => {
+    const pics = { dancer: ["https://cdn.test/d.png"], amy: ["https://cdn.test/a.png"], ben: ["https://cdn.test/b.png"] }
+    const example = { videoUrl: "https://cdn.test/ex.mp4", width: 720, height: 1280, durationSec: 12, slots: pics, sourceJobId: "j" }
     routes[`GET ${BASE}`] = () => ({
       body: { data: detail({ faceMaskState: { status: "approved", reasons: [] } }, { slots: SLOTS, faceMasking: MASKING, faceMask: STORED, examples: [example] }) },
     })
     renderEditor()
     expect(await screen.findByLabelText("Face mask")).toBeInTheDocument()
     expect(screen.queryByTestId("face-mask-unmarked-people")).toBeNull()
+  })
+
+  it("lists only the people an example has no pictures for on a trend with examples", async () => {
+    const example = { videoUrl: "https://cdn.test/ex.mp4", width: 720, height: 1280, durationSec: 12, slots: { dancer: ["https://cdn.test/d.png"], amy: ["https://cdn.test/a.png"] }, sourceJobId: "j" }
+    routes[`GET ${BASE}`] = () => ({
+      body: { data: detail({ faceMaskState: { status: "approved", reasons: [] } }, { slots: SLOTS, faceMasking: MASKING, faceMask: STORED, examples: [example] }) },
+    })
+    renderEditor()
+    expect(await screen.findByTestId("face-mask-unmarked-people")).toHaveTextContent(/^Ben has no person marks/)
   })
 })
 

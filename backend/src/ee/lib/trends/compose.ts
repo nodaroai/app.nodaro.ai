@@ -11,8 +11,9 @@
  *   either inside `display`);
  * - `display`: the public record of the run (English labels, the user's own
  *   pictures, the example's pictures for empty optional slots — none on a
- *   trend with no example, whose empty optional slots stay as in the
- *   original — the chips and the user's raw details), also carried in
+ *   trend with no example, or for a slot the example has no pictures for,
+ *   which then stays as in the original — the chips and the user's raw
+ *   details), also carried in
  *   `body.trendRun.display`;
  * - `needs`: what the engine must support for this run.
  *
@@ -37,8 +38,9 @@
  * only on that approved mask: without one made from these settings the run
  * is refused (`face_mask_required`). The marks themselves are never sent.
  *
- * Per-person variants (decided 2026-10-27, face-mask-variants.ts): on a trend
- * with no examples, a run that leaves optional people with slot marks empty
+ * Per-person variants (decided 2026-10-27, face-mask-variants.ts): a run that
+ * leaves optional people with slot marks empty (on a trend with no examples,
+ * or ones the chosen example has no pictures for)
  * is sent the variant made for exactly those people (`storedFaceMask` with
  * `required: true`), so the people kept as in the clip keep their faces; a
  * variant that left nothing to cover sends no `faceMasking` and no
@@ -182,8 +184,8 @@ export interface TrendRunDisplaySlot extends Chips {
   images: string[]
   /**
    * True when the slot was left empty and the example's pictures filled it.
-   * False with no pictures: left empty on a trend with no example, so it
-   * stays as in the original.
+   * False with no pictures: left empty on a trend with no example, or the
+   * chosen example has no pictures for it, so it stays as in the original.
    */
   fromExample: boolean
   /**
@@ -405,7 +407,8 @@ export function composeTrendRun(
   // then means "no example": an empty optional slot is sent with no pictures,
   // so the original's person stays (the engine keeps a role with none as in
   // the clip), and the run records example 0. With examples, an empty
-  // optional slot takes the chosen example's pictures (Example 1 by default).
+  // optional slot takes the chosen example's pictures (Example 1 by default),
+  // or none (kept as in the clip) when that example has none for it.
   const noExample = req.example === undefined && data.examples.length === 0
   const requested = noExample ? 0 : (req.example ?? 1)
   const exampleInRange = Number.isInteger(requested) && requested >= 1 && requested <= data.examples.length
@@ -441,11 +444,10 @@ export function composeTrendRun(
       if (!exampleInRange) throw new TrendRunError("example_out_of_range", `This trend has no example ${example}.`)
       const fill = data.examples[example - 1]!.slots
       const picked = Object.hasOwn(fill, slot.key) ? fill[slot.key] : undefined
-      if (!picked || picked.length === 0) {
-        throw new TrendRunError("missing_slot", `"${pickText(slot.label, "en")}" needs a picture.`, slot.key)
-      }
-      images = [...picked]
-      fromExample = true
+      // An example may have no pictures for an optional slot: the slot is then sent with none,
+      // so the engine keeps that role as in the clip (as on a trend with no example).
+      images = picked ? [...picked] : []
+      fromExample = images.length > 0
     }
 
     const chips = chipsOf(slot, entry, allowHiddenChips)
@@ -494,8 +496,8 @@ export function composeTrendRun(
         : "This trend prepares its clip ahead of time: make and approve it first.",
     )
   }
-  // The marked optional people this run leaves empty (only a trend with no examples has any: an
-  // example fills every empty slot). Each one stays as in the clip, so the run is sent the variant
+  // The marked optional people this run leaves empty (with examples, only those the chosen example
+  // has no pictures for). Each one stays as in the clip, so the run is sent the variant
   // made for exactly them, never the mask that covers their faces (decided 2026-10-27).
   const marked = new Set(markedPeople(data))
   const emptyPeople = slots.filter((s) => s.images.length === 0 && marked.has(s.key)).map((s) => s.key)

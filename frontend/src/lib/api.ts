@@ -11116,6 +11116,7 @@ export interface AdminTrendExample {
   width: number
   height: number
   durationSec: number
+  /** Slot key → the pictures this example used; an optional slot it kept as in the original has no key. */
   slots: Record<string, string[]>
   sourceJobId: string
 }

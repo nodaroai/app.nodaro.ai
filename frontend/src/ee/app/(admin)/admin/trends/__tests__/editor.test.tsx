@@ -764,6 +764,25 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(await screen.findByText("5 / 30")).toHaveAttribute("data-state", "ok")
   })
 
+  describe("examples: an optional slot without pictures", () => {
+    const PLACE = slot({ key: "place", label: { en: "Place" }, kind: "location", required: false, roleName: "the street", defaults: undefined })
+    const ex = (slots: Record<string, string[]>) => ({ videoUrl: "https://cdn.test/ex.mp4", width: 720, height: 1280, durationSec: 12, slots, sourceJobId: "job-x" })
+
+    it("shows an optional slot an example has no pictures for as kept from the original, never as a problem", async () => {
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots: [slot(), PLACE], examples: [ex({ dancer: ["https://cdn.test/d.png"] })] }) } })
+      renderEditor()
+      expect(await screen.findByText("As in the original: Place (no pictures).")).toBeInTheDocument()
+      expect(screen.queryByText(/^No pictures for:/)).toBeNull()
+      expect(screen.getByAltText("Dancer picture 1")).toBeInTheDocument()
+    })
+
+    it("still flags a required slot an example has no pictures for", async () => {
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots: [slot(), PLACE], examples: [ex({ place: ["https://cdn.test/p.png"] })] }) } })
+      renderEditor()
+      expect(await screen.findByText(/^No pictures for: dancer/)).toBeInTheDocument()
+    })
+  })
+
   describe("examples: a fresh revision is never paired with a stale list", () => {
     const ex = (job: string) => ({
       videoUrl: `https://cdn.test/${job}.mp4`,
