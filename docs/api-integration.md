@@ -2514,6 +2514,7 @@ so a value the model doesn't support is ignored, never a 400:
   `@` removed so the run still starts. A reference-video run is billed per
   second of **output + max(output, total reference-video seconds)** at the
   `-ref` rate (see the [Generate Video node](nodes/ai-video/generate-video.md)).
+  **Audio soundtrack (on by default):** the first `referenceAudioUrls` clip plays as the result's soundtrack. It is sent as one more reference video (a still frame carrying the audio, as long as the audio, at least 2 s and at most the output) with its sound kept, so the people perform to the exact track; any further clips stay named voices (`@audio_2` becomes `@Voice1`). It takes one of the 5 reference-video places and the run is billed as a reference-video run. `audioSoundtrack: false` keeps every clip a voice sample. With the soundtrack, Kling also keeps the sound of any reference videos you send.
 - **`kling-4-keyframes`** (Kling 4.0 Keyframes) takes an `imageUrl` (start
   frame), up to **8** in-between frames as `referenceImageUrls` (in order) and
   an `endFrameUrl` (an end frame alone is allowed; no frame at all is

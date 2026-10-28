@@ -438,6 +438,12 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *  generating new sound. Ignored without a reference video and by every
    *  other model. */
   keepOriginalSound?: boolean
+  /** Kling 4.0 (`kling-4`): play the first `referenceAudioUrls` clip as the
+   *  result's soundtrack — it is sent as one more reference video (a still
+   *  frame carrying the audio) with its sound kept, so it is priced as a
+   *  reference-video run; further clips stay voice samples. Default `true`;
+   *  `false` makes every clip a voice sample. Ignored by every other model. */
+  audioSoundtrack?: boolean
   /** How a start/end frame is reshaped before the model sees it. Default
    *  `"resolution"`: resize it to the pixel size that model actually renders,
    *  which is what stops the provider reshaping it mid-clip. `"ratio"` corrects
@@ -485,6 +491,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0 (`kling-4`): keep the reference videos' own sound — see {@link GenerateVideoParams.keepOriginalSound}. */
   keepOriginalSound?: boolean
+  /** Kling 4.0 (`kling-4`): play the first audio clip as the soundtrack — see {@link GenerateVideoParams.audioSoundtrack}. */
+  audioSoundtrack?: boolean
   /** Cinematic direction as catalog IDS — the route renders the wording. */
   direction?: DirectionFields
   /** WHO is in the shot as picker-catalog ids ({@link Subject}), folded ahead of the direction clauses. */

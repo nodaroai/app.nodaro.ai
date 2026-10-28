@@ -1408,7 +1408,7 @@ Needs `workflows:execute`.
 | `reference_image_urls` | string[] or string |  | Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, gemini-omni-video / gemini-omni-flash 7, veo3/veo3.1 3, ...). Dropped on models with no reference path. Accepts an array; a lone URL or JSON-stringified array is coerced. |
 | `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
 | `reference_video_captions` | string[] |  | Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`. At most 10 items. |
-| `reference_audio_urls` | string[] or string |  | Reference audio for soundtrack-driven motion, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, kling-4 3). Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without audio-reference support. |
+| `reference_audio_urls` | string[] or string |  | Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack); else dropped. |
 | `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash / kling-4 only); see docs/nodes/ai-video/generate-video.md. At most 7 items. |
 | `character_references[].image_url` | string | yes |  |
 | `character_references[].body_image_url` | string |  |  |
@@ -1416,7 +1416,8 @@ Needs `workflows:execute`.
 | `character_references[].description` | string | yes |  |
 | `character_references[].name` | string |  |  |
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
-| `keep_original_sound` | boolean |  | kling-4: keep reference videos' own sound. |
+| `keep_original_sound` | boolean |  | kling-4: keep ref videos' sound. |
+| `audio_soundtrack` | boolean |  | kling-4: false = every audio clip a voice, no soundtrack. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 

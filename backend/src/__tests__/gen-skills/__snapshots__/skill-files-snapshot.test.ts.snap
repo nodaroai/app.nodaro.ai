@@ -292,6 +292,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`reference_audio_urls\`
 - \`character_references\`
 - \`keep_original_sound\`
+- \`audio_soundtrack\`
 - \`user_request\`
 - \`flow_id\`",
   "node-data-shape": "**Type:** \`generate-video\`
@@ -350,6 +351,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`kieTaskId?: string\`
 - \`connectedImageOrder?: readonly string[]\`
 - \`referenceOrder?: readonly string[]\`
+- \`audioSoundtrack?: boolean\`
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
 - \`suppressedCanonicalLocationIds?: readonly string[]\`
 - \`veoMode?: "frame-to-frame" | "reference"\`
@@ -832,6 +834,7 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`connectedImageOrder?: readonly string[]\`
 - \`connectedRefImageOrder?: readonly string[]\`
 - \`referenceOrder?: readonly string[]\`
+- \`audioSoundtrack?: boolean\`
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
 - \`suppressedCanonicalLocationIds?: readonly string[]\`
 - \`veoMode?: "frame-to-frame" | "reference"\`

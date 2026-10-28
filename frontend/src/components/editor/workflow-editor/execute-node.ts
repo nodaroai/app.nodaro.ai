@@ -3161,6 +3161,7 @@ function executeNodeCore(
           ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(nodeProvider)) }
           : {}),
         keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
+        audioSoundtrack: (i2vData as Record<string, unknown>).audioSoundtrack as boolean | undefined,
         videoTrimStart: i2vData.videoTrimStart,
         videoTrimEnd: i2vData.videoTrimEnd,
         // Identity injection — populated by node-input-resolver when an upstream
@@ -3552,6 +3553,7 @@ function executeNodeCore(
         ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(t2vProvider)) }
         : {}),
       keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
+      audioSoundtrack: t2vRaw.audioSoundtrack as boolean | undefined,
     };
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(

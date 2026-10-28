@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-24T23:37:38.118Z
-generated_from: db68a9ee4
+generated_at: 2026-10-28T07:59:43.688Z
+generated_from: 5f6b6e634
 ---
 
 # Text to Video
@@ -42,6 +42,7 @@ generated_from: db68a9ee4
 - `kieTaskId?: string`
 - `connectedRefImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
+- `audioSoundtrack?: boolean`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
 - `direction?: DirectionFields`
@@ -91,6 +92,7 @@ generated_from: db68a9ee4
 - `reference_audio_urls`
 - `character_references`
 - `keep_original_sound`
+- `audio_soundtrack`
 - `user_request`
 - `flow_id`
 <!-- AUTO-GEN:END mcp-call -->

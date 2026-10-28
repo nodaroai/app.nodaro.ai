@@ -2124,6 +2124,8 @@ export type ImageToVideoData = PromptAffixFields & {
   connectedRefImageOrder?: readonly string[]
   /** See GenerateImageData.referenceOrder. Additive over connectedRefImageOrder. */
   referenceOrder?: readonly string[]
+  /** Kling 4.0: play the first audio reference clip as the soundtrack — see GenerateVideoNodeData.audioSoundtrack. */
+  audioSoundtrack?: boolean
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
@@ -2250,6 +2252,8 @@ export type TextToVideoData = PromptAffixFields & {
   connectedRefImageOrder?: readonly string[]
   /** See GenerateImageData.referenceOrder. Additive over connectedRefImageOrder. */
   referenceOrder?: readonly string[]
+  /** Kling 4.0: play the first audio reference clip as the soundtrack — see GenerateVideoNodeData.audioSoundtrack. */
+  audioSoundtrack?: boolean
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
@@ -2285,6 +2289,10 @@ export type GenerateVideoNodeData =
      *  new sound (KIE `keep_original_sound`). Ignored without a reference video
      *  and by every other model. */
     keepOriginalSound?: boolean
+    /** Kling 4.0: play the first Audio Refs clip as the result's soundtrack
+     *  (sent as a reference video with its sound kept); further clips stay
+     *  voice samples. Unset = on; `false` makes every clip a voice sample. */
+    audioSoundtrack?: boolean
     /** Loosened from required (text-to-video) to optional, matching i2v. */
     prompt?: string
     /** Loosened from required (text-to-video) to optional, matching i2v. */

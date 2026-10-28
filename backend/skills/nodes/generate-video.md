@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-10-24T23:37:37.944Z
-generated_from: db68a9ee4
+generated_at: 2026-10-28T07:59:43.567Z
+generated_from: 5f6b6e634
 ---
 
 # Generate Video
@@ -63,6 +63,7 @@ generated_from: db68a9ee4
 - `kieTaskId?: string`
 - `connectedImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
+- `audioSoundtrack?: boolean`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
 - `veoMode?: "frame-to-frame" | "reference"`
@@ -127,6 +128,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 - `reference_audio_urls`
 - `character_references`
 - `keep_original_sound`
+- `audio_soundtrack`
 - `user_request`
 - `flow_id`
 <!-- AUTO-GEN:END mcp-call -->

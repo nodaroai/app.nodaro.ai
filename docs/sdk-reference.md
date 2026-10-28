@@ -2854,7 +2854,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `characterReferences` (≤ 7, as named subjects) and `referenceAudioUrls`
 > (≤ 3, as named voices) — at most 15 materials in all, else a `400` before
 > anything is reserved. A sent `imageUrl` / `endFrameUrl` joins the reference
-> images. `keepOriginalSound: true` keeps a reference video's own sound. A
+> images. `keepOriginalSound: true` keeps a reference video's own sound. The
+> first audio clip plays as the soundtrack by default (sent as one more
+> reference video, so billed as a reference-video run; `audioSoundtrack: false`
+> keeps every clip a voice sample). A
 > reference-video run bills output + max(output, total clip seconds) at the
 > `-ref` rate. **Kling 4.0 Keyframes** (`kling-4-keyframes`) takes
 > `imageUrl`, up to 8 in-between frames as `referenceImageUrls` (in order) and

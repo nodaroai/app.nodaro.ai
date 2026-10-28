@@ -77,6 +77,19 @@ export function resetRefVideoProbeCache(): void {
 }
 
 /**
+ * Record a clip this platform made itself at a length it chose (an audio
+ * soundtrack's reference video, `lib/audio-soundtrack.ts`): the run's probes
+ * read that exact length — the one its price was quoted from — instead of the
+ * container's, which an audio track's last frame can stretch by a few ms.
+ */
+export function rememberRefVideoDuration(url: string, durationSec: number): void {
+  if (!isOwnMediaUrl(url) || !Number.isFinite(durationSec) || durationSec <= 0) return
+  probeCache.delete(url)
+  probeCache.set(url, { durationSec, at: Date.now() })
+  if (probeCache.size > PROBE_CACHE_MAX) probeCache.delete(probeCache.keys().next().value as string)
+}
+
+/**
  * One clip's length. Only a file in this platform's OWN storage is cached
  * ({@link isOwnMediaUrl}): its key names one upload or one job output, so the
  * bytes behind it do not change, while any other host could serve a different

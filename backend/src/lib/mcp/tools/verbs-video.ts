@@ -210,10 +210,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Reference audio for soundtrack-driven motion, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, kling-4 3). " +
-            "Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without " +
-            "audio-reference support.",
+            "Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; " +
+            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack); else dropped.",
           ),
         character_references: z
           .array(z.object({
@@ -229,7 +227,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
           ),
-        keep_original_sound: z.boolean().optional().describe("kling-4: keep reference videos' own sound."),
+        keep_original_sound: z.boolean().optional().describe("kling-4: keep ref videos' sound."),
+        audio_soundtrack: z.boolean().optional().describe("kling-4: false = every audio clip a voice, no soundtrack."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -416,6 +415,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             }
           : {}),
         ...(args.keep_original_sound !== undefined ? { keepOriginalSound: args.keep_original_sound } : {}),
+        ...(args.audio_soundtrack !== undefined ? { audioSoundtrack: args.audio_soundtrack } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

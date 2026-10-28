@@ -38,7 +38,7 @@ import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { isUseCaseNodeType, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
-import { countRefModalityEdges } from "@nodaro/shared/workflow"
+import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
@@ -644,7 +644,7 @@ export function getModelIdentifier(
       mode: (data.videoSize ?? data.mode) as string | undefined,
       resolution: data.resolution as string | undefined,
       draft: data.draft === true,
-      hasVideoRef: countRefModalityEdges(edges ?? [], node.id, "video") > 0,
+      hasVideoRef: sendsReferenceVideo(node.id, sel.provider, typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined, edges ?? []),
     })
   }
 

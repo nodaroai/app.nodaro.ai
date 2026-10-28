@@ -48,8 +48,8 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { buildVideoCreditModelIdentifier, videoGenerationCreditId } from "@nodaro/shared/credits"
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { audioReferencesLabel, sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { SETTINGS_INPUT_HANDLE } from "@nodaro/shared/nodes"
-import { countRefModalityEdges } from "@nodaro/shared/workflow"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoNodeData, GeneratedResult, WorkflowNode } from "@/types/nodes"
 
@@ -149,7 +149,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // A wired reference video moves the price to the reference-video ladder. It
   // is a GRAPH fact (a videoReferences edge) — nothing writes
   // `referenceVideoUrls` into this node's data.
-  const hasVideoRef = useWorkflowStore((s) => countRefModalityEdges(s.edges, id, "video") > 0)
+  // A Kling 4.0 soundtrack is sent as a reference video too (sendsReferenceVideo).
+  const audioSoundtrack = typeof runData.audioSoundtrack === "boolean" ? runData.audioSoundtrack : undefined
+  const hasVideoRef = useWorkflowStore((s) => sendsReferenceVideo(id, provider, audioSoundtrack, s.edges))
   // Credit identifier — the "image-to-video" string is a FE DISPLAY DEFAULT.
   // The actual mode is decided by the backend payload-builder at run-time
   // based on connected inputs. Using i2v as the display estimate matches the
@@ -536,7 +538,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"  color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={handleTop(HANDLE_OFFSET.imageReferences)} orderMatters accepts={ACCEPTS_IMAGE_REFS} disabled={disabledHandles.has("imageReferences")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="videoReferences" type="target" position={Position.Left}  label="Video Refs"  color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top={handleTop(HANDLE_OFFSET.videoReferences)} orderMatters accepts={ACCEPTS_VIDEO_REFS} disabled={disabledHandles.has("videoReferences")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audio"           type="target" position={Position.Left}  label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top={handleTop(HANDLE_OFFSET.audio)}           accepts={ACCEPTS_AUDIO} disabled={disabledHandles.has("audio")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"  color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={handleTop(HANDLE_OFFSET.audioReferences)} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label={audioReferencesLabel(provider, audioSoundtrack)}  color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={handleTop(HANDLE_OFFSET.audioReferences)} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(HANDLE_OFFSET.assets)}          orderMatters accepts={ACCEPTS_ASSETS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={handleTop(HANDLE_OFFSET.look)}            accepts={ACCEPTS_LOOK} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="elements"        type="target" position={Position.Left}  label="Elements"    color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={handleTop(HANDLE_OFFSET.elements)}        accepts={ACCEPTS_ELEMENTS} />

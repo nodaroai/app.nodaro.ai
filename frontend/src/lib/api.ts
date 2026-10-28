@@ -3177,6 +3177,8 @@ export interface GenerateVideoOptions {
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0: keep the reference videos' own sound. */
   keepOriginalSound?: boolean
+  /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
+  audioSoundtrack?: boolean
   webSearch?: boolean            // Seedance 2 (required field)
   nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
@@ -3259,6 +3261,7 @@ export async function generateVideo(
       referenceAudioUrls: opts.referenceAudioUrls,
       characterReferences: opts.characterReferences?.length ? opts.characterReferences : undefined,
       keepOriginalSound: opts.keepOriginalSound,
+      audioSoundtrack: opts.audioSoundtrack,
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
@@ -3519,6 +3522,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0: keep the reference videos' own sound. */
   keepOriginalSound?: boolean
+  /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
+  audioSoundtrack?: boolean
   webSearch?: boolean
   nsfwChecker?: boolean
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
@@ -10832,6 +10837,10 @@ export interface SeedanceRefEstimateRequest {
   readonly draft?: boolean
   readonly referenceVideoUrls: readonly string[]
   readonly unknownReferenceVideos?: number
+  /** Kling 4.0: the audio clip the run plays as its soundtrack (one more reference video). */
+  readonly soundtrackAudioUrl?: string
+  /** A soundtrack clip whose audio is not produced yet. */
+  readonly unknownSoundtrack?: boolean
 }
 
 /**

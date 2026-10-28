@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-24T23:37:37.913Z
-generated_from: db68a9ee4
+generated_at: 2026-10-28T07:59:43.544Z
+generated_from: 5f6b6e634
 ---
 
 # image-to-video
@@ -65,6 +65,7 @@ generated_from: db68a9ee4
 - `connectedImageOrder?: readonly string[]`
 - `connectedRefImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
+- `audioSoundtrack?: boolean`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
 - `veoMode?: "frame-to-frame" | "reference"`

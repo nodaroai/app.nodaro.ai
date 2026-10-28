@@ -24,6 +24,7 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { SeedanceRefEstimateRequest } from "@/lib/api"
 import {
   applyDefaultVideoSelection,
+  audioSoundtrackActive,
   billsReferenceVideoSeconds,
   isSeedanceVideoEditProvider,
 } from "@nodaro/shared/models"
@@ -70,7 +71,18 @@ export function seedanceRefQuoteRequest(
   const clipEdges = edges.filter((e) => e.target === node.id && (
     isGeneration ? referenceModalityForHandle(e.targetHandle) === "video" : e.targetHandle === "video"
   ))
-  if (clipEdges.length === 0) return undefined
+  // Kling 4.0 audio soundtrack: the first audio clip goes as one more reference
+  // video (@nodaro/shared `audioSoundtrackActive`), so it moves the price too.
+  const audioEdges = isGeneration ? edges.filter((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "audio") : []
+  const soundtrackProvider = isGeneration
+    ? applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider
+    : undefined
+  const soundtrack = audioSoundtrackActive({
+    provider: soundtrackProvider,
+    audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
+    audioRefCount: audioEdges.length,
+  })
+  if (clipEdges.length === 0 && !soundtrack) return undefined
 
   let provider: string
   let resolution: string | undefined
@@ -96,6 +108,9 @@ export function seedanceRefQuoteRequest(
     ? (inputs.referenceVideoUrls ?? []).filter((u): u is string => typeof u === "string" && u.length > 0)
     : inputs.videoUrl ? [inputs.videoUrl] : []
   const unknown = Math.max(0, clipEdges.length - urls.length)
+  const soundtrackAudioUrl = soundtrack
+    ? (inputs.referenceAudioUrls ?? []).find((u): u is string => typeof u === "string" && u.length > 0)
+    : undefined
 
   return {
     provider,
@@ -104,6 +119,7 @@ export function seedanceRefQuoteRequest(
     ...(data.draft === true ? { draft: true } : {}),
     referenceVideoUrls: urls,
     ...(unknown > 0 ? { unknownReferenceVideos: unknown } : {}),
+    ...(soundtrack ? (soundtrackAudioUrl ? { soundtrackAudioUrl } : { unknownSoundtrack: true }) : {}),
   }
 }
 

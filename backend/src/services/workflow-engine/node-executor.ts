@@ -110,6 +110,7 @@ import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
@@ -2175,6 +2176,20 @@ async function executeWorkerNode(
   const { jobName, queueName, modelIdentifier } = buildResult
   // `let`: the Seedance draft-finalize stamp (2b'++) rebinds it to a merged copy.
   let { payload } = buildResult
+
+  // 2a. Audio soundtrack — the DAG twin of the routes'
+  // `applyAudioSoundtrackPreHandler`: on a model that takes reference audio
+  // only as voice samples (Kling 4.0), the first clip becomes a reference video
+  // carrying it (lib/audio-soundtrack.ts), BEFORE the reference checks, the
+  // reservation and input_data below, so all of them read the run as sent.
+  const soundtrack = await applyAudioSoundtrack(payload, ctx.userId)
+  if (!soundtrack.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(soundtrack.message) as Error & { errorCode?: string }
+    err.errorCode = "validation_error"
+    throw err
+  }
+  if (soundtrack.applied) payload = soundtrack.request
 
   // 2b. Reference-video duration gate — the DAG twin of the routes'
   // `validateRefVideoDurationPreHandler`, through the SAME core helper.

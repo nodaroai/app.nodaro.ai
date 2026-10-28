@@ -17,6 +17,8 @@ export function seedanceRefQuoteKey(request: SeedanceRefEstimateRequest): string
     draft: request.draft,
     referenceVideoUrls: request.referenceVideoUrls,
     unknownReferenceVideos: request.unknownReferenceVideos,
+    soundtrackAudioUrl: request.soundtrackAudioUrl,
+    unknownSoundtrack: request.unknownSoundtrack,
   })
 }
 

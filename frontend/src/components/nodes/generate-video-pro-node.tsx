@@ -29,6 +29,7 @@ import { useWiredSettings } from "@/hooks/use-wired-settings"
 import { SettingsChips, SettingsPriceNote } from "./settings-chips"
 import { estimateGenerateVideoProCredits } from "@/components/editor/workflow-editor/types"
 import { computeDeleteResultUpdates } from "@/lib/utils"
+import { audioReferencesLabel } from "@/lib/audio-reference-handles"
 import type { GenerateVideoProNodeData, GeneratedResult, ContentPolicyRewriteEntry } from "@/types/nodes"
 
 // Stable, module-level `accepts` predicates — see generate-image-node.tsx /
@@ -441,7 +442,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"    color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={handleTop(HANDLE_OFFSET.imageReferences)} orderMatters accepts={ACCEPTS_IMAGE_REFS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="videoReferences" type="target" position={Position.Left}  label="Extend Source" color={HANDLE_COLORS.video}    icon={<Film />}      side="left"  top={handleTop(HANDLE_OFFSET.videoReferences)} accepts={ACCEPTS_VIDEO_REFS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="audio"           type="target" position={Position.Left}  label="Audio"         color={HANDLE_COLORS.audio}    icon={<Volume2 />}   side="left"  top={handleTop(HANDLE_OFFSET.audio)}           accepts={ACCEPTS_AUDIO} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"    color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={handleTop(HANDLE_OFFSET.audioReferences)} orderMatters accepts={ACCEPTS_AUDIO_REFS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="audioReferences" type="target" position={Position.Left}  label={audioReferencesLabel(provider, false)}    color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={handleTop(HANDLE_OFFSET.audioReferences)} orderMatters accepts={ACCEPTS_AUDIO_REFS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="assets"          type="target" position={Position.Left}  label="Assets"        color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(HANDLE_OFFSET.assets)}          orderMatters accepts={ACCEPTS_ASSETS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="elements"        type="target" position={Position.Left}  label="Elements"      color={HANDLE_COLORS.look}     icon={<Sparkles />}  side="left"  top={handleTop(HANDLE_OFFSET.elements)}        accepts={ACCEPTS_ELEMENTS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video-pro" handleId="look"            type="target" position={Position.Left}  label="Look"          color={HANDLE_COLORS.look}     icon={<Aperture />}  side="left"  top={handleTop(HANDLE_OFFSET.look)}            accepts={ACCEPTS_LOOK} />
