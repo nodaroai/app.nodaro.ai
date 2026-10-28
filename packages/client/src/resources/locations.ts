@@ -2,6 +2,7 @@ import type { CharacterAspectRatio, SurroundDirection, LocationAssetType, Locati
 export type { LocationAssetType, LocationAttachColumn, CharacterAspectRatio, SurroundDirection } from "@nodaro/shared/entities"
 export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, SURROUND_DIRECTIONS } from "@nodaro/shared/entities"
 import type { NodaroClientCore } from "../core.js"
+import type { SetKeeperCatalogInput, SetKeeperCatalogResult } from "./keepers.js"
 import type { GenerationSessionParams } from "./nodes.js"
 
 /**
@@ -492,6 +493,16 @@ export class LocationsResource {
    */
   restore(id: string): Promise<{ id: string; name: string }> {
     return this.client.request("POST", `/v1/locations/${encodeURIComponent(id)}/restore`)
+  }
+
+  /**
+   * Admin only: put one of your own locations on the shared Nodaro Keepers
+   * shelf (`client.keepers.catalog()`), or take it off. A first-party session
+   * or your personal token; `forbidden` for anyone who is not a platform
+   * admin, `not_found` for a row that is not yours.
+   */
+  setCatalog(id: string, input: SetKeeperCatalogInput): Promise<SetKeeperCatalogResult> {
+    return this.client.request("PUT", `/v1/locations/${encodeURIComponent(id)}/catalog`, { body: input })
   }
 
   /**

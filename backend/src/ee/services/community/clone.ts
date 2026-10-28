@@ -1,12 +1,10 @@
 import { randomUUID } from "node:crypto"
 import { supabase } from "../../../lib/supabase.js"
-import { reserveStorageIfWithinLimit, refundStorage } from "../../../utils/file-validation.js"
+import { reserveStorageIfWithinLimit } from "../../../utils/file-validation.js"
 import { ensureDefaultProject } from "../../../lib/default-project.js"
 import { deriveAvailableName } from "../../../lib/entity-naming.js"
-import { copyR2ObjectToPrefix, r2KeyFromOurUrl } from "../../../lib/storage.js"
-import { deleteKeysRecordingFailures } from "../../../lib/storage-delete.js"
 import { buildCloneRow, COMMUNITY_ENTITY_ADAPTERS, type EntityType } from "../../lib/community-entity-adapters.js"
-import { deepCopyReferenceSheet } from "./asset-lifecycle.js"
+import { copyEntityAssets, rollbackCopiedAssets } from "./copy-entity-assets.js"
 
 /** Internal marker so the outer catch never double-rolls-back an error whose
  *  resources were already released inline (reservation reject + insert fail). */
@@ -61,54 +59,21 @@ export async function cloneListing(input: {
   }
 
   const destPrefix = `user-clones/${userId}/${randomUUID()}/`
-  const copiedAssets: Record<string, unknown> = {}
-  const copiedUrls: string[] = []
+  // Filled once the copy is in; a throw inside `copyEntityAssets` has already
+  // deleted its partial copies, so the catch below has nothing to undo then.
+  let copiedUrls: string[] = []
   let bytes = 0
-  const copyUrl = async (url: string): Promise<string> => {
-    const { url: u, bytes: b } = await copyR2ObjectToPrefix(url, destPrefix)
-    bytes += b
-    copiedUrls.push(u)
-    return u
-  }
 
   try {
-    for (const f of adapter.assetFields) {
-      const v = snapshot[f]
-      if (v == null) continue
-      if (typeof v === "string") {
-        copiedAssets[f] = await copyUrl(v)
-      } else if (f === "sheets" && Array.isArray(v)) {
-        // ReferenceSheet[] — deep-copy nested panel/source/gen URLs, not just the top-level url.
-        copiedAssets[f] = await Promise.all(
-          (v as Array<Record<string, unknown>>).map((s) => deepCopyReferenceSheet(s, copyUrl)),
-        )
-      } else if (Array.isArray(v)) {
-        copiedAssets[f] = await Promise.all(
-          (v as Array<{ url?: string }>).map(async (it) =>
-            it?.url ? { ...it, url: await copyUrl(it.url) } : it,
-          ),
-        )
-      } else if (typeof v === "object") {
-        const obj: Record<string, unknown> = {}
-        for (const [k, vv] of Object.entries(v as Record<string, unknown>)) {
-          if (typeof vv === "string") {
-            obj[k] = await copyUrl(vv)
-          } else if (Array.isArray(vv)) {
-            obj[k] = await Promise.all(
-              vv.map((u) => (typeof u === "string" ? copyUrl(u) : u)),
-            )
-          } else {
-            obj[k] = vv
-          }
-        }
-        copiedAssets[f] = obj
-      }
-    }
+    const copied = await copyEntityAssets(entityType, snapshot, destPrefix)
+    copiedUrls = copied.copiedUrls
+    bytes = copied.bytes
+    const copiedAssets = copied.copiedAssets
 
     const reserved = await reserveStorageIfWithinLimit(userId, bytes)
     if (!reserved) {
       // No reservation was made → only the copied blobs need cleanup.
-      await rollback(copiedUrls, userId, 0)
+      await rollbackCopiedAssets(copiedUrls, userId, 0)
       const e = new Error("storage_limit_exceeded") as RolledBackError
       e.code = "storage_limit_exceeded"
       e.rolledBack = true
@@ -129,7 +94,7 @@ export async function cloneListing(input: {
       .single()
     if (error || !inserted) {
       // Reservation succeeded but the row never landed → refund + delete blobs.
-      await rollback(copiedUrls, userId, bytes)
+      await rollbackCopiedAssets(copiedUrls, userId, bytes)
       const e = new Error(`clone insert failed: ${error?.message ?? "no row"}`) as RolledBackError
       e.rolledBack = true
       throw e
@@ -146,14 +111,8 @@ export async function cloneListing(input: {
     // Only roll back here for failures that did NOT already release resources
     // inline (e.g. a copy error mid-loop, or the record_clone RPC throwing).
     if (!(err as RolledBackError).rolledBack && copiedUrls.length) {
-      await rollback(copiedUrls, userId, bytes).catch(() => {})
+      await rollbackCopiedAssets(copiedUrls, userId, bytes).catch(() => {})
     }
     throw err
   }
-}
-
-async function rollback(urls: string[], userId: string, reservedBytes: number): Promise<void> {
-  const keys = urls.map((u) => r2KeyFromOurUrl(u)).filter((k): k is string => !!k)
-  if (keys.length) await deleteKeysRecordingFailures(keys, "community")
-  if (reservedBytes > 0) await refundStorage(userId, reservedBytes)
 }

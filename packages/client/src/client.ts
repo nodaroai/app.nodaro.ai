@@ -15,6 +15,7 @@ import { CharactersResource } from "./resources/characters.js"
 import { LocationsResource } from "./resources/locations.js"
 import { ObjectsResource } from "./resources/objects.js"
 import { CreaturesResource } from "./resources/creatures.js"
+import { KeepersResource } from "./resources/keepers.js"
 import { PipelinesResource } from "./resources/pipelines.js"
 import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
@@ -79,6 +80,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly locations: LocationsResource
   readonly objects: ObjectsResource
   readonly creatures: CreaturesResource
+  /** The shared Nodaro Keepers catalog of characters, creatures, locations and objects. */
+  readonly keepers: KeepersResource
   readonly pipelines: PipelinesResource
   readonly reduce: ReduceResource
   readonly promptHelper: PromptHelperResource
@@ -141,6 +144,7 @@ export class NodaroClient extends NodaroClientCore {
     this.locations = new LocationsResource(this)
     this.objects = new ObjectsResource(this)
     this.creatures = new CreaturesResource(this)
+    this.keepers = new KeepersResource(this)
     this.pipelines = new PipelinesResource(this)
     this.reduce = new ReduceResource(this)
     this.promptHelper = new PromptHelperResource(this)

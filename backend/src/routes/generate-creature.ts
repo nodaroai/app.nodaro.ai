@@ -12,6 +12,9 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { resolveEntityAspect } from "@nodaro/shared/entities"
 import { buildCreaturePrompt } from "@nodaro/prompts/doctrine"
+import { renderEntitySubjectHints } from "../lib/entity-subject.js"
+import { subjectSchema } from "../lib/subject-schema.js"
+import { isMinorAge } from "@nodaro/prompts/picker-catalogs"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
@@ -48,6 +51,14 @@ const generateCreatureBody = z.object({
   // catalog (parameter-picker), the seed prompt fragment flows through to
   // the worker so it can be appended to the prompt context.
   seedPromptHint: z.string().max(2000).optional(),
+  // What the creature is, as picker-catalog ids (`animal` above all; Person /
+  // Styling / held prop / material are accepted too) — the SAME door as
+  // `/v1/generate-image` and `/v1/generate-character` (`subjectSchema`: same
+  // keys, same bounds, unknown keys stripped and unknown ids skipped). The
+  // platform writes the words (`renderEntitySubjectHints`) and
+  // `buildCreaturePrompt` folds them after the prose, so no client folds ids
+  // into `seedPromptHint` / `description` itself.
+  subject: subjectSchema.optional(),
   // Optional name to set on the attached row at the same time as the
   // source image URL (worker auto-attach helper writes both atomically).
   attachName: z.string().max(100).optional(),
@@ -147,7 +158,22 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
 
       const modelIdentifier = parsed.data.provider
 
-      const prompt = buildCreaturePrompt({ name, description, species, category, style })
+      // The request's `subject` ids, phrased ONCE by the platform and folded
+      // after the prose. No `subject` → `[]` → the prompt is byte-identical.
+      const prompt = buildCreaturePrompt({
+        name,
+        description,
+        species,
+        category,
+        style,
+        subjectHints: renderEntitySubjectHints(parsed.data.subject),
+      })
+      // W1-a: the door accepts Person ids too, so a `subject` whose age is a
+      // minor's arms the minor-age floor at the entity worker exactly as the
+      // character route's does (persisted on the jobs row to be auditable).
+      // Absent / adult → false: the worker applies nothing, the prompt is
+      // untouched (the key itself is new on creature jobs).
+      const subjectMinor = isMinorAge(parsed.data.subject as { age?: string; customAge?: number; type?: string } | undefined)
 
       // Main creature image: full-body portrait framing (3:4) so the hero shot
       // isn't generated square and cropped. Mirrors generate-character.ts (which
@@ -194,8 +220,9 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
             attachName: parsed.data.attachName,
             expectedUpdatedAt: parsed.data.expectedUpdatedAt,
             prompt,
+            subjectMinor,
           }
-        : { ...baseInputData, prompt }
+        : { ...baseInputData, prompt, subjectMinor }
 
       const insertedJobIds: string[] = []
       for (let i = 0; i < parsed.data.count; i++) {
@@ -335,6 +362,7 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
           aspectRatio,
           usageLogId: r.usageLogId,
           seedPromptHint: parsed.data.seedPromptHint,
+          subjectMinor,
           ...(includeAttach
             ? {
                 attachToCreatureId: parsed.data.attachToCreatureId,

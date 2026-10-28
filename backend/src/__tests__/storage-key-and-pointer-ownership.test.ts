@@ -371,7 +371,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
   "backend/src/services/scene3d-artifacts/object-store.ts":
     "the scene-3D artifact store's delete: its one caller (gc.ts) passes keys from service-role-only scene3d_artifact_gc rows (389) and skips any task naming another bucket",
   "backend/src/ee/services/community/asset-lifecycle.ts": "lists the server-owned community/<listingId>/ prefix",
-  "backend/src/ee/services/community/clone.ts": "rolls back the copies it just made",
+  "backend/src/ee/services/community/copy-entity-assets.ts":
+    "rolls back the copies it just made under the new owner's user-clones/ prefix (the community clone's and the Keepers copy's one copier)",
   "backend/src/routes/character-training.ts": "the training zip it uploaded in the same request",
   "backend/src/providers/video/edl-timeline.ts": "the render's own checkpoints",
   "backend/src/lib/speaker-frames-cache-sweep.ts":

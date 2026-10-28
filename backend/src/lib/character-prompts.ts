@@ -135,8 +135,15 @@ export function buildPortraitPrompt(args: {
    *  person value the hints are derived from (`isMinorAge`, @nodaro/prompts).
    *  Absent/false → byte-identical to the pre-W1-a prompt. */
   subjectMinor?: boolean
+  /** The clauses of the request's `subject` ids (`renderEntitySubjectHints`),
+   *  already rendered by the route. They read in the SAME slot as the row's
+   *  person / wardrobe hints, after them, deduped fragment by fragment
+   *  (`withSubjectHints`) so a row and a request that carry the same pick (a
+   *  Keepers copy re-sent with its own ids) phrase it once. Absent/empty →
+   *  byte-identical output. */
+  subjectHints?: readonly string[]
 }): string {
-  const hints = buildEntityHints(args.person, args.wardrobe).join(", ")
+  const hints = withSubjectHints(buildEntityHints(args.person, args.wardrobe), args.subjectHints).join(", ")
   const injected = nonEmpty(args.injectedAssets)
   const seed = [
     stripTrailingPeriod(args.seedPrompt.trim()),
@@ -144,6 +151,47 @@ export function buildPortraitPrompt(args: {
     injected ? stripTrailingPeriod(injected) : null,
   ].filter(Boolean).join(", ")
   return `${seed}. ${portraitScaffolding(args.subjectMinor === true)}.`
+}
+
+/**
+ * The row's hints, untouched, followed by the request's `subject` clauses
+ * with every FRAGMENT (a ", "-joined piece) the row or an earlier clause
+ * already carries removed — first occurrence wins, order kept. A clause left
+ * with nothing new is dropped. No subject clauses → the row's hints exactly
+ * as given (the no-subject prompt stays byte-identical).
+ *
+ * Fragment level, not clause level, on purpose: the row's `buildPersonHints`
+ * hands back one fragment per dimension ("in their 20s", "short straight
+ * hair") while `renderSubjectHints` folds the whole Person group into ONE
+ * comma-joined clause ("in their 20s, short straight hair"), so a clause
+ * compare never matches a pick of two or more dimensions and a Keepers copy
+ * re-sent with its own ids would read every pick twice. Splitting a subject
+ * clause on the same ", " the renderer joined it with is lossless for the
+ * text and makes the compare see the dimensions; the row's own hints are
+ * never split or re-joined. A pick the two builders WORD differently (the
+ * row's wardrobe hints vs the request's styling hints) still reads twice —
+ * the dedupe is by wording, not by id.
+ */
+export function withSubjectHints(
+  rowHints: readonly string[],
+  subjectHints: readonly string[] | undefined,
+): string[] {
+  const clauses = (subjectHints ?? []).filter((clause) => clause.trim().length > 0)
+  if (clauses.length === 0) return [...rowHints]
+  const seen = new Set(rowHints.flatMap(splitFragments))
+  return clauses.reduce<string[]>((out, clause) => {
+    const fresh = splitFragments(clause).filter((fragment) => {
+      if (seen.has(fragment)) return false
+      seen.add(fragment)
+      return true
+    })
+    return fresh.length === 0 ? out : [...out, fresh.join(", ")]
+  }, [...rowHints])
+}
+
+/** The ", "-joined pieces of a hint, trimmed, empties dropped. */
+function splitFragments(hint: string): string[] {
+  return hint.split(", ").map((fragment) => fragment.trim()).filter((fragment) => fragment.length > 0)
 }
 
 export function buildAssetPromptText(args: {

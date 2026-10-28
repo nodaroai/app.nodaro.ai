@@ -144,7 +144,9 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
     `${NOT_A_JOB} (a workflow run's link audio, fetched by the run before any of its jobs and read by its later nodes)`,
   // The copy helpers.
   "ee/services/community/asset-lifecycle.ts :: prefix": `${NOT_A_JOB} (a community listing's copy of an entity's assets, under \`community/<listingId>/\`)`,
-  "ee/services/community/clone.ts :: destPrefix": `${NOT_A_JOB} (a user's clone of a community entity, under \`user-clones/<userId>/\`)`,
+  "ee/services/community/copy-entity-assets.ts :: destPrefix":
+    `${NOT_A_JOB} (a user's copy of another owner's entity — a community clone or a Keepers copy — under \`user-clones/<userId>/\`)`,
+  "ee/lib/keepers-store.ts :: destPrefix": `${NOT_A_JOB} (a Keepers copy's voice sample, under the same \`user-clones/<userId>/\` prefix as its assets)`,
   "routes/workflow-templates.ts :: existingTemplate.id": `${NOT_A_JOB} (a template's durable preview, keyed by the template)`,
   "routes/workflow-templates.ts :: newTemplateId": `${NOT_A_JOB} (a template's durable preview, keyed by the template)`,
   // Raw sends past the writers.

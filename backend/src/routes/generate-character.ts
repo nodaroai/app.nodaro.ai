@@ -12,6 +12,8 @@ import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildPortraitPrompt } from "../lib/character-prompts.js"
+import { renderEntitySubjectHints } from "../lib/entity-subject.js"
+import { subjectSchema } from "../lib/subject-schema.js"
 import { isMinorAge, containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
 import { resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -85,6 +87,16 @@ const generateCharacterBody = z
     // not "fix" it. Mirrors the characters.seed_prompt CHECK exactly, so an
     // over-long value is a clean 400 instead of a Postgres 23514.
     seedPrompt: z.string().max(4000).optional(),
+    // WHO the portrait shows, as picker-catalog ids (Person, Styling, held
+    // prop, material, animal) — the SAME door as `/v1/generate-image`
+    // (`subjectSchema`: same keys, same bounds, unknown keys stripped and
+    // unknown ids skipped). The platform writes the words
+    // (`renderEntitySubjectHints`) and folds them into the portrait prompt's
+    // hint slot, so a Keepers shelf, Studio and a Create Image tile phrase one
+    // pick identically and no client folds ids into `seedPrompt` itself. Not
+    // a prompt source on its own: the refine below still asks for seedPrompt /
+    // referencePhotos / description.
+    subject: subjectSchema.optional(),
     referencePhotos: z
       .array(
         z.object({
@@ -277,9 +289,16 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       //
       // Either signal floors. Neither is a bare-word check, so an adult prompt
       // that merely mentions a child stays byte-identical.
+      //
+      // The body's `subject` is a THIRD structured signal: it carries the same
+      // `age` / `customAge` / `type` keys as the row's person value (the
+      // normalized bag keeps exactly the wire keys), so a request whose picks
+      // say "child" floors even when the row has no person and the prose says
+      // nothing.
       // ──────────────────────────────────────────────────────────────────────
       const subjectMinor =
         isMinorAge(characterPerson as { age?: string; customAge?: number; type?: string } | null) ||
+        isMinorAge(data.subject as { age?: string; customAge?: number; type?: string } | undefined) ||
         containsMinorAgeHint(
           [
             data.seedPrompt,
@@ -293,6 +312,12 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
             .join(". "),
         )
 
+      // The request's `subject` ids, phrased ONCE by the platform. Every branch
+      // below folds them — the scaffolded ones through `buildPortraitPrompt`'s
+      // hint slot, the legacy ones right after the prose, before the injected
+      // assets — so a pick is never lost to the branch a caller happens to
+      // take. No `subject` → `[]` → every branch is byte-identical to before.
+      const subjectHints = renderEntitySubjectHints(data.subject)
       const hasBodyLegacyPrompt =
         data.userPrompt !== undefined || data.description !== undefined
       const promptText = data.seedPrompt
@@ -302,9 +327,10 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
             wardrobe: characterWardrobe ?? undefined,
             injectedAssets,
             subjectMinor,
+            subjectHints,
           })
         : hasBodyLegacyPrompt
-          ? [data.userPrompt ?? data.description, injectedAssets]
+          ? [data.userPrompt ?? data.description, ...subjectHints, injectedAssets]
               .filter((s): s is string => !!s && s.length > 0)
               .join(", ")
           : characterDescription
@@ -314,8 +340,9 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
                 wardrobe: characterWardrobe ?? undefined,
                 injectedAssets,
                 subjectMinor,
+                subjectHints,
               })
-            : [data.name, injectedAssets]
+            : [data.name, ...subjectHints, injectedAssets]
                 .filter((s): s is string => !!s && s.length > 0)
                 .join(", ")
 

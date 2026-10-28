@@ -420,6 +420,72 @@ describe("POST /v1/generate-creature — multi-candidate + auto-attach (Phase D5
     )
   })
 
+  // ───────────────────────────────────────────────────────────────────────
+  // `subject` — picker-catalog ids phrased by the platform (the same door
+  // and renderer as /v1/generate-image), folded after the prose.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("subject (catalog ids, phrased by the platform)", () => {
+    async function promptFor(payload: Record<string, unknown>) {
+      const { jobInsert } = setupSupabaseMock()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-creature",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload,
+      })
+      const inserted = jobInsert.mock.calls[0]?.[0] as { input_data: Record<string, unknown> } | undefined
+      return { status: res.statusCode, body: res.json(), inputData: inserted?.input_data, jobInsert }
+    }
+
+    it("renders the ids into the prompt after the description, before the style line, and records the bag", async () => {
+      const { status, inputData } = await promptFor({
+        name: "Fang",
+        species: "wolf",
+        description: "scarred muzzle",
+        subject: { animal: "wolf" },
+      })
+      expect(status).toBe(200)
+      const prompt = inputData!.prompt as string
+      expect(prompt).toContain("Single wolf, Fang, scarred muzzle, featuring a wolf, ")
+      expect(prompt.indexOf("featuring a wolf")).toBeLessThan(prompt.indexOf("art style"))
+      expect(inputData!.subject).toEqual({ animal: "wolf" })
+      expect(videoQueue.add).toHaveBeenCalledWith("generate-creature", expect.objectContaining({ prompt }))
+    })
+
+    it("no subject = today's prompt, byte for byte", async () => {
+      const without = await promptFor({ name: "Fang", species: "wolf" })
+      const empty = await promptFor({ name: "Fang", species: "wolf", subject: {} })
+      expect(empty.inputData!.prompt).toBe(without.inputData!.prompt)
+      expect(without.inputData!.prompt).toContain("Single wolf, Fang, realistic art style")
+    })
+
+    it("an unknown key or id is skipped, never a 400 — the same tolerance as /v1/generate-image", async () => {
+      const { status, inputData } = await promptFor({
+        name: "Fang",
+        species: "wolf",
+        subject: { animal: "not-a-real-id", bogus: "x" },
+      })
+      expect(status).toBe(200)
+      expect(inputData!.prompt).toContain("Single wolf, Fang, realistic art style")
+    })
+
+    it("a minor's age in the subject arms the minor-age floor (W1-a) on the jobs row and the queue payload", async () => {
+      const { inputData } = await promptFor({ name: "Fang", species: "wolf", subject: { age: "age-child" } })
+      expect(inputData!.subjectMinor).toBe(true)
+      expect(videoQueue.add).toHaveBeenCalledWith("generate-creature", expect.objectContaining({ subjectMinor: true }))
+      const adult = await promptFor({ name: "Fang", species: "wolf", subject: { animal: "wolf" } })
+      expect(adult.inputData!.subjectMinor).toBe(false)
+      expect(videoQueue.add).toHaveBeenLastCalledWith("generate-creature", expect.objectContaining({ subjectMinor: false }))
+    })
+
+    it("rejects the shared wire bounds (an id over 100 chars) with validation_error", async () => {
+      const { status, body, jobInsert } = await promptFor({ name: "Fang", subject: { animal: "a".repeat(101) } })
+      expect(status).toBe(400)
+      expect(body.error.code).toBe("validation_error")
+      expect(jobInsert).not.toHaveBeenCalled()
+    })
+  })
+
   it("force_private respects user setting (not hardcoded)", async () => {
     const { jobInsert } = setupSupabaseMock()
 

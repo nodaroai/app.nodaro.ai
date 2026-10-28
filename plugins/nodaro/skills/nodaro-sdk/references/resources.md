@@ -19,6 +19,7 @@
 | `locations` | Location Studio: CRUD, assets, atmosphere motion |
 | `objects` | Object Studio: CRUD, assets, motion |
 | `creatures` | Creature Studio: CRUD, assets, motion |
+| `keepers` | Nodaro Keepers, the shared catalog of characters / creatures / locations / objects: `catalog` (public, by `kind`, cursor-paged), `copy` (a copy of an item in your own account, the same copy on every call, no credits); an admin puts their own items on it with `characters.setCatalog` (and the same on the other three) |
 | `pipelines` | Showrunner pipelines: stages, approvals, chat, branch |
 | `reduce` | Fan-in reducer (pick-best, concat, vote, merge…) |
 | `promptHelper` | Prompt enhancement / wizard |

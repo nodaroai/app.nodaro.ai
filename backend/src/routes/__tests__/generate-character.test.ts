@@ -458,6 +458,114 @@ describe("POST /v1/generate-character", () => {
   })
 
   // ───────────────────────────────────────────────────────────────────────
+  // `subject` — picker-catalog ids phrased by the platform (the same door
+  // and renderer as /v1/generate-image), folded into the prompt's hint slot.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("subject (catalog ids, phrased by the platform)", () => {
+    const SMARTPHONE_CLAUSE = "holding a modern smartphone in one hand"
+
+    async function promptFor(payload: Record<string, unknown>, row: Record<string, unknown> | null = null) {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain(row) } as never)
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload,
+      })
+      const inserted = insert.mock.calls[0]?.[0] as { input_data: Record<string, unknown> } | undefined
+      return { status: res.statusCode, body: res.json(), inputData: inserted?.input_data, insert }
+    }
+
+    it("renders the ids into the prompt after the seed, before the scaffolding, and records the normalized bag", async () => {
+      const { status, inputData } = await promptFor({
+        name: "Kira",
+        seedPrompt: "young woman, glasses",
+        subject: { hairBase: "base-short-straight", heldProp: ["smartphone"] },
+      })
+      expect(status).toBe(200)
+      const prompt = inputData!.prompt as string
+      expect(prompt).toContain("young woman, glasses, short straight hair, " + SMARTPHONE_CLAUSE)
+      expect(prompt.indexOf(SMARTPHONE_CLAUSE)).toBeLessThan(prompt.indexOf(PORTRAIT_SCAFFOLDING))
+      // The door normalizes: a single-id array is stored as the bare id.
+      expect(inputData!.subject).toEqual({ hairBase: "base-short-straight", heldProp: "smartphone" })
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "generate-character",
+        expect.objectContaining({ prompt }),
+      )
+    })
+
+    it("folds the ids on the legacy description path too (no seedPrompt)", async () => {
+      const { inputData } = await promptFor({
+        name: "Kira",
+        description: "a traveller",
+        subject: { hairBase: "base-short-straight" },
+      })
+      expect(inputData!.prompt).toBe("a traveller, short straight hair")
+    })
+
+    it("phrases a two-dimension pick the row's person and the request's subject both carry once (the Keepers re-send)", async () => {
+      const picks = { age: "age-20s", hairBase: "base-short-straight" }
+      const { inputData } = await promptFor(
+        { name: "Kira", seedPrompt: "young woman", attachToCharacterId: TEST_CHARACTER_ID, subject: picks },
+        { person: picks, wardrobe: null, description: null },
+      )
+      const prompt = inputData!.prompt as string
+      expect(prompt.split("short straight hair").length - 1).toBe(1)
+      expect(prompt.split("in their 20s").length - 1).toBe(1)
+      const { inputData: rowOnly } = await promptFor(
+        { name: "Kira", seedPrompt: "young woman", attachToCharacterId: TEST_CHARACTER_ID },
+        { person: picks, wardrobe: null, description: null },
+      )
+      expect(prompt).toBe(rowOnly!.prompt)
+    })
+
+    it("no subject = today's prompt, byte for byte", async () => {
+      const without = await promptFor({ name: "Kira", seedPrompt: "young woman, glasses" })
+      const empty = await promptFor({ name: "Kira", seedPrompt: "young woman, glasses", subject: {} })
+      expect(empty.inputData!.prompt).toBe(without.inputData!.prompt)
+      expect(without.inputData!.prompt).toBe(`young woman, glasses. ${PORTRAIT_SCAFFOLDING}.`)
+    })
+
+    it("an unknown key or id is skipped, never a 400 — the same tolerance as /v1/generate-image", async () => {
+      const { status, inputData } = await promptFor({
+        name: "Kira",
+        seedPrompt: "young woman, glasses",
+        subject: { hairBase: "not-a-real-id", bogus: "x" },
+      })
+      expect(status).toBe(200)
+      expect(inputData!.prompt).toBe(`young woman, glasses. ${PORTRAIT_SCAFFOLDING}.`)
+    })
+
+    it("rejects the shared wire bounds (an id over 100 chars, a list over 8) with validation_error", async () => {
+      const longId = await promptFor({ name: "Kira", seedPrompt: "x", subject: { hairBase: "a".repeat(101) } })
+      expect(longId.status).toBe(400)
+      expect(longId.body.error.code).toBe("validation_error")
+      const longList = await promptFor({ name: "Kira", seedPrompt: "x", subject: { heldProp: Array(9).fill("smartphone") } })
+      expect(longList.status).toBe(400)
+      expect(longList.insert).not.toHaveBeenCalled()
+    })
+
+    it("is not a prompt source on its own — subject without seedPrompt / description / referencePhotos is a 400", async () => {
+      const { status, body } = await promptFor({ name: "Kira", subject: { hairBase: "base-short-straight" } })
+      expect(status).toBe(400)
+      expect(body.error.message).toBe("Provide seedPrompt, referencePhotos, or description")
+    })
+
+    it("a minor's age in the subject floors the portrait (W1-a) even with no row and adult prose", async () => {
+      const { inputData } = await promptFor({
+        name: "Kira",
+        seedPrompt: "a traveller in a cloak",
+        subject: { age: "age-child" },
+      })
+      expect(inputData!.subjectMinor).toBe(true)
+      expect(inputData!.prompt).toContain(MODEST_ATTIRE_CLAUSE)
+      expect(inputData!.prompt).not.toContain(CLOTHED_DEFAULT)
+      expect(videoQueue.add).toHaveBeenCalledWith("generate-character", expect.objectContaining({ subjectMinor: true }))
+    })
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
   // Element/asset injection (P2) — facetInjections resolve (server-side LLM
   // extraction, mocked here) and weave into the SAME injection slot as P1's
   // injectedAssets. No facetInjections → byte-identical no-op.

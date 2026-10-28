@@ -50,6 +50,13 @@ export interface CreaturePromptInput {
   species?: string
   category?: string
   style?: EntityStyle | string
+  /**
+   * Already-rendered clauses of the request's `subject` catalog ids (the
+   * platform's `renderSubjectHints`, image surface) — the route renders, this
+   * builder only places them: after the prose, before the style line, each
+   * once. Absent/empty → byte-identical output.
+   */
+  subjectHints?: readonly string[]
 }
 
 /**
@@ -61,9 +68,11 @@ export interface CreaturePromptInput {
 export function buildCreaturePrompt(input: CreaturePromptInput): string {
   const subject = input.species?.trim() || "creature"
   const descPart = input.description ? `, ${input.description}` : ""
+  const hints = [...new Set((input.subjectHints ?? []).filter((h) => h.length > 0))]
+  const hintPart = hints.length > 0 ? `, ${hints.join(", ")}` : ""
   const styleDesc = input.style ?? "realistic"
   return [
-    `Single ${subject}, ${input.name}${descPart},`,
+    `Single ${subject}, ${input.name}${descPart}${hintPart},`,
     `${styleDesc} art style, full body, front view,`,
     "4k, highly detailed, plain background, no text, no labels, no watermarks.",
   ].join(" ")

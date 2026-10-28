@@ -246,7 +246,13 @@ describe("list_node_presets / get_node_preset — what each preset says", () => 
     const factory = JSON.parse(
       textOf(await callTool(server(["presets:read"]), "get_node_preset", { nodeType: "generate-image", presetId: "generate-image/cinematic-portrait" })),
     )
-    expect(factory).toMatchObject({ source: "factory", needsImage: false, minReferences: 0, favorite: false, previewUrl: null })
+    expect(factory).toMatchObject({
+      source: "factory",
+      needsImage: false,
+      minReferences: 0,
+      favorite: false,
+      previewUrl: expect.stringMatching(/\/preset-previews\/generate-image\/cinematic-portrait\.[0-9a-f]{8}\.webp$/),
+    })
   })
 
   it("an in-app (first-party) session is never handed a preview address", async () => {

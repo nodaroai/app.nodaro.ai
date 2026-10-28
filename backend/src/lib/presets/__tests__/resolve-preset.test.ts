@@ -124,11 +124,19 @@ describe("resolvePreset", () => {
     expect(q.eq).toHaveBeenCalledTimes(0)
   })
 
-  it("says how many photos a factory preset works from, and has no preview until one is committed", async () => {
+  it("says how many photos a factory preset works from, and hands out its committed preview picture", async () => {
     const board = await resolvePreset({ nodeType: "generate-image", presetId: "generate-image/location-board" })
-    expect(board).toMatchObject({ minReferences: 1, needsImage: true, previewUrl: null })
+    expect(board).toMatchObject({
+      minReferences: 1,
+      needsImage: true,
+      previewUrl: expect.stringMatching(/\/preset-previews\/generate-image\/location-board\.[0-9a-f]{8}\.webp$/),
+    })
     const portrait = await resolvePreset({ nodeType: "generate-image", presetId: "generate-image/cinematic-portrait" })
-    expect(portrait).toMatchObject({ minReferences: 0, needsImage: false, previewUrl: null })
+    expect(portrait).toMatchObject({
+      minReferences: 0,
+      needsImage: false,
+      previewUrl: expect.stringMatching(/\/preset-previews\/generate-image\/cinematic-portrait\.[0-9a-f]{8}\.webp$/),
+    })
   })
 
   it("counts a custom preset's {image:N} tokens and returns its stored preview", async () => {
