@@ -85,10 +85,10 @@ export const trendRunShape = {
   slots: z
     .record(z.string().regex(/^[a-z0-9_]{1,32}$/), slotInput)
     .describe(
-      "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's, or with none stays as in the original. " +
+      "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the chosen example's, or with none stays as in the original, except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look. " +
         'Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot\'s chips.',
     ),
-  example: z.number().int().min(1).optional().describe("The example (1-based, default 1) whose pictures fill optional slots left out. Leave out if the trend has none."),
+  example: z.number().int().min(1).optional().describe("The example (1-based, default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none."),
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
@@ -98,7 +98,7 @@ export const trendRunShape = {
 
 type RunArgs = z.infer<z.ZodObject<typeof trendRunShape>> & { session_id?: string }
 
-/** The route's camelCase body; an empty images list is left out (the slot then takes the example's, or stays as in the original on a trend with none). */
+/** The route's camelCase body; an empty images list is left out (the slot then takes the example's, or stays as in the original on a trend with none; a Full depth trend uses its default image for the role, else the original's look). */
 function runBody(args: RunArgs): Record<string, unknown> {
   const slots: Record<string, Record<string, unknown>> = {}
   for (const [key, { images, ...chips }] of Object.entries(args.slots)) {

@@ -36,6 +36,7 @@ import {
   runFfprobe,
   withFfmpegSlot,
 } from "../../../providers/video/ffmpeg-utils.js"
+import { TREND_PICTURE_MAX_BYTES } from "@nodaro/render-rules"
 import { uploadBufferToR2, uploadFileWithKeyToR2 } from "../../../lib/storage.js"
 import { imageDimensionsOf } from "../../../lib/image-dimensions.js"
 import { reencodePeakMemoryMiB } from "../../../providers/video/video-file-stages.js"
@@ -94,7 +95,8 @@ export async function sha256OfFile(path: string): Promise<string> {
 }
 
 /** The most a trend file may weigh: a 30 s source clip, a result video, a picture. */
-export const TREND_MEDIA_MAX_BYTES: Record<TrendMediaKind, number> = { video: 500 * 1024 * 1024, image: 30 * 1024 * 1024 }
+// The picture cap is shared with the trend builder, which offers a Topaz upscale only when its result fits it.
+export const TREND_MEDIA_MAX_BYTES: Record<TrendMediaKind, number> = { video: 500 * 1024 * 1024, image: TREND_PICTURE_MAX_BYTES }
 
 interface Sniffed { kind: TrendMediaKind; ext: string; contentType: string }
 

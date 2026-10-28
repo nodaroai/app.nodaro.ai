@@ -45,11 +45,13 @@ import {
   applyAdminTrendUpscale,
   discardAdminTrendUpscale,
   startAdminTrendCrop,
+  cropAdminTrendFrame,
   dismissAdminTrendCrop,
   fetchAdminTrendUpscaleJob,
   type AdminTrendUpscaleTarget,
   type AdminTrendSceneDescriptionWhich,
   type AdminTrendCropAspect,
+  type AdminTrendFrameCrop,
   fetchAdminTrendTags,
   saveAdminTrendTagLabels,
   type AdminTrendMediaKind,
@@ -1900,6 +1902,14 @@ export function useDiscardTrendUpscale(id: string) {
     onError: handledByScreen,
     mutationFn: ({ jobId, revision }: { jobId: string; revision: string }) => discardAdminTrendUpscale(id, jobId, revision),
     onSuccess: () => invalidate(id),
+  })
+}
+
+/** Crop one frame of the saved original into a picture in trend storage (a slot's default picture); the draft is not written. */
+export function useCropTrendFrame(id: string) {
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (body: AdminTrendFrameCrop) => cropAdminTrendFrame(id, body),
   })
 }
 

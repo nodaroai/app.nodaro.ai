@@ -70,6 +70,15 @@
  * whole clip's. Without one the keys are left out (the engine describes the
  * clip per run, as before).
  *
+ * An empty optional slot on a FULL DEPTH trend (`faceMasking.source`
+ * `"full-depth"`) is never filled from an example (an example can look nothing
+ * like the original): it takes the slot's `defaultImages` when it has them
+ * (`fromDefault: true` on the display slot), else it is sent with no pictures,
+ * so the engine keeps that role as in the clip. The run records `example: 0`
+ * (none was used); an explicit `example` must still exist. Every other clip
+ * preparation fills an empty optional slot from the example as before, and its
+ * display slots carry no `fromDefault` key.
+ *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking. Likewise the
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
@@ -177,6 +186,12 @@ export interface TrendRunDisplaySlot extends Chips {
    * stays as in the original.
    */
   fromExample: boolean
+  /**
+   * Present (true) only when the slot was left empty on a Full depth trend
+   * and its default pictures filled it (`fromExample` is then false). Absent
+   * otherwise, so a run of any other trend records exactly what it did before.
+   */
+  fromDefault?: true
 }
 
 export interface TrendRunDisplay {
@@ -392,12 +407,16 @@ export function composeTrendRun(
   // the clip), and the run records example 0. With examples, an empty
   // optional slot takes the chosen example's pictures (Example 1 by default).
   const noExample = req.example === undefined && data.examples.length === 0
-  const example = noExample ? 0 : (req.example ?? 1)
-  const exampleInRange = Number.isInteger(example) && example >= 1 && example <= data.examples.length
-  // An explicit example must exist, on a trend with none too.
+  const requested = noExample ? 0 : (req.example ?? 1)
+  const exampleInRange = Number.isInteger(requested) && requested >= 1 && requested <= data.examples.length
+  // An explicit example must exist, on a trend with none too (and on a Full depth trend, which uses none).
   if (req.example !== undefined && !exampleInRange) {
     throw new TrendRunError("example_out_of_range", `This trend has no example ${req.example}.`)
   }
+  // Full depth never fills an empty slot from an example (an example can look nothing like the
+  // original): its default pictures, else none (kept as in the clip). So it records example 0.
+  const fullDepth = faceMaskingOn(data.faceMasking) && faceMaskingSourceOf(data.faceMasking) === "full-depth"
+  const example = fullDepth ? 0 : requested
 
   const slots: TrendRunDisplaySlot[] = []
   const roles: unknown[] = []
@@ -406,10 +425,14 @@ export function composeTrendRun(
     const own = entry?.images ?? []
     let images: string[]
     let fromExample = false
+    let fromDefault = false
     if (own.length > 0) {
       images = [...own]
     } else if (slot.required) {
       throw new TrendRunError("missing_slot", `"${pickText(slot.label, "en")}" needs a picture.`, slot.key)
+    } else if (fullDepth) {
+      images = [...(slot.defaultImages ?? [])]
+      fromDefault = images.length > 0
     } else if (noExample) {
       images = []
     } else {
@@ -427,7 +450,16 @@ export function composeTrendRun(
 
     const chips = chipsOf(slot, entry, allowHiddenChips)
     roles.push({ kind: slot.kind, name: slot.roleName, images, ...chips })
-    slots.push({ key: slot.key, label: pickText(slot.label, "en")!, kind: slot.kind, images: [...images], fromExample, ...chips })
+    slots.push({
+      key: slot.key,
+      label: pickText(slot.label, "en")!,
+      kind: slot.kind,
+      images: [...images],
+      fromExample,
+      // Only when a default filled it: every other run's record keeps exactly its old keys.
+      ...(fromDefault ? { fromDefault: true as const } : {}),
+      ...chips,
+    })
   }
 
   if (req.preview && data.previewStart === null) {

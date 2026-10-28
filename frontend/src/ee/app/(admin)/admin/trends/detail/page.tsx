@@ -288,6 +288,13 @@ export default function AdminTrendEditorPage() {
 
   const upscales = server.upscaleJobs ?? []
   const savedSource = server.draft.source
+  // The saved original as shown (its display copy, rotation applied), for a slot's "Take from the original".
+  const cropWidth = savedSource?.display?.width ?? savedSource?.width
+  const cropHeight = savedSource?.display?.height ?? savedSource?.height
+  const cropOriginal =
+    savedSource && cropWidth && cropHeight
+      ? { videoUrl: savedSource.display?.videoUrl ?? savedSource.videoUrl, width: cropWidth, height: cropHeight, durationSec: savedSource.durationSec }
+      : null
   const sourceUpscale =
     upscales.find((u) => u.target === "source" && u.current) ?? upscales.filter((u) => u.target === "source").at(-1)
   const upscaleProps = {
@@ -412,6 +419,13 @@ export default function AdminTrendEditorPage() {
               trendId={id}
               slots={form.slots}
               hasPreview={hasPreview}
+              fullDepth={preparation === "full-depth"}
+              original={cropOriginal}
+              originalWaitFor={
+                cropOriginal && form.source?.videoUrl !== savedSource?.videoUrl
+                  ? "Save first: the picture is taken from the saved source clip."
+                  : undefined
+              }
               onChange={(fn) => setForm((f) => (f ? { ...f, slots: fn(f.slots) } : f))}
             />
           </Section>

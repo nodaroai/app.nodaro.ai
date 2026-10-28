@@ -109,7 +109,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
   const remove = useDeleteTrendTestRun(trendId)
   const formTop = useRef<HTMLDivElement>(null)
 
-  /** The form set to `r`'s inputs, by slot key; a slot it filled from an example stays empty. */
+  /** The form set to `r`'s inputs, by slot key; a slot it filled from an example or a default stays empty. */
   const copyInputs = (r: AdminTrendRun) => {
     const bySlot = new Map(r.slots.map((x) => [x.key, x]))
     const nextImages: Record<string, string[]> = {}
@@ -117,7 +117,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
     for (const s of slots) {
       const used = bySlot.get(s.key)
       if (!used) continue
-      if (!used.fromExample && used.images.length > 0) nextImages[s.key] = used.images.slice(0, MAX_IMAGES_PER_SLOT)
+      if (!used.fromExample && !used.fromDefault && used.images.length > 0) nextImages[s.key] = used.images.slice(0, MAX_IMAGES_PER_SLOT)
       const set = Object.fromEntries(CHIPS_BY_KIND[s.kind].filter((c) => used[c]).map((c) => [c, used[c]])) as ChipChoices
       if (Object.keys(set).length > 0) nextChips[s.key] = set
     }
@@ -489,7 +489,7 @@ function RunCard({
             <div key={s.key} className="flex flex-col gap-1">
               <span className="text-muted-foreground">
                 {s.label}
-                {s.fromExample ? " (example)" : ""}
+                {s.fromExample ? " (example)" : s.fromDefault ? " (default)" : ""}
               </span>
               <div className="flex gap-1">
                 {s.images.map((u, i) => (

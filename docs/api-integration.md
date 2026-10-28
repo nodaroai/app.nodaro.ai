@@ -4595,7 +4595,10 @@ The estimate and run body is
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
-  example `example` (1-based, default 1). On a trend with no example, leave
+  example `example` (1-based, default 1), except in Full depth trends, where it
+  uses the trend's default image for that role if one is set, otherwise the
+  original's look (the slot records `fromDefault: true` when the default was
+  used, and the run `example: 0`). On a trend with no example, leave
   `example` out: an optional slot left out then stays as in the original, and
   the run records `example: 0`. The chips are the ones the slot's
   `chips` lists (of its kind's own: a person `body` / `outfit` / `hair`, a pet
@@ -4657,12 +4660,12 @@ anything is charged:
 | Status | `code` | When |
 |---|---|---|
 | `400` | `validation_error` | The body or a query does not validate, the `cursor` is not one this list gave, or (`/runs`) `origin` is not a slug. |
-| `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
+| `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it (never in a Full depth trend, which does not use examples to fill slots). |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
 | `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Pulse). |
 | `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Pulse trend). |
-| `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
+| `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's — or, in a Full depth trend, the default image — for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend does not have (any `example` on a trend with none). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |

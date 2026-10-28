@@ -53,6 +53,12 @@ interface TrendSlotBase {
    * sent with a run.
    */
   hintImageUrl?: string
+  /**
+   * An OPTIONAL slot's default pictures (1–3), in trend storage: what a Full
+   * depth run sends for the slot when the person leaves it empty (compose.ts).
+   * Read only in Full depth; never on a required slot (the schema refuses it).
+   */
+  defaultImages?: string[]
   /** HIDDEN. Who this is in the source clip, e.g. "the woman on the left" (1–200). */
   roleName: string
   /**

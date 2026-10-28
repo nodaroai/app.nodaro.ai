@@ -237,6 +237,7 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["components/nodes/run-node-button.tsx", { refs: 1, why: "Stop on a Video Pro run: it acts on the run the node already shows, whose job's id holds the freeze back, and starts nothing" }],
   ["hooks/queries/use-competitors-queries.ts", { refs: 1, why: "Competitors: a page of its own, with no canvas" }],
   ["ee/hooks/queries/use-admin-queries.ts", { refs: 3, why: "Admin → Trends' test run, its face mask and its upscales to 1080p: an admin page of its own, with no canvas; the test run's job is read back into the trend's test-run list, the face mask's into the face masking section, an upscale's into its example card or the source clip section" }],
+  ["ee/app/(admin)/admin/trends/components/SlotDefaultImages.tsx", { refs: 1, why: "Admin → Trends' default-image upscale: an admin page of its own, with no canvas; the upscaled picture replaces the slot's default image in the trend draft" }],
   ["routes/video-director-page.tsx", { refs: 1, why: "the Video Director: a page of its own, with no canvas" }],
   ["components/editor/scene-editor-modal.tsx", { refs: 2, why: UNMOUNTED, check: importedOnlyBy(SCENE_EDITOR, []) }],
   ["components/editor/scene-config.tsx", { refs: 1, why: UNMOUNTED, check: importedOnlyBy("components/editor/scene-config", [`${SCENE_EDITOR}.tsx`]) }],

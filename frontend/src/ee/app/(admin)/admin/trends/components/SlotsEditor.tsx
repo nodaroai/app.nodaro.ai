@@ -7,6 +7,8 @@
 // A slot may carry a hint picture (e.g. a frame of that actor from the
 // original), copied into the trend's storage as it is added; shown with the
 // slot, never sent with a run.
+// On a Full depth trend an optional slot may also carry default pictures
+// (SlotDefaultImages): what a run sends when the person leaves it empty.
 
 import { useState } from "react"
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react"
@@ -37,6 +39,8 @@ import {
 } from "../model"
 import { LocalizedField } from "./LocalizedField"
 import { MediaPicker } from "./MediaPicker"
+import { SlotDefaultImages } from "./SlotDefaultImages"
+import type { CropOriginal } from "./FrameCropDialog"
 import { uploadLocalFile } from "./uploads"
 
 const KIND_LABELS: Readonly<Record<TrendSlotKind, string>> = {
@@ -62,11 +66,17 @@ interface Props {
   readonly slots: FormSlot[]
   /** The trend offers a 4 s preview: each slot shows its preview role name (kept, not shown, otherwise). */
   readonly hasPreview: boolean
+  /** The trend's clip preparation is Full depth: each optional slot shows its default pictures. */
+  readonly fullDepth?: boolean
+  /** The saved original, for "Take from the original"; null while there is none. */
+  readonly original?: CropOriginal | null
+  /** Why "Take from the original" waits (the source clip is not saved yet). */
+  readonly originalWaitFor?: string
   /** Functional: a hint picture arrives asynchronously, after other edits may have landed. */
   readonly onChange: (fn: (slots: FormSlot[]) => FormSlot[]) => void
 }
 
-export function SlotsEditor({ trendId, slots, hasPreview, onChange }: Props) {
+export function SlotsEditor({ trendId, slots, hasPreview, fullDepth = false, original = null, originalWaitFor, onChange }: Props) {
   // By uid, on the slots as they are when the change lands (never the ones this render saw).
   const update = (uid: string, fn: (s: FormSlot) => FormSlot) => onChange((ss) => ss.map((s) => (s.uid === uid ? fn(s) : s)))
   const move = (uid: string, by: -1 | 1) =>
@@ -92,9 +102,13 @@ export function SlotsEditor({ trendId, slots, hasPreview, onChange }: Props) {
           index={i}
           count={slots.length}
           hasPreview={hasPreview}
+          fullDepth={fullDepth}
+          original={original}
+          originalWaitFor={originalWaitFor}
           kindFull={(k) => k !== s.kind && countOf(k) >= SLOT_CAPS[k]}
           onChange={(next) => update(s.uid, () => next)}
           onHintImage={(url) => update(s.uid, (x) => withHintImage(x, url))}
+          onDefaultImages={(fn) => update(s.uid, (x) => withDefaultImages(x, fn(x.defaultImages ?? [])))}
           onMove={(by) => move(s.uid, by)}
           onRemove={() => remove(s.uid)}
         />
@@ -118,6 +132,13 @@ export function SlotsEditor({ trendId, slots, hasPreview, onChange }: Props) {
   )
 }
 
+/** The slot with these default pictures, or with none (empty: the key is removed, never saved empty). */
+function withDefaultImages(s: FormSlot, images: readonly string[]): FormSlot {
+  const rest: FormSlot = { ...s }
+  delete rest.defaultImages
+  return images.length > 0 ? { ...rest, defaultImages: [...images] } : rest
+}
+
 /** The slot with this hint picture, or with none (`undefined`: the key is removed, never saved empty). */
 function withHintImage(s: FormSlot, url: string | undefined): FormSlot {
   const rest: FormSlot = { ...s }
@@ -131,15 +152,20 @@ interface CardProps {
   readonly index: number
   readonly count: number
   readonly hasPreview: boolean
+  readonly fullDepth: boolean
+  readonly original: CropOriginal | null
+  readonly originalWaitFor: string | undefined
   readonly kindFull: (k: TrendSlotKind) => boolean
   readonly onChange: (s: FormSlot) => void
   /** Applied to the slot as it is when the picture lands. */
   readonly onHintImage: (url: string | undefined) => void
+  /** Applied to the slot's default pictures as they are when the change lands. */
+  readonly onDefaultImages: (fn: (images: readonly string[]) => readonly string[]) => void
   readonly onMove: (by: -1 | 1) => void
   readonly onRemove: () => void
 }
 
-function SlotCard({ trendId, slot, index, count, hasPreview, kindFull, onChange, onHintImage, onMove, onRemove }: CardProps) {
+function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, original, originalWaitFor, kindFull, onChange, onHintImage, onDefaultImages, onMove, onRemove }: CardProps) {
   const n = index + 1
   const keyOk = SLOT_KEY_RE.test(slot.key)
   const setChip = (chip: TrendChipKey, v: TrendChoice | "default") => {
@@ -212,6 +238,18 @@ function SlotCard({ trendId, slot, index, count, hasPreview, kindFull, onChange,
         onChange={(hint) => onChange({ ...slot, hint })}
       />
       <HintPicture trendId={trendId} n={n} url={slot.hintImageUrl} onChange={onHintImage} />
+      {/* Full depth's optional slots; a required one still holding some shows them, to remove. */}
+      {((fullDepth && !slot.required) || (slot.required && (slot.defaultImages?.length ?? 0) > 0)) && (
+        <SlotDefaultImages
+          trendId={trendId}
+          n={n}
+          images={slot.defaultImages ?? []}
+          required={slot.required}
+          original={original}
+          originalWaitFor={originalWaitFor}
+          onChange={onDefaultImages}
+        />
+      )}
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">Role name</span>
