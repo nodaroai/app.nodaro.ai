@@ -1655,6 +1655,23 @@ describe("test runs", () => {
     expect(full.parts.roles[0].roleName).toEqual({ text: "the woman on the left", fromFullRun: false })
   })
 
+  it("Show prompt of a preview run that carried the stored scene description shows the full role names it sent", async () => {
+    seed({}, previewDraft())
+    world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ preview: true, __sceneDescription: "A neon kitchen." }) }))
+    world.jobs.set(CHILD, { id: CHILD, input_data: { prompt: "ENGINE PROMPT preview" } })
+    const own = (await call("GET", `/v1/admin/trends/test-runs/${RUN}/prompt`)).json().data
+    expect(own).toMatchObject({ mode: "preview", runMode: "preview" })
+    // One name per run: each role by its full role name, never its preview name.
+    expect(own.parts.roles.map((r: { roleName: unknown }) => r.roleName)).toEqual([
+      { text: "the woman on the left", fromFullRun: true },
+      { text: "the dog", fromFullRun: true },
+    ])
+    // The preview's other parts stay its own.
+    expect(own.parts.references).toEqual([{ line: { text: "the sign", fromFullRun: false } }])
+    expect(own.parts.trendPrompt).toEqual({ text: "PREVIEW-PROMPT neon", fromFullRun: false })
+    // A preview run that carried none shows its preview names (the test above).
+  })
+
   it("Show prompt says when the trend offers no preview, and has no parts when the run's version is gone", async () => {
     seed({}, draftData({ previewStart: null }))
     world.jobs.set(RUN, jobRow(RUN, ADMIN))

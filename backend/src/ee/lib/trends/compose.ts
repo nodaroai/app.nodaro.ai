@@ -70,7 +70,10 @@
  * `sceneDescription` with the source window it covers
  * (`sceneDescriptionWindow`): a preview run the preview's text, a full run the
  * whole clip's. Without one the keys are left out (the engine describes the
- * clip per run, as before).
+ * clip per run, as before). A run that sends one names each role as the
+ * stored text does, by its full `roleName`, a preview included: one name per
+ * run (`sceneRoleNames`, applied by `withoutUnsupportedSceneDescription`,
+ * run-helpers.ts, once the description is known to stay).
  *
  * An empty optional slot on a FULL DEPTH trend (`faceMasking.source`
  * `"full-depth"`) is never filled from an example (an example can look nothing
@@ -323,6 +326,16 @@ export interface ComposedTrendRun {
    * zone the preview ran with instead (`followPreviewMasking`). Never sent.
    */
   maskingZoneLeftOut: boolean
+  /**
+   * Each role's name as the stored scene description names it (each slot's
+   * full `roleName`, in `body.roles` order), when the body carries one
+   * (`sceneDescription`). A run sends one name per role: while the
+   * description stays on the wire, a preview run's roles are sent these
+   * names, never their `previewRoleName`, so the engine finds each role of
+   * the stored text by the name it is sent (`withoutUnsupportedSceneDescription`,
+   * run-helpers.ts, decides once the description is known to stay). Never sent.
+   */
+  sceneRoleNames?: string[]
 }
 
 /**
@@ -619,5 +632,7 @@ export function composeTrendRun(
     },
     // Full depth reads no zone at all.
     maskingZoneLeftOut: runMasking !== undefined && runMasking.zone === undefined && faceMaskingSourceOf(runMasking) !== "full-depth",
+    // The names the stored text uses (sceneMakeFields' roleName): applied only if the description stays on the wire.
+    ...(scene ? { sceneRoleNames: data.slots.map((s) => s.roleName) } : {}),
   }
 }

@@ -28,6 +28,7 @@ import {
   MAX_TREND_PROMPT,
   hasOwnPreviewPrompts,
   previewClipStatus,
+  previewPromptBudget,
   promptBudget,
   shownChips,
   TREND_DETAILS_MAX,
@@ -417,6 +418,38 @@ describe("the 4 s preview's own prompt parts in the form", () => {
     ])
     // No preview offered: kept, never run, so not held to the budget.
     expect(formIssues({ ...over, previewStart: null })).toEqual([])
+  })
+})
+
+describe("one name per run: a described Full depth preview sends the full role names", () => {
+  // Long role names (what the stored scene description uses), short preview ones, and the preview's
+  // pre and trend prompts at their longest: they fit Kling 4 beside the short names only.
+  const kling = (faceMasking?: AdminTrendFaceMasking) =>
+    toForm(
+      draft({
+        engine: "kling-4",
+        slots: [
+          { key: "lead", label: { en: "Lead" }, kind: "person", required: true, roleName: "r".repeat(200), previewRoleName: "her" },
+          { key: "friend", label: { en: "Friend" }, kind: "person", required: false, roleName: "f".repeat(200), previewRoleName: "him" },
+        ],
+        trendPrompt: "t",
+        previewPrePrompt: "x".repeat(MAX_PRE_PROMPT),
+        previewTrendPrompt: "y".repeat(promptBudget({ prePrompt: "", trendPrompt: "" }).trendPromptMax),
+        ...(faceMasking ? { faceMasking } : {}),
+      }),
+    )
+  const previewBudgetIssues = (f: ReturnType<typeof kling>) => formIssues(f).filter((m) => m.startsWith("Pre and trend prompts in the 4 s preview"))
+
+  it("holds the preview to the full role names while it may carry the stored description, and only then", () => {
+    const faces = kling()
+    expect(previewPromptBudget(faces).room).toBeGreaterThanOrEqual(0)
+    expect(previewBudgetIssues(faces)).toEqual([])
+    const described = kling({ mode: "always", source: "full-depth" })
+    expect(previewPromptBudget(described).room).toBeLessThan(0)
+    expect(previewPromptBudget(described)).toEqual(promptBudget(withPromptsFor(described, "preview", "stored")))
+    expect(previewBudgetIssues(described)).toHaveLength(1)
+    // Another scene sends no stored description: the preview's own names.
+    expect(previewBudgetIssues(kling({ mode: "always", source: "full-depth", scene: "original" }))).toEqual([])
   })
 })
 

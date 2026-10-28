@@ -18,7 +18,7 @@
  * HIDDEN: everything here is the trend's recipe; nothing of it may reach a
  * public response.
  */
-import { hasPreviewText, type TrendPromptMode } from "@nodaro/render-rules"
+import { hasPreviewText, type TrendPromptMode, type TrendRoleNames } from "@nodaro/render-rules"
 import { pickText } from "./localize.js"
 import type { TrendSlotKind, TrendVersionData } from "./types.js"
 
@@ -30,6 +30,7 @@ export {
   hasPreviewText,
   withPromptsFor,
   type TrendPromptMode,
+  type TrendRoleNames,
 } from "@nodaro/render-rules"
 
 /** What the prompt texts are read from: a trend version (or its prompt fields). */
@@ -57,8 +58,14 @@ export interface TrendPromptParts {
   trendPrompt: TrendPromptPart | null
 }
 
-/** `withPromptsFor`, part by part, saying which part a preview takes from the full run. */
-export function trendPromptParts(data: PromptSource, mode: TrendPromptMode): TrendPromptParts {
+/**
+ * `withPromptsFor`, part by part, saying which part a preview takes from the
+ * full run. `roleNames` `"stored"`: the run carries the stored scene
+ * description, so a preview names each role by its `roleName` (one name per
+ * run: run-helpers.ts `withoutUnsupportedSceneDescription`), shown as taken
+ * from the full run.
+ */
+export function trendPromptParts(data: PromptSource, mode: TrendPromptMode, roleNames: TrendRoleNames = "own"): TrendPromptParts {
   const preview = mode === "preview"
   const part = (own: string | undefined, full: string | undefined): TrendPromptPart | null => {
     if (preview && hasPreviewText(own)) return { text: own, fromFullRun: false }
@@ -71,7 +78,7 @@ export function trendPromptParts(data: PromptSource, mode: TrendPromptMode): Tre
       key: s.key,
       label: pickText(s.label, "en") ?? s.key,
       kind: s.kind,
-      roleName: part(s.previewRoleName, s.roleName) ?? { text: "", fromFullRun: preview },
+      roleName: part(roleNames === "stored" ? undefined : s.previewRoleName, s.roleName) ?? { text: "", fromFullRun: preview },
     })),
     references: data.references.map((r) => ({ line: part(r.previewLine, r.line) ?? { text: "", fromFullRun: preview } })),
     trendPrompt: part(data.previewTrendPrompt, data.trendPrompt),

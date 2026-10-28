@@ -12,6 +12,7 @@ import { storedFaceMaskFor } from "../face-mask.js"
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { faceMaskSettingsKey } from "../face-mask.js"
 import { promptBudget, promptModesOf } from "../prompt-budget.js"
+import { promptRunsOf, previewMayUseStoredRoleNames } from "@nodaro/render-rules"
 import { hasOwnPreviewPrompts, hasPreviewText, trendPromptParts, withPromptsFor } from "../prompt-parts.js"
 import { publishBlockers } from "../publish-check.js"
 import type { TrendVersionData, TrendPreviewClip } from "../types.js"
@@ -160,6 +161,20 @@ describe("trendPromptParts (the admin's prompt view)", () => {
     expect(trendPromptParts(data({ trendPrompt: undefined }), "full").trendPrompt).toBeNull()
   })
 
+  it("a run that carried the stored scene description: a preview's roles by their full role names, its other parts its own", () => {
+    const parts = trendPromptParts(data({ previewTrendPrompt: "" }), "preview", "stored")
+    expect(parts.roles.map((r) => r.roleName)).toEqual([
+      { text: "the woman on the left", fromFullRun: true },
+      { text: "the dance floor", fromFullRun: true },
+    ])
+    expect(parts.prePrompt).toEqual({ text: "PREVIEW PRE", fromFullRun: false })
+    expect(parts.references[0]!.line).toEqual({ text: "the sign", fromFullRun: false })
+    // A full run is the same either way.
+    expect(trendPromptParts(data(), "full", "stored")).toEqual(trendPromptParts(data(), "full"))
+    // And it matches what withPromptsFor sends with those names.
+    expect(parts.roles.map((r) => r.roleName.text)).toEqual(withPromptsFor(data(), "preview", "stored").slots.map((s) => s.roleName))
+  })
+
   it("matches what withPromptsFor sends, in both modes", () => {
     for (const mode of ["full", "preview"] as const) {
       const d = data({ previewTrendPrompt: "", references: [{ images: ["https://cdn.example/r.png"], line: "l", previewLine: " " }] })
@@ -225,6 +240,56 @@ describe("the prompt budget and the publish check hold the 4 s preview's texts",
     expect(promptBudget(withPromptsFor(kling, "preview")).room).toBeLessThan(0)
     expect(publishBlockers(kling, envs, REQUIRED)).toEqual([
       { code: "prompt_budget", message: expect.stringMatching(/^4 s preview: the pre and trend prompts are .* on Kling 4 is /) },
+    ])
+  })
+
+  it("holds a described Full depth preview to the engine text of the full role names it sends (one name per run)", () => {
+    // Long role names the stored scene description uses, short ones of the preview's own.
+    const slots = [
+      { key: "lead", kind: "person" as const, label: { en: "Lead" }, required: true, roleName: "r".repeat(200), previewRoleName: "her" },
+      { key: "friend", kind: "person" as const, label: { en: "Friend" }, required: false, roleName: "f".repeat(200), previewRoleName: "him" },
+    ]
+    const references = [{ images: ["https://cdn.example/r0.png"], line: "it" }]
+    // The preview's pre and trend prompts at their longest: they fit beside the short names only.
+    const faces = data({
+      engine: "kling-4", slots, references, prePrompt: "p", trendPrompt: "t",
+      previewPrePrompt: "x".repeat(3000), previewTrendPrompt: "y".repeat(promptBudget({}).trendPromptMax),
+    })
+    const described = { ...faces, faceMasking: { mode: "always" as const, source: "full-depth" as const } }
+    expect(promptBudget(faces).room).toBeGreaterThanOrEqual(0)
+    expect(promptBudget(withPromptsFor(faces, "preview")).room).toBeGreaterThanOrEqual(0)
+    expect(promptBudget(withPromptsFor(faces, "preview", "stored")).room).toBeLessThan(0)
+
+    const KLING = { ...ALL, engines: ["seedance-2-5", "kling-4"], resolutions: ["720p", "1080p"] }
+    const envs = [env("staging", KLING), env("production", KLING)]
+    const budgetBlockers = (d: TrendVersionData) => publishBlockers(d, envs, REQUIRED).filter((b) => b.code === "prompt_budget")
+    // Not Full depth: a preview always sends its own names, which fit.
+    expect(previewMayUseStoredRoleNames(faces)).toBe(false)
+    expect(budgetBlockers(faces)).toEqual([])
+    // Full depth from a description (the default scene): a preview may send the full names, which do not.
+    expect(previewMayUseStoredRoleNames(described)).toBe(true)
+    expect(promptRunsOf(described).map((r) => [r.mode, r.texts.slots[0]!.roleName.length])).toEqual([
+      ["full", 200],
+      ["preview", 3],
+      ["preview", 200],
+    ])
+    expect(budgetBlockers(described)).toEqual([
+      { code: "prompt_budget", message: expect.stringMatching(/^4 s preview: the pre and trend prompts are .* on Kling 4 is /) },
+    ])
+    // Another scene sends no stored description: the preview's own names only.
+    for (const scene of ["original", "none"] as const) {
+      expect(budgetBlockers({ ...described, faceMasking: { ...described.faceMasking, scene } })).toEqual([])
+    }
+  })
+
+  it("names a blocker once when a preview is over the same way with both namings", () => {
+    const described = data({
+      faceMasking: { mode: "always", source: "full-depth" },
+      previewTrendPrompt: tooLong,
+    })
+    expect(promptRunsOf(described).filter((r) => r.mode === "preview")).toHaveLength(2)
+    expect(publishBlockers(described, ENVS, REQUIRED).filter((b) => b.code === "prompt_budget")).toEqual([
+      { code: "prompt_budget", message: expect.stringMatching(/^4 s preview: the trend prompt is /) },
     ])
   })
 

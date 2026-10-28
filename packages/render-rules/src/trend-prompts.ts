@@ -15,6 +15,7 @@
  */
 import { CAST_SWAP_POST_PROMPT_MAX, getMaxVideoPromptChars, TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
 import { klingEngineText } from "./cast-swap-kling-trend"
+import { CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT } from "./cast-swap-prompt-parts"
 
 type SlotKind = "person" | "pet" | "product" | "location"
 
@@ -53,18 +54,45 @@ export function hasOwnPreviewPrompts(t: TrendPromptSource): boolean {
 }
 
 /**
+ * Which names a preview run sends its roles by: `"own"` each slot's
+ * `previewRoleName` where set (else its `roleName`), `"stored"` each slot's
+ * `roleName` — the names a full-depth trend's stored scene description uses,
+ * sent by a preview that carries that text (one name per run: the backend's
+ * run-helpers.ts `withoutUnsupportedSceneDescription` decides per run).
+ */
+export type TrendRoleNames = "own" | "stored"
+
+/** A trend's clip preparation, as the role-name rule reads it. */
+export interface TrendSceneNamingSource {
+  readonly faceMasking?: { readonly mode?: string; readonly source?: string; readonly scene?: string }
+}
+
+/**
+ * Whether a preview run of this trend may carry the stored scene description
+ * and so name its roles by their `roleName` (`"stored"`): masking on, Full
+ * depth, its scene a description (the default). Whether a given run does
+ * depends on what only that run knows (the stored clip's text, the engine),
+ * so a check that must hold for every run holds both namings.
+ */
+export function previewMayUseStoredRoleNames(t: TrendSceneNamingSource): boolean {
+  const m = t.faceMasking
+  return !!m && m.mode !== "off" && m.source === "full-depth" && (m.scene ?? CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT) === "description"
+}
+
+/**
  * The texts a run in `mode` sends, in the full run's fields: each slot's
  * `roleName`, each reference's `line`, `prePrompt` and `trendPrompt`. Full:
  * `t` itself, unchanged. Preview: a copy with each preview text that is set
- * in place of its full one (everything else untouched; `t` is never changed).
+ * in place of its full one (everything else untouched; `t` is never changed),
+ * its role names as `roleNames` says (`"stored"`: the full run's).
  */
-export function withPromptsFor<T extends TrendPromptSource>(t: T, mode: TrendPromptMode): T {
+export function withPromptsFor<T extends TrendPromptSource>(t: T, mode: TrendPromptMode, roleNames: TrendRoleNames = "own"): T {
   if (mode === "full") return t
   const prePrompt = previewTextOr(t.previewPrePrompt, t.prePrompt)
   const trendPrompt = previewTextOr(t.previewTrendPrompt, t.trendPrompt)
   return {
     ...t,
-    slots: t.slots.map((s) => ({ ...s, roleName: previewTextOr(s.previewRoleName, s.roleName) })),
+    slots: t.slots.map((s) => ({ ...s, roleName: roleNames === "stored" ? s.roleName : previewTextOr(s.previewRoleName, s.roleName) })),
     references: t.references.map((r) => ({ ...r, line: previewTextOr(r.previewLine, r.line) })),
     ...(prePrompt !== undefined ? { prePrompt } : {}),
     ...(trendPrompt !== undefined ? { trendPrompt } : {}),
@@ -80,6 +108,25 @@ export function withPromptsFor<T extends TrendPromptSource>(t: T, mode: TrendPro
  */
 export function promptModesOf(t: TrendPromptSource & { readonly previewStart: number | null }): TrendPromptMode[] {
   return t.previewStart !== null && hasOwnPreviewPrompts(t) ? ["full", "preview"] : ["full"]
+}
+
+/**
+ * Each set of texts a run of this trend can send, by mode (`promptModesOf`),
+ * for the checks that must hold for every run (the prompt budget): the full
+ * run's; the preview's with its own role names; and, while a preview may
+ * carry the stored scene description (`previewMayUseStoredRoleNames`) and a
+ * slot words its name its own way for the preview, the preview's with each
+ * slot's `roleName` — so Kling 4's engine text is counted with the names a
+ * run actually sends.
+ */
+export function promptRunsOf<T extends TrendPromptSource & TrendSceneNamingSource & { readonly previewStart: number | null }>(
+  t: T,
+): Array<{ mode: TrendPromptMode; texts: T }> {
+  return promptModesOf(t).flatMap((mode) => {
+    const own = { mode, texts: withPromptsFor(t, mode) }
+    if (mode === "full" || !previewMayUseStoredRoleNames(t) || !t.slots.some((s) => hasPreviewText(s.previewRoleName))) return [own]
+    return [own, { mode, texts: withPromptsFor(t, mode, "stored") }]
+  })
 }
 
 /** The run schema's `details` limit: the user's own text after the trend prompt. */

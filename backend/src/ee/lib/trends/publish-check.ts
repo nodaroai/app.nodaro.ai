@@ -18,7 +18,9 @@
  * no example at all: it shows only its original), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
  * the user's details (`promptBudget`), the 4 s preview's own too when the
- * trend offers one (`promptModesOf`). And the Cast Swap engine of EVERY
+ * trend offers one (`promptModesOf`), with each role name a preview can send
+ * (`promptRunsOf`: a preview that carries the stored scene description names
+ * its roles by their `roleName`). And the Cast Swap engine of EVERY
  * environment in `TREND_PUBLISH_ENVIRONMENTS` must support it: the slot kinds
  * it uses, fixed references when it has some, face masking when it masks
  * (mode not "off"), a trend pre prompt when it has one, the trend's video
@@ -82,7 +84,7 @@ import {
   CAST_SWAP_KLING_MAX_IMAGES,
   CAST_SWAP_RESOLUTIONS_BY_ENGINE,
 } from "@nodaro/shared/models"
-import { castSwapImagesSent } from "@nodaro/render-rules"
+import { castSwapImagesSent, promptRunsOf } from "@nodaro/render-rules"
 import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas.js"
 import { promptBudget, promptModesOf, TREND_DETAILS_MAX } from "./prompt-budget.js"
 import { withPromptsFor } from "./prompt-parts.js"
@@ -256,23 +258,24 @@ export function publishBlockers(
     const issue = parsed.error.issues[0]
     out.push({ code: "invalid_data", message: issue ? `${issue.path.join(".") || "data"}: ${issue.message}` : "Invalid trend data." })
   }
-  for (const mode of promptModesOf(data)) {
-    // The texts a run in this mode sends: the preview's own role names, reference lines and prompts where it has them.
-    const texts = withPromptsFor(data, mode)
+  // One blocker per message: a preview held to both namings may be over in the same way twice.
+  const budgetMessages = new Set<string>()
+  for (const { mode, texts } of promptRunsOf(data)) {
+    // The texts a run in this mode sends: the preview's own role names, reference lines and prompts where it has
+    // them, and once more with each slot's roleName when a preview may carry the stored scene description.
     const budget = promptBudget(texts)
     const trendLen = texts.trendPrompt?.length ?? 0
     const what = mode === "preview" ? "4 s preview: the" : "The"
+    let message: string | null = null
     if (trendLen > budget.trendPromptMax) {
-      out.push({
-        code: "prompt_budget",
-        message: `${what} trend prompt is ${trendLen} characters; with the user's details (up to ${TREND_DETAILS_MAX}) the most is ${budget.trendPromptMax}.`,
-      })
+      message = `${what} trend prompt is ${trendLen} characters; with the user's details (up to ${TREND_DETAILS_MAX}) the most is ${budget.trendPromptMax}.`
     } else if (budget.room < 0) {
       const kling = engineOf(data) === "kling-4" ? " on Kling 4" : ""
-      out.push({
-        code: "prompt_budget",
-        message: `${what} pre and trend prompts are ${(texts.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most${kling} is ${Math.max(0, budget.promptsMax)}.`,
-      })
+      message = `${what} pre and trend prompts are ${(texts.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most${kling} is ${Math.max(0, budget.promptsMax)}.`
+    }
+    if (message !== null && !budgetMessages.has(message)) {
+      budgetMessages.add(message)
+      out.push({ code: "prompt_budget", message })
     }
   }
   // Kling 4 takes at most 10 images a run, as the route counts them: every slot filled to its 3,
