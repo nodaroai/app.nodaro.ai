@@ -21,6 +21,7 @@ import {
 } from "./message-builders.js"
 import { assertKieEnvelope, assertMediaIngested, buildResponse, extractActualUsd } from "./response.js"
 import { requestChars } from "./kie-cost.js"
+import { CHAT_COMPLETIONS_USAGE_KEYS, MESSAGES_USAGE_KEYS, kieReportedUsage } from "./kie-usage.js"
 import { parseSseStream } from "./sse.js"
 import { asStoppedStream, type StreamAbortContext } from "./stream-abort.js"
 import { withTransportRetry } from "./transport-retry.js"
@@ -212,13 +213,13 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
   assertKieEnvelope(data, model.id, "chat-completions")
   const choices = data.choices as Array<Record<string, unknown>> | undefined
   const text = (choices?.[0]?.message as Record<string, unknown>)?.content as string ?? ""
-  const usage = data.usage as Record<string, number> | undefined
+  const usage = kieReportedUsage(model.id, data.usage, CHAT_COMPLETIONS_USAGE_KEYS, { requestChars: requestChars(req), answerChars: text.length })
 
   return buildResponse(
     model,
     responseFormat ? responseFormat.restoreText(text) : text,
     { stopReason: choices?.[0]?.finish_reason, cap: maxTokens },
-    usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined,
+    usage,
     extractActualUsd(data),
     "kie",
     req,
@@ -262,7 +263,7 @@ async function streamKieChatCompletions(
     throw new LlmLaneError(`KIE.ai chat-completions stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens, undefined, false, abort)
+  const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens, undefined, false, abort, requestChars(req))
   return responseFormat ? { ...streamed, text: responseFormat.restoreText(streamed.text) } : streamed
 }
 
@@ -314,13 +315,13 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   } else {
     text = rawText
   }
-  const usage = data.usage as Record<string, number> | undefined
+  const usage = kieReportedUsage(model.id, data.usage, MESSAGES_USAGE_KEYS, { requestChars: requestChars(req), answerChars: text.length })
 
   return buildResponse(
     model,
     text,
     { stopReason: data.stop_reason, cap: base.max_tokens as number, refusalFails: req.failOnRefusal === true },
-    usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
+    usage,
     extractActualUsd(data),
     "kie",
     req,
@@ -348,7 +349,7 @@ async function streamKieMessagesUnguarded(
     throw new LlmLaneError(`KIE.ai messages stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  const streamed = await parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson, req.failOnRefusal === true, abort)
+  const streamed = await parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson, req.failOnRefusal === true, abort, requestChars(req))
   return kieClaudePromptJson(model, req) ? kiePromptJsonPayload(model, streamed) : streamed
 }
 
@@ -474,7 +475,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   const contentArr = (textItem?.content as Array<Record<string, unknown>>) ?? []
   const textBlock = contentArr.find((c) => c.type === "output_text")
   const text = (textBlock?.text as string) ?? ""
-  const usage = data.usage as Record<string, number> | undefined
+  const usage = kieReportedUsage(model.id, data.usage, MESSAGES_USAGE_KEYS, { requestChars: requestChars(req), answerChars: text.length })
   // The responses dialect states an unfinished reply as `status: "incomplete"`
   // plus a reason — "max_output_tokens" is the cap.
   const incompleteReason = data.status === "incomplete"
@@ -485,7 +486,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
     model,
     textFormat ? textFormat.restoreText(text) : text,
     { stopReason: incompleteReason, cap: body.max_output_tokens as number | undefined },
-    usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
+    usage,
     extractActualUsd(data),
     "kie",
     req,
@@ -523,7 +524,7 @@ async function streamKieResponses(
 
   // As on the chat-completions stream: `onToken` chunks are the wire form, the
   // returned text the caller's.
-  const streamed = await parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined, undefined, false, abort)
+  const streamed = await parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined, undefined, false, abort, requestChars(req))
   return textFormat ? { ...streamed, text: textFormat.restoreText(streamed.text) } : streamed
 }
 
