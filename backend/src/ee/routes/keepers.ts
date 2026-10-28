@@ -6,6 +6,7 @@ import { PERSONAL_SPACE_DISABLED_ERROR } from "../../lib/default-project.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
 import {
+  KEEPER_CATALOG_CATEGORY_MAX,
   KEEPER_CATALOG_LIMIT_MAX,
   KEEPER_CATALOG_SORT_MAX,
   KEEPER_KINDS,
@@ -47,7 +48,7 @@ const copyParams = z.object({ kind: kindParam, id: idParam })
 const setCatalogBody = z.object({
   catalog: z.boolean(),
   sort: z.number().int().min(-KEEPER_CATALOG_SORT_MAX).max(KEEPER_CATALOG_SORT_MAX).optional(),
-  category: z.string().max(80).nullable().optional(),
+  category: z.string().max(KEEPER_CATALOG_CATEGORY_MAX).nullable().optional(),
 })
 
 const ADMIN_ONLY_MSG = "Only a platform admin, signed in or with a personal token, can change the Keepers shelf."

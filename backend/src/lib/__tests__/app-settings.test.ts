@@ -122,6 +122,28 @@ describe("getAppSettings", () => {
     expect((await getAppSettings()).nodaro_motion_pulse_audio).toBeNull()
   })
 
+  it("reads the direct runs' Prism reference audio: full, voice or none, anything else (or no row, or a failed read) as never saved", async () => {
+    for (const value of ["full", "voice", "none"]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_prism_reference_audio", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBe(value)
+    }
+
+    for (const value of ["mute", "", null, { prismReferenceAudio: "voice" }]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_prism_reference_audio", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_prism_reference_audio, JSON.stringify(value)).toBeNull()
+    }
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [], error: null })
+    expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBeNull()
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: null, error: { message: "fail" } })
+    expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBeNull()
+  })
+
   it("returns cached result on second call within TTL", async () => {
     mockSelect.mockResolvedValueOnce({
       data: [

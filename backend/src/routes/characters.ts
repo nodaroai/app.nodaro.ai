@@ -227,7 +227,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, person, wardrobe, personality, canonical_description, identity_lock, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, person, wardrobe, personality, canonical_description, identity_lock, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, catalog, catalog_sort, catalog_category, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -264,6 +264,11 @@ type CharacterRow = {
   sheets: ReferenceSheet[] | null
   detail_closeups: unknown[] | null
   outfit_variations: unknown[] | null
+  // Nodaro Keepers (migration 566): the row's own shelf state. Admin-set;
+  // off on every other user's rows and on every copy.
+  catalog: boolean
+  catalog_sort: number
+  catalog_category: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -304,6 +309,9 @@ function toCamel(c: CharacterRow) {
     loraReplicateVersion: c.lora_replicate_version,
     loraTriggerWord: c.lora_trigger_word,
     loraTrainedAt: c.lora_trained_at,
+    catalog: c.catalog ?? false,
+    catalogSort: c.catalog_sort ?? 0,
+    catalogCategory: c.catalog_category ?? null,
     deletedAt: c.deleted_at,
     createdAt: c.created_at,
     updatedAt: c.updated_at,

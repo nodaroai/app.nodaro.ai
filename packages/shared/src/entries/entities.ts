@@ -7,6 +7,7 @@
  */
 export { FEATURED_ENTITIES, getFeaturedEntities } from "../featured-entities.js"
 export type { FeaturedEntity } from "../featured-entities.js"
+export { KEEPER_CATALOG_CATEGORY_MAX, KEEPER_CATALOG_SORT_MAX } from "../keepers-limits.js"
 export {
   IMAGE_REF_TYPES,
   PASSTHROUGH_TYPES,

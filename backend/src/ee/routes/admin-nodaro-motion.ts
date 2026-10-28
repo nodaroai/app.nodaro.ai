@@ -10,6 +10,8 @@
  *                                         the Motion style's masking and prompt style per engine (admin-nodaro-motion-motion.ts)
  *   GET/PUT /v1/admin/nodaro-motion/pulse-audio
  *                                         the direct Pulse runs' audio (admin-nodaro-motion-pulse-audio.ts)
+ *   GET/PUT /v1/admin/nodaro-motion/prism-reference-audio
+ *                                         the direct Prism runs' reference audio (admin-nodaro-motion-prism-reference-audio.ts)
  *
  * The setting (`nodaro_motion_masking`, lib/nodaro-motion-masking.ts) is how
  * the Cast Swap engine masks faces on every DIRECT run of each engine —
@@ -36,6 +38,7 @@ import { audit } from "./admin-trends-lifecycle.js"
 import { registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
 import { registerNodaroMotionMotionRoutes } from "./admin-nodaro-motion-motion.js"
 import { registerNodaroMotionPulseAudioRoutes } from "./admin-nodaro-motion-pulse-audio.js"
+import { registerNodaroMotionPrismReferenceAudioRoutes } from "./admin-nodaro-motion-prism-reference-audio.js"
 
 /**
  * `admin_actions.target_id` is a NOT NULL uuid, and a deployment-wide setting
@@ -79,6 +82,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPromptPartRoutes(app)
   registerNodaroMotionMotionRoutes(app)
   registerNodaroMotionPulseAudioRoutes(app)
+  registerNodaroMotionPrismReferenceAudioRoutes(app)
   app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }

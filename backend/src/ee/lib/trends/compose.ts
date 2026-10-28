@@ -92,6 +92,10 @@
  * A Kling 4 trend that delivers Kling's own audio sends `pulseAudio: "generated"`
  * (the original audio, the default, sends no key); dropped for an engine that
  * does not declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
+ * A Prism trend whose reference video carries only the voice, or no audio,
+ * sends `prismReferenceAudio: "voice" | "none"` (the full audio, the default,
+ * sends no key); dropped for an engine that does not declare it
+ * (`withoutUnsupportedPrismReferenceAudio`, run-helpers.ts).
  *
  * Every run names what it edits (`sourceAsset`, provenance the engine stamps
  * on the job): the whole source clip (`kind: "full"`, its length and, once
@@ -134,6 +138,7 @@ import { promptStyleOf } from "./prompt-style.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
+import type { CastSwapPrismReferenceAudioSent } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
 import type {
   CastSwapEngine,
@@ -232,6 +237,13 @@ export interface TrendRunBody {
    * declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
    */
   pulseAudio?: "generated"
+  /**
+   * Only on Prism, and only when the trend's reference video carries the
+   * voice alone or no audio (absent = the full audio). Dropped for an engine
+   * that does not declare it (`withoutUnsupportedPrismReferenceAudio`,
+   * run-helpers.ts).
+   */
+  prismReferenceAudio?: CastSwapPrismReferenceAudioSent
   /**
    * The trend's prompt part overrides, text only (`{ [part]: text }`; `"-"`
    * removes a part), only when it has some. Dropped for an engine that does
@@ -599,6 +611,10 @@ export function composeTrendRun(
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
     ...(engine === "kling-4" && data.pulseAudio === "generated" ? { pulseAudio: "generated" as const } : {}),
+    // Prism's reference audio, when the trend asks for the voice alone or none (the full audio sends no key).
+    ...(engine === "seedance-2-5" && data.prismReferenceAudio && data.prismReferenceAudio !== "full"
+      ? { prismReferenceAudio: data.prismReferenceAudio }
+      : {}),
     // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
     ...(parts ? { promptParts: parts } : {}),
     promptStyle: promptStyleOf(data),

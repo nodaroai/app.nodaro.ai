@@ -99,6 +99,9 @@ const DB_LOCATION = {
   reference_photos: [],
   canonical_description: null,
   style_lock: true,
+  catalog: false,
+  catalog_sort: 0,
+  catalog_category: null,
   deleted_at: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -127,6 +130,9 @@ const CAMEL_LOCATION = {
   selectedAssetByVariant: {},
   sheets: [],
   detailCloseups: [],
+  catalog: false,
+  catalogSort: 0,
+  catalogCategory: null,
   deletedAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
@@ -292,6 +298,29 @@ describe("GET /v1/locations/:id", () => {
     expect(res.json()).toEqual({ ...CAMEL_LOCATION, pendingJobs: [], previousCandidates: [] })
     expect(locChain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
     expect(locChain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("carries the row's Nodaro Keepers shelf state (catalog, catalogSort, catalogCategory) so Studio can show it", async () => {
+    const onShelf = { ...DB_LOCATION, catalog: true, catalog_sort: 3, catalog_category: "Worlds" }
+    const { mockSelect: locSelect } = getByIdChain({ data: onShelf, error: null })
+    const { mockSelect: jobsSelect } = jobsChain()
+    const { mockSelect: prevSelect } = jobsChain()
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: locSelect } as never)
+      .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/locations/${TEST_LOCATION_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const cols = vi.mocked(locSelect).mock.calls[0]?.[0] as string
+    expect(cols).toMatch(/\bcatalog\b(?!_)/)
+    for (const c of ["catalog_sort", "catalog_category"]) expect(cols).toContain(c)
+    expect(res.json()).toMatchObject({ catalog: true, catalogSort: 3, catalogCategory: "Worlds" })
   })
 
   it("returns selected_asset_by_variant on the row (read round-trip)", async () => {

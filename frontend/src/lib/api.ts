@@ -10393,6 +10393,56 @@ export async function getCommunityReports(): Promise<{ data: Array<Record<string
   return apiRequest(`/v1/admin/community/reports`, "apiErr.loadReports")
 }
 
+// --- Nodaro Keepers (the shared shelf) ---
+
+/** The four kinds an admin can put on the shelf — the entity studios' kinds. */
+export type KeeperKind = "character" | "creature" | "location" | "object"
+
+/** Each kind's own routes' prefix — the item read and the shelf write hang off it. */
+export const KEEPER_KIND_PATH: Record<KeeperKind, string> = {
+  character: "/v1/characters",
+  creature: "/v1/creatures",
+  location: "/v1/locations",
+  object: "/v1/objects",
+}
+
+/** An item's shelf state, as the item's own GET reports it. */
+export interface KeeperShelfState {
+  catalog: boolean
+  sort: number
+  category: string | null
+}
+
+/**
+ * The shelf state of one of the caller's items: reads the item's own by-id
+ * route (the kind's prefix + the id) and keeps only the three shelf fields.
+ * Any user may read their own item; the state is only ever on for an admin's
+ * shelved row.
+ */
+export async function readKeeperShelf(kind: KeeperKind, id: string): Promise<KeeperShelfState> {
+  const row = await apiRequest<{ catalog?: boolean; catalogSort?: number; catalogCategory?: string | null }>(
+    `${KEEPER_KIND_PATH[kind]}/${encodeURIComponent(id)}`,
+    "apiErr.readKeeperShelf",
+  )
+  return { catalog: row.catalog ?? false, sort: row.catalogSort ?? 0, category: row.catalogCategory ?? null }
+}
+
+/**
+ * Admin only: puts one of the admin's own items on the shelf or takes it off
+ * (a PUT on the kind's prefix + the id + "catalog"). `sort` within ±1,000,000;
+ * `category` up to 80 characters, `null` clears it; both kept when omitted.
+ */
+export async function setKeeperCatalog(
+  kind: KeeperKind,
+  id: string,
+  body: { catalog: boolean; sort?: number; category?: string | null },
+): Promise<{ id: string; kind: KeeperKind; catalog: boolean; sort: number; category: string | null }> {
+  return apiRequest(`${KEEPER_KIND_PATH[kind]}/${encodeURIComponent(id)}/catalog`, "apiErr.setKeeperCatalog", {
+    method: "PUT",
+    body,
+  })
+}
+
 export async function takedownCommunityListing(id: string): Promise<{ ok: boolean }> {
   return apiRequest(`/v1/admin/community/listings/${encodeURIComponent(id)}/takedown`, "apiErr.takeDown", { method: "POST", body: {} })
 }
@@ -11361,6 +11411,8 @@ export interface AdminTrendData {
   klingLength?: AdminTrendKlingLength
   /** Kling 4 only: what sound a run delivers (hidden). Absent = `"original"`. */
   pulseAudio?: CastSwapPulseAudioId
+  /** Prism only: what audio the reference video sent to the video model carries (hidden). Absent = `"full"`. */
+  prismReferenceAudio?: CastSwapPrismReferenceAudioId
   /**
    * The engine prompt's overrides (hidden; written only by the prompt parts
    * route, kept by a draft save): per part, its text and the hash of the
@@ -11417,6 +11469,14 @@ export type AdminTrendKlingLength = "cut-end" | "cut-start"
  * track as is.
  */
 export type CastSwapPulseAudioId = "original" | "generated"
+
+/**
+ * What audio the reference video a Nodaro Motion Prism run sends to the video
+ * model carries (admin only): the clip's full audio (the default), only the
+ * voice split from the music, or none. The original audio always goes back on
+ * the result.
+ */
+export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none"
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
@@ -12373,6 +12433,35 @@ export async function saveNodaroMotionPulseAudio(pulseAudio: CastSwapPulseAudioI
     await apiRequest<{ data: NodaroMotionPulseAudioView }>(ADMIN_NODARO_MOTION_PULSE_AUDIO, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { pulseAudio },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Prism reference audio for direct runs (/v1/admin/nodaro-motion/prism-reference-audio, admin-nodaro-motion-prism-reference-audio.ts) ----
+
+export interface NodaroMotionPrismReferenceAudioView {
+  /** null = never saved: every direct Prism run sends the clip's full audio. */
+  prismReferenceAudio: CastSwapPrismReferenceAudioId | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine takes the setting (`castSwap.prismReferenceAudio`); without it every run sends the full audio. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"
+
+export async function fetchNodaroMotionPrismReferenceAudio(): Promise<NodaroMotionPrismReferenceAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPrismReferenceAudioView }>(ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO, "apiErr.loadNodaroMotion")
+  ).data
+}
+
+export async function saveNodaroMotionPrismReferenceAudio(
+  prismReferenceAudio: CastSwapPrismReferenceAudioId,
+): Promise<NodaroMotionPrismReferenceAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPrismReferenceAudioView }>(ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { prismReferenceAudio },
     })
   ).data
 }

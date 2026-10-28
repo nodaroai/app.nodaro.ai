@@ -1121,6 +1121,48 @@ describe("a trend's prompt style", () => {
   })
 })
 
+describe("a Prism trend's reference audio", () => {
+  const T_AUDIO = "00000000-0000-4000-8000-0000000000a7"
+  const WITH_AUDIO = { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], prismReferenceAudio: true }
+
+  it("never shows on its page", async () => {
+    mem.trends.push(trend(T_AUDIO, "voice-dance", "published", 1, versionData({ prismReferenceAudio: "voice" })))
+    const res = await app.inject({ method: "GET", url: "/v1/trends/voice-dance", headers: as() })
+    expect(res.statusCode).toBe(200)
+    expect(res.body).not.toContain("prismReferenceAudio")
+    expectNoHidden(res.body)
+  })
+
+  it("is sent to the estimate exactly as to the run (so the quote prices the voice split), and only to an engine that declares it", async () => {
+    for (const value of ["voice", "none"] as const) {
+      mem.trends = mem.trends.filter((t) => t.id !== T_AUDIO)
+      mem.trends.push(trend(T_AUDIO, "voice-dance", "published", 1, versionData({ prismReferenceAudio: value })))
+      setPluginSupports({ castSwap: WITH_AUDIO })
+      engine.calls = []
+      expect((await app.inject({ method: "POST", url: "/v1/trends/voice-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
+      expect((await app.inject({ method: "POST", url: "/v1/trends/voice-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
+      expect(engine.calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      for (const c of engine.calls) expect(c.body, value).toMatchObject({ prismReferenceAudio: value })
+
+      setPluginSupports({ castSwap: { ...WITH_AUDIO, prismReferenceAudio: false } })
+      engine.calls = []
+      await app.inject({ method: "POST", url: "/v1/trends/voice-dance/estimate", headers: as(), payload: RUN_BODY })
+      await app.inject({ method: "POST", url: "/v1/trends/voice-dance/runs", headers: as(), payload: RUN_BODY })
+      expect(engine.calls).toHaveLength(2)
+      for (const c of engine.calls) expect(c.body).not.toHaveProperty("prismReferenceAudio")
+    }
+  })
+
+  it("sends no key for the full audio, set or left out", async () => {
+    setPluginSupports({ castSwap: WITH_AUDIO })
+    mem.trends.push(trend(T_AUDIO, "voice-dance", "published", 1, versionData({ prismReferenceAudio: "full" })))
+    await app.inject({ method: "POST", url: "/v1/trends/voice-dance/estimate", headers: as(), payload: RUN_BODY })
+    await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: RUN_BODY })
+    expect(engine.calls).toHaveLength(2)
+    for (const c of engine.calls) expect(c.body).not.toHaveProperty("prismReferenceAudio")
+  })
+})
+
 // ── face masking, pre prompt and the preview a full run follows ────────────
 
 describe("trend face masking and pre prompt", () => {

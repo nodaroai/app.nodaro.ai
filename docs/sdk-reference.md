@@ -4631,8 +4631,13 @@ setCatalog(id: string, input: { catalog: boolean; sort?: number; category?: stri
 ```
 
 Admin only, on the admin's own items: puts one on the shelf or takes it
-off (`sort` an integer within ±1,000,000; `category` up to 80 characters;
-both kept when omitted; `category: null` or a blank string clears it). Returns `{ id, kind, catalog, sort, category }`. `ForbiddenError` for
+off (`sort` an integer within ±1,000,000; `category` up to 80 characters —
+`KEEPER_CATALOG_SORT_MAX` and `KEEPER_CATALOG_CATEGORY_MAX` in
+`@nodaro/shared/entities`; both kept when omitted; `category: null` or a
+blank string clears it). Returns `{ id, kind, catalog, sort, category }`. The item's own
+read (`client.characters.get(id)` and the others) reports the same state as
+`catalog`, `catalogSort` and `catalogCategory` — `false` / `0` / `null` on
+everyone else's rows and on every copy. `ForbiddenError` for
 anyone who is not a platform admin or for an OAuth app token (a session or
 the admin's personal token only); `NotFoundError` for an item that is not
 the admin's. An item with no main image stays off the shelf even when

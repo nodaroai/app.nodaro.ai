@@ -176,7 +176,7 @@ const listCreaturesQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, species, category, style, source_image_url, image_provider, angles, poses, variations, motion_clips, boards, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, voice, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, species, category, style, source_image_url, image_provider, angles, poses, variations, motion_clips, boards, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, voice, catalog, catalog_sort, catalog_category, deleted_at, created_at, updated_at"
 
 type CreatureRow = {
   id: string
@@ -204,6 +204,11 @@ type CreatureRow = {
   detail_closeups: unknown[] | null
   // Creature voice (migration 220) — identical shape to characters.voice.
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
+  // Nodaro Keepers (migration 566): the row's own shelf state. Admin-set;
+  // off on every other user's rows and on every copy.
+  catalog: boolean
+  catalog_sort: number
+  catalog_category: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -236,6 +241,9 @@ function toCamel(creature: CreatureRow) {
     sheets: creature.sheets ?? [],
     detailCloseups: creature.detail_closeups ?? [],
     voice: creature.voice,
+    catalog: creature.catalog ?? false,
+    catalogSort: creature.catalog_sort ?? 0,
+    catalogCategory: creature.catalog_category ?? null,
     deletedAt: creature.deleted_at,
     createdAt: creature.created_at,
     updatedAt: creature.updated_at,

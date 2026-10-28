@@ -5,6 +5,7 @@ import type { CreatureStudioJobs } from "./use-creature-studio-jobs"
 import { useCreatureCandidates } from "./use-creature-candidates"
 import { CreatureCandidatesContext } from "./creature-candidates-context"
 import { StudioShell } from "../studio-shell/studio-shell"
+import { KeepersShelfButton } from "../studio-shell/keepers-shelf-button"
 import { CREATURE_STUDIO_NAV } from "./creature-nav-config"
 import { Button } from "@/components/ui/button"
 import {
@@ -191,6 +192,7 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
               </Tooltip>
             </TooltipProvider>
           )}
+          <KeepersShelfButton kind="creature" dbId={data.creatureDbId} sourceImageUrl={data.sourceImageUrl} />
           <button
             type="button"
             onClick={() => {

@@ -5,6 +5,7 @@ import { useObjectStudioJobs } from "./use-object-studio-jobs"
 import { useObjectCandidates } from "./use-object-candidates"
 import { ObjectCandidatesContext } from "./object-candidates-context"
 import { StudioShell } from "../studio-shell/studio-shell"
+import { KeepersShelfButton } from "../studio-shell/keepers-shelf-button"
 import { OBJECT_STUDIO_NAV } from "./object-nav-config"
 import { Button } from "@/components/ui/button"
 import {
@@ -172,6 +173,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
               </Tooltip>
             </TooltipProvider>
           )}
+          <KeepersShelfButton kind="object" dbId={data.objectDbId} sourceImageUrl={data.sourceImageUrl} />
           <button
             type="button"
             onClick={() => {

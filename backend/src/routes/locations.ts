@@ -178,7 +178,7 @@ const listLocationsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, boards, reference_photos, canonical_description, style_lock, pii_consent_at, selected_asset_by_variant, sheets, detail_closeups, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, boards, reference_photos, canonical_description, style_lock, pii_consent_at, selected_asset_by_variant, sheets, detail_closeups, catalog, catalog_sort, catalog_category, deleted_at, created_at, updated_at"
 
 type LocationRow = {
   id: string
@@ -206,6 +206,11 @@ type LocationRow = {
   // Reference-sheet buckets (migration 200).
   sheets: ReferenceSheet[] | null
   detail_closeups: unknown[] | null
+  // Nodaro Keepers (migration 566): the row's own shelf state. Admin-set;
+  // off on every other user's rows and on every copy.
+  catalog: boolean
+  catalog_sort: number
+  catalog_category: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -239,6 +244,9 @@ function toCamel(loc: LocationRow) {
     selectedAssetByVariant: loc.selected_asset_by_variant ?? {},
     sheets: loc.sheets ?? [],
     detailCloseups: loc.detail_closeups ?? [],
+    catalog: loc.catalog ?? false,
+    catalogSort: loc.catalog_sort ?? 0,
+    catalogCategory: loc.catalog_category ?? null,
     deletedAt: loc.deleted_at,
     createdAt: loc.created_at,
     updatedAt: loc.updated_at,

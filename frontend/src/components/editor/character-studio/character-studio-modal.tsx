@@ -3,6 +3,7 @@ import { Upload } from "lucide-react"
 import { useCharacterStudio, type CharacterStudioState, type SaveStatus } from "./use-character-studio"
 import { useCharacterStudioJobs, type CharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
 import { StudioShell } from "../studio-shell/studio-shell"
+import { KeepersShelfButton } from "../studio-shell/keepers-shelf-button"
 import { CHARACTER_STUDIO_NAV } from "./character-nav-config"
 import { usePortraitCandidates } from "./use-portrait-candidates"
 import { PortraitCandidatesContext } from "./portrait-candidates-context"
@@ -252,6 +253,11 @@ function StudioModalBody({
               </Tooltip>
             </TooltipProvider>
           )}
+          <KeepersShelfButton
+            kind="character"
+            dbId={studio.staged.characterDbId}
+            sourceImageUrl={studio.staged.sourceImageUrl}
+          />
           <button onClick={onClose} className="text-[11px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
             ✕ {t("common.close")}
           </button>

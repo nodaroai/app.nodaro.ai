@@ -8,6 +8,10 @@
 // a run cuts to whole seconds (the end, the default, or the start). Shown, and
 // saved, only while the model is Kling 4. Likewise its Pulse audio: the
 // original audio back on the result (the default) or Kling's own track.
+//
+// Prism has its reference audio instead: what the reference video sent to the
+// video model carries (the full audio, the default; the voice only; or none).
+// Shown, and saved, only while the model is Prism.
 
 import { useId } from "react"
 import {
@@ -17,9 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPulseAudioId } from "@/lib/api"
+import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioId, CastSwapPulseAudioId } from "@/lib/api"
 import { engineOfForm } from "../model"
 import { PulseAudioSelect } from "./PulseAudioSelect"
+import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
 
 const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: string }> = [
   {
@@ -48,12 +53,24 @@ interface Props {
   readonly klingLength: AdminTrendKlingLength | undefined
   /** As stored; undefined = none set (the original audio). */
   readonly pulseAudio: CastSwapPulseAudioId | undefined
+  /** As stored; undefined = none set (the full audio). */
+  readonly prismReferenceAudio: CastSwapPrismReferenceAudioId | undefined
   readonly onChange: (next: AdminTrendEngine) => void
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
   readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
+  readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioId) => void
 }
 
-export function EngineEditor({ value, klingLength, pulseAudio, onChange, onKlingLengthChange, onPulseAudioChange }: Props) {
+export function EngineEditor({
+  value,
+  klingLength,
+  pulseAudio,
+  prismReferenceAudio,
+  onChange,
+  onKlingLengthChange,
+  onPulseAudioChange,
+  onPrismReferenceAudioChange,
+}: Props) {
   const engine = engineOfForm({ engine: value })
   const hint = ENGINES.find((e) => e.value === engine)?.hint
   const id = useId()
@@ -101,6 +118,7 @@ export function EngineEditor({ value, klingLength, pulseAudio, onChange, onKling
           </div>
         )}
         {engine === "kling-4" && <PulseAudioSelect value={pulseAudio} onChange={onPulseAudioChange} />}
+        {engine === "seedance-2-5" && <PrismReferenceAudioSelect value={prismReferenceAudio} onChange={onPrismReferenceAudioChange} />}
       </div>
       <p id={hintId} className="text-xs text-muted-foreground">
         {hint}

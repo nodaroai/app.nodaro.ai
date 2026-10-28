@@ -97,6 +97,9 @@ const DB_OBJECT = {
   reference_photos: [],
   canonical_description: null,
   style_lock: true,
+  catalog: false,
+  catalog_sort: 0,
+  catalog_category: null,
   deleted_at: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -123,6 +126,9 @@ const CAMEL_OBJECT = {
   selectedAssetByVariant: {},
   sheets: [],
   detailCloseups: [],
+  catalog: false,
+  catalogSort: 0,
+  catalogCategory: null,
   deletedAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
@@ -298,6 +304,24 @@ describe("GET /v1/objects/:id", () => {
     expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     // Soft-delete: default GET respects deleted_at IS NULL.
     expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
+  })
+
+  it("carries the row's Nodaro Keepers shelf state (catalog, catalogSort, catalogCategory) so Studio can show it", async () => {
+    const onShelf = { ...DB_OBJECT, catalog: true, catalog_sort: 3, catalog_category: "Props" }
+    const { mockSelect } = getByIdChain({ data: onShelf, error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/objects/${TEST_OBJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const cols = vi.mocked(mockSelect).mock.calls[0]?.[0] as string
+    expect(cols).toMatch(/\bcatalog\b(?!_)/)
+    for (const c of ["catalog_sort", "catalog_category"]) expect(cols).toContain(c)
+    expect(res.json()).toMatchObject({ catalog: true, catalogSort: 3, catalogCategory: "Props" })
   })
 
   it("returns selected_asset_by_variant on the row (read round-trip)", async () => {

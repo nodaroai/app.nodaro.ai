@@ -100,6 +100,9 @@ const DB_CREATURE = {
   canonical_description: null,
   style_lock: true,
   voice: null,
+  catalog: false,
+  catalog_sort: 0,
+  catalog_category: null,
   deleted_at: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -128,6 +131,9 @@ const CAMEL_CREATURE = {
   sheets: [],
   detailCloseups: [],
   voice: null,
+  catalog: false,
+  catalogSort: 0,
+  catalogCategory: null,
   deletedAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
@@ -208,9 +214,13 @@ describe("creatures SELECT_COLUMNS read projection", () => {
       // migration 220 — Creature Boards + the "talking creature" voice.
       "boards",
       "voice",
+      // migration 566 — the Nodaro Keepers shelf state Studio prefills from.
+      "catalog_sort",
+      "catalog_category",
     ]) {
       expect(cols).toContain(c)
     }
+    expect(cols).toMatch(/\bcatalog\b(?!_)/) // the flag itself, not only its two siblings
     // Must NOT carry the legacy/unused columns objects deliberately omits.
     expect(cols).not.toContain("materials") // renamed to poses
     expect(cols).not.toContain("main_image_url")
@@ -375,6 +385,21 @@ describe("GET /v1/creatures/:id", () => {
     expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     // Soft-delete: default GET respects deleted_at IS NULL.
     expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
+  })
+
+  it("carries the row's Nodaro Keepers shelf state (catalog, catalogSort, catalogCategory) so Studio can show it", async () => {
+    const onShelf = { ...DB_CREATURE, catalog: true, catalog_sort: 3, catalog_category: "Pets" }
+    const { mockSelect } = getByIdChain({ data: onShelf, error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/creatures/${TEST_CREATURE_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ catalog: true, catalogSort: 3, catalogCategory: "Pets" })
   })
 
   it("returns selected_asset_by_variant on the row (read round-trip)", async () => {

@@ -16,6 +16,7 @@ import {
   withPreparedPreview,
   withoutUnsupportedFields,
   withoutUnsupportedPulseAudio,
+  withoutUnsupportedPrismReferenceAudio,
   withoutUnsupportedStoredMask,
   type RunJobRow,
 } from "../run-helpers.js"
@@ -160,6 +161,48 @@ describe("pulseAudio on the wire", () => {
     const c = composed(false)
     withoutUnsupportedPulseAudio(c)
     expect(c.body).not.toHaveProperty("pulseAudio")
+  })
+})
+
+describe("prismReferenceAudio on the wire", () => {
+  beforeEach(() => _resetPluginSupportsForTests())
+  const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true }
+  function prism(value: "voice" | "none", preview = false): ComposedTrendRun {
+    const c = composed(preview)
+    c.body.prismReferenceAudio = value
+    return c
+  }
+
+  it("is kept (voice or none, estimate and preview alike) for an engine that declares castSwap.prismReferenceAudio", () => {
+    setPluginSupports({ castSwap: { ...BASE, prismReferenceAudio: true } })
+    for (const value of ["voice", "none"] as const) {
+      for (const preview of [false, true]) {
+        const c = prism(value, preview)
+        withoutUnsupportedFields(c)
+        expect(c.body.prismReferenceAudio).toBe(value)
+      }
+    }
+  })
+
+  it("is dropped for an engine that does not (absent or false), so the body is today's", () => {
+    for (const castSwap of [BASE, { ...BASE, prismReferenceAudio: false }]) {
+      setPluginSupports({ castSwap })
+      for (const value of ["voice", "none"] as const) {
+        const c = prism(value)
+        withoutUnsupportedPrismReferenceAudio(c)
+        expect(c.body).not.toHaveProperty("prismReferenceAudio")
+        const d = prism(value)
+        withoutUnsupportedFields(d)
+        expect(d.body).not.toHaveProperty("prismReferenceAudio")
+      }
+    }
+  })
+
+  it("adds nothing to a body without it", () => {
+    setPluginSupports({ castSwap: { ...BASE, prismReferenceAudio: true } })
+    const c = composed(false)
+    withoutUnsupportedFields(c)
+    expect(c.body).not.toHaveProperty("prismReferenceAudio")
   })
 })
 

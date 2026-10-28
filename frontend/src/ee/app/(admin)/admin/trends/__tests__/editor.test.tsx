@@ -222,6 +222,28 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("combobox", { name: "Pulse audio" })).not.toBeInTheDocument()
   })
 
+  it("shows Prism reference audio only for Prism (Full audio by default), and saves the one chosen", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    await screen.findByRole("combobox", { name: "Model" })
+    // A draft naming no engine is Prism: the select is there from the start.
+    const audio = screen.getByRole("combobox", { name: "Prism reference audio" })
+    expect(audio).toHaveTextContent("Full audio (default)")
+    expect(screen.getByText("What the engine hears in the reference video. The original audio always goes back on the result.")).toBeInTheDocument()
+    await user.click(audio)
+    await user.click(screen.getByRole("option", { name: "No audio" }))
+    expect(audio).toHaveTextContent("No audio")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).toMatchObject({ prismReferenceAudio: "none" })
+    // On Pulse the select goes away.
+    await user.click(screen.getByRole("combobox", { name: "Model" }))
+    await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
+    expect(screen.queryByRole("combobox", { name: "Prism reference audio" })).not.toBeInTheDocument()
+  })
+
   it("a saved Kling 4 draft tests at 720p or 1080p with no draft switch, and sends no draft", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { engine: "kling-4" }) } })
