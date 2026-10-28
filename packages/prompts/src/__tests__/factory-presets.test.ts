@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
-import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared/nodes"
+import { extractPresetData, normalizeNodeModelParams, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared/nodes"
+import { normalizeModelInput } from "@nodaro/shared/model-catalog"
 import { LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
 import {
   COMPOSER_PLAN_MAP,
@@ -211,6 +212,29 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
+  // Remove People keeps the photo's shape AND renders 2K. That pair is only
+  // possible on GPT Image 2.5 Flare: GPT Image 2 drops "auto" to 1K. Pinned on
+  // the write boundary and on both models a run can send it to (the i2i
+  // sibling once the photo is connected).
+  it("Remove People keeps auto + 2K through normalization", () => {
+    const p = presets.find((x) => x.id === "generate-image/remove-people")
+    expect(p?.group).toBe("Face Privacy")
+    expect(p?.minReferences).toBeUndefined()
+    expect(p?.data).toMatchObject({ provider: "gpt-image-2-5-flare", aspectRatio: "auto", resolution: "2K" })
+    expect(p?.data.promptPrefix).toBe("remove all people from {image:1}\nkeep background exactly the same")
+
+    const written = normalizeNodeModelParams([{ id: "n", type: "generate-image", data: { ...p!.data } }])
+    expect(written.adjustments).toEqual([])
+    expect(written.nodes[0]!.data).toMatchObject({ aspectRatio: "auto", resolution: "2K" })
+
+    for (const modelId of ["gpt-image-2-5-flare", "gpt-image-2-5-flare-i2i"]) {
+      const out = normalizeModelInput(modelId, { aspectRatio: "auto", resolution: "2K" })
+      expect(out.adjustments, modelId).toEqual([])
+      expect(out.aspectRatio, modelId).toBe("auto")
+      expect(out.resolution, modelId).toBe("2K")
+    }
+  })
+
   it("includes the Reference Sheet group with Character + Location boards", () => {
     const char = presets.find((p) => p.id === "generate-image/character-board")
     const loc = presets.find((p) => p.id === "generate-image/location-board")
@@ -316,7 +340,7 @@ describe("generate-image factory preset data validity", () => {
     "generate-image/mirror-selfie", "generate-image/creator-at-home", "generate-image/video-call-frame",
     "generate-image/macro-skin-study", "generate-image/product-in-hand", "generate-image/skin-detail-sheet",
     "generate-image/add-skin-realism", "generate-image/natural-photo-finish", "generate-image/phone-camera-look",
-    "generate-image/undo-beauty-filter",
+    "generate-image/undo-beauty-filter", "generate-image/remove-people",
   ])
 
   it("every generate-image preset has a non-empty negativePrompt (except the exempt ones, which carry none)", () => {

@@ -137,6 +137,7 @@ export const PRESET_CONTENT_JA: Record<string, PresetCopy> = {
   "generate-image/faceless-3d-head": { name: "顔なし · 3D ブランクヘッド", description: "人物の顔 → 特徴のないなめらかな白い 3D の頭部に置き換えます。それ以外はそのままです。" },
   "generate-image/remove-faces": { name: "顔を消去", description: "人物の顔を完全に消去します。それ以外はそのままです。" },
   "generate-image/transparent-faces": { name: "顔を透明化", description: "人物の顔を透明にします。それ以外はそのままです。" },
+  "generate-image/remove-people": { name: "人物を消去", description: "写真からすべての人物を消去します。背景はまったく同じまま残ります。" },
   "generate-video/slow-push-in": { name: "スロープッシュイン", description: "被写体に向かって、ゆっくりとドリーインします。" },
   "generate-video/dolly-out": { name: "ドリーアウト（全景を見せる）", description: "カメラを引いて、シーン全体を見せます。" },
   "generate-video/orbit-360": { name: "360° オービット", description: "カメラが被写体の周りを回ります。" },

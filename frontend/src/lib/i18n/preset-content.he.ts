@@ -192,6 +192,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/faceless-3d-head": { name: "ללא פנים · ראש תלת־ממד חלק", description: "פני האנשים ← צורת ראש תלת־ממד חלקה וגנרית; כל השאר נשאר ללא שינוי." },
   "generate-image/remove-faces": { name: "הסרת פנים", description: "מחיקת פני האנשים לחלוטין; כל השאר נשאר ללא שינוי." },
   "generate-image/transparent-faces": { name: "פנים שקופות", description: "פני האנשים הופכות לשקופות; כל השאר נשאר ללא שינוי." },
+  "generate-image/remove-people": { name: "הסרת אנשים", description: "מחיקת כל האנשים מהתמונה; הרקע נשאר בדיוק כפי שהוא." },
 
   // ═══ generate-video ═══
 

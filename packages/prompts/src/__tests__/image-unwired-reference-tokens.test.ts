@@ -258,13 +258,14 @@ describe("unwired {image:N} — the Face Privacy presets' prefix", () => {
       "generate-image/faceless-3d-head",
       "generate-image/remove-faces",
       "generate-image/transparent-faces",
+      "generate-image/remove-people",
     ])
     for (const { data } of presets) {
       const prompt = prefixed(data)
       expect(prompt).toContain("{image:1}")
       const provider = data.provider as string
-      const negativePrompt = data.negativePrompt as string
-      const avoid = `\nAvoid: ${negativePrompt}`
+      const negativePrompt = data.negativePrompt as string | undefined
+      const avoid = negativePrompt ? `\nAvoid: ${negativePrompt}` : ""
 
       const unwired = buildImagePrompt({ prompt, provider, negativePrompt, connectedReferences: [] })
       expect(unwired.prompt).toBe(`${resolveReferenceTokens(prompt, ZERO)}${avoid}`)
