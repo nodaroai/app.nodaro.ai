@@ -476,8 +476,10 @@ export default function AdminTrendEditorPage() {
             <EngineEditor
               value={form.engine}
               klingLength={form.klingLength}
+              pulseAudio={form.pulseAudio}
               onChange={(engine) => set({ engine })}
               onKlingLengthChange={(klingLength) => set({ klingLength })}
+              onPulseAudioChange={(pulseAudio) => set({ pulseAudio })}
             />
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">

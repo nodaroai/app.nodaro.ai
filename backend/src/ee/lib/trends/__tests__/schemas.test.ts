@@ -474,6 +474,15 @@ describe("trendVersionDataSchema — engine", () => {
     expect(trendVersionDataSchema.safeParse(data({ klingLength: "pad" })).success).toBe(false)
   })
 
+  it("takes a pulseAudio of original or generated, keeps none when none is set (the original audio), and refuses any other", () => {
+    for (const pulseAudio of ["original", "generated"]) {
+      expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4", pulseAudio })).data?.pulseAudio, pulseAudio).toBe(pulseAudio)
+    }
+    expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4" })).data).not.toHaveProperty("pulseAudio")
+    expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4", pulseAudio: "mute" })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4", pulseAudio: "" })).success).toBe(false)
+  })
+
   it("refuses any other engine", () => {
     expect(trendVersionDataSchema.safeParse(data({ engine: "kling-3" })).success).toBe(false)
     expect(trendVersionDataSchema.safeParse(data({ engine: "" })).success).toBe(false)

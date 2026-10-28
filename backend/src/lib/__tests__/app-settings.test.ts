@@ -99,6 +99,29 @@ describe("getAppSettings", () => {
     expect((await getAppSettings()).model_maker_logos).toEqual([])
   })
 
+  it("reads the direct runs' Pulse audio: original or generated, anything else (or no row, or a failed read) as never saved", async () => {
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_pulse_audio", value: "generated" }], error: null })
+    expect((await getAppSettings()).nodaro_motion_pulse_audio).toBe("generated")
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_pulse_audio", value: "original" }], error: null })
+    expect((await getAppSettings()).nodaro_motion_pulse_audio).toBe("original")
+
+    for (const value of ["mute", "", null, { pulseAudio: "generated" }]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_pulse_audio", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_pulse_audio, JSON.stringify(value)).toBeNull()
+    }
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [], error: null })
+    expect((await getAppSettings()).nodaro_motion_pulse_audio).toBeNull()
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: null, error: { message: "fail" } })
+    expect((await getAppSettings()).nodaro_motion_pulse_audio).toBeNull()
+  })
+
   it("returns cached result on second call within TTL", async () => {
     mockSelect.mockResolvedValueOnce({
       data: [

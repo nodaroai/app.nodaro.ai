@@ -198,6 +198,30 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(body.data).toMatchObject({ engine: "kling-4", klingLength: "cut-start" })
   })
 
+  it("shows Pulse audio only for Kling 4 (Original audio by default), and saves the one chosen", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    await screen.findByRole("combobox", { name: "Model" })
+    expect(screen.queryByRole("combobox", { name: "Pulse audio" })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("combobox", { name: "Model" }))
+    await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
+    const audio = screen.getByRole("combobox", { name: "Pulse audio" })
+    expect(audio).toHaveTextContent("Original audio (default)")
+    expect(screen.getByText("The original audio goes back on the result, exactly")).toBeInTheDocument()
+    await user.click(audio)
+    await user.click(screen.getByRole("option", { name: "Kling's audio" }))
+    expect(screen.getByText("Kling keeps the clip's sound and its own track is delivered as is")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).toMatchObject({ engine: "kling-4", pulseAudio: "generated" })
+    // Back on Seedance 2.5 the select goes away.
+    await user.click(screen.getByRole("combobox", { name: "Model" }))
+    await user.click(screen.getByRole("option", { name: /Prism/ }))
+    expect(screen.queryByRole("combobox", { name: "Pulse audio" })).not.toBeInTheDocument()
+  })
+
   it("a saved Kling 4 draft tests at 720p or 1080p with no draft switch, and sends no draft", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { engine: "kling-4" }) } })

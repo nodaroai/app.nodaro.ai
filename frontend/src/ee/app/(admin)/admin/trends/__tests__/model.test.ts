@@ -290,6 +290,12 @@ describe("the model (engine) in the form", () => {
     expect(fromForm({ ...toForm(draft({ engine: "kling-4", klingLength: "cut-start" })), engine: "seedance-2-5" })).not.toHaveProperty("klingLength")
   })
 
+  it("keeps pulseAudio on a Kling 4 draft, out of a Seedance one, and leaves it absent when none is set", () => {
+    expect(fromForm(toForm(draft({ engine: "kling-4", pulseAudio: "generated" })))).toMatchObject({ engine: "kling-4", pulseAudio: "generated" })
+    expect(fromForm({ ...toForm(draft({ engine: "kling-4", pulseAudio: "generated" })), engine: "seedance-2-5" })).not.toHaveProperty("pulseAudio")
+    expect(fromForm(toForm(draft({ engine: "kling-4" })))).not.toHaveProperty("pulseAudio")
+  })
+
   it("round-trips a chosen engine exactly", () => {
     for (const engine of ["seedance-2-5", "kling-4"] as const) {
       expect(fromForm(toForm(draft({ engine })))).toEqual(savedOf(draft({ engine })))

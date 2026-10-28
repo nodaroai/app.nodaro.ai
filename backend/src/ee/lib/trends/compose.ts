@@ -75,6 +75,9 @@
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
  * trend sends `engine: "kling-4"` (and its `klingLength` when it sets one), renders 720p unless 1080p is asked, and
  * refuses a draft (`draft_unsupported`) and 480p (`resolution_unsupported`).
+ * A Kling 4 trend that delivers Kling's own audio sends `pulseAudio: "generated"`
+ * (the original audio, the default, sends no key); dropped for an engine that
+ * does not declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
  *
  * Every run names what it edits (`sourceAsset`, provenance the engine stamps
  * on the job): the whole source clip (`kind: "full"`, its length and, once
@@ -202,6 +205,12 @@ export interface TrendRunBody {
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
   klingLength?: CastSwapKlingLength
+  /**
+   * Only on Kling 4, and only when the trend delivers Kling's own audio
+   * (absent = the original audio). Dropped for an engine that does not
+   * declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
+   */
+  pulseAudio?: "generated"
   /**
    * The trend's prompt part overrides, text only (`{ [part]: text }`; `"-"`
    * removes a part), only when it has some. Dropped for an engine that does
@@ -536,6 +545,8 @@ export function composeTrendRun(
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
+    // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
+    ...(engine === "kling-4" && data.pulseAudio === "generated" ? { pulseAudio: "generated" as const } : {}),
     // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
     ...(parts ? { promptParts: parts } : {}),
     promptStyle: promptStyleOf(data),

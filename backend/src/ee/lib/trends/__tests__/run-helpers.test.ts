@@ -15,6 +15,7 @@ import {
   toTrendRun,
   withPreparedPreview,
   withoutUnsupportedFields,
+  withoutUnsupportedPulseAudio,
   withoutUnsupportedStoredMask,
   type RunJobRow,
 } from "../run-helpers.js"
@@ -122,6 +123,43 @@ describe("the stored face mask on the wire", () => {
     const c = withStored({ mode: "auto", target: "face" })
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(c.body.faceMasking).toMatchObject({ mode: "always", target: "face" })
+  })
+})
+
+describe("pulseAudio on the wire", () => {
+  beforeEach(() => _resetPluginSupportsForTests())
+  const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
+  function pulse(): ComposedTrendRun {
+    const c = composed(false)
+    c.body.engine = "kling-4"
+    c.body.pulseAudio = "generated"
+    return c
+  }
+
+  it("is kept for an engine that declares castSwap.pulseAudio", () => {
+    setPluginSupports({ castSwap: { ...BASE, pulseAudio: true } })
+    const c = pulse()
+    withoutUnsupportedFields(c)
+    expect(c.body.pulseAudio).toBe("generated")
+  })
+
+  it("is dropped for an engine that does not (absent or false), so the body is today's", () => {
+    for (const castSwap of [BASE, { ...BASE, pulseAudio: false }]) {
+      setPluginSupports({ castSwap })
+      const c = pulse()
+      withoutUnsupportedPulseAudio(c)
+      expect(c.body).not.toHaveProperty("pulseAudio")
+      const d = pulse()
+      withoutUnsupportedFields(d)
+      expect(d.body).not.toHaveProperty("pulseAudio")
+    }
+  })
+
+  it("adds nothing to a body without it", () => {
+    setPluginSupports({ castSwap: { ...BASE, pulseAudio: true } })
+    const c = composed(false)
+    withoutUnsupportedPulseAudio(c)
+    expect(c.body).not.toHaveProperty("pulseAudio")
   })
 })
 

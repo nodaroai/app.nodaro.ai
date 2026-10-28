@@ -11342,6 +11342,8 @@ export interface AdminTrendData {
   engine?: AdminTrendEngine
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
   klingLength?: AdminTrendKlingLength
+  /** Kling 4 only: what sound a run delivers (hidden). Absent = `"original"`. */
+  pulseAudio?: CastSwapPulseAudioId
   /**
    * The engine prompt's overrides (hidden; written only by the prompt parts
    * route, kept by a draft save): per part, its text and the hash of the
@@ -11391,6 +11393,13 @@ export type AdminTrendPreviewClipOutOfDate = "source" | "start" | "recipe" | "fa
 
 /** Which end of the clip a Kling 4 run cuts to whole seconds: the end (default) or the start. */
 export type AdminTrendKlingLength = "cut-end" | "cut-start"
+
+/**
+ * What sound a Nodaro Motion Pulse (Kling 4) run delivers (admin only): the
+ * original audio back on the result, exactly (the default), or Kling's own
+ * track as is.
+ */
+export type CastSwapPulseAudioId = "original" | "generated"
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
@@ -12284,6 +12293,31 @@ export async function saveNodaroMotionMotion(motion: NodaroMotionMotion): Promis
     await apiRequest<{ data: NodaroMotionMotionView }>(ADMIN_NODARO_MOTION_MOTION, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { motion },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Pulse audio for direct runs (/v1/admin/nodaro-motion/pulse-audio, admin-nodaro-motion-pulse-audio.ts) ----
+
+export interface NodaroMotionPulseAudioView {
+  /** null = never saved: every direct Pulse run delivers the original audio. */
+  pulseAudio: CastSwapPulseAudioId | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine takes the setting (`castSwap.pulseAudio`); without it every run is the original audio. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PULSE_AUDIO = "/v1/admin/nodaro-motion/pulse-audio"
+
+export async function fetchNodaroMotionPulseAudio(): Promise<NodaroMotionPulseAudioView> {
+  return (await apiRequest<{ data: NodaroMotionPulseAudioView }>(ADMIN_NODARO_MOTION_PULSE_AUDIO, "apiErr.loadNodaroMotion")).data
+}
+
+export async function saveNodaroMotionPulseAudio(pulseAudio: CastSwapPulseAudioId): Promise<NodaroMotionPulseAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPulseAudioView }>(ADMIN_NODARO_MOTION_PULSE_AUDIO, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { pulseAudio },
     })
   ).data
 }

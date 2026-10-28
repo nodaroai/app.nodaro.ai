@@ -50,6 +50,7 @@ import type {
   TrendPublishBlocker,
   TrendSlotKind,
   CastSwapPromptStyleId,
+  CastSwapPulseAudioId,
 } from "@/lib/api"
 
 export const MAX_TREND_IMAGES = 30
@@ -149,6 +150,8 @@ export interface TrendForm {
   engine: AdminTrendEngine | undefined
   /** As stored: undefined = none set ("cut-end"). Saved only while the engine is Kling 4. */
   klingLength: AdminTrendKlingLength | undefined
+  /** As stored: undefined = none set ("original"). Saved only while the engine is Kling 4. */
+  pulseAudio: CastSwapPulseAudioId | undefined
   /** As stored: undefined = the clip preparation's default (prompt-style.ts). */
   promptStyle: CastSwapPromptStyleId | undefined
   /**
@@ -177,6 +180,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     faceMasking: draft.faceMasking ? structuredClone(draft.faceMasking) : undefined,
     engine: draft.engine,
     klingLength: draft.klingLength,
+    pulseAudio: draft.pulseAudio,
     promptStyle: draft.promptStyle,
     previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
   }
@@ -333,6 +337,7 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(form.engine ? { engine: form.engine } : {}),
     // Read only on Kling 4: kept out of a Seedance draft.
     ...(form.engine === "kling-4" && form.klingLength ? { klingLength: form.klingLength } : {}),
+    ...(form.engine === "kling-4" && form.pulseAudio ? { pulseAudio: form.pulseAudio } : {}),
     // Left out = the clip preparation's default, so loading an old draft is no change.
     ...(form.promptStyle ? { promptStyle: form.promptStyle } : {}),
   }
