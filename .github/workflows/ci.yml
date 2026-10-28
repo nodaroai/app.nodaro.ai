@@ -211,7 +211,7 @@ jobs:
         with:
           name: ci-build-packages
           path: ${{ runner.temp }}/ci-build-packages/
-          retention-days: 7
+          retention-days: 2
           overwrite: true
           compression-level: 0
           if-no-files-found: error
@@ -411,7 +411,7 @@ jobs:
           path: |
             ${{ runner.temp }}/selection-frontend.json
             ${{ runner.temp }}/registry-check-frontend.json
-          retention-days: 30
+          retention-days: 7
           overwrite: true
       # Shadow mode's evidence: the miss check, and the selection it was
       # checked against (its `total` is the denominator of the "would run"
@@ -427,7 +427,7 @@ jobs:
             ${{ runner.temp }}/shadow-frontend.json
             ${{ runner.temp }}/selection-frontend.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 7
           overwrite: true
       - name: Upload failed files for attribution
         if: ${{ failure() && github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
@@ -440,6 +440,7 @@ jobs:
             ${{ runner.temp }}/failed-frontend.txt.unknown
           if-no-files-found: ignore
           overwrite: true
+          retention-days: 14
 
   remotion-tests:
     name: Remotion Tests
@@ -741,7 +742,7 @@ jobs:
           path: |
             ${{ runner.temp }}/selection-backend.json
             ${{ runner.temp }}/registry-check-backend.json
-          retention-days: 30
+          retention-days: 7
           overwrite: true
       # Shadow mode's evidence: the miss check, and the selection it was
       # checked against (its `total` is the denominator of the "would run"
@@ -757,7 +758,7 @@ jobs:
             ${{ runner.temp }}/shadow-backend.json
             ${{ runner.temp }}/selection-backend.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 7
           overwrite: true
       # The workspace-package suites ran ONLY locally until 2026-07-14 —
       # packages/prompts/seedance-extend.test.ts silently broke on dev twice
@@ -790,6 +791,7 @@ jobs:
             ${{ runner.temp }}/failed-backend.txt.unknown
           if-no-files-found: ignore
           overwrite: true
+          retention-days: 14
 
   # Post-merge failure on dev → a comment on the PR whose merge produced the
   # commit. Every dev commit has its own full run (see concurrency), so the
@@ -1604,7 +1606,7 @@ jobs:
         with:
           name: ci-build-backend
           path: ${{ runner.temp }}/ci-build-backend/
-          retention-days: 7
+          retention-days: 2
           overwrite: true
           compression-level: 0
           if-no-files-found: error

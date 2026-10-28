@@ -69,6 +69,7 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage/
+          retention-days: 14
           overwrite: true
       - name: Coverage totals
         if: always()
@@ -148,6 +149,7 @@ jobs:
         with:
           name: backend-coverage
           path: backend/coverage/
+          retention-days: 14
           overwrite: true
       - name: Coverage totals
         if: always()
