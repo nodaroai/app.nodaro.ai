@@ -23,7 +23,6 @@ Mode is chosen automatically at execution time from the wiring shape — there i
 | `endFrame` | target | Image producers | no | Last frame, paired with `startFrame` |
 | `imageReferences` | target | Image producers (ordered, multi) | no | Reference images (Seedance 2 etc.) |
 | `videoReferences` | target | Video producers (ordered, multi) | no | Reference videos (Seedance 2) |
-| `audio` | target | Audio producers | no | Post-merge audio track |
 | `audioReferences` | target | Audio producers (ordered, multi) | no | Conditioning audio (Seedance 2) |
 | `assets` | target | Character / Face / Location / Object | no | Identity references |
 | `look` | target | Setting / Lens / Lighting / Mood / Style / Color Look / ... | no | Look-family pickers |
@@ -115,7 +114,7 @@ Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 
 - **With no references connected** (`startFrame` and/or `endFrame` only), the frames are used in exact **first/last-frame** mode (`first_frame_url` / `last_frame_url`).
 - **With any reference connected** (image / video / audio), the frames are passed as **prompt-directed reference images** — they join the reference set and are bound in the prompt as `@image_N` (e.g. `Use @image_3 as the opening (first) frame of the video.`) so the model can refer to them, rather than being pinned as exact endpoints.
 
-The node shows an indicator of the active mode, and warns when a wired input would be dropped. Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio): `audio` always applies as the final soundtrack, while `audioReferences` conditions generation (and triggers audio-driven lip-sync on Seedance 2).
+The node shows an indicator of the active mode, and warns when a wired input would be dropped. Its one audio input is `audioReferences`, audio the model uses while it generates (audio-driven lip-sync on Seedance 2, the soundtrack on Kling 4.0, the driving clip on LTX 2.3 Pro). To lay a soundtrack over a finished clip, wire the clip and the audio into a [Merge Video & Audio](../processing-audio/merge-video-audio.md) node. Generate Video used to have a separate `audio` input that did this; a workflow saved with a wire into it opens with a Merge Video & Audio node added after the clip, mixed the same way (the track at full volume, the clip's own sound kept at 30 % only when the node generated audio). On LTX 2.3 Pro such a wire moves to `audioReferences`; on LTX 2.3 Fast, which never read it, it is removed. Through the API, `audioUrl` on `POST /v1/generate-video` still lays the track over the result, but it is deprecated: send the clip to Merge Video & Audio instead.
 
 Reference arrays are forwarded to the backend for **every** provider in both dispatch modes; models that don't support them ignore them. (Earlier editor builds dropped reference images on the text-to-video path for all providers except Kling and Seedance 2.)
 
@@ -180,11 +179,11 @@ LTX 2.3 exposes five task modes on Replicate; Generate Video picks one automatic
 
 | Wired inputs | LTX task | Variants |
 |---|---|---|
-| No `startFrame`, no `audio` | `text_to_video` | Pro + Fast |
+| No `startFrame`, no `audioReferences` | `text_to_video` | Pro + Fast |
 | `startFrame` (optionally `endFrame`) | `image_to_video` (with `last_frame_image` when `endFrame` set) | Pro + Fast |
-| `audio` connected (no `startFrame`) | `audio_to_video` | Pro only |
+| One `audioReferences` clip | `audio_to_video` (the clip drives the picture) | Pro only |
 
-LTX 2.3 Fast has its audio handle visually muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
+LTX 2.3 Pro's `audioReferences` input takes one clip; LTX 2.3 Fast has it muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
 
 ### Gemini Omni (Pro & Flash) — modes and capabilities
 

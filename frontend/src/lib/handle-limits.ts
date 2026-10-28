@@ -214,17 +214,13 @@ export function getHandleConnectionLimit(
           ? { limit: cap, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }
       }
-      case "audio":
-        // NOTE: `audio` is a post-gen soundtrack/overlay (not a multimodal
-        // reference). LTX 2.3 Fast has no audio overlay handle.
-        if (provider === "ltx-2.3-fast") {
-          return { limit: 0, providerLabel, isMultiProviderMin: false }
-        }
-        return { limit: 1, providerLabel, isMultiProviderMin: false }
+      // No `audio` case: Generate Video has no soundtrack input (a Merge Video
+      // & Audio node lays one over the clip); Generate Video Pro's is below.
       case "audioReferences": {
-        // Multimodal audio reference input (distinct from the `audio`
-        // overlay above) — gated by the provider's audio-ref capability.
-        const cap = caps?.audio
+        // Multimodal audio reference input — gated by the provider's
+        // audio-ref capability; a model driven by one clip (catalog feature
+        // `audio-to-video`, LTX 2.3 Pro) takes exactly that one.
+        const cap = caps?.audio ?? (hasFeature(provider, "audio-to-video") ? 1 : undefined)
         return cap != null
           ? { limit: cap, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }

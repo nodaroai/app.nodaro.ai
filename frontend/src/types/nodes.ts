@@ -8556,7 +8556,7 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Mirrors GENERATE_VIDEO_INPUT_HANDLES (the handle set the node renders) so
     // every input is offered as a connection candidate; kept in lockstep by the
     // drift test in enumerate-connection-options.test.ts.
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
     // duration is the literal DEFAULT_VIDEO_DURATION_SEC (the API's default):
     // gen-skills parses this file textually and cannot resolve a constant. At 5 s

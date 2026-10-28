@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-10-28T07:59:43.567Z
-generated_from: 5f6b6e634
+generated_at: 2026-10-28T09:09:09.605Z
+generated_from: f4e983e9e
 ---
 
 # Generate Video
@@ -10,7 +10,7 @@ generated_from: 5f6b6e634
 **Type:** `generate-video`
 **Category:** ai
 **Credit cost:** `11-9405` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
-**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`, `settings`
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audioReferences`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

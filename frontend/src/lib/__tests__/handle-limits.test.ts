@@ -37,13 +37,20 @@ describe("getHandleConnectionLimit (generate-video)", () => {
     expect(getHandleConnectionLimit(node, "startFrame")?.limit).toBe(1)
   })
 
-  it("returns audio cap 1 for any provider", () => {
+  it("has no Audio input on Generate Video (a Merge Video & Audio node lays a soundtrack)", () => {
     const node = {
       id: "n",
       type: "generate-video",
       data: { provider: "kling" },
     } as unknown as WorkflowNode
-    expect(getHandleConnectionLimit(node, "audio")?.limit).toBe(1)
+    expect(getHandleConnectionLimit(node, "audio")).toBeNull()
+  })
+
+  it("gives LTX 2.3 Pro one Audio Refs clip — the clip that drives audio-to-video", () => {
+    const pro = { id: "n", type: "generate-video", data: { provider: "ltx-2.3-pro" } } as unknown as WorkflowNode
+    const fast = { id: "n", type: "generate-video", data: { provider: "ltx-2.3-fast" } } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(pro, "audioReferences")?.limit).toBe(1)
+    expect(getHandleConnectionLimit(fast, "audioReferences")?.limit).toBe(0)
   })
 
   it("returns videoReferences cap 0 for provider absent from VIDEO_REF_LIMITS_BY_PROVIDER", () => {

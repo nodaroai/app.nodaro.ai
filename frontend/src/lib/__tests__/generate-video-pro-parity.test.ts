@@ -22,24 +22,29 @@ import { isSeedance2Provider, isMinimaxH3Provider, isGvpSupportedProvider, GVP_S
  *  4. no mention→start-frame promotion (identity refs must ride EVERY
  *     segment, so they always stay references);
  *  5. no repeat-×N strip chip (a multi-segment stitch is orders of magnitude
- *     more expensive per run than a single generation).
+ *     more expensive per run than a single generation);
+ *  6. an `audio` input, a soundtrack over the stitched result (decided
+ *     2026-10-28: Generate Video dropped it for a Merge Video & Audio node).
  * ANYTHING else diverging is a bug. Handles are parity-by-construction
- * (generate-video-pro-handles.ts re-exports generate-video's array and
- * validator) — these assertions pin the construction itself.
+ * (generate-video-pro-handles.ts builds its array FROM generate-video's and
+ * re-exports its validator) — these assertions pin the construction itself.
  */
 describe("generate-video-pro ⇄ generate-video FULL parity", () => {
-  it("the handle arrays are the SAME array (parity by construction, not by copy)", () => {
-    expect(GENERATE_VIDEO_PRO_INPUT_HANDLES).toBe(GENERATE_VIDEO_INPUT_HANDLES)
+  it("the pro handles are generate-video's, in order, plus only sanctioned delta #6 (`audio`)", () => {
+    expect(GENERATE_VIDEO_PRO_INPUT_HANDLES.filter((h) => h !== "audio")).toEqual([...GENERATE_VIDEO_INPUT_HANDLES])
+    expect(GENERATE_VIDEO_PRO_INPUT_HANDLES).toContain("audio")
+    expect(GENERATE_VIDEO_INPUT_HANDLES).not.toContain("audio")
   })
 
   it("the connection validators are the SAME function", () => {
     expect(isValidGenerateVideoProConnection).toBe(isValidGenerateVideoConnection)
   })
 
-  it("both nodes register the identical inputs list in NODE_DEFINITIONS (same names, same order)", () => {
+  it("both nodes register the same inputs list in NODE_DEFINITIONS (same names, same order, pro adding `audio`)", () => {
     const gv = NODE_DEFINITIONS.find((d) => d.type === "generate-video")!
     const gvp = NODE_DEFINITIONS.find((d) => d.type === "generate-video-pro")!
-    expect(gvp.inputs).toEqual(gv.inputs)
+    expect(gvp.inputs.filter((h) => h !== "audio")).toEqual(gv.inputs)
+    expect(gvp.inputs).toEqual([...GENERATE_VIDEO_PRO_INPUT_HANDLES])
     expect(gvp.outputs).toEqual(gv.outputs)
   })
 

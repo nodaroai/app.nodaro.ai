@@ -298,6 +298,10 @@ export interface ModelCatalogEntry {
    * that clip as a reference video (a still frame carrying the audio) with the
    * video's own sound kept, so the scene is performed to the exact track (see
    * `audio-soundtrack.ts`). On unless a run sets `audioSoundtrack: false`.
+   *
+   * `"audio-to-video"` (video models only) means ONE reference audio clip
+   * drives the generation — the picture is made to that audio (LTX 2.3 Pro's
+   * `audio_to_video` task). The node's Audio Refs input then takes one clip.
    */
   features?: readonly string[]
   /**
@@ -2287,7 +2291,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "LTX",
     description: "Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation.",
     useCases: ["premium", "high-res", "narrative"],
-    features: ["end-frame"],
+    features: ["end-frame", "audio-to-video"],
     aspectRatios: ["16:9", "9:16"] as const,
     resolutions: ["1080p", "2k", "4k"] as const,
     durations: [6, 8, 10],

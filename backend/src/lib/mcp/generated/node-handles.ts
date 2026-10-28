@@ -72,7 +72,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "generate-mask": { inputs: ["image"], outputs: ["image", "mask"] },
   "generate-music": { inputs: ["prompt", "ref-audio", "audio-style"], outputs: ["audio"] },
   "generate-script": { inputs: ["prompt", "field-tone", "field-styleGuide", "field-sceneCount", "field-targetLength"], outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"] },
-  "generate-video": { inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"], outputs: ["video"] },
+  "generate-video": { inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audioReferences", "assets", "elements", "look", "settings"], outputs: ["video"] },
   "generate-video-pro": { inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"], outputs: ["video"] },
   "generative-pipeline": { inputs: ["story_prompt"], outputs: [] },
   "group": { inputs: [], outputs: [] },

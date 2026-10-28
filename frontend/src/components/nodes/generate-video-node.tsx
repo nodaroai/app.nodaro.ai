@@ -10,7 +10,6 @@ import {
   X,
   Image as ImageIcon,
   Images,
-  Volume2,
   Music,
   Download,
   LayoutGrid,
@@ -64,7 +63,6 @@ const ACCEPTS_STARTFRAME      = (t: string) => isValidGenerateVideoConnection("s
 const ACCEPTS_ENDFRAME        = (t: string) => isValidGenerateVideoConnection("endFrame", t, isPickerType)
 const ACCEPTS_IMAGE_REFS      = (t: string) => isValidGenerateVideoConnection("imageReferences", t, isPickerType)
 const ACCEPTS_VIDEO_REFS      = (t: string) => isValidGenerateVideoConnection("videoReferences", t, isPickerType)
-const ACCEPTS_AUDIO           = (t: string) => isValidGenerateVideoConnection("audio", t, isPickerType)
 const ACCEPTS_AUDIO_REFS      = (t: string) => isValidGenerateVideoConnection("audioReferences", t, isPickerType)
 const ACCEPTS_ASSETS          = (t: string) => isValidGenerateVideoConnection("assets", t, isPickerType)
 const ACCEPTS_LOOK            = (t: string) => isValidGenerateVideoConnection("look", t, isPickerType)
@@ -78,7 +76,7 @@ const ACCEPTS_SETTINGS        = (t: string) => isValidGenerateVideoConnection(SE
 //
 //   Text:    prompt(24) → negative(52)
 //   Image:   start(92) → end(120) → imgRefs(148) → vidRefs(176)   (gap 40 → 92)
-//   Audio:   audio(216) → audioRefs(244)                          (gap 40 → 216)
+//   Audio:   audioRefs(216)                                       (gap 40 → 216)
 //   Pickers: assets(284) → elements(312) → look(340)              (gap 40 → 284)
 //   Settings: settings(380)                                        (gap 40 → 380)
 //
@@ -92,8 +90,7 @@ const HANDLE_OFFSET = {
   endFrame: 120,
   imageReferences: 148,
   videoReferences: 176,
-  audio: 216,
-  audioReferences: 244,
+  audioReferences: 216,
   assets: 284,
   elements: 312,
   look: 340,
@@ -216,7 +213,6 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       { id: "endFrame",        type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.endFrame),        left: "-29px" }, external: true },
       { id: "imageReferences", type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.imageReferences), left: "-29px" }, external: true },
       { id: "videoReferences", type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.videoReferences), left: "-29px" }, external: true },
-      { id: "audio",           type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.audio),           left: "-29px" }, external: true },
       { id: "audioReferences", type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.audioReferences), left: "-29px" }, external: true },
       { id: "assets",          type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.assets),          left: "-29px" }, external: true },
       { id: "look",            type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.look),            left: "-29px" }, external: true },
@@ -246,7 +242,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       data: { provider },
     } as unknown as WorkflowNode
     const set = new Set<string>()
-    for (const hid of ["startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences"] as const) {
+    for (const hid of ["startFrame", "endFrame", "imageReferences", "videoReferences", "audioReferences"] as const) {
       const lim = getHandleConnectionLimit(fakeNode, hid)
       if (lim?.limit === 0) set.add(hid)
     }
@@ -528,7 +524,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             negative → red          (negation)
             startFrame/endFrame → cyan (location/image family)
             imgRefs/vidRefs → emerald/purple (images vs videos)
-            audio/audioRefs → yellow (audio family)
+            audioRefs → yellow (audio family)
             assets   → character pink (identity entities)
             look/elements/settings → indigo (parameter nodes) */}
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={handleTop(HANDLE_OFFSET.prompt)}          accepts={ACCEPTS_PROMPT} />
@@ -537,7 +533,6 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="endFrame"        type="target" position={Position.Left}  label="End Frame"   color={HANDLE_COLORS.endFrame} icon={<ImageIcon />} side="left"  top={handleTop(HANDLE_OFFSET.endFrame)}        accepts={ACCEPTS_ENDFRAME} disabled={disabledHandles.has("endFrame")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"  color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={handleTop(HANDLE_OFFSET.imageReferences)} orderMatters accepts={ACCEPTS_IMAGE_REFS} disabled={disabledHandles.has("imageReferences")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="videoReferences" type="target" position={Position.Left}  label="Video Refs"  color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top={handleTop(HANDLE_OFFSET.videoReferences)} orderMatters accepts={ACCEPTS_VIDEO_REFS} disabled={disabledHandles.has("videoReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audio"           type="target" position={Position.Left}  label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top={handleTop(HANDLE_OFFSET.audio)}           accepts={ACCEPTS_AUDIO} disabled={disabledHandles.has("audio")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label={audioReferencesLabel(provider, audioSoundtrack)}  color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={handleTop(HANDLE_OFFSET.audioReferences)} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(HANDLE_OFFSET.assets)}          orderMatters accepts={ACCEPTS_ASSETS} />
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={handleTop(HANDLE_OFFSET.look)}            accepts={ACCEPTS_LOOK} />

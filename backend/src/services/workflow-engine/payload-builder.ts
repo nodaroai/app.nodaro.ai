@@ -4048,7 +4048,10 @@ export function buildPayload(
       // the UI, but the orchestrator may still receive payloads from older
       // workflows or webhook triggers, so we degrade gracefully here).
       if (provider === "ltx-2.3-pro" || provider === "ltx-2.3-fast") {
-        const hasAudio = !!resolvedInputs.audioUrl && provider === "ltx-2.3-pro"
+        // The driving clip is the node's first Audio Refs clip; a graph saved
+        // before Generate Video dropped its "Audio" input still carries it there.
+        const ltxAudioUrl = resolvedInputs.referenceAudioUrls?.[0] ?? resolvedInputs.audioUrl
+        const hasAudio = !!ltxAudioUrl && provider === "ltx-2.3-pro"
         const hasStart = !!resolvedInputs.startFrameUrl
         const hasEnd = !!resolvedInputs.endFrameUrl
 
@@ -4130,7 +4133,7 @@ export function buildPayload(
               image: resolvedInputs.startFrameUrl,
               ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
             }),
-            ...(task === "audio_to_video" && { audio: resolvedInputs.audioUrl }),
+            ...(task === "audio_to_video" && { audio: ltxAudioUrl }),
             resolution: ltxNorm.resolution,
             duration: (ltxNorm.duration ?? gvSel.duration) as number | undefined,
             aspect_ratio: ltxNorm.aspectRatio,
