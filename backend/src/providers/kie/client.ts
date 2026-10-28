@@ -16,6 +16,7 @@ import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
+import { getRuntimeEnv } from "../../lib/runtime-env.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
@@ -72,8 +73,17 @@ export class KieError extends Error {
    *  a reference image or the output (see `isInputVideoRefusal`). Independent
    *  of `contentPolicyClass`: a refusal can carry a class (copyright) or none.
    *  Read duck-typed by `lib/safety-block.ts` (`inputVideoRefusedOf`) to mark
-   *  the job's `error_hint`; it never changes the user-facing message. */
+   *  the job's `error_hint`; this flag never changes the user-facing message
+   *  (a copyright refusal of the input video gets its own sentence from
+   *  `copyrightSubjectOf`, decided on the text, not on this flag). */
   public readonly inputVideoRefused: boolean
+  /** True when the provider refused one of the INPUT IMAGES as possibly
+   *  copyrighted ("the input image may be related to copyright
+   *  restrictions") — not the prompt or the output. Only ever set beside
+   *  `contentPolicyClass: "copyright"` (see `copyrightSubjectOf`). Read
+   *  duck-typed by `lib/safety-block.ts` (`inputImageRefusedOf`) to name the
+   *  input on the job's `error_hint` (`subject: "input_image"`). */
+  public readonly inputImageRefused: boolean
 
   constructor(
     sanitizedMessage: string,
@@ -83,6 +93,7 @@ export class KieError extends Error {
     contentPolicy = false,
     contentPolicyClass: ContentPolicyClass | null = null,
     inputVideoRefused = false,
+    inputImageRefused = false,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
@@ -92,6 +103,7 @@ export class KieError extends Error {
     this.contentPolicy = contentPolicy
     this.contentPolicyClass = contentPolicy ? contentPolicyClass : null
     this.inputVideoRefused = inputVideoRefused
+    this.inputImageRefused = this.contentPolicyClass === "copyright" && inputImageRefused
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -226,8 +238,10 @@ export function createSanitizedError(
     // in prod (job 3b2f644d): the user saw "try again" while every KIE-routed
     // generation was failing. Distinct message + a greppable [ALERT] marker so
     // an empty provider balance is diagnosable from Railway logs at a glance.
+    // Staging and production print the same line, so it names the
+    // environment: an operator can tell which deployment's traffic hit it.
     console.error(
-      `[ALERT] KIE.ai account balance exhausted — top up required (context: ${context})`
+      `[ALERT] KIE.ai account balance exhausted — top up required (env: ${getRuntimeEnv()}, context: ${context})`
     )
     sanitizedMessage =
       PLATFORM_CAPACITY_MESSAGE
@@ -281,8 +295,12 @@ export function createSanitizedError(
     lowerMsg.includes("intellectual property") ||
     lowerMsg.includes("trademark")
   ) {
-    sanitizedMessage =
-      "Blocked for copyright: the provider refused this generation because the output may contain copyrighted material (recognizable characters, footage, music, or logos). Change the input image/clip or rephrase the prompt — retrying the same request will fail again."
+    // The provider named the INPUT (a picture or a video it was sent), not
+    // the output: rephrasing the prompt cannot help, so say which input.
+    const subject = copyrightSubjectOf(internalMessage)
+    sanitizedMessage = subject
+      ? INPUT_COPYRIGHT_MESSAGES[subject]
+      : "Blocked for copyright: the provider refused this generation because the output may contain copyrighted material (recognizable characters, footage, music, or logos). Change the input image/clip or rephrase the prompt — retrying the same request will fail again."
   } else if (
     lowerMsg.includes("filtered") ||
     lowerMsg.includes("prohibited") ||
@@ -403,13 +421,24 @@ export function createUpstreamFailureError(
         ? (options.contentPolicyClass ?? classifyContentPolicyClass(internalMessage) ?? "safety")
         : null
   const contentPolicy = cls !== null
-  const userMessage = options?.userMessage ?? (cls ? CONTENT_POLICY_MESSAGES[cls] : undefined)
+  // A copyright refusal of one of the job's INPUTS (an image or a video it was
+  // sent) gets its own sentence: the output-resemblance message's "rephrase the
+  // prompt" advice cannot help when the provider refused a picture. The class
+  // stays `copyright` either way (the hint, the retry policy and the refund
+  // are unchanged); only the sentence and the hint's `subject` differ.
+  const copyrightSubject = cls === "copyright" ? copyrightSubjectOf(internalMessage) : null
+  const userMessage =
+    options?.userMessage ??
+    (copyrightSubject ? INPUT_COPYRIGHT_MESSAGES[copyrightSubject] : cls ? CONTENT_POLICY_MESSAGES[cls] : undefined)
   if (userMessage) {
     // Mirrors createSanitizedError's debug logging — we skip calling it below
     // (its generic pattern matching would clobber the caller-supplied
     // userMessage), so log here instead to keep the same Railway visibility.
     console.error(`[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`)
-    return new KieError(userMessage, internalMessage, context, true, contentPolicy, cls, inputVideoRefused)
+    return new KieError(
+      userMessage, internalMessage, context, true, contentPolicy, cls, inputVideoRefused,
+      copyrightSubject === "input_image",
+    )
   }
   return createSanitizedError(internalMessage, context, true, contentPolicy, {
     upstreamStatus: options?.upstreamStatus,
@@ -496,6 +525,38 @@ const INPUT_VIDEO_REFUSAL_RE = /input video may be related to copyright|file pro
 /** True when a provider `failMsg` says the input video itself was refused. */
 export function isInputVideoRefusal(failMsg: string): boolean {
   return INPUT_VIDEO_REFUSAL_RE.test(failMsg)
+}
+
+/** Which INPUT a copyright refusal names, when it names one. The provider
+ *  refuses a picture it was sent with "The request failed because the input
+ *  image may be related to copyright restrictions." (Seedance 2.5, staging
+ *  2026-10-28) and a clip with "Input video may be related to copyright
+ *  restrictions…". Either way the prompt is not the problem. Plural and
+ *  "picture"/"photo" spellings are accepted; the word "copyright" must follow
+ *  within the same sentence, so an unrelated mention of an input image never
+ *  matches. */
+export type CopyrightSubject = "input_image" | "input_video"
+
+const INPUT_IMAGE_COPYRIGHT_RE = /\binput (?:image|picture|photo)s?\b[^.]{0,80}\bcopyright/i
+const INPUT_VIDEO_COPYRIGHT_RE = /\binput (?:video|clip)s?\b[^.]{0,80}\bcopyright/i
+
+/** The input a copyright refusal names, or null when it names none (the
+ *  output-resemblance case keeps `CONTENT_POLICY_MESSAGES.copyright`). */
+export function copyrightSubjectOf(failMsg: string): CopyrightSubject | null {
+  if (INPUT_IMAGE_COPYRIGHT_RE.test(failMsg)) return "input_image"
+  if (INPUT_VIDEO_COPYRIGHT_RE.test(failMsg)) return "input_video"
+  return null
+}
+
+/** The user-facing sentence for a copyright refusal of one of the job's
+ *  inputs. The vendor is never named, like every other message here. The
+ *  words "as possibly copyrighted" are matched by `lib/mcp/tools/_job-error.ts`
+ *  (non-retryable, copyright rejection) — keep them. */
+export const INPUT_COPYRIGHT_MESSAGES: Readonly<Record<CopyrightSubject, string>> = {
+  input_image:
+    "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+  input_video:
+    "The video model declined one of your videos as possibly copyrighted. Try a different video.",
 }
 
 /** Boolean twin, kept for the existing call sites and the plugin contract. */

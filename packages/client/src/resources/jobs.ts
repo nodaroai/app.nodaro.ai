@@ -38,10 +38,13 @@ export type SafetyBlockHint = {
   retried: boolean
   suggestedProvider?: string
   /**
-   * Present when the provider refused the INPUT VIDEO itself — not the prompt,
-   * a reference image or the output. Sending a different clip is the fix.
+   * Present when the provider named the input it refused — not the prompt or
+   * the output. `"input_video"`: the input video itself; sending a different
+   * clip is the fix. `"input_image"`: one of the input images, refused as
+   * possibly copyrighted (with `class: "copyright"`); sending a different
+   * picture is the fix. Treat an unknown value as absent.
    */
-  subject?: "input_video"
+  subject?: "input_video" | "input_image"
 }
 
 /**

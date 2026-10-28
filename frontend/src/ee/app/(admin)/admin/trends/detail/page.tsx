@@ -56,7 +56,7 @@ import {
   maxImagesFor,
   previewClipStatus,
   toForm,
-  withPreviewPrompts,
+  previewPromptBudget,
   type TrendForm,
 } from "../model"
 import { SourceClipEditor } from "../components/SourceClipEditor"
@@ -284,7 +284,8 @@ export default function AdminTrendEditorPage() {
 
   // The 4 s preview's own prompt parts are edited only while the trend offers a preview (kept when it stops).
   const hasPreview = form.previewStart !== null
-  const previewBudget = promptBudget(withPreviewPrompts(form))
+  // At its tightest: a preview that carries the stored scene description names its roles by their role names.
+  const previewBudget = previewPromptBudget(form)
 
   const upscales = server.upscaleJobs ?? []
   const savedSource = server.draft.source

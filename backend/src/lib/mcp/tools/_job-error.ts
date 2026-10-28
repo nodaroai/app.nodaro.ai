@@ -48,6 +48,10 @@ const CONTENT_REJECTION_PATTERNS = [
   "declined this generation",
   "blocked for copyright",
   "real person's likeness",
+  // A copyright refusal of one of the job's INPUTS (an image or a video it was
+  // sent) — providers/kie/client.ts INPUT_COPYRIGHT_MESSAGES. Contains
+  // "copyright", so rejectionClassOf files it as `copyright`.
+  "as possibly copyrighted",
 ]
 
 // Input-shape limits (permanent until the caller changes the input).
@@ -246,6 +250,18 @@ export function failureGuidance(job: {
       guidance:
         "The provider refused the input video itself; the same clip will be refused again. " +
         "Send a different clip (or ask the user for one) — changing the prompt or retrying will not help.",
+    }
+  }
+
+  // The provider refused one of the INPUT IMAGES as possibly copyrighted: the
+  // picture is what failed, not the prompt or the output, so neither the same
+  // request nor a fallback model is offered — only a different picture.
+  if (hint && hint.kind === "safety-block" && hint.subject === "input_image") {
+    return {
+      retryable: false,
+      guidance:
+        "The provider refused one of the input images as possibly copyrighted; the same image will be refused again. " +
+        "Send a different image (or ask the user for one) — changing the prompt or retrying will not help.",
     }
   }
 

@@ -1367,7 +1367,9 @@ or that ran out of credits partway (`kind: "credits"`, carrying the refusal's
 person to top up and run it again), or whose input video the provider refused
 without naming a content-policy class (`kind: "input-refused"`, `subject:
 "input_video"` — send a different clip; a `safety-block` carries the same
-`subject` when the refused input video also has a class). Admin callers
+`subject` when the refused input video also has a class, and `subject:
+"input_image"` on a `copyright` block when the provider refused one of the
+input images as possibly copyrighted — send a different picture). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only

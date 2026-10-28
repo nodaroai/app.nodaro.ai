@@ -13,6 +13,9 @@
  *   (`trendPromptParts`: a preview's own role names, reference lines, pre and
  *   trend prompts, each falling back to the full run's), from the trend
  *   version the run used, as that version is saved now; null when it is gone.
+ *   A run that carried the stored scene description (`__sceneDescription` on
+ *   its record) names its roles by their full role names, a preview included
+ *   (one name per run), and its parts show those.
  *
  * `mode` left out = the mode the run ran in. Admins may see a trend's hidden
  * data; nothing here is reachable by a user.
@@ -73,12 +76,14 @@ export function registerTrendPromptRoutes(app: FastifyInstance, deps: TrendPromp
         mode === runMode ? enginePromptOf(run) : Promise.resolve(null),
         trendId && version !== null ? getVersion(trendId, version) : Promise.resolve(null),
       ])
+      // The run carried the stored scene description: its roles went by their full role names.
+      const roleNames = typeof input.__sceneDescription === "string" ? "stored" : "own"
       const out: AdminTrendRunPrompt = {
         mode,
         runMode,
         prompt,
         previewOffered: data ? data.previewStart !== null : false,
-        parts: data ? trendPromptParts(data, mode) : null,
+        parts: data ? trendPromptParts(data, mode, roleNames) : null,
       }
       return { data: out }
     } catch (e) {

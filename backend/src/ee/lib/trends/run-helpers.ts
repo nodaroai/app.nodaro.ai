@@ -459,7 +459,14 @@ export function withoutUnsupportedPulseAudio(composed: ComposedTrendRun): void {
  * not declare it rewrites one (`castSwap.storedSceneDescription`), or when the
  * body no longer asks for a described scene (an engine that does not take
  * the scene had `faceMasking.scene` stripped first): such an engine describes
- * the clip itself per run, exactly as before. Mutates `composed.body`.
+ * the clip itself per run, exactly as before.
+ *
+ * One name per run: a body that keeps its stored description sends each role
+ * by the name that text uses (`composed.sceneRoleNames`, each slot's full
+ * `roleName`), a preview run included, so the engine finds every role of the
+ * text by the name it is sent. A body that sends none keeps the names it was
+ * composed with (a preview's `previewRoleName` where set). Decided here alone,
+ * once it is known whether the description goes. Mutates `composed.body`.
  */
 export function withoutUnsupportedSceneDescription(composed: ComposedTrendRun): void {
   const { body } = composed
@@ -467,6 +474,11 @@ export function withoutUnsupportedSceneDescription(composed: ComposedTrendRun): 
   if (getPluginSupports().castSwap?.storedSceneDescription !== true || body.faceMasking?.scene !== "description") {
     delete body.sceneDescription
     delete body.sceneDescriptionWindow
+    return
+  }
+  const names = composed.sceneRoleNames
+  if (body.sceneDescription !== undefined && names) {
+    body.roles = body.roles.map((role, i) => (names[i] !== undefined ? { ...(role as Record<string, unknown>), name: names[i] } : role))
   }
 }
 

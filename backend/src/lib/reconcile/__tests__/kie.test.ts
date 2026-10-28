@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     /** Set by the real poll clients from the provider's bare failMsg. */
     contentPolicyClass: "copyright" | "likeness" | "safety" | null = null
     inputVideoRefused = false
+    inputImageRefused = false
     constructor(message: string, isUpstreamFailure = false, internalDetails = "task failed: [500] raw provider text") {
       super(message)
       this.name = "KieError"
@@ -471,6 +472,7 @@ describe("reconcileKieJob", () => {
       const err = new mocks.FakeKieError("The provider declined this generation.", true, `task failed: [501] ${failMsg}`)
       err.contentPolicyClass = real.classifyContentPolicyClass(failMsg)
       err.inputVideoRefused = real.isInputVideoRefusal(failMsg)
+      err.inputImageRefused = err.contentPolicyClass === "copyright" && real.copyrightSubjectOf(failMsg) === "input_image"
       return err
     }
     const COPYRIGHT_VIDEO = "Input video may be related to copyright restrictions. Please try another video."
@@ -502,6 +504,15 @@ describe("reconcileKieJob", () => {
       expect(update.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false, subject: "input_video" })
       // The user-facing message is the sanitized one, as before.
       expect(update.error_message).toBe("The provider declined this generation.")
+      expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
+    })
+
+    it("a copyright refusal of one of the job's input images → the copyright hint names the input image", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(
+        await kieTaskFailure("The request failed because the input image may be related to copyright restrictions."),
+      )
+      await reconcileKieJob(videoRow({ provider: "seedance-2", imageUrl: "https://cdn.example/a.png" }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false, subject: "input_image" })
       expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
     })
 

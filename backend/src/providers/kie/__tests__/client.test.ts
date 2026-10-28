@@ -56,6 +56,44 @@ describe("createSanitizedError — provider account balance exhausted", () => {
     expect(err.message).not.toContain("Please try again or contact support if the issue persists")
   })
 
+  describe("the operator alert names the environment", () => {
+    const saved = { runtime: process.env.RUNTIME_ENV, railway: process.env.RAILWAY_ENVIRONMENT_NAME }
+    afterEach(() => {
+      if (saved.runtime === undefined) delete process.env.RUNTIME_ENV
+      else process.env.RUNTIME_ENV = saved.runtime
+      if (saved.railway === undefined) delete process.env.RAILWAY_ENVIRONMENT_NAME
+      else process.env.RAILWAY_ENVIRONMENT_NAME = saved.railway
+      vi.restoreAllMocks()
+    })
+
+    function alertFor(internal: string): string | undefined {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+      spy.mockClear()
+      const err = createSanitizedError(internal, "Generation", false, false, { upstreamStatus: 402 })
+      // The user-facing message is unchanged: it never names an environment.
+      expect(err.message).toContain("out of capacity on our side")
+      expect(err.message).not.toMatch(/staging|production/i)
+      return spy.mock.calls.map((c) => String(c[0])).find((l) => l.startsWith("[ALERT] KIE.ai account balance exhausted"))
+    }
+
+    it("a createTask 402 'Credits insufficient' logs the Railway environment", () => {
+      delete process.env.RUNTIME_ENV
+      process.env.RAILWAY_ENVIRONMENT_NAME = "staging"
+      const line = alertFor(
+        `createTask failed: 402 - {"code":402,"msg":"Credits insufficient : Your current balance isn’t enough to run this request. Please top up to continue.","data":null}`,
+      )
+      expect(line).toBe("[ALERT] KIE.ai account balance exhausted — top up required (env: staging, context: Generation)")
+    })
+
+    it("names production, and an explicit RUNTIME_ENV override", () => {
+      delete process.env.RUNTIME_ENV
+      process.env.RAILWAY_ENVIRONMENT_NAME = "production"
+      expect(alertFor("Credits insufficient")).toContain("(env: production,")
+      process.env.RUNTIME_ENV = "self-host-a"
+      expect(alertFor("Credits insufficient")).toContain("(env: self-host-a,")
+    })
+  })
+
   it("matches the 'insufficient credits' / 'insufficient balance' spellings too", () => {
     expect(createSanitizedError("insufficient credits on account", "Generation").message).toContain("out of capacity")
     expect(createSanitizedError("Insufficient balance for this request", "Generation").message).toContain("out of capacity")

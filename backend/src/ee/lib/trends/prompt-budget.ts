@@ -30,7 +30,10 @@
  * A trend that offers a 4 s preview is held to the budget twice: with the
  * full run's prompt parts, and with the preview's (its own role names,
  * reference lines, pre and trend prompts, each falling back to the full
- * run's: `withPromptsFor`). `promptModesOf` says when.
+ * run's: `withPromptsFor`). `promptModesOf` says when. A preview that may
+ * carry the stored scene description (Full depth, scene a description) is
+ * held with each slot's `roleName` too, the names such a run sends (one name
+ * per run): `promptRunsOf` lists every set of texts to hold.
  */
 import { TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
 import { trendPromptBudget, type TrendPromptBudget } from "@nodaro/render-rules"

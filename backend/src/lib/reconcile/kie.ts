@@ -7,6 +7,7 @@ import { providerDetailOf, logProviderFailure } from "../provider-error-detail.j
 import {
   safetyBlockOf,
   inputVideoRefusedOf,
+  inputImageRefusedOf,
   sentVideoInput,
   refusalHintFor,
   jobModelIdOf,
@@ -298,6 +299,7 @@ function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
     safetyBlockOf(err, jobModelIdOf(input)),
     false,
     inputVideoRefusedOf(err) && sentVideoInput(input),
+    inputImageRefusedOf(err),
   )
 }
 

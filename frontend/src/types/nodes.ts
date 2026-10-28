@@ -231,9 +231,11 @@ export interface SafetyBlockHint {
   readonly class: "copyright" | "likeness" | "safety"
   readonly retried: boolean
   readonly suggestedProvider?: string
-  /** Present when the provider refused the INPUT VIDEO itself (not the
-   *  prompt, a reference image or the output). */
-  readonly subject?: "input_video"
+  /** Present when the provider named the INPUT it refused (not the prompt or
+   *  the output): `"input_video"` — the input video itself; `"input_image"` —
+   *  one of the input images, as possibly copyrighted. Mirrors
+   *  `SafetyBlockHint` in `backend/src/lib/safety-block.ts`. */
+  readonly subject?: "input_video" | "input_image"
 }
 
 /**

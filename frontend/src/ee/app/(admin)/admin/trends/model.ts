@@ -25,7 +25,8 @@ import {
 import {
   castSwapImagesSent,
   faceMaskMarkSlot,
-  promptModesOf,
+  previewMayUseStoredRoleNames,
+  promptRunsOf,
   TREND_DETAILS_MAX,
   trendPromptBudget,
   withPromptsFor,
@@ -85,6 +86,22 @@ export function promptBudget(
 /** The form with the texts a 4 s preview run sends in the full run's fields (the preview's own, else the full run's). */
 export function withPreviewPrompts<F extends TrendPromptSource>(form: F): F {
   return withPromptsFor(form, "preview")
+}
+
+/**
+ * The 4 s preview's budget at its tightest: with its own role names, and,
+ * while a preview may carry the stored scene description
+ * (`previewMayUseStoredRoleNames`: it then names each role by its role name),
+ * with those too. What the preview's room counter shows.
+ */
+export function previewPromptBudget(
+  form: Pick<TrendForm, "prePrompt" | "trendPrompt" | "previewPrePrompt" | "previewTrendPrompt" | "slots" | "references" | "faceMasking"> &
+    Partial<Pick<TrendForm, "engine">>,
+): PromptBudget {
+  const own = promptBudget(withPromptsFor(form, "preview"))
+  if (!previewMayUseStoredRoleNames(form)) return own
+  const stored = promptBudget(withPromptsFor(form, "preview", "stored"))
+  return stored.room < own.room ? stored : own
 }
 
 /**
@@ -438,8 +455,12 @@ export function formIssues(form: TrendForm): string[] {
   if (form.previewTrendPrompt.length > MAX_TREND_PROMPT) out.push(`Trend prompt in the 4 s preview: at most ${MAX_TREND_PROMPT} characters.`)
   if (form.previewPrePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt in the 4 s preview: at most ${MAX_PRE_PROMPT} characters.`)
   // The preview's texts are held to the budget only while the trend offers a preview and has
-  // text of its own (else it sends the full run's): the server's publish check (`promptModesOf`).
-  if (promptModesOf(form).includes("preview")) out.push(...promptIssues(withPreviewPrompts(form), " in the 4 s preview"))
+  // text of its own (else it sends the full run's), with each role name a preview can send: the
+  // server's publish check (`promptRunsOf`).
+  for (const run of promptRunsOf(form)) {
+    if (run.mode !== "preview") continue
+    for (const issue of promptIssues(run.texts, " in the 4 s preview")) if (!out.includes(issue)) out.push(issue)
+  }
   if (form.faceMasking) out.push(...clipPreparationIssues(form.faceMasking), ...maskingIssues(form.faceMasking), ...personMarkIssues(form))
   if (form.source && form.previewStart !== null && form.previewStart + PREVIEW_SECONDS > form.source.durationSec) {
     out.push(`The ${PREVIEW_SECONDS} s preview must fit inside the ${form.source.durationSec.toFixed(1)} s clip.`)

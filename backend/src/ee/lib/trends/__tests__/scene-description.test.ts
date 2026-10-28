@@ -213,3 +213,81 @@ describe("the engine's declaration", () => {
     expect(composed.body).not.toHaveProperty("sceneDescription")
   })
 })
+
+describe("one name per run: a run that sends the stored description names each role as that text does", () => {
+  const DECLARED = { castSwap: { ...SUPPORTS, storedSceneDescription: true } as never }
+  /** Each role worded its own way for the preview. */
+  const renamed = (over: Partial<TrendVersionData> = {}, mask: Partial<TrendFaceMask> = {}) => {
+    const d = data(over, mask)
+    return { ...d, slots: d.slots.map((s) => ({ ...s, previewRoleName: `PREVIEW ${s.roleName}` })) }
+  }
+  const sent = (d: TrendVersionData, preview: boolean) => {
+    const composed = run(d, preview)
+    withoutUnsupportedFields(composed)
+    return composed.body
+  }
+  const names = (body: { roles: unknown[] }) => body.roles.map((r) => (r as { name: string }).name)
+  const FULL_NAMES = ["the woman on the left", "the dog"]
+  const PREVIEW_NAMES = ["PREVIEW the woman on the left", "PREVIEW the dog"]
+
+  it("a Full depth preview with a stored description sends each role's roleName, never its previewRoleName", () => {
+    setPluginSupports(DECLARED)
+    const body = sent(renamed(), true)
+    expect(body.sceneDescription).toBe(PREVIEW_TEXT)
+    expect(names(body)).toEqual(FULL_NAMES)
+    expect(JSON.stringify(body)).not.toContain("PREVIEW")
+    // The whole clip's text, cut to a moved preview window, is the stored text too.
+    const moved = sent(renamed({ previewStart: 5 }), true)
+    expect(moved.sceneDescription).toBe(FULL_TEXT)
+    expect(names(moved)).toEqual(FULL_NAMES)
+  })
+
+  it("the names the text uses are never sent as such", () => {
+    setPluginSupports(DECLARED)
+    expect(JSON.stringify(sent(renamed(), true))).not.toContain("sceneRoleNames")
+    expect(JSON.stringify(sent(renamed(), false))).not.toContain("sceneRoleNames")
+  })
+
+  it("a preview whose description the engine does not take keeps its previewRoleName", () => {
+    setPluginSupports({ castSwap: SUPPORTS as never })
+    const body = sent(renamed(), true)
+    expect(body).not.toHaveProperty("sceneDescription")
+    expect(names(body)).toEqual(PREVIEW_NAMES)
+    // Nor an engine that does not take the described scene (its scene key stripped first).
+    setPluginSupports({ castSwap: { ...SUPPORTS, fullDepthScenes: ["original"], storedSceneDescription: true } as never })
+    expect(names(sent(renamed(), true))).toEqual(PREVIEW_NAMES)
+  })
+
+  it("a preview that sends no stored description keeps its previewRoleName", () => {
+    setPluginSupports(DECLARED)
+    for (const scene of ["original", "none"] as const) {
+      const body = sent(renamed({ faceMasking: { ...FULL, scene } }), true)
+      expect(body).not.toHaveProperty("sceneDescription")
+      expect(names(body)).toEqual(PREVIEW_NAMES)
+    }
+    // A clip made before descriptions existed.
+    const before = sent(renamed({}, { sceneDescription: undefined, previewSceneDescription: undefined }), true)
+    expect(before).not.toHaveProperty("sceneDescription")
+    expect(names(before)).toEqual(PREVIEW_NAMES)
+  })
+
+  it("a preview of a trend that is not Full depth keeps its previewRoleName, whatever its face mask holds", () => {
+    setPluginSupports(DECLARED)
+    for (const faceMasking of [{ mode: "always" as const, threshold: 0.4 }, { mode: "always" as const, source: "keep-people" as const }]) {
+      const body = sent(renamed({ faceMasking }), true)
+      expect(body).not.toHaveProperty("sceneDescription")
+      expect(names(body)).toEqual(PREVIEW_NAMES)
+    }
+  })
+
+  it("a full run sends each role's roleName, as before", () => {
+    setPluginSupports(DECLARED)
+    const body = sent(renamed(), false)
+    expect(body.sceneDescription).toBe(FULL_TEXT)
+    expect(names(body)).toEqual(FULL_NAMES)
+    // Exactly the body of the same trend with no preview names.
+    expect(body).toEqual(sent(data(), false))
+    setPluginSupports({ castSwap: SUPPORTS as never })
+    expect(names(sent(renamed(), false))).toEqual(FULL_NAMES)
+  })
+})

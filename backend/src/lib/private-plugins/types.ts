@@ -132,6 +132,10 @@ export interface PluginHandlerCtx {
  *   (`videoUrl`, `referenceVideoUrl` or `referenceVideoUrls`): final now, and
  *   `error_hint` names it — `subject: "input_video"` on a safety-block hint, or
  *   `{ kind: "input-refused", subject: "input_video" }` with no content class.
+ * - `inputImageRefused: true` (error or `cause` chain) — the provider refused
+ *   one of the job's INPUT IMAGES as possibly copyrighted. Honoured only on a
+ *   `copyright` block: `error_hint` then carries `subject: "input_image"`.
+ *   ADDITIVE-OPTIONAL.
  */
 export type PluginHandlerFn = (job: PluginJob, ctx: PluginHandlerCtx) => Promise<void>
 
@@ -1346,9 +1350,12 @@ export type PluginJobErrorHint =
       suggestedProvider?: string
       /**
        * What was blocked, when the provider named it: `"input_video"` = the
-       * job's input video (not its prompt). Absent ⇒ unknown. ADDITIVE-OPTIONAL.
+       * job's input video (not its prompt); `"input_image"` = one of the job's
+       * input images, refused as possibly copyrighted (only with
+       * `class: "copyright"`). Absent ⇒ unknown. ADDITIVE-OPTIONAL — the union
+       * may grow; treat an unknown subject as absent.
        */
-      subject?: "input_video"
+      subject?: "input_video" | "input_image"
     }
   | {
       /**
