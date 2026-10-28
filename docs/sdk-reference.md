@@ -2297,6 +2297,8 @@ interface TrendCard {
   id: string; slug: string; name: string; description?: string
   tags: string[]; badges: string[]
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example, else the original's display copy
+  original?: { videoUrl: string; posterUrl?: string; width: number; height: number } // the original's display copy (as TrendDetail.original); absent without one
+  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }> // every example's video, in order; [] = none, absent from an older server (slot pictures are on the page)
   needs: Record<TrendSlotKind, number>   // slots of each kind
   durationSec: number
   isFavorite: boolean

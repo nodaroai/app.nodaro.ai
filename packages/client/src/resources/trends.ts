@@ -117,6 +117,19 @@ export interface TrendCard {
    * display copy, as {@link TrendDetail.original}.
    */
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /**
+   * The original's display copy, the same address as {@link TrendDetail.original}
+   * (without its length and preview start). Absent on a version without a
+   * display copy (and from an older server).
+   */
+  original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /**
+   * Every example's video, in the page's order, so a list can show each clip
+   * without reading the trend's page. Empty on a trend with only its original;
+   * absent from an older server. The pictures each slot used are on the page
+   * ({@link TrendDetail.examples}).
+   */
+  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
   /** How many slots of each kind the trend has. */
   needs: Record<TrendSlotKind, number>
   /** The length of a full run, in seconds. */

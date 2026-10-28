@@ -274,10 +274,37 @@ describe("GET /v1/trends", () => {
       tags: ["dance"],
       badges: ["trending"],
       cover: { videoUrl: "https://cdn.example/ex1.mp4", posterUrl: "https://cdn.example/ex1.jpg", width: 720, height: 1280 },
+      original: { videoUrl: DISPLAY.videoUrl, posterUrl: DISPLAY.posterUrl, width: 720, height: 1280 },
+      examples: [{ videoUrl: "https://cdn.example/ex1.mp4", posterUrl: "https://cdn.example/ex1.jpg", width: 720, height: 1280 }],
       needs: { person: 1, location: 1, product: 0, pet: 0 },
       durationSec: 12,
       isFavorite: false,
     })
+    expectNoHidden(res.body)
+  })
+
+  it("a card carries every example's video in order, without its slots, length or source job", async () => {
+    const [ex1] = versionData().examples
+    mem.trends[0]!.versions[2] = versionData({
+      examples: [
+        ex1!,
+        { videoUrl: "https://cdn.example/ex2.mp4", width: 1280, height: 720, durationSec: 12, slots: { lead: ["https://cdn.example/ex2-lead.png"] }, sourceJobId: SOURCE_JOB },
+      ],
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    expect(res.statusCode).toBe(200)
+    const [card] = res.json().data
+    expect(card.examples).toEqual([
+      { videoUrl: "https://cdn.example/ex1.mp4", posterUrl: "https://cdn.example/ex1.jpg", width: 720, height: 1280 },
+      { videoUrl: "https://cdn.example/ex2.mp4", width: 1280, height: 720 },
+    ])
+    for (const ex of card.examples) {
+      expect(ex).not.toHaveProperty("slots")
+      expect(ex).not.toHaveProperty("durationSec")
+    }
+    expect(res.body).not.toContain("ex1-lead.png")
+    expect(res.body).not.toContain("ex2-lead.png")
+    expect(card.cover.videoUrl).toBe("https://cdn.example/ex1.mp4")
     expectNoHidden(res.body)
   })
 
@@ -435,6 +462,21 @@ describe("GET /v1/trends/:slug — the original", () => {
     expect(d).not.toHaveProperty("original")
     expect(d.cover.videoUrl).toBe("https://cdn.example/ex1.mp4")
     expectNoHidden(res.body)
+
+    const list = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    const [card] = list.json().data
+    expect(card).not.toHaveProperty("original")
+    expect(card.cover.videoUrl).toBe("https://cdn.example/ex1.mp4")
+    expect(card.examples).toEqual([{ videoUrl: "https://cdn.example/ex1.mp4", posterUrl: "https://cdn.example/ex1.jpg", width: 720, height: 1280 }])
+    expectNoHidden(list.body)
+  })
+
+  it("the card's `original` is the page's display copy, without its length or preview start", async () => {
+    const [card] = (await app.inject({ method: "GET", url: "/v1/trends", headers: as() })).json().data
+    const d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    expect(card.original).toEqual({ videoUrl: d.original.videoUrl, posterUrl: d.original.posterUrl, width: d.original.width, height: d.original.height })
+    expect(card.original).not.toHaveProperty("durationSec")
+    expect(card.original).not.toHaveProperty("previewStartSec")
   })
 
   it("a trend with no example has a card and a page, the cover being the original's display copy", async () => {
@@ -444,6 +486,8 @@ describe("GET /v1/trends/:slug — the original", () => {
     const [card] = list.json().data
     expect(card.slug).toBe("neon-dance")
     expect(card.cover).toEqual({ videoUrl: DISPLAY.videoUrl, posterUrl: DISPLAY.posterUrl, width: 720, height: 1280 })
+    expect(card.original).toEqual(card.cover)
+    expect(card.examples).toEqual([])
     expect(card.durationSec).toBe(12)
     expectNoHidden(list.body)
 
