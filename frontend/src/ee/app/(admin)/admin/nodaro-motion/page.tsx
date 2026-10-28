@@ -13,9 +13,10 @@
 // original audio back on the result (the default) or Kling's own track
 // (PUT /v1/admin/nodaro-motion/pulse-audio).
 // Prism has its reference audio, for every direct Prism run of either style:
-// what the reference video sent to the video model carries (the full audio,
-// the default; the voice only; or none), the original audio always back on
-// the result (PUT /v1/admin/nodaro-motion/prism-reference-audio).
+// what the reference video sent to the video model carries, per output
+// resolution (the full audio, the default; the voice only; or none), the
+// original audio always back on the result
+// (PUT /v1/admin/nodaro-motion/prism-reference-audio).
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -27,7 +28,7 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
-import type { AdminTrendEngine, CastSwapPrismReferenceAudioId, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
+import type { AdminTrendEngine, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
 import { useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
@@ -37,7 +38,8 @@ import {
 } from "@/ee/hooks/queries/use-nodaro-motion-prism-reference-audio"
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
 import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/PulseAudioSelect"
-import { DEFAULT_PRISM_REFERENCE_AUDIO, PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
+import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
+import { prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
@@ -70,7 +72,7 @@ export default function AdminNodaroMotionPage() {
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
-  const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioId>(DEFAULT_PRISM_REFERENCE_AUDIO)
+  const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioByResolution>(() => prismReferenceAudioTriple(null))
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -83,7 +85,7 @@ export default function AdminNodaroMotionPage() {
     if (pulseQuery.data) setPulseDraft(pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
   }, [pulseQuery.data])
   useEffect(() => {
-    if (prismAudioQuery.data) setPrismAudioDraft(prismAudioQuery.data.prismReferenceAudio ?? DEFAULT_PRISM_REFERENCE_AUDIO)
+    if (prismAudioQuery.data) setPrismAudioDraft(prismReferenceAudioTriple(prismAudioQuery.data.prismReferenceAudio))
   }, [prismAudioQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
@@ -95,9 +97,10 @@ export default function AdminNodaroMotionPage() {
   const motionChanged = !!motionQuery.data && JSON.stringify(nextMotion) !== savedMotion
   // Never saved reads as the original audio: choosing it then is no change.
   const pulseChanged = !!pulseQuery.data && pulseDraft !== (pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
-  // Never saved reads as the full audio: choosing it then is no change.
+  // Never saved (or a resolution left out) reads as the full audio: choosing it then is no change.
   const prismAudioChanged =
-    !!prismAudioQuery.data && prismAudioDraft !== (prismAudioQuery.data.prismReferenceAudio ?? DEFAULT_PRISM_REFERENCE_AUDIO)
+    !!prismAudioQuery.data &&
+    JSON.stringify(prismReferenceAudioTriple(prismAudioDraft)) !== JSON.stringify(prismReferenceAudioTriple(prismAudioQuery.data.prismReferenceAudio))
   const issues = (data?.engines ?? []).flatMap((e) => {
     const m = draft[e.id]
     return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
@@ -112,7 +115,7 @@ export default function AdminNodaroMotionPage() {
       if (changed) await save.mutateAsync(next)
       if (motionChanged) await saveMotion.mutateAsync(nextMotion)
       if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
-      if (prismAudioChanged) await savePrismAudio.mutateAsync(prismAudioDraft)
+      if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioTriple(prismAudioDraft))
       toast.success("Saved. Runs pick it up within a minute.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -204,7 +207,7 @@ export default function AdminNodaroMotionPage() {
                   </div>
                 )}
                 {engine.id === "motion-prism" && (
-                  <div role="group" aria-label={`${engine.name} reference audio`} className="mt-4 max-w-sm">
+                  <div role="group" aria-label={`${engine.name} reference audio`} className="mt-4 max-w-md">
                     {prismAudioQuery.data ? (
                       <PrismReferenceAudioSelect
                         value={prismAudioDraft}

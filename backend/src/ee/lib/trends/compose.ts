@@ -92,10 +92,12 @@
  * A Kling 4 trend that delivers Kling's own audio sends `pulseAudio: "generated"`
  * (the original audio, the default, sends no key); dropped for an engine that
  * does not declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
- * A Prism trend whose reference video carries only the voice, or no audio,
- * sends `prismReferenceAudio: "voice" | "none"` (the full audio, the default,
- * sends no key); dropped for an engine that does not declare it
- * (`withoutUnsupportedPrismReferenceAudio`, run-helpers.ts).
+ * A Prism trend whose reference video carries only the voice, or no audio, at
+ * some output resolution sends `prismReferenceAudio` as those resolutions'
+ * modes (`{ "720p": "none" }`; the full audio everywhere, the default, sends no
+ * key); shaped for the loaded engine — the object, the run's own resolution's
+ * mode, or nothing — by `withoutUnsupportedPrismReferenceAudio`
+ * (run-helpers.ts).
  *
  * Every run names what it edits (`sourceAsset`, provenance the engine stamps
  * on the job): the whole source clip (`kind: "full"`, its length and, once
@@ -138,7 +140,11 @@ import { promptStyleOf } from "./prompt-style.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
-import type { CastSwapPrismReferenceAudioSent } from "../../../lib/cast-swap-prism-reference-audio.js"
+import {
+  prismReferenceAudioByResolutionOf,
+  prismReferenceAudioNotFull,
+  type CastSwapPrismReferenceAudioSent,
+} from "../../../lib/cast-swap-prism-reference-audio.js"
 import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
 import type {
   CastSwapEngine,
@@ -239,9 +245,10 @@ export interface TrendRunBody {
   pulseAudio?: "generated"
   /**
    * Only on Prism, and only when the trend's reference video carries the
-   * voice alone or no audio (absent = the full audio). Dropped for an engine
-   * that does not declare it (`withoutUnsupportedPrismReferenceAudio`,
-   * run-helpers.ts).
+   * voice alone or no audio at some output resolution (absent = the full
+   * audio). Composed as the object of those resolutions; turned into what the
+   * loaded engine takes — the object, the run's own resolution's mode, or
+   * nothing — by `withoutUnsupportedPrismReferenceAudio` (run-helpers.ts).
    */
   prismReferenceAudio?: CastSwapPrismReferenceAudioSent
   /**
@@ -581,6 +588,7 @@ export function composeTrendRun(
   const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && (req.draft ?? true)
 
   const parts = promptPartTexts(data.promptParts)
+  const prismAudio = prismReferenceAudioNotFull(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
   // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
   const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
 
@@ -611,10 +619,9 @@ export function composeTrendRun(
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
     ...(engine === "kling-4" && data.pulseAudio === "generated" ? { pulseAudio: "generated" as const } : {}),
-    // Prism's reference audio, when the trend asks for the voice alone or none (the full audio sends no key).
-    ...(engine === "seedance-2-5" && data.prismReferenceAudio && data.prismReferenceAudio !== "full"
-      ? { prismReferenceAudio: data.prismReferenceAudio }
-      : {}),
+    // Prism's reference audio, per output resolution, where the trend asks for the voice alone or none
+    // (the full audio everywhere sends no key). A plain mode stored earlier reads as every resolution.
+    ...(engine === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),
     // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
     ...(parts ? { promptParts: parts } : {}),
     promptStyle: promptStyleOf(data),

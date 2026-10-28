@@ -4,17 +4,22 @@
  * gate). Admin-only.
  *
  *   GET /v1/admin/nodaro-motion/prism-reference-audio   the setting (null = never saved: the full audio) and whether the engine takes it
- *   PUT /v1/admin/nodaro-motion/prism-reference-audio   { prismReferenceAudio: "full" | "voice" | "none" }: save it; audit-logged
+ *   PUT /v1/admin/nodaro-motion/prism-reference-audio   { prismReferenceAudio: { "480p"?, "720p"?, "1080p"? } }: save it; audit-logged
  *
  * The setting (`nodaro_motion_prism_reference_audio`,
  * lib/cast-swap-prism-reference-audio.ts) is what audio the reference video of
- * every DIRECT Prism run (either style) carries: the clip's audio (the
- * default), only the voice split from the music, or none. The original audio
+ * every DIRECT Prism run (either style) carries, per output resolution: the
+ * clip's audio (`"full"`, the default and what a missing key means), only the
+ * voice split from the music (`"voice"`), or none (`"none"`). A plain mode (the
+ * setting's first shape) is still taken, and read, as that mode at every
+ * resolution. The original audio
  * always goes back on the result. People running Nodaro Motion never set it;
  * a trend run keeps its own trend's choice. The `/v1/cast-swap` hook sends it
  * (middleware/nodaro-motion-prism-reference-audio.ts), only to an engine that
- * declares `castSwap.prismReferenceAudio` — `supported` answers whether this
- * environment's does.
+ * declares `castSwap.prismReferenceAudioPerResolution` (the object) or
+ * `castSwap.prismReferenceAudio` (the run's own resolution's mode) —
+ * `supported` answers whether this environment's declares either, and
+ * `perResolution` whether it takes the object.
  *
  * Each save writes an `admin_actions` row
  * (`update_nodaro_motion_prism_reference_audio`) with the setting before and
@@ -28,6 +33,7 @@ import {
   NODARO_MOTION_PRISM_REFERENCE_AUDIO_KEY,
   castSwapPrismReferenceAudioSchema,
   engineTakesPrismReferenceAudio,
+  engineTakesPrismReferenceAudioPerResolution,
 } from "../../lib/cast-swap-prism-reference-audio.js"
 import { readNodaroMotionPrismReferenceAudio, saveNodaroMotionPrismReferenceAudio } from "../../lib/nodaro-motion-prism-reference-audio-store.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -40,7 +46,12 @@ const putBody = z.strictObject({ prismReferenceAudio: castSwapPrismReferenceAudi
 
 async function view() {
   const { prismReferenceAudio, updatedAt } = await readNodaroMotionPrismReferenceAudio()
-  return { prismReferenceAudio, updatedAt, supported: engineTakesPrismReferenceAudio() }
+  return {
+    prismReferenceAudio,
+    updatedAt,
+    supported: engineTakesPrismReferenceAudio(),
+    perResolution: engineTakesPrismReferenceAudioPerResolution(),
+  }
 }
 
 export function registerNodaroMotionPrismReferenceAudioRoutes(app: FastifyInstance): void {

@@ -11411,8 +11411,14 @@ export interface AdminTrendData {
   klingLength?: AdminTrendKlingLength
   /** Kling 4 only: what sound a run delivers (hidden). Absent = `"original"`. */
   pulseAudio?: CastSwapPulseAudioId
-  /** Prism only: what audio the reference video sent to the video model carries (hidden). Absent = `"full"`. */
-  prismReferenceAudio?: CastSwapPrismReferenceAudioId
+  /**
+   * Prism only: what audio the reference video sent to the video model
+   * carries, per output resolution (hidden). Absent, or a resolution left out,
+   * = `"full"`. A draft saved before the per-resolution setting may hold a
+   * plain mode, meaning that mode at every resolution
+   * (`prismReferenceAudioByResolutionOf`, trends/components/PrismReferenceAudioSelect.tsx).
+   */
+  prismReferenceAudio?: CastSwapPrismReferenceAudioByResolution | CastSwapPrismReferenceAudioId
   /**
    * The engine prompt's overrides (hidden; written only by the prompt parts
    * route, kept by a draft save): per part, its text and the hash of the
@@ -11477,6 +11483,9 @@ export type CastSwapPulseAudioId = "original" | "generated"
  * the result.
  */
 export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none"
+
+/** The Prism reference audio per output resolution (admin only); a resolution left out is `"full"`. */
+export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolution, CastSwapPrismReferenceAudioId>>
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
@@ -12440,11 +12449,13 @@ export async function saveNodaroMotionPulseAudio(pulseAudio: CastSwapPulseAudioI
 // ---- Admin: Nodaro Motion's Prism reference audio for direct runs (/v1/admin/nodaro-motion/prism-reference-audio, admin-nodaro-motion-prism-reference-audio.ts) ----
 
 export interface NodaroMotionPrismReferenceAudioView {
-  /** null = never saved: every direct Prism run sends the clip's full audio. */
-  prismReferenceAudio: CastSwapPrismReferenceAudioId | null
+  /** Per output resolution, a resolution left out being the full audio. null = never saved: every direct Prism run sends the clip's full audio. */
+  prismReferenceAudio: CastSwapPrismReferenceAudioByResolution | null
   updatedAt: string | null
-  /** Whether this environment's Cast Swap engine takes the setting (`castSwap.prismReferenceAudio`); without it every run sends the full audio. */
+  /** Whether this environment's Cast Swap engine takes the setting in either shape; without it every run sends the full audio. */
   supported: boolean
+  /** Whether it takes a mode per resolution (`castSwap.prismReferenceAudioPerResolution`); else it is sent the run's own resolution's mode. */
+  perResolution?: boolean
 }
 
 const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"
@@ -12456,7 +12467,7 @@ export async function fetchNodaroMotionPrismReferenceAudio(): Promise<NodaroMoti
 }
 
 export async function saveNodaroMotionPrismReferenceAudio(
-  prismReferenceAudio: CastSwapPrismReferenceAudioId,
+  prismReferenceAudio: CastSwapPrismReferenceAudioByResolution,
 ): Promise<NodaroMotionPrismReferenceAudioView> {
   return (
     await apiRequest<{ data: NodaroMotionPrismReferenceAudioView }>(ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO, "apiErr.saveNodaroMotion", {

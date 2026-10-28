@@ -16,11 +16,13 @@ import { firstHeaderValue } from "../lib/request-helpers.js"
  * (`nodaro_motion_prism_reference_audio`,
  * lib/cast-swap-prism-reference-audio.ts), never from the caller: any
  * `prismReferenceAudio` the body carries is dropped, and a Prism run (one
- * naming Prism, or no engine at all) is sent `prismReferenceAudio: "voice"` or
- * `"none"` only when the setting says so and the loaded engine declares
- * `castSwap.prismReferenceAudio`. Otherwise the key is left out (the full
- * audio), so a run is sent exactly the body it was sent before the setting. A
- * settings read that failed reads as the full audio. The run and its quote go
+ * naming Prism, or no engine at all) is sent the setting as the loaded engine
+ * takes it (`prismReferenceAudioSent`): its non-"full" resolutions as an
+ * object to an engine declaring `castSwap.prismReferenceAudioPerResolution`,
+ * or the mode of the run's own resolution (a draft is 480p) to one declaring
+ * only `castSwap.prismReferenceAudio`. Whatever reads as the full audio leaves
+ * the key out, so a run is sent exactly the body it was sent before the
+ * setting. A settings read that failed reads as the full audio. The run and its quote go
  * through the same hook, so the quote prices what the run sends (the voice
  * split is priced in).
  *
@@ -49,7 +51,7 @@ export function registerNodaroMotionPrismReferenceAudioHook(app: FastifyInstance
     // The setting is read only for a Prism run on an engine that takes it (a Pulse run never needs it).
     if (isPrismRun(rest.engine) && engineTakesPrismReferenceAudio()) {
       const settings = await getAppSettings()
-      added = prismReferenceAudioSent(rest.engine, settingsReadFailed(settings) ? null : settings.nodaro_motion_prism_reference_audio)
+      added = prismReferenceAudioSent(rest, settingsReadFailed(settings) ? null : settings.nodaro_motion_prism_reference_audio)
     }
     const next = { ...rest, ...added }
     // Untouched unless something changes: a body without the key keeps its own object.

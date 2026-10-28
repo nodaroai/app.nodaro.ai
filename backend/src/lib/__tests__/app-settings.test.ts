@@ -122,14 +122,20 @@ describe("getAppSettings", () => {
     expect((await getAppSettings()).nodaro_motion_pulse_audio).toBeNull()
   })
 
-  it("reads the direct runs' Prism reference audio: full, voice or none, anything else (or no row, or a failed read) as never saved", async () => {
+  it("reads the direct runs' Prism reference audio per resolution, a plain mode as every resolution, anything else (or no row, or a failed read) as never saved", async () => {
+    for (const value of [{ "480p": "full", "720p": "none", "1080p": "voice" }, { "720p": "none" }, {}]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_prism_reference_audio", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toEqual(value)
+    }
+
     for (const value of ["full", "voice", "none"]) {
       invalidateSettingsCache()
       mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_prism_reference_audio", value }], error: null })
-      expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBe(value)
+      expect((await getAppSettings()).nodaro_motion_prism_reference_audio, value).toEqual({ "480p": value, "720p": value, "1080p": value })
     }
 
-    for (const value of ["mute", "", null, { prismReferenceAudio: "voice" }]) {
+    for (const value of ["mute", "", null, { prismReferenceAudio: "voice" }, { "720p": "mute" }]) {
       invalidateSettingsCache()
       mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_prism_reference_audio", value }], error: null })
       expect((await getAppSettings()).nodaro_motion_prism_reference_audio, JSON.stringify(value)).toBeNull()
@@ -143,6 +149,7 @@ describe("getAppSettings", () => {
     mockSelect.mockResolvedValueOnce({ data: null, error: { message: "fail" } })
     expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBeNull()
   })
+
 
   it("returns cached result on second call within TTL", async () => {
     mockSelect.mockResolvedValueOnce({

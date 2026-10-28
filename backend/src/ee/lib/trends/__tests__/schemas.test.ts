@@ -493,15 +493,26 @@ describe("trendVersionDataSchema — engine", () => {
     expect(trendVersionDataSchema.safeParse(data({ engine: "kling-4", pulseAudio: "" })).success).toBe(false)
   })
 
-  it("takes a prismReferenceAudio of full, voice or none, keeps none when none is set (the full audio), and refuses any other", () => {
-    for (const prismReferenceAudio of ["full", "voice", "none"]) {
-      expect(trendVersionDataSchema.safeParse(data({ prismReferenceAudio })).data?.prismReferenceAudio, prismReferenceAudio).toBe(prismReferenceAudio)
+  it("takes a prismReferenceAudio per output resolution, keeps none when none is set (the full audio), and refuses any other", () => {
+    for (const prismReferenceAudio of [{ "480p": "full", "720p": "none", "1080p": "voice" }, { "720p": "none" }, {}]) {
+      expect(trendVersionDataSchema.safeParse(data({ prismReferenceAudio })).data?.prismReferenceAudio).toEqual(prismReferenceAudio)
     }
     expect(trendVersionDataSchema.safeParse(data({})).data).not.toHaveProperty("prismReferenceAudio")
-    for (const bad of ["mute", "", "music", null, 1]) {
+    for (const bad of ["mute", "", "music", null, 1, { "720p": "mute" }, { "4k": "none" }, ["voice"]]) {
       expect(trendVersionDataSchema.safeParse(data({ prismReferenceAudio: bad })).success, JSON.stringify(bad)).toBe(false)
     }
   })
+
+  it("migrates a plain prismReferenceAudio (the setting's first shape) to that mode at every resolution", () => {
+    for (const mode of ["full", "voice", "none"]) {
+      expect(trendVersionDataSchema.safeParse(data({ prismReferenceAudio: mode })).data?.prismReferenceAudio, mode).toEqual({
+        "480p": mode,
+        "720p": mode,
+        "1080p": mode,
+      })
+    }
+  })
+
 
   it("refuses any other engine", () => {
     expect(trendVersionDataSchema.safeParse(data({ engine: "kling-3" })).success).toBe(false)

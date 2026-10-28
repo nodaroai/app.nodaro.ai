@@ -349,7 +349,9 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     // Absent = "original" (the original audio back on the result). Read only on a Kling 4 trend.
     pulseAudio: castSwapPulseAudioSchema.optional(),
-    // Absent = "full" (the clip's audio in the reference). Read only on a Prism trend.
+    // A mode per output resolution; absent (or a resolution left out) = "full" (the clip's audio in the
+    // reference). A plain mode, saved before the per-resolution setting, parses to that mode at every
+    // resolution. Read only on a Prism trend.
     prismReferenceAudio: castSwapPrismReferenceAudioSchema.optional(),
     previewClip: trendPreviewClipSchema.optional(),
     examples: z.array(trendExampleSchema),

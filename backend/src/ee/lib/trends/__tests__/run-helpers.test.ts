@@ -167,31 +167,56 @@ describe("pulseAudio on the wire", () => {
 describe("prismReferenceAudio on the wire", () => {
   beforeEach(() => _resetPluginSupportsForTests())
   const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true }
-  function prism(value: "voice" | "none", preview = false): ComposedTrendRun {
+  const MIXED = { "720p": "none", "1080p": "voice" } as const
+  // As composeTrendRun puts it on the body: the non-"full" resolutions.
+  function prism(value: ComposedTrendRun["body"]["prismReferenceAudio"], over: Partial<ComposedTrendRun["body"]> = {}, preview = false): ComposedTrendRun {
     const c = composed(preview)
+    Object.assign(c.body, over)
     c.body.prismReferenceAudio = value
     return c
   }
 
-  it("is kept (voice or none, estimate and preview alike) for an engine that declares castSwap.prismReferenceAudio", () => {
-    setPluginSupports({ castSwap: { ...BASE, prismReferenceAudio: true } })
-    for (const value of ["voice", "none"] as const) {
+  it("is kept as the object (estimate and preview alike) for an engine that declares castSwap.prismReferenceAudioPerResolution", () => {
+    for (const castSwap of [{ ...BASE, prismReferenceAudioPerResolution: true }, { ...BASE, prismReferenceAudio: true, prismReferenceAudioPerResolution: true }]) {
+      setPluginSupports({ castSwap })
       for (const preview of [false, true]) {
-        const c = prism(value, preview)
-        withoutUnsupportedFields(c)
-        expect(c.body.prismReferenceAudio).toBe(value)
+        for (const over of [{}, { resolution: "720p" as const, draft: false }]) {
+          const c = prism(MIXED, over, preview)
+          withoutUnsupportedFields(c)
+          expect(c.body.prismReferenceAudio).toEqual(MIXED)
+        }
       }
     }
   })
 
-  it("is dropped for an engine that does not (absent or false), so the body is today's", () => {
-    for (const castSwap of [BASE, { ...BASE, prismReferenceAudio: false }]) {
+  it("is the run's own resolution's mode for an engine that declares only castSwap.prismReferenceAudio, and dropped when that is the full audio", () => {
+    setPluginSupports({ castSwap: { ...BASE, prismReferenceAudio: true } })
+    // The 480p draft: 480p is the full audio here, so no key.
+    const draft = prism(MIXED)
+    withoutUnsupportedFields(draft)
+    expect(draft.body).not.toHaveProperty("prismReferenceAudio")
+    for (const [resolution, mode] of [["720p", "none"], ["1080p", "voice"]] as const) {
+      const c = prism(MIXED, { resolution, draft: false })
+      withoutUnsupportedFields(c)
+      expect(c.body.prismReferenceAudio, resolution).toBe(mode)
+    }
+    // A draft is 480p, whatever else the body says.
+    const voiceDraft = prism({ "480p": "voice" })
+    withoutUnsupportedPrismReferenceAudio(voiceDraft)
+    expect(voiceDraft.body.prismReferenceAudio).toBe("voice")
+    // Shaping twice changes nothing.
+    withoutUnsupportedPrismReferenceAudio(voiceDraft)
+    expect(voiceDraft.body.prismReferenceAudio).toBe("voice")
+  })
+
+  it("is dropped for an engine that declares neither (absent or false), so the body is today's", () => {
+    for (const castSwap of [BASE, { ...BASE, prismReferenceAudio: false, prismReferenceAudioPerResolution: false }]) {
       setPluginSupports({ castSwap })
-      for (const value of ["voice", "none"] as const) {
+      for (const value of [MIXED, { "480p": "voice" as const }]) {
         const c = prism(value)
         withoutUnsupportedPrismReferenceAudio(c)
         expect(c.body).not.toHaveProperty("prismReferenceAudio")
-        const d = prism(value)
+        const d = prism(value, { resolution: "720p", draft: false })
         withoutUnsupportedFields(d)
         expect(d.body).not.toHaveProperty("prismReferenceAudio")
       }
@@ -199,10 +224,12 @@ describe("prismReferenceAudio on the wire", () => {
   })
 
   it("adds nothing to a body without it", () => {
-    setPluginSupports({ castSwap: { ...BASE, prismReferenceAudio: true } })
-    const c = composed(false)
-    withoutUnsupportedFields(c)
-    expect(c.body).not.toHaveProperty("prismReferenceAudio")
+    for (const castSwap of [{ ...BASE, prismReferenceAudio: true }, { ...BASE, prismReferenceAudioPerResolution: true }]) {
+      setPluginSupports({ castSwap })
+      const c = composed(false)
+      withoutUnsupportedFields(c)
+      expect(c.body).not.toHaveProperty("prismReferenceAudio")
+    }
   })
 })
 

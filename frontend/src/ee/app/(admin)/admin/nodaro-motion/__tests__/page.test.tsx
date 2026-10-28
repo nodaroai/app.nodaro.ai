@@ -134,42 +134,63 @@ describe("Admin → Nodaro Motion → Pulse audio", () => {
 })
 
 describe("Admin → Nodaro Motion → Prism reference audio", () => {
-  const HINT = "What the engine hears in the reference video. The original audio always goes back on the result."
+  const HINT = "What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."
+  const RESOLUTIONS = ["480p", "720p", "1080p"]
+  const audioGroup = async (prism: HTMLElement) => within(prism).findByRole("group", { name: "Prism reference audio" })
 
-  it("shows the select in the Prism section only, Full audio until it is saved", async () => {
+  it("shows three selects, one per output resolution, in the Prism section only, Full audio until it is saved", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const prism = await section(/Prism/)
-    const audio = await within(prism).findByRole("combobox", { name: "Prism reference audio" })
-    expect(audio).toHaveTextContent("Full audio (default)")
+    const group = await audioGroup(prism)
+    for (const r of RESOLUTIONS) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full audio")
+    expect(within(group).getAllByRole("combobox")).toHaveLength(3)
     expect(within(prism).getByText(HINT)).toBeInTheDocument()
-    expect(within(await section(/Pulse/)).queryByRole("combobox", { name: "Prism reference audio" })).not.toBeInTheDocument()
-    expect(screen.getAllByRole("combobox", { name: "Prism reference audio" })).toHaveLength(1)
+    expect(within(await section(/Pulse/)).queryByRole("group", { name: "Prism reference audio" })).not.toBeInTheDocument()
+    expect(screen.getAllByRole("group", { name: "Prism reference audio" })).toHaveLength(1)
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 
-  it("offers the three choices and saves the one chosen on its own, and nothing else", async () => {
+  it("offers the three choices per resolution and saves every resolution's mode on its own, and nothing else", async () => {
     const user = userEvent.setup()
     routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
       body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-10-29T12:00:00.000Z", supported: true } },
     })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
-    await user.click(await within(prism).findByRole("combobox", { name: "Prism reference audio" }))
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Full audio (default)", "Voice only (music removed)", "No audio"])
-    await user.click(screen.getByRole("option", { name: "Voice only (music removed)" }))
+    const group = await audioGroup(await section(/Prism/))
+    await user.click(within(group).getByRole("combobox", { name: "720p" }))
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Full audio", "Voice only", "No audio"])
+    await user.click(screen.getByRole("option", { name: "No audio" }))
+    await user.click(within(group).getByRole("combobox", { name: "1080p" }))
+    await user.click(screen.getByRole("option", { name: "Voice only" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: "voice" }]))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: { "480p": "full", "720p": "none", "1080p": "voice" } }]),
+    )
     expect(sentTo(`PUT ${URL}`)).toEqual([])
     expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([])
     expect(sentTo(`PUT ${PULSE_AUDIO_URL}`)).toEqual([])
   })
 
-  it("starts from what is stored, and says when this environment's engine does not take it yet", async () => {
-    routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: "none", updatedAt: "2026-10-29T10:00:00.000Z", supported: false } } })
+  it("starts from what is stored, a resolution left out as Full audio, and says when this environment's engine does not take it yet", async () => {
+    routes[`GET ${PRISM_AUDIO_URL}`] = () => ({
+      body: { data: { prismReferenceAudio: { "720p": "none" }, updatedAt: "2026-10-29T10:00:00.000Z", supported: false } },
+    })
     renderWith(<AdminNodaroMotionPage />)
     const prism = await section(/Prism/)
-    expect(await within(prism).findByRole("combobox", { name: "Prism reference audio" })).toHaveTextContent("No audio")
+    const group = await audioGroup(prism)
+    expect(within(group).getByRole("combobox", { name: "480p" })).toHaveTextContent("Full audio")
+    expect(within(group).getByRole("combobox", { name: "720p" })).toHaveTextContent("No audio")
+    expect(within(group).getByRole("combobox", { name: "1080p" })).toHaveTextContent("Full audio")
     expect(within(prism).getByText(/does not take it yet: its runs send the full audio/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("reads a setting saved as one plain mode as that mode at every resolution, with no change to save", async () => {
+    routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: "voice", updatedAt: "2026-10-29T10:00:00.000Z", supported: true } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    for (const r of RESOLUTIONS) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Voice only")
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 })
 

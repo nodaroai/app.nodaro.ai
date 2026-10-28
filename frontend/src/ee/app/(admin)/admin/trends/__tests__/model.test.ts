@@ -297,14 +297,26 @@ describe("the model (engine) in the form", () => {
     expect(fromForm(toForm(draft({ engine: "kling-4" })))).not.toHaveProperty("pulseAudio")
   })
 
-  it("keeps prismReferenceAudio on a Prism draft (named or not), out of a Kling 4 one, and leaves it absent when none is set", () => {
-    for (const prismReferenceAudio of ["full", "voice", "none"] as const) {
-      expect(fromForm(toForm(draft({ prismReferenceAudio })))).toMatchObject({ prismReferenceAudio })
-      expect(fromForm(toForm(draft({ engine: "seedance-2-5", prismReferenceAudio })))).toMatchObject({ engine: "seedance-2-5", prismReferenceAudio })
-      expect(fromForm({ ...toForm(draft({ prismReferenceAudio })), engine: "kling-4" })).not.toHaveProperty("prismReferenceAudio")
+  it("keeps prismReferenceAudio's non-full resolutions on a Prism draft (named or not), out of a Kling 4 one, and leaves it absent when every one is full", () => {
+    const mixed = { "480p": "full", "720p": "none", "1080p": "voice" } as const
+    const sent = { "720p": "none", "1080p": "voice" }
+    expect(fromForm(toForm(draft({ prismReferenceAudio: mixed }))).prismReferenceAudio).toEqual(sent)
+    expect(fromForm(toForm(draft({ engine: "seedance-2-5", prismReferenceAudio: mixed })))).toMatchObject({ engine: "seedance-2-5", prismReferenceAudio: sent })
+    expect(fromForm({ ...toForm(draft({ prismReferenceAudio: mixed })), engine: "kling-4" })).not.toHaveProperty("prismReferenceAudio")
+    for (const full of [{}, { "480p": "full", "720p": "full", "1080p": "full" } as const, "full" as const]) {
+      expect(fromForm(toForm(draft({ prismReferenceAudio: full }))), JSON.stringify(full)).not.toHaveProperty("prismReferenceAudio")
     }
     expect(fromForm(toForm(draft({})))).not.toHaveProperty("prismReferenceAudio")
   })
+
+  it("reads a plain prismReferenceAudio saved before the per-resolution setting as that mode at every resolution", () => {
+    for (const mode of ["voice", "none"] as const) {
+      expect(toForm(draft({ prismReferenceAudio: mode })).prismReferenceAudio).toEqual({ "480p": mode, "720p": mode, "1080p": mode })
+      expect(fromForm(toForm(draft({ prismReferenceAudio: mode }))).prismReferenceAudio).toEqual({ "480p": mode, "720p": mode, "1080p": mode })
+    }
+    expect(toForm(draft({ prismReferenceAudio: "full" })).prismReferenceAudio).toEqual({ "480p": "full", "720p": "full", "1080p": "full" })
+  })
+
 
   it("round-trips a chosen engine exactly", () => {
     for (const engine of ["seedance-2-5", "kling-4"] as const) {
