@@ -131,6 +131,7 @@ import { promptStyleOf } from "./prompt-style.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
+import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
@@ -450,6 +451,10 @@ export function composeTrendRun(
       fromExample = images.length > 0
     }
 
+    // The original files, never a CDN display rendition a client showed (lib/cdn-original-url.ts):
+    // whether the picture came from the person, the slot's defaults or an example.
+    images = originalCdnImageUrls(images)
+
     const chips = chipsOf(slot, entry, allowHiddenChips)
     roles.push({ kind: slot.kind, name: slot.roleName, images, ...chips })
     slots.push({
@@ -564,7 +569,7 @@ export function composeTrendRun(
   const body: TrendRunBody = {
     videoUrl: data.source.videoUrl,
     roles,
-    references: texts.references.map((r) => ({ images: [...r.images], line: r.line })),
+    references: texts.references.map((r) => ({ images: originalCdnImageUrls(r.images), line: r.line })),
     ...(texts.prePrompt ? { prePrompt: texts.prePrompt } : {}),
     ...(postPrompt ? { postPrompt } : {}),
     // The zone resolved here (left out = the default margins), so the estimate and the run send

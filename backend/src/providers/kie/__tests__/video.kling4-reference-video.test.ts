@@ -40,7 +40,7 @@ describe("Kling 4 reference videos", () => {
       referenceVideoUrls: [ORIGINAL],
       keepOriginalSound: true,
     })
-    expect(mocks.ensureVideoFitsSize).toHaveBeenCalledWith(ORIGINAL, { maxDimension: 2048, maxPixels: 1920 * 1080 }, "Video generation", expect.any(String))
+    expect(mocks.ensureVideoFitsSize).toHaveBeenCalledWith(ORIGINAL, { maxDimension: 2048, maxPixels: 1920 * 1080 }, "Video generation", expect.any(String), "reference video #1")
     const [model, input] = mocks.runKieTask.mock.calls[0] as [string, Record<string, unknown>]
     expect(model).toBe("kling-4.0/reference-to-video")
     expect(input.video_urls).toEqual([SHRUNK])

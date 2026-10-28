@@ -3,6 +3,7 @@ import { z } from "zod"
 import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { withOriginalVideoImageUrls } from "../lib/cdn-original-url.js"
 import { loopTrimAddonCreditsFor } from "../lib/loop-trim-addon.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
@@ -962,7 +963,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
   app.post("/v1/generate-video", {
     preHandler: [...generateVideoPricing.prechecks, creditGuard(generateVideoPricing.modelResolver, generateVideoPricing.opts)],
   }, async (req, reply) => {
-    const parsed = generateVideoBody.safeParse(req.body)
+    // Image inputs on their original files, never a CDN display rendition (lib/cdn-original-url.ts).
+    const parsed = generateVideoBody.safeParse(withOriginalVideoImageUrls(req.body))
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },

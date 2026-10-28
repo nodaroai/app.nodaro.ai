@@ -20,6 +20,7 @@ import { join } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir, probeVideoSource } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { createSanitizedError } from "./client.js"
+import { atInputStep, urlForLog } from "./input-label.js"
 
 export interface VideoSizeLimit {
   /** Neither side over this many pixels. */
@@ -87,13 +88,17 @@ export async function ensureVideoFitsSize(
   limit: VideoSizeLimit,
   context: string,
   logLabel: string,
+  /** Which input this is ("reference video #1"), for the log lines. */
+  inputLabel = "reference video",
 ): Promise<string> {
   let width: number
   let height: number
   try {
     ;({ width, height } = await probeVideoSource(videoUrl))
   } catch (err) {
-    console.warn(`[KIE.ai] ${logLabel}: could not probe reference video, sending it as is: ${err instanceof Error ? err.message : String(err)}`)
+    console.warn(
+      `[KIE.ai] ${logLabel}: could not probe ${inputLabel} (${urlForLog(videoUrl)}), sending it as is: ${err instanceof Error ? err.message : String(err)}`,
+    )
     return videoUrl
   }
   const size = fitVideoSize(width, height, limit)
@@ -105,12 +110,15 @@ export async function ensureVideoFitsSize(
     workDir = await createWorkDir("ref-video-shrink")
     const inputPath = join(workDir, "input")
     const outputPath = join(workDir, "shrunk.mp4")
-    await downloadFile(videoUrl, inputPath)
-    await runFfmpeg(shrinkVideoArgs(inputPath, outputPath, size))
+    // Each step under the input's name: a failure logs which input and step (input-label.ts).
+    const label = `${logLabel} ${inputLabel}`
+    await atInputStep(label, videoUrl, "download", () => downloadFile(videoUrl, inputPath))
+    await atInputStep(label, videoUrl, "shrink", () => runFfmpeg(shrinkVideoArgs(inputPath, outputPath, size)))
     // A provider input: the running job's scratch folder, emptied when the job ends.
-    return await uploadJobScratchFile(outputPath, "provider-shrunk", "mp4", "video/mp4")
+    return await atInputStep(label, videoUrl, "upload", () =>
+      uploadJobScratchFile(outputPath, "provider-shrunk", "mp4", "video/mp4"))
   } catch (err) {
-    console.error(`[KIE.ai] ${logLabel}: reference video shrink failed: ${err instanceof Error ? err.message : String(err)}`)
+    console.error(`[KIE.ai] ${logLabel}: ${inputLabel} shrink failed: ${err instanceof Error ? err.message : String(err)}`)
     throw createSanitizedError(
       `Could not prepare the reference video (${width}×${height}) for this model`,
       context,

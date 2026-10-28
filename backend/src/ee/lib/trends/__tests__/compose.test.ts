@@ -209,6 +209,26 @@ describe("composeTrendRun — roles", () => {
     ])
   })
 
+  it("sends every picture as its original file, never a CDN display rendition", () => {
+    const shown = (path: string) => `https://cdn.nodaro.ai/cdn-cgi/image/width=1600,quality=80,format=auto/${path}`
+    const file = (path: string) => `https://cdn.nodaro.ai/${path}`
+    const data = version({
+      references: [{ images: [shown("trends/cloud.png")], line: "the clouds in the opening dive" }],
+      examples: [
+        { videoUrl: img("ex1v"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j1", slots: { lead: [img("ex1-lead")], friend: [shown("trends/friend.png")], place: [img("ex1-place")] } },
+      ],
+    })
+    const { body, display } = composeTrendRun(trend(data), req({ slots: { lead: { images: [shown("community/listing-1/portrait.png"), img("me")] } } }))
+    expect(body.roles.map((r) => (r as { images: string[] }).images)).toEqual([
+      [file("community/listing-1/portrait.png"), img("me")],
+      [file("trends/friend.png")],
+      [img("ex1-place")],
+    ])
+    expect(body.references).toEqual([{ images: [file("trends/cloud.png")], line: "the clouds in the opening dive" }])
+    expect(display.slots[0]!.images).toEqual([file("community/listing-1/portrait.png"), img("me")])
+    expect(JSON.stringify(body)).not.toContain("/cdn-cgi/")
+  })
+
   it("takes the user's chips over the slot defaults", () => {
     const { body, display } = composeTrendRun(trend(), req({ slots: { lead: { images: [img("me")], body: "new", outfit: "original" } } }))
     expect(body.roles[0]).toMatchObject({ body: "new", outfit: "original", hair: "original" })

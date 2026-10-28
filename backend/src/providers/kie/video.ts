@@ -59,6 +59,8 @@ import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
+import { originalCdnImageUrl } from "../../lib/cdn-original-url.js"
+import { labelInputFailure, urlForLog, type InputStep } from "./input-label.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -736,6 +738,12 @@ interface ImageConstraints {
    * de-align.
    */
   preserveGeometry?: boolean
+  /**
+   * Which input this is, for the log line and `error_detail` when its
+   * preparation fails ("reference image #2", "start frame"). Default:
+   * "image".
+   */
+  inputLabel?: string
 }
 
 /**
@@ -757,9 +765,35 @@ interface ImageConstraints {
  * there stays exactly ONE place that decides what a provider will accept.
  */
 export async function ensureImageForProvider(
-  imageUrl: string,
+  inputUrl: string,
   provider: string,
   constraints?: ImageConstraints,
+): Promise<string> {
+  // A CDN display rendition (`/cdn-cgi/image/…`, often AVIF and downscaled)
+  // is never the input: its original file is (lib/cdn-original-url.ts).
+  const imageUrl = originalCdnImageUrl(inputUrl)
+  const label = constraints?.inputLabel ?? "image"
+  if (imageUrl !== inputUrl) {
+    console.log(`[KIE.ai] input ${label}: a CDN display rendition, using its original ${urlForLog(imageUrl)}`)
+  }
+  // Each failure names the input and the step it failed at; the error itself
+  // is rethrown unchanged (input-label.ts).
+  let step: InputStep = "download"
+  try {
+    return await prepareImageForProvider(imageUrl, provider, constraints, (next) => {
+      step = next
+    })
+  } catch (err) {
+    labelInputFailure(err, label, imageUrl, step)
+    throw err
+  }
+}
+
+async function prepareImageForProvider(
+  imageUrl: string,
+  provider: string,
+  constraints: ImageConstraints | undefined,
+  at: (step: InputStep) => void,
 ): Promise<string> {
   const acceptedFormats = constraints?.acceptedFormats
     ?? (JPEG_PNG_ONLY_PROVIDERS.has(provider) ? JPEG_PNG_ONLY : JPEG_PNG_WEBP)
@@ -784,7 +818,10 @@ export async function ensureImageForProvider(
       context
     )
   }
+  // The body read is part of the download: undici's "terminated" and the
+  // 30 s timeout's abort usually land here, after the headers.
   const buffer = Buffer.from(await res.arrayBuffer())
+  at("decode")
   // sharp THROWS on a buffer it cannot parse ("Input buffer contains
   // unsupported image format") rather than returning empty metadata, so
   // without this catch the raw library string escaped to the user and the
@@ -803,6 +840,7 @@ export async function ensureImageForProvider(
     throw unreadableImageError(context)
   }
 
+  at("check")
   // Enforce minimum dimension
   if (constraints?.minDimension && (width < constraints.minDimension || height < constraints.minDimension)) {
     throw createSanitizedError(
@@ -864,6 +902,7 @@ export async function ensureImageForProvider(
   // the file itself when sharp manages, else ffmpeg's decode of it. An encode
   // that still fails is the unreadable-file error, never the raw libheif text
   // ("bad seek to …" was a production Kling 4 job's whole error, 2026-10-25).
+  at("decode")
   let source: Buffer = buffer
   if (format === "heif") {
     try {
@@ -875,6 +914,7 @@ export async function ensureImageForProvider(
       throw unreadableImageError(context)
     }
   }
+  at("encode")
   const encode = async (image: sharp.Sharp): Promise<Buffer> => {
     try {
       return await image.toBuffer()
@@ -912,6 +952,7 @@ export async function ensureImageForProvider(
       ? await encode(pipeline().webp({ lossless: true }))
       : await encode(pipeline().png({ compressionLevel: 9 }))
     if (lossless.length <= IMAGE_MAX_BYTES) {
+      at("upload")
       const losslessUrl = await uploadJobScratchBuffer(lossless, "provider-converted", losslessFormat, `image/${losslessFormat}`)
       console.log(
         `[KIE.ai] Image converted losslessly to ${losslessFormat}: ${(lossless.length / 1024 / 1024).toFixed(1)}MB → ${losslessUrl.substring(0, 80)}...`
@@ -954,6 +995,7 @@ export async function ensureImageForProvider(
   // A converted INPUT is disposable once the provider has fetched it: the
   // running job's scratch folder (`lib/job-scratch.ts`), emptied when the job
   // ends, never beside user media.
+  at("upload")
   const newUrl = await uploadJobScratchBuffer(converted, "provider-converted", "jpg", "image/jpeg")
   console.log(
     `[KIE.ai] Image converted: ${(converted.length / 1024 / 1024).toFixed(1)}MB → ${newUrl.substring(0, 80)}...`
@@ -1042,7 +1084,7 @@ async function normalizeSeedance2ReferenceImages(
   const modelConfig = KIE_VIDEO_MODELS[provider] ?? KIE_TEXT_TO_VIDEO_MODELS[provider]
   if (modelConfig?.model.startsWith("hailuo/")) constraints.forceJpeg = true
   const processed = await Promise.all(
-    refs.map((u) => ensureImageForProvider(u, provider, constraints)),
+    refs.map((u, i) => ensureImageForProvider(u, provider, { ...constraints, inputLabel: `reference image #${i + 1}` })),
   )
   return { ...options, referenceImageUrls: processed }
 }
@@ -1676,22 +1718,25 @@ async function runKling4(
     minAspectRatio: 0.4,
     maxAspectRatio: 2.5,
   }
-  const norm = (u: string): Promise<string> => ensureImageForProvider(u, modelKey, constraints)
-  const normList = (v: unknown): Promise<string[]> | undefined =>
-    Array.isArray(v) ? Promise.all((v as string[]).map(norm)) : undefined
-  const one = (v: unknown): Promise<string> | undefined => (typeof v === "string" ? norm(v) : undefined)
+  // Each input is prepared under its own name (kind and 1-based number), so a
+  // failure says which one it was (input-label.ts).
+  const norm = (u: string, inputLabel: string): Promise<string> =>
+    ensureImageForProvider(u, modelKey, { ...constraints, inputLabel: `${logLabel} ${inputLabel}` })
+  const normList = (v: unknown, kind: string): Promise<string[]> | undefined =>
+    Array.isArray(v) ? Promise.all((v as string[]).map((u, i) => norm(u, `${kind} #${i + 1}`))) : undefined
+  const one = (v: unknown, kind: string): Promise<string> | undefined => (typeof v === "string" ? norm(v, kind) : undefined)
   // Reference videos too: Kling fails an over-size clip (not its shape) with a
   // bare "Generation failed" after accepting the task (reference-video-size.ts).
   const videoList = (v: unknown): Promise<string[]> | undefined =>
     Array.isArray(v)
-      ? Promise.all((v as string[]).map((u) =>
-        ensureVideoFitsSize(u, KLING_4_REF_VIDEO_LIMIT, "Video generation", logLabel)))
+      ? Promise.all((v as string[]).map((u, i) =>
+        ensureVideoFitsSize(u, KLING_4_REF_VIDEO_LIMIT, "Video generation", logLabel, `reference video #${i + 1}`)))
       : undefined
   const [imageUrls, keyframeUrls, firstFrame, lastFrame, videoUrls] = await Promise.all([
-    normList(input.image_urls),
-    normList(input.keyframe_urls),
-    one(input.first_frame_url),
-    one(input.last_frame_url),
+    normList(input.image_urls, "reference image"),
+    normList(input.keyframe_urls, "keyframe"),
+    one(input.first_frame_url, "first frame"),
+    one(input.last_frame_url, "last frame"),
     videoList(input.video_urls),
   ])
   if (videoUrls) input.video_urls = videoUrls
@@ -1701,9 +1746,9 @@ async function runKling4(
   if (lastFrame) input.last_frame_url = lastFrame
   if (Array.isArray(input.elements)) {
     input.elements = await Promise.all(
-      (input.elements as Array<{ image_urls: string[] } & Record<string, unknown>>).map(async (el) => ({
+      (input.elements as Array<{ image_urls: string[] } & Record<string, unknown>>).map(async (el, e) => ({
         ...el,
-        image_urls: await Promise.all(el.image_urls.map(norm)),
+        image_urls: await Promise.all(el.image_urls.map((u, i) => norm(u, `element ${e + 1} image #${i + 1}`))),
       })),
     )
   }
@@ -1849,8 +1894,8 @@ export class KieVideoProvider
     if (modelConfig.model.startsWith("hailuo/")) i2vConstraints.forceJpeg = true
     if (!usesRawImageUrls) {
       const [normImage, normEnd] = await Promise.all([
-        imageUrl ? ensureImageForProvider(imageUrl, provider, i2vConstraints) : imageUrl,
-        endFrameUrl ? ensureImageForProvider(endFrameUrl, provider, i2vConstraints) : endFrameUrl,
+        imageUrl ? ensureImageForProvider(imageUrl, provider, { ...i2vConstraints, inputLabel: "start frame" }) : imageUrl,
+        endFrameUrl ? ensureImageForProvider(endFrameUrl, provider, { ...i2vConstraints, inputLabel: "end frame" }) : endFrameUrl,
       ])
       effectiveImageUrl = normImage
       effectiveEndFrameUrl = normEnd
@@ -2143,7 +2188,7 @@ export class KieVideoProvider
       const refs = usesRawImageUrls
         ? options.referenceImageUrls
         : await Promise.all(
-            options.referenceImageUrls.map((u) => ensureImageForProvider(u, provider, i2vConstraints)),
+            options.referenceImageUrls.map((u, i) => ensureImageForProvider(u, provider, { ...i2vConstraints, inputLabel: `reference image #${i + 1}` })),
           )
       // Platform frame-slot convention (a maxRefImages model carries frame and
       // references in ONE list): the caller's refs first (their image token N
@@ -2864,7 +2909,7 @@ export class KieVideoProvider
       motionConstraints.minAspectRatio = 2 / 5
       motionConstraints.maxAspectRatio = 5 / 2
     }
-    const effectiveImageUrl = await ensureImageForProvider(imageUrl, provider, motionConstraints)
+    const effectiveImageUrl = await ensureImageForProvider(imageUrl, provider, { ...motionConstraints, inputLabel: "character image" })
 
     console.log(
       `[KIE.ai] ========== MOTION TRANSFER REQUEST ==========`
