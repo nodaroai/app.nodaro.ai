@@ -117,6 +117,8 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
     `${NOT_A_JOB} (a trend's preview input clip, \`trends/<trendId>/<uuid>.mp4\`, cut from its source once at save: the trend owns it, never a job)`,
   'ee/lib/trends/preview-clip-media.ts :: trendMediaKey(trendId, "mp4")':
     `${NOT_A_JOB} (the preview input clip's cut of the trend's stored face mask, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
+  "lib/audio-soundtrack.ts :: args.key":
+    `${CACHE} (a Kling 4.0 soundtrack clip, \`uploads/video/<userId>/soundtrack-<digest>.mp4\`, keyed by the audio, frame and length it is made of: a quote and its run, or a run done again, read one copy)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
   "lib/media-import.ts :: r2Key": UPLOAD,
   "lib/media-import.ts :: thumbKey": UPLOAD,

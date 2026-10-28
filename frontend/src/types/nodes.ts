@@ -2124,6 +2124,8 @@ export type ImageToVideoData = PromptAffixFields & {
   connectedRefImageOrder?: readonly string[]
   /** See GenerateImageData.referenceOrder. Additive over connectedRefImageOrder. */
   referenceOrder?: readonly string[]
+  /** Kling 4.0: play the first audio reference clip as the soundtrack — see GenerateVideoNodeData.audioSoundtrack. */
+  audioSoundtrack?: boolean
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
@@ -2250,6 +2252,8 @@ export type TextToVideoData = PromptAffixFields & {
   connectedRefImageOrder?: readonly string[]
   /** See GenerateImageData.referenceOrder. Additive over connectedRefImageOrder. */
   referenceOrder?: readonly string[]
+  /** Kling 4.0: play the first audio reference clip as the soundtrack — see GenerateVideoNodeData.audioSoundtrack. */
+  audioSoundtrack?: boolean
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
@@ -2285,6 +2289,10 @@ export type GenerateVideoNodeData =
      *  new sound (KIE `keep_original_sound`). Ignored without a reference video
      *  and by every other model. */
     keepOriginalSound?: boolean
+    /** Kling 4.0: play the first Audio Refs clip as the result's soundtrack
+     *  (sent as a reference video with its sound kept); further clips stay
+     *  voice samples. Unset = on; `false` makes every clip a voice sample. */
+    audioSoundtrack?: boolean
     /** Loosened from required (text-to-video) to optional, matching i2v. */
     prompt?: string
     /** Loosened from required (text-to-video) to optional, matching i2v. */
@@ -8548,7 +8556,7 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Mirrors GENERATE_VIDEO_INPUT_HANDLES (the handle set the node renders) so
     // every input is offered as a connection candidate; kept in lockstep by the
     // drift test in enumerate-connection-options.test.ts.
-    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
     // duration is the literal DEFAULT_VIDEO_DURATION_SEC (the API's default):
     // gen-skills parses this file textually and cannot resolve a constant. At 5 s

@@ -171,7 +171,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     description: { en: "", ...draft.description },
     source: draft.source ? { ...draft.source } : null,
     previewStart: draft.previewStart,
-    slots: draft.slots.map((s) => ({ ...s, uid: newUid(), isNew: false })),
+    slots: draft.slots.map((s) => ({ ...s, ...(s.defaultImages ? { defaultImages: [...s.defaultImages] } : {}), uid: newUid(), isNew: false })),
     references: draft.references.map((r) => ({ ...r, images: [...r.images], uid: newUid() })),
     trendPrompt: draft.trendPrompt ?? "",
     prePrompt: draft.prePrompt ?? "",
@@ -285,6 +285,8 @@ function cleanSlot(s: FormSlot): AdminTrendSlot {
   if (previewRole) out.previewRoleName = previewRole
   if (hasAnyText(s.hint)) out.hint = cleanText(s.hint!)
   if (s.hintImageUrl) out.hintImageUrl = s.hintImageUrl
+  // Saved as they are (a required slot with some is refused by the server, and named by `formIssues`), never empty.
+  if (s.defaultImages && s.defaultImages.length > 0) out.defaultImages = [...s.defaultImages]
   const defaults: Partial<Record<TrendChipKey, TrendChoice>> = {}
   for (const chip of CHIPS_BY_KIND[s.kind]) {
     const v = s.defaults?.[chip]
@@ -413,6 +415,9 @@ export function formIssues(form: TrendForm): string[] {
     else if (role.length > 200) out.push(`${n}: the role name is at most 200 characters.`)
     if ((s.previewRoleName?.trim().length ?? 0) > 200) out.push(`${n}: the role name in the 4 s preview is at most 200 characters.`)
     if (hasAnyText(s.hint) && !s.hint!.en.trim()) out.push(`${n}: the hint needs English when any language has text.`)
+    const defaults = s.defaultImages?.length ?? 0
+    if (defaults > 0 && s.required) out.push(`${n}: a required slot cannot have a default image. Remove its default images, or make it optional.`)
+    if (defaults > MAX_IMAGES_PER_SLOT) out.push(`${n}: at most ${MAX_IMAGES_PER_SLOT} default images.`)
   })
   for (const kind of SLOT_KINDS) {
     const count = form.slots.filter((s) => s.kind === kind).length

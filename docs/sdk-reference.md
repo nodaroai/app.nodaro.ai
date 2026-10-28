@@ -2297,6 +2297,8 @@ interface TrendCard {
   id: string; slug: string; name: string; description?: string
   tags: string[]; badges: string[]
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example, else the original's display copy
+  original?: { videoUrl: string; posterUrl?: string; width: number; height: number } // the original's display copy (as TrendDetail.original); absent without one
+  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }> // every example's video, in order; [] = none, absent from an older server (slot pictures are on the page)
   needs: Record<TrendSlotKind, number>   // slots of each kind
   durationSec: number
   isFavorite: boolean
@@ -2329,7 +2331,7 @@ interface TrendDetailSlot {
 
 interface TrendRunRequest {
   slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + the slot's `chips`
-  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1; leave it out on a trend with no examples
+  example?: number      // 1-based; its pictures fill the optional slots you leave out (not in Full depth trends). Default 1; leave it out on a trend with no examples
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
@@ -2354,7 +2356,7 @@ interface TrendRun {
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
   example: number                    // 1-based; 0 = the trend had no example (none was used)
-  slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
+  slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean; fromDefault?: true } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean
   engine?: "motion-prism" | "motion-pulse" // the engine it was made on; absent = motion-prism
@@ -2395,7 +2397,9 @@ else your profile's language, else English).
 A required slot left empty is refused with `400 missing_slot`; an optional one
 left out takes the chosen example's pictures (`fromExample: true` on the run),
 or is refused with `missing_slot` when that example has none for it
-(`example_out_of_range` when the trend has no such example). On a trend with
+(`example_out_of_range` when the trend has no such example), except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look
+(`fromDefault: true` on the run when the default was used; such a run records
+`example: 0`). On a trend with
 no example, leave `example` out: an optional slot left out then stays as in
 the original (no pictures, `fromExample: false`) and the run records
 `example: 0`.
@@ -2854,7 +2858,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `characterReferences` (≤ 7, as named subjects) and `referenceAudioUrls`
 > (≤ 3, as named voices) — at most 15 materials in all, else a `400` before
 > anything is reserved. A sent `imageUrl` / `endFrameUrl` joins the reference
-> images. `keepOriginalSound: true` keeps a reference video's own sound. A
+> images. `keepOriginalSound: true` keeps a reference video's own sound. The
+> first audio clip plays as the soundtrack by default (sent as one more
+> reference video, so billed as a reference-video run; `audioSoundtrack: false`
+> keeps every clip a voice sample). A
 > reference-video run bills output + max(output, total clip seconds) at the
 > `-ref` rate. **Kling 4.0 Keyframes** (`kling-4-keyframes`) takes
 > `imageUrl`, up to 8 in-between frames as `referenceImageUrls` (in order) and

@@ -29,7 +29,7 @@ import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, applyAudioSoundtrackPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
 
@@ -73,6 +73,9 @@ export const textToVideoBody = z.object({
   // Kling 4.0: keep the reference videos' own sound (KIE `keep_original_sound`).
   // Ignored without a reference video and by every other model.
   keepOriginalSound: z.boolean().optional(),
+  // Kling 4.0: play the first reference audio clip as the result's soundtrack
+  // (lib/audio-soundtrack.ts). Unset = on; `false` keeps every clip a voice sample.
+  audioSoundtrack: z.boolean().optional(),
   // Structured references (parity with generate-video). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired refs to referenceImageUrls, emitting per-ref directives, and
@@ -122,7 +125,7 @@ export const textToVideoBody = z.object({
 export const textToVideoPricing: RoutePricing = {
   // Reference audio the provider would refuse (format, length) is refused here,
   // before the reservation — the same check /v1/generate-video runs.
-  prechecks: [validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0

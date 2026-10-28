@@ -803,6 +803,13 @@ export {
   type TrendCropAspect,
 } from "./trend-source-crop"
 export { TREND_UPSCALE_SHORT_SIDE, trendUpscaleOfferFor, type TrendUpscaleOffer } from "./trend-upscale-offer"
+// Whether a Topaz upscale of a trend picture (a slot's default picture) can be stored: the builder's offer and the store's cap.
+export {
+  TREND_PICTURE_MAX_BYTES,
+  TREND_PICTURE_UPSCALE_MAX_PIXELS,
+  TREND_PICTURE_WORST_BYTES_PER_PIXEL,
+  trendPictureUpscaleFits,
+} from "./trend-picture-upscale"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

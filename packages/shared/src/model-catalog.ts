@@ -286,6 +286,22 @@ export interface ModelCatalogEntry {
    * reaches the model as a NAMED SUBJECT built from several of its images
    * (`characterReferencesFromWired` → `characterReferences`), not only as a
    * reference image (Kling 4.0: KIE `elements`, `@Name` in the prompt).
+   *
+   * `"voice-references"` (video models only) means the model takes each
+   * reference AUDIO clip as a VOICE sample — who speaks and how they sound —
+   * and makes its own soundtrack, rather than conditioning on the audio itself
+   * (Kling 4.0: KIE `voices`, `@VoiceN` in the prompt). The editor names that
+   * input "Voice Refs" for such a model.
+   *
+   * `"audio-soundtrack"` (video models only) means the platform can play the
+   * model's FIRST reference audio clip as the result's soundtrack: it sends
+   * that clip as a reference video (a still frame carrying the audio) with the
+   * video's own sound kept, so the scene is performed to the exact track (see
+   * `audio-soundtrack.ts`). On unless a run sets `audioSoundtrack: false`.
+   *
+   * `"audio-to-video"` (video models only) means ONE reference audio clip
+   * drives the generation — the picture is made to that audio (LTX 2.3 Pro's
+   * `audio_to_video` task). The node's Audio Refs input then takes one clip.
    */
   features?: readonly string[]
   /**
@@ -1813,7 +1829,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // `video-reference` is NOT declared: like wan-3, the generate-video-pro
     // extend chain (a continuation tail sent as a reference video) is unwired
     // for it, so the pro node offers it in keyframes mode only.
-    features: ["audio", "reference-image", "reference-to-video", "character-subjects"],
+    features: ["audio", "reference-image", "reference-to-video", "character-subjects", "voice-references", "audio-soundtrack"],
     aspectRatios: VIDEO_RATIOS_KLING_4,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 5,
@@ -2275,7 +2291,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "LTX",
     description: "Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation.",
     useCases: ["premium", "high-res", "narrative"],
-    features: ["end-frame"],
+    features: ["end-frame", "audio-to-video"],
     aspectRatios: ["16:9", "9:16"] as const,
     resolutions: ["1080p", "2k", "4k"] as const,
     durations: [6, 8, 10],

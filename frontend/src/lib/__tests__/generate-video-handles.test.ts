@@ -61,8 +61,9 @@ describe("generate-video-handles", () => {
     expect(isValidGenerateVideoConnection("unknown", "text-prompt", isPicker)).toBe(false)
   })
 
-  it("GENERATE_VIDEO_INPUT_HANDLES has 12 entries", () => {
-    expect(GENERATE_VIDEO_INPUT_HANDLES).toHaveLength(12)
+  it("GENERATE_VIDEO_INPUT_HANDLES has 11 entries — no `audio` (a Merge Video & Audio node lays a soundtrack)", () => {
+    expect(GENERATE_VIDEO_INPUT_HANDLES).toHaveLength(11)
+    expect(GENERATE_VIDEO_INPUT_HANDLES).not.toContain("audio")
   })
 
   it("negative rejects visual pickers (unlike prompt)", () => {

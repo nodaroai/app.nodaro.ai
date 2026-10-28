@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.47.0
+
+### Minor Changes
+
+- f4e983e: Model catalog: two new video feature flags. `voice-references` marks a model that takes each reference audio clip as a voice sample and makes its own sound (Kling 4.0). `audio-soundtrack` marks a model whose first reference audio clip the platform plays as the result's soundtrack, sent as a sound-carrying reference video (Kling 4.0, on by default). New helpers: `audioSoundtrackActive`, `audioSoundtrackClipSec`, `audioSoundtrackPrompt`, `AUDIO_SOUNDTRACK_MIN_SEC`.
+- ae4a043: Model catalog: a new video feature flag, `audio-to-video`, marks a model that one reference audio clip drives (LTX 2.3 Pro).
+
 ## 3.46.0
 
 ### Minor Changes

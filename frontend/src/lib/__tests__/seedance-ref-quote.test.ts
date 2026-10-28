@@ -59,6 +59,36 @@ describe("seedanceRefQuoteRequest — Generate Video", () => {
   })
 })
 
+describe("seedanceRefQuoteRequest — Kling 4.0 audio soundtrack", () => {
+  const SONG = "https://cdn.example/song.mp3"
+  const song = node("song", "upload-audio", { url: SONG })
+  const gv = (data: Record<string, unknown> = {}) => node("gv", "generate-video", { provider: "kling-4", duration: 5, ...data })
+  const audioWire = (source: string) => ({ ...edge(source, "gv", "audioReferences"), sourceHandle: "audio" }) as WorkflowEdge
+
+  it("quotes the first audio clip as the soundtrack (a reference video) by default", () => {
+    const g = gv()
+    expect(seedanceRefQuoteRequest(g, [song, g], [audioWire("song")])).toEqual({
+      provider: "kling-4", duration: 5, referenceVideoUrls: [], soundtrackAudioUrl: SONG,
+    })
+  })
+
+  it("quotes a soundtrack not produced yet as unknown", () => {
+    const g = gv()
+    const pending = node("pending", "upload-audio", {})
+    expect(seedanceRefQuoteRequest(g, [pending, g], [audioWire("pending")])?.unknownSoundtrack).toBe(true)
+  })
+
+  it("is undefined with the soundtrack off and no reference video — voice samples move no price", () => {
+    const g = gv({ audioSoundtrack: false })
+    expect(seedanceRefQuoteRequest(g, [song, g], [audioWire("song")])).toBeUndefined()
+  })
+
+  it("keys the soundtrack, so a changed track re-quotes", () => {
+    const base = { provider: "kling-4", referenceVideoUrls: [] as string[] }
+    expect(seedanceRefQuoteKey({ ...base, soundtrackAudioUrl: SONG })).not.toBe(seedanceRefQuoteKey({ ...base, soundtrackAudioUrl: "https://cdn.example/other.mp3" }))
+  })
+})
+
 describe("seedanceRefQuoteRequest — Video to Video's Seedance edit lane", () => {
   it("prices the source clip at Auto with the node's one resolution field and its draft toggle", () => {
     const v = node("v2v", "video-to-video", { provider: "seedance-2-5", v2vResolution: "1080p", draft: true })

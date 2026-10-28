@@ -2945,7 +2945,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // control rendered below. The unified provider type is widened separately
   // via `currentProvider`. This mirrors the t2v config which casts
   // GenerateVideoNodeData → ImageToVideoData when dispatching to Kling3Studio.
-  type DataView = ImageToVideoData & { referenceImageOrder?: readonly string[]; keepOriginalSound?: boolean }
+  type DataView = ImageToVideoData & { referenceImageOrder?: readonly string[]; keepOriginalSound?: boolean; audioSoundtrack?: boolean }
   const data = rawData as unknown as DataView
   const onUpdate = rawOnUpdate as unknown as (u: Partial<DataView>) => void
 
@@ -2992,6 +2992,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // Kling 4.0 Keyframes: Image References are in-between FRAMES (catalog
   // feature `keyframes`), capped by the clip's length.
   const isKeyframesModel = isKling4 && hasFeature(currentProvider, "keyframes")
+  // Kling 4.0 plays its first audio clip as the soundtrack unless turned off
+  // (catalog feature `audio-soundtrack`, @nodaro/shared audio-soundtrack.ts).
+  const soundtrackModel = hasFeature(currentProvider, "audio-soundtrack")
+  const soundtrackOn = soundtrackModel && data.audioSoundtrack !== false
   const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[currentProvider]
 
   // Fail-safe: snap stale resolution / duration / fps / aspect / frame / draft
@@ -3274,7 +3278,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* Reference audio — same capability gate as the video tray above. */}
       {(refCaps?.audio ?? 0) > 0 && connectedRefAudio.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{refCaps?.audio})</Label>
+          <Label className="text-xs">{t(hasFeature(currentProvider, "voice-references") && !soundtrackOn ? "vidcfg.referenceVoices" : "vidcfg.referenceAudio")} ({connectedRefAudio.length}/{refCaps?.audio})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefAudio.map((s) => (
               <div key={s.id} className="text-[11px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -3287,6 +3291,21 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           )}
           {isViduQ4 && (
             <p className="text-[11px] leading-snug text-muted-foreground px-1">{t("vidcfg.viduQ4AudioRefLimits")}</p>
+          )}
+          {soundtrackModel && (
+            <>
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  type="checkbox"
+                  id="gv-audioSoundtrack"
+                  checked={soundtrackOn}
+                  onChange={(e) => onUpdate({ audioSoundtrack: e.target.checked })}
+                  className="rounded border-muted-foreground/40"
+                />
+                <label htmlFor="gv-audioSoundtrack" className="text-xs">{t("vidcfg.audioSoundtrack")}</label>
+              </div>
+              <p className="text-[11px] leading-snug text-muted-foreground px-1">{t(soundtrackOn ? "vidcfg.audioSoundtrackOnNote" : "vidcfg.audioSoundtrackOffNote")}</p>
+            </>
           )}
         </div>
       )}

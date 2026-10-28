@@ -3177,6 +3177,8 @@ export interface GenerateVideoOptions {
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0: keep the reference videos' own sound. */
   keepOriginalSound?: boolean
+  /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
+  audioSoundtrack?: boolean
   webSearch?: boolean            // Seedance 2 (required field)
   nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
@@ -3259,6 +3261,7 @@ export async function generateVideo(
       referenceAudioUrls: opts.referenceAudioUrls,
       characterReferences: opts.characterReferences?.length ? opts.characterReferences : undefined,
       keepOriginalSound: opts.keepOriginalSound,
+      audioSoundtrack: opts.audioSoundtrack,
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
@@ -3519,6 +3522,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0: keep the reference videos' own sound. */
   keepOriginalSound?: boolean
+  /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
+  audioSoundtrack?: boolean
   webSearch?: boolean
   nsfwChecker?: boolean
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
@@ -10832,6 +10837,10 @@ export interface SeedanceRefEstimateRequest {
   readonly draft?: boolean
   readonly referenceVideoUrls: readonly string[]
   readonly unknownReferenceVideos?: number
+  /** Kling 4.0: the audio clip the run plays as its soundtrack (one more reference video). */
+  readonly soundtrackAudioUrl?: string
+  /** A soundtrack clip whose audio is not produced yet. */
+  readonly unknownSoundtrack?: boolean
 }
 
 /**
@@ -11073,6 +11082,13 @@ export interface AdminTrendSlot {
   hint?: TrendLocalizedText
   /** A picture of who (or what) this slot replaces, in trend storage (`/media` kind `hint`). Shown with the slot; never sent with a run. */
   hintImageUrl?: string
+  /**
+   * An OPTIONAL slot's default pictures (1–3), in trend storage (`/media` kind
+   * `default`): what a Full depth run sends for the slot when the person leaves
+   * it empty (else none: kept as in the clip). Never on a required slot (the
+   * server refuses it); read only in Full depth.
+   */
+  defaultImages?: string[]
   /** Who this is in the source clip (hidden from users). */
   roleName: string
   /** Who this is in the 4 s preview (hidden; ≤ 200). Empty or absent = `roleName`; only a preview run reads it. */
@@ -11527,6 +11543,8 @@ export interface AdminTrendRunSlot {
   kind: TrendSlotKind
   images: string[]
   fromExample: boolean
+  /** Only on a Full depth run whose slot was left empty and filled with the slot's default pictures. */
+  fromDefault?: true
   body?: TrendChoice
   outfit?: TrendChoice
   hair?: TrendChoice
@@ -11734,7 +11752,7 @@ export async function saveAdminTrendDraft(
   ).data
 }
 
-export type AdminTrendMediaKind = "source" | "reference" | "hint"
+export type AdminTrendMediaKind = "source" | "reference" | "hint" | "default"
 
 /** What `/media` stored: a source clip also has its length, size and display copy. */
 export interface AdminTrendStoredMedia {
@@ -11747,7 +11765,7 @@ export interface AdminTrendStoredMedia {
   sha256?: string
 }
 
-/** Copy a URL (an upload, a library asset) into the trend's own storage: the source clip, a reference or a slot's hint picture. */
+/** Copy a URL (an upload, a library asset) into the trend's own storage: the source clip, a reference, a slot's hint or default picture. */
 export async function storeAdminTrendMedia(
   id: string,
   input: { url: string; kind: AdminTrendMediaKind },
@@ -12076,6 +12094,36 @@ export async function discardAdminTrendUpscale(id: string, jobId: string, revisi
  * the draft in the background (read the trend until the record is gone or
  * carries an error).
  */
+/**
+ * Upscale one of a trend's default pictures with Topaz (`topaz-image-upscale`,
+ * 2x or 4x) through the platform's own image upscale (`POST /v1/edit-image`):
+ * the admin's own job, billed as any upscale. Follow it with
+ * `fetchAdminTrendUpscaleJob`; its `output_data.imageUrl` is the result. Sent
+ * without the editor's workflow id (it belongs to no workflow).
+ */
+export async function startAdminTrendImageUpscale(imageUrl: string, factor: "2" | "4"): Promise<{ jobId: string }> {
+  return apiJson("/v1/edit-image", {
+    body: { imageUrl, provider: "topaz-image-upscale", upscaleFactor: factor },
+    label: "apiErr.startImageEditing",
+  })
+}
+
+/** One frame of the original, as "Take from the original" crops it: the time, and the box in pixels of the frame as shown. */
+export interface AdminTrendFrameCrop {
+  timeSec: number
+  box: { x: number; y: number; w: number; h: number }
+}
+
+/** Crop one frame of the SAVED draft's original into a picture in trend storage; the draft is not written. */
+export async function cropAdminTrendFrame(id: string, body: AdminTrendFrameCrop): Promise<{ url: string; width?: number; height?: number }> {
+  return (
+    await apiRequest<{ data: { url: string; width?: number; height?: number } }>(`${trendPath(id)}/frame-crop`, "apiErr.saveTrend", {
+      method: "POST",
+      body,
+    })
+  ).data
+}
+
 export async function startAdminTrendCrop(
   id: string,
   aspect: AdminTrendCropAspect,

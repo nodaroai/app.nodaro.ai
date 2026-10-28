@@ -88,7 +88,7 @@ describe("validateWorkflowEdges", () => {
   })
 
   it("a use-case node's plan pip is no audio source, though its episode is (the pip, not the node type)", () => {
-    const graph = [{ id: "te", type: "tighten-episode" }, { id: "gv", type: "generate-video" }]
+    const graph = [{ id: "te", type: "tighten-episode" }, { id: "gv", type: "generate-video-pro" }]
     const plan = validateWorkflowEdges(graph, [{ id: "e1", source: "te", sourceHandle: "json", target: "gv", targetHandle: "audio" }])
     expect(plan.ok).toBe(true)
     expect(plan.warnings.join(" ")).toContain("does not look like a audio source")

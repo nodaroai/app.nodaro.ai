@@ -366,3 +366,10 @@ export type {
   TopazVideoTargetInput,
   TopazVideoTarget,
 } from "../topaz-video.js"
+export {
+  AUDIO_SOUNDTRACK_MIN_SEC,
+  AUDIO_SOUNDTRACK_FPS,
+  audioSoundtrackActive,
+  audioSoundtrackClipSec,
+  audioSoundtrackPrompt,
+} from "../audio-soundtrack.js"

@@ -23,7 +23,6 @@ Mode is chosen automatically at execution time from the wiring shape — there i
 | `endFrame` | target | Image producers | no | Last frame, paired with `startFrame` |
 | `imageReferences` | target | Image producers (ordered, multi) | no | Reference images (Seedance 2 etc.) |
 | `videoReferences` | target | Video producers (ordered, multi) | no | Reference videos (Seedance 2) |
-| `audio` | target | Audio producers | no | Post-merge audio track |
 | `audioReferences` | target | Audio producers (ordered, multi) | no | Conditioning audio (Seedance 2) |
 | `assets` | target | Character / Face / Location / Object | no | Identity references |
 | `look` | target | Setting / Lens / Lighting / Mood / Style / Color Look / ... | no | Look-family pickers |
@@ -115,7 +114,7 @@ Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 
 - **With no references connected** (`startFrame` and/or `endFrame` only), the frames are used in exact **first/last-frame** mode (`first_frame_url` / `last_frame_url`).
 - **With any reference connected** (image / video / audio), the frames are passed as **prompt-directed reference images** — they join the reference set and are bound in the prompt as `@image_N` (e.g. `Use @image_3 as the opening (first) frame of the video.`) so the model can refer to them, rather than being pinned as exact endpoints.
 
-The node shows an indicator of the active mode, and warns when a wired input would be dropped. Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio): `audio` always applies as the final soundtrack, while `audioReferences` conditions generation (and triggers audio-driven lip-sync on Seedance 2).
+The node shows an indicator of the active mode, and warns when a wired input would be dropped. Its one audio input is `audioReferences`, audio the model uses while it generates (audio-driven lip-sync on Seedance 2, the soundtrack on Kling 4.0, the driving clip on LTX 2.3 Pro). To lay a soundtrack over a finished clip, wire the clip and the audio into a [Merge Video & Audio](../processing-audio/merge-video-audio.md) node. Generate Video used to have a separate `audio` input that did this; a workflow saved with a wire into it opens with a Merge Video & Audio node added after the clip, mixed the same way (the track at full volume, the clip's own sound kept at 30 % only when the node generated audio). On LTX 2.3 Pro such a wire moves to `audioReferences`; on LTX 2.3 Fast, which never read it, it is removed. Through the API, `audioUrl` on `POST /v1/generate-video` still lays the track over the result, but it is deprecated: send the clip to Merge Video & Audio instead.
 
 Reference arrays are forwarded to the backend for **every** provider in both dispatch modes; models that don't support them ignore them. (Earlier editor builds dropped reference images on the text-to-video path for all providers except Kling and Seedance 2.)
 
@@ -127,11 +126,12 @@ Kling 4.0 is two model ids over two provider endpoints. Both run **3–30 s** (a
 
 - **Frames join the reference images.** A wired start frame (or end frame) is appended after your own reference images and named in the prompt as the opening (closing) frame — the same fold as Wan 3.0 and Vidu Q4.
 - **Characters become named subjects.** A wired Character node reaches the model as a subject named after the character: its portrait plus up to 3 more of its images. A character with only one image stays a plain reference image. Through the API, send subjects in `characterReferences` (see [Character references](#character-references-gemini-omni)): an entry's `imageUrl`, optional `bodyImageUrl` and up to 3 optional `extraImageUrls` are the subject's 2–4 images, and its `name` is how the prompt calls it.
-- **Audio References become named voices** — `@Voice1`, `@Voice2`, `@Voice3`, in the order they are wired.
+- **The first Audio Refs clip plays as the soundtrack (on by default).** Kling 4.0 takes reference audio only as voice samples, so the platform sends the first clip as one more **reference video** — a still frame (the start frame, else the first reference image or character, else black) carrying the audio — with that video's sound kept. The result's sound is your exact track, and the people in the scene perform to it. The clip is as long as the audio, at least 2 s (padded with silence) and at most the video's duration (a longer track is cut). In the prompt, `@audio_1` names it. The run is a reference-video run: it takes one of the 5 reference-video places and is billed as one (see **Price** below). With the soundtrack, Kling also keeps the sound of any reference videos you wire. Turn off **Play the first clip as the soundtrack** in the settings (`audioSoundtrack: false` on the API, `audio_soundtrack: false` on the MCP `generate_video` tool) to send every clip as a voice sample instead.
+- **The other audio clips become named voices** — `@Voice1`, `@Voice2`, in the order they are wired (with the soundtrack off, all three: `@Voice1`–`@Voice3`). Kling takes each as a sample of a voice and generates its own sound, so a voice clip itself is not played; with the soundtrack off, the editor names the input **Voice Refs**.
 - **Reference videos** must each be 2–30 seconds; a clip outside that range is refused before the run starts, so no credits are spent. A clip whose long side is over **2048 px**, or that has more pixels than **1920×1080**, is scaled down to fit both, keeping its shape, before it is sent (the provider fails larger clips; a 4K 16:9 clip goes as 1920×1080); its length, and so the price, is unchanged. By default the output's sound is generated; `keepOriginalSound: true` on the API (`keep_original_sound` on the MCP `generate_video` tool) keeps a reference video's own sound instead. It is ignored when no reference video is sent.
 - **Naming materials in the prompt.** Write `@image_1`, `@image_2` … for reference images, `@video_1` … for reference videos, a character by `@Name`, and a voice clip as `@audio_1` … (the platform maps it to that voice). The editor's reference tokens write these for you. The provider refuses a prompt that names a material the request does not carry, so the platform removes the `@` from any such mention — the word stays in the prompt — and the run still starts.
 - **Over 15 materials** is refused with a `400` before any credits are reserved (`character_references_quota` when the request carries `characterReferences`, `validation_error` otherwise).
-- **Price.** Reference images, characters and voice clips add nothing. A reference **video** switches the run to a per-second reference rate on a longer billed duration — see [Credit pricing](#credit-pricing).
+- **Price.** Reference images, characters and voice clips add nothing. A reference **video** — a soundtrack clip included — switches the run to a per-second reference rate on a longer billed duration — see [Credit pricing](#credit-pricing). A soundtrack is never longer than the video, so with no other reference video a soundtrack run bills twice the video's seconds at the reference rate.
 
 **Kling 4.0 Keyframes (`kling-4-keyframes`).** A start frame, up to **8 in-between frames** and an end frame. The in-between frames are the node's **Image References** input, in the order shown in the settings panel (drag to reorder); over the API they are `referenceImageUrls`, in order. An end frame alone is allowed, and with no frame at all it is text-to-video. The aspect ratio applies only when no frame is attached; otherwise the output follows the start frame's shape. The total number of frames (start + in-between + end) is capped by the clip's duration:
 
@@ -179,11 +179,11 @@ LTX 2.3 exposes five task modes on Replicate; Generate Video picks one automatic
 
 | Wired inputs | LTX task | Variants |
 |---|---|---|
-| No `startFrame`, no `audio` | `text_to_video` | Pro + Fast |
+| No `startFrame`, no `audioReferences` | `text_to_video` | Pro + Fast |
 | `startFrame` (optionally `endFrame`) | `image_to_video` (with `last_frame_image` when `endFrame` set) | Pro + Fast |
-| `audio` connected (no `startFrame`) | `audio_to_video` | Pro only |
+| One `audioReferences` clip | `audio_to_video` (the clip drives the picture) | Pro only |
 
-LTX 2.3 Fast has its audio handle visually muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
+LTX 2.3 Pro's `audioReferences` input takes one clip; LTX 2.3 Fast has it muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
 
 ### Gemini Omni (Pro & Flash) — modes and capabilities
 

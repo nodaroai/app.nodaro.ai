@@ -2514,6 +2514,7 @@ so a value the model doesn't support is ignored, never a 400:
   `@` removed so the run still starts. A reference-video run is billed per
   second of **output + max(output, total reference-video seconds)** at the
   `-ref` rate (see the [Generate Video node](nodes/ai-video/generate-video.md)).
+  **Audio soundtrack (on by default):** the first `referenceAudioUrls` clip plays as the result's soundtrack. It is sent as one more reference video (a still frame carrying the audio, as long as the audio, at least 2 s and at most the output) with its sound kept, so the people perform to the exact track; any further clips stay named voices (`@audio_2` becomes `@Voice1`). It takes one of the 5 reference-video places and the run is billed as a reference-video run. `audioSoundtrack: false` keeps every clip a voice sample. With the soundtrack, Kling also keeps the sound of any reference videos you send.
 - **`kling-4-keyframes`** (Kling 4.0 Keyframes) takes an `imageUrl` (start
   frame), up to **8** in-between frames as `referenceImageUrls` (in order) and
   an `endFrameUrl` (an end frame alone is allowed; no frame at all is
@@ -4576,7 +4577,7 @@ an unknown slug is a `404` on every route.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
+| `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
 | `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. `engine` is the engine every run of the trend uses (`"motion-prism"` or `"motion-pulse"`, with its name in `engineName`: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Prism (480p is the draft), `["720p", "1080p"]` on Nodaro Motion Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
@@ -4594,7 +4595,10 @@ The estimate and run body is
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
-  example `example` (1-based, default 1). On a trend with no example, leave
+  example `example` (1-based, default 1), except in Full depth trends, where it
+  uses the trend's default image for that role if one is set, otherwise the
+  original's look (the slot records `fromDefault: true` when the default was
+  used, and the run `example: 0`). On a trend with no example, leave
   `example` out: an optional slot left out then stays as in the original, and
   the run records `example: 0`. The chips are the ones the slot's
   `chips` lists (of its kind's own: a person `body` / `outfit` / `hair`, a pet
@@ -4656,12 +4660,12 @@ anything is charged:
 | Status | `code` | When |
 |---|---|---|
 | `400` | `validation_error` | The body or a query does not validate, the `cursor` is not one this list gave, or (`/runs`) `origin` is not a slug. |
-| `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
+| `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it (never in a Full depth trend, which does not use examples to fill slots). |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
 | `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Pulse). |
 | `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Pulse trend). |
-| `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's for slots you left empty, and the trend's own): send fewer per slot. |
+| `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's — or, in a Full depth trend, the default image — for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend does not have (any `example` on a trend with none). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |

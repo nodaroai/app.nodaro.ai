@@ -5500,6 +5500,10 @@ export const en = {
   "vidcfg.fps824": "FPS (8-24)",
   "vidcfg.seedNeg1": "Seed (-1 for random)",
   "vidcfg.referenceAudio": "Reference Audio",
+  "vidcfg.referenceVoices": "Voice References",
+  "vidcfg.audioSoundtrack": "Play the first clip as the soundtrack",
+  "vidcfg.audioSoundtrackOnNote": "The first clip becomes the result's sound, and the people perform to it. Any other clips are voice samples. It counts as a reference video, so the run is priced at the reference-video rate.",
+  "vidcfg.audioSoundtrackOffNote": "Each clip is a voice sample: Kling makes its own sound, and the clips themselves are not played.",
   "vidcfg.referenceImages": "Reference Images",
   "vidcfg.referenceVideos": "Reference Videos",
   // Toggle / option values

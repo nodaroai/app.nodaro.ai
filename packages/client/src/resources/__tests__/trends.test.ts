@@ -48,6 +48,11 @@ const card: TrendCard = {
   tags: ["dance"],
   badges: ["trending"],
   cover: { videoUrl: "https://cdn.example.com/ex1.mp4", posterUrl: "https://cdn.example.com/ex1.jpg", width: 720, height: 1280 },
+  original: { videoUrl: "https://cdn.example.com/original.mp4", posterUrl: "https://cdn.example.com/original.png", width: 720, height: 1280 },
+  examples: [
+    { videoUrl: "https://cdn.example.com/ex1.mp4", posterUrl: "https://cdn.example.com/ex1.jpg", width: 720, height: 1280 },
+    { videoUrl: "https://cdn.example.com/ex2.mp4", width: 1280, height: 720 },
+  ],
   needs: { person: 2, location: 1, product: 0, pet: 0 },
   durationSec: 12,
   isFavorite: false,

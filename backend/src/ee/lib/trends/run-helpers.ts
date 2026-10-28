@@ -176,6 +176,8 @@ export function displaySlots(v: unknown): TrendRunDisplaySlot[] {
       kind,
       images: Array.isArray(s.images) ? s.images.filter((i): i is string => typeof i === "string") : [],
       fromExample: s.fromExample === true,
+      // Only on a Full depth run whose default pictures filled the slot (compose.ts): absent otherwise.
+      ...(s.fromDefault === true ? { fromDefault: true as const } : {}),
       ...chips,
     }]
   })

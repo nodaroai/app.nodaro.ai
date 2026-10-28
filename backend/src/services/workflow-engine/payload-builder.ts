@@ -167,6 +167,7 @@ import {
   type SunoStemName,
   isTopazVideoResolution,
   clampTopazVideoFps,
+  audioSoundtrackActive,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -642,6 +643,19 @@ export function assertRequiredMediaInputs(
  */
 function seedanceDraftField(provider: string | undefined, draft: unknown): { draft?: true } {
   return draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}
+}
+
+/**
+ * Whether a video node's run plays its first reference audio clip as the
+ * soundtrack (@nodaro/shared `audioSoundtrackActive`) — that clip is then a
+ * reference video, so the run reserves on the reference-video ladder.
+ */
+function playsAudioSoundtrack(provider: string | undefined, data: Record<string, unknown>, referenceAudioUrls: readonly unknown[] | undefined): boolean {
+  return audioSoundtrackActive({
+    provider,
+    audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
+    audioRefCount: referenceAudioUrls?.length ?? 0,
+  })
 }
 
 function codedMediaRefusal(code: `${"video" | "audio" | "image"}_required`, detail: string): Error {
@@ -3826,7 +3840,7 @@ export function buildPayload(
           "image-to-video",
           (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           i2vNorm.resolution,
-          hasVideoRef,
+          hasVideoRef || playsAudioSoundtrack(provider, data, resolvedInputs.referenceAudioUrls),
         ),
         payload: {
           jobId,
@@ -3866,6 +3880,7 @@ export function buildPayload(
           referenceImageUrls: i2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          audioSoundtrack: data.audioSoundtrack,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
           // VEO uses its REFERENCE_2_VIDEO endpoint when the user picked
@@ -3968,7 +3983,7 @@ export function buildPayload(
           "text-to-video",
           (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
           t2vNorm.resolution,
-          hasVideoRef,
+          hasVideoRef || playsAudioSoundtrack(provider, data, resolvedInputs.referenceAudioUrls),
         ),
         payload: {
           jobId,
@@ -3992,6 +4007,7 @@ export function buildPayload(
           referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          audioSoundtrack: data.audioSoundtrack,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
           enableTranslation: data.enableTranslation,
@@ -4032,7 +4048,10 @@ export function buildPayload(
       // the UI, but the orchestrator may still receive payloads from older
       // workflows or webhook triggers, so we degrade gracefully here).
       if (provider === "ltx-2.3-pro" || provider === "ltx-2.3-fast") {
-        const hasAudio = !!resolvedInputs.audioUrl && provider === "ltx-2.3-pro"
+        // The driving clip is the node's first Audio Refs clip; a graph saved
+        // before Generate Video dropped its "Audio" input still carries it there.
+        const ltxAudioUrl = resolvedInputs.referenceAudioUrls?.[0] ?? resolvedInputs.audioUrl
+        const hasAudio = !!ltxAudioUrl && provider === "ltx-2.3-pro"
         const hasStart = !!resolvedInputs.startFrameUrl
         const hasEnd = !!resolvedInputs.endFrameUrl
 
@@ -4114,7 +4133,7 @@ export function buildPayload(
               image: resolvedInputs.startFrameUrl,
               ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
             }),
-            ...(task === "audio_to_video" && { audio: resolvedInputs.audioUrl }),
+            ...(task === "audio_to_video" && { audio: ltxAudioUrl }),
             resolution: ltxNorm.resolution,
             duration: (ltxNorm.duration ?? gvSel.duration) as number | undefined,
             aspect_ratio: ltxNorm.aspectRatio,
@@ -4328,7 +4347,9 @@ export function buildPayload(
           effectiveMode,
           (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           gvNorm.resolution,
-          hasVideoRef,
+          // A soundtrack clip is a reference video by the time the run is
+          // dispatched (node-executor applies lib/audio-soundtrack.ts).
+          hasVideoRef || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
         ),
         payload: {
           jobId,
@@ -4365,6 +4386,7 @@ export function buildPayload(
           elements: data.elements,
           ...(gvCharacterReferences && gvCharacterReferences.length > 0 ? { characterReferences: gvCharacterReferences } : {}),
           keepOriginalSound: data.keepOriginalSound,
+          audioSoundtrack: data.audioSoundtrack,
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,

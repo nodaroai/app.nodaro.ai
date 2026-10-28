@@ -117,6 +117,19 @@ export interface TrendCard {
    * display copy, as {@link TrendDetail.original}.
    */
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /**
+   * The original's display copy, the same address as {@link TrendDetail.original}
+   * (without its length and preview start). Absent on a version without a
+   * display copy (and from an older server).
+   */
+  original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /**
+   * Every example's video, in the page's order, so a list can show each clip
+   * without reading the trend's page. Empty on a trend with only its original;
+   * absent from an older server. The pictures each slot used are on the page
+   * ({@link TrendDetail.examples}).
+   */
+  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
   /** How many slots of each kind the trend has. */
   needs: Record<TrendSlotKind, number>
   /** The length of a full run, in seconds. */
@@ -132,7 +145,8 @@ export interface TrendDetailSlot {
   kind: TrendSlotKind
   /**
    * A required slot needs pictures; an optional one left empty takes the
-   * chosen example's, or, on a trend with no example, stays as in the original.
+   * chosen example's, or, on a trend with no example, stays as in the original;
+   * except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
    */
   required: boolean
   hint?: string
@@ -218,12 +232,13 @@ export interface TrendRunRequest {
   /**
    * Slot key → what you put in it. Every required slot needs pictures; an
    * optional slot left out takes the chosen example's, or, on a trend with no
-   * example, stays as in the original. 1–3 pictures per slot.
+   * example, stays as in the original; except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
+   * 1–3 pictures per slot.
    */
   slots: Record<string, TrendRunSlot>
   /**
-   * 1-based example whose pictures fill the optional slots you leave empty.
-   * Default 1. Leave it out on a trend with no examples: sending one there
+   * 1-based example whose pictures fill the optional slots you leave empty
+   * (never in a Full depth trend, which records `example: 0`). Default 1. Leave it out on a trend with no examples: sending one there
    * answers 400 `example_out_of_range` (and `0` is a `validation_error`).
    */
   example?: number
@@ -313,6 +328,11 @@ export interface TrendRunDisplaySlot extends TrendChips {
    * stayed as in the original.
    */
   fromExample: boolean
+  /**
+   * `true` when the slot was left empty and the trend's own default pictures
+   * filled it (`fromExample` is then `false`). Absent otherwise.
+   */
+  fromDefault?: true
 }
 
 /**
@@ -340,8 +360,8 @@ export interface TrendRun {
   /** The trend and version it ran (name in English). */
   trend: { id: string; slug: string; version: number; name: string }
   /**
-   * The 1-based example used for empty optional slots; `0` = the trend had no
-   * example (none was used: never show it as "Example 0").
+   * The 1-based example used for empty optional slots; `0` = none was used (the
+   * trend had no example, or is a Full depth trend): never show it as "Example 0".
    */
   example: number
   slots: TrendRunDisplaySlot[]

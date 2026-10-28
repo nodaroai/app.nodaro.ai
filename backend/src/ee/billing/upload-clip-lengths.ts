@@ -22,9 +22,13 @@ export function __forgetUploadClipLengths(): void {
   clipLengths.clear()
 }
 
-/** The clip a source hands the run unchanged — an upload's file — else undefined. */
+/**
+ * The clip a source hands the run unchanged — an upload's file — else
+ * undefined. An uploaded AUDIO counts too: a Kling 4.0 soundtrack is priced by
+ * its audio's length (`seedance-ref-video-estimate.ts`).
+ */
 export function knownClipUrl(source: EstimateNode | undefined): string | undefined {
-  if (source?.type !== "upload-video") return undefined
+  if (source?.type !== "upload-video" && source?.type !== "upload-audio") return undefined
   const url = (source.data as { url?: unknown } | undefined)?.url
   return typeof url === "string" && url.trim() !== "" ? url.trim() : undefined
 }

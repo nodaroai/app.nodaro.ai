@@ -17,6 +17,7 @@ import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/r
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
+import { applyAudioSoundtrack } from "../lib/audio-soundtrack.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { voicedAddonBaseCredits } from "../lib/voiced-dialogue-lines.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -113,6 +114,9 @@ const generateVideoPublicFields = z.object({
   // sound (KIE `keep_original_sound`). Ignored without a reference video and by
   // every other model.
   keepOriginalSound: z.boolean().optional(),
+  // Kling 4.0: play the first reference audio clip as the result's soundtrack
+  // (lib/audio-soundtrack.ts). Unset = on; `false` keeps every clip a voice sample.
+  audioSoundtrack: z.boolean().optional(),
   // Structured references (parity with generate-image). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired-ref URLs to `referenceImageUrls`, emitting per-ref
@@ -631,6 +635,27 @@ openApiRegistry.registerPath({
   },
 })
 
+/**
+ * Plays the first reference audio clip as the soundtrack on a model that would
+ * otherwise take it only as a voice sample (lib/audio-soundtrack.ts). The FIRST
+ * pricing pre-check of both video routes, so every later check and the price
+ * read the request as the run sends it: one more reference video, one audio
+ * clip fewer. Refuses with a 400 before anything is reserved when the clip has
+ * no reference-video place left or cannot be read.
+ */
+export async function applyAudioSoundtrackPreHandler(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const body = req.body
+  if (!body || typeof body !== "object") return
+  const outcome = await applyAudioSoundtrack(body as Record<string, unknown>, req.userId)
+  if (!outcome.ok) {
+    return reply.status(400).send({ error: { code: "validation_error", message: outcome.message } })
+  }
+  if (outcome.applied) req.body = outcome.request
+}
+
 export async function validateSeedance2AudioPreHandler(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -743,7 +768,7 @@ export async function validateRefVideoDurationPreHandler(
  * is what the run reserves).
  */
 export const generateVideoPricing: RoutePricing = {
-  prechecks: [validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0

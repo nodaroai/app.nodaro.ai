@@ -36,6 +36,7 @@ import { Workflow } from "lucide-react"
 import type { ReactNode } from "react"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { cn } from "@/lib/utils"
+import { audioReferencesLabel } from "@/lib/audio-reference-handles"
 import { useT } from "@/lib/i18n"
 
 const SENSOR_OPTIONS = { activationConstraint: { distance: 4 } } as const
@@ -365,7 +366,13 @@ export function HandlePopover({
             videoUrl: candidateIsTileGridPicker ? undefined : getNodeVideoUrl(n),
             pickerVisual,
             configSummary: getNodeConfigSummary(n),
-            targetHandleLabel: labelByHandle.get(`${t}:${targetHandleId}`),
+            targetHandleLabel: targetHandleId === "audioReferences"
+              ? audioReferencesLabel(
+                  (n.data as { provider?: string } | undefined)?.provider,
+                  // Generate Video Pro keeps its clips as voice samples (no soundtrack lane).
+                  t === "generate-video-pro" ? false : (n.data as { audioSoundtrack?: boolean } | undefined)?.audioSoundtrack,
+                )
+              : labelByHandle.get(`${t}:${targetHandleId}`),
             source: nodeId,
             sourceHandle: handleId,
             target: n.id,

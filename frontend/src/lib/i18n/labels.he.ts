@@ -284,6 +284,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Analysis": "ניתוח",
   "Audio": "אודיו",
   "Audio Refs": "ייחוסי אודיו",
+  "Voice Refs": "ייחוסי קול",
   "Clips": "קליפים",
   "End Frame": "פריים סיום",
   "End state": "מצב סיום",

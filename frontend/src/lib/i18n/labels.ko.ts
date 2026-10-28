@@ -276,6 +276,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Analysis": "분석",
   "Audio": "오디오",
   "Audio Refs": "오디오 레퍼런스",
+  "Voice Refs": "음성 레퍼런스",
   "Clips": "클립",
   "End Frame": "종료 프레임",
   "End state": "종료 상태",

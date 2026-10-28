@@ -5471,6 +5471,10 @@ export const he: ChromeDict = {
   "vidcfg.fps824": "פריימים לשנייה (8-24)",
   "vidcfg.seedNeg1": "זרע (‎-1 לאקראי)",
   "vidcfg.referenceAudio": "אודיו ייחוס",
+  "vidcfg.referenceVoices": "ייחוסי קול",
+  "vidcfg.audioSoundtrack": "השמעת הקליפ הראשון כפסקול",
+  "vidcfg.audioSoundtrackOnNote": "הקליפ הראשון הופך לסאונד של התוצאה, והאנשים בסרטון מופיעים לצליליו. שאר הקליפים משמשים כדגימות קול. הקליפ נחשב סרטון ייחוס, ולכן ההרצה מתומחרת לפי תעריף סרטוני ייחוס.",
+  "vidcfg.audioSoundtrackOffNote": "כל קליפ הוא דגימת קול: Kling יוצר סאונד משלו, והקליפים עצמם לא מושמעים.",
   "vidcfg.referenceImages": "תמונות ייחוס",
   "vidcfg.referenceVideos": "סרטוני ייחוס",
   // Toggle / option values

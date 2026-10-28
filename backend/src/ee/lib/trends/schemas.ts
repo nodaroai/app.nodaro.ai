@@ -123,6 +123,8 @@ const slotBase = {
   required: z.boolean(),
   hint: localizedText(500).optional(),
   hintImageUrl: httpUrl.optional(),
+  // An optional slot's default pictures (read by Full depth runs only, compose.ts). Refused on a required slot below.
+  defaultImages: z.array(httpUrl).min(1).max(MAX_IMAGES_PER_SLOT).optional(),
   roleName: z.string().min(1).max(200),
   // The 4 s preview's own wording (prompt-parts.ts): same limit, and empty is
   // allowed (it falls back to `roleName`), so clearing one never fails a save.
@@ -353,6 +355,14 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     d.slots.forEach((s, i) => {
       if (seen.has(s.key)) ctx.addIssue({ code: "custom", path: ["slots", i, "key"], message: `Duplicate slot key "${s.key}".` })
       seen.add(s.key)
+      // A required slot always has the person's own pictures, so a default could never be used: refused, never dropped.
+      if (s.required && s.defaultImages !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["slots", i, "defaultImages"],
+          message: `Slot "${s.key}" is required, so it cannot have a default image. Remove its default images, or make it optional.`,
+        })
+      }
     })
 
     for (const kind of Object.keys(SLOT_CAPS) as TrendSlotKind[]) {

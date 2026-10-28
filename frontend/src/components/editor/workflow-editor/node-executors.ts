@@ -326,6 +326,8 @@ export function runVideoGeneration(
     characterReferences?: VideoCharacterReference[];
     /** Kling 4.0: keep the reference videos' own sound. */
     keepOriginalSound?: boolean;
+    /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
+    audioSoundtrack?: boolean;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,
@@ -361,6 +363,7 @@ export function runVideoGeneration(
         referenceAudioUrls: extras?.referenceAudioUrls,
         characterReferences: extras?.characterReferences,
         keepOriginalSound: extras?.keepOriginalSound,
+        audioSoundtrack: extras?.audioSoundtrack,
         webSearch: extras?.webSearch,
         nsfwChecker: extras?.nsfwChecker,
         generationType,
@@ -483,6 +486,8 @@ export function runTextToVideoGeneration(
     characterReferences?: VideoCharacterReference[];
     /** Kling 4.0: keep the reference videos' own sound. */
     keepOriginalSound?: boolean;
+    /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
+    audioSoundtrack?: boolean;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,

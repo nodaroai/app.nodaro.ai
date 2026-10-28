@@ -97,6 +97,13 @@ export interface TrendCard {
   badges: string[]
   /** Example 1, else (a trend with no example) the original's display copy. */
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /**
+   * The original's display copy (the same address as the page's `original`),
+   * absent on a version without one. Never the uploaded source clip.
+   */
+  original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /** Every example's video, in order (empty on a trend with none); the pictures each slot used are the page's. */
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
   needs: Record<TrendSlotKind, number>
   durationSec: number
   isFavorite: boolean
@@ -247,13 +254,16 @@ function needsOf(slots: TrendSlot[]): Record<TrendSlotKind, number> {
 /**
  * The card of a published trend. Its cover is Example 1, else the original's
  * display copy — never the uploaded source clip — so a version with neither
- * (or without a source, which no published version has) has no card.
+ * (or without a source, which no published version has) has no card. It also
+ * carries the display copy as `original` and every example's video (never its
+ * slots or source job), so a list can show each clip without reading the page.
  */
 function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorite: boolean): TrendCard | null {
   if (!data.source) return null
   const cover = data.examples[0] ?? data.source.display
   if (!cover) return null
   const description = pickText(data.description, locale)
+  const display = data.source.display
   return {
     id: row.id,
     slug: row.slug,
@@ -267,6 +277,22 @@ function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorit
       width: cover.width,
       height: cover.height,
     },
+    ...(display
+      ? {
+          original: {
+            videoUrl: display.videoUrl,
+            ...(display.posterUrl ? { posterUrl: display.posterUrl } : {}),
+            width: display.width,
+            height: display.height,
+          },
+        }
+      : {}),
+    examples: data.examples.map((ex) => ({
+      videoUrl: ex.videoUrl,
+      ...(ex.posterUrl ? { posterUrl: ex.posterUrl } : {}),
+      width: ex.width,
+      height: ex.height,
+    })),
     needs: needsOf(data.slots),
     durationSec: data.source.durationSec,
     isFavorite,
@@ -299,8 +325,10 @@ function originalOf(data: TrendVersionData): TrendOriginal | undefined {
 }
 
 function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale: string, isFavorite: boolean): TrendDetail | null {
-  const card = toCard(row, data, locale, isFavorite)
-  if (!card) return null
+  const shown = toCard(row, data, locale, isFavorite)
+  if (!shown) return null
+  // The page's `original` (with its length and preview start) replaces the card's; both are the display copy.
+  const { original: _cardOriginal, ...card } = shown
   const keys = new Set(data.slots.map((s) => s.key))
   const original = originalOf(data)
   return {

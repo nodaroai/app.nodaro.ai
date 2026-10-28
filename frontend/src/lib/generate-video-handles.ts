@@ -17,8 +17,9 @@ export const GENERATE_VIDEO_INPUT_HANDLES = [
   "prompt", "negative",
   // Image cluster
   "startFrame", "endFrame", "imageReferences", "videoReferences",
-  // Audio cluster
-  "audio", "audioReferences",
+  // Audio cluster. No "audio" (a soundtrack laid over the result): that is a
+  // Merge Video & Audio node — Generate Video Pro keeps it (generate-video-pro-handles.ts).
+  "audioReferences",
   // Pickers cluster
   "assets", "elements", "look",
   // Generation Settings (Aspect Ratio / Duration / Provider), one input for all

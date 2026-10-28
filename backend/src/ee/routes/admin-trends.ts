@@ -31,6 +31,7 @@
  *   DELETE /v1/admin/trends/:id/upscale/:jobId       discard an upscale in the making
  *   POST   /v1/admin/trends/:id/crop                 crop the source to 16:9 / 9:16 (admin-trends-crop.ts, in the background) → 202
  *   DELETE /v1/admin/trends/:id/crop                 dismiss a failed source crop
+ *   POST   /v1/admin/trends/:id/frame-crop           crop one frame of the original into a stored picture (admin-trends-frame-crop.ts) → { url }
  *   GET    /v1/admin/trends/:id/prompt-parts         the engine's prompt parts for the draft (admin-trends-prompt-parts.ts)
  *   PUT    /v1/admin/trends/:id/prompt-parts         save the draft's overrides, checked by the engine first
  *
@@ -119,6 +120,7 @@ import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
 import { registerTrendUpscaleRoutes } from "./admin-trends-upscale.js"
 import { registerTrendPromptRoutes } from "./admin-trends-prompt.js"
 import { registerTrendCropRoutes } from "./admin-trends-crop.js"
+import { registerTrendFrameCropRoutes } from "./admin-trends-frame-crop.js"
 import { registerTrendPromptPartRoutes } from "./admin-trends-prompt-parts.js"
 import { withServerOwnedFields } from "../lib/trends/server-owned.js"
 import { pendingSourceCrop } from "../lib/trends/crop.js"
@@ -190,8 +192,11 @@ const patchBody = z.strictObject({
   badges: z.array(z.enum(["trending", "new"])).max(2).optional(),
   sortOrder: z.int().min(-1_000_000).max(1_000_000).optional(),
 })
-/** `source`: the clip (and its display copy); `reference` / `hint`: a picture (a fixed reference, a slot's hint picture). */
-const mediaBody = z.strictObject({ url: z.url({ protocol: /^https?$/ }), kind: z.enum(["source", "reference", "hint"]) })
+/**
+ * `source`: the clip (and its display copy); `reference` / `hint` / `default`: a picture (a fixed
+ * reference, a slot's hint picture, a slot's default picture for Full depth).
+ */
+const mediaBody = z.strictObject({ url: z.url({ protocol: /^https?$/ }), kind: z.enum(["source", "reference", "hint", "default"]) })
 const exampleBody = z.strictObject({ jobId: z.string().regex(UUID_RE, "Not a job id.") })
 const orderBody = z.strictObject({ order: z.array(z.int().min(0)), revision: revisionSchema })
 const revisionQuery = z.object({ revision: revisionSchema })
@@ -886,5 +891,6 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendCropRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
+  registerTrendFrameCropRoutes(app, { loadDraft, badRequest })
   registerTrendPromptPartRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
 }

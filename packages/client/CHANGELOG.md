@@ -1,5 +1,24 @@
 # @nodaro/sdk
 
+## 2.54.0
+
+### Minor Changes
+
+- ad5e6c5: `client.characters.generate()` and `client.creatures.generate()` take an optional `subject` — who the picture shows as picker-catalog ids (a person's age, hair and styling, a held prop, a material, an animal), the same `Subject` type and bounds as `nodes.generateImage`'s. The platform writes the wording and folds it into the prompt it sends (after `seedPrompt` / `description`), so a client sends ids instead of phrasing a pick itself; without it the prompt is unchanged.
+- ea34461: Nodaro Keepers — a shared catalog of characters, creatures, locations and objects. `client.keepers.catalog({ kind?, cursor?, limit? })` reads the shelf (public: display fields only, cursor-paginated, in shelf order), `client.keepers.copy(kind, id)` puts a copy of an item into the caller's own account through the same rule as cloning a community listing (their own row with the public text, the main image and the variant assets, every file copied into their own storage; a custom voice reduced to its name and sample; editable in Studio; the same copy on every later call; no credits; 413 `storage_limit_exceeded` when the files do not fit), and the admin-only `client.characters.setCatalog(id, { catalog, sort?, category? })` — and the same on `creatures`, `locations` and `objects` — puts one of the admin's own items on the shelf or takes it off. Types: `KeeperKind`, `KeeperCatalogItem`, `KeeperCatalogPage`, `CopyKeeperResult`, `SetKeeperCatalogInput`, `SetKeeperCatalogResult`; subpath `@nodaro/sdk/keepers`.
+- f4e983e: `generateVideo` / `textToVideo`: new `audioSoundtrack` option for Kling 4.0. The first reference audio clip plays as the result's soundtrack by default (billed as a reference-video run); `false` keeps every clip a voice sample.
+- bf23be9: `trends.list()`: each `TrendCard` now carries the trend's `original` (its display copy, the same address as `TrendDetail.original`, without its length and preview start; absent on a version without one) and `examples` (every example's video in order, `{ videoUrl, posterUrl?, width, height }`, without the pictures its slots used; `[]` on a trend with only its original), so a catalog can show and play each clip without reading every trend's page. `cover` is unchanged.
+
+### Patch Changes
+
+- f2edcc5: `TrendRunDisplaySlot` gains an optional `fromDefault: true`: a slot left empty on a run that the trend's own default pictures filled (`fromExample` is then `false`). Absent on every other slot, so existing runs read exactly as before. Its JSDoc now says that a Full depth trend fills an empty optional slot with the trend's default image for that role if one is set, otherwise the original's look, never an example's pictures.
+- Updated dependencies [ad5e6c5]
+- Updated dependencies [f4e983e]
+- Updated dependencies [ae4a043]
+- Updated dependencies [54c3869]
+  - @nodaro/prompts@1.46.0
+  - @nodaro/shared@3.47.0
+
 ## 2.53.1
 
 ### Patch Changes

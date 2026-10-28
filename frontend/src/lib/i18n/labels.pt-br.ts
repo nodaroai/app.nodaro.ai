@@ -276,6 +276,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Analysis": "Análise",
   "Audio": "Áudio",
   "Audio Refs": "Refs. de áudio",
+  "Voice Refs": "Refs. de voz",
   "Clips": "Clipes",
   "End Frame": "Quadro final",
   "End state": "Estado final",

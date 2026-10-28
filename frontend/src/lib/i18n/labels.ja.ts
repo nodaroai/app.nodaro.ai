@@ -276,6 +276,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Analysis": "分析",
   "Audio": "オーディオ",
   "Audio Refs": "オーディオリファレンス",
+  "Voice Refs": "ボイスリファレンス",
   "Clips": "クリップ",
   "End Frame": "終了フレーム",
   "End state": "終了状態",

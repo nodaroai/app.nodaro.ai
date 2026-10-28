@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { billsReferenceVideoSeconds, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared/models"
+import { audioSoundtrackClipSec, billsReferenceVideoSeconds, pricedOutputDurationSec, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared/models"
+import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
@@ -24,6 +25,14 @@ const estimateBody = z.object({
   referenceVideoUrls: z.array(z.string().url().max(2048)).max(MAX_CLIPS),
   /** Wired reference clips whose URL is not known yet (their upstream has not produced them). */
   unknownReferenceVideos: z.number().int().min(0).max(MAX_CLIPS).optional(),
+  /**
+   * Kling 4.0 audio soundtrack (lib/audio-soundtrack.ts): the audio clip the run
+   * plays as its soundtrack. The run sends it as one more reference video, as
+   * long as the audio, kept within [2 s, the output] — priced the same way here.
+   */
+  soundtrackAudioUrl: z.string().url().max(2048).optional(),
+  /** A soundtrack clip whose audio is not produced yet: priced as long as the output, the longest it can be. */
+  unknownSoundtrack: z.boolean().optional(),
 })
 
 /**
@@ -73,7 +82,8 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     if (!billsReferenceVideoSeconds(provider)) {
       return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0).` } })
     }
-    if (referenceVideoUrls.length + unknownClips === 0) {
+    const soundtrack = parsed.data.soundtrackAudioUrl !== undefined || parsed.data.unknownSoundtrack === true
+    if (referenceVideoUrls.length + unknownClips === 0 && !soundtrack) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Name at least one reference video (referenceVideoUrls or unknownReferenceVideos)." } })
     }
 
@@ -85,7 +95,13 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       }
       // A provider with no declared bound is not probed by the gate; the
       // reservation probes it itself — so does the estimate.
-      const durationsSec = check.durationsSec ?? (await probeRefVideoDurations({ provider, referenceVideoUrls }))
+      const probed = check.durationsSec ?? (await probeRefVideoDurations({ provider, referenceVideoUrls }))
+      // The soundtrack clip, sized by the very rule the run renders it at.
+      const outputSec = pricedOutputDurationSec(provider, duration)
+      const soundtrackSec = parsed.data.soundtrackAudioUrl !== undefined
+        ? audioSoundtrackClipSec(await probeMediaDuration(parsed.data.soundtrackAudioUrl).catch(() => Number.NaN), outputSec)
+        : parsed.data.unknownSoundtrack === true ? outputSec : undefined
+      const durationsSec = soundtrackSec === undefined ? probed : [...probed, soundtrackSec]
       return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, durationsSec, unknownClips }) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply

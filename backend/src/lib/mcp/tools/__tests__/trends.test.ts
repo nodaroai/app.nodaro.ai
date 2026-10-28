@@ -467,7 +467,9 @@ describe("trend verbs — what the descriptions promise", () => {
   it("only an OPTIONAL slot left out takes the example's pictures", async () => {
     for (const tool of ["estimate_trend", "run_trend"]) {
       const text = await schemaText(tool)
-      expect(text, tool).toContain("an optional slot left out takes the example's")
+      expect(text, tool).toContain("an optional slot left out takes the chosen example's")
+      // …except in Full depth, which never uses an example to fill a slot.
+      expect(text, tool).toContain("except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look")
       expect(text, tool).not.toContain("one left out takes the example's")
     }
   })

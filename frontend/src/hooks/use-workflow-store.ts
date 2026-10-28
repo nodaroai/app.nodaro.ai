@@ -59,6 +59,7 @@ import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migrati
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
+import { migrateGenerateVideoAudioInput } from "@/lib/generate-video-audio-migration"
 import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
@@ -2496,6 +2497,13 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     }
     // A retired video model (Seedance 1.5) loads as the model it runs as.
     migratedNodes = migrateRetiredVideoProviders(migratedNodes)
+    // Generate Video's retired "Audio" input loads as what it did: a Merge
+    // Video & Audio node after the clip (LTX 2.3 Pro: its Audio Refs).
+    {
+      const result = migrateGenerateVideoAudioInput(migratedNodes, migratedEdges)
+      migratedNodes = result.nodes
+      migratedEdges = result.edges
+    }
 
     // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
     // normalize legacy `items` strings. Idempotent; edges unchanged.

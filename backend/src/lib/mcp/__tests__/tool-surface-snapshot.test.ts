@@ -1346,6 +1346,12 @@ const NODARO_MOTION_RENAME_BYTES = 28
 // NOT move. Measured by this suite: 509_243 total − 508_981 = 262 B; the headroom carries across.
 const CAST_SWAP_STYLE_BYTES = 262
 
+// RAISED 2026-10-28 by the Full depth wording and nothing else: `estimate_trend` / `run_trend`
+// say that a Full depth trend fills an empty optional slot with its default image (else the
+// original's look), never an example's. No tool was added, so the fixture does NOT move.
+// Measured by this suite: 509_573 total − 509_243 = 330 B (165 B on each of the two tools).
+const TRENDS_FULL_DEPTH_WORDING_BYTES = 330
+
 // A job's charge is its run's: the job envelope (`get_job` / `wait_for_job` outputSchema) gains
 // `creditsHeld` (the run's hold, its steps' included) and `creditsReleased`, and the get_job and
 // list_jobs descriptions say `creditsCharged` / `credits_charged` include the run's steps. No tool
@@ -1518,7 +1524,8 @@ export const TOOL_WIRE_BUDGET = {
     SESSIONS_TRASH_BYTES +
     RUN_CHARGE_STEPS_BYTES +
     NODARO_MOTION_RENAME_BYTES +
-    CAST_SWAP_STYLE_BYTES,
+    CAST_SWAP_STYLE_BYTES +
+    TRENDS_FULL_DEPTH_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -248,13 +248,13 @@ describe("GenerateVideoNode", () => {
   })
 
   describe("handles — 12 inputs + 1 output", () => {
-    it("has 12 input typed pips on the left + 1 output pip on the right", () => {
+    it("has 11 input typed pips on the left + 1 output pip on the right (no Audio: a Merge Video & Audio node lays a soundtrack)", () => {
       renderNode()
-      // 12 input pips
+      // 11 input pips
       const inputIds = [
         "prompt", "negative",
         "startFrame", "endFrame", "imageReferences", "videoReferences",
-        "audio", "audioReferences",
+        "audioReferences",
         "assets", "elements", "look",
         "settings",
       ]
@@ -263,18 +263,19 @@ describe("GenerateVideoNode", () => {
         expect(pip).toHaveAttribute("data-type", "target")
         expect(pip).toHaveAttribute("data-position", "left")
       }
+      expect(screen.queryByTestId("pip-audio")).toBeNull()
       // 1 output pip
       const videoPip = screen.getByTestId("pip-video")
       expect(videoPip).toHaveAttribute("data-type", "source")
       expect(videoPip).toHaveAttribute("data-position", "right")
     })
 
-    it("has 12 target handle configs + 1 source on BaseNode (external true)", () => {
+    it("has 11 target handle configs + 1 source on BaseNode (external true)", () => {
       renderNode()
       const inputIds = [
         "prompt", "negative",
         "startFrame", "endFrame", "imageReferences", "videoReferences",
-        "audio", "audioReferences",
+        "audioReferences",
         "assets", "elements", "look",
         "settings",
       ]
@@ -289,7 +290,7 @@ describe("GenerateVideoNode", () => {
       expect(out).toHaveAttribute("data-position", "right")
     })
 
-    it("grouped vertical spacing — text cluster at 24/52, image at 92/120/148/176, audio at 216/244, pickers at 284/312/340, settings at 380", () => {
+    it("grouped vertical spacing — text cluster at 24/52, image at 92/120/148/176, audio refs at 216, pickers at 284/312/340, settings at 380", () => {
       renderNode()
       // Text cluster (28 between)
       expect(screen.getByTestId("pip-prompt")).toHaveAttribute("data-top", "calc(100% - 24px)")
@@ -300,8 +301,7 @@ describe("GenerateVideoNode", () => {
       expect(screen.getByTestId("pip-imageReferences")).toHaveAttribute("data-top", "calc(100% - 148px)")
       expect(screen.getByTestId("pip-videoReferences")).toHaveAttribute("data-top", "calc(100% - 176px)")
       // Audio cluster (40 gap → 216)
-      expect(screen.getByTestId("pip-audio")).toHaveAttribute("data-top", "calc(100% - 216px)")
-      expect(screen.getByTestId("pip-audioReferences")).toHaveAttribute("data-top", "calc(100% - 244px)")
+      expect(screen.getByTestId("pip-audioReferences")).toHaveAttribute("data-top", "calc(100% - 216px)")
       // Pickers cluster (40 gap → 284); look on top, elements in middle
       expect(screen.getByTestId("pip-assets")).toHaveAttribute("data-top", "calc(100% - 284px)")
       expect(screen.getByTestId("pip-elements")).toHaveAttribute("data-top", "calc(100% - 312px)")

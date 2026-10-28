@@ -1,7 +1,10 @@
 import {
   applyDefaultVideoSelection,
+  audioSoundtrackActive,
+  audioSoundtrackClipSec,
   billsReferenceVideoSeconds,
   isSeedanceVideoEditProvider,
+  pricedOutputDurationSec,
 } from "@nodaro/shared/models"
 import {
   referenceModalityForHandle,
@@ -49,6 +52,12 @@ interface RefVideoEstimateRequest {
   draft: boolean
   /** One entry per clip wire: the upstream node, when the estimate has it. */
   clipSources: ReadonlyArray<EstimateNode | undefined>
+  /**
+   * Kling 4.0 audio soundtrack (`audioSoundtrackActive`): the first audio clip
+   * goes as one more reference video, as long as the audio within [2 s, the
+   * output] — `source` is its upstream node, when the estimate has it.
+   */
+  soundtrack?: { readonly source: EstimateNode | undefined }
 }
 
 /** The request `node` (already read through its Settings input) makes, or undefined when its price does not follow reference clips. */
@@ -70,8 +79,16 @@ function refVideoEstimateRequest(
   const clipSourceIds: Array<string | undefined> = clipEdges.length > 0
     ? clipEdges.map((e) => e.source)
     : isGeneration ? [] : [undefined]
-  if (clipSourceIds.length === 0) return undefined
   const data = node.data ?? {}
+  const audioEdges = isGeneration && edges && node.id
+    ? edges.filter((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "audio")
+    : []
+  const soundtrack = isGeneration && audioSoundtrackActive({
+    provider: applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider,
+    audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
+    audioRefCount: audioEdges.length,
+  })
+  if (clipSourceIds.length === 0 && !soundtrack) return undefined
   let provider: string
   let resolution: string | undefined
   let duration: number | string | undefined
@@ -88,7 +105,11 @@ function refVideoEstimateRequest(
   }
   if (!billsReferenceVideoSeconds(provider)) return undefined
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  return { provider, resolution, duration, draft: data.draft === true, clipSources: clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))) }
+  return {
+    provider, resolution, duration, draft: data.draft === true,
+    clipSources: clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))),
+    ...(soundtrack ? { soundtrack: { source: byId.get(audioEdges[0]!.source) } } : {}),
+  }
 }
 
 /**
@@ -113,6 +134,12 @@ export function seedanceRefVideoEstimateCredits(
     if (sec === undefined) unknownClips += 1
     else durationsSec.push(sec)
   }
+  if (request.soundtrack) {
+    // Known whatever the audio: an unread one is as long as the output, the longest the clip can be.
+    const url = knownClipUrl(request.soundtrack.source)
+    const audioSec = url === undefined ? undefined : prices.uploadClipSec?.get(url)
+    durationsSec.push(audioSoundtrackClipSec(audioSec ?? Number.NaN, pricedOutputDurationSec(request.provider, request.duration)))
+  }
   return seedance2RefVideoQuote({
     provider: request.provider,
     resolution: request.resolution,
@@ -133,5 +160,8 @@ export function refVideoClipSources(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
 ): Array<EstimateNode | undefined> {
-  return nodes.flatMap((node) => refVideoEstimateRequest(withWiredSettings(node, nodes, edges) as EstimateNode, nodes, edges)?.clipSources ?? [])
+  return nodes.flatMap((node) => {
+    const request = refVideoEstimateRequest(withWiredSettings(node, nodes, edges) as EstimateNode, nodes, edges)
+    return request ? [...request.clipSources, ...(request.soundtrack ? [request.soundtrack.source] : [])] : []
+  })
 }

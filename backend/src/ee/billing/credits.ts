@@ -61,6 +61,8 @@ import {
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
   sunoSeparateCreditId,
+  audioSoundtrackActive,
+  applyDefaultVideoSelection,
 } from "@nodaro/shared/models"
 import {
   CAMERA_SWITCH_CREDIT_ID,
@@ -6397,7 +6399,14 @@ function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<Est
  */
 function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>): boolean {
   if (!edges || !node.id) return false
-  return countRefModalityEdges(edges, node.id, "video") > 0
+  if (countRefModalityEdges(edges, node.id, "video") > 0) return true
+  // A Kling 4.0 audio soundtrack is sent as a reference video (audio-soundtrack.ts).
+  const data = node.data ?? {}
+  return audioSoundtrackActive({
+    provider: applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider,
+    audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
+    audioRefCount: countRefModalityEdges(edges, node.id, "audio"),
+  })
 }
 
 export function getNodeModelIdentifier(
