@@ -266,10 +266,11 @@ export class KieImageProvider
       const callerMask = typeof extraParams?.mask_url === "string" && extraParams.mask_url.length > 0
       const refProvider = provider
       referenceImageUrls = await Promise.all(
-        referenceImageUrls.map((url) =>
+        referenceImageUrls.map((url, i) =>
           ensureImageForProvider(url, refProvider, {
             acceptedFormats,
             context: "Image generation",
+            inputLabel: `reference image #${i + 1}`,
             preferLossless: true,
             preserveGeometry: callerMask,
           }),
@@ -637,6 +638,7 @@ export class KieImageProvider
             ? new Set(modelConfig.acceptedImageFormats)
             : undefined,
           context: "Image editing",
+          inputLabel: "source image",
           // Every lane here is an EDIT or an UPSCALE: the user is paying this
           // SKU to preserve detail, so normalising the input must not spend
           // that detail on a lossy, alpha-flattening JPEG. Lossless where the

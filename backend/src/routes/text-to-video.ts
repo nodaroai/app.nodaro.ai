@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { withOriginalVideoImageUrls } from "../lib/cdn-original-url.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
@@ -293,7 +294,8 @@ export async function textToVideoRoutes(app: FastifyInstance) {
  * reference-video lane), after running this route's pricing on the edit body.
  */
 export async function handleTextToVideoRequest(req: FastifyRequest, reply: FastifyReply) {
-  const parsed = textToVideoBody.safeParse(req.body)
+  // Image inputs on their original files, never a CDN display rendition (lib/cdn-original-url.ts).
+  const parsed = textToVideoBody.safeParse(withOriginalVideoImageUrls(req.body))
   if (!parsed.success) {
     return reply.status(400).send({
       error: { code: "validation_error", ...formatZodError(parsed.error) },

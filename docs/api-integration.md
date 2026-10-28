@@ -2674,6 +2674,15 @@ ref pointing at a private address / non-http(s) scheme is rejected at the route
 boundary. See the [Generate Video node](nodes/ai-video/generate-video.md#referencing-wired-assets-in-the-prompt-imagen--videon--audion-tokens)
 page for the token syntax and worked examples.
 
+> **Display renditions are replaced by their originals.** An image input on
+> `POST /v1/generate-video` / `POST /v1/text-to-video` (`imageUrl`,
+> `endFrameUrl`, `referenceImageUrls`, a connected or character reference)
+> that is a resized display copy of a Nodaro CDN image
+> (`https://cdn.nodaro.ai/cdn-cgi/image/<options>/<path>`) is recorded and sent
+> as the original file, `https://cdn.nodaro.ai/<path>`. The same applies to the
+> pictures of a trend run and of a Nodaro Motion run. Other hosts' URLs are
+> used as sent.
+
 > **`referenceOrder` on images too.** `POST /v1/generate-image` accepts the same
 > optional `referenceOrder` (parity with video) to reorder its assembled
 > reference list and renumber the `@image_N` bindings.

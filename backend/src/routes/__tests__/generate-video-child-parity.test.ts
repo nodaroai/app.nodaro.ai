@@ -247,6 +247,21 @@ describe("a cast-swap child sends the same request on /v1/generate-video as on /
     })
   }
 
+  it("a CDN display rendition among the reference images is recorded and sent as its original file", async () => {
+    const rendition = "https://cdn.nodaro.ai/cdn-cgi/image/width=1600,quality=80,format=auto/community/listing-1/portrait.png"
+    const original = "https://cdn.nodaro.ai/community/listing-1/portrait.png"
+    const body = { ...BODIES["kling-4"], referenceImageUrls: [IMAGES[0], IMAGES[1], rendition] }
+    for (const url of ["/v1/text-to-video", "/v1/generate-video"] as const) {
+      const r = await runChild(url, body)
+      expect((r.row.input_data as Record<string, unknown>).referenceImageUrls, url).toEqual([IMAGES[0], IMAGES[1], original])
+      // Only the original was downloaded; the rendition never reached the image preparation.
+      const fetched = mocks.safeFetch.mock.calls.map((c) => c[0] as string)
+      expect(fetched, url).toContain(original)
+      expect(fetched.some((u) => u.includes("/cdn-cgi/")), url).toBe(false)
+      expect(JSON.stringify(r.kieInput), url).not.toContain("/cdn-cgi/")
+    }
+  })
+
   it("the seedance-2-5 child keeps its mov container on /v1/generate-video", async () => {
     const gv = await runChild("/v1/generate-video", BODIES["seedance-2-5 (edit shape)"])
     expect(gv.kieInput.output_format).toBe("mov")

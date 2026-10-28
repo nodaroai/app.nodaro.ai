@@ -57,6 +57,7 @@ import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
 import { castSwapLengthKey, loadedEngineRuns } from "../../cast-swap-engines.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
+import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -235,11 +236,14 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         videoUrl: args.video_url,
         roles: args.roles.map(({ preview_name, in_preview, ...role }) => ({
           ...role,
-          images: role.images ?? null,
+          // The original files, never a CDN display rendition (lib/cdn-original-url.ts).
+          images: role.images ? originalCdnImageUrls(role.images) : null,
           ...(preview_name !== undefined ? { previewName: preview_name } : {}),
           ...(in_preview !== undefined ? { inPreview: in_preview } : {}),
         })),
-        ...(args.references !== undefined ? { references: args.references } : {}),
+        ...(args.references !== undefined
+          ? { references: args.references.map((r) => ({ ...r, images: originalCdnImageUrls(r.images) })) }
+          : {}),
         ...(args.pre_prompt !== undefined ? { prePrompt: args.pre_prompt } : {}),
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
