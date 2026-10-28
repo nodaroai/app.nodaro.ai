@@ -1,30 +1,43 @@
 /**
- * Upscaling a trend's videos to 1080p (pure; no I/O).
+ * Upscaling a trend's videos to 720p or 1080p (pure; no I/O).
  *
  * Admins make a trend's examples, and may make its source clip, at 720p (it
- * costs less) and upscale them afterwards: Topaz asked for 1080p (the core
- * `POST /v1/video-upscale`, `targetResolution: "1080p"`, the short side; a
- * `video-upscale` job of the admin, billed as any upscale), then stored as it
- * is when it already is exactly 1080 on the short side, else resized so it is
- * (aspect kept, both sides even: yuv420p needs them even). A video at exactly
- * 1080 on its short side is offered an enhance instead (the same Topaz ask, at
- * the same size); one above 1080 is offered nothing (`trendUpscaleOfferFor`,
- * shared with the trend builder).
+ * costs less) and upscale them afterwards: Topaz asked for the target the
+ * admin picks, 720p or 1080p (the core `POST /v1/video-upscale`,
+ * `targetResolution`, the short side; a `video-upscale` job of the admin,
+ * billed as any upscale), then stored as it is when it already is exactly the
+ * target on the short side, else resized so it is (aspect kept, both sides
+ * even: yuv420p needs them even). A video at exactly the target on its short
+ * side is offered an enhance instead (the same Topaz ask, at the same size: a
+ * 720p clip asked for 720p only gets a cleaner picture); one above the target
+ * is offered nothing at it (`trendUpscaleOfferFor`, shared with the trend
+ * builder).
  *
  * The upscale in the making is recorded on the draft (`TrendUpscaleJob`),
  * named by the video it was made from, so it survives a reload, a reorder
  * and a removal: it applies only while that video is still the target's.
  */
-import { TREND_UPSCALE_SHORT_SIDE, trendUpscaleOfferFor } from "@nodaro/render-rules"
+import {
+  TREND_UPSCALE_DEFAULT_RESOLUTION,
+  TREND_UPSCALE_SHORT_SIDE,
+  trendUpscaleOfferFor,
+  trendUpscaleShortSide,
+  type TrendUpscaleResolution,
+} from "@nodaro/render-rules"
 import { MAX_UPSCALE_JOBS, PREVIEW_SECONDS } from "./schemas.js"
 import { withoutPreviewClip } from "./preview-clip.js"
 import type { TrendUpscaleJob, TrendVersionData } from "./types.js"
 
-/** The short side of every upscaled (or enhanced) video. */
+/** The short side of a video upscaled (or enhanced) at the default target, 1080p. */
 export const UPSCALE_SHORT_SIDE = TREND_UPSCALE_SHORT_SIDE
 
-/** The Topaz target asked for: 1080p, the short side (portrait stays portrait). */
-export const UPSCALE_TOPAZ_RESOLUTION = "1080p"
+/** The short side of a video upscaled (or enhanced) at `resolution`. */
+export const upscaleShortSide = trendUpscaleShortSide
+
+/** The target an upscale was made at: its record's, else 1080p (every record written before the choice). */
+export function upscaleResolutionOf(job: Pick<TrendUpscaleJob, "resolution">): TrendUpscaleResolution {
+  return job.resolution ?? TREND_UPSCALE_DEFAULT_RESOLUTION
+}
 
 /**
  * How long "Use it" may run in the background before it is taken for dead (a
@@ -44,26 +57,32 @@ export const UPSCALE_JOB_TYPE = "video-upscale"
 
 /**
  * The size a `width`×`height` video is resized to: its short side
- * `UPSCALE_SHORT_SIDE`, its long side scaled by the same ratio and rounded to
- * the nearest even number (never below the short side). The orientation is
- * kept: 720×1280 → 1080×1920, 1280×720 → 1920×1080.
+ * `shortSide` (1080 unless named), its long side scaled by the same ratio and
+ * rounded to the nearest even number (never below the short side). The
+ * orientation is kept: 720×1280 → 1080×1920, 1280×720 → 1920×1080; at 720,
+ * 1080×1920 → 720×1280.
  */
-export function upscaleTargetSize(width: number, height: number): { width: number; height: number } {
+export function upscaleTargetSize(width: number, height: number, shortSide: number = UPSCALE_SHORT_SIDE): { width: number; height: number } {
   if (!(width > 0) || !(height > 0)) throw new RangeError(`Not a video size: ${width}×${height}`)
   const short = Math.min(width, height)
   const long = Math.max(width, height)
-  const scaledLong = Math.max(UPSCALE_SHORT_SIDE, Math.round((long * UPSCALE_SHORT_SIDE) / short / 2) * 2)
-  return width <= height ? { width: UPSCALE_SHORT_SIDE, height: scaledLong } : { width: scaledLong, height: UPSCALE_SHORT_SIDE }
+  const scaledLong = Math.max(shortSide, Math.round((long * shortSide) / short / 2) * 2)
+  return width <= height ? { width: shortSide, height: scaledLong } : { width: scaledLong, height: shortSide }
 }
 
 /**
- * Whether a video of this size is offered Topaz: an upscale when its short
- * side is under `UPSCALE_SHORT_SIDE`, an enhance at the same size when it is
- * exactly that, nothing above it (`trendUpscaleOfferFor`). An unknown size (a
- * source clip stored before sizes were recorded) is offered an upscale.
+ * Whether a video of this size is offered Topaz at `resolution` (1080p unless
+ * named): an upscale when its short side is under the target, an enhance at
+ * the same size when it is exactly that, nothing above it
+ * (`trendUpscaleOfferFor`). An unknown size (a source clip stored before sizes
+ * were recorded) is offered an upscale.
  */
-export function offersUpscale(width: number | undefined, height: number | undefined): boolean {
-  return trendUpscaleOfferFor(width, height) !== null
+export function offersUpscale(
+  width: number | undefined,
+  height: number | undefined,
+  resolution: TrendUpscaleResolution = TREND_UPSCALE_DEFAULT_RESOLUTION,
+): boolean {
+  return trendUpscaleOfferFor(width, height, resolution) !== null
 }
 
 /** What an upscale is for: the source clip, or the example at `index`. */
@@ -120,7 +139,8 @@ export function withoutUpscaleJob<T extends Pick<TrendVersionData, "upscaleJobs"
 }
 
 /**
- * An upscale in the making as the editor shows it: `index` = the example it
+ * An upscale in the making as the editor shows it: `resolution` = the target
+ * it was asked for; `index` = the example it
  * applies to now; `current` = it still applies; `applying` = "Use it" is
  * running (`stale`: past `UPSCALE_APPLY_STALE_MS`, may be tried again);
  * `error` = the last "Use it" failed.
@@ -128,6 +148,8 @@ export function withoutUpscaleJob<T extends Pick<TrendVersionData, "upscaleJobs"
 export interface PendingUpscaleJob {
   jobId: string
   target: "source" | "example"
+  /** The target it was asked for (1080p for one recorded before the choice). */
+  resolution: TrendUpscaleResolution
   fromUrl: string
   startedAt: string
   current: boolean
@@ -142,6 +164,7 @@ export function pendingUpscaleJobs(data: Pick<TrendVersionData, "source" | "exam
     return {
       jobId: j.jobId,
       target: j.target,
+      resolution: upscaleResolutionOf(j),
       fromUrl: j.fromUrl,
       startedAt: j.startedAt,
       current: target !== null,

@@ -2,7 +2,8 @@
 // the pictures per slot. Example 1 is the cover; with none, the original's
 // display copy is (a trend may publish with no example). Reorder (up / down)
 // and remove; each write carries the draft's revision. Each example made
-// below 1080p can be upscaled to it (`renderUpscale`, the UpscalePanel).
+// below 1080p can be upscaled (to 720p or 1080p), or enhanced at its own size
+// when it is exactly one of them (`renderUpscale`, the UpscalePanel).
 
 import { useState, type ReactNode } from "react"
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react"

@@ -21,7 +21,7 @@ import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
-import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect } from "@nodaro/render-rules"
+import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
 
@@ -224,7 +224,7 @@ export interface TrendFaceMaskJob {
 }
 
 /**
- * HIDDEN. An upscale to 1080p in the making: a Topaz `video-upscale` job of
+ * HIDDEN. An upscale to 720p or 1080p in the making: a Topaz `video-upscale` job of
  * the admin who started it, for the source clip or one example, named by the
  * video it was made FROM (`fromUrl`: the source's `videoUrl` or the
  * example's, each a file of its own) so a reorder or a removal never points
@@ -235,6 +235,8 @@ export interface TrendFaceMaskJob {
 export interface TrendUpscaleJob {
   jobId: string
   target: "source" | "example"
+  /** The target Topaz was asked for (the short side). Absent: 1080p (a record written before the choice). */
+  resolution?: TrendUpscaleResolution
   fromUrl: string
   startedAt: string
   /**

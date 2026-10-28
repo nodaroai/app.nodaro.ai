@@ -1,10 +1,12 @@
 /**
- * Admin → Trends → one trend → upscaling the source clip and the examples to 1080p.
+ * Admin → Trends → one trend → upscaling the source clip and the examples to
+ * 720p or 1080p.
  *
- * - Each example below 1080p, and the saved source clip, offer "Upscale to
- *   1080p"; a video at exactly 1080p (by its short side) offers "Enhance at
- *   1080p" (the same Topaz run, at the same size); one above 1080p, nothing.
- * - Starting sends the target, the held revision and a per-click
+ * - Each video is offered the targets it allows, by its short side: under 720
+ *   "Topaz 720p" and "Topaz 1080p"; exactly 720 "Topaz 720p (enhance)" (the
+ *   same Topaz run, at the same size) and "Topaz 1080p"; above 720 no 720p;
+ *   exactly 1080 "Topaz 1080p (enhance)" only; above 1080p, nothing.
+ * - Starting sends the video, the target (`resolution`), the held revision and a per-click
  *   Idempotency-Key; the job is followed, the before and after play side by
  *   side, and "Use it" sends the job with the revision start returned. "Use
  *   it" runs on the server: the panel says so, the trend is read until the
@@ -70,11 +72,12 @@ function job(over: Record<string, unknown> = {}) {
   return { body: { data: { id: JOB, status: "completed", progress: 100, output_data: { videoUrl: UPSCALED }, ...over } } }
 }
 
-/** Start answers with the job, recorded on the draft at rev-2. */
+/** Start answers with the job, recorded on the draft at rev-2 with the target it was sent. */
 function startable(target: "source" | "example", fromUrl: string, index?: number) {
-  routes[`POST ${BASE}/upscale`] = () => {
+  routes[`POST ${BASE}/upscale`] = (init) => {
+    const resolution = (JSON.parse(String(init?.body ?? "{}")) as { resolution?: "720p" | "1080p" }).resolution ?? "1080p"
     server.revision = "rev-2"
-    server.upscaleJobs = [{ jobId: JOB, target, fromUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, ...(index !== undefined ? { index } : {}) }]
+    server.upscaleJobs = [{ jobId: JOB, target, resolution, fromUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, ...(index !== undefined ? { index } : {}) }]
     return { status: 202, body: { data: { jobId: JOB, version: 1, revision: "rev-2", recorded: true, draftMoved: false } } }
   }
   routes[`GET /v1/jobs/${JOB}`] = () => job()
@@ -93,7 +96,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe("trendUpscaleOfferFor", () => {
-  it("an upscale below a 1080 short side, an enhance at it, nothing above (an unknown size is offered an upscale)", () => {
+  it("at 720p: an upscale below a 720 short side, an enhance at it, nothing above", () => {
+    expect(trendUpscaleOfferFor(540, 960, "720p")).toBe("upscale")
+    expect(trendUpscaleOfferFor(720, 1280, "720p")).toBe("enhance")
+    expect(trendUpscaleOfferFor(1080, 1920, "720p")).toBeNull()
+  })
+
+  it("an upscale below a 1080 short side, an enhance at it, nothing above (an unknown size is offered an upscale); 1080p unless named", () => {
     expect(trendUpscaleOfferFor(720, 1280)).toBe("upscale")
     expect(trendUpscaleOfferFor(1280, 720)).toBe("upscale")
     expect(trendUpscaleOfferFor(1080, 1920)).toBe("enhance")
@@ -120,10 +129,10 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
 
     const first = await screen.findByRole("group", { name: "Upscale example 1" })
     const second = screen.getByRole("group", { name: "Upscale example 2" })
-    expect(within(second).getByRole("button", { name: /enhance at 1080p/i })).toBeInTheDocument()
-    expect(within(second).queryByRole("button", { name: /upscale to 1080p/i })).not.toBeInTheDocument()
-    await user.click(within(first).getByRole("button", { name: /upscale to 1080p/i }))
-    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "example", index: 0, revision: "rev-1" }]))
+    expect(within(second).getByRole("button", { name: /^topaz 1080p \(enhance\)$/i })).toBeInTheDocument()
+    expect(within(second).queryByRole("button", { name: /^topaz 1080p$/i })).not.toBeInTheDocument()
+    await user.click(within(first).getByRole("button", { name: /^topaz 1080p$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "example", index: 0, resolution: "1080p", revision: "rev-1" }]))
     // One Idempotency-Key per click.
     const keyOf = (i: number) =>
       new Headers(fetchMock.mock.calls.filter(([u, init]) => init?.method === "POST" && u === `${BASE}/upscale`)[i]![1]!.headers as HeadersInit).get("Idempotency-Key")
@@ -136,7 +145,7 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     // The card now shows the 1080p video, and offers an enhance of it, no further upscale.
     await waitFor(() => expect(screen.getAllByText(/1080×1920 · 10\.0 s/)).toHaveLength(2))
     await waitFor(() =>
-      expect(within(screen.getByRole("group", { name: "Upscale example 1" })).getByRole("button", { name: /enhance at 1080p/i })).toBeInTheDocument(),
+      expect(within(screen.getByRole("group", { name: "Upscale example 1" })).getByRole("button", { name: /^topaz 1080p \(enhance\)$/i })).toBeInTheDocument(),
     )
 
     // The next draft write carries the revision the server holds now.
@@ -149,7 +158,7 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
   it("while Use it runs on the server it says so and reads the trend until it is done; an error is shown with a retry", async () => {
     const user = userEvent.setup()
     serve({ examples: [example(1)] })
-    server.upscaleJobs = [{ jobId: JOB, target: "example", fromUrl: example(1).videoUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, index: 0 }]
+    server.upscaleJobs = [{ jobId: JOB, target: "example", resolution: "1080p", fromUrl: example(1).videoUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, index: 0 }]
     routes[`GET /v1/jobs/${JOB}`] = () => job()
     const applying = { startedAt: new Date().toISOString(), stale: false }
     routes[`POST ${BASE}/upscale/apply`] = () => {
@@ -184,7 +193,7 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     expect(await screen.findByText(/1080×1920 · 10\.0 s/)).toBeInTheDocument()
   }, 20_000)
 
-  it("a failed upscale says why and offers Upscale again; Discard drops it with the held revision", async () => {
+  it("a failed upscale says why and offers the targets again; Discard drops it with the held revision", async () => {
     const user = userEvent.setup()
     serve({ examples: [example(1)] })
     startable("example", example(1).videoUrl, 0)
@@ -196,32 +205,79 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     }
     renderEditor()
     const card = await screen.findByRole("group", { name: "Upscale example 1" })
-    await user.click(within(card).getByRole("button", { name: /upscale to 1080p/i }))
+    await user.click(within(card).getByRole("button", { name: /^topaz 1080p$/i }))
     expect(await within(card).findByText(/the video is too large to upscale/i)).toBeInTheDocument()
-    expect(within(card).getByRole("button", { name: /upscale again/i })).toBeEnabled()
+    expect(within(card).getByRole("button", { name: /^topaz 1080p$/i })).toBeEnabled()
     expect(within(card).queryByRole("button", { name: /use it/i })).not.toBeInTheDocument()
     await user.click(within(card).getByRole("button", { name: /discard/i }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([u, init]) => init?.method === "DELETE" && u === `${BASE}/upscale/${JOB}?revision=rev-2`)).toBe(true))
-    expect(await within(card).findByRole("button", { name: /upscale to 1080p/i })).toBeInTheDocument()
+    expect(await within(card).findByRole("button", { name: /^topaz 1080p$/i })).toBeInTheDocument()
   })
 
   it("follows a recorded upscale after a reload, while it runs", async () => {
     serve({ examples: [example(1)] })
-    server.upscaleJobs = [{ jobId: JOB, target: "example", fromUrl: example(1).videoUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, index: 0 }]
+    server.upscaleJobs = [{ jobId: JOB, target: "example", resolution: "1080p", fromUrl: example(1).videoUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, index: 0 }]
     routes[`GET /v1/jobs/${JOB}`] = () => job({ status: "processing", progress: 42, output_data: null })
     renderEditor()
     const card = await screen.findByRole("group", { name: "Upscale example 1" })
     expect(await within(card).findByRole("status")).toHaveTextContent("Upscaling to 1080p… 42 %")
-    expect(within(card).queryByRole("button", { name: /upscale to 1080p/i })).not.toBeInTheDocument()
+    expect(within(card).queryByRole("button", { name: /^topaz 1080p$/i })).not.toBeInTheDocument()
   })
 
-  it("an upscale whose example is gone can only be discarded", async () => {
+  it("an upscale whose example is gone can only be discarded, and names the target it was made at", async () => {
     serve({ examples: [example(1)] })
-    server.upscaleJobs = [{ jobId: JOB, target: "example", fromUrl: "https://cdn.test/trends/a1/removed.mp4", startedAt: "2026-10-25T09:00:00.000Z", current: false }]
+    server.upscaleJobs = [{ jobId: JOB, target: "example", resolution: "720p", fromUrl: "https://cdn.test/trends/a1/removed.mp4", startedAt: "2026-10-25T09:00:00.000Z", current: false }]
     renderEditor()
     const stale = await screen.findByLabelText("Upscales of removed examples")
     expect(within(stale).getByText(/since removed or replaced/i)).toBeInTheDocument()
+    expect(within(stale).getByText(`Job ${JOB} · 720p`)).toBeInTheDocument()
     expect(within(stale).getByRole("button", { name: /discard/i })).toBeEnabled()
+  })
+
+  it("offers each video only the targets it allows, by its short side", async () => {
+    serve({ examples: [example(1, { width: 540, height: 960 }), example(2), example(3, { width: 1080, height: 1920 }), example(4, { width: 1440, height: 2560 })] })
+    renderEditor()
+    const names = (n: number) => within(screen.getByRole("group", { name: `Upscale example ${n}` })).getAllByRole("button").map((b) => b.textContent)
+    await screen.findByRole("group", { name: "Upscale example 1" })
+    // Under 720: both, as upscales.
+    expect(names(1)).toEqual(["Topaz 720p", "Topaz 1080p"])
+    // Exactly 720: 720p enhances it at the same size; 1080p upscales it.
+    expect(names(2)).toEqual(["Topaz 720p (enhance)", "Topaz 1080p"])
+    // Above 720: no 720p (it would shrink it); exactly 1080: an enhance.
+    expect(names(3)).toEqual(["Topaz 1080p (enhance)"])
+    // Above 1080: nothing at all.
+    expect(screen.queryByRole("group", { name: "Upscale example 4" })).not.toBeInTheDocument()
+  })
+
+  it("a 720p enhance sends 720p, and the card follows it at 720p through Use it", async () => {
+    const user = userEvent.setup()
+    serve({ examples: [example(1)] })
+    startable("example", example(1).videoUrl, 0)
+    routes[`GET /v1/jobs/${JOB}`] = () => job({ status: "processing", progress: 10, output_data: null })
+    renderEditor()
+    const card = await screen.findByRole("group", { name: "Upscale example 1" })
+    await user.click(within(card).getByRole("button", { name: /^topaz 720p \(enhance\)$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "example", index: 0, resolution: "720p", revision: "rev-1" }]))
+    expect(await within(card).findByRole("status")).toHaveTextContent("Enhancing at 720p… 10 %")
+
+    routes[`GET /v1/jobs/${JOB}`] = () => job()
+    routes[`POST ${BASE}/upscale/apply`] = () => {
+      server.revision = "rev-3"
+      server.upscaleJobs = [{ ...server.upscaleJobs[0]!, applying: { startedAt: new Date().toISOString(), stale: false } }]
+      return { status: 202, body: { data: { jobId: JOB, version: 1, revision: "rev-3", applying: true, upscaleJobs: server.upscaleJobs } } }
+    }
+    expect(await within(card).findByText("After · Topaz 720p (enhance) · stored at 720p", {}, { timeout: 8_000 })).toBeInTheDocument()
+    await user.click(within(card).getByRole("button", { name: /^use it$/i }))
+    expect(await within(card).findByTestId("upscale-applying")).toHaveTextContent("Putting the 720p video in the draft")
+  })
+
+  it("a recorded 1080p upscale after a reload reads as 1080p, whatever the video is offered", async () => {
+    serve({ examples: [example(1)] })
+    server.upscaleJobs = [{ jobId: JOB, target: "example", resolution: "1080p", fromUrl: example(1).videoUrl, startedAt: "2026-10-25T09:00:00.000Z", current: true, index: 0 }]
+    routes[`GET /v1/jobs/${JOB}`] = () => job()
+    renderEditor()
+    const card = await screen.findByRole("group", { name: "Upscale example 1" })
+    expect(await within(card).findByText("After · Topaz 1080p · stored at 1080p")).toBeInTheDocument()
   })
 })
 
@@ -234,7 +290,7 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     const display = { videoUrl: "https://cdn.test/trends/a1/d.mp4", posterUrl: "https://cdn.test/trends/a1/d.png", width: 1080, height: 1920, durationSec: 12 }
     routes[`POST ${BASE}/upscale/apply`] = () => {
       server.revision = "rev-3"
-      server.upscaleJobs = [{ jobId: JOB, target: "source", fromUrl: SRC, startedAt: "2026-10-25T09:00:00.000Z", current: true, applying: { startedAt: new Date().toISOString(), stale: false } }]
+      server.upscaleJobs = [{ jobId: JOB, target: "source", resolution: "1080p", fromUrl: SRC, startedAt: "2026-10-25T09:00:00.000Z", current: true, applying: { startedAt: new Date().toISOString(), stale: false } }]
       // The background finishes on the server after this answer: the poll sees it.
       setTimeout(() => {
         server.revision = "rev-4"
@@ -247,8 +303,8 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     renderEditor()
 
     const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
-    await user.click(within(panel).getByRole("button", { name: /upscale to 1080p/i }))
-    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "source", revision: "rev-1" }]))
+    await user.click(within(panel).getByRole("button", { name: /^topaz 1080p$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "source", resolution: "1080p", revision: "rev-1" }]))
     expect(await screen.findByTestId("upscale-source-warning")).toHaveTextContent("The face mask will need to be made again.")
     expect(screen.getByLabelText("Before: the source clip")).toHaveAttribute("src", SRC)
 
@@ -257,7 +313,7 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     // The form took the server's draft once the poll found it done: the new clip, 1080p, offered an enhance, no further upscale.
     expect(await screen.findByText("1080×1920", {}, { timeout: 5_000 })).toBeInTheDocument()
     await waitFor(() =>
-      expect(within(screen.getByRole("group", { name: "Upscale the source clip" })).getByRole("button", { name: /enhance at 1080p/i })).toBeInTheDocument(),
+      expect(within(screen.getByRole("group", { name: "Upscale the source clip" })).getByRole("button", { name: /^topaz 1080p \(enhance\)$/i })).toBeInTheDocument(),
     )
 
     await user.type(screen.getByLabelText("Trend prompt"), "!")
@@ -274,7 +330,7 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     serve({})
     startable("source", SRC)
     renderEditor()
-    await user.click(within(await screen.findByRole("group", { name: "Upscale the source clip" })).getByRole("button", { name: /upscale to 1080p/i }))
+    await user.click(within(await screen.findByRole("group", { name: "Upscale the source clip" })).getByRole("button", { name: /^topaz 1080p$/i }))
     const warning = await screen.findByTestId("upscale-source-warning")
     expect(warning).toHaveTextContent("Using it replaces the source clip")
     expect(warning).not.toHaveTextContent(/face mask/i)
@@ -285,9 +341,9 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     serve({})
     renderEditor()
     const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
-    expect(within(panel).getByRole("button", { name: /upscale to 1080p/i })).toBeEnabled()
+    expect(within(panel).getByRole("button", { name: /^topaz 1080p$/i })).toBeEnabled()
     await user.type(screen.getByLabelText("Trend prompt"), "!")
-    expect(within(panel).getByRole("button", { name: /upscale to 1080p/i })).toBeDisabled()
+    expect(within(panel).getByRole("button", { name: /^topaz 1080p$/i })).toBeDisabled()
     expect(within(panel).getByText(/save first/i)).toBeInTheDocument()
   })
 
@@ -297,9 +353,26 @@ describe("upscaling the source clip", { timeout: 20_000 }, () => {
     startable("source", SRC)
     renderEditor()
     const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
-    expect(within(panel).queryByRole("button", { name: /upscale to 1080p/i })).not.toBeInTheDocument()
-    await user.click(within(panel).getByRole("button", { name: /enhance at 1080p/i }))
-    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "source", revision: "rev-1" }]))
+    expect(within(panel).queryByRole("button", { name: /^topaz 1080p$/i })).not.toBeInTheDocument()
+    await user.click(within(panel).getByRole("button", { name: /^topaz 1080p \(enhance\)$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "source", resolution: "1080p", revision: "rev-1" }]))
+  })
+
+  it("a source clip already 1080p is not offered 720p (it would shrink it)", async () => {
+    serve({ source: { videoUrl: SRC, durationSec: 12, width: 1920, height: 1080 } })
+    renderEditor()
+    const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
+    expect(within(panel).queryByRole("button", { name: /720p/i })).not.toBeInTheDocument()
+  })
+
+  it("a 720p source clip offers a 720p enhance, sent as 720p", async () => {
+    const user = userEvent.setup()
+    serve({})
+    startable("source", SRC)
+    renderEditor()
+    const panel = await screen.findByRole("group", { name: "Upscale the source clip" })
+    await user.click(within(panel).getByRole("button", { name: /^topaz 720p \(enhance\)$/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/upscale`)).toEqual([{ target: "source", resolution: "720p", revision: "rev-1" }]))
   })
 
   it("is not offered for a source clip above 1080p", async () => {

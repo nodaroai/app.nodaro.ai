@@ -1,5 +1,5 @@
 /**
- * Upscaling a trend's source clip or an example to 1080p
+ * Upscaling a trend's source clip or an example to 720p or 1080p
  * (ee/routes/admin-trends-upscale.ts).
  *
  * What must hold:
@@ -64,7 +64,7 @@ const mem = vi.hoisted(() => ({
   /** The next draft save fails with this (a database error, not a conflict). */
   saveFails: null as null | Error,
   /** Every `storeUpscaledVideo` call. */
-  stored: [] as Array<{ trendId: string; upscaledUrl: string; originalUrl: string; durationSec: number; asSource: boolean; shownAs?: { width: number; height: number } }>,
+  stored: [] as Array<{ trendId: string; upscaledUrl: string; originalUrl: string; durationSec: number; asSource: boolean; resolution: "720p" | "1080p"; shownAs?: { width: number; height: number } }>,
   /** Called while the resize runs: a hook for "meanwhile, someone else wrote". */
   onStore: null as null | (() => void),
   storeFails: null as null | Error,
@@ -160,23 +160,25 @@ vi.mock("../../lib/trends/media.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/trends/media.js")>()
   return {
     ...actual,
-    storeUpscaledVideo: async (trendId: string, args: { upscaledUrl: string; originalUrl: string; durationSec: number; asSource: boolean; shownAs?: { width: number; height: number } }) => {
+    storeUpscaledVideo: async (trendId: string, args: { upscaledUrl: string; originalUrl: string; durationSec: number; asSource: boolean; resolution: "720p" | "1080p"; shownAs?: { width: number; height: number } }) => {
       mem.stored.push({ trendId, ...args })
       const hook = mem.onStore
       mem.onStore = null
       hook?.()
       if (mem.storeFails) throw mem.storeFails
       const n = mem.stored.length
+      // Stored at its target, portrait.
+      const [width, height] = args.resolution === "720p" ? [720, 1280] : [1080, 1920]
       return args.asSource
         ? {
             url: `https://cdn.test/trends/${trendId}/up-src-${n}.mp4`,
-            width: 1080,
-            height: 1920,
+            width,
+            height,
             durationSec: 11.96,
             sha256: "d".repeat(64),
-            display: { videoUrl: `https://cdn.test/trends/${trendId}/up-display-${n}.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/up-display-${n}.png`, width: 1080, height: 1920, durationSec: 11.96 },
+            display: { videoUrl: `https://cdn.test/trends/${trendId}/up-display-${n}.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/up-display-${n}.png`, width, height, durationSec: 11.96 },
           }
-        : { url: `https://cdn.test/trends/${trendId}/up-ex-${n}.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/up-ex-${n}.png`, width: 1080, height: 1920, durationSec: 10 }
+        : { url: `https://cdn.test/trends/${trendId}/up-ex-${n}.mp4`, posterUrl: `https://cdn.test/trends/${trendId}/up-ex-${n}.png`, width, height, durationSec: 10 }
     },
   }
 })
@@ -389,12 +391,13 @@ describe("starting an upscale", () => {
     // 1080p is Topaz's short side: a portrait clip stays portrait. The frame rate is the clip's own.
     expect(upscaler.calls[0]!.body).toEqual({ videoUrl: ex(2).videoUrl, provider: "topaz", targetResolution: "1080p" })
     expect(upscaler.calls[0]!.headers["x-internal-user-id"]).toBe(ADMIN)
-    expect(v.data.upscaleJobs).toEqual([{ jobId: UP_JOB, target: "example", fromUrl: ex(2).videoUrl, startedAt: expect.any(String) }])
+    // No target named: 1080p, as before the choice, and the record says so.
+    expect(v.data.upscaleJobs).toEqual([{ jobId: UP_JOB, target: "example", resolution: "1080p", fromUrl: ex(2).videoUrl, startedAt: expect.any(String) }])
     expect(audits()).toEqual([
-      expect.objectContaining({ admin_user_id: ADMIN, action: "upscale_trend_video", target_type: "trend", target_id: T1, payload: { slug: "neon-dance", jobId: UP_JOB, target: "example", fromUrl: ex(2).videoUrl } }),
+      expect.objectContaining({ admin_user_id: ADMIN, action: "upscale_trend_video", target_type: "trend", target_id: T1, payload: { slug: "neon-dance", jobId: UP_JOB, target: "example", resolution: "1080p", fromUrl: ex(2).videoUrl } }),
     ])
     const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
-    expect(detail.upscaleJobs).toEqual([{ jobId: UP_JOB, target: "example", fromUrl: ex(2).videoUrl, startedAt: expect.any(String), current: true, index: 1 }])
+    expect(detail.upscaleJobs).toEqual([{ jobId: UP_JOB, target: "example", resolution: "1080p", fromUrl: ex(2).videoUrl, startedAt: expect.any(String), current: true, index: 1 }])
   })
 
   it.each([
@@ -405,6 +408,33 @@ describe("starting an upscale", () => {
     expect((await start(body as Record<string, unknown>)).statusCode).toBe(202)
     expect(upscaler.calls[0]!.body).toEqual(expect.objectContaining({ provider: "topaz", targetResolution: "1080p" }))
     expect(draftNow().upscaleJobs).toHaveLength(1)
+  })
+
+  it("asks Topaz for 720p when 720p is named, and records and audits that target", async () => {
+    seed({}, draftData({ examples: [ex(1, { width: 540, height: 960 })] }))
+    expect((await start({ target: "example", index: 0, resolution: "720p" })).statusCode).toBe(202)
+    expect(upscaler.calls[0]!.body).toEqual({ videoUrl: ex(1).videoUrl, provider: "topaz", targetResolution: "720p" })
+    expect(draftNow().upscaleJobs).toEqual([{ jobId: UP_JOB, target: "example", resolution: "720p", fromUrl: ex(1).videoUrl, startedAt: expect.any(String) }])
+    expect(audits()).toEqual([expect.objectContaining({ action: "upscale_trend_video", payload: expect.objectContaining({ jobId: UP_JOB, resolution: "720p" }) })])
+    const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
+    expect(detail.upscaleJobs).toEqual([expect.objectContaining({ jobId: UP_JOB, resolution: "720p", current: true, index: 0 })])
+  })
+
+  it.each([
+    ["a portrait example at 720p", { target: "example", index: 1, resolution: "720p" }, draftData()],
+    ["a landscape source clip at 720p", { target: "source", resolution: "720p" }, draftData({ source: { videoUrl: SRC, durationSec: 12, width: 1280, height: 720, display: { ...DISPLAY, width: 1280, height: 720 } } })],
+  ])("enhances %s: the same Topaz ask at 720p, at the same size (never refused as already 720p)", async (_what, body, data) => {
+    seed({}, data as TrendVersionData)
+    expect((await start(body as Record<string, unknown>)).statusCode).toBe(202)
+    expect(upscaler.calls[0]!.body).toEqual(expect.objectContaining({ provider: "topaz", targetResolution: "720p" }))
+    expect(draftNow().upscaleJobs).toEqual([expect.objectContaining({ resolution: "720p" })])
+  })
+
+  it("a 1080p clip is still offered 1080p (an enhance) when 720p is refused for it", async () => {
+    seed({}, draftData({ examples: [ex(1, { width: 1080, height: 1920 })] }))
+    expect((await start({ target: "example", index: 0, resolution: "720p" })).json().error.code).toBe("above_720p")
+    expect((await start({ target: "example", index: 0, resolution: "1080p" })).statusCode).toBe(202)
+    expect(upscaler.calls.map((c) => c.body.targetResolution)).toEqual(["1080p"])
   })
 
   it("upscales the source clip's uploaded video (what runs edit), not its display copy", async () => {
@@ -421,6 +451,10 @@ describe("starting an upscale", () => {
     ["an example above 1080p", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 1440, height: 2560 })] }), 409, "above_1080p"],
     ["a landscape example at 4K", { target: "example", index: 0 }, draftData({ examples: [ex(1, { width: 3840, height: 2160 })] }), 409, "above_1080p"],
     ["a source above 1080p", { target: "source" }, draftData({ source: { videoUrl: SRC, durationSec: 12, width: 1440, height: 2560, display: DISPLAY } }), 409, "above_1080p"],
+    ["an example above 720p asked for 720p", { target: "example", index: 0, resolution: "720p" }, draftData({ examples: [ex(1, { width: 1080, height: 1920 })] }), 409, "above_720p"],
+    ["a source above 720p asked for 720p", { target: "source", resolution: "720p" }, draftData({ source: { videoUrl: SRC, durationSec: 12, width: 1920, height: 1080, display: DISPLAY } }), 409, "above_720p"],
+    ["an example above 1080p asked for 720p", { target: "example", index: 0, resolution: "720p" }, draftData({ examples: [ex(1, { width: 1440, height: 2560 })] }), 409, "above_720p"],
+    ["a target Topaz is not offered here (4k)", { target: "source", resolution: "4k" }, draftData(), 400, "validation_error"],
     ["a body with a stray field", { target: "source", index: 0 }, draftData(), 400, "validation_error"],
     ["an unknown target", { target: "poster" }, draftData(), 400, "validation_error"],
   ])("refuses %s before Video Upscale is asked (nothing is paid for)", async (_what, body, data, status, code) => {
@@ -538,14 +572,14 @@ describe("using an upscale", () => {
     mem.onStore = () => {
       // While the resize runs, the record reads as applying, and the example is still the old one.
       const d = mem.trends[0]!.versions[1]!.data
-      expect(d.upscaleJobs).toEqual([{ ...pending(), applying: { startedAt: expect.any(String), by: ADMIN } }])
+      expect(d.upscaleJobs).toEqual([{ ...pending(), resolution: "1080p", applying: { startedAt: expect.any(String), by: ADMIN } }])
       expect(d.examples[1]).toEqual(ex(2))
     }
     const res = await apply()
     expect(res.statusCode).toBe(202)
     expect(res.json().data).toMatchObject({ jobId: UP_JOB, applying: true, revision: expect.any(String), upscaleJobs: [expect.objectContaining({ jobId: UP_JOB, applying: { startedAt: expect.any(String), stale: false } })] })
     await _settledUpscaleAppliesForTests()
-    expect(mem.stored).toEqual([{ trendId: T1, upscaledUrl: UPSCALED, originalUrl: ex(2).videoUrl, durationSec: 10, asSource: false, shownAs: { width: 720, height: 1280 } }])
+    expect(mem.stored).toEqual([{ trendId: T1, upscaledUrl: UPSCALED, originalUrl: ex(2).videoUrl, durationSec: 10, asSource: false, resolution: "1080p", shownAs: { width: 720, height: 1280 } }])
     const d = draftNow()
     expect(d.examples[0]).toEqual(ex(1))
     expect(d.examples[1]).toEqual({
@@ -632,7 +666,7 @@ describe("using an upscale", () => {
     world.jobs.set(UP_JOB, upJob(SRC))
     expect((await applyAndSettle()).statusCode).toBe(202)
     // Its orientation is checked against the display copy's (the rotation applied), not the upload's raw size.
-    expect(mem.stored).toEqual([{ trendId: T1, upscaledUrl: UPSCALED, originalUrl: SRC, durationSec: 12, asSource: true, shownAs: { width: 720, height: 1280 } }])
+    expect(mem.stored).toEqual([{ trendId: T1, upscaledUrl: UPSCALED, originalUrl: SRC, durationSec: 12, asSource: true, resolution: "1080p", shownAs: { width: 720, height: 1280 } }])
     const d = draftNow()
     expect(d.source).toEqual({
       videoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`,
@@ -796,6 +830,54 @@ describe("using an upscale", () => {
     expect(res.json().error.code).toBe(code)
     expect(mem.stored).toEqual([])
     expect(draftNow()).toEqual(data)
+  })
+
+  it("a 720p upscale is stored at 720p: the example takes the 720p video and its size; audited with its target", async () => {
+    seed({}, draftData({ upscaleJobs: [pending({ resolution: "720p" })] }))
+    world.jobs.set(UP_JOB, upJob(ex(2).videoUrl, {}, { targetResolution: "720p" }))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(mem.stored).toEqual([expect.objectContaining({ asSource: false, resolution: "720p" })])
+    expect(draftNow().examples[1]).toMatchObject({ videoUrl: `https://cdn.test/trends/${T1}/up-ex-1.mp4`, width: 720, height: 1280 })
+    expect(draftNow()).not.toHaveProperty("upscaleJobs")
+    expect(audits()).toEqual([expect.objectContaining({ action: "apply_trend_upscale", payload: expect.objectContaining({ resolution: "720p", width: 720, height: 1280 }) })])
+  })
+
+  it("a 720p source upscale replaces the source at 720p, and the preview's input clip is cut again from it", async () => {
+    seed({}, draftData({ upscaleJobs: [pending({ target: "source", fromUrl: SRC, resolution: "720p" })] }))
+    world.jobs.set(UP_JOB, upJob(SRC, {}, { targetResolution: "720p" }))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(mem.stored).toEqual([expect.objectContaining({ asSource: true, resolution: "720p" })])
+    const d = draftNow()
+    expect(d.source).toMatchObject({ videoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, width: 720, height: 1280 })
+    expect(mem.clips).toEqual([{ trendId: T1, sourceUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, startSec: d.previewStart, durationSec: 4 }])
+    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4` })
+  })
+
+  it("stores at the target the JOB was made at (what Topaz was asked), over a record that says otherwise", async () => {
+    seed({}, draftData({ upscaleJobs: [pending()] }))
+    world.jobs.set(UP_JOB, upJob(ex(2).videoUrl, {}, { targetResolution: "720p" }))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(mem.stored).toEqual([expect.objectContaining({ resolution: "720p" })])
+  })
+
+  it("an audited start that never got recorded is applied at the target it was asked for", async () => {
+    seed({}, draftData({ examples: [ex(1, { width: 540, height: 960 }), ex(2)] }))
+    mem.conflictSaves = 100
+    const started = await start({ target: "example", index: 0, resolution: "720p" })
+    expect(started.json().data).toMatchObject({ jobId: UP_JOB, recorded: false })
+    mem.conflictSaves = 0
+    // The job carries no target of its own here: the audited start's is read.
+    world.jobs.set(UP_JOB, upJob(ex(1).videoUrl))
+    expect((await applyAndSettle()).statusCode).toBe(202)
+    expect(mem.stored).toEqual([expect.objectContaining({ originalUrl: ex(1).videoUrl, resolution: "720p" })])
+  })
+
+  it("refuses a Topaz job made at a target this route does not store (4k), storing nothing", async () => {
+    seed({}, draftData({ upscaleJobs: [pending()] }))
+    world.jobs.set(UP_JOB, upJob(ex(2).videoUrl, {}, { targetResolution: "4k" }))
+    const res = await applyAndSettle()
+    expect(res.json().error.code).toBe("not_an_upscale")
+    expect(mem.stored).toEqual([])
   })
 
   it("refuses a stale revision with draft_conflict before reading the job", async () => {

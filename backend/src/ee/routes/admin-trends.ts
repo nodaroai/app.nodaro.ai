@@ -26,7 +26,7 @@
  *   POST   /v1/admin/trends/:id/face-mask            make the trend's face mask (admin-trends-face-mask.ts) → 202 { jobId, revision }
  *   POST   /v1/admin/trends/:id/face-mask/approve    approve a finished one: stored on the draft
  *   DELETE /v1/admin/trends/:id/face-mask            clear the draft's face mask
- *   POST   /v1/admin/trends/:id/upscale              upscale the source or an example to 1080p (admin-trends-upscale.ts) → 202
+ *   POST   /v1/admin/trends/:id/upscale              upscale the source or an example to 720p / 1080p (admin-trends-upscale.ts) → 202
  *   POST   /v1/admin/trends/:id/upscale/apply        use a finished upscale (in the background) → 202: replaces that video on the draft
  *   DELETE /v1/admin/trends/:id/upscale/:jobId       discard an upscale in the making
  *   POST   /v1/admin/trends/:id/crop                 crop the source to 16:9 / 9:16 (admin-trends-crop.ts, in the background) → 202

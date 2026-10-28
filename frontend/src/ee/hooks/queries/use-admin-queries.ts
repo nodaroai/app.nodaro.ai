@@ -48,6 +48,7 @@ import {
   cropAdminTrendFrame,
   dismissAdminTrendCrop,
   fetchAdminTrendUpscaleJob,
+  type AdminTrendUpscaleResolution,
   type AdminTrendUpscaleTarget,
   type AdminTrendSceneDescriptionWhich,
   type AdminTrendCropAspect,
@@ -1861,13 +1862,22 @@ export function useClearTrendFaceMask(id: string) {
   })
 }
 
-/** Upscale the saved draft's source clip or one example to 1080p (the admin pays); follow it with `useTrendUpscaleJob`. */
+/** Upscale the saved draft's source clip or one example to 720p or 1080p (the admin pays); follow it with `useTrendUpscaleJob`. */
 export function useStartTrendUpscale(id: string) {
   const invalidate = useInvalidateTrend()
   return useMutation({
     onError: handledByScreen,
-    mutationFn: ({ target, revision, idempotencyKey }: { target: AdminTrendUpscaleTarget; revision: string; idempotencyKey: string }) =>
-      startAdminTrendUpscale(id, target, revision, idempotencyKey),
+    mutationFn: ({
+      target,
+      resolution,
+      revision,
+      idempotencyKey,
+    }: {
+      target: AdminTrendUpscaleTarget
+      resolution: AdminTrendUpscaleResolution
+      revision: string
+      idempotencyKey: string
+    }) => startAdminTrendUpscale(id, target, resolution, revision, idempotencyKey),
     onSuccess: () => invalidate(id),
   })
 }

@@ -11503,8 +11503,8 @@ export interface AdminTrendPendingSourceCrop {
 }
 
 /**
- * An upscale to 1080p in the making, named by the video it was made from:
- * `current` = that video is still the source's (or an example's: `index` is
+ * An upscale to 720p or 1080p in the making, named by the video it was made
+ * from: `resolution` = the target it was asked for; `current` = that video is still the source's (or an example's: `index` is
  * where that example is now), so it can be used. `applying`: "Use it" is
  * running on the server (`stale`: for so long it may be tried again);
  * `error`: the last "Use it" failed, and why.
@@ -11512,6 +11512,8 @@ export interface AdminTrendPendingSourceCrop {
 export interface AdminTrendPendingUpscale {
   jobId: string
   target: "source" | "example"
+  /** The target Topaz was asked for (the short side): what the upscale is stored at. */
+  resolution: AdminTrendUpscaleResolution
   fromUrl: string
   startedAt: string
   current: boolean
@@ -12029,8 +12031,11 @@ export async function fetchAdminTrendFaceMaskJob(jobId: string): Promise<AdminTr
 /** What an upscale is for: the source clip, or the example at `index`. */
 export type AdminTrendUpscaleTarget = { target: "source" } | { target: "example"; index: number }
 
+/** The target an upscale is asked for: the short side. 720p on a 720p clip enhances it at the same size. */
+export type AdminTrendUpscaleResolution = "720p" | "1080p"
+
 /**
- * Upscale the saved draft's source clip or one example to 1080p (Topaz, billed to the admin), at
+ * Upscale the saved draft's source clip or one example to `resolution` (Topaz, billed to the admin), at
  * `revision`. Follow the job, then use it. It returns the job and the draft's new revision (the job is
  * recorded on the draft; `recorded: false` when it could not be, and it can still be used);
  * `draftMoved`: another write landed meanwhile, so the screen reloads the trend. (The return type is
@@ -12039,6 +12044,7 @@ export type AdminTrendUpscaleTarget = { target: "source" } | { target: "example"
 export async function startAdminTrendUpscale(
   id: string,
   target: AdminTrendUpscaleTarget,
+  resolution: AdminTrendUpscaleResolution,
   revision: string,
   /** One per click: a repeat of the same click is never paid for twice. */
   idempotencyKey: string,
@@ -12046,7 +12052,7 @@ export async function startAdminTrendUpscale(
   return (
     await apiJson<{ data: { jobId: string; version?: number; revision?: string; recorded: boolean; draftMoved: boolean } }>(`${trendPath(id)}/upscale`, {
       label: "apiErr.saveTrend",
-      body: { ...target, revision },
+      body: { ...target, resolution, revision },
       idempotencyKey,
     })
   ).data
@@ -12067,7 +12073,7 @@ export interface TrendUpscaleWrite extends TrendDraftWrite {
   upscaleJobs: AdminTrendPendingUpscale[]
 }
 
-/** Use a finished upscale: its video, at 1080p, replaces the source clip's or the example's on the draft (in the background). */
+/** Use a finished upscale: its video, at the target it was made at, replaces the source clip's or the example's on the draft (in the background). */
 export async function applyAdminTrendUpscale(id: string, jobId: string, revision: string): Promise<TrendUpscaleWrite> {
   return (
     await apiRequest<{ data: TrendUpscaleWrite }>(`${trendPath(id)}/upscale/apply`, "apiErr.saveTrend", {

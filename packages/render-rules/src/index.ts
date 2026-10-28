@@ -802,7 +802,17 @@ export {
   trendCropTargetSize,
   type TrendCropAspect,
 } from "./trend-source-crop"
-export { TREND_UPSCALE_SHORT_SIDE, trendUpscaleOfferFor, type TrendUpscaleOffer } from "./trend-upscale-offer"
+export {
+  TREND_UPSCALE_DEFAULT_RESOLUTION,
+  TREND_UPSCALE_RESOLUTIONS,
+  TREND_UPSCALE_SHORT_SIDE,
+  isTrendUpscaleResolution,
+  trendUpscaleOfferFor,
+  trendUpscaleOffersFor,
+  trendUpscaleShortSide,
+  type TrendUpscaleOffer,
+  type TrendUpscaleResolution,
+} from "./trend-upscale-offer"
 // Whether a Topaz upscale of a trend picture (a slot's default picture) can be stored: the builder's offer and the store's cap.
 export {
   TREND_PICTURE_MAX_BYTES,
