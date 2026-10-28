@@ -2163,6 +2163,40 @@ draft on `generate-object-asset`, the 5-tab Studio surface, and using
 object assets as references in downstream image/video calls — is in
 [Object Platform](./object-platform.md).
 
+### Nodaro Keepers — the shared catalog
+
+A shelf of characters, creatures, locations and objects that the platform's
+admins curate from their own items and everyone can use (Business and Cloud
+editions — the ones with sharing). Using one copies it into your own account
+through the same rule as cloning a community listing: a row of your own
+(editable in Studio, listed with your other items, deletable) with the public
+text, the main image and the variant assets that keep its renders consistent
+(angles, expressions, poses, …) — every file copied into your own storage and
+counted against it; a premade or library voice carried, a custom or cloned
+voice reduced to its name and sample; the owner's picker selections,
+reference photos and trained-model fields never carried. The original is
+never changed, a later change to it does not reach the copies, and taking it
+off the shelf removes no copy. Reading and copying cost no credits.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/keepers/catalog` | The shelf. **Public** — no credential, like `/v1/node-presets/factory`, so a guest browses it. Query: `kind` (`character` / `creature` / `location` / `object`; omitted, the page runs through the kinds in that order), `limit` (1–200, default 50), `cursor` (a previous page's `next`). Returns `{ data: [{ id, kind, name, description, imageUrl, previewUrl, category, sort, createdAt }], next }` — `previewUrl` is a 480px-wide copy of `imageUrl` for a tile; `category` the shelf heading, `sort` the shelf order (lowest first; then newest first). Display fields only: never a user id, a prompt, a reference photo or a LoRA field. An unreadable `cursor` is a 400 `validation_error`, never page 1. Served with `Cache-Control: public, max-age=60` (an admin's change shows within a minute) and limited to 60 requests a minute per address (429 past it). |
+| `POST` | `/v1/keepers/catalog/:kind/:id/copy` | Use one: your own copy of it. Returns `{ id, name, kind, created }` — `id` is your row (`GET /v1/characters/:id` and the others read it). One copy per caller and item: a second call (or two at once) returns the same copy with `created: false`; a copy you archived comes back un-archived — and a copy you already have is yours whether or not the item is still on the shelf. The copy lands in your default project with a fresh canvas id. 404 `not_found` for an item that is not on the shelf (and that you have no copy of); 413 `storage_limit_exceeded` when its files do not fit your storage (nothing is kept then); 403 `personal_space_disabled` when your organization closed the personal space a copy lands in — the community clone's answers. OAuth apps need `assets:write`. |
+| `PUT` | `/v1/characters/:id/catalog` (and `/v1/creatures/`, `/v1/locations/`, `/v1/objects/`) | **Admin only**, on the admin's own items: `{ catalog: boolean, sort?: integer, category?: string \| null }` puts the item on the shelf or takes it off (`sort` an integer within ±1,000,000; `category` up to 80 characters; both kept when omitted; `category: null` or a blank string clears it). Returns `{ id, kind, catalog, sort, category }`. 403 `forbidden` for anyone who is not a platform admin, or for an OAuth app token (a session or the admin's personal token only); 404 `not_found` for an item that is not the admin's. An item with no main image stays off the shelf even when marked. Cloud and Business editions (the ones with an admin). |
+
+```bash
+# A guest reads the shelf
+curl "$API/v1/keepers/catalog?kind=character&limit=20"
+
+# A signed-in user takes one
+curl -X POST "$API/v1/keepers/catalog/character/$ITEM/copy" -H "Authorization: Bearer $TOKEN"
+# → { "id": "…", "name": "Mira", "kind": "character", "created": true }
+
+# An admin puts one of their own characters on the shelf
+curl -X PUT "$API/v1/characters/$MINE/catalog" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{ "catalog": true, "sort": 1, "category": "Heroes" }'
+```
+
 ## 11. Node discovery
 
 `GET /v1/nodes` and `GET /v1/nodes/:type` let clients enumerate every

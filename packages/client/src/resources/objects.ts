@@ -2,6 +2,7 @@ import type { ObjectAspectRatio, ObjectAssetType, ObjectAttachColumn } from "@no
 export type { ObjectAssetType, ObjectAttachColumn, ObjectAspectRatio } from "@nodaro/shared/entities"
 export { OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClientCore } from "../core.js"
+import type { SetKeeperCatalogInput, SetKeeperCatalogResult } from "./keepers.js"
 import type { GenerationSessionParams } from "./nodes.js"
 
 /**
@@ -498,6 +499,16 @@ export class ObjectsResource {
    */
   restore(id: string): Promise<{ id: string; name: string }> {
     return this.client.request("POST", `/v1/objects/${encodeURIComponent(id)}/restore`)
+  }
+
+  /**
+   * Admin only: put one of your own objects on the shared Nodaro Keepers
+   * shelf (`client.keepers.catalog()`), or take it off. A first-party session
+   * or your personal token; `forbidden` for anyone who is not a platform
+   * admin, `not_found` for a row that is not yours.
+   */
+  setCatalog(id: string, input: SetKeeperCatalogInput): Promise<SetKeeperCatalogResult> {
+    return this.client.request("PUT", `/v1/objects/${encodeURIComponent(id)}/catalog`, { body: input })
   }
 
   /**

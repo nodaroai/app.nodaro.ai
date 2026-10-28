@@ -83,6 +83,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "studio.productions", cli: [], routePrefixes: ["/v1/studio/productions"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },
   { id: "copilot", cli: [], routePrefixes: ["/v1/copilot"], mcpFiles: [] },
   { id: "community", cli: ["community"], routePrefixes: ["/v1/community"], mcpFiles: [] },
+  { id: "keepers", cli: [], routePrefixes: ["/v1/keepers"], mcpFiles: [] },
   { id: "templates", cli: [], routePrefixes: ["/v1/templates"], mcpFiles: [] },
   { id: "tutorials", cli: [], routePrefixes: ["/v1/tutorials"], mcpFiles: [] },
   { id: "organizations", cli: ["org"], routePrefixes: ["/v1/organizations", "/v1/orgs", "/v1/invitations"], mcpFiles: [] },

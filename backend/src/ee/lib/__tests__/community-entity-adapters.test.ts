@@ -20,6 +20,8 @@ const COLUMNS: Record<string, string[]> = {
     // Structured Person + Wardrobe picker selections (migration 222) — STRIPPED on
     // share (may embed private refs), classified in stripFields.
     "person","wardrobe",
+    // Nodaro Keepers shelf (migration 566) — system columns, never copied (ALWAYS_IGNORED).
+    "catalog","catalog_sort","catalog_category","catalog_source_id",
   ],
   locations: [
     "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
@@ -28,6 +30,8 @@ const COLUMNS: Record<string, string[]> = {
     "style_lock","deleted_at","pii_consent_at","r2_assets_purged_at",
     // Named Location Boards (migration 213) — published + cloned like the buckets.
     "boards",
+    // Nodaro Keepers shelf (migration 566) — system columns, never copied (ALWAYS_IGNORED).
+    "catalog","catalog_sort","catalog_category","catalog_source_id",
   ],
   objects: [
     "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
@@ -35,6 +39,8 @@ const COLUMNS: Record<string, string[]> = {
     "user_id","motion_clips","reference_photos","canonical_description","style_lock","deleted_at",
     // Named Product Boards (migration 213) — published + cloned like the buckets.
     "boards",
+    // Nodaro Keepers shelf (migration 566) — system columns, never copied (ALWAYS_IGNORED).
+    "catalog","catalog_sort","catalog_category","catalog_source_id",
   ],
   // FULL physical column set from migration 206_creatures.sql (NOT copied from the
   // stale objects block above — that one omits image_provider/selected_asset_by_variant/
@@ -48,6 +54,8 @@ const COLUMNS: Record<string, string[]> = {
     // Creature Boards + the "talking creature" voice (migration 220) —
     // boards published + cloned like the buckets; voice carried by KIND.
     "boards","voice",
+    // Nodaro Keepers shelf (migration 566) — system columns, never copied (ALWAYS_IGNORED).
+    "catalog","catalog_sort","catalog_category","catalog_source_id",
   ],
 }
 
@@ -60,6 +68,11 @@ const ALWAYS_IGNORED = new Set([
   "image_provider","selected_asset_by_variant",
   // legacy dead column (migration 004) — superseded by sheets/detail_closeups/outfit_variations; physically present but no route/business code reads or writes it.
   "character_sheet",
+  // Nodaro Keepers shelf (migration 566): whether the admin put the row on the
+  // shared shelf, its order and heading, and on a copy the shelf row it came
+  // from. Owner-local state, never copied: a share or a Keepers copy starts
+  // off the shelf, and only the Keepers copy sets catalog_source_id itself.
+  "catalog","catalog_sort","catalog_category","catalog_source_id",
 ])
 
 describe("character adapter classifies every column", () => {

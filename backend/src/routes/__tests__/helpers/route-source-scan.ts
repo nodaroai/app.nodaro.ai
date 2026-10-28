@@ -35,6 +35,7 @@ const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..")
 export const DYNAMIC_ROUTE_FILES: Record<string, string> = {
   "routes/use-case-run.ts": "use-case node routes: one top-level path per use-case descriptor (`d.route`)",
   "routes/use-case-continue.ts": "use-case continue routes: one per use-case node (`usecaseContinuePath(type)`)",
+  "ee/routes/keepers.ts": "the admin's Keepers shelf mark, one PUT per kind (`/v1/<kind's path>/:id/catalog`): an item route, never an app run or app-management path",
 }
 
 const LITERAL = /^(["'`])((?:(?!\1)[^\\]|\\.)*)\1/

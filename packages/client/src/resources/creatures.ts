@@ -4,6 +4,7 @@ export type { CreatureAttachColumn, ObjectAspectRatio as CreatureAspectRatio } f
 export { CREATURE_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS as CREATURE_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS as CREATURE_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClientCore } from "../core.js"
 import type { GenerationSessionParams, Subject } from "./nodes.js"
+import type { SetKeeperCatalogInput, SetKeeperCatalogResult } from "./keepers.js"
 
 /**
  * Creature voice — IDENTICAL shape + semantics to `Character["voice"]` (the
@@ -547,6 +548,16 @@ export class CreaturesResource {
    */
   restore(id: string): Promise<{ id: string; name: string }> {
     return this.client.request("POST", `/v1/creatures/${encodeURIComponent(id)}/restore`)
+  }
+
+  /**
+   * Admin only: put one of your own creatures on the shared Nodaro Keepers
+   * shelf (`client.keepers.catalog()`), or take it off. A first-party session
+   * or your personal token; `forbidden` for anyone who is not a platform
+   * admin, `not_found` for a row that is not yours.
+   */
+  setCatalog(id: string, input: SetKeeperCatalogInput): Promise<SetKeeperCatalogResult> {
+    return this.client.request("PUT", `/v1/creatures/${encodeURIComponent(id)}/catalog`, { body: input })
   }
 
   /**

@@ -120,6 +120,11 @@
       "import": "./dist/entries/jobs.js",
       "require": "./dist/entries/jobs.cjs"
     },
+    "./keepers": {
+      "types": "./dist/entries/keepers.d.ts",
+      "import": "./dist/entries/keepers.js",
+      "require": "./dist/entries/keepers.cjs"
+    },
     "./library": {
       "types": "./dist/entries/library.d.ts",
       "import": "./dist/entries/library.js",

@@ -241,6 +241,7 @@ import { adminReviewRoutes } from "./ee/routes/admin-review.js"
 import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
 import { communityRoutes } from "./ee/routes/community.js"
 import { adminCommunityRoutes } from "./ee/routes/admin-community.js"
+import { keeperRoutes } from "./ee/routes/keepers.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { llmChatRoutes } from "./routes/llm-chat.js"
 import { llmSuggestDescriptionRoutes } from "./routes/llm-suggest-description.js"
@@ -788,6 +789,9 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
   if (isMultiUser()) await app.register(communityRoutes)
   if (isMultiUser()) await app.register(adminCommunityRoutes)
+  // Nodaro Keepers: the shared catalog of the four item kinds (migration 566),
+  // copied through the community clone rule — the same editions as sharing.
+  if (isMultiUser()) await app.register(keeperRoutes)
   await app.register(aiWriterRoutes)
   await app.register(llmChatRoutes)
   await app.register(llmSuggestDescriptionRoutes)

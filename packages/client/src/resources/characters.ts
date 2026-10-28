@@ -5,6 +5,7 @@ export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared/entities"
 export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClientCore } from "../core.js"
 import type { GenerationSessionParams, Subject } from "./nodes.js"
+import type { SetKeeperCatalogInput, SetKeeperCatalogResult } from "./keepers.js"
 
 /**
  * Re-export the shared `EntityStyle` union (realistic | anime | 3d-pixar |
@@ -671,6 +672,16 @@ export class CharactersResource {
    */
   usage(id: string): Promise<CharacterUsage> {
     return this.client.request("GET", `/v1/characters/${encodeURIComponent(id)}/usage`)
+  }
+
+  /**
+   * Admin only: put one of your own characters on the shared Nodaro Keepers
+   * shelf (`client.keepers.catalog()`), or take it off. A first-party session
+   * or your personal token; `forbidden` for anyone who is not a platform
+   * admin, `not_found` for a row that is not yours.
+   */
+  setCatalog(id: string, input: SetKeeperCatalogInput): Promise<SetKeeperCatalogResult> {
+    return this.client.request("PUT", `/v1/characters/${encodeURIComponent(id)}/catalog`, { body: input })
   }
 
   /**

@@ -196,6 +196,13 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   // generate. Exact path, GET only — a user's OWN presets (`/v1/node-presets`,
   // `/favorites`, the groups) stay behind a credential.
   { method: "GET", path: "/v1/node-presets/factory" },
+  // The Nodaro Keepers shelf (ee/routes/keepers.ts, multi-user editions; a
+  // community install has no such route and answers 404): the deployment's shared
+  // catalog of characters / creatures / locations / objects — display fields
+  // only, the same for every caller, so a guest browses it and is asked to
+  // sign in only when they use one. Exact path, GET only — copying one
+  // (`/copy`) and curating it stay behind a credential.
+  { method: "GET", path: "/v1/keepers/catalog" },
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },
   // Public share-by-link read of an OPT-IN-shared workflow (studio /example/:id).

@@ -4557,6 +4557,83 @@ const { creatures } = await client.creatures.list({ q: "dragon" })
 
 ---
 
+### `client.keepers`
+
+Nodaro Keepers — the shared catalog of characters, creatures, locations and
+objects (`/v1/keepers/catalog`). The platform's admins curate it from their
+own items; everyone browses it (the read takes no credential, so a guest sees
+it too); using one copies it into the caller's own account — a row of their
+own, editable in Studio, with the main image and the variant assets that keep
+its renders consistent. The original is never changed, a later change to it
+does not reach the copies, and taking it off the shelf removes no copy.
+Reading and copying cost no credits.
+
+#### `catalog(params?)`
+
+```ts
+catalog(params?: { kind?: KeeperKind; cursor?: string; limit?: number }): Promise<KeeperCatalogPage>
+```
+
+One page of the shelf: `{ data: KeeperCatalogItem[], next }`. `kind` is
+`"character"` / `"creature"` / `"location"` / `"object"`; omitted, the page
+runs through the kinds in that order. `limit` 1–200 (default 50); pass a
+page's `next` back as `cursor` (null on the last page). Each item is
+`{ id, kind, name, description, imageUrl, previewUrl, category, sort, createdAt }`
+— `previewUrl` a 480px-wide copy of the main image for a tile, `category`
+the shelf heading, `sort` the shelf order. Display fields only. The shelf is
+public and cached for a minute; one address may read it 60 times a minute.
+
+```ts
+const { data, next } = await client.keepers.catalog({ kind: "character" })
+```
+
+#### `copy(kind, id)`
+
+```ts
+copy(kind: KeeperKind, id: string): Promise<CopyKeeperResult>
+```
+
+Use a shelf item: `{ id, name, kind, created }` — `id` is the caller's own
+row (`client.characters.get(id)` and the others read it). The copy is made
+through the same rule as cloning a community listing: the public text, the
+main image and the variant assets, every file copied into the caller's own
+storage and counted against it; a premade or library voice carried, a custom
+or cloned voice reduced to its name and sample; the owner's picker
+selections, reference photos and trained-model fields never carried; the
+caller's default project and a fresh canvas id. One copy per caller and
+item: a later call returns the same copy with `created: false`; a copy the
+caller archived comes back un-archived; a copy the caller already has is
+theirs whether or not the item is still on the shelf. `NotFoundError` for an
+item that is not on the shelf (and that the caller has no copy of); a 413 `storage_limit_exceeded` when its files do not fit
+the caller's storage (nothing is kept then); `ForbiddenError`
+`personal_space_disabled` when the caller's organization closed the personal
+space. OAuth apps need `assets:write`.
+
+```ts
+const { id } = await client.keepers.copy("character", item.id)
+const mine = await client.characters.get(id)
+```
+
+#### Curating the shelf — `setCatalog(id, input)` on `characters`, `creatures`, `locations`, `objects`
+
+```ts
+setCatalog(id: string, input: { catalog: boolean; sort?: number; category?: string | null }): Promise<SetKeeperCatalogResult>
+```
+
+Admin only, on the admin's own items: puts one on the shelf or takes it
+off (`sort` an integer within ±1,000,000; `category` up to 80 characters;
+both kept when omitted; `category: null` or a blank string clears it). Returns `{ id, kind, catalog, sort, category }`. `ForbiddenError` for
+anyone who is not a platform admin or for an OAuth app token (a session or
+the admin's personal token only); `NotFoundError` for an item that is not
+the admin's. An item with no main image stays off the shelf even when
+marked.
+
+```ts
+await client.characters.setCatalog(myCharacterId, { catalog: true, sort: 1, category: "Heroes" })
+```
+
+---
+
 ### `client.pipelines`
 
 Story-to-Video pipeline operations. Pipelines orchestrate multi-stage AI
