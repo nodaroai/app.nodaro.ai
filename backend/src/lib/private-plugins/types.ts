@@ -3635,6 +3635,14 @@ export interface PluginSupports {
    *   window instead of describing the clip again. Additive-optional: absent ⇒
    *   `false` — the make is sent neither key and a run neither field, so the
    *   wire is byte-identical (ee/lib/trends/scene-description.ts).
+   * - `pulseAudio`: a Pulse run (`engine: "kling-4"`) takes
+   *   `pulseAudio: "generated"` — Kling's own output audio delivered as is, in
+   *   place of the original audio put back on the result. The host sends it
+   *   only for that value (a body without it is the original audio): a
+   *   trend's choice (`TrendVersionData.pulseAudio`) and, for every direct
+   *   run, the admin's `nodaro_motion_pulse_audio` setting (any caller-sent
+   *   value is dropped). Additive-optional: absent ⇒ `false` — the key is
+   *   never sent, so the wire is byte-identical (lib/cast-swap-pulse-audio.ts).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3663,6 +3671,7 @@ export interface PluginSupports {
     readonly fullDepthScenes?: readonly ("description" | "original" | "none")[]
     readonly preparedPreview?: boolean
     readonly storedSceneDescription?: boolean
+    readonly pulseAudio?: boolean
   }
 }
 

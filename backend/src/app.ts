@@ -357,6 +357,7 @@ import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-sco
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
 import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
+import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
@@ -566,6 +567,9 @@ export async function buildApp() {
   // A Nodaro Motion run or quote naming its engine by any id (public, earlier
   // or internal) reaches the plugin's route as the internal id every engine takes.
   registerNodaroMotionEngineHook(app)
+  // A direct Nodaro Motion run's Pulse audio is the admin's setting, never the caller's
+  // (a trend run keeps the one its trend composed).
+  registerNodaroMotionPulseAudioHook(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the
   // identity this validates against. A no-op unless organizations are

@@ -9,8 +9,11 @@
 // - Motion: a Motion run's masking (Same as Precise, Faces hidden, or Full
 //   depth with its scene source) and its prompt style (left out: Flexible),
 //   PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
-// Save sends each setting that changed, whole; the Cast Swap engine reads
-// them within a minute.
+// Pulse also has its audio, for every direct Pulse run of either style: the
+// original audio back on the result (the default) or Kling's own track
+// (PUT /v1/admin/nodaro-motion/pulse-audio).
+// Save sends each setting that changed, whole; runs pick them up within a
+// minute.
 //
 // Below it, the engine prompt per engine and style (PromptPartsTabs.tsx),
 // saved on its own.
@@ -20,10 +23,12 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
-import type { AdminTrendEngine, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
+import type { AdminTrendEngine, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
 import { useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
+import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
+import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/PulseAudioSelect"
 import { maskingIssues } from "../trends/model"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
@@ -35,6 +40,9 @@ const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
   "kling-4": "Kling 4",
 }
 
+/** Said under the Pulse audio select when this environment's engine does not take it yet. */
+const PULSE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs deliver the original audio."
+
 const AUTO_HINT =
   "Only when the video model refuses the clip: one retry with the faces covered, charged only then (the quote names it apart)."
 
@@ -43,8 +51,11 @@ export default function AdminNodaroMotionPage() {
   const save = useSaveNodaroMotionMasking()
   const motionQuery = useNodaroMotionMotion()
   const saveMotion = useSaveNodaroMotionMotion()
+  const pulseQuery = useNodaroMotionPulseAudio()
+  const savePulse = useSaveNodaroMotionPulseAudio()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
+  const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -53,6 +64,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (motionQuery.data) setMotionDraft(structuredClone(motionQuery.data.motion ?? {}))
   }, [motionQuery.data])
+  useEffect(() => {
+    if (pulseQuery.data) setPulseDraft(pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
+  }, [pulseQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -61,11 +75,13 @@ export default function AdminNodaroMotionPage() {
   const nextMotion = motionToSaved(motionDraft)
   // Until the Motion setting has loaded there is nothing of it to save.
   const motionChanged = !!motionQuery.data && JSON.stringify(nextMotion) !== savedMotion
+  // Never saved reads as the original audio: choosing it then is no change.
+  const pulseChanged = !!pulseQuery.data && pulseDraft !== (pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
   const issues = (data?.engines ?? []).flatMap((e) => {
     const m = draft[e.id]
     return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
   })
-  const pending = save.isPending || saveMotion.isPending
+  const pending = save.isPending || saveMotion.isPending || savePulse.isPending
 
   if (!hasAdmin()) return null
 
@@ -74,6 +90,7 @@ export default function AdminNodaroMotionPage() {
     try {
       if (changed) await save.mutateAsync(next)
       if (motionChanged) await saveMotion.mutateAsync(nextMotion)
+      if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
       toast.success("Saved. Runs pick it up within a minute.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -90,7 +107,7 @@ export default function AdminNodaroMotionPage() {
             Precise and the Motion style. People never see or set it. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
@@ -149,6 +166,21 @@ export default function AdminNodaroMotionPage() {
                     )}
                   </div>
                 </div>
+                {engine.id === "motion-pulse" && (
+                  <div role="group" aria-label={`${engine.name} audio`} className="mt-4 max-w-sm">
+                    {pulseQuery.data ? (
+                      <PulseAudioSelect
+                        value={pulseDraft}
+                        onChange={setPulseDraft}
+                        note={pulseQuery.data.supported ? undefined : PULSE_AUDIO_UNSUPPORTED}
+                      />
+                    ) : pulseQuery.error ? (
+                      <p className="text-xs text-destructive">{pulseQuery.error.message}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Loading…</p>
+                    )}
+                  </div>
+                )}
               </section>
             ))}
           </div>

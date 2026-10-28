@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `pulseAudio`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -20,6 +20,7 @@
 import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
+import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
 import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect } from "@nodaro/render-rules"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
@@ -382,6 +383,13 @@ export interface TrendVersionData {
    * when absent, or `"cut-start"`). Read only on a Kling 4 trend.
    */
   klingLength?: CastSwapKlingLength
+  /**
+   * HIDDEN. What sound a Kling 4 run delivers: `"original"` (the default when
+   * absent: the original audio goes back on the result, exactly) or
+   * `"generated"` (Kling's own track, as is). Read only on a Kling 4 trend; not
+   * part of the face mask's settings, so changing it needs no new mask.
+   */
+  pulseAudio?: CastSwapPulseAudio
   /**
    * HIDDEN. The 4 s preview's INPUT clip, cut ahead of time from the source at
    * `previewStart` (see `TrendPreviewClip`); absent while the draft offers no

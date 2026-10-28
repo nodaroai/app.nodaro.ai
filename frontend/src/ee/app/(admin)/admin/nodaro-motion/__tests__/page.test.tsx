@@ -21,6 +21,7 @@ import { motionEngineGaps, motionIssues, motionToSaved, toSaved } from "../model
 const URL = "/v1/admin/nodaro-motion/masking"
 const PROMPT_URL = "/v1/admin/nodaro-motion/prompt-parts"
 const MOTION_URL = "/v1/admin/nodaro-motion/motion"
+const PULSE_AUDIO_URL = "/v1/admin/nodaro-motion/pulse-audio"
 const ANSWER = {
   set: "precise",
   parts: [{ id: "face", default: "Keep the faces.", defaultHash: "0123456789abcdef", placeholders: [], required: [], applies: true }],
@@ -41,6 +42,7 @@ beforeEach(() => {
   routes[`GET ${PROMPT_URL}`] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
   routes[`POST ${PROMPT_URL}/preview`] = () => ({ body: { data: ANSWER } })
   routes[`GET ${MOTION_URL}`] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -89,6 +91,43 @@ describe("Admin → Nodaro Motion", () => {
     await user.type(threshold, "2")
     expect(screen.getByText(/Nodaro Motion Prism: Face masking: the detection threshold/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+})
+
+describe("Admin → Nodaro Motion → Pulse audio", () => {
+  it("shows the select in the Pulse section only, Original audio until it is saved", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const pulse = await section(/Pulse/)
+    const audio = await within(pulse).findByRole("combobox", { name: "Pulse audio" })
+    expect(audio).toHaveTextContent("Original audio (default)")
+    expect(within(pulse).getByText("The original audio goes back on the result, exactly")).toBeInTheDocument()
+    expect(within(await section(/Prism/)).queryByRole("combobox", { name: "Pulse audio" })).not.toBeInTheDocument()
+    expect(screen.getAllByRole("combobox", { name: "Pulse audio" })).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("saves Kling's audio on its own, and nothing else", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${PULSE_AUDIO_URL}`] = (init) => ({
+      body: { data: { pulseAudio: JSON.parse(String(init?.body)).pulseAudio, updatedAt: "2026-10-28T12:00:00.000Z", supported: true } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const pulse = await section(/Pulse/)
+    await user.click(await within(pulse).findByRole("combobox", { name: "Pulse audio" }))
+    await user.click(screen.getByRole("option", { name: "Kling's audio" }))
+    expect(within(pulse).getByText("Kling keeps the clip's sound and its own track is delivered as is")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${PULSE_AUDIO_URL}`)).toEqual([{ pulseAudio: "generated" }]))
+    expect(sentTo(`PUT ${URL}`)).toEqual([])
+    expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([])
+  })
+
+  it("starts from what is stored, and says when this environment's engine does not take it yet", async () => {
+    routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: "generated", updatedAt: "2026-10-28T10:00:00.000Z", supported: false } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const pulse = await section(/Pulse/)
+    expect(await within(pulse).findByRole("combobox", { name: "Pulse audio" })).toHaveTextContent("Kling's audio")
+    expect(within(pulse).getByText(/does not take it yet/)).toBeInTheDocument()
   })
 })
 

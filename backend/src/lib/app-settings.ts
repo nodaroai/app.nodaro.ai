@@ -5,6 +5,7 @@ import { MODEL_MAKER_LOGOS_KEY, parseModelMakerLogos } from "./maker-logo-settin
 import { NODARO_MOTION_MASKING_KEY, parseNodaroMotionMasking, type NodaroMotionMasking } from "./nodaro-motion-masking.js"
 import { NODARO_MOTION_PROMPT_PARTS_KEY, parseNodaroMotionPromptParts, type NodaroMotionPromptParts } from "./nodaro-motion-prompt-parts.js"
 import { NODARO_MOTION_MOTION_KEY, parseNodaroMotionMotion, type NodaroMotionMotion } from "./nodaro-motion-motion.js"
+import { NODARO_MOTION_PULSE_AUDIO_KEY, parseNodaroMotionPulseAudio, type CastSwapPulseAudio } from "./cast-swap-pulse-audio.js"
 import {
   GALLERY_BANNED_EMAIL_PATTERNS_KEY,
   GALLERY_BANNED_USERS_KEY,
@@ -89,6 +90,11 @@ export interface AppSettings {
    * its own; an invalid one is dropped.
    */
   nodaro_motion_motion: NodaroMotionMotion | null
+  /**
+   * The audio of every DIRECT Nodaro Motion Pulse run (cast-swap-pulse-audio.ts).
+   * null = never saved (or not a value this app knows): the original audio.
+   */
+  nodaro_motion_pulse_audio: CastSwapPulseAudio | null
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -135,7 +141,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null }
     readFailures.add(fallback)
     return fallback
   }
@@ -160,6 +166,7 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_masking: null,
     nodaro_motion_prompt_parts: null,
     nodaro_motion_motion: null,
+    nodaro_motion_pulse_audio: null,
   }
 
   for (const row of data ?? []) {
@@ -169,6 +176,10 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === NODARO_MOTION_MOTION_KEY) {
       settings.nodaro_motion_motion = parseNodaroMotionMotion(row.value)
+      continue
+    }
+    if (row.key === NODARO_MOTION_PULSE_AUDIO_KEY) {
+      settings.nodaro_motion_pulse_audio = parseNodaroMotionPulseAudio(row.value)
       continue
     }
     if (row.key === NODARO_MOTION_PROMPT_PARTS_KEY) {

@@ -6,7 +6,8 @@
 //
 // Kling 4 renders whole seconds, so it also has a Length: which end of the clip
 // a run cuts to whole seconds (the end, the default, or the start). Shown, and
-// saved, only while the model is Kling 4.
+// saved, only while the model is Kling 4. Likewise its Pulse audio: the
+// original audio back on the result (the default) or Kling's own track.
 
 import { useId } from "react"
 import {
@@ -16,8 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { AdminTrendEngine, AdminTrendKlingLength } from "@/lib/api"
+import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPulseAudioId } from "@/lib/api"
 import { engineOfForm } from "../model"
+import { PulseAudioSelect } from "./PulseAudioSelect"
 
 const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: string }> = [
   {
@@ -44,11 +46,14 @@ interface Props {
   readonly value: AdminTrendEngine | undefined
   /** As stored; undefined = none set (cut the end). */
   readonly klingLength: AdminTrendKlingLength | undefined
+  /** As stored; undefined = none set (the original audio). */
+  readonly pulseAudio: CastSwapPulseAudioId | undefined
   readonly onChange: (next: AdminTrendEngine) => void
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
+  readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
 }
 
-export function EngineEditor({ value, klingLength, onChange, onKlingLengthChange }: Props) {
+export function EngineEditor({ value, klingLength, pulseAudio, onChange, onKlingLengthChange, onPulseAudioChange }: Props) {
   const engine = engineOfForm({ engine: value })
   const hint = ENGINES.find((e) => e.value === engine)?.hint
   const id = useId()
@@ -95,6 +100,7 @@ export function EngineEditor({ value, klingLength, onChange, onKlingLengthChange
             </Select>
           </div>
         )}
+        {engine === "kling-4" && <PulseAudioSelect value={pulseAudio} onChange={onPulseAudioChange} />}
       </div>
       <p id={hintId} className="text-xs text-muted-foreground">
         {hint}

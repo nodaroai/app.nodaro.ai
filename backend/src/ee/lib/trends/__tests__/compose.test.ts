@@ -485,6 +485,15 @@ describe("composeTrendRun — engine", () => {
     expect(composeTrendRun(trend(version({ klingLength: "cut-start" })), req()).body).not.toHaveProperty("klingLength")
   })
 
+  it("sends pulseAudio: generated on Kling 4 only when the trend asks for Kling's audio, and no key for the original audio (the default)", () => {
+    expect(composeTrendRun(kling(), req()).body).not.toHaveProperty("pulseAudio")
+    expect(composeTrendRun(trend(version({ engine: "kling-4", pulseAudio: "original" })), req()).body).not.toHaveProperty("pulseAudio")
+    expect(composeTrendRun(trend(version({ engine: "kling-4", pulseAudio: "generated" })), req()).body).toMatchObject({ pulseAudio: "generated" })
+    expect(composeTrendRun(trend(version({ engine: "kling-4", pulseAudio: "generated" })), req({ preview: true })).body).toMatchObject({ pulseAudio: "generated" })
+    // Seedance never gets it.
+    expect(composeTrendRun(trend(version({ pulseAudio: "generated" })), req()).body).not.toHaveProperty("pulseAudio")
+  })
+
   it("refuses a Kling 4 run that would send more than 10 pictures, as the route counts them", () => {
     // version(): lead and friend (people: one prepared picture each), place (a location: its own), and a reference of 2.
     const three = [img("a"), img("b"), img("c")]

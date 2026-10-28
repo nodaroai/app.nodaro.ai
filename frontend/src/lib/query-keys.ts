@@ -448,6 +448,7 @@ export const queryKeys = {
     /** Admin → Nodaro Motion: the direct runs' prompt part overrides, and one engine and style's preview of them. */
     nodaroMotionPromptParts: () => ["admin", "nodaro-motion", "prompt-parts"] as const,
     nodaroMotionMotion: () => ["admin", "nodaro-motion", "motion"] as const,
+    nodaroMotionPulseAudio: () => ["admin", "nodaro-motion", "pulse-audio"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
   },

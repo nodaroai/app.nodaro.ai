@@ -33,6 +33,7 @@ import { TrendsUnavailableError } from "./store.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
+import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -441,6 +442,16 @@ export function withoutUnsupportedPromptStyle(composed: ComposedTrendRun): void 
 }
 
 /**
+ * The body without `pulseAudio` when the loaded engine does not declare it
+ * takes one (`castSwap.pulseAudio`): such an engine always puts the original
+ * audio back, so it gets exactly the body it got before the setting existed.
+ * Mutates `composed.body`.
+ */
+export function withoutUnsupportedPulseAudio(composed: ComposedTrendRun): void {
+  if (composed.body.pulseAudio !== undefined && !engineTakesPulseAudio()) delete composed.body.pulseAudio
+}
+
+/**
  * The body without the stored scene description (`sceneDescription` and its
  * `sceneDescriptionWindow`, scene-description.ts) when the loaded engine does
  * not declare it rewrites one (`castSwap.storedSceneDescription`), or when the
@@ -512,7 +523,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
  * prompt parts, the prompt style and scene, the stored scene description, the
- * run's `sourceAsset`), and the
+ * Pulse audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
  * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
  */
@@ -521,6 +532,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedPromptParts(composed)
   withoutUnsupportedPromptStyle(composed)
   withoutUnsupportedSceneDescription(composed)
+  withoutUnsupportedPulseAudio(composed)
   withPreparedPreview(composed)
 }
 
