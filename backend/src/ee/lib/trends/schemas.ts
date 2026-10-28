@@ -19,6 +19,7 @@ import {
 import { CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_PROMPT_PART_IDS, CAST_SWAP_PROMPT_STYLES, TREND_UPSCALE_RESOLUTIONS, faceMaskMarkSlot } from "@nodaro/render-rules"
 import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapPulseAudioSchema } from "../../../lib/cast-swap-pulse-audio.js"
+import { castSwapPrismReferenceAudioSchema } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
 import type {
   Choice,
@@ -348,6 +349,8 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     // Absent = "original" (the original audio back on the result). Read only on a Kling 4 trend.
     pulseAudio: castSwapPulseAudioSchema.optional(),
+    // Absent = "full" (the clip's audio in the reference). Read only on a Prism trend.
+    prismReferenceAudio: castSwapPrismReferenceAudioSchema.optional(),
     previewClip: trendPreviewClipSchema.optional(),
     examples: z.array(trendExampleSchema),
   })

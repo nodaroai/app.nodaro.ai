@@ -297,6 +297,15 @@ describe("the model (engine) in the form", () => {
     expect(fromForm(toForm(draft({ engine: "kling-4" })))).not.toHaveProperty("pulseAudio")
   })
 
+  it("keeps prismReferenceAudio on a Prism draft (named or not), out of a Kling 4 one, and leaves it absent when none is set", () => {
+    for (const prismReferenceAudio of ["full", "voice", "none"] as const) {
+      expect(fromForm(toForm(draft({ prismReferenceAudio })))).toMatchObject({ prismReferenceAudio })
+      expect(fromForm(toForm(draft({ engine: "seedance-2-5", prismReferenceAudio })))).toMatchObject({ engine: "seedance-2-5", prismReferenceAudio })
+      expect(fromForm({ ...toForm(draft({ prismReferenceAudio })), engine: "kling-4" })).not.toHaveProperty("prismReferenceAudio")
+    }
+    expect(fromForm(toForm(draft({})))).not.toHaveProperty("prismReferenceAudio")
+  })
+
   it("round-trips a chosen engine exactly", () => {
     for (const engine of ["seedance-2-5", "kling-4"] as const) {
       expect(fromForm(toForm(draft({ engine })))).toEqual(savedOf(draft({ engine })))

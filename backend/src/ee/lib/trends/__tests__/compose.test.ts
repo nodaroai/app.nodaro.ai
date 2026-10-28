@@ -532,6 +532,23 @@ describe("composeTrendRun — engine", () => {
     expect(composeTrendRun(trend(version({ pulseAudio: "generated" })), req()).body).not.toHaveProperty("pulseAudio")
   })
 
+  it("sends prismReferenceAudio on Prism only for the voice or no audio, and no key for the full audio (the default)", () => {
+    expect(composeTrendRun(trend(version()), req()).body).not.toHaveProperty("prismReferenceAudio")
+    expect(composeTrendRun(trend(version({ prismReferenceAudio: "full" })), req()).body).not.toHaveProperty("prismReferenceAudio")
+    for (const prismReferenceAudio of ["voice", "none"] as const) {
+      // A trend naming no engine is Prism, and so is one naming it.
+      for (const over of [{}, { engine: "seedance-2-5" as const }]) {
+        for (const preview of [false, true]) {
+          expect(composeTrendRun(trend(version({ ...over, prismReferenceAudio })), req({ preview })).body, `${prismReferenceAudio} ${preview}`).toMatchObject({
+            prismReferenceAudio,
+          })
+        }
+      }
+      // Kling 4 never gets it.
+      expect(composeTrendRun(trend(version({ engine: "kling-4", prismReferenceAudio })), req()).body).not.toHaveProperty("prismReferenceAudio")
+    }
+  })
+
   it("refuses a Kling 4 run that would send more than 10 pictures, as the route counts them", () => {
     // version(): lead and friend (people: one prepared picture each), place (a location: its own), and a reference of 2.
     const three = [img("a"), img("b"), img("c")]

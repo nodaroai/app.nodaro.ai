@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `pulseAudio`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original. `engine` is public: the trend's page
@@ -21,6 +21,7 @@ import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
+import type { CastSwapPrismReferenceAudio } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
@@ -398,6 +399,15 @@ export interface TrendVersionData {
    * part of the face mask's settings, so changing it needs no new mask.
    */
   pulseAudio?: CastSwapPulseAudio
+  /**
+   * HIDDEN. What audio the reference video a Prism run sends to the video
+   * model carries: `"full"` (the default when absent: the clip's audio),
+   * `"voice"` (only the voice, split from the music) or `"none"` (silent). The
+   * original audio goes back on the result in every mode. Read only on a
+   * Prism trend; not part of the face mask's settings, so changing it needs
+   * no new mask.
+   */
+  prismReferenceAudio?: CastSwapPrismReferenceAudio
   /**
    * HIDDEN. The 4 s preview's INPUT clip, cut ahead of time from the source at
    * `previewStart` (see `TrendPreviewClip`); absent while the draft offers no

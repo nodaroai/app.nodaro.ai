@@ -3650,6 +3650,18 @@ export interface PluginSupports {
    *   run, the admin's `nodaro_motion_pulse_audio` setting (any caller-sent
    *   value is dropped). Additive-optional: absent ⇒ `false` — the key is
    *   never sent, so the wire is byte-identical (lib/cast-swap-pulse-audio.ts).
+   * - `prismReferenceAudio`: a Prism run (`engine: "seedance-2-5"`, or none)
+   *   takes `prismReferenceAudio: "voice" | "none"` — what audio the
+   *   reference video sent to the video model carries: only the voice split
+   *   from the music, or none, in place of the clip's full audio. The original
+   *   audio goes back on the result either way. The engine quotes `"voice"`
+   *   with the audio split in it. The host sends it only for those values (a
+   *   body without it is the full audio): a trend's choice
+   *   (`TrendVersionData.prismReferenceAudio`) and, for every direct run, the
+   *   admin's `nodaro_motion_prism_reference_audio` setting (any caller-sent
+   *   value is dropped). Additive-optional: absent ⇒ `false` — the key is
+   *   never sent, so the wire is byte-identical
+   *   (lib/cast-swap-prism-reference-audio.ts).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3679,6 +3691,7 @@ export interface PluginSupports {
     readonly preparedPreview?: boolean
     readonly storedSceneDescription?: boolean
     readonly pulseAudio?: boolean
+    readonly prismReferenceAudio?: boolean
   }
 }
 

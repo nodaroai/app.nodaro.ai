@@ -22,6 +22,7 @@ const URL = "/v1/admin/nodaro-motion/masking"
 const PROMPT_URL = "/v1/admin/nodaro-motion/prompt-parts"
 const MOTION_URL = "/v1/admin/nodaro-motion/motion"
 const PULSE_AUDIO_URL = "/v1/admin/nodaro-motion/pulse-audio"
+const PRISM_AUDIO_URL = "/v1/admin/nodaro-motion/prism-reference-audio"
 const ANSWER = {
   set: "precise",
   parts: [{ id: "face", default: "Keep the faces.", defaultHash: "0123456789abcdef", placeholders: [], required: [], applies: true }],
@@ -43,6 +44,7 @@ beforeEach(() => {
   routes[`POST ${PROMPT_URL}/preview`] = () => ({ body: { data: ANSWER } })
   routes[`GET ${MOTION_URL}`] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
   routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -128,6 +130,46 @@ describe("Admin → Nodaro Motion → Pulse audio", () => {
     const pulse = await section(/Pulse/)
     expect(await within(pulse).findByRole("combobox", { name: "Pulse audio" })).toHaveTextContent("Kling's audio")
     expect(within(pulse).getByText(/does not take it yet/)).toBeInTheDocument()
+  })
+})
+
+describe("Admin → Nodaro Motion → Prism reference audio", () => {
+  const HINT = "What the engine hears in the reference video. The original audio always goes back on the result."
+
+  it("shows the select in the Prism section only, Full audio until it is saved", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    const audio = await within(prism).findByRole("combobox", { name: "Prism reference audio" })
+    expect(audio).toHaveTextContent("Full audio (default)")
+    expect(within(prism).getByText(HINT)).toBeInTheDocument()
+    expect(within(await section(/Pulse/)).queryByRole("combobox", { name: "Prism reference audio" })).not.toBeInTheDocument()
+    expect(screen.getAllByRole("combobox", { name: "Prism reference audio" })).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("offers the three choices and saves the one chosen on its own, and nothing else", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
+      body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-10-29T12:00:00.000Z", supported: true } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(await within(prism).findByRole("combobox", { name: "Prism reference audio" }))
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Full audio (default)", "Voice only (music removed)", "No audio"])
+    await user.click(screen.getByRole("option", { name: "Voice only (music removed)" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: "voice" }]))
+    expect(sentTo(`PUT ${URL}`)).toEqual([])
+    expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([])
+    expect(sentTo(`PUT ${PULSE_AUDIO_URL}`)).toEqual([])
+  })
+
+  it("starts from what is stored, and says when this environment's engine does not take it yet", async () => {
+    routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: "none", updatedAt: "2026-10-29T10:00:00.000Z", supported: false } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    expect(await within(prism).findByRole("combobox", { name: "Prism reference audio" })).toHaveTextContent("No audio")
+    expect(within(prism).getByText(/does not take it yet: its runs send the full audio/)).toBeInTheDocument()
   })
 })
 

@@ -34,6 +34,7 @@ import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
 import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
+import { engineTakesPrismReferenceAudio } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -454,6 +455,16 @@ export function withoutUnsupportedPulseAudio(composed: ComposedTrendRun): void {
 }
 
 /**
+ * The body without `prismReferenceAudio` when the loaded engine does not
+ * declare it takes one (`castSwap.prismReferenceAudio`): such an engine always
+ * sends the clip's full audio in the reference, so it gets exactly the body it
+ * got before the setting existed. Mutates `composed.body`.
+ */
+export function withoutUnsupportedPrismReferenceAudio(composed: ComposedTrendRun): void {
+  if (composed.body.prismReferenceAudio !== undefined && !engineTakesPrismReferenceAudio()) delete composed.body.prismReferenceAudio
+}
+
+/**
  * The body without the stored scene description (`sceneDescription` and its
  * `sceneDescriptionWindow`, scene-description.ts) when the loaded engine does
  * not declare it rewrites one (`castSwap.storedSceneDescription`), or when the
@@ -537,7 +548,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
  * prompt parts, the prompt style and scene, the stored scene description, the
- * Pulse audio, the run's `sourceAsset`), and the
+ * Pulse audio, the Prism reference audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
  * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
  */
@@ -547,6 +558,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedPromptStyle(composed)
   withoutUnsupportedSceneDescription(composed)
   withoutUnsupportedPulseAudio(composed)
+  withoutUnsupportedPrismReferenceAudio(composed)
   withPreparedPreview(composed)
 }
 

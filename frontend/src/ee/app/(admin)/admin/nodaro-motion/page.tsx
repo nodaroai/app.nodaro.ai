@@ -12,6 +12,10 @@
 // Pulse also has its audio, for every direct Pulse run of either style: the
 // original audio back on the result (the default) or Kling's own track
 // (PUT /v1/admin/nodaro-motion/pulse-audio).
+// Prism has its reference audio, for every direct Prism run of either style:
+// what the reference video sent to the video model carries (the full audio,
+// the default; the voice only; or none), the original audio always back on
+// the result (PUT /v1/admin/nodaro-motion/prism-reference-audio).
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -23,12 +27,17 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
-import type { AdminTrendEngine, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
+import type { AdminTrendEngine, CastSwapPrismReferenceAudioId, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
 import { useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
+import {
+  useNodaroMotionPrismReferenceAudio,
+  useSaveNodaroMotionPrismReferenceAudio,
+} from "@/ee/hooks/queries/use-nodaro-motion-prism-reference-audio"
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
 import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/PulseAudioSelect"
+import { DEFAULT_PRISM_REFERENCE_AUDIO, PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { maskingIssues } from "../trends/model"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
@@ -43,6 +52,9 @@ const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
 /** Said under the Pulse audio select when this environment's engine does not take it yet. */
 const PULSE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs deliver the original audio."
 
+/** Said under the Prism reference audio select when this environment's engine does not take it yet. */
+const PRISM_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs send the full audio."
+
 const AUTO_HINT =
   "Only when the video model refuses the clip: one retry with the faces covered, charged only then (the quote names it apart)."
 
@@ -53,9 +65,12 @@ export default function AdminNodaroMotionPage() {
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
+  const prismAudioQuery = useNodaroMotionPrismReferenceAudio()
+  const savePrismAudio = useSaveNodaroMotionPrismReferenceAudio()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
+  const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioId>(DEFAULT_PRISM_REFERENCE_AUDIO)
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -67,6 +82,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (pulseQuery.data) setPulseDraft(pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
   }, [pulseQuery.data])
+  useEffect(() => {
+    if (prismAudioQuery.data) setPrismAudioDraft(prismAudioQuery.data.prismReferenceAudio ?? DEFAULT_PRISM_REFERENCE_AUDIO)
+  }, [prismAudioQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -77,11 +95,14 @@ export default function AdminNodaroMotionPage() {
   const motionChanged = !!motionQuery.data && JSON.stringify(nextMotion) !== savedMotion
   // Never saved reads as the original audio: choosing it then is no change.
   const pulseChanged = !!pulseQuery.data && pulseDraft !== (pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
+  // Never saved reads as the full audio: choosing it then is no change.
+  const prismAudioChanged =
+    !!prismAudioQuery.data && prismAudioDraft !== (prismAudioQuery.data.prismReferenceAudio ?? DEFAULT_PRISM_REFERENCE_AUDIO)
   const issues = (data?.engines ?? []).flatMap((e) => {
     const m = draft[e.id]
     return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
   })
-  const pending = save.isPending || saveMotion.isPending || savePulse.isPending
+  const pending = save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending
 
   if (!hasAdmin()) return null
 
@@ -91,6 +112,7 @@ export default function AdminNodaroMotionPage() {
       if (changed) await save.mutateAsync(next)
       if (motionChanged) await saveMotion.mutateAsync(nextMotion)
       if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
+      if (prismAudioChanged) await savePrismAudio.mutateAsync(prismAudioDraft)
       toast.success("Saved. Runs pick it up within a minute.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -107,7 +129,7 @@ export default function AdminNodaroMotionPage() {
             Precise and the Motion style. People never see or set it. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
@@ -176,6 +198,21 @@ export default function AdminNodaroMotionPage() {
                       />
                     ) : pulseQuery.error ? (
                       <p className="text-xs text-destructive">{pulseQuery.error.message}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Loading…</p>
+                    )}
+                  </div>
+                )}
+                {engine.id === "motion-prism" && (
+                  <div role="group" aria-label={`${engine.name} reference audio`} className="mt-4 max-w-sm">
+                    {prismAudioQuery.data ? (
+                      <PrismReferenceAudioSelect
+                        value={prismAudioDraft}
+                        onChange={setPrismAudioDraft}
+                        note={prismAudioQuery.data.supported ? undefined : PRISM_REFERENCE_AUDIO_UNSUPPORTED}
+                      />
+                    ) : prismAudioQuery.error ? (
+                      <p className="text-xs text-destructive">{prismAudioQuery.error.message}</p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Loading…</p>
                     )}

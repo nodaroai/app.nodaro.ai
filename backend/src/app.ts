@@ -358,6 +358,7 @@ import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
 import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
 import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
+import { registerNodaroMotionPrismReferenceAudioHook } from "./middleware/nodaro-motion-prism-reference-audio.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
@@ -570,6 +571,8 @@ export async function buildApp() {
   // A direct Nodaro Motion run's Pulse audio is the admin's setting, never the caller's
   // (a trend run keeps the one its trend composed).
   registerNodaroMotionPulseAudioHook(app)
+  // Likewise its Prism reference audio (a trend run keeps the one its trend composed).
+  registerNodaroMotionPrismReferenceAudioHook(app)
 
   // Workspace context — AFTER the auth hook, which is what resolves the
   // identity this validates against. A no-op unless organizations are

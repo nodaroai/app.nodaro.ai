@@ -11411,6 +11411,8 @@ export interface AdminTrendData {
   klingLength?: AdminTrendKlingLength
   /** Kling 4 only: what sound a run delivers (hidden). Absent = `"original"`. */
   pulseAudio?: CastSwapPulseAudioId
+  /** Prism only: what audio the reference video sent to the video model carries (hidden). Absent = `"full"`. */
+  prismReferenceAudio?: CastSwapPrismReferenceAudioId
   /**
    * The engine prompt's overrides (hidden; written only by the prompt parts
    * route, kept by a draft save): per part, its text and the hash of the
@@ -11467,6 +11469,14 @@ export type AdminTrendKlingLength = "cut-end" | "cut-start"
  * track as is.
  */
 export type CastSwapPulseAudioId = "original" | "generated"
+
+/**
+ * What audio the reference video a Nodaro Motion Prism run sends to the video
+ * model carries (admin only): the clip's full audio (the default), only the
+ * voice split from the music, or none. The original audio always goes back on
+ * the result.
+ */
+export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none"
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
@@ -12423,6 +12433,35 @@ export async function saveNodaroMotionPulseAudio(pulseAudio: CastSwapPulseAudioI
     await apiRequest<{ data: NodaroMotionPulseAudioView }>(ADMIN_NODARO_MOTION_PULSE_AUDIO, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { pulseAudio },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Prism reference audio for direct runs (/v1/admin/nodaro-motion/prism-reference-audio, admin-nodaro-motion-prism-reference-audio.ts) ----
+
+export interface NodaroMotionPrismReferenceAudioView {
+  /** null = never saved: every direct Prism run sends the clip's full audio. */
+  prismReferenceAudio: CastSwapPrismReferenceAudioId | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine takes the setting (`castSwap.prismReferenceAudio`); without it every run sends the full audio. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"
+
+export async function fetchNodaroMotionPrismReferenceAudio(): Promise<NodaroMotionPrismReferenceAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPrismReferenceAudioView }>(ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO, "apiErr.loadNodaroMotion")
+  ).data
+}
+
+export async function saveNodaroMotionPrismReferenceAudio(
+  prismReferenceAudio: CastSwapPrismReferenceAudioId,
+): Promise<NodaroMotionPrismReferenceAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPrismReferenceAudioView }>(ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { prismReferenceAudio },
     })
   ).data
 }
