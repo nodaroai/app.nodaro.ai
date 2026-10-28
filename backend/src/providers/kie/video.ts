@@ -60,6 +60,7 @@ import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
 import { originalCdnImageUrl } from "../../lib/cdn-original-url.js"
+import { imageHasMetadata } from "../../lib/image-metadata.js"
 import { labelInputFailure, urlForLog, type InputStep } from "./input-label.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
@@ -879,7 +880,13 @@ async function prepareImageForProvider(
   const needsCompress = buffer.length > IMAGE_MAX_BYTES
   const needsResize = maxDim !== undefined && (width > maxDim || height > maxDim)
 
-  if (!needsConversion && !needsCompress && !needsResize) {
+  // Embedded metadata (Content Credentials, EXIF, XMP, text chunks) never
+  // reaches a provider: a model can refuse an input image because of it, and
+  // it was never ours to forward. Every re-encode below writes none of it, so
+  // this only adds a pass for a file that needed nothing else (lib/image-metadata.ts).
+  const needsStrip = !needsConversion && imageHasMetadata(buffer, format)
+
+  if (!needsConversion && !needsCompress && !needsResize && !needsStrip) {
     return imageUrl
   }
 
@@ -887,7 +894,8 @@ async function prepareImageForProvider(
     `[KIE.ai] Image preprocessing for ${provider}: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
     `${needsConversion ? ` → converting to JPEG${acceptedFormats.has(format) ? " (forced)" : ` (${format} not accepted)`}` : ""}` +
     `${needsResize ? ` → downscaling to ≤${maxDim}px` : ""}` +
-    `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
+    `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}` +
+    `${needsStrip ? " → stripping metadata" : ""}`
   )
 
   // Base pipeline. `.rotate()` FIRST: re-encoding drops EXIF, so an
@@ -927,6 +935,26 @@ async function prepareImageForProvider(
     return maxDim !== undefined
       ? s.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true })
       : s
+  }
+
+  // Metadata was the only reason to touch the file: re-encode it in its own
+  // format (PNG stays lossless and keeps its alpha), so stripping costs the
+  // input nothing a provider would see. Over the size cap it takes the ladder.
+  if (needsStrip && !needsResize && !needsCompress && (format === "png" || format === "jpeg" || format === "webp")) {
+    const stripped = await encode(
+      format === "png"
+        ? pipeline().png()
+        : format === "webp"
+          ? pipeline().webp(constraints?.preferLossless === true ? { lossless: true } : { quality: 95 })
+          : pipeline().jpeg({ quality: 95, mozjpeg: true }),
+    )
+    if (stripped.length <= IMAGE_MAX_BYTES) {
+      at("upload")
+      const ext = format === "jpeg" ? "jpg" : format
+      const strippedUrl = await uploadJobScratchBuffer(stripped, "provider-stripped", ext, `image/${format}`)
+      console.log(`[KIE.ai] Image metadata stripped (${format}): ${(stripped.length / 1024 / 1024).toFixed(1)}MB → ${strippedUrl.substring(0, 80)}...`)
+      return strippedUrl
+    }
   }
 
   // Lossless first, where the lane asked for it and the SKU will take it.
@@ -1068,7 +1096,7 @@ const SEEDANCE_2_REF_MAX_DIMENSION = 2048
  * Returns the original `options` unchanged when there are no references to
  * process, so the common no-reference path stays allocation-free.
  */
-async function normalizeSeedance2ReferenceImages(
+async function normalizeReferenceImages(
   provider: string,
   options: ProviderOptions | undefined,
 ): Promise<ProviderOptions | undefined> {
@@ -1087,6 +1115,34 @@ async function normalizeSeedance2ReferenceImages(
     refs.map((u, i) => ensureImageForProvider(u, provider, { ...constraints, inputLabel: `reference image #${i + 1}` })),
   )
   return { ...options, referenceImageUrls: processed }
+}
+
+/**
+ * Kling 3.0 element images go through the same preparation as its frames
+ * (JPEG/PNG, 2048px cap, no embedded metadata). Element videos are untouched.
+ */
+async function prepareKlingElementImages(
+  elements: ProviderOptions["klingElements"],
+): Promise<ProviderOptions["klingElements"]> {
+  if (!elements?.length) return elements
+  return Promise.all(
+    elements.map(async (el) =>
+      el.element_input_urls?.length
+        ? {
+            ...el,
+            element_input_urls: await Promise.all(
+              el.element_input_urls.map((u, i) =>
+                ensureImageForProvider(u, "kling-3.0", {
+                  context: "Video generation",
+                  maxDimension: 2048,
+                  inputLabel: `element "${el.name}" image #${i + 1}`,
+                }),
+              ),
+            ),
+          }
+        : el,
+    ),
+  )
 }
 
 /** Shared helper for Kling 3.0 calls from both imageToVideo and textToVideo. */
@@ -1117,7 +1173,7 @@ async function runKling3(
     aspectRatio,
     multiShots: options?.multiShots,
     multiPrompt: options?.multiPrompt,
-    klingElements: options?.klingElements,
+    klingElements: await prepareKlingElementImages(options?.klingElements),
     motionPrompt: options?.motionPrompt,
     onProgress: options?.onProgress,
   }, { ...reconcileOpts, modelKey: "kling-3.0", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions({ audio: sound, resolution: mode, duration: Number(snappedDuration) }) } })
@@ -1469,7 +1525,7 @@ async function runWan3(
   // run being rejected for combining the two. Reference images are size-
   // normalized first (the resolver is synchronous); the frame URLs the caller
   // passes are already normalized by imageToVideo.
-  const normalizedOptions = await normalizeSeedance2ReferenceImages(modelKey, options)
+  const normalizedOptions = await normalizeReferenceImages(modelKey, options)
   const limits = {
     ...SEEDANCE_2_REF_LIMITS,
     ...(VIDEO_REF_LIMITS_BY_PROVIDER[modelKey] ?? {}),
@@ -1589,7 +1645,7 @@ async function runViduQ4(
   // the start frame the caller passes is already normalized by imageToVideo.
   // No reference VIDEO lane exists on either endpoint: `videos: 0` overrides
   // the Seedance base so nothing can reach the wire as reference_video_urls.
-  const normalizedOptions = await normalizeSeedance2ReferenceImages(modelKey, options)
+  const normalizedOptions = await normalizeReferenceImages(modelKey, options)
   const limits = { ...SEEDANCE_2_REF_LIMITS, ...(VIDEO_REF_LIMITS_BY_PROVIDER[modelKey] ?? {}), videos: 0 }
   const userPrompt = prompt?.trim() ? prompt : undefined
   const resolved = resolveSeedance2Inputs({
@@ -2045,6 +2101,7 @@ export class KieVideoProvider
     // below is model-agnostic and each SKU's own KIE id, resolution list,
     // aspect list, input quota and tier cost are looked up per model.
     if (isGeminiOmniProvider(provider)) {
+      options = await normalizeReferenceImages(provider, options)
       // With a start frame, the list is OURS to describe and budget
       // (resolveGeminiOmniI2vInputs): image 1 is bound as the opening frame
       // and the rest as identity references — a multimodal model treats an
@@ -2099,6 +2156,7 @@ export class KieVideoProvider
     // createTask path: that path would send `duration: "5"` and a lowercase
     // resolution, both of which the Wan schema rejects.
     if (isWan3Provider(provider)) {
+      options = await normalizeReferenceImages(provider, options)
       return runWan3(
         modelConfig,
         provider,
@@ -2142,6 +2200,7 @@ export class KieVideoProvider
       if (effectiveEndFrameUrl) {
         console.log(`[KIE.ai] Vidu Q4: end frame ignored — neither Vidu Q4 endpoint accepts one`)
       }
+      options = await normalizeReferenceImages(provider, options)
       return runViduQ4(
         modelConfig,
         provider,
@@ -2318,14 +2377,14 @@ export class KieVideoProvider
       // here. The frame URLs the resolver moves into the pool are already
       // processed (effectiveImageUrl/effectiveEndFrameUrl), so they're not
       // touched again.
-      const seedance2Options = await normalizeSeedance2ReferenceImages(provider, options)
+      const seedance2Options = await normalizeReferenceImages(provider, options)
       applySeedance2Params(input, seedance2Options, provider)
     }
 
     if (isMinimaxH3Provider(provider)) {
       // Same 2048px-cap normalization pipeline as Seedance 2 (the frames were
       // already processed into effectiveImageUrl/effectiveEndFrameUrl above).
-      const h3Options = await normalizeSeedance2ReferenceImages(provider, options)
+      const h3Options = await normalizeReferenceImages(provider, options)
       applyMinimaxH3Params(input, h3Options)
     }
 
@@ -2519,6 +2578,7 @@ export class KieVideoProvider
     // Gemini Omni family (pro + flash) — text-to-video (defensive V2V/I2V if
     // refs present). Family-keyed so a sibling SKU inherits the whole branch.
     if (isGeminiOmniProvider(provider)) {
+      options = await normalizeReferenceImages(provider, options)
       const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
       return runGeminiOmni(
         modelConfig,
@@ -2556,6 +2616,7 @@ export class KieVideoProvider
     // unified Generate Video node, so the resolver picks reference mode when
     // refs are wired and the degenerate no-input mode when they are not.
     if (isWan3Provider(provider)) {
+      options = await normalizeReferenceImages(provider, options)
       return runWan3(
         modelConfig,
         provider,
@@ -2622,7 +2683,7 @@ export class KieVideoProvider
     if (isSeedance2Provider(provider)) {
       // Size-normalize the user's reference images before the resolver runs —
       // same rationale as the i2v path (applySeedance2Params is synchronous).
-      const seedance2Options = await normalizeSeedance2ReferenceImages(provider, options)
+      const seedance2Options = await normalizeReferenceImages(provider, options)
       applySeedance2Params(input, seedance2Options, provider)
     }
 
@@ -2630,7 +2691,7 @@ export class KieVideoProvider
       // Same rationale as the i2v path (applyMinimaxH3Params is synchronous;
       // reference images ride the shared 2048px-cap normalization first).
       // With references wired, the task model swaps to reference-to-video.
-      const h3Options = await normalizeSeedance2ReferenceImages(provider, options)
+      const h3Options = await normalizeReferenceImages(provider, options)
       applyMinimaxH3Params(input, h3Options)
     }
 

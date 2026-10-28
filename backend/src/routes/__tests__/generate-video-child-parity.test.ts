@@ -71,6 +71,9 @@ vi.mock("@/providers/kie/reference-video-size.js", async (importOriginal) => ({
 }))
 // Reference images are downloaded and inspected: an already-fine 1024² JPEG.
 vi.mock("@/lib/safe-fetch.js", () => ({ safeFetch: mocks.safeFetch }))
+// The mocked download is not a real file, so the metadata walker would rightly
+// refuse to vouch for it and strip it; this test compares the requests sent.
+vi.mock("@/lib/image-metadata.js", () => ({ imageHasMetadata: () => false }))
 vi.mock("sharp", () => {
   const chain: Record<string, unknown> = {}
   chain.metadata = () => Promise.resolve({ format: "jpeg", width: 1024, height: 1024 })

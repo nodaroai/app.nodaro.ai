@@ -2685,6 +2685,11 @@ page for the token syntax and worked examples.
 > as the original file, `https://cdn.nodaro.ai/<path>`. The same applies to the
 > pictures of a trend run and of a Nodaro Motion run. Other hosts' URLs are
 > used as sent.
+>
+> **Embedded metadata is removed before a model sees an image.** An input image
+> that carries embedded data (Content Credentials, EXIF, XMP, IPTC, PNG text
+> chunks) is re-encoded without it, in its own format, before it is sent to the
+> model; a clean image is sent as is. Your stored file is not changed.
 
 > **`referenceOrder` on images too.** `POST /v1/generate-image` accepts the same
 > optional `referenceOrder` (parity with video) to reorder its assembled
