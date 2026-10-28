@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { lookPreviewStillUrl } from "@nodaro/prompts/picker-art"
+// The shelf bounds are public contract (`@nodaro/shared`): the route's zod, the
+// cursor check below and the Studio dialog hold `catalog_sort` within
+// ±KEEPER_CATALOG_SORT_MAX and the heading to KEEPER_CATALOG_CATEGORY_MAX.
+import { KEEPER_CATALOG_CATEGORY_MAX, KEEPER_CATALOG_SORT_MAX } from "@nodaro/shared/entities"
 import { supabase } from "../../lib/supabase.js"
 import { deriveAvailableName } from "../../lib/entity-naming.js"
 import { ensureDefaultProject } from "../../lib/default-project.js"
@@ -64,8 +68,8 @@ const PREVIEW_WIDTH = 480
 export const KEEPER_CATALOG_LIMIT_DEFAULT = 50
 /** The largest page a caller may ask for. */
 export const KEEPER_CATALOG_LIMIT_MAX = 200
-/** `catalog_sort` lives within ±this — the admin's body and a cursor are held to the same bound. */
-export const KEEPER_CATALOG_SORT_MAX = 1_000_000
+/** The shelf bounds, re-exported for the route (see the import at the top). */
+export { KEEPER_CATALOG_CATEGORY_MAX, KEEPER_CATALOG_SORT_MAX }
 
 export interface KeeperCatalogItem {
   readonly id: string
@@ -288,11 +292,16 @@ export async function setKeeperCatalog(
 ): Promise<SetKeeperCatalogResult> {
   // A blank heading is no heading.
   const category = input.category === undefined ? undefined : input.category?.trim() || null
+  // No `updated_at` bump: the shelf state is admin metadata, not content. The
+  // creature, location and object studios send the row's `updatedAt` as their
+  // optimistic-concurrency token on Save and Approve main image, so bumping it
+  // here would make the admin's own next click in Studio a 409 that throws
+  // their edits away (the shelf listing orders by sort + created_at, never by
+  // updated_at, so nothing reads this timestamp for the shelf).
   const patch = {
     catalog: input.catalog,
     ...(input.sort !== undefined ? { catalog_sort: input.sort } : {}),
     ...(category !== undefined ? { catalog_category: category } : {}),
-    updated_at: new Date().toISOString(),
   }
   const { data, error } = await supabase
     .from(tableOf(kind))

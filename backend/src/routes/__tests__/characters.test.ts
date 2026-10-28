@@ -73,6 +73,9 @@ const DB_CHARACTER = {
   expressions: [],
   poses: [],
   lighting_variations: [],
+  catalog: false,
+  catalog_sort: 0,
+  catalog_category: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 }
@@ -97,6 +100,9 @@ const CAMEL_CHARACTER = {
   sheets: [],
   detailCloseups: [],
   outfitVariations: [],
+  catalog: false,
+  catalogSort: 0,
+  catalogCategory: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 }
@@ -665,6 +671,30 @@ describe("GET /v1/characters/:id", () => {
       "eq",
       TEST_CHARACTER_ID,
     )
+  })
+
+  it("carries the row's Nodaro Keepers shelf state (catalog, catalogSort, catalogCategory) so Studio can show it", async () => {
+    // The admin's Studio header reads the item's own GET to prefill the shelf
+    // dialog — without these three fields it would guess from the public shelf.
+    const onShelf = { ...DB_CHARACTER, catalog: true, catalog_sort: 3, catalog_category: "Heroes" }
+    const charsByIdChain = getByIdChain({ data: onShelf, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const cols = vi.mocked(charsByIdChain.mockSelect).mock.calls[0]?.[0] as string
+    expect(cols).toMatch(/\bcatalog\b(?!_)/)
+    for (const c of ["catalog_sort", "catalog_category"]) expect(cols).toContain(c)
+    expect(res.json()).toMatchObject({ catalog: true, catalogSort: 3, catalogCategory: "Heroes" })
   })
 
   it("excludes skipPortraitAttach jobs from BOTH portrait-candidate queries (scene renders are not portraits)", async () => {

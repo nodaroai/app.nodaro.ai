@@ -168,7 +168,7 @@ const listObjectsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, boards, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, boards, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, catalog, catalog_sort, catalog_category, deleted_at, created_at, updated_at"
 
 type ObjectRow = {
   id: string
@@ -193,6 +193,11 @@ type ObjectRow = {
   // Reference-sheet buckets (migration 200).
   sheets: ReferenceSheet[] | null
   detail_closeups: unknown[] | null
+  // Nodaro Keepers (migration 566): the row's own shelf state. Admin-set;
+  // off on every other user's rows and on every copy.
+  catalog: boolean
+  catalog_sort: number
+  catalog_category: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -223,6 +228,9 @@ function toCamel(obj: ObjectRow) {
     selectedAssetByVariant: obj.selected_asset_by_variant ?? {},
     sheets: obj.sheets ?? [],
     detailCloseups: obj.detail_closeups ?? [],
+    catalog: obj.catalog ?? false,
+    catalogSort: obj.catalog_sort ?? 0,
+    catalogCategory: obj.catalog_category ?? null,
     deletedAt: obj.deleted_at,
     createdAt: obj.created_at,
     updatedAt: obj.updated_at,

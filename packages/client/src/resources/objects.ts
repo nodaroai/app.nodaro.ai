@@ -98,6 +98,14 @@ export interface Object {
    *  NOT normalized; soft-capped server-side at 200 keys / 2048-char values
    *  (overflow dropped silently). Defaults to `{}`. */
   selectedAssetByVariant?: Record<string, string> | null
+  /** Nodaro Keepers: whether this row is on the shared shelf (`client.keepers`).
+   *  Admin-set through `setCatalog`; `false` on everyone else's rows and on
+   *  every copy. Optional on the read surface for older servers. */
+  catalog?: boolean
+  /** The shelf order (lowest first); `0` when never set. */
+  catalogSort?: number
+  /** The shelf heading, or `null`. */
+  catalogCategory?: string | null
   deletedAt: string | null
   createdAt: string
   updatedAt: string

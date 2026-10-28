@@ -3,6 +3,7 @@ import { Upload } from "lucide-react"
 import { useLocationStudio } from "./use-location-studio"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
 import { StudioShell } from "../studio-shell/studio-shell"
+import { KeepersShelfButton } from "../studio-shell/keepers-shelf-button"
 import { LOCATION_STUDIO_NAV } from "./location-nav-config"
 import { Button } from "@/components/ui/button"
 import {
@@ -163,6 +164,7 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
               </Tooltip>
             </TooltipProvider>
           )}
+          <KeepersShelfButton kind="location" dbId={data.locationDbId} sourceImageUrl={data.sourceImageUrl} />
           <button
             type="button"
             onClick={() => {

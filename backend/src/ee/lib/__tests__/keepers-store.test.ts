@@ -239,9 +239,21 @@ describe("setKeeperCatalog", () => {
     const result = await setKeeperCatalog("creature", SRC, ADMIN, { catalog: true, sort: 5 })
     expect(tables).toEqual(["creatures"])
     const [, [patch]] = qb.calls.find(([verb]) => verb === "update")!
-    expect(patch).toEqual({ catalog: true, catalog_sort: 5, updated_at: expect.any(String) })
+    expect(patch).toEqual({ catalog: true, catalog_sort: 5 })
     expect(qb.calls).toEqual(expect.arrayContaining([["eq", ["id", SRC]], ["eq", ["user_id", ADMIN]], ["is", ["deleted_at", null]]]))
     expect(result).toEqual({ ok: true, id: SRC, catalog: true, sort: 5, category: null })
+  })
+
+  it("never touches updated_at — the studios' optimistic-concurrency token on their next Save", async () => {
+    // A bump here made the admin's own next Save / Approve main image in the
+    // creature, location and object studios a 409 that discarded their edits.
+    for (const input of [{ catalog: true }, { catalog: false, sort: 2, category: "Heroes" }]) {
+      const qb = makeQB({ data: { id: SRC, catalog: input.catalog, catalog_sort: input.sort ?? 0, catalog_category: input.category ?? null } })
+      queueFrom(qb)
+      await setKeeperCatalog("location", SRC, ADMIN, input)
+      const [, [patch]] = qb.calls.find(([verb]) => verb === "update")!
+      expect(Object.keys(patch as object)).not.toContain("updated_at")
+    }
   })
 
   it("a row that is not the admin's (or is gone) is not_found; a null or blank category clears it", async () => {
@@ -252,7 +264,7 @@ describe("setKeeperCatalog", () => {
       queueFrom(qb)
       await setKeeperCatalog("object", SRC, ADMIN, { catalog: false, category })
       const [, [patch]] = qb.calls.find(([verb]) => verb === "update")!
-      expect(patch).toEqual({ catalog: false, catalog_category: null, updated_at: expect.any(String) })
+      expect(patch).toEqual({ catalog: false, catalog_category: null })
     }
   })
 })

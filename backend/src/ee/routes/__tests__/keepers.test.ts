@@ -190,4 +190,31 @@ describe("PUT /v1/<kind>/:id/catalog (admin)", () => {
     const notMine = await app.inject({ method: "PUT", url: `/v1/objects/${ITEM}/catalog`, headers: { "x-user-id": ADMIN }, payload: { catalog: true } })
     expect(notMine.statusCode).toBe(404)
   })
+
+  it("holds the body to the shared bounds at the edge: 80 / ±1,000,000 pass, 81 / ±1,000,001 are 400", async () => {
+    // The bounds are `@nodaro/shared`'s KEEPER_CATALOG_* — the Studio dialog
+    // refuses the same values, so a drift on either side shows here.
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    vi.mocked(setKeeperCatalog).mockResolvedValue({ ok: true, id: ITEM, catalog: true, sort: 0, category: null })
+    const put = (payload: Record<string, unknown>) =>
+      app.inject({ method: "PUT", url: `/v1/characters/${ITEM}/catalog`, headers: { "x-user-id": ADMIN }, payload })
+
+    for (const payload of [
+      { catalog: true, category: "x".repeat(80) },
+      { catalog: true, sort: 1_000_000 },
+      { catalog: true, sort: -1_000_000 },
+    ]) {
+      expect((await put(payload)).statusCode, JSON.stringify(payload).slice(0, 40)).toBe(200)
+    }
+    for (const payload of [
+      { catalog: true, category: "x".repeat(81) },
+      { catalog: true, sort: 1_000_001 },
+      { catalog: true, sort: -1_000_001 },
+      { catalog: true, sort: 1.5 },
+    ]) {
+      const res = await put(payload)
+      expect(res.statusCode, JSON.stringify(payload).slice(0, 40)).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+  })
 })
