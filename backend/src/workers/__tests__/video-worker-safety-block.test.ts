@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.hoisted() for variables used inside vi.mock().
@@ -184,6 +184,7 @@ import { createVideoWorker } from "../video-worker.js"
 import { KieError } from "../../providers/kie/client.js"
 import { UnrecoverableError } from "bullmq"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -386,6 +387,28 @@ describe("video worker — input-video refusal hint", () => {
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
+  it("a copyright refusal of an input image → safety-block hint with subject input_image, final and refunded", async () => {
+    const message = "The video model declined one of your pictures as possibly copyrighted. Try a different picture."
+    mocks.mockHandler.mockRejectedValueOnce(
+      Object.assign(
+        new KieError(
+          message,
+          "task failed: [400] The request failed because the input image may be related to copyright restrictions.",
+          "Generation", true, true, "copyright",
+        ),
+        { inputImageRefused: true },
+      ),
+    )
+
+    await processor(makeBullJob("image-to-video", { provider: "seedance-2", imageUrl: "https://cdn.example/a.png" })).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({
+      error_message: message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false, subject: "input_image" },
+    }))
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
   it("an unclassified refusal of the input video → input-refused hint, message unchanged", async () => {
     mocks.mockHandler.mockRejectedValueOnce(fileProcessingFailed())
 
@@ -503,4 +526,56 @@ describe("video worker — deterministic refusals (lib/deterministic-job-error.t
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
     mocks.mockIsFinalJobAttempt.mockReturnValue(true) // restore the file default
   })
+})
+
+// The platform's own provider account ran out (createTask 402 "Credits
+// insufficient"). Staging and production print the same failure line, so the
+// line names the environment; the user-facing message is unchanged.
+describe("video worker — provider-balance failure line names the environment", () => {
+  let processor: (job: unknown, token?: string) => Promise<void>
+  const saved = { runtime: process.env.RUNTIME_ENV, railway: process.env.RAILWAY_ENVIRONMENT_NAME }
+
+  beforeEach(() => {
+    mocks.mockIsFinalJobAttempt.mockReturnValue(true)
+    createVideoWorker()
+    processor = mocks.getCapturedProcessor()!
+    delete process.env.RUNTIME_ENV
+    process.env.RAILWAY_ENVIRONMENT_NAME = "staging"
+  })
+
+  afterEach(() => {
+    if (saved.runtime === undefined) delete process.env.RUNTIME_ENV
+    else process.env.RUNTIME_ENV = saved.runtime
+    if (saved.railway === undefined) delete process.env.RAILWAY_ENVIRONMENT_NAME
+    else process.env.RAILWAY_ENVIRONMENT_NAME = saved.railway
+  })
+
+  async function failureLine(err: Error): Promise<string | undefined> {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    spy.mockClear()
+    mocks.mockHandler.mockRejectedValueOnce(err)
+    await processor(makeBullJob("text-to-video", { provider: "seedance-2" })).catch(() => {})
+    return spy.mock.calls.map((c) => String(c[0])).find((l) => l.includes("failed (KIE.ai)"))
+  }
+
+  it("a 402 'Credits insufficient' failure carries the environment", async () => {
+    const line = await failureLine(
+      new KieError(
+        PLATFORM_CAPACITY_MESSAGE,
+        `createTask failed: 402 - {"code":402,"msg":"Credits insufficient","data":null}`,
+        "Generation",
+      ),
+    )
+    expect(line).toContain("| context: Generation | env: staging | user message: ")
+    expect(failedUpdateMessage()).toBe(PLATFORM_CAPACITY_MESSAGE)
+  })
+
+  it("any other failure line is unchanged", async () => {
+    const line = await failureLine(new KieError("Generation timed out. Please try again.", "task timed out", "Generation"))
+    expect(line).not.toContain("env:")
+  })
+
+  function failedUpdateMessage(): unknown {
+    return mocks.mockUpdate.mock.calls.map((c) => c[0] as Record<string, unknown>).find((c) => c.status === "failed")?.error_message
+  }
 })

@@ -1586,12 +1586,15 @@ plus, for four classes of failure, a structured `error_hint`.
 A provider content-policy block:
 
 ```json
-{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" }
+{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" | "input_image" }
 ```
 
 `subject: "input_video"` is present when the provider refused the job's input
 video itself — not the prompt, a reference image or the output; send a
-different clip.
+different clip. `subject: "input_image"` (always with `class: "copyright"`) is
+present when the provider refused one of the job's input images as possibly
+copyrighted; send a different picture — rephrasing the prompt will not help.
+Treat a `subject` you do not know as absent.
 
 Or, on a deployment that registers a job policy, a rejection by that policy:
 

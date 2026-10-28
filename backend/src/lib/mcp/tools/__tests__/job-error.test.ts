@@ -139,6 +139,17 @@ describe("copyright / likeness messages are rejections (W0)", () => {
     }
   })
 
+  it("the input-image / input-video copyright sentences are copyright rejections, not retryable", () => {
+    for (const m of [
+      "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+      "The video model declined one of your videos as possibly copyrighted. Try a different video.",
+    ]) {
+      expect(isContentRejection(m)).toBe(true)
+      expect(isRetryableFailure(m)).toBe(false)
+      expect(rejectionClassOf(m)).toBe("copyright")
+    }
+  })
+
   it("rejectionClassOf names the class", () => {
     expect(rejectionClassOf(COPYRIGHT_A)).toBe("copyright")
     expect(rejectionClassOf(COPYRIGHT_B)).toBe("copyright")
@@ -302,6 +313,23 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.guidance).toMatch(/refused the input video itself/)
     expect(result.guidance).toMatch(/different clip/)
     expect(result.guidance).not.toMatch(/change the prompt or the input image/)
+  })
+
+  it("a copyright block on an input image asks for a different picture, not a fallback model or a new prompt", () => {
+    const result = failureGuidance({
+      error_message: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+      error_hint: {
+        kind: "safety-block",
+        class: "copyright",
+        retried: false,
+        subject: "input_image",
+        suggestedProvider: "some-fallback-model",
+      },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toMatch(/input images as possibly copyrighted/)
+    expect(result.guidance).toMatch(/different image/)
   })
 
   it("a safety-block WITHOUT subject keeps today's guidance", () => {

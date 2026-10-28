@@ -6,6 +6,7 @@ import {
   errorHintFor,
   inputRefusedHint,
   inputVideoRefusedOf,
+  inputImageRefusedOf,
   sentVideoInput,
   refusalHintFor,
   jobModelIdOf,
@@ -268,6 +269,35 @@ describe("refusalHintFor", () => {
 
   it("neither → null", () => {
     expect(refusalHintFor(null, false, false)).toBeNull()
+  })
+
+  it("a copyright block on an input image → the copyright hint names the input image", () => {
+    expect(refusalHintFor(copyright, false, false, true)).toEqual({
+      kind: "safety-block", class: "copyright", retried: false, subject: "input_image",
+    })
+  })
+
+  it("an input-image flag on a non-copyright class, or with no block, names nothing", () => {
+    const safety: SafetyBlock = { class: "safety", maxAttempts: 2 }
+    expect(refusalHintFor(safety, true, false, true)).toEqual({ kind: "safety-block", class: "safety", retried: true })
+    expect(refusalHintFor(null, false, false, true)).toBeNull()
+  })
+})
+
+describe("inputImageRefusedOf", () => {
+  it("reads KieError.inputImageRefused, on the error or its cause chain", () => {
+    const inner = new KieError("m", "d", "c", true, true, "copyright", false, true)
+    expect(inputImageRefusedOf(inner)).toBe(true)
+    expect(inputImageRefusedOf(new Error("outer", { cause: inner }))).toBe(true)
+    expect(inputImageRefusedOf(new KieError("m", "d", "c", true, true, "copyright"))).toBe(false)
+  })
+
+  it("only a strict true counts, and it never throws", () => {
+    expect(inputImageRefusedOf(Object.assign(new Error("x"), { inputImageRefused: "true" }))).toBe(false)
+    expect(inputImageRefusedOf(null)).toBe(false)
+    const hostile = new Proxy({}, { get() { throw new Error("boom") } })
+    expect(() => inputImageRefusedOf(hostile)).not.toThrow()
+    expect(inputImageRefusedOf(hostile)).toBe(false)
   })
 })
 

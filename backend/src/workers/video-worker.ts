@@ -16,11 +16,14 @@ import { markJobFailed } from "../lib/job-failure.js"
 import { discardJobScratch } from "../lib/job-scratch.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { isDrainAbortError } from "../lib/worker-drain.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
+import { PLATFORM_CAPACITY_MESSAGE } from "../lib/llm-platform-exhaustion.js"
 import {
   safetyBlockOf,
   refusalHintFor,
   jobModelIdOf,
   inputVideoRefusedOf,
+  inputImageRefusedOf,
   sentVideoInput,
   creditsHintOf,
   safetyBlockMessage,
@@ -536,8 +539,12 @@ export function createVideoWorker() {
         let internalDetails: string | undefined
         if (err instanceof KieError) {
           internalDetails = err.internalDetails
+          // The provider account ran out (createTask 402 "Credits
+          // insufficient"): staging and production print the same line, so it
+          // names the environment whose account needs topping up.
+          const envNote = message === PLATFORM_CAPACITY_MESSAGE ? ` | env: ${getRuntimeEnv()}` : ""
           console.error(
-            `[worker] Job ${jobId} failed (KIE.ai): ${internalDetails ?? message} | context: ${err.context} | user message: ${message}`,
+            `[worker] Job ${jobId} failed (KIE.ai): ${internalDetails ?? message} | context: ${err.context}${envNote} | user message: ${message}`,
           )
         } else {
           console.error(`[worker] Job ${jobId} failed:`, message)
@@ -636,8 +643,11 @@ export function createVideoWorker() {
           // what keeps this worker off a `pending_review` row (spec D11).
           // The provider refused the INPUT VIDEO: said on the hint (beside the
           // class when there is one), so a caller can send a different clip.
+          // Likewise an input image refused as possibly copyrighted
+          // (`subject: "input_image"`), so a caller can send a different picture.
           // Shared with the reconcile path (lib/reconcile/kie.ts).
-          const errorHint = refusalHintFor(block, safetyRetried, inputVideoRefused) ?? creditsHintOf(err)
+          const errorHint =
+            refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err)) ?? creditsHintOf(err)
           const flipped = await markJobFailed(jobId, {
             error_message: errorMessage,
             // W0: the provider's own error, redacted — the sanitized message

@@ -17,6 +17,8 @@ import {
   classifyContentPolicyClass,
   CONTENT_POLICY_MESSAGE,
   CONTENT_POLICY_MESSAGES,
+  copyrightSubjectOf,
+  INPUT_COPYRIGHT_MESSAGES,
   KieError,
   createSanitizedError,
   createUpstreamFailureError,
@@ -191,7 +193,9 @@ describe('pollKieTask — state:"fail" content-policy classification', () => {
 // The provider refused the INPUT VIDEO itself (not the prompt, not a reference
 // image, not the output). A caller can act on that (send a different clip), so
 // it rides on the error as `inputVideoRefused` — beside, never instead of, the
-// content-policy class, and with the user-facing message unchanged.
+// content-policy class. A COPYRIGHT refusal of the input video gets the
+// input-video sentence (rephrasing the prompt cannot help); the flag itself
+// never changes the message.
 // ---------------------------------------------------------------------------
 const INPUT_VIDEO_COPYRIGHT =
   "Input video may be related to copyright restrictions. Please replace the material and try again"
@@ -248,15 +252,17 @@ describe('pollKieTask — state:"fail" input-video refusal', () => {
     return promise.catch((e) => e) as Promise<KieError>
   }
 
-  it("an input-video copyright refusal keeps the copyright class and message, and is flagged", async () => {
+  it("an input-video copyright refusal keeps the copyright class, says which input, and is flagged", async () => {
     failWith(INPUT_VIDEO_COPYRIGHT)
     const err = await failure()
 
     expect(err).toBeInstanceOf(KieError)
     expect(err.contentPolicyClass).toBe("copyright")
     expect(err.inputVideoRefused).toBe(true)
+    expect(err.inputImageRefused).toBe(false)
     expect(err.isUpstreamFailure).toBe(true)
-    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.copyright)
+    expect(err.message).toBe(INPUT_COPYRIGHT_MESSAGES.input_video)
+    expect(err.message).toBe("The video model declined one of your videos as possibly copyrighted. Try a different video.")
   })
 
   it("\"File processing failed\" has no class, keeps the generic message, and is flagged", async () => {
@@ -509,5 +515,131 @@ describe("the widening does not over-reach", () => {
     expect(PARAM_REJECT_RE.test("duration out of range")).toBe(true)
     expect(PARAM_REJECT_RE.test("invalid resolution")).toBe(true)
     expect(PARAM_REJECT_RE.test("Content was flagged by the safety system.")).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The provider refused one of the INPUT IMAGES as possibly copyrighted
+// (Seedance 2.5, staging 2026-10-28): "The request failed because the input
+// image may be related to copyright restrictions." The output-resemblance
+// message told the user to rephrase the prompt, which cannot help. Same class
+// (copyright: content policy, refunded, not retried), its own sentence, and
+// `inputImageRefused` so the hint can name the input.
+// ---------------------------------------------------------------------------
+const INPUT_IMAGE_COPYRIGHT = "The request failed because the input image may be related to copyright restrictions."
+const OUTPUT_VIDEO_COPYRIGHT = "The request failed because the output video may be related to copyright restrictions."
+
+describe("copyrightSubjectOf", () => {
+  it("names the input image or the input video a copyright refusal is about", () => {
+    expect(copyrightSubjectOf(INPUT_IMAGE_COPYRIGHT)).toBe("input_image")
+    expect(copyrightSubjectOf(`task failed: [400] ${INPUT_IMAGE_COPYRIGHT}`)).toBe("input_image")
+    expect(copyrightSubjectOf("Input images may be related to copyright restrictions")).toBe("input_image")
+    expect(copyrightSubjectOf(INPUT_VIDEO_COPYRIGHT)).toBe("input_video")
+  })
+
+  it("names nothing for the output case, a prompt, or an input mention without copyright", () => {
+    expect(copyrightSubjectOf(OUTPUT_VIDEO_COPYRIGHT)).toBeNull()
+    expect(copyrightSubjectOf("prompt may be related to copyright")).toBeNull()
+    expect(copyrightSubjectOf("input image is too large. Copyright notice: none")).toBeNull()
+    expect(copyrightSubjectOf(FILE_PROCESSING_FAILED)).toBeNull()
+  })
+})
+
+describe('pollKieTask — state:"fail" input-image copyright refusal', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    vi.useFakeTimers()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  async function failWith(failMsg: string, failCode = "400"): Promise<KieError> {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/recordInfo")) {
+        return new Response(
+          JSON.stringify({ code: 0, data: { taskId: "t-img", state: "fail", failCode, failMsg } }),
+          { status: 200 },
+        )
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+    const promise = pollKieTask("t-img")
+    promise.catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(60_000)
+    return promise.catch((e) => e) as Promise<KieError>
+  }
+
+  it("keeps the copyright class and upstream/content-policy flags, with the input-image sentence", async () => {
+    const err = await failWith(INPUT_IMAGE_COPYRIGHT)
+
+    expect(err).toBeInstanceOf(KieError)
+    expect(err.contentPolicy).toBe(true)
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.isUpstreamFailure).toBe(true)
+    expect(err.inputImageRefused).toBe(true)
+    expect(err.inputVideoRefused).toBe(false)
+    expect(err.message).toBe(
+      "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+    )
+    expect(err.message).toBe(INPUT_COPYRIGHT_MESSAGES.input_image)
+    // Never the vendor, never the prompt advice.
+    expect(err.message).not.toMatch(/kie|seedance|bytedance/i)
+    expect(err.message).not.toMatch(/prompt/i)
+  })
+
+  it("the output-resemblance case is unchanged", async () => {
+    const err = await failWith(OUTPUT_VIDEO_COPYRIGHT, "500")
+
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.inputImageRefused).toBe(false)
+    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.copyright)
+    expect(err.message).toBe(
+      "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this.",
+    )
+  })
+})
+
+describe("input-image copyright — every throw path", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("createUpstreamFailureError classifies it on its own (other poll clients)", () => {
+    const err = createUpstreamFailureError(`task failed: [400] ${INPUT_IMAGE_COPYRIGHT}`, "Generation")
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.inputImageRefused).toBe(true)
+    expect(err.message).toBe(INPUT_COPYRIGHT_MESSAGES.input_image)
+  })
+
+  it("a caller-supplied message still wins, and the flag still rides", () => {
+    const err = createUpstreamFailureError(`task failed: [400] ${INPUT_IMAGE_COPYRIGHT}`, "Generation", {
+      userMessage: "custom",
+    })
+    expect(err.message).toBe("custom")
+    expect(err.inputImageRefused).toBe(true)
+  })
+
+  it("the sanitizer (createTask refusals) uses the same sentence", () => {
+    const err = createSanitizedError(
+      `createTask error (code 400): ${INPUT_IMAGE_COPYRIGHT}`,
+      "Generation",
+      false,
+      false,
+      { upstreamStatus: 400 },
+    )
+    expect(err.message).toBe(INPUT_COPYRIGHT_MESSAGES.input_image)
+  })
+
+  it("the flag never rides a non-copyright class", () => {
+    const err = new KieError("m", "i", "Generation", true, true, "safety", false, true)
+    expect(err.inputImageRefused).toBe(false)
   })
 })

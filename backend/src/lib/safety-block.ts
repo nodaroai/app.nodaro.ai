@@ -73,9 +73,12 @@ export type SafetyBlockHint = {
   class: SafetyBlock["class"]
   retried: boolean
   suggestedProvider?: string
-  /** Present when the provider refused the INPUT VIDEO itself, not the prompt,
-   *  a reference image or the output — a caller can then send a different clip. */
-  subject?: "input_video"
+  /** Present when the provider named the INPUT it refused, not the prompt or
+   *  the output: `"input_video"` — the input video itself, so a caller can
+   *  send a different clip; `"input_image"` — one of the input images, refused
+   *  as possibly copyrighted (always with `class: "copyright"`), so a caller
+   *  can send a different picture. Absent ⇒ not known. The union may grow. */
+  subject?: "input_video" | "input_image"
 }
 
 /** A NODARO-side policy decision, not a provider's — written by the job-policy
@@ -198,6 +201,25 @@ export function inputVideoRefusedOf(err: unknown): boolean {
   }
 }
 
+/** True when the thrown error (or anything on its `cause` chain) says the
+ *  provider refused one of the job's INPUT IMAGES as possibly copyrighted: a
+ *  duck-typed `inputImageRefused === true` own property
+ *  (`KieError.inputImageRefused`, or a plugin's error carrying the same flag).
+ *  Not gated on the payload like the video flag: the provider's wording names
+ *  the input image explicitly. Never throws. */
+export function inputImageRefusedOf(err: unknown): boolean {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      if ((cur as { inputImageRefused?: unknown }).inputImageRefused === true) return true
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
 const nonBlank = (v: unknown): boolean => typeof v === "string" && v.trim() !== ""
 
 /** True when the job's payload sent a video to the provider: a source video
@@ -219,17 +241,22 @@ export function sentVideoInput(data: unknown): boolean {
 export function errorHintFor(
   block: SafetyBlock,
   retried: boolean,
-  opts?: { inputVideoRefused?: boolean },
+  opts?: { inputVideoRefused?: boolean; inputImageRefused?: boolean },
 ): SafetyBlockHint {
   const hint: SafetyBlockHint = block.fallback
     ? { kind: "safety-block", class: block.class, retried, suggestedProvider: block.fallback }
     : { kind: "safety-block", class: block.class, retried }
-  return opts?.inputVideoRefused ? { ...hint, subject: "input_video" } : hint
+  if (opts?.inputVideoRefused) return { ...hint, subject: "input_video" }
+  // Only a copyright block names an input image (KieError sets the flag only
+  // beside that class); a stray flag on another class is not passed on.
+  if (opts?.inputImageRefused && block.class === "copyright") return { ...hint, subject: "input_image" }
+  return hint
 }
 
 /** The `jobs.error_hint` for a provider's refusal of a job, or null when it was
- *  not one: a classified content-policy block (naming the input video when
- *  the provider refused that), else a refused input video with no class. The
+ *  not one: a classified content-policy block (naming the input video or the
+ *  input image when the provider refused that), else a refused input video
+ *  with no class. The
  *  ONE mapping shared by every writer that fails a job on a provider's
  *  verdict — the worker's catch path and the reconcile path (a job re-picked
  *  after a worker restart is failed there, and must carry the same hint).
@@ -239,8 +266,9 @@ export function refusalHintFor(
   block: SafetyBlock | null,
   retried: boolean,
   inputVideoRefused: boolean,
+  inputImageRefused = false,
 ): SafetyBlockHint | InputRefusedHint | null {
-  if (block) return errorHintFor(block, retried, { inputVideoRefused })
+  if (block) return errorHintFor(block, retried, { inputVideoRefused, inputImageRefused })
   return inputVideoRefused ? inputRefusedHint() : null
 }
 
