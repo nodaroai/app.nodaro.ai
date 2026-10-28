@@ -29,9 +29,14 @@ vi.mock("../omni-character.js", async (importOriginal) => ({
   resolveOmniCharacterIds: mocks.mockResolve,
   forgetOmniCharacters: mocks.mockForget,
 }))
-vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: vi.fn() }))
+// Reference images pass the shared image preparation: a small, clean PNG
+// comes back as its own URL, so the assertions below see the URLs as sent.
+vi.mock("../../../lib/safe-fetch.js", () => ({
+  safeFetch: vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(16) })),
+}))
+vi.mock("../../../lib/image-metadata.js", () => ({ imageHasMetadata: () => false }))
 vi.mock("sharp", () => {
-  const mockSharp = () => ({})
+  const mockSharp = () => ({ metadata: async () => ({ format: "png", width: 64, height: 64 }) })
   mockSharp.default = mockSharp
   return { default: mockSharp }
 })

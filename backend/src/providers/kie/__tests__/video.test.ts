@@ -74,6 +74,9 @@ vi.mock("../../video/ffmpeg-utils.js", () => ({
 // Mock sharp so ensureImageForProvider doesn't need real image data. The chain
 // is intentionally permissive — resize/jpeg return `this`, toBuffer returns a
 // tiny fake JPEG — so the conversion path can run without real image bytes.
+// The mocked download is not a real file, so the metadata walker would rightly
+// refuse to vouch for it and strip it; these tests are about where URLs go.
+vi.mock("../../../lib/image-metadata.js", () => ({ imageHasMetadata: () => false }))
 vi.mock("sharp", () => {
   const makeChain = () => {
     const chain: Record<string, unknown> = {}

@@ -50,6 +50,9 @@ vi.mock("../../../lib/safe-fetch.js", () => ({
   safeFetch: mocks.mockSafeFetch,
 }))
 
+// The mocked download is not a real file, so the metadata walker would rightly
+// refuse to vouch for it and strip it; these tests are about where URLs go.
+vi.mock("../../../lib/image-metadata.js", () => ({ imageHasMetadata: () => false }))
 vi.mock("sharp", () => {
   const makeChain = () => {
     const chain: Record<string, unknown> = {}
