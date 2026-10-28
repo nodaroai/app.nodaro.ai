@@ -26,6 +26,18 @@ export function extractActualUsd(data: unknown): number | undefined {
 }
 
 /**
+ * Usage objects whose input count is a size estimate, not the provider's
+ * report (`kieReportedUsage` replaced a count KIE got wrong). Kept off the
+ * object itself so the usage a route records stays `{ inputTokens, outputTokens }`.
+ */
+const ESTIMATED_INPUT = new WeakSet<object>()
+
+/** Mark `usage`'s input count as an estimate: {@link assertMediaIngested} then treats it as unreported. */
+export function markInputEstimated(usage: { inputTokens: number }): void {
+  ESTIMATED_INPUT.add(usage)
+}
+
+/**
  * Build LlmResponse with computed provider cost from token usage. When
  * `actualUsd` is supplied (real KIE `credits_consumed` billing — see
  * {@link extractActualUsd}), it wins over the per-token table estimate; the
@@ -42,11 +54,12 @@ export function extractActualUsd(data: unknown): number | undefined {
  * never delivered, which is strictly worse than an error.
  *
  * Silent when the caller sets no floor, or when the provider reports no usage
- * at all (streams) — this must never turn a working call into a failure.
+ * at all (streams), or when the input count is an estimate (`markInputEstimated`)
+ * — this must never turn a working call into a failure.
  */
 export function assertMediaIngested(model: LlmModelDef, req: LlmRequest, usage?: { inputTokens: number }): void {
   const floor = req.minPromptTokens
-  if (floor === undefined || !usage || usage.inputTokens <= 0) return
+  if (floor === undefined || !usage || usage.inputTokens <= 0 || ESTIMATED_INPUT.has(usage)) return
   if (usage.inputTokens < floor) {
     throw new Error(
       `media_not_ingested:${model.id} — provider reported ${usage.inputTokens} prompt tokens, below the ${floor} floor for this request's media. ` +

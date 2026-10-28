@@ -351,6 +351,40 @@ describe("Generate Text / AI Writer, synchronous — metered", () => {
     expect(outputDataBilling()).toBe(false)
   })
 
+  it("llm-chat sync: a KIE reply with a negative completion_tokens is settled at the answer's size, not left to the sweep", async () => {
+    // The REAL lane behind the route, with only the network stubbed: what is
+    // under test is the count KIE sent reaching the spend.
+    const actual = await vi.importActual<typeof import("../../lib/llm-client.js")>("../../lib/llm-client.js")
+    h.llmComplete.mockImplementationOnce((req: LlmRequest) => actual.llmComplete(req))
+    const answer = "word ".repeat(80) // 400 chars → 100 tokens
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      choices: [{ message: { role: "assistant", content: answer }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 120, completion_tokens: -3977, total_tokens: -3857 },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    vi.stubGlobal("fetch", fetchMock)
+    const commit = commitReturns(1)
+    try {
+      const app = await buildApp()
+      const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: textBody(200, { llmModel: "gemini-3.8-flash" }) })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ jobId: JOB, generatedText: answer })
+      expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/gemini-3-8-flash-openai\/v1\/chat\/completions$/)
+      // Recorded and settled — no ALERT, never left to the reconcile sweep.
+      expect(console.error).not.toHaveBeenCalledWith(expect.stringMatching(/could not record/), expect.anything())
+      expect(commit).toHaveBeenCalledTimes(1)
+      expect(commit).toHaveBeenCalledWith(LOG, expect.any(Number), { collectOverHold: true })
+      expect(CreditsService.refundCredits).not.toHaveBeenCalled()
+      const { calculateLlmCost } = await import("../../lib/pricing/llm-cost.js")
+      const sized = calculateLlmCost("gemini-3.8-flash", { inputTokens: 120, outputTokens: 100 }, "kie")
+      expect(ledgerWrite()).toMatchObject({ calls: 1, lanes: ["kie"] })
+      expect((ledgerWrite() as { costUsd: number }).costUsd).toBeCloseTo(sized, 12)
+      expect(console.warn).toHaveBeenCalledWith(expect.stringMatching(/\[llm-kie-usage\] gemini-3\.8-flash.*completion_tokens=-3977/))
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it("R38: cancelled between its reserve and its call's stamp → the provider is never called, nothing is charged (the hold is refunded), 409", async () => {
     h.callStart.value = "not-live"
     const refund = vi.spyOn(CreditsService, "refundCredits").mockResolvedValue(undefined)

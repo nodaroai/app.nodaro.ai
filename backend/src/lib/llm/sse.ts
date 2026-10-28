@@ -14,6 +14,7 @@ import {
   type ReplyEnd,
 } from "../llm-errors.js"
 import { assertKieEnvelope, extractActualUsd } from "./response.js"
+import { CHAT_COMPLETIONS_USAGE_KEYS, MESSAGES_USAGE_KEYS, kieReportedUsage, type KieUsageKeys } from "./kie-usage.js"
 import { asStoppedStream, type StreamAbortContext } from "./stream-abort.js"
 import type { LlmResponse } from "./types.js"
 
@@ -168,6 +169,11 @@ export async function parseSseStream(
    * non-streaming wires, whose signal is their own deadline.
    */
   abort?: StreamAbortContext,
+  /**
+   * The request's size (`requestChars`): the input estimate when KIE reports
+   * an input count no provider could mean (`kieReportedUsage`).
+   */
+  requestChars: number = abort?.requestChars ?? 0,
 ): Promise<LlmResponse> {
   const reader = response.body?.getReader()
   if (!reader) throw new Error("No response body for SSE stream")
@@ -184,7 +190,16 @@ export async function parseSseStream(
   // block came back. This is what lets a structured call be served off the
   // streaming wire (see callKieMessagesCollapsed).
   let toolJson = ""
-  let usage: { inputTokens: number; outputTokens: number } | undefined
+  // The last `usage` the stream reported, as sent, with the key names of its
+  // format. Read into token counts (`kieReportedUsage`, which replaces a count
+  // KIE got wrong and warns once) only where it is used — at the end, or on the
+  // throw that ends the stream — so the answer it is sized from is complete and
+  // a stream that repeats its usage on several frames warns once.
+  let reportedUsage: { raw: unknown; keys: KieUsageKeys } | undefined
+  const usageNow = (): { inputTokens: number; outputTokens: number } | undefined =>
+    reportedUsage
+      ? kieReportedUsage(modelId, reportedUsage.raw, reportedUsage.keys, { requestChars, answerChars: (toolJson || fullText).length })
+      : undefined
   // KIE's Claude SSE DOES carry `credits_consumed` (verified 2026-08-06 —
   // 0.09 and 0.13 on live streams), so the collapsed non-streaming path keeps
   // real actual-cost capture instead of silently dropping to the rate-table
@@ -281,6 +296,7 @@ export async function parseSseStream(
           const e = parsed.error as { message?: string; type?: string } | undefined
           const detail =
             `KIE.ai ${format} stream ${modelId} returned an error event: ${e?.type ?? "unknown"}: ${e?.message ?? JSON.stringify(parsed).slice(0, 200)}`
+          const usage = usageNow()
           if (usage) {
             const providerCost = actualUsd ?? llmCostOrZero(modelId, usage)
             throw new LlmStreamResponseError(detail, {
@@ -303,10 +319,7 @@ export async function parseSseStream(
           }
           const finishReason = choices?.[0]?.finish_reason
           if (typeof finishReason === "string" && finishReason) stopReason = finishReason
-          if (parsed.usage) {
-            const u = parsed.usage as Record<string, number>
-            usage = { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 }
-          }
+          if (parsed.usage) reportedUsage = { raw: parsed.usage, keys: CHAT_COMPLETIONS_USAGE_KEYS }
         } else if (format === "messages") {
           const eventType = parsed.type as string | undefined
           if (eventType === "content_block_delta") {
@@ -323,10 +336,7 @@ export async function parseSseStream(
             }
           }
           if (eventType === "message_delta") {
-            const u = parsed.usage as Record<string, number> | undefined
-            if (u) {
-              usage = { inputTokens: u.input_tokens ?? 0, outputTokens: u.output_tokens ?? 0 }
-            }
+            if (parsed.usage) reportedUsage = { raw: parsed.usage, keys: MESSAGES_USAGE_KEYS }
             const d = parsed.delta as Record<string, unknown> | undefined
             if (d?.stop_reason) stopReason = d.stop_reason
           }
@@ -348,16 +358,14 @@ export async function parseSseStream(
           }
           if (eventType === "response.completed" || eventType === "response.incomplete" || eventType === "response.failed") {
             const resp = parsed.response as Record<string, unknown> | undefined
-            const u = resp?.usage as Record<string, number> | undefined
-            if (u) {
-              usage = { inputTokens: u.input_tokens ?? 0, outputTokens: u.output_tokens ?? 0 }
-            }
+            if (resp?.usage) reportedUsage = { raw: resp.usage, keys: MESSAGES_USAGE_KEYS }
             actualUsd = extractActualUsd(resp ?? {}) ?? actualUsd
             if (eventType === "response.completed") {
               sawStreamEnd = true
               completedText = responsesFrameText(resp)
             }
             if (eventType !== "response.completed") {
+              const usage = usageNow()
               const providerCost = actualUsd ?? (usage ? llmCostOrZero(modelId, usage) : undefined)
               // The provider's own reason, not just the event name. `response.incomplete`
               // carries `incomplete_details.reason` ("max_output_tokens", "content_filter")
@@ -417,6 +425,7 @@ export async function parseSseStream(
     })
   }
 
+  const usage = usageNow()
   // Real billing beats the estimate, same precedence as the non-streaming path.
   const providerCost = actualUsd ?? (usage ? llmCostOrZero(modelId, usage) : undefined)
   // Last, so a streamed caller has already shown every token it received — the

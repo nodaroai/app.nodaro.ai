@@ -21,6 +21,7 @@ import { getAnthropicClient } from "../../lib/anthropic.js"
 import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"
 import { LlmPlatformExhaustedError, toPlatformExhausted } from "../../lib/llm-errors.js"
 import { kieCostUsd, kieCreditsUsdOf, kieInputTokens } from "../../lib/llm/kie-cost.js"
+import { MESSAGES_USAGE_KEYS, kieReportedUsage } from "../../lib/llm/kie-usage.js"
 import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, TURN_CAPS, type CopilotTierSpec } from "./constants.js"
 import { stripThinkingBlocks } from "./history.js"
 import { estimateNextCallUsd, wouldExceedBudget, type TurnBudget } from "./budget.js"
@@ -212,12 +213,15 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
 
     iterations += 1
     if (lane === "kie") {
+      const answerChars = JSON.stringify(final.content).length
       const costUsd = kieCostUsd(tier.registryId, {
         creditsUsd: call.creditsUsd,
         promptChars: sentChars + toolsChars,
-        answerChars: JSON.stringify(final.content).length,
+        answerChars,
       })
-      accumulateKieUsage(usage, final.usage, { inputTokens: kieInputTokens(sentChars + toolsChars), costUsd })
+      // KIE's output count, unless it sent one no provider could mean (then the answer's size).
+      const reported = kieReportedUsage(tier.registryId, final.usage, MESSAGES_USAGE_KEYS, { requestChars: sentChars + toolsChars, answerChars })
+      accumulateKieUsage(usage, { inputTokens: kieInputTokens(sentChars + toolsChars), outputTokens: reported?.outputTokens ?? 0, costUsd })
     } else {
       accumulateUsage(usage, final.usage, tier.registryId)
     }
@@ -429,17 +433,17 @@ function accumulateUsage(target: LoopUsage, raw: Anthropic.Messages.Usage, tierR
 
 /**
  * A KIE call's usage: the input count is the size estimate (`kieInputTokens` —
- * KIE's own count leaves out our prompt), the output count KIE's, and none of
- * its cache fields — those are KIE's own injected prefix, not our cache. The
- * cost is the one `kieCostUsd` gave (KIE's charge, or the size estimate).
+ * KIE's own count leaves out our prompt), the output count KIE's (read through
+ * `kieReportedUsage`), and none of its cache fields — those are KIE's own
+ * injected prefix, not our cache. The cost is the one `kieCostUsd` gave (KIE's
+ * charge, or the size estimate).
  */
 function accumulateKieUsage(
   target: LoopUsage,
-  raw: Anthropic.Messages.Usage,
-  sized: { inputTokens: number; costUsd: number },
+  sized: { inputTokens: number; outputTokens: number; costUsd: number },
 ): void {
   target.inputTokens += sized.inputTokens
-  target.outputTokens += raw.output_tokens ?? 0
+  target.outputTokens += sized.outputTokens
   target.costUsd += sized.costUsd
 }
 
