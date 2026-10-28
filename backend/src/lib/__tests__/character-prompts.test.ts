@@ -10,7 +10,11 @@ import {
   ASSET_STILL_SCAFFOLDING,
   ASSET_MOTION_SCAFFOLDING,
   CLOTHED_DEFAULT,
+  buildEntityHints,
+  withSubjectHints,
 } from "../character-prompts.js"
+import { buildPersonHints } from "@nodaro/prompts/person"
+import { renderEntitySubjectHints } from "../entity-subject.js"
 import { MODEST_ATTIRE_CLAUSE, registerMainlinePromptPolicies } from "../prompt-policies/index.js"
 import { applyPromptPolicies, clearPromptPolicies } from "../prompt-policy.js"
 
@@ -50,6 +54,84 @@ describe("buildPortraitPrompt", () => {
     // The scaffolding carries a clothed floor so an outfit-less portrait is dressed.
     expect(PORTRAIT_SCAFFOLDING).toMatch(/clothed/i)
     expect(buildPortraitPrompt({ seedPrompt: "young woman" })).toMatch(/clothed/i)
+  })
+
+  describe("subjectHints (the request's `subject` ids, rendered by the route)", () => {
+    it("reads after the row's person hints, before the injected assets and the scaffolding", () => {
+      const prompt = buildPortraitPrompt({
+        seedPrompt: "young woman",
+        person: { hairBase: "base-short-straight" },
+        subjectHints: ["holding a smartphone"],
+        injectedAssets: "wearing a leather jacket",
+      })
+      const rowHint = buildPersonHints({ hairBase: "base-short-straight" })[0]!
+      expect(prompt.indexOf("young woman")).toBeLessThan(prompt.indexOf(rowHint))
+      expect(prompt.indexOf(rowHint)).toBeLessThan(prompt.indexOf("holding a smartphone"))
+      expect(prompt.indexOf("holding a smartphone")).toBeLessThan(prompt.indexOf("wearing a leather jacket"))
+      expect(prompt.indexOf("wearing a leather jacket")).toBeLessThan(prompt.indexOf(PORTRAIT_SCAFFOLDING))
+    })
+
+    it("phrases a pick the row and the request both carry exactly once", () => {
+      const rowHint = buildPersonHints({ hairBase: "base-short-straight" })[0]!
+      const prompt = buildPortraitPrompt({
+        seedPrompt: "young woman",
+        person: { hairBase: "base-short-straight" },
+        subjectHints: [rowHint, "holding a smartphone", "holding a smartphone"],
+      })
+      expect(countOf(prompt, rowHint)).toBe(1)
+      expect(countOf(prompt, "holding a smartphone")).toBe(1)
+    })
+
+    it("dedupes by FRAGMENT: a two-dimension pick the row and the request both carry, through the real renderer, reads once", () => {
+      // The row's builder gives one fragment per dimension; the renderer folds
+      // the Person group into ONE comma-joined clause. A clause compare would
+      // miss, and every pick would read twice (the Keepers re-send case).
+      const picks = { age: "age-20s", hairBase: "base-short-straight" }
+      const rendered = renderEntitySubjectHints(picks)
+      expect(rendered).toHaveLength(1)
+      expect(rendered[0]).toContain(", ")
+      const prompt = buildPortraitPrompt({ seedPrompt: "young woman", person: picks, subjectHints: rendered })
+      for (const fragment of buildPersonHints(picks)) expect(countOf(prompt, fragment)).toBe(1)
+      expect(prompt).toBe(buildPortraitPrompt({ seedPrompt: "young woman", person: picks }))
+    })
+
+    it("is a no-op when absent or empty (byte-identical to the prompt without it)", () => {
+      const base = buildPortraitPrompt({ seedPrompt: "young woman", person: { hairBase: "base-short-straight" } })
+      expect(buildPortraitPrompt({ seedPrompt: "young woman", person: { hairBase: "base-short-straight" }, subjectHints: [] })).toBe(base)
+      expect(buildPortraitPrompt({ seedPrompt: "young woman", person: { hairBase: "base-short-straight" }, subjectHints: [""] })).toBe(base)
+    })
+
+    it("leaves a row with both person and wardrobe hints exactly as before when no subject is sent", () => {
+      const person = { age: "age-20s", hairBase: "base-short-straight" }
+      const wardrobe = { archetype: "wd-formal" }
+      const rowHints = buildEntityHints(person, wardrobe)
+      expect(rowHints.length).toBeGreaterThan(2)
+      const expected = `young woman, ${rowHints.join(", ")}. ${PORTRAIT_SCAFFOLDING}.`
+      expect(buildPortraitPrompt({ seedPrompt: "young woman", person, wardrobe })).toBe(expected)
+      expect(buildPortraitPrompt({ seedPrompt: "young woman", person, wardrobe, subjectHints: undefined })).toBe(expected)
+    })
+  })
+})
+
+describe("withSubjectHints", () => {
+  it("keeps the row's hints first, adds the request's, each clause once, order kept", () => {
+    expect(withSubjectHints(["a", "b"], ["b", "c", "", "a", "d"])).toEqual(["a", "b", "c", "d"])
+    expect(withSubjectHints([], undefined)).toEqual([])
+  })
+
+  it("hands the row's hints back untouched when the request carries no subject", () => {
+    const row = ["a, a", " b ", "c, d"]
+    expect(withSubjectHints(row, undefined)).toEqual(row)
+    expect(withSubjectHints(row, [])).toEqual(row)
+    expect(withSubjectHints(row, ["", "  "])).toEqual(row)
+  })
+
+  it("drops only the fragments of a subject clause the row already carries, never the row's own pieces", () => {
+    expect(withSubjectHints(["in their 20s", "short hair"], ["in their 20s, short hair, green eyes"]))
+      .toEqual(["in their 20s", "short hair", "green eyes"])
+    expect(withSubjectHints(["in their 20s", "short hair"], ["in their 20s, short hair"]))
+      .toEqual(["in their 20s", "short hair"])
+    expect(withSubjectHints(["x, y"], ["y, z"])).toEqual(["x, y", "z"])
   })
 })
 

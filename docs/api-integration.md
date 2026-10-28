@@ -1906,6 +1906,23 @@ character row when the job completes — no separate `approve` step needed
 for single-candidate runs. Add `attachPortrait: false` to keep each take a
 candidate instead: only `approve-portrait` then sets the portrait.
 
+`/v1/generate-character` and `/v1/generate-creature` also take an optional
+`subject` — WHO the picture shows as picker-catalog ids (a person's age, hair
+and styling, a held prop, a material, an animal), the same object, keys and
+bounds as [`/v1/generate-image`'s](#structured-subject-subject). The platform
+writes the wording and folds it into the prompt it sends (right after
+`seedPrompt` or `description` and the row's own person and wardrobe picks; a
+pick both carry with the same wording is phrased once), so send the ids rather
+than writing the words into `seedPrompt` yourself — a Keepers shelf, Studio
+and a Create Image tile then phrase one pick identically. It is not a prompt
+source on its own (`/v1/generate-character` still asks for `seedPrompt`,
+`referencePhotos` or `description`), it costs nothing extra, and a `subject`
+whose age is a minor's arms the same minor-age floor as the row's own person
+value does. These two routes use the still-image wording and never shorten
+the clauses — the fold order and prompt-length trimming described under
+[Structured subject](#structured-subject-subject) belong to the image and
+video routes.
+
 The image-generating routes (`/v1/generate-character`,
 `/v1/generate-character-asset`, and the location equivalents
 `/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
@@ -2986,8 +3003,9 @@ continues an existing clip, where re-stating the look is the wrong lever.
 
 ### Structured subject (`subject`)
 
-`POST /v1/generate-image`, `POST /v1/generate-video` and
-`POST /v1/text-to-video` accept an optional `subject` object — the same
+`POST /v1/generate-image`, `POST /v1/generate-video`,
+`POST /v1/text-to-video`, `POST /v1/generate-character` and
+`POST /v1/generate-creature` accept an optional `subject` object — the same
 doctrine as `direction`, one channel over: a flat map of **catalog ids**
 describing WHO is in the shot (the person, how they are styled, and the props
 in frame) which the platform folds into the prompt as its own clauses.

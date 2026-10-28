@@ -3667,10 +3667,19 @@ exactly like Generate Image (composite ids such as `gpt-image:high` /
 cost). A value the chosen model doesn't support is ignored, never rejected.
 `generateAsset()` accepts the same two fields.
 
+Optional `subject` — WHO the portrait shows as picker-catalog ids (`Subject`,
+the same type as `nodes.generateImage`'s: a person's age, hair and styling,
+a held prop, a material, an animal). The platform writes the wording and
+folds it into the prompt after `seedPrompt`, so send the ids rather than
+phrasing a pick yourself; one of `seedPrompt`, `referencePhotos` or
+`description` is still required. `client.creatures.generate()` takes the
+same field.
+
 ```ts
 const { jobIds } = await client.characters.generate({
   name: "Kira",
   seedPrompt: "kira portrait, warm natural lighting",
+  subject: { type: "woman", age: "age-30s", hairBase: "base-short-straight" },
   count: 4,
   attachToCharacterId,
   provider: "gpt-image",

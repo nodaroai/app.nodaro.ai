@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { PLACEHOLDER_CHARACTER_NAME, LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_REFERENCE_PHOTO_KIND_LABELS, locationReferencePhotoKindLabel, OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared/entities"
-import { buildCharacterPrompt, buildObjectPrompt, buildLocationPrompt, buildFaceTemplateInputs, buildMotionPrompt, buildObjectMotionPrompt } from "../entity-prompts.js"
+import { buildCharacterPrompt, buildCreaturePrompt, buildObjectPrompt, buildLocationPrompt, buildFaceTemplateInputs, buildMotionPrompt, buildObjectMotionPrompt } from "../entity-prompts.js"
 
 describe("buildCharacterPrompt", () => {
   it("combines name, gender, description with outfit and style", () => {
@@ -64,6 +64,33 @@ describe("buildObjectPrompt", () => {
   it("defaults category to 'object' when unset", () => {
     const prompt = buildObjectPrompt({ name: "widget" })
     expect(prompt).toContain("Single object widget")
+  })
+})
+
+describe("buildCreaturePrompt", () => {
+  it("leads with the species, then the name and description, then the style line", () => {
+    const prompt = buildCreaturePrompt({ name: "Fang", species: "wolf", description: "scarred muzzle", style: "anime" })
+    expect(prompt).toContain("Single wolf, Fang, scarred muzzle,")
+    expect(prompt).toContain("anime art style, full body, front view,")
+  })
+
+  it("subjectHints (the request's `subject` ids, rendered by the route) read after the prose, before the style line, each once", () => {
+    const prompt = buildCreaturePrompt({
+      name: "Fang",
+      species: "wolf",
+      description: "scarred muzzle",
+      subjectHints: ["featuring a wolf, lean grey coat", "featuring a wolf, lean grey coat", ""],
+    })
+    expect(prompt).toContain("Single wolf, Fang, scarred muzzle, featuring a wolf, lean grey coat,")
+    expect(prompt.split("featuring a wolf").length - 1).toBe(1)
+    expect(prompt.indexOf("featuring a wolf")).toBeLessThan(prompt.indexOf("art style"))
+  })
+
+  it("is byte-identical without subjectHints, or with an empty list", () => {
+    const base = buildCreaturePrompt({ name: "Fang", species: "wolf" })
+    expect(buildCreaturePrompt({ name: "Fang", species: "wolf", subjectHints: [] })).toBe(base)
+    expect(buildCreaturePrompt({ name: "Fang", species: "wolf", subjectHints: [""] })).toBe(base)
+    expect(base).toContain("Single wolf, Fang, realistic art style")
   })
 })
 
