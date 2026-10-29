@@ -194,6 +194,14 @@ vi.mock("../../lib/trends/run-delete.js", async (importOriginal) => {
   }
 })
 
+// The CDN light-copy warm-up a publish starts (fire and forget): recorded, never fetched.
+const warmed = vi.hoisted(() => [] as Array<[string, number | null | undefined]>)
+vi.mock("../../../lib/warm-video-copies.js", () => ({
+  warmVideoCopies: (url: string, width?: number | null) => {
+    warmed.push([url, width])
+  },
+}))
+
 vi.mock("../../../lib/admin-check.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../lib/admin-check.js")>()
   return { ...actual, checkIsAdmin: async (userId: string) => mem.admins.has(userId) }
@@ -468,6 +476,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   db.log.length = 0
   db.respond = respond
+  warmed.length = 0
   mem.revs = 0
   mem.onUpload = null
   mem.onEnvRead = null
@@ -579,6 +588,29 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
     expect(mem.trends[0]!.status).toBe("published")
+  })
+
+  it("a publish warms the CDN copies of what the catalog shows: the display copy and every example, with their widths", async () => {
+    seed({}, draftData({ examples: [EXAMPLE, { ...EXAMPLE, videoUrl: `https://cdn.test/trends/${T1}/ex2.mp4`, width: 1080 }] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(warmed).toEqual([
+      [DISPLAY.videoUrl, 720],
+      [EXAMPLE.videoUrl, 720],
+      [`https://cdn.test/trends/${T1}/ex2.mp4`, 1080],
+    ])
+  })
+
+  it("a publish of a draft that hides its original never warms the display copy", async () => {
+    seed({}, draftData({ hideOriginal: true, examples: [EXAMPLE] }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+    expect(warmed).toEqual([[EXAMPLE.videoUrl, 720]])
+  })
+
+  it("a blocked publish warms nothing", async () => {
+    seed({}, draftData({ hideOriginal: true }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(409)
+    expect(warmed).toEqual([])
   })
 
   it("a source with no display copy is a source_display_missing blocker, and nothing is published", async () => {

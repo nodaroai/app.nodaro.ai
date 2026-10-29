@@ -91,6 +91,7 @@ import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { TREND_SOURCE_SECONDS, TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
 import { publishBlockers } from "../lib/trends/publish-check.js"
+import { warmTrendVersionVideos } from "../lib/trends/warm-videos.js"
 import { trendPromptPartProblems } from "../lib/trends/prompt-parts-check.js"
 import { replyPromptPartsFailure } from "../lib/cast-swap-prompt-parts.js"
 import { allTagUsage, readTagLabels, saveTagLabels, type TagLabels } from "../lib/trends/tags.js"
@@ -876,6 +877,8 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       }
       // Publishes exactly the draft revision checked above (the one just saved, when the clip was made), or nothing.
       await publish(trend.id, { version, revision })
+      // The CDN's light copies of what the catalog now shows, warmed for its first viewers (never awaited).
+      warmTrendVersionVideos(draft)
       return { data: (await getTrendById(trend.id)) ?? trend }
     } catch (e) {
       if (e instanceof DraftConflictError) return draftConflict(reply)

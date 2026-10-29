@@ -108,6 +108,7 @@ import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
+import { warmCompletedJobVideo } from "../warm-video-copies.js"
 import { billingPairColumns, insertJobIdempotent } from "../insert-job.js"
 import { isGenerationSessionNotFound } from "../generation-session-error.js"
 import { CLIENT_ORIGIN_RULE, isInvalidClientOrigin } from "../client-origin-error.js"
@@ -846,17 +847,28 @@ function jsonContains(actual: unknown, expected: unknown): boolean {
       && jsonContains(actualRecord[key], value))
 }
 
+/** The completed job's video, warmed on the CDN for its first viewer; never fails the completion. */
+function warmAfterCompletion(jobType: unknown, output: Record<string, unknown>): void {
+  try {
+    warmCompletedJobVideo(jobType, output)
+  } catch {
+    /* a warm-up is best effort */
+  }
+}
+
 async function pluginMarkJobCompleted(
   jobId: string,
   output: Record<string, unknown>,
   extraColumns?: Record<string, unknown>,
 ): Promise<boolean> {
-  const { data, error } = await supabase.from("jobs").select("output_data").eq("id", jobId).single()
+  const { data, error } = await supabase.from("jobs").select("output_data, job_type").eq("id", jobId).single()
   if (error) {
     throw new Error(`Failed to read output_data for job ${jobId}: ${error.message}`)
   }
   const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
   const nextOutput = { ...existing, ...output }
+  // A finished video the clients play: its CDN light copies are warmed for the first viewer (never awaited).
+  const jobType = (data as { job_type?: unknown } | null)?.job_type
   // `output` merges into output_data; `extraColumns` (optional) spread as real
   // jobs-table COLUMNS (video-analysis writes provider_cost this way). markJobCompleted
   // spreads its `fields` as UPDATE columns, so output_data + extraColumns land together.
@@ -864,7 +876,10 @@ async function pluginMarkJobCompleted(
     output_data: nextOutput,
     ...(extraColumns ?? {}),
   })
-  if (outcome === "completed") return true
+  if (outcome === "completed") {
+    warmAfterCompletion(jobType, nextOutput)
+    return true
+  }
 
   // A POLICY outcome is unambiguous and already written: `blocked` failed the
   // row and refunded (D19), `held` parked it at `pending_review` with the
@@ -892,6 +907,7 @@ async function pluginMarkJobCompleted(
     output_data?: unknown
   } | null
   if (terminalRow?.status === "completed" && jsonContains(terminalRow.output_data, nextOutput)) {
+    warmAfterCompletion(jobType, nextOutput)
     return true
   }
   // IN_FLIGHT, not a hand-rolled list: `pending_review` is in-flight (D14), and
