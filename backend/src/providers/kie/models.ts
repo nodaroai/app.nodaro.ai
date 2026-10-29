@@ -246,9 +246,8 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // map. See docs.kie.ai/market/grok-imagine-image-2-0/{text-to-image,image-edit,segment-map}.md
   // (the edit is GROK_2_SEGMENT_EDIT_MODEL above — read its rename note).
   // The edit + segment endpoints take a PRIOR grok-2 generation's task_id
-  // (NOT an image URL) — same plumbing as grok-upscale: the worker passes the
-  // taskId through editImage's imageUrl arg and `imageParam: "task_id"` places
-  // it in the request body. grok-2-edit additionally accepts `mask_indexs`
+  // (NOT an image URL): the worker passes the taskId through editImage's
+  // imageUrl arg and `imageParam: "task_id"` places it in the request body. grok-2-edit additionally accepts `mask_indexs`
   // (segment indexes from grok-2-segment) via extraParams for region edits.
   "grok-2": {
     model: "grok-imagine-image-2-0/text-to-image",
@@ -601,20 +600,13 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { upscale_factor: "2" },
   },
 
-  // Grok image upscale (requires task_id from previous grok generation)
-  // See: docs.kie.ai/market/grok-imagine/upscale.md
-  // The route accepts a `taskId` field (not imageUrl) for this provider; the
-  // worker passes the taskId in via the `imageUrl` arg of editImage, and the
-  // KIE provider writes it to `input[imageParamName]` — so setting
-  // imageParam: "task_id" makes the KIE request body { task_id: <taskId> }.
-  "grok-upscale": {
-    model: "grok-imagine/upscale",
-    credits: 10,
-    cost: 0.05,
-    inputType: "image-to-image",
-    imageParam: "task_id",
-    extraParams: {},
-  },
+  // `grok-upscale` (KIE `grok-imagine/upscale`) was retired 2026-10-29: that
+  // endpoint upscales a Grok VIDEO task — its task_id "must be a successful
+  // grok-imagine/text-to-video or image-to-video task" (docs.kie.ai/market/
+  // grok-imagine/upscale.md, read 2026-10-29) — and KIE lists no Grok image
+  // upscale, so every run with an image task's id was refused at createTask
+  // (422 "record result error"). A Grok video upscale would be a video-upscale
+  // provider with that config, not an image edit.
 
   // Flux Kontext (special endpoint: /api/v1/flux/kontext/generate)
   // See: docs.kie.ai/flux-kontext-api/generate-or-edit-image.md

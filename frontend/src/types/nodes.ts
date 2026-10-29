@@ -180,7 +180,7 @@ export interface GeneratedResult {
   readonly shotStills?: readonly import("@nodaro/shared/scene3d").Pro3DRenderShotStill[]
   // KIE task id of the generation that produced this result (merged per-result
   // via poll-job extraFields, like sunoTaskId). Grok task-chained ops
-  // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
+  // (grok-2-segment / grok-2-edit) key off the ACTIVE result's
   // task id so region edits target the version the user is looking at.
   readonly kieTaskId?: string
   // A Seedance 2.5 DRAFT (480p) — the tile shows a "Draft" badge; finalize it

@@ -314,15 +314,51 @@ describe("POST /v1/edit-image", () => {
 })
 
 // ---------------------------------------------------------------------------
-// grok-upscale provider — accepts taskId instead of imageUrl
+// Task-chained providers — accept taskId instead of imageUrl; and the retired
+// grok-upscale, refused with its reason before anything is reserved.
 // ---------------------------------------------------------------------------
 
-describe("POST /v1/edit-image — grok-upscale provider", () => {
-  it("accepts taskId without imageUrl", async () => {
+describe("POST /v1/edit-image — task-chained providers and the retired grok-upscale", () => {
+  it("a task-chained provider accepts taskId without imageUrl", async () => {
     const { mockInsert } = mockJobInsert({
       data: { id: "job-grok" },
       error: null,
     })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-2-segment",
+        taskId: "grok-prior-task-abc",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({
+          provider: "grok-2-segment",
+          taskId: "grok-prior-task-abc",
+          type: "edit-image",
+        }),
+      })
+    )
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({
+        provider: "grok-2-segment",
+        taskId: "grok-prior-task-abc",
+      })
+    )
+  })
+
+  it("grok-upscale is retired: refused 400 with the reason and the replacement, before any job row or reservation", async () => {
+    // It never upscaled an image — the provider endpoint it was wired to
+    // upscales a Grok VIDEO task (2026-10-29). The id has no price any more,
+    // so the refusal must come before the credit guard's price lookup.
+    const { mockInsert } = mockJobInsert({ data: { id: "job-never" }, error: null })
 
     const res = await app.inject({
       method: "POST",
@@ -334,31 +370,22 @@ describe("POST /v1/edit-image — grok-upscale provider", () => {
       },
     })
 
-    expect(res.statusCode).toBe(200)
-    expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input_data: expect.objectContaining({
-          provider: "grok-upscale",
-          taskId: "grok-prior-task-abc",
-          type: "edit-image",
-        }),
-      })
-    )
-    expect(videoQueue.add).toHaveBeenCalledWith(
-      "edit-image",
-      expect.objectContaining({
-        provider: "grok-upscale",
-        taskId: "grok-prior-task-abc",
-      })
-    )
+    expect(res.statusCode).toBe(400)
+    const body = res.json()
+    expect(body.error.code).toBe("validation_error")
+    expect(body.error.message).toMatch(/grok-upscale was retired/)
+    expect(body.error.message).toMatch(/recraft-upscale or topaz-image-upscale/)
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when grok-upscale is sent without taskId (even with imageUrl)", async () => {
+  it("returns 400 when a task-chained provider is sent without taskId (even with imageUrl)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/edit-image",
       payload: {
-        provider: "grok-upscale",
+        provider: "grok-2-edit",
+        prompt: "make the sky stormy",
         imageUrl: "https://example.com/photo.png",
         userId: "00000000-0000-4000-8000-000000000001",
       },
@@ -384,7 +411,7 @@ describe("POST /v1/edit-image — grok-upscale provider", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
-  it("non-grok-upscale providers ignore taskId field if provided", async () => {
+  it("URL providers ignore a taskId field if provided", async () => {
     const { mockInsert } = mockJobInsert({
       data: { id: "job-1" },
       error: null,

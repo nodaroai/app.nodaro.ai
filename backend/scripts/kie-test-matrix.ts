@@ -667,22 +667,8 @@ export const IMAGE_TEST_CONFIGS: TestConfig[] = [
     skipByDefault: false,
   },
 
-  // --- Grok Upscale (requires task_id from prior grok generation, skipped by default) ---
-  {
-    modelKey: "grok-upscale",
-    category: "image",
-    kieModel: "grok-imagine/upscale",
-    expectedKieCredits: 4,
-    expectedCostUsd: 0.02,
-    configDesc: "Grok Upscale (needs task_id, skip unless chained)",
-    apiType: "standard",
-    input: { task_id: "{{GROK_TASK_ID}}" },
-    requiresImage: false,
-    requiresAudio: false,
-    requiresVideo: false,
-    estimatedTimeSec: 20,
-    skipByDefault: true,
-  },
+  // (`grok-upscale` — KIE `grok-imagine/upscale` — was retired 2026-10-29: that
+  // endpoint upscales a Grok VIDEO task, never an image.)
 
   // --- Flux Kontext (special endpoint) ---
   {

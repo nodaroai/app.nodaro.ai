@@ -306,41 +306,42 @@ describe("edit-image handler", () => {
   })
 
   // -------------------------------------------------------------------------
-  // grok-upscale: takes a prior Grok task_id instead of imageUrl. The KIE
-  // provider's editImage signature is unchanged — the worker passes the
-  // taskId through the imageUrl arg, and `imageParam: "task_id"` on the KIE
-  // model config (kie/models.ts) routes it to the correct request key.
+  // The task-chained Grok ops (grok-2-edit / grok-2-segment) take a prior Grok
+  // task_id instead of imageUrl. The KIE provider's editImage signature is
+  // unchanged — the worker passes the taskId through the imageUrl arg, and
+  // `imageParam: "task_id"` on the KIE model config (kie/models.ts) routes it
+  // to the correct request key.
   // -------------------------------------------------------------------------
 
-  it("grok-upscale: passes taskId through the imageUrl arg of editImage", async () => {
+  it("a task-chained provider: passes taskId through the imageUrl arg of editImage", async () => {
     const job = makeJob("edit-image", {
-      provider: "grok-upscale",
+      provider: "grok-2-segment",
       taskId: "grok-prior-task-abc",
     })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockEditImage).toHaveBeenCalledWith(
       "grok-prior-task-abc", // taskId routed through imageUrl arg
-      "grok-upscale",
+      "grok-2-segment",
       undefined,
       undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
-  it("grok-upscale: throws when taskId is missing (no fallback to imageUrl)", async () => {
+  it("a task-chained provider: throws when taskId is missing (no fallback to imageUrl)", async () => {
     const job = makeJob("edit-image", {
-      provider: "grok-upscale",
-      imageUrl: "https://input.png", // ignored for grok-upscale
+      provider: "grok-2-segment",
+      imageUrl: "https://input.png", // not the input for a task-chained op
     })
 
     await expect(handler(job as never, makeCtx())).rejects.toThrow(
-      /grok-upscale requires taskId/,
+      /grok-2-segment requires taskId/,
     )
     expect(mocks.mockEditImage).not.toHaveBeenCalled()
   })
 
-  it("non-grok-upscale providers ignore taskId field in job data", async () => {
+  it("URL providers ignore a taskId field in job data", async () => {
     const job = makeJob("edit-image", {
       provider: "recraft-upscale",
       imageUrl: "https://input.png",
@@ -349,7 +350,7 @@ describe("edit-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockEditImage).toHaveBeenCalledWith(
-      "https://input.png", // imageUrl wins for non-grok providers
+      "https://input.png", // imageUrl wins for URL providers
       "recraft-upscale",
       undefined,
       undefined,
@@ -357,7 +358,7 @@ describe("edit-image handler", () => {
     )
   })
 
-  it("non-grok-upscale: throws when imageUrl is missing", async () => {
+  it("a URL provider: throws when imageUrl is missing", async () => {
     const job = makeJob("edit-image", { provider: "recraft-upscale" })
 
     await expect(handler(job as never, makeCtx())).rejects.toThrow(

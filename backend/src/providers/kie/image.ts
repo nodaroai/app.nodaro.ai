@@ -500,8 +500,8 @@ export class KieImageProvider
       ? result.providerMs
       : undefined
     // Surface the KIE task id so it lands in output_data.kieTaskId (via
-    // buildProviderMeta) — grok-2's task-chained edit/segment endpoints and
-    // grok-upscale consume it downstream.
+    // buildProviderMeta) — grok-2's task-chained edit/segment endpoints
+    // consume it downstream.
     const kieTaskId = ("taskId" in result && typeof result.taskId === "string")
       ? result.taskId
       : undefined
@@ -583,8 +583,8 @@ export class KieImageProvider
     const providerMs = ("providerMs" in result && typeof result.providerMs === "number")
       ? result.providerMs
       : undefined
-    // The EDIT task id is the chainable one — Refine Regions / grok-2-edit /
-    // grok-upscale can all consume the result downstream.
+    // The EDIT task id is the chainable one — Refine Regions / grok-2-edit
+    // consume the result downstream.
     const kieTaskId = ("taskId" in result && typeof result.taskId === "string")
       ? result.taskId
       : undefined

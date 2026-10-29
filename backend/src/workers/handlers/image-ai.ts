@@ -177,8 +177,8 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     maskIndexes?: number[]
   }
   const resolvedProvider = provider ?? "recraft-upscale"
-  // The task-chained Grok providers (grok-upscale / grok-2-edit /
-  // grok-2-segment) take a prior Grok task_id instead of an image URL; the
+  // The task-chained Grok providers (grok-2-edit / grok-2-segment) take a
+  // prior Grok task_id instead of an image URL; the
   // KIE provider's editImage uses `imageParam` to route the input value to
   // the correct request key, so we just plumb taskId through the imageUrl
   // arg and let imageParam: "task_id" (in models.ts) place it correctly.

@@ -1310,22 +1310,14 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     pricing: [{ identifier: "grok-i2i", credits: 10 }],
   },
-  "grok-upscale": {
-    id: "grok-upscale",
-    kind: "image",
-    modes: ["upscale"] as const,
-    family: "xAI",
-    maker: "xai",
-    label: "Grok Upscale",
-    series: "Grok",
-    description: "Upscale a previously-generated Grok image. Requires the prior task id.",
-    useCases: ["upscale"],
-    pricing: [{ identifier: "grok-upscale", credits: 25 }],
-  },
+  // `grok-upscale` was retired 2026-10-29 — it never upscaled an image: the
+  // provider endpoint it was wired to upscales a Grok VIDEO task, and the
+  // provider offers no Grok image upscale. See IMAGE_EDIT_PROVIDERS in
+  // model-constants. No entry: a stored or sent id is refused by the route.
   // Grok Imagine Image 2.0 — t2i plus task-chained region editing. The edit
   // and segment-map endpoints take a PRIOR grok-2 generation's task id (the
-  // job's `kieTaskId` output), not an image URL — same contract as
-  // grok-upscale (see TASK_CHAINED_EDIT_PROVIDERS in model-constants).
+  // job's `kieTaskId` output), not an image URL (see
+  // TASK_CHAINED_EDIT_PROVIDERS in model-constants).
   "grok-2": {
     id: "grok-2",
     kind: "image",

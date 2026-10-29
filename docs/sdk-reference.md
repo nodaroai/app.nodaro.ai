@@ -2998,8 +2998,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 >   `maskUrl` (white = the area to change, on both models) is sent to the model
 >   as its own mask, so only `ideogram-edit` and `flux-fill` use it.
 > - `EditImageParams` is one of two forms: `imageUrl` for every provider except
->   the Grok task ops, or `taskId` plus `provider: "grok-upscale" | "grok-2-edit"
->   | "grok-2-segment"` (a prior Grok generation's task id, its job's
+>   the Grok task ops, or `taskId` plus `provider: "grok-2-edit" |
+>   "grok-2-segment"` (a prior Grok 2 generation's task id, its job's
 >   `output_data.kieTaskId`). A body typed as `EditImageParams` that sends both,
 >   or a `taskId` on another provider, does not compile. The provider defaults
 >   to `recraft-upscale`; `prompt` is required for `nano-banana-edit` and

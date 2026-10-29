@@ -3,6 +3,7 @@ import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/re
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
+import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
@@ -3249,6 +3250,10 @@ export function buildPayload(
 
     case "edit-image": {
       const provider = sourceImageNodeProvider(type, data)
+      // A retired provider on a legacy node: refused with its reason before
+      // the credit id is built (see the upscale-image case).
+      const retiredEdit = retiredEditProviderReason(provider)
+      if (retiredEdit) throw new Error(retiredEdit)
 
       // Same last-mile catalog snap as generate-image / image-to-image — see the
       // comment there. Aspect-only on this branch: `targetResolution` is an
@@ -3669,6 +3674,12 @@ export function buildPayload(
 
     case "upscale-image": {
       const provider = (data.provider as string) ?? "recraft-upscale"
+      // A retired provider is refused with its reason here, before the credit
+      // id is built — the id has no price any more, and the check's "pricing is
+      // not configured" would read as a platform fault (the route's preHandler
+      // answers the same words on the direct lane).
+      const retired = retiredEditProviderReason(provider)
+      if (retired) throw new Error(retired)
       const targetResolution = data.targetResolution as string | undefined
       // Topaz's only real quality lever is the upscale FACTOR; the legacy
       // `targetResolution` on stored node data has no provider parameter behind
