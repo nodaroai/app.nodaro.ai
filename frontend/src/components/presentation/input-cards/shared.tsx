@@ -1,7 +1,9 @@
 import { CoverButton } from "@/components/ui/cover-button"
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Upload, Link } from "lucide-react"
+import { toast } from "sonner"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { useLinkImport } from "@/hooks/use-link-import"
 import { useMediaEditor } from "@/components/editor/media-editor"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
@@ -9,7 +11,7 @@ import type { InputMode } from "@/types/nodes"
 import type { PromptContext } from "@/lib/prompt-context"
 import { GlassCard } from "../output-cards/shared"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
-import { useT } from "@/lib/i18n"
+import { tx, useT } from "@/lib/i18n"
 import { editableTextDir } from "@/lib/user-text-dir"
 
 /** Deterministic waveform bar heights for decorative display */
@@ -44,7 +46,7 @@ interface UseMediaUploadOptions {
 
 /** Shared upload logic for image, video, and audio input cards */
 export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, onUpdateInput, url }: UseMediaUploadOptions) {
-  const { upload, isUploading } = useFileUpload()
+  const { isUploading } = useFileUpload()
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlValue, setUrlValue] = useState("")
   const [isDragOver, setIsDragOver] = useState(false)
@@ -62,6 +64,7 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
     }
   }, [nodeId, isFullscreen, onUpdateInput])
 
+  const linkImport = useLinkImport()
   const mediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const result = results[0]
@@ -83,13 +86,24 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
     if (file) handleFile(file)
   }, [handleFile])
 
-  const handleUrlSubmit = useCallback(() => {
-    if (urlValue.trim()) {
-      updateUrl(urlValue.trim())
-      setUrlValue("")
-      setShowUrlInput(false)
+  const { importLink } = linkImport
+  const { openEditor } = mediaEditor
+  const handleUrlSubmit = useCallback(async () => {
+    const link = urlValue.trim()
+    if (!link) return
+    setUrlValue("")
+    setShowUrlInput(false)
+    // A picture link is imported and opened in the "Adjust image" editor, as
+    // a picked file is; a video or audio link is used as it is, and so is a
+    // picture link that cannot be imported (with a notice).
+    if (mimePrefix !== "image/") {
+      updateUrl(link)
+      return
     }
-  }, [urlValue, updateUrl])
+    if (await importLink(link, openEditor) !== "failed") return
+    updateUrl(link)
+    toast.warning(tx("linkImport.addedAsIs"))
+  }, [urlValue, updateUrl, mimePrefix, importLink, openEditor])
 
   const handleRemove = useCallback(() => {
     updateUrl("")
@@ -97,7 +111,7 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
 
   return {
     effectiveUrl,
-    isUploading,
+    isUploading: isUploading || linkImport.isImporting,
     isDragOver,
     setIsDragOver,
     showUrlInput,

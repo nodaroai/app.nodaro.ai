@@ -177,7 +177,7 @@ Specific subclasses add fields:
 
 - `ForbiddenError.missingScope?: string` — set when `code === "insufficient_scope"`
 - `InsufficientCreditsError.required?: number` / `.available?: number`
-- `StorageExceededError.limitBytes?: number`
+- `StorageExceededError.limitBytes?: number` / `.reason?: string` — the 413's own code: `file_too_large` is one file over the limit, `storage_limit_exceeded` a full storage
 
 ## 4. Common workflows
 

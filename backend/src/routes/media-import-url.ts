@@ -14,7 +14,8 @@ import { importImageFromUrl } from "../lib/media-import.js"
  *
  * Body:      { url: string }   (http(s); safeUrlSchema + safeFetch SSRF gates)
  * Response:  { data: { url, thumbnailUrl, assetId, mimeType, sizeBytes,
- *              filename } } — the /v1/upload response shape.
+ *              filename, width, height } } — width/height are the decoded
+ *              pixel size (0 when it could not be read).
  * Errors:    400 validation_error (not an image / bad url),
  *            413 file_too_large | storage_limit_exceeded,
  *            422 fetch_failed (unreachable / non-2xx origin).

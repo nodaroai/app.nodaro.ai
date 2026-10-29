@@ -6108,6 +6108,7 @@ export const ja: ChromeDict = {
   "node.avatarLipSyncsToAudio": "実行時に、アバターが接続されたオーディオに合わせてリップシンクします。10 分を超えるクリップは 600 秒にトリミングされます。",
   "node.connectAudioNodeHint": "オーディオノードを「オーディオ」入力に接続してください。アバターがそのオーディオに合わせてリップシンクします。スクリプトを入力する場合は、ツールバーで「テキスト（TTS）」に切り替えてください。",
   "node.urlCopied": "URL をコピーしました",
+  "linkImport.addedAsIs": "リンクをそのまま追加しました。調整用に開けませんでした。",
   "node.copied": "コピーしました",
   "node.promptCopied": "プロンプトをコピーしました",
   "node.failed": "失敗",

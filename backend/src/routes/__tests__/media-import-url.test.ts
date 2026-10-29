@@ -134,6 +134,18 @@ describe("POST /v1/media/import-url", () => {
     expect(h.uploadBufferToR2).toHaveBeenCalledWith(expect.any(Buffer), expect.any(String), "image/jpeg")
   })
 
+  it("imports a link whose name has a malformed escape, keeping the name as written", async () => {
+    const res = await post({ url: "https://images.example.com/photo%E0%A4%A.jpg" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.filename).toBe("photo%E0%A4%A.jpg")
+  })
+
+  it("decodes a well-formed escape in the name", async () => {
+    const res = await post({ url: "https://images.example.com/my%20photo.jpg" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.filename).toBe("my photo.jpg")
+  })
+
   it("422s when the origin is unreachable", async () => {
     h.safeFetch.mockRejectedValue(new Error("connect ECONNREFUSED"))
     const res = await post({ url: IMPORT_URL })

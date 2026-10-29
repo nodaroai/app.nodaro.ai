@@ -4730,6 +4730,65 @@ export async function processMedia(params: MediaProcessParams): Promise<MediaPro
   return json.data
 }
 
+/** A link copied into the person's storage by `POST /v1/media/import-url`. */
+export interface ImportedMedia {
+  readonly url: string
+  readonly thumbnailUrl: string | null
+  readonly assetId: string | null
+  readonly mimeType: string
+  readonly sizeBytes: number
+  readonly filename: string
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * Copy the picture at a link into the person's storage (`POST
+ * /v1/media/import-url`), so it can be read and cropped like an upload. Any
+ * refusal or network failure throws; the caller does not word it (a link that
+ * cannot be imported is kept as it is), so the error carries only the
+ * platform's code, for debugging.
+ */
+export async function importMediaUrl(url: string): Promise<ImportedMedia> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/media/import-url`, {
+    method: "POST",
+    headers: { ...authHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(`media import refused: ${res.status} ${err?.error?.code ?? "unknown"}`)
+  }
+  const json = await res.json()
+  return json.data
+}
+
+/** How long a discard may take before it is given up (it is best effort). */
+export const DISCARD_TIMEOUT_MS = 5000
+
+/**
+ * Throw away a file this app just made and no longer needs (`POST
+ * /v1/media/discard`): an imported link's copy, right after it is read back
+ * into the browser for the editor. Best effort: the platform refuses a file
+ * that is still in use, a request still unanswered after
+ * {@link DISCARD_TIMEOUT_MS} is abandoned, and any failure is ignored, so a
+ * discard never holds up what follows.
+ */
+export async function discardMedia(url: string): Promise<void> {
+  try {
+    const authHeaders = await getAuthHeaders()
+    await fetch(`${API_BASE_URL}/v1/media/discard`, {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+      signal: AbortSignal.timeout(DISCARD_TIMEOUT_MS),
+    })
+  } catch {
+    // best effort
+  }
+}
+
 export async function downloadYouTubeAudio(url: string): Promise<{ url: string; thumbnailUrl: string | null }> {
   return apiJson("/v1/youtube-audio", {
     body: { url },

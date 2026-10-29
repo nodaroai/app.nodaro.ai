@@ -18,10 +18,12 @@ describe("upload-image-node moderation wiring (G3)", () => {
     expect(SRC).toContain("runtimeUploadModerationEnabled")
   })
 
-  it("moderates on upload-complete and on url-add, but NOT on the legacy/upstream hoist", () => {
-    // moderate() is called in onComplete and handleAddUrl.
-    const calls = SRC.match(/moderate\(/g) ?? []
-    expect(calls.length).toBeGreaterThanOrEqual(2)
+  it("moderates on upload-complete (files and links alike), but NOT on the legacy/upstream hoist", () => {
+    // A link is imported and goes through the editor like a file, so the
+    // editor's onComplete is where both are moderated.
+    const onComplete = SRC.slice(SRC.indexOf("onComplete:"), SRC.indexOf("const useFull"))
+    expect(onComplete).toContain("moderate(url)")
+    expect(SRC).toMatch(/importLink\(url, mediaEditor\.openEditor\)/)
     // The legacy-hoist useEffect must not call moderate — it runs on every
     // workflow open and would fire moderation for imported/legacy nodes.
     const legacyBlock = SRC.slice(

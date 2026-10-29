@@ -7,4 +7,4 @@
  */
 export { UploadsResource } from "../resources/uploads.js"
 
-export type { UploadResult, UploadJsonResult } from "../resources/uploads.js"
+export type { UploadResult, UploadJsonResult, ImportUrlResult } from "../resources/uploads.js"

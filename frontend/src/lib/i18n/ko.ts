@@ -6042,6 +6042,7 @@ export const ko: ChromeDict = {
   "node.avatarLipSyncsToAudio": "실행 시 아바타가 연결된 오디오에 맞춰 립싱크합니다. 10분이 넘는 클립은 600초로 잘립니다.",
   "node.connectAudioNodeHint": "오디오 노드를 “오디오” 입력에 연결하세요. 아바타가 해당 오디오에 맞춰 립싱크합니다. 스크립트를 직접 입력하려면 툴바에서 “텍스트(TTS)”로 전환하세요.",
   "node.urlCopied": "URL이 복사되었습니다",
+  "linkImport.addedAsIs": "링크를 그대로 추가했습니다. 조정할 수 있게 열지 못했습니다.",
   "node.copied": "복사되었습니다",
   "node.promptCopied": "프롬프트가 복사되었습니다",
   "node.failed": "실패",
