@@ -3,8 +3,10 @@
  *
  * Maps ProviderCapability values to provider preference chains.
  * KIE.ai is the sole primary provider; Replicate participates only for the
- * models that live exclusively there: the "Open" image-generation models and
- * the Topaz upscalers (image-editing, video-upscale — moved off KIE 2026-10-25).
+ * models that live exclusively there: the "Open" image-generation models, the
+ * Topaz upscalers (image-editing, video-upscale — moved off KIE 2026-10-25)
+ * and the Replicate-only video models (image-to-video, text-to-video — Kling
+ * 3 Omni, reachable since 2026-10-29).
  *
  * The legacy `ai_provider` app-setting deliberately does NOT affect routing:
  * migration 005 seeds it to "replicate" on every fresh database, nothing
@@ -57,13 +59,31 @@ const KIE_ONLY_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
 
 /**
  * Capabilities whose chain falls through to Replicate for the model ids it
- * declares (the router walks each provider's `supportedModels`, so an id KIE
- * declares never reaches Replicate).
+ * declares (the router walks each provider's `supportedModels` and the first
+ * provider that declares the id serves it — no fall-through on failure — so
+ * an id KIE declares never reaches Replicate).
+ *
+ * image-to-video and text-to-video are here for the video models that live
+ * only on Replicate (Kling 3 Omni; the LTX pair is intercepted by its own
+ * handler before the router). They were missing: Replicate registered
+ * kling-3-omni for image-to-video, the dispatch guard saw it registered, and
+ * the chain never asked Replicate — every run failed at the router with
+ * "not supported by any registered provider" (prod 2026-10-29).
+ * `__tests__/provider-chain-reachability.test.ts` now fails a capability a
+ * registered provider declares models for whose chain never reaches it —
+ * which is why sound-effect and audio-separation are listed too: Replicate
+ * alone declares their models (MMAudio, Demucs). Their routes call the
+ * provider directly today, with no router wrapper, so the chain changes
+ * nothing for them; listing them keeps the rule total rather than exempted.
  */
 const KIE_THEN_REPLICATE_CAPABILITIES: ReadonlySet<ProviderCapability> = new Set([
   "image-generation",
   "image-editing",
+  "image-to-video",
+  "text-to-video",
   "video-upscale",
+  "sound-effect",
+  "audio-separation",
 ])
 
 /**
@@ -104,9 +124,10 @@ export async function buildRoutingDecision(
 ): Promise<RoutingDecision> {
   const settings = await getAppSettings()
 
-  // KIE-only capabilities have no fallback; image-generation, image-editing and
-  // video-upscale fall through to Replicate for the models that only live there
-  // (flux-2-klein, kontext-multi, the Topaz upscalers) — the router.ts walker uses each provider's
+  // KIE-only capabilities have no fallback; every capability in
+  // KIE_THEN_REPLICATE_CAPABILITIES falls through to Replicate for the models
+  // that only live there (flux-2-klein, kontext-multi, the Topaz upscalers,
+  // kling-3-omni, MMAudio, Demucs) — the router.ts walker uses each provider's
   // `supportedModels`, so KIE-routed ids never reach Replicate. Everything else
   // is KIE-only. (All three KIE-mode chains share the same markup/provider.)
   const baseChain: RoutingDecision["providerChain"] = KIE_ONLY_CAPABILITIES.has(capability)

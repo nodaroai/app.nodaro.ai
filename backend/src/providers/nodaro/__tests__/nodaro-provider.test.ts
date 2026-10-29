@@ -79,11 +79,16 @@ describe("routing chains while nodaro is unregistered", () => {
       "kie",
       "replicate",
     ])
+    // The video capabilities reach the second provider for the ids only it
+    // declares (Kling 3 Omni) since 2026-10-29; the walker still serves a KIE
+    // id with KIE, so nothing a KIE id does changes.
     expect((await buildRoutingDecision("image-to-video", "minimax")).providerChain).toEqual([
       "kie",
+      "replicate",
     ])
     expect((await buildRoutingDecision("text-to-video", "kling")).providerChain).toEqual([
       "kie",
+      "replicate",
     ])
     expect((await buildRoutingDecision("lip-sync", "kling-avatar")).providerChain).toEqual([
       "kie",
@@ -478,10 +483,12 @@ describe("registration + chain extension when connected", () => {
     ])
     expect((await buildRoutingDecision("image-to-video", "minimax")).providerChain).toEqual([
       "kie",
+      "replicate",
       "nodaro",
     ])
     expect((await buildRoutingDecision("text-to-video", "kling")).providerChain).toEqual([
       "kie",
+      "replicate",
       "nodaro",
     ])
     expect((await buildRoutingDecision("lip-sync", "kling-avatar")).providerChain).toEqual([

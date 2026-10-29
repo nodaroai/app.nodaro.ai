@@ -311,8 +311,9 @@ backend/src/providers/
 
 ### Routing Logic
 - KIE.ai is the sole primary provider; the legacy `ai_provider` app-setting no longer affects routing (fresh installs seed `"replicate"`, and the old non-`"kie"` branch returned an empty chain that broke registry-routed nodes on self-host — see `providers/config.ts` + migration 307)
-- image-generation, image-editing, video-upscale -> [kie, replicate] chain (Replicate serves only the models that live exclusively there: the "Open" image models and the Topaz upscalers)
+- image-generation, image-editing, video-upscale, image-to-video, text-to-video, sound-effect, audio-separation -> [kie, replicate] chain (Replicate serves only the models that live exclusively there: the "Open" image models, the Topaz upscalers, Kling 3 Omni, MMAudio and Demucs — the last two have no router wrapper, their routes call the provider directly; the walker takes the FIRST provider that declares the id and never falls through on failure, so a KIE id never reaches Replicate)
 - Every other capability -> [kie] chain
+- **A capability a registered provider declares models for must be in that provider's chain** — `providers/__tests__/provider-chain-reachability.test.ts` fails otherwise. The registration guard (`video-provider-dispatch.test.ts`) cannot see this: Kling 3 Omni was registered with Replicate for image-to-video while the chain stayed `["kie"]`, and every run failed at the router (prod 2026-10-29).
 
 ### KIE.ai Models
 
