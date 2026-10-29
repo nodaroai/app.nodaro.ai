@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   audits: [] as Record<string, unknown>[],
   admin: true,
   invalidated: 0,
+  /** The recorded engine environments (`listEngineEnvironments`). */
+  envs: [] as { env: string; pluginBuildId: string | null; supports: Record<string, unknown>; updatedAt: string }[],
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -40,6 +42,13 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/app-settings.js", () => ({ invalidateSettingsCache: () => void h.invalidated++ }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: async () => h.admin }))
+vi.mock("../../lib/engine-environments.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/engine-environments.js")>()),
+  listEngineEnvironments: async () => h.envs,
+}))
+
+const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap }, updatedAt: "2026-10-29T00:00:00.000Z" })
+const HIDES = { faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head", "body"] }
 
 const { adminNodaroMotionRoutes } = await import("../admin-nodaro-motion.js")
 const { NODARO_MOTION_MOTION_AUDIT_TARGET } = await import("../admin-nodaro-motion-motion.js")
@@ -55,6 +64,7 @@ beforeEach(async () => {
   h.audits = []
   h.admin = true
   h.invalidated = 0
+  h.envs = [envRow("production", HIDES), envRow("staging", HIDES)]
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     if (req.headers["x-user"]) req.userId = String(req.headers["x-user"])
@@ -128,6 +138,16 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     for (const m of [{ "motion-pulse": { masking: { mode: "auto", target: "face" } } }, { "motion-prism": {} }, {}]) {
       expect((await put(m)).statusCode, JSON.stringify(m)).toBe(200)
     }
+  })
+
+  it("takes a masking that hides whole people only while every environment's engine can (the row is shared)", async () => {
+    const motion = { "motion-prism": { masking: { mode: "always", target: "body" } } }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    h.envs = [envRow("production", { faceMaskTargets: ["face", "head", "body"] }), envRow("staging", HIDES)]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["production"] })
+    expect(h.upserts).toHaveLength(1)
   })
 
   it("refuses what a Motion run cannot take, writing nothing", async () => {

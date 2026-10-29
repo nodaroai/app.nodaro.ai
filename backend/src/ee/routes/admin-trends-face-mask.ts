@@ -24,7 +24,8 @@
  * `makeMarksOf`), and held back unless the loaded engine declares the mode
  * (`castSwap.sourceModes`), its target (`faceMaskTargets`, keep people's
  * `"body"`) and a main mark's label (`faceMaskMarkLabels`). A face mask
- * (absent or `"faces"`) needs none of them.
+ * (absent or `"faces"`) needs none of them, but one that hides the whole
+ * person (`"body"`) needs `faceMaskHideTargets` to name it.
  *
  * Marks (`faceMasking.marks`, decided 2026-10-26): a make sends the `"erased"`
  * ones to the engine, which leaves their faces out of the mask; slot marks
@@ -225,13 +226,15 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       // An engine that does not declare the target strips it and masks heads: a face-only (or whole-person)
       // mask made there would be stored under that target's settings key, so it is refused before anything is paid.
       const target = faceMaskTargetOf(draft.faceMasking)
-      if (target !== null && !loadedEngineMasksTarget(target)) {
+      if (target !== null && !loadedEngineMasksTarget(target, source)) {
         return err(
           reply,
           503,
           "engine_unsupported",
           target === "body"
-            ? "This environment's Cast Swap engine cannot keep whole people yet: choose Head or Face, or wait for the engine."
+            ? source === "faces"
+              ? "This environment's Cast Swap engine cannot hide whole people yet: choose Head or Face, or wait for the engine."
+              : "This environment's Cast Swap engine cannot keep whole people yet: choose Head or Face, or wait for the engine."
             : "This environment's Cast Swap engine cannot mask the face alone yet: choose Head, or wait for the engine.",
         )
       }

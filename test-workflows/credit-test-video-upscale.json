@@ -53,13 +53,13 @@
       }
     },
     {
-      "id": "ei_grok_upscale",
+      "id": "ei_recraft_upscale",
       "type": "edit-image",
       "position": { "x": 500, "y": 800 },
       "data": {
-        "label": "Grok Upscale (4cr) — requires task_id from prior Grok generation",
+        "label": "Recraft Upscale",
         "prompt": "",
-        "provider": "grok-upscale",
+        "provider": "recraft-upscale",
         "fieldMappings": {}
       }
     }

@@ -11,6 +11,8 @@ import { supabase } from "../../lib/supabase.js"
 import { insertAppReport } from "../../lib/app-reports.js"
 import { isBillingContext, isDeploymentBillingContext, type BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
+import { deniedModelRejectionMessage, isModelDenied } from "../../lib/surface-deny.js"
+import { isModelSwitchedOff } from "../../lib/model-switch.js"
 import { LlmSpend, type LlmSettleOutcome } from "../../lib/llm-billing.js"
 import type { LlmBillingLedgerWrite } from "../../lib/llm-billing-ledger.js"
 import type { LlmSideHoldRefusal, LlmSideHoldReserveArgs, LlmSideReserveImplResult } from "../../lib/llm-side-hold.js"
@@ -64,6 +66,16 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
   const keyed = await keyedHold(args.jobId, args.userId, args.key, replayChargeId)
   if (keyed) return keyed
 
+  // The deployment's model availability, asked of each planned call's MODEL
+  // (the charge id is the feature's row, which carries no switch for one LLM
+  // model): the admin's switch on the LLM models page is its own code, never
+  // a balance answer; a model the deployment does not offer is refused in the
+  // route guard's words.
+  for (const call of calls as Array<{ modelId: string }>) {
+    if (isModelSwitchedOff(call.modelId)) return refusal("model_disabled", "This model is currently disabled")
+    if (isModelDenied(call.modelId)) return refusal("model_not_available", deniedModelRejectionMessage([call.modelId]))
+  }
+
   let hold: { chargeId: string; holdCredits: number }
   try {
     hold = await llmHoldForCalls(args.feature, args.calls)
@@ -93,6 +105,9 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
     return refusal("reservation_failed", "Failed to check credits")
   }
   if (!check.allowed) {
+    // The admin's switch on the model's pricing row: its own code, never the
+    // balance answer — no purchase lifts it (the route guard's 403 `model_disabled`).
+    if (check.code === "model_disabled") return refusal("model_disabled", check.error ?? "This model is currently disabled")
     if (check.code === "free_video_limit") return refusal("free_video_limit", check.error ?? "Not available on free credits")
     if (check.subscriptionRequired) return refusal("subscription_required", check.error ?? "A subscription is required")
     if (payer.ctx?.payer === "deployment") {

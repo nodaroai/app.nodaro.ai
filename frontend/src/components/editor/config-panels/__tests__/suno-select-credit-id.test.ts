@@ -23,9 +23,14 @@ import { SUNO_VERSION_PRICED_OPERATIONS, SUNO_SELECT_OPERATIONS } from "@nodaro/
 
 const SRC = readFileSync(resolve(__dirname, "../audio-configs.tsx"), "utf8")
 
-/** Every Suno model dropdown: the `.map((m) => (<ModelSelectOption ... />))` body. */
+/**
+ * Every Suno model dropdown: the `.map((m) => (<ModelSelectOption ... />))`
+ * body. A panel renders the registry through `useOfferedModels` under a local
+ * name (`offeredSunoModels`, model-menus-offered.test.ts) — matched by that
+ * name, and by the registry names for a menu that bypasses the hook.
+ */
 const SUNO_OPTION_RE =
-  /(SUNO_MODELS|SUNO_ADD_TRACK_MODEL_OPTIONS)\.map\(\(m\) => \(\s*<ModelSelectOption([\s\S]{0,400}?)\/>/g
+  /(offeredSunoModels|SUNO_MODELS|SUNO_ADD_TRACK_MODEL_OPTIONS)\.map\(\(m\) => \(\s*<ModelSelectOption([\s\S]{0,400}?)\/>/g
 
 /** The operation string inside `creditId={sunoCreditType(m.value, "<op>")}`. */
 const CREDIT_ID_RE = /creditId=\{sunoCreditType\(m\.value,\s*"([a-z0-9-]+)"\)\}/

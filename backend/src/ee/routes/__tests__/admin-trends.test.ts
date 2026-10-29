@@ -2295,6 +2295,31 @@ describe("the stored face mask", () => {
       expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).not.toBe(KEY())
     })
 
+    it("hides whole people (faces hidden) only on an engine whose `faceMaskHideTargets` names it, sending the target and fill", async () => {
+      const BODY = { ...MASKING, target: "body" as const, fill: "depth" as const }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      seed({}, draftData({ faceMasking: BODY }))
+      // An engine from before the declaration lists "body" for keep people while refusing it with faces hidden.
+      for (const extra of [{ faceMaskTargets: ["face", "head", "body"] }, { faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head"] }]) {
+        supports(extra)
+        const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+        expect(held.statusCode, JSON.stringify(extra)).toBe(503)
+        expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/cannot hide whole people/) })
+      }
+      expect(engine.calls).toEqual([])
+
+      supports({ faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head", "body"] })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone(BODY) })
+      // Its own settings key: never a head mask's, nor keep people's whole person.
+      const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+      expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: BODY })))
+      expect(key).not.toBe(KEY())
+      expect(key).not.toBe(faceMaskSettingsKey(draftData({ faceMasking: { mode: "always", source: "keep-people", threshold: 0.4 } })))
+    })
+
     it("makes a head mask (the default, named or not) on an engine that declares no targets", async () => {
       seed({}, draftData({ faceMasking: { ...MASKING, target: "head" } }))
       const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })

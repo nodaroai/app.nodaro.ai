@@ -63,7 +63,7 @@ describe("edit_image becomes the node its provider runs on", () => {
   it("maps no node for a lever its node cannot hold", () => {
     const edit = (body: Record<string, unknown>) => flowNodeFor("/v1/edit-image", { ...TRANSPORT, ...body }, "edit_image")
     // A Grok op runs on a prior task, a mask or segment indexes have no node field.
-    expect(edit({ provider: "grok-upscale", taskId: "t1" })).toBeNull()
+    expect(edit({ provider: "grok-2-edit", taskId: "t1", prompt: "make the sky stormy" })).toBeNull()
     expect(edit({ imageUrl: IMG, provider: "grok-2-segment", taskId: "t1" })).toBeNull()
     expect(edit({ imageUrl: IMG, provider: "nano-banana-edit", prompt: "x", maskUrl: IMG2 })).toBeNull()
     // An upscaler's node has no prompt; a prompt edit's node has no upscale factor.

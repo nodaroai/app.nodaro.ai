@@ -29,7 +29,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
 import type { AdminTrendEngine, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
-import { useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
+import { useEngineEnvironments, useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
 import {
@@ -41,6 +41,7 @@ import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/Puls
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
+import { environmentsThatCannotHideBodies } from "../trends/clip-preparation"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
 import { MotionColumn } from "./components/MotionColumn"
@@ -64,6 +65,10 @@ export default function AdminNodaroMotionPage() {
   const { data, isLoading, error } = useNodaroMotionMasking()
   const save = useSaveNodaroMotionMasking()
   const motionQuery = useNodaroMotionMotion()
+  // The setting is shared by every environment: Body (the whole person hidden) is offered only once EVERY
+  // environment's engine can hide whole people (the server refuses the save otherwise).
+  const envs = useEngineEnvironments()
+  const bodyMissingIn = environmentsThatCannotHideBodies(envs.data)
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
@@ -166,6 +171,7 @@ export default function AdminNodaroMotionPage() {
                     <FaceMaskingEditor
                       value={draft[engine.id]}
                       autoHint={AUTO_HINT}
+                      bodyMissingIn={bodyMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
                           const out = { ...d }
@@ -182,6 +188,7 @@ export default function AdminNodaroMotionPage() {
                       <MotionColumn
                         value={motionDraft[engine.id]}
                         supports={motionQuery.data.supports}
+                        bodyMissingIn={bodyMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
                       />
                     ) : motionQuery.error ? (

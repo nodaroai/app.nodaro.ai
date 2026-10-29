@@ -83,7 +83,7 @@ export function migrateImageNodes(nodes: WorkflowNode[]): WorkflowNode[] {
       } else if (provider === "recraft-remove-bg") {
         return { ...node, type: "remove-background" as SceneNodeType }
       } else {
-        // recraft-upscale, topaz-image-upscale, grok-upscale, or unknown → upscale
+        // recraft-upscale, topaz-image-upscale, or unknown → upscale
         return { ...node, type: "upscale-image" as SceneNodeType }
       }
     }

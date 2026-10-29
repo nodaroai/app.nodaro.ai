@@ -82,7 +82,7 @@ describe("the typed overloads (compile-time pins)", () => {
     const nodes = {} as Nodes
     const lazy = <T>(f: () => T) => f
     expectTypeOf(lazy(() => nodes.runAndWait("image-to-image", { imageUrl: "u", prompt: "p" }))).returns.resolves.toEqualTypeOf<NodeJobOutput>()
-    expectTypeOf(lazy(() => nodes.runAndWait("edit-image", { taskId: "t", provider: "grok-upscale" }))).returns.resolves.toEqualTypeOf<NodeJobOutput>()
+    expectTypeOf(lazy(() => nodes.runAndWait("edit-image", { taskId: "t", provider: "grok-2-segment" }))).returns.resolves.toEqualTypeOf<NodeJobOutput>()
     expectTypeOf(lazy(() => nodes.runAndWait("generate-mask", { imageUrl: "u", prompt: "the car" }))).returns.resolves.toEqualTypeOf<GenerateMaskJobOutput>()
     expectTypeOf<GenerateMaskJobOutput["maskUrl"]>().toEqualTypeOf<string>()
     expectTypeOf<GenerateMaskJobOutput["imageUrl"]>().toEqualTypeOf<string>()
@@ -100,7 +100,7 @@ describe("the typed overloads (compile-time pins)", () => {
   it("the params take the platform's own vocabularies", () => {
     expectTypeOf<ImageToImageParams["provider"]>().toEqualTypeOf<ModifyImageProvider | undefined>()
     expectTypeOf<Extract<EditImageParams, { taskId: string }>["provider"]>().toEqualTypeOf<TaskChainedEditProvider>()
-    expectTypeOf<TaskChainedEditProvider>().toEqualTypeOf<"grok-upscale" | "grok-2-edit" | "grok-2-segment">()
+    expectTypeOf<TaskChainedEditProvider>().toEqualTypeOf<"grok-2-edit" | "grok-2-segment">()
     expectTypeOf<GenerateImageParams["baseImageUrl"]>().toEqualTypeOf<string | undefined>()
     expectTypeOf<GenerateImageParams["maskUrl"]>().toEqualTypeOf<string | undefined>()
   })
@@ -109,7 +109,7 @@ describe("the typed overloads (compile-time pins)", () => {
     // @ts-expect-error — recraft-upscale takes an image URL, not a Grok task id
     const taskOnUrlProvider: EditImageParams = { taskId: "t", provider: "recraft-upscale" }
     // @ts-expect-error — exactly one source: an image URL or a task id, never both
-    const bothSources: EditImageParams = { imageUrl: "u", taskId: "t", provider: "grok-upscale" }
+    const bothSources: EditImageParams = { imageUrl: "u", taskId: "t", provider: "grok-2-segment" }
     // @ts-expect-error — the Grok task ops take a task id, not an image URL
     const urlOnTaskProvider: EditImageParams = { imageUrl: "u", provider: "grok-2-edit" }
     // @ts-expect-error — not an image-to-image model

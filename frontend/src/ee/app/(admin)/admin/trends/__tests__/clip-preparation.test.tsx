@@ -25,7 +25,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 import type { AdminTrendFaceMask, AdminTrendFaceMaskMark, TrendEngineEnvironment } from "@/lib/api"
 import { detail, ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, run, sentTo, TREND_ID } from "./harness"
 import AdminTrendEditorPage from "../detail/page"
-import { clipPreparationIssues, withClipPreparation } from "../clip-preparation"
+import { clipPreparationIssues, environmentsThatCannotHideBodies, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { cleanMasking, describeBlocker, maskingIssues } from "../model"
 import { labelOf, labelValue, markCounts, markFromDrag, markWho } from "../components/FaceMaskMarks"
 import { unmarkedPeople } from "../components/FaceMaskPanel"
@@ -39,6 +39,12 @@ const ERASED: AdminTrendFaceMaskMark = { label: "erased", ...BOX }
 const DEPTH_ENVS: TrendEngineEnvironment[] = ENVIRONMENTS.map((e) => ({
   ...e,
   supports: { castSwap: { ...e.supports.castSwap, sourceModes: ["faces", "full-depth", "keep-people"], faceMaskTargets: ["face", "head", "body"] } },
+}))
+
+/** Engines that also hide whole people with Faces hidden (`faceMaskHideTargets`). */
+const HIDE_ENVS: TrendEngineEnvironment[] = DEPTH_ENVS.map((e) => ({
+  ...e,
+  supports: { castSwap: { ...e.supports.castSwap, faceMaskHideTargets: ["face", "head", "body"] } },
 }))
 
 const STORED: AdminTrendFaceMask = {
@@ -71,9 +77,37 @@ describe("the clip preparation's rules", () => {
     expect(withClipPreparation({ ...from, marks: [MAIN] }, "full-depth")).toEqual({ masking: { mode: "always", source: "full-depth" }, removedMain: 1 })
   })
 
+  it("Faces hidden keeps its whole person (Body); Full depth drops it", () => {
+    const hide = { mode: "always" as const, target: "body" as const, fill: "depth" as const }
+    expect(withClipPreparation(hide, "faces").masking).toEqual(hide)
+    expect(withClipPreparation({ ...hide, source: "faces" }, "faces").masking).toEqual(hide)
+    expect(withClipPreparation(hide, "full-depth").masking).toEqual({ mode: "always", source: "full-depth", fill: "depth" })
+  })
+
+  it("the targets some engine masks: Faces hidden reads faceMaskHideTargets, Keep people faceMaskTargets", () => {
+    expect(supportedTargetsFor(undefined, "faces")).toBeUndefined()
+    expect(supportedTargetsFor(ENVIRONMENTS, "faces")).toEqual(["head"])
+    // An engine that keeps whole people (Keep people) but cannot hide them.
+    expect(supportedTargetsFor(DEPTH_ENVS, "faces")).toEqual(["face", "head"])
+    expect(supportedTargetsFor(DEPTH_ENVS, "keep-people")).toEqual(["face", "head", "body"])
+    expect(supportedTargetsFor(HIDE_ENVS, "faces")).toEqual(["face", "head", "body"])
+    expect(supportedTargetsFor([...ENVIRONMENTS, ...HIDE_ENVS], "faces")).toEqual(["head", "face", "body"])
+  })
+
+  it("Nodaro Motion's shared setting: the environments that cannot hide whole people, a missing one included", () => {
+    const at = (env: string, list: TrendEngineEnvironment[]) => list.map((e) => ({ ...e, env }))
+    expect(environmentsThatCannotHideBodies(undefined)).toBeUndefined()
+    expect(environmentsThatCannotHideBodies([])).toEqual(["staging", "production"])
+    expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS)])).toEqual(["staging"])
+    expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", DEPTH_ENVS)])).toEqual(["staging"])
+    expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", HIDE_ENVS)])).toEqual([])
+  })
+
   it("names what the server would refuse", () => {
     expect(clipPreparationIssues({ mode: "auto", source: "full-depth" })).toEqual(["Clip preparation: Full depth runs every time (mode Always)."])
-    expect(clipPreparationIssues({ mode: "always", target: "body" })).toEqual(["Clip preparation: the whole person is covered in Keep people only."])
+    expect(clipPreparationIssues({ mode: "always", target: "body" })).toEqual([])
+    expect(clipPreparationIssues({ mode: "always", source: "faces", target: "body" })).toEqual([])
+    expect(clipPreparationIssues({ mode: "always", source: "full-depth", target: "body" })).toEqual(["Clip preparation: Full depth masks no one, so it has no whole-person target."])
     expect(clipPreparationIssues({ mode: "always", marks: [MAIN] })[0]).toMatch(/1 box marks the main character, which only Keep people takes/)
     expect(clipPreparationIssues({ mode: "always", source: "keep-people", target: "body", marks: [MAIN] })).toEqual([])
   })
@@ -122,6 +156,9 @@ describe("the publish refusals", () => {
     expect(describeBlocker({ code: "prompt_parts_unsupported", env: "staging", need: "promptParts" })).toMatch(/^staging: engine prompt changes not supported yet/)
     expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "faceMaskTarget:body" })).toBe(
       "production: whole-person masks (Keep people) not supported yet",
+    )
+    expect(describeBlocker({ code: "engine_unsupported", env: "staging", need: "faceMaskHideTarget:body" })).toBe(
+      "staging: whole-person hiding (Faces hidden) not supported yet",
     )
   })
 })
@@ -195,6 +232,51 @@ describe("choosing the clip preparation", { timeout: 20_000 }, () => {
     renderEditor()
     expect(await screen.findByText(/No environment's Cast Swap engine keeps whole people yet/)).toBeInTheDocument()
     expect(screen.getByText(/Not supported yet by the Cast Swap engine of: production/)).toBeInTheDocument()
+  })
+
+  it("Faces hidden offers Body greyed out while no engine hides whole people (one that only keeps them included)", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({ faceMaskState: { status: "none", reasons: [] } }, { faceMasking: { mode: "always" } }) } })
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Covers" }))
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Head (default)", "Face", "Body (not supported yet)"])
+    expect(screen.getByRole("option", { name: "Body (not supported yet)" })).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByRole("option", { name: "Face" })).not.toHaveAttribute("aria-disabled")
+  })
+
+  it("Faces hidden hides the whole person with Body once an engine can, and saves target body with its fill", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: HIDE_ENVS } })
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({ faceMaskState: { status: "none", reasons: [] } }, { faceMasking: { mode: "always", fill: "depth" } }) } })
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Covers" }))
+    await user.click(screen.getByRole("option", { name: "Body" }))
+    const covers = screen.getByRole("combobox", { name: "Covers" })
+    expect(covers).toHaveTextContent("Body")
+    expect(screen.getByText(/everyone in the clip is hidden, body and head/)).toBeInTheDocument()
+    expect(screen.queryByText(/hides whole people yet/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: { faceMasking: unknown } }>
+    expect(body!.data.faceMasking).toEqual({ mode: "always", fill: "depth", target: "body" })
+  })
+
+  it("Trends offers Body once SOME environment's engine hides whole people (the publish check holds the rest)", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends/engine-environments"] = () => ({
+      body: { data: [...DEPTH_ENVS, ...HIDE_ENVS.map((e) => ({ ...e, env: "staging" }))] },
+    })
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({ faceMaskState: { status: "none", reasons: [] } }, { faceMasking: { mode: "always" } }) } })
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Covers" }))
+    expect(screen.getByRole("option", { name: "Body" })).not.toHaveAttribute("aria-disabled")
+  })
+
+  it("a saved Body on engines that cannot hide whole people says so", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({ faceMaskState: { status: "none", reasons: [] } }, { faceMasking: { mode: "always", target: "body" } }) } })
+    renderEditor()
+    expect(await screen.findByText(/No environment's Cast Swap engine hides whole people yet/)).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Covers" })).toHaveTextContent("Body")
   })
 
   it("switching away from Keep people says the main character boxes were removed", async () => {

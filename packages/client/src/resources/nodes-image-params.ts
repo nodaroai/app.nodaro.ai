@@ -130,9 +130,9 @@ export interface EditImageFromUrlParams extends EditImageCommonParams {
 }
 
 /**
- * An `edit-image` request on a prior Grok generation — `grok-upscale`,
- * `grok-2-edit`, `grok-2-segment` take that generation's task id instead of an
- * image URL (`TASK_CHAINED_EDIT_PROVIDER_IDS`).
+ * An `edit-image` request on a prior Grok 2 generation — `grok-2-edit` and
+ * `grok-2-segment` take that generation's task id instead of an image URL
+ * (`TASK_CHAINED_EDIT_PROVIDER_IDS`).
  */
 export interface EditImageFromTaskParams extends EditImageCommonParams {
   /** The prior Grok generation's task id — its job's `output_data.kieTaskId`. 1–200 characters. */

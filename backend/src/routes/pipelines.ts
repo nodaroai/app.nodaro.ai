@@ -3108,6 +3108,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
             forbidden: 403,
             invalid_stage: 400,
             model_pin_forbidden: 403,
+            model_disabled: 403,
             insufficient_credits: 402,
             reservation_failed: 500,
             // Every reserve refusal branchPipeline now forwards by code, at the

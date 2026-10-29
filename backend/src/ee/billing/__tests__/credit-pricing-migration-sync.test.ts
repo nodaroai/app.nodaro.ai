@@ -216,6 +216,11 @@ describe("STATIC_CREDIT_COSTS keys have model_pricing migrations", () => {
 // ---------------------------------------------------------------------------
 
 const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
+  // ── grok-upscale — retired 2026-10-29: the provider endpoint it was wired
+  //    to upscales a Grok VIDEO task, never an image, so every run was refused
+  //    upstream. Migration 567 deletes the row; 059's INSERT stays on disk,
+  //    hence documented here. ──
+  "grok-upscale",
   // ── voice-recast renamed → voice-changer-pro. Migration 233 historically
   //    seeded 'voice-recast'; migration 234 renames that row to
   //    'voice-changer-pro' (the live id, now in STATIC_CREDIT_COSTS). 233's

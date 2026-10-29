@@ -99,7 +99,7 @@ describe("editImage normalizes the input image format", () => {
 
   it("leaves the task-chained grok ops alone (they take a task_id, not a URL)", async () => {
     const { KieImageProvider } = await import("../image.js")
-    await new KieImageProvider().editImage("kie-task-123", undefined, "grok-upscale")
+    await new KieImageProvider().editImage("kie-task-123", "make the sky stormy", "grok-2-edit")
     const sent = runKieTask.mock.calls.at(-1)?.[1] as Record<string, string>
     expect(sent.task_id).toBe("kie-task-123")
     expect(safeFetch).not.toHaveBeenCalled()

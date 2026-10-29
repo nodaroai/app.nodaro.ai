@@ -143,7 +143,9 @@ export async function createPipeline(
         return {
           ok: false,
           status: 403,
-          code: "model_pin_forbidden",
+          // A model an admin switched off keeps the guard's own code (a client
+          // shows its own sentence for it); a plan restriction is the pin refusal.
+          code: check.code === "model_disabled" ? "model_disabled" : "model_pin_forbidden",
           model: modelId,
           message:
             check.error ??
@@ -168,6 +170,17 @@ export async function createPipeline(
         code: "model_pin_forbidden",
         model: DEFAULT_SHOT_VIDEO_MODEL,
         message: check.error ?? "Not available on free credits.",
+      }
+    }
+    // The default shot model switched off by an admin: refused up front with
+    // the guard's code — every shot would be refused at its reservation anyway.
+    if (!check.allowed && check.code === "model_disabled") {
+      return {
+        ok: false,
+        status: 403,
+        code: "model_disabled",
+        model: DEFAULT_SHOT_VIDEO_MODEL,
+        message: check.error ?? "This model is currently disabled",
       }
     }
   }

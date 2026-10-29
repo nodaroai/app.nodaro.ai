@@ -1,0 +1,17 @@
+-- 567: retire `grok-upscale` (KIE `grok-imagine/upscale`).
+--
+-- The id was sold as an image upscale ("upscale a previously-generated Grok
+-- image, requires the prior task id"), but the provider endpoint it was wired
+-- to upscales a Grok VIDEO task: its task_id "must be a successful
+-- grok-imagine/text-to-video or image-to-video task" (the provider's docs,
+-- read 2026-10-29), and the provider lists no Grok image upscale at all. Every
+-- run with an image task's id was refused at task creation (422 "record result
+-- error") and refunded — the model could never have worked for an image.
+--
+-- The code drops the id from every surface in the same PR (the shared
+-- provider lists, the catalog, the KIE config, STATIC_CREDIT_COSTS, the MCP
+-- enum, the docs), and the edit-image route answers the id with a 400 naming
+-- the replacement; this removes its price row so /admin/models stops listing
+-- a model nothing can run. Idempotent. A Grok VIDEO upscale, if ever offered,
+-- is a new id on the video-upscale node with its own row.
+DELETE FROM public.model_pricing WHERE model_identifier = 'grok-upscale';

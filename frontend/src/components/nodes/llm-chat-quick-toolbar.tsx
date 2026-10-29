@@ -23,6 +23,7 @@ import { useLlmPricingMode } from "@/hooks/use-llm-pricing-mode"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
+import { isModelUnavailable, useSurfaceAvailability } from "@/lib/surface-availability"
 import {
   supportsAdvancedMode,
   availableReasoningEfforts,
@@ -204,6 +205,14 @@ export function LlmChatQuickToolbar({
   // Each model's estimated price beside its tier — only while the server prices
   // them as estimates (metered pricing on, D7); the bare tier under rollback.
   const modelPrices = useLlmModelPrices("llm-chat", LLM_MODEL_IDS, data.reasoningEffort, data.advancedMode === true)
+  // A model the deployment does not offer leaves the menu; the node's stored
+  // model stays listed (never silently moved). Subscribed, so an admin's
+  // switch on the LLM models page flips the menu while the strip is open.
+  const availability = useSurfaceAvailability()
+  const offeredModels = useMemo(
+    () => LLM_MODELS.filter((m) => m.id === currentModel || !isModelUnavailable(m.id)),
+    [currentModel, availability],
+  )
   const unitShort = t("credits.unitShort")
   const modelBadge = (m: (typeof LLM_MODELS)[number]) => {
     const price = llmPickerPriceLabel(modelPrices.get(m.id), unitShort)
@@ -214,7 +223,7 @@ export function LlmChatQuickToolbar({
     <SelectContent className="node-menu-surface">
       {/* Vendor groups, tier-ordered inside each — the shared ordering every
           LLM menu renders (a flat registry dump was unscannable at 17 models). */}
-      {groupLlmModelsByVendor(LLM_MODELS).map((group) => (
+      {groupLlmModelsByVendor(offeredModels).map((group) => (
         <SelectGroup key={group.vendor}>
           <SelectLabel>{group.label}</SelectLabel>
           {group.models.map((m) => (

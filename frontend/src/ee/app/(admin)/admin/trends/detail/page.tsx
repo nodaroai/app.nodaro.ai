@@ -68,7 +68,7 @@ import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
 import { ClipPreparationSelect } from "../components/ClipPreparationSelect"
 import { EnginePromptParts } from "../components/EnginePromptParts"
 import { PromptStyleSelect } from "../components/PromptStyleSelect"
-import { clipPreparationOf, withClipPreparation } from "../clip-preparation"
+import { clipPreparationOf, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
@@ -273,10 +273,10 @@ export default function AdminTrendEditorPage() {
     )
   }
 
-  // How the clip is prepared (the form's), the saved draft's, and the targets some environment's engine declares.
+  // How the clip is prepared (the form's), the saved draft's, and the targets some environment's engine masks under it.
   const preparation = clipPreparationOf(form.faceMasking)
   const savedPreparation = clipPreparationOf(server.draft.faceMasking)
-  const supportedTargets = envs.data ? [...new Set(envs.data.flatMap((e) => e.supports.castSwap?.faceMaskTargets ?? ["head" as const]))] : undefined
+  const supportedTargets = supportedTargetsFor(envs.data, preparation)
   const onClipPreparation = (next: typeof preparation) => {
     const { masking, removedMain } = withClipPreparation(form.faceMasking, next)
     set({ faceMasking: masking })

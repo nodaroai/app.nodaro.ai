@@ -119,6 +119,10 @@ export type LlmSideHoldRefusalCode =
   | "insufficient_credits"
   | "subscription_required"
   | "free_video_limit"
+  /** The model is switched off by an admin — never a balance problem (the guard's 403). */
+  | "model_disabled"
+  /** The deployment does not offer the model (its profile or the admin's availability override). */
+  | "model_not_available"
   | "consent_required"
   /** Bad arguments (an unknown feature, a malformed payer). */
   | "invalid_request"

@@ -44,7 +44,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `flux-pro-i2i` | `flux-2/pro-image-to-image` | [flux-2 pro i2i](https://docs.kie.ai/market/flux2/pro-image-to-image.md) |
 | `grok` | `grok-imagine/text-to-image` | [grok t2i](https://docs.kie.ai/market/grok-imagine/text-to-image.md) |
 | `grok-i2i` | `grok-imagine/image-to-image` | [grok i2i](https://docs.kie.ai/market/grok-imagine/image-to-image.md) |
-| `grok-upscale` | `grok-imagine/upscale` | [grok upscale](https://docs.kie.ai/market/grok-imagine/upscale.md) |
+| ~~`grok-upscale`~~ | ~~`grok-imagine/upscale`~~ | **RETIRED 2026-10-29** — that endpoint upscales a Grok VIDEO task ("task_id must be a successful grok-imagine/text-to-video or image-to-video task"); KIE has no Grok image upscale. A Grok video upscale would be a video-upscale provider. |
 | `gpt-image` | `gpt-image/1.5-text-to-image` | [gpt-image 1.5 t2i](https://docs.kie.ai/market/gpt-image/1-5-text-to-image.md) |
 | `gpt-image-i2i` | `gpt-image/1.5-image-to-image` | [gpt-image 1.5 i2i](https://docs.kie.ai/market/gpt-image/1-5-image-to-image.md) |
 | `gpt-image-2` | `gpt-image-2-text-to-image` | [gpt-image 2 t2i](https://docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md) |
@@ -419,7 +419,7 @@ Different models use different param names for input images — getting this wro
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
-| Task ID | grok-upscale | `task_id` (NOT an image URL — requires prior grok generation) |
+| Task ID | grok-2-edit, grok-2-segment | `task_id` (NOT an image URL — requires a prior grok-2 generation) |
 | Reference images (T2I) | nano-banana-pro, others | `image_input` |
 
 Check `imageParam` in `models.ts` for the authoritative mapping.
@@ -435,7 +435,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 
 **The allowed ratios differ sharply per model — read `MODEL_CATALOG[...].aspectRatios`, never assume 16:9 exists.** `gpt-image` (GPT Image 1.5) accepts only `1:1 / 3:2 / 2:3` and has NO `resolution` lever at all, while its `gpt-image-2` sibling accepts `auto / 1:1 / 16:9 / 9:16 / 4:3 / 3:4` plus 1K–4K. Sending a ratio the model doesn't list returns a KIE error that `client.ts` surfaces as "Invalid aspect ratio setting" — and inside a workflow run that aborts every sibling node's results too. `normalizeModelInput` (`@nodaro/shared`) coerces a stale pair at the write and run boundaries; it derives entirely from the catalog, so a new model is covered by declaring `aspectRatios` honestly and nothing else.
 | `image_size` (named) | ideogram, qwen | `"square"`, `"landscape_16_9"`, etc. | Named values, NOT ratios! `image.ts` converts at runtime |
-| *(none)* | grok-i2i, recraft-*, grok-upscale | — | No aspect ratio control |
+| *(none)* | grok-i2i, recraft-*, grok-2-edit, grok-2-segment | — | No aspect ratio control |
 
 `image.ts` handles conversions:
 - Base `nano-banana`: remaps `aspect_ratio` → `image_size` (ratio format)

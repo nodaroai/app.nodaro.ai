@@ -48,8 +48,10 @@ export const CAST_SWAP_FACE_MASKING_BOUNDS = {
  * - `"head"` (the default): the whole head, hair included, and people seen
  *   from behind or turned away, with a bigger mask.
  * - `"face"`: the face only; the hair, and a person turned away, stay visible.
- * - `"body"`: the whole person. Only a trend clip that keeps its people as
- *   they are (the rest of the frame prepared) takes it; a face mask does not.
+ * - `"body"`: the whole person. A face mask that takes it hides everyone in
+ *   the clip, body and head (the biggest mask); a trend clip that keeps its
+ *   people as they are (the rest of the frame prepared) keeps them whole. A
+ *   clip made into depth as a whole takes no target.
  */
 export const CAST_SWAP_FACE_MASK_TARGETS = ["face", "head", "body"] as const
 

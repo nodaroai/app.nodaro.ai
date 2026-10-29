@@ -135,6 +135,38 @@ async function runUntilSettled<T>(p: Promise<T>, stepMs = 3500, maxSteps = 30): 
 }
 
 describe("pipelineAnimateShot", () => {
+  it("a shot whose video model an admin switched off is refused before any row — the switch is on the base row, the shot is priced under a composite id", async () => {
+    const { __resetModelSwitchForTests } = await import("../../../../lib/model-switch.js")
+    __resetModelSwitchForTests(["kling"])
+    try {
+      const supabase = makeSupabaseMock({ jobStates: [{ status: "completed", output_data: { videoUrl: "https://r2/anim.mp4" } }] })
+      await expect(
+        runUntilSettled(pipelineAnimateShot({
+          supabase, pipelineId: "p1", pipelineEntityId: "scene-1", userId: "u1", shot: makeShot(),
+          sceneNodeData: makeSceneNodeData({ shot_input_mode: "first_frame", video_model: "kling" }), startFrameUrl: "https://r2/kf.png",
+        })),
+      ).rejects.toThrow("This model is currently disabled")
+      expect(CreditsService.checkCredits).not.toHaveBeenCalled()
+      expect(CreditsService.reserveCredits).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    } finally {
+      __resetModelSwitchForTests()
+    }
+  })
+
+  it("a video shot the credit check refuses as model_disabled is refused with the check's sentence, before any row", async () => {
+    vi.mocked(CreditsService.checkCredits).mockResolvedValueOnce({ allowed: false, code: "model_disabled", error: "This model is currently disabled" } as never)
+    const supabase = makeSupabaseMock({ jobStates: [{ status: "completed", output_data: { videoUrl: "https://r2/anim.mp4" } }] })
+    await expect(
+      runUntilSettled(pipelineAnimateShot({
+        supabase, pipelineId: "p1", pipelineEntityId: "scene-1", userId: "u1", shot: makeShot(),
+        sceneNodeData: makeSceneNodeData({ shot_input_mode: "first_frame", video_model: "kling" }), startFrameUrl: "https://r2/kf.png",
+      })),
+    ).rejects.toThrow("This model is currently disabled")
+    expect(CreditsService.reserveCredits).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("dispatches first_frame mode to image-to-video queue", async () => {
     const supabase = makeSupabaseMock({
       jobStates: [

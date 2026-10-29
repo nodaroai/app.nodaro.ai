@@ -5,7 +5,7 @@
 
 ## Overview
 
-Edit Image takes an existing image as input and applies a transformation operation. It supports AI upscaling (Recraft, Topaz, and Grok), background removal (Recraft), context-aware prompt-based editing (Nano Banana Edit), and the Grok Imagine 2 task-chained operations — a free segment map and region-targeted prompt edits of a prior Grok 2 generation (see [Grok Imagine 2 Task-Chained Editing](#grok-imagine-2-task-chained-editing)). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.
+Edit Image takes an existing image as input and applies a transformation operation. It supports AI upscaling (Recraft and Topaz), background removal (Recraft), context-aware prompt-based editing (Nano Banana Edit), and the Grok Imagine 2 task-chained operations — a free segment map and region-targeted prompt edits of a prior Grok 2 generation (see [Grok Imagine 2 Task-Chained Editing](#grok-imagine-2-task-chained-editing)). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.
 
 ## Configuration
 
@@ -43,13 +43,12 @@ The interactive **Mask Painter** UI (Paint Mask / Edit Mask buttons, brush/erase
 | topaz-image-upscale | Topaz Upscale | Advanced upscaling with a configurable factor (1x/2x/4x). |
 | recraft-remove-bg | Recraft Remove BG | Removes the background and outputs a transparent PNG. No additional configuration needed. |
 | nano-banana-edit | Nano Banana Edit | Context-aware image editing using a text prompt. Supports style presets, negative prompts, aspect ratio, seed, and character/asset references. |
-| grok-upscale | Grok Upscale | AI upscaling via Grok. Takes a prior Grok generation's `taskId` instead of an image URL. |
 | grok-2-edit | Grok Imagine 2 Edit | Prompt-based edit of a prior Grok 2 generation (`taskId` + `prompt` required). Optional `maskIndexes` restrict the edit to named regions from a segment map. Priced the same as a Grok 2 generation. |
 | grok-2-segment | Grok Imagine 2 Segment Map | **Free.** Named segment-mask map of a prior Grok 2 generation (`taskId` required, no prompt). |
 
 ## Grok Imagine 2 Task-Chained Editing
 
-The three `grok-*` operations don't take an image URL. They reference a **prior Grok generation on the provider side** via `taskId` — the task id is returned in the source generation job's output as `providerTaskId` (fetch the job via the API/SDK/MCP `get_job` and read `output_data.providerTaskId`; older jobs carry the same value as `kieTaskId`). Only Grok generations can be chained; images from other providers or uploads cannot.
+The two `grok-2-*` operations don't take an image URL. They reference a **prior Grok generation on the provider side** via `taskId` — the task id is returned in the source generation job's output as `providerTaskId` (fetch the job via the API/SDK/MCP `get_job` and read `output_data.providerTaskId`; older jobs carry the same value as `kieTaskId`). Only Grok generations can be chained; images from other providers or uploads cannot.
 
 The full region-editing flow with `grok-2`:
 
@@ -58,6 +57,8 @@ The full region-editing flow with `grok-2`:
 3. **Edit** — `POST /v1/edit-image` with `{ "provider": "grok-2-edit", "taskId": "<providerTaskId>", "prompt": "make the sky stormy", "maskIndexes": [0] }`. Omit `maskIndexes` to let the prompt apply to the whole image.
 
 `maskIndexes` entries are the segment map's `index` values passed through **verbatim** (0-based in practice, whatever the segment map returned). A `grok-2-edit` run costs the same as a `grok-2` generation; the segment map costs nothing. Note the edit is region-*driven* rather than pixel-locked: Grok may adjust global lighting to keep the scene consistent (e.g. a night-sky edit also relights the water).
+
+`grok-upscale` was retired on 2026-10-29: it never upscaled an image — the provider endpoint it was wired to upscales a Grok *video* task, and the provider offers no Grok image upscale — so every run was refused. A request that still names it is answered with a 400 naming the replacement (`recraft-upscale` or `topaz-image-upscale`).
 
 In the editor, this flow is built into the **Generate Image** node: with the grok-2 provider selected, its config panel shows a **Refine Regions** section (detect regions → tick named chips → prompt edit) — see [Generate Image → Refine regions](./generate-image.md#refine-regions-grok-imagine-2). The API/MCP flow above is the same machinery.
 

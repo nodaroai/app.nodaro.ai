@@ -2902,7 +2902,9 @@ export interface PluginLlmSideHoldRefusal {
   /**
    * `unavailable` (metered pricing is off: bill as before), `job_not_live`,
    * `conflict`, `llm_model_unpriced`, `insufficient_credits`,
-   * `subscription_required`, `free_video_limit`, `consent_required`,
+   * `subscription_required`, `free_video_limit`, `model_disabled` (an admin
+   * switched the model off — not a balance problem), `model_not_available`
+   * (the deployment does not offer the model), `consent_required`,
    * `invalid_request`, a reserve refusal (`budget_exceeded`,
    * `member_cap_exceeded`, `user_allowance_exceeded`, `access_blocked`, …)
    * or `reservation_failed`.
@@ -3573,10 +3575,17 @@ export interface PluginSupports {
    * - `faceMaskTargets`: what a run's (and a stored face mask's)
    *   `faceMasking.target` may name: `"head"` (the whole head, hair and people
    *   seen from behind included), `"face"` (the face only) and/or `"body"`
-   *   (the whole person — a keep-people trend clip only).
+   *   (the whole person — a keep-people trend clip, and a faces-hidden
+   *   setting where `faceMaskHideTargets` names it).
    *   Additive-optional: absent ⇒ `["head"]`, what every 0.392.0 engine does
    *   (it strips a `target` it does not know), so a trend that masks `"face"`
    *   is held back from publishing and running there (`faceMaskTargetsOf`).
+   * - `faceMaskHideTargets`: the targets a faces-hidden setting (source
+   *   `"faces"`: a trend's, or the Nodaro Motion setting) may name — `"body"`
+   *   there hides the whole person under the setting's fill. Additive-optional:
+   *   absent ⇒ `faceMaskTargets` without `"body"` (an engine from before it
+   *   declared `"body"` for keep people while refusing it with `"faces"`), read
+   *   through `faceMaskHideTargetsOf`.
    * - `faceMaskErase`: a stored face mask's make (`POST /v1/cast-swap/face-mask`)
    *   takes `faceMasking.marks` (its `"erased"` marks' faces left out of the
    *   mask, through the core `mask-erase` job) and `fromMask` (an earlier raw
@@ -3689,6 +3698,7 @@ export interface PluginSupports {
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string
     readonly faceMaskTargets?: readonly ("face" | "head" | "body")[]
+    readonly faceMaskHideTargets?: readonly ("face" | "head" | "body")[]
     readonly faceMaskErase?: boolean
     readonly storedFaceMaskRequired?: boolean
     readonly sourceModes?: readonly ("faces" | "full-depth" | "keep-people")[]

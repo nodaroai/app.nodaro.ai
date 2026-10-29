@@ -8,8 +8,9 @@ import { basename, delimiter, dirname, join } from "node:path"
 /**
  * The shared site header reaches a build in exactly one place: the frontend
  * stage of the Dockerfile runs frontend/src/ee/shell/install-package.sh, which
- * installs the private package on a cloud build with VITE_SHARED_HEADER=true
- * and does nothing anywhere else. The script runs here against a fake `npm`
+ * installs the private package on a cloud build — required with
+ * VITE_SHARED_HEADER=true, and with the flag off whenever NPM_TOKEN is set
+ * (the trend admin's media editor) — and does nothing anywhere else. The script runs here against a fake `npm`
  * that records what it was asked and what .npmrc held at the time.
  */
 
@@ -65,11 +66,12 @@ function run(ws, env, { relative = false } = {}) {
 
 const ON = { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "true" }
 
-test("community, business and a cloud build with the flag off: nothing is installed", { skip: !available }, () => {
+test("community, business, and a cloud build with the flag off and no token: nothing is installed", { skip: !available }, () => {
   for (const env of [
     { VITE_EDITION: "community", VITE_SHARED_HEADER: "true", NPM_TOKEN: TOKEN },
     { VITE_EDITION: "business", VITE_SHARED_HEADER: "true", NPM_TOKEN: TOKEN },
-    { VITE_EDITION: "cloud", NPM_TOKEN: TOKEN },
+    { VITE_EDITION: "cloud" },
+    { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "false" },
     {},
   ]) {
     const ws = workspace()
@@ -78,6 +80,21 @@ test("community, business and a cloud build with the flag off: nothing is instal
       assert.equal(r.status, 0, r.output)
       assert.equal(existsSync(ws.log), false, "npm must not run")
       assert.equal(existsSync(join(ws.root, ".npmrc")), false)
+    } finally {
+      rmSync(ws.root, { recursive: true, force: true })
+    }
+  }
+})
+
+test("cloud with the flag off but a token: installs the package for the media editor", { skip: !available }, () => {
+  for (const env of [{ VITE_EDITION: "cloud", NPM_TOKEN: TOKEN }, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "false", NPM_TOKEN: TOKEN }]) {
+    const ws = workspace()
+    try {
+      const r = run(ws, env)
+      assert.equal(r.status, 0, r.output)
+      assert.match(readFileSync(ws.log, "utf8"), /@nodaroai\/shell@\d+\.\d+\.\d+/)
+      assert.equal(existsSync(join(ws.root, ".npmrc")), false)
+      assert.doesNotMatch(r.output, new RegExp(TOKEN))
     } finally {
       rmSync(ws.root, { recursive: true, force: true })
     }

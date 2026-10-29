@@ -42,7 +42,10 @@ import type { Plugin } from "vite"
  * entry (and the stylesheet its parts are drawn with) with
  * `mediaEditorAvailable = true`; elsewhere `media-editor-stub.ts`
  * (`mediaEditorAvailable = false`, every part `null`), and the admin keeps its
- * own source editor.
+ * own source editor. Its decision is its own (`mediaEditorDecision`): every
+ * cloud build with the package installed, whatever VITE_SHARED_HEADER says —
+ * the editor is admin tooling, not the header, and a cloud build without the
+ * package simply keeps the admin's own editor.
  *
  * Types come from `site-header.d.ts`, `media-editor.d.ts`,
  * `lib/site-locale.d.ts` and `lib/site-a11y.d.ts`; `contract/` holds the
@@ -71,6 +74,14 @@ export interface SiteHeaderEnv {
 export function siteHeaderDecision(env: SiteHeaderEnv, installed: boolean): SiteHeaderDecision {
   if (env.edition !== "cloud" || env.flag !== "true") return "stub"
   return installed ? "package" : "missing"
+}
+
+/**
+ * What `virtual:media-editor` becomes for this build: the package on any cloud
+ * build that has it installed, the header flag on or off; the stub otherwise.
+ */
+export function mediaEditorDecision(edition: string | undefined, installed: boolean): "package" | "stub" {
+  return edition === "cloud" && installed ? "package" : "stub"
 }
 
 /**
@@ -150,13 +161,16 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   const installed = options.isInstalled ?? isPackageInstalled
   const readEnv = options.readEnv ?? viteEnv
   let decision: SiteHeaderDecision = "stub"
+  let editor: "package" | "stub" = "stub"
   return {
     name: "nodaro-site-header",
     enforce: "pre",
     async config(config, { mode, command }) {
       const envDir = typeof config.envDir === "string" ? config.envDir : (config.root ?? options.root)
       const env = await readEnv(mode, envDir)
-      decision = siteHeaderDecision({ edition: env.VITE_EDITION, flag: env[FLAG] }, installed(options.root))
+      const present = installed(options.root)
+      decision = siteHeaderDecision({ edition: env.VITE_EDITION, flag: env[FLAG] }, present)
+      editor = mediaEditorDecision(env.VITE_EDITION, present)
       if (decision === "missing" && command === "build") {
         throw new Error(`${FLAG}=true on a cloud build, but the header package is not installed. Install it (see frontend/src/ee/shell/install-package.sh) or unset the flag.`)
       }
@@ -171,7 +185,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       if (id === SITE_HEADER_ID) return decision === "package" ? RESOLVED_ID : options.stubPath
       if (id === SITE_LOCALE_ID) return decision === "package" ? RESOLVED_LOCALE_ID : options.localeStubPath
       if (id === SITE_A11Y_ID) return decision === "package" ? RESOLVED_A11Y_ID : options.a11yStubPath
-      if (id === MEDIA_EDITOR_ID) return decision === "package" ? RESOLVED_MEDIA_EDITOR_ID : options.mediaEditorStubPath
+      if (id === MEDIA_EDITOR_ID) return editor === "package" ? RESOLVED_MEDIA_EDITOR_ID : options.mediaEditorStubPath
       // The adapters have no file of their own: resolve their imports from the
       // frontend directory, as if a file there imported them.
       if (ADAPTER_IDS.has(importer) && id.startsWith(PACKAGE)) {

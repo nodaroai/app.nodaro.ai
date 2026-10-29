@@ -85,7 +85,6 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Wan 2.7 | Alibaba | Premium | 22<!-- credits: wan-2.7 --> | t2i | Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images. |
 | Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 26<!-- credits: flux-2-pro --> | t2i, i2i | BFL Flux 2 Pro flagship via Replicate — exposes the `safety_tolerance` lever pinned to 5 (max for Pro). Accepts up to 4 reference images. |
 | Flux Kontext Max | Black Forest Labs | Premium | 28<!-- credits: flux-kontext-max --> | t2i, edit | Premium Kontext — highest fidelity context-aware edits. |
-| Grok Upscale | xAI | Premium | 28<!-- credits: grok-upscale --> | upscale | Upscale a previously-generated Grok image. Requires the prior task id. |
 | Topaz Image Upscale | Topaz | Premium | 28<!-- credits: topaz-image-upscale --> | upscale | High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output. |
 | Imagen 4 Ultra | Google | Premium | 33<!-- credits: imagen4-ultra --> | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
 | Kontext Multi (Open) | Black Forest Labs | Premium | 33<!-- credits: kontext-multi --> | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images, no safety filter. |

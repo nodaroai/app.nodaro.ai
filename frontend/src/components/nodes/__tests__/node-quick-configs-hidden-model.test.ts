@@ -65,4 +65,25 @@ describe("quick-strip model menus and the deployment's model availability", () =
     __resetSurfaceAvailabilityForTests({ nodes: [], models: ["infinitalk"] })
     expect(resolveQuickConfigOptions(control, { provider: "kling-avatar" })).toEqual(allQuickConfigOptions(control, { provider: "kling-avatar" }))
   })
+
+  it("the LLM model menu (field llmModel) hides a model switched off on the LLM models page, and keeps a node's stored one", () => {
+    const control = getQuickConfigs("generate-script").find((c) => c.field === "llmModel")
+    if (!control) throw new Error("generate-script has no llmModel control")
+    const before = resolveQuickConfigOptions(control, {}).map((o) => o.value)
+    const hidden = before[0]!
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [hidden] })
+    expect(resolveQuickConfigOptions(control, {}).map((o) => o.value)).toEqual(before.filter((v) => v !== hidden))
+    // A node that still holds it is not snapped away from it.
+    expect(quickConfigSnapPatch(control, hidden, resolveQuickConfigOptions(control, { llmModel: hidden }), { llmModel: hidden })).toBeUndefined()
+  })
+
+  it("a Suno version menu (field model) hides a switched-off version the same way", () => {
+    const control = getQuickConfigs("suno-generate").find((c) => c.field === "model")
+    if (!control) throw new Error("suno-generate has no model control")
+    const before = resolveQuickConfigOptions(control, {}).map((o) => o.value)
+    const hidden = before[0]!
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [hidden] })
+    expect(resolveQuickConfigOptions(control, {}).map((o) => o.value)).toEqual(before.filter((v) => v !== hidden))
+    expect(quickConfigSnapPatch(control, hidden, resolveQuickConfigOptions(control, { model: hidden }), { model: hidden })).toBeUndefined()
+  })
 })

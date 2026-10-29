@@ -13,6 +13,9 @@ const h = vi.hoisted(() => ({
   audits: [] as Record<string, unknown>[],
   admin: true,
   invalidated: 0,
+  /** The recorded engine environments (`listEngineEnvironments`); every one hides whole people unless a test says otherwise. */
+  envs: [] as { env: string; pluginBuildId: string | null; supports: Record<string, unknown>; updatedAt: string }[],
+  envReads: 0,
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -39,6 +42,13 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/app-settings.js", () => ({ invalidateSettingsCache: () => void h.invalidated++ }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: async () => h.admin }))
+vi.mock("../../lib/engine-environments.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/engine-environments.js")>()),
+  listEngineEnvironments: async () => (h.envReads++, h.envs),
+}))
+
+const HIDES = { castSwap: { faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head", "body"] } }
+const envRow = (env: string, supports: Record<string, unknown>) => ({ env, pluginBuildId: null, supports, updatedAt: "2026-10-29T00:00:00.000Z" })
 
 const { adminNodaroMotionRoutes, NODARO_MOTION_MASKING_AUDIT_TARGET } = await import("../admin-nodaro-motion.js")
 
@@ -50,6 +60,8 @@ beforeEach(async () => {
   h.audits = []
   h.admin = true
   h.invalidated = 0
+  h.envs = [envRow("production", HIDES), envRow("staging", HIDES)]
+  h.envReads = 0
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     if (req.headers["x-user"]) req.userId = String(req.headers["x-user"])
@@ -135,6 +147,40 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.upserts).toHaveLength(2)
+  })
+
+  it("saves Body (the whole person hidden, either fill) once every environment's engine can hide whole people", async () => {
+    const body = { "motion-prism": { mode: "always", target: "body" }, "motion-pulse": { mode: "auto", target: "body", fill: "depth" } }
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: body } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.masking).toEqual(body)
+    expect(h.envReads).toBe(1)
+  })
+
+  it("refuses Body while any environment's engine cannot hide whole people (the row is shared), writing nothing", async () => {
+    const body = { "motion-pulse": { mode: "always", target: "body" } }
+    // An engine from before the declaration lists "body" for keep people only; a missing row is unknown.
+    for (const [envs, blocked] of [
+      [[envRow("production", { castSwap: { faceMaskTargets: ["face", "head", "body"] } }), envRow("staging", HIDES)], ["production"]],
+      [[envRow("staging", HIDES)], ["production"]],
+      [[envRow("production", { castSwap: { faceMaskHideTargets: ["face", "head"] } }), envRow("staging", {})], ["staging", "production"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: body } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot hide whole people/) })
+    }
+    expect(h.upserts).toEqual([])
+    expect(h.audits).toEqual([])
+  })
+
+  it("never asks the environments for a setting that hides no whole person (head, face, or Body left off)", async () => {
+    h.envs = []
+    for (const m of [{ "motion-prism": { mode: "always", target: "face" } }, { "motion-prism": { mode: "off", target: "body" } }]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+      expect(res.statusCode, JSON.stringify(m)).toBe(200)
+    }
+    expect(h.envReads).toBe(0)
   })
 
   it("refuses a setting the engine would refuse, writing nothing", async () => {

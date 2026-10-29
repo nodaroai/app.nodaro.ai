@@ -37,7 +37,7 @@ import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export type FaceMaskingMode = "off" | "always" | "auto"
 export type FaceMaskingFill = "blur" | "depth"
-/** What a mask covers: `"head"` (default: hair and people seen from behind too), `"face"` (the hair stays visible) or `"body"` (the whole person; a keep-people trend clip only). */
+/** What a mask covers: `"head"` (default: hair and people seen from behind too), `"face"` (the hair stays visible) or `"body"` (the whole person: hidden with faces hidden, kept with keep people; never full depth). */
 export type FaceMaskingTarget = CastSwapFaceMaskTarget
 /**
  * How a trend's clip is prepared (`source`, absent = `"faces"`): the faces
@@ -79,8 +79,9 @@ export interface FaceMasking {
   /**
    * What a mask covers. Left out = `"head"` (`CAST_SWAP_FACE_MASKING_DEFAULTS.target`):
    * the whole head, hair included, and people seen from behind or turned away;
-   * `"face"` covers the face only and leaves the hair visible. `"body"` (the
-   * whole person, and keep-people's default) is keep-people's alone.
+   * `"face"` covers the face only and leaves the hair visible. `"body"` is the
+   * whole person: hidden under the fill with faces hidden (the biggest mask),
+   * kept as filmed with keep people (its default); full depth refuses it.
    */
   target?: FaceMaskingTarget
   fill?: FaceMaskingFill
@@ -180,7 +181,8 @@ const faceHeightsMessage = { path: ["maxFaceHeightPct"], message: "The largest f
 /**
  * What a source mode allows: a depth mode needs `mode: "always"` (its clip is
  * made once, approved and stored; "auto" and "off" have no meaning there), the
- * whole-person target is keep-people's alone, and so is a `"main"` mark.
+ * whole-person target is never full depth's (it masks no one), and a `"main"`
+ * mark is keep-people's alone.
  */
 function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
   const source = faceMaskingSourceOf(m)
@@ -190,8 +192,8 @@ function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
   if (m.scene !== undefined && source !== "full-depth") {
     ctx.addIssue({ code: "custom", path: ["scene"], message: "Where the scene comes from is a Full depth setting only." })
   }
-  if (m.target === "body" && source !== "keep-people") {
-    ctx.addIssue({ code: "custom", path: ["target"], message: 'The whole-person target ("body") is for Keep people only.' })
+  if (m.target === "body" && source === "full-depth") {
+    ctx.addIssue({ code: "custom", path: ["target"], message: 'Full depth masks no one: the whole-person target ("body") is for Faces hidden and Keep people.' })
   }
   ;(m.marks ?? []).forEach((mark, i) => {
     if (isMainFaceMaskMark(mark) && source !== "keep-people") {
@@ -318,9 +320,31 @@ export function faceMaskTargetsOf(
   return cs?.faceMaskTargets ?? [CAST_SWAP_FACE_MASKING_DEFAULTS.target]
 }
 
-/** Whether this process's Cast Swap engine masks `target` (`faceMaskTargetsOf` its declaration). */
-export function loadedEngineMasksTarget(target: FaceMaskingTarget): boolean {
-  return faceMaskTargetsOf(getPluginSupports().castSwap).includes(target)
+/**
+ * What a (loaded or recorded) Cast Swap engine can hide with faces hidden
+ * (`source` `"faces"`): its `castSwap.faceMaskHideTargets`, else
+ * `faceMaskTargetsOf` without `"body"`. An engine from before the
+ * declaration listed `"body"` in `faceMaskTargets` for keep people while
+ * refusing it with faces hidden, so that list alone cannot say it.
+ */
+export function faceMaskHideTargetsOf(
+  cs: { readonly faceMaskTargets?: readonly FaceMaskingTarget[]; readonly faceMaskHideTargets?: readonly FaceMaskingTarget[] } | undefined,
+): readonly FaceMaskingTarget[] {
+  return cs?.faceMaskHideTargets ?? faceMaskTargetsOf(cs).filter((t) => t !== "body")
+}
+
+/** Whether an engine masks `target` under `source` (faces hidden: `faceMaskHideTargetsOf`; keep people: `faceMaskTargetsOf`). */
+export function engineMasksTarget(
+  cs: { readonly faceMaskTargets?: readonly FaceMaskingTarget[]; readonly faceMaskHideTargets?: readonly FaceMaskingTarget[] } | undefined,
+  target: FaceMaskingTarget,
+  source: FaceMaskingSource,
+): boolean {
+  return (source === "faces" ? faceMaskHideTargetsOf(cs) : faceMaskTargetsOf(cs)).includes(target)
+}
+
+/** Whether this process's Cast Swap engine masks `target` under `source` (`engineMasksTarget` its declaration). */
+export function loadedEngineMasksTarget(target: FaceMaskingTarget, source: FaceMaskingSource): boolean {
+  return engineMasksTarget(getPluginSupports().castSwap, target, source)
 }
 
 /** The margins a face masking setting that leaves `zone` out gets (10 % at the left and right). */

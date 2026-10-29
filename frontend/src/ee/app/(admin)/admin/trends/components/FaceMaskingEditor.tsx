@@ -56,6 +56,7 @@ const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hi
 const TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: string; hint: string }> = [
   { value: "head", label: "Head (default)", hint: "Covers the whole head: also hides the hair and people seen from behind (a bigger mask)." },
   { value: "face", label: "Face", hint: "Covers the face only: the hair stays visible, and people turned away are not covered." },
+  { value: "body", label: "Body", hint: "Covers the whole person: everyone in the clip is hidden, body and head (the biggest mask)." },
 ]
 
 /** Keep people: what stays as filmed (the rest becomes depth). */
@@ -89,18 +90,26 @@ interface Props {
   /** The trend's clip preparation (left out: Faces hidden, the only one Admin → Nodaro Motion has). */
   readonly source?: AdminTrendFaceMaskingSource
   /**
-   * The targets some environment's engine declares (`castSwap.faceMaskTargets`);
-   * unknown when left out. Keep people's whole person is offered greyed out
-   * while no engine declares it.
+   * The targets some environment's engine masks under this source
+   * (`supportedTargetsFor`: Faces hidden reads `castSwap.faceMaskHideTargets`,
+   * Keep people `castSwap.faceMaskTargets`); unknown when left out. The whole
+   * person (Body) is offered greyed out while no engine declares it.
    */
   readonly supportedTargets?: readonly AdminTrendFaceMaskingTarget[]
+  /**
+   * Admin → Nodaro Motion (a setting every environment shares): the
+   * environments whose engine cannot hide whole people
+   * (`environmentsThatCannotHideBodies`). When given it decides Body instead
+   * of `supportedTargets`: greyed out, naming them, while any is listed.
+   */
+  readonly bodyMissingIn?: readonly string[]
   /** The source clip's length, when known: Full depth's original scene takes up to 27.5 s. */
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
   readonly envs?: readonly TrendEngineEnvironment[]
 }
 
-export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces", supportedTargets, clipSec, envs }: Props) {
+export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces", supportedTargets, bodyMissingIn, clipSec, envs }: Props) {
   const depth = isDepthPreparation(source)
   const keepPeople = source === "keep-people"
   const mode = depth ? "always" : (value?.mode ?? "off")
@@ -134,7 +143,9 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
   const target = value?.target ?? (keepPeople ? defaultTargetFor(source) : FACE_MASKING_DEFAULTS.target)
   const targetHint = targets.find((t) => t.value === target)?.hint
   // Only the whole person is ever greyed out: the head is every engine's, and the face is held at publish.
-  const bodyUnsupported = keepPeople && !!supportedTargets && !supportedTargets.includes("body")
+  // Admin → Nodaro Motion names the environments that lack it (every one must have it there).
+  const bodyUnsupported = bodyMissingIn ? bodyMissingIn.length > 0 : !!supportedTargets && !supportedTargets.includes("body")
+  const missingIn = bodyMissingIn && bodyMissingIn.length > 0 ? `: ${bodyMissingIn.join(", ")}` : ""
   const word = keepPeople ? "person" : "face"
   const id = useId()
   const modeId = `${id}-mode`
@@ -209,7 +220,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
               <SelectContent>
                 {targets.map((t) => (
                   <SelectItem key={t.value} value={t.value} disabled={t.value === "body" && bodyUnsupported && target !== "body"}>
-                    {t.label}
+                    {t.value === "body" && bodyUnsupported && target !== "body" && !keepPeople ? `${t.label} (not supported yet${missingIn})` : t.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -219,9 +230,13 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
                 {targetHint}
               </span>
             )}
-            {bodyUnsupported && (
+            {bodyUnsupported && (keepPeople || target === "body") && (
               <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
-                No environment's Cast Swap engine keeps whole people yet: the engine is out of date.
+                {keepPeople
+                  ? "No environment's Cast Swap engine keeps whole people yet: the engine is out of date."
+                  : bodyMissingIn
+                    ? `The Cast Swap engine of ${bodyMissingIn.join(", ")} cannot hide whole people yet, and this setting is shared by every environment: choose Head or Face.`
+                    : "No environment's Cast Swap engine hides whole people yet: the engine is out of date."}
               </span>
             )}
           </div>

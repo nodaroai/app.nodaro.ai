@@ -405,14 +405,15 @@ describe("trendVersionDataSchema — faceMasking and prePrompt", () => {
     expect(off.data?.faceMasking).toEqual({ mode: "auto", zone: null })
   })
 
-  it("takes a target of face or head, stored as given (left out = head, resolved at run time)", () => {
-    for (const target of ["face", "head"]) {
+  it("takes a target of face, head or body, stored as given (left out = head, resolved at run time)", () => {
+    // "body" with faces hidden: the whole person hidden under the fill.
+    for (const target of ["face", "head", "body"]) {
       const r = trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target } }))
       expect(r.success, target).toBe(true)
       expect(r.data?.faceMasking).toEqual({ mode: "always", target })
     }
     expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always" } })).data?.faceMasking).not.toHaveProperty("target")
-    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target: "body" } })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target: "person" } })).success).toBe(false)
     expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", target: null } })).success).toBe(false)
   })
 

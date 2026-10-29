@@ -268,8 +268,10 @@ RUN set -eu; \
     esac
 
 # The shared site header — a private package, installed ONLY on a cloud build
-# with VITE_SHARED_HEADER=true; every other build skips this step untouched
-# (the script exits before touching anything). NPM_TOKEN is the same
+# (required with VITE_SHARED_HEADER=true; with the flag off it is installed for
+# the trend admin's media editor when NPM_TOKEN is set, the header staying
+# off); every other build skips this step untouched (the script exits before
+# touching anything). NPM_TOKEN is the same
 # read:packages token the cloud plugin install below uses (one classic PAT on
 # the org's private packages, on Railway staging + production and as the repo
 # secret). The script reads it from its environment and removes the temporary

@@ -13,6 +13,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
+import { retiredEditProviderReason } from "../lib/retired-edit-providers.js"
 import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, IMAGE_EDIT_TARGET_RESOLUTION_VALUES, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale, TOPAZ_UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
@@ -20,9 +21,9 @@ import { sendInternalError } from "../lib/http-errors.js"
 
 export const editImageBody = z.object({
   // imageUrl is required for every provider EXCEPT the task-chained Grok ops
-  // (grok-upscale / grok-2-edit / grok-2-segment), which take a prior Grok
-  // generation's task_id instead of an image URL. The refinement below
-  // enforces "imageUrl XOR taskId" with provider-aware routing.
+  // (grok-2-edit / grok-2-segment), which take a prior Grok generation's
+  // task_id instead of an image URL. The refinement below enforces
+  // "imageUrl XOR taskId" with provider-aware routing.
   imageUrl: safeUrlSchema.optional(),
   /**
    * Prior Grok generation task_id, used only by the task-chained providers
@@ -67,7 +68,7 @@ export const editImageBody = z.object({
     }
     return Boolean(data.imageUrl)
   },
-  { message: "imageUrl is required (or taskId for grok-upscale / grok-2-edit / grok-2-segment)" },
+  { message: "imageUrl is required (or taskId for grok-2-edit / grok-2-segment)" },
 )
 
 /**
@@ -124,6 +125,20 @@ async function topazImageSizePreHandler(req: FastifyRequest, reply: FastifyReply
   if (reading.kind === "sized") req.topazImageSizeUnits = reading.units
 }
 
+/**
+ * A provider this route no longer serves (`lib/retired-edit-providers.ts`) is
+ * answered BEFORE the credit guard — the id has no price any more, and the
+ * guard's 503 "price not configured" would hide the reason from a client that
+ * still sends it. The orchestrator lane reads the same table in
+ * `payload-builder.ts`.
+ */
+async function retiredEditProviderPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const reason = retiredEditProviderReason((req.body as Record<string, unknown> | null)?.provider)
+  if (reason) {
+    return reply.status(400).send({ error: { code: "validation_error", message: reason } })
+  }
+}
+
 const editImageGuard = creditGuard(resolveEditImageCreditIdentifier, {
   computeCredits: async (_body, req) =>
     req.topazImageSizeUnits !== undefined
@@ -132,7 +147,7 @@ const editImageGuard = creditGuard(resolveEditImageCreditIdentifier, {
 })
 
 export async function editImageRoutes(app: FastifyInstance) {
-  app.post("/v1/edit-image", { preHandler: [topazImageSizePreHandler, editImageGuard] }, async (req, reply) => {
+  app.post("/v1/edit-image", { preHandler: [retiredEditProviderPreHandler, topazImageSizePreHandler, editImageGuard] }, async (req, reply) => {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

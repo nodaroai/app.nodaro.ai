@@ -819,19 +819,27 @@ export const IMAGE_I2I_PROVIDERS = [
   "flux-fill",
 ] as const
 
-/** Image editing providers (upscale, remove bg, etc.) */
+/**
+ * Image editing providers (upscale, remove bg, etc.)
+ *
+ * `grok-upscale` was retired 2026-10-29: it never upscaled an image. The id was
+ * wired to the provider's `grok-imagine/upscale`, which upscales a Grok VIDEO
+ * task (its task id must be a text-to-video or image-to-video task), and the
+ * provider offers no Grok image upscale at all — every run was refused
+ * upstream. Its price row is removed by migration 567; the edit-image route
+ * answers the id with a 400 naming the replacement. A Grok video upscale, if
+ * ever offered, is a new id on the video-upscale node.
+ */
 export const IMAGE_EDIT_PROVIDERS = [
   "recraft-upscale",
   "recraft-remove-bg",
   "nano-banana-edit",
   "topaz-image-upscale",
-  // grok-upscale takes a prior Grok generation's task_id (NOT an image URL) —
-  // see edit-image route for the taskId-vs-imageUrl branching.
-  "grok-upscale",
-  // Grok Imagine 2 task-chained ops — same task_id contract as grok-upscale.
-  // grok-2-edit: prompt edit of a prior grok-2 generation, optionally region-
-  // targeted via mask indexes from grok-2-segment. grok-2-segment: FREE named
-  // segment-mask map of a prior grok-2 generation.
+  // Grok Imagine 2 task-chained ops — a prior grok-2 generation's task_id (NOT
+  // an image URL); see the edit-image route for the taskId-vs-imageUrl
+  // branching. grok-2-edit: prompt edit of a prior grok-2 generation,
+  // optionally region-targeted via mask indexes from grok-2-segment.
+  // grok-2-segment: FREE named segment-mask map of a prior grok-2 generation.
   "grok-2-edit",
   "grok-2-segment",
 ] as const
@@ -849,7 +857,6 @@ export const IMAGE_EDIT_PROVIDERS = [
  * built from it, so the two cannot disagree.
  */
 export const TASK_CHAINED_EDIT_PROVIDER_IDS = [
-  "grok-upscale",
   "grok-2-edit",
   "grok-2-segment",
 ] as const satisfies readonly (typeof IMAGE_EDIT_PROVIDERS)[number][]

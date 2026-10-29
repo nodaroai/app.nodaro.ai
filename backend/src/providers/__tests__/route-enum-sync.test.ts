@@ -161,7 +161,8 @@ const T2V_IMAGE_REQUIRED_EXEMPTIONS = VIDEO_PROVIDERS_REQUIRING_IMAGE
  * the model up by adding it to the appropriate shared array + frontend
  * dropdown, or (b) remove it from `kie/models.ts` and pricing.
  *
- * Empty for now — grok-upscale was wired up properly in IMAGE_EDIT_PROVIDERS.
+ * Empty: every KIE config today is reachable through a route (a retired config
+ * leaves models.ts with its route, e.g. grok-upscale on 2026-10-29).
  */
 const KIE_DEAD_CODE: ReadonlySet<string> = new Set<string>([])
 
