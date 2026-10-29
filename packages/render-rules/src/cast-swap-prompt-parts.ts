@@ -11,6 +11,7 @@
 /** Every prompt part, in the order the engine assembles them. */
 export const CAST_SWAP_PROMPT_PART_IDS = [
   "opener",
+  "artStyle",
   "original",
   "scene",
   "quality",
@@ -34,6 +35,8 @@ export type CastSwapPromptPartId = (typeof CAST_SWAP_PROMPT_PART_IDS)[number]
  */
 export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptPartId, readonly string[]>> = {
   opener: ["{video}"],
+  // Flex (flexible) direct runs with an art style only: the style's own wording (the platform's `style` catalog).
+  artStyle: ["{style}"],
   // Depth-reference runs only.
   original: ["{original}"],
   // Flexible full-depth runs whose scene is "description" only: the scene description the engine writes per run.

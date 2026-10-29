@@ -30,9 +30,43 @@ export class UnauthorizedError extends NodaroError {
 }
 
 export class ForbiddenError extends NodaroError {
-  constructor(message = "Forbidden", public readonly missingScope?: string) {
-    super(message, "forbidden", 403)
+  /** `code` defaults to `"forbidden"`; {@link ModelUnavailableError} passes its own. */
+  constructor(message = "Forbidden", public readonly missingScope?: string, code = "forbidden") {
+    super(message, code, 403)
     this.name = "ForbiddenError"
+  }
+}
+
+export type ModelUnavailableCode = "model_not_available" | "model_disabled"
+
+/**
+ * The 403 codes {@link ModelUnavailableError} carries: a model this
+ * deployment does not offer (`model_not_available` — outside its edition or
+ * surface, or hidden by its operator) and a model an admin switched off on
+ * the models page (`model_disabled`).
+ */
+export const MODEL_UNAVAILABLE_CODES: ReadonlySet<ModelUnavailableCode> = new Set<ModelUnavailableCode>([
+  "model_not_available",
+  "model_disabled",
+])
+
+/**
+ * HTTP 403 refusing the MODEL, not the caller: this deployment does not offer
+ * it, or an admin switched it off. Answered by the credit guard before any
+ * credits are held (the LLM and pipeline lanes still answer a switched-off
+ * model with a 402 for now).
+ * Choosing another model is the remedy — retrying, topping up or a wider
+ * scope changes nothing. A {@link ForbiddenError}, so existing catches keep
+ * working; `code` is the server's own code and says which. The envelope
+ * names no model: what was refused is the request's own `provider` (or, for
+ * a fan-out, one of its `models`).
+ */
+export class ModelUnavailableError extends ForbiddenError {
+  declare readonly code: ModelUnavailableCode
+
+  constructor(code: ModelUnavailableCode, message = "This model is not available") {
+    super(message, undefined, code)
+    this.name = "ModelUnavailableError"
   }
 }
 
@@ -613,6 +647,12 @@ function selectError(status: number, body: ApiErrorBody): never {
     throw new AppRunVersionChangedError(message, finite(parsed.runVersion), finite(parsed.appVersion))
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(read.message)
+  // The model, not the caller — before the scope line, so its own code is
+  // kept (a plain ForbiddenError says "forbidden" whatever the server sent).
+  const modelCode = read.code as ModelUnavailableCode | undefined
+  if (status === 403 && modelCode !== undefined && MODEL_UNAVAILABLE_CODES.has(modelCode)) {
+    throw new ModelUnavailableError(modelCode, read.message)
+  }
   if (status === 403 && code === "insufficient_scope") {
     throw new ForbiddenError(read.message, envelope.missingScope)
   }

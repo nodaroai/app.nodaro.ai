@@ -50,9 +50,9 @@ describe("Nodaro Motion enums", () => {
     expect(isMainFaceMaskMark({ label: { slot: "guest" } })).toBe(false)
   })
 
-  it("the 14 prompt parts, in the engine's assembly order", () => {
+  it("the 15 prompt parts, in the engine's assembly order (Flex's art style right after the opener)", () => {
     expect(CAST_SWAP_PROMPT_PART_IDS).toEqual([
-      "opener", "original", "scene", "quality", "keep", "audio", "face", "depthGuard",
+      "opener", "artStyle", "original", "scene", "quality", "keep", "audio", "face", "depthGuard",
       "person", "pet", "product", "location", "avoid", "postHeader",
     ])
   })
@@ -60,6 +60,7 @@ describe("Nodaro Motion enums", () => {
   it("each part's placeholders, every part named and `{image}` in every role part", () => {
     expect(CAST_SWAP_PROMPT_PART_PLACEHOLDERS).toEqual({
       opener: ["{video}"],
+      artStyle: ["{style}"],
       original: ["{original}"],
       scene: ["{scene}"],
       quality: [],

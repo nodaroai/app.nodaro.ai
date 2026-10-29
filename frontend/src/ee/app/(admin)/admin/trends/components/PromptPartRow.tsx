@@ -21,6 +21,7 @@ export const PROMPT_PART_MAX = 2000
 /** What each part is, in the admin's words. */
 export const PROMPT_PART_LABELS: Readonly<Record<CastSwapPromptPartId, string>> = {
   opener: "Opening line",
+  artStyle: "Art style (Flex)",
   original: "The original video",
   scene: "The scene, described",
   quality: "Quality",

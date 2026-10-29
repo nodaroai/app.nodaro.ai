@@ -1,5 +1,14 @@
 # @nodaro/sdk
 
+## 2.56.0
+
+### Minor Changes
+
+- 159f409: `CastSwapParams.direction?: { style }` — Flex's art style for a direct Nodaro Motion run (`style: "motion"`): a `style` picker-catalog id that restyles the whole video, worded by the platform. Refused with 400 `unknown_art_style`, `art_style_not_supported` (a saved moodboard) or `art_style_needs_flex` (Precise or a trend run); it never changes the price, and the job records it in `input_data.direction`.
+- 5c0129e: New `ModelUnavailableError` (a `ForbiddenError`): a 403 refusing the MODEL rather than the caller — a model this deployment does not offer (`code: "model_not_available"`) or one an admin switched off (`code: "model_disabled"`). It is answered by the credit guard before any credits are held, and `code` keeps the server's own code, so a client can tell it from every other 403 and show its own sentence without reading the English message. `MODEL_UNAVAILABLE_CODES` lists the two codes. A 403 with `insufficient_scope`, any other code or none stays a plain `ForbiddenError` with `code: "forbidden"`.
+
+  A behaviour change for code that compared `err.code === "forbidden"` to mean "any 403": check `err instanceof ForbiddenError` instead, which still catches both.
+
 ## 2.55.0
 
 ### Minor Changes

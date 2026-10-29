@@ -4,6 +4,7 @@ import type { VideoToVideoParams, NodeQuote } from "./nodes-video-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
+import type { ModelUnavailableError } from "../errors.js"
 import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared/nodes"
 import {
   SOCIAL_POST_NODE_PLATFORM,
@@ -817,6 +818,13 @@ export class NodesResource {
    * rejects the same way once the API answers that it has no such route; a
    * 404 about a missing resource stays a `NotFoundError`.
    *
+   * A model this deployment does not offer, or one an admin switched off,
+   * is refused by the credit guard with a {@link ModelUnavailableError} (a
+   * `ForbiddenError` whose `code` is `model_not_available` /
+   * `model_disabled`) before any credits are held — pick another model;
+   * retrying changes nothing. (The LLM and pipeline lanes still answer a
+   * switched-off model with a 402 `InsufficientCreditsError` for now.)
+   *
    * This is the SDK equivalent of the MCP server's verb tools — and the
    * path the Nodaro CLI uses for `nodaro nodes run <type>`.
    *
@@ -915,6 +923,9 @@ export class NodesResource {
    * `completed`. Throws (all typed, catchable by `instanceof`):
    * - {@link InsufficientCreditsError} / {@link StorageExceededError} etc. —
    *   surfaced by the underlying {@link run} on 402/413/… before any poll.
+   * - {@link ModelUnavailableError} — a model this deployment does not offer
+   *   (or one an admin switched off), refused by the credit guard in
+   *   {@link run} before credits are held.
    * - {@link JobFailedError} — terminal `failed`/`cancelled` (carries the
    *   job's `error_message` + `jobId`).
    * - {@link JobTimeoutError} — `maxMs` deadline exceeded before terminal.

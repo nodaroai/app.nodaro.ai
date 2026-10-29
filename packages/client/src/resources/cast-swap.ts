@@ -266,6 +266,16 @@ export interface CastSwapParams {
    */
   style?: CastSwapStyle
   /**
+   * Flex only (`style: "motion"`, a direct run): an art style that restyles
+   * the whole video, as a `direction.style` id of the platform's `style`
+   * picker catalog (the same ids an image's `direction.style` takes); the
+   * platform words it. Refused with 400 `unknown_art_style` (not in the
+   * catalog), `art_style_not_supported` (a saved moodboard, `moodboard:…`)
+   * or `art_style_needs_flex` (Precise, a trend run). It never changes the
+   * price. The job records it in `input_data.direction`.
+   */
+  direction?: { style: string }
+  /**
    * Nodaro Motion Pulse only (Prism ignores it): which end of the clip is cut to
    * whole seconds (see {@link CastSwapMotionLength}). Default `"cut-end"`.
    */
