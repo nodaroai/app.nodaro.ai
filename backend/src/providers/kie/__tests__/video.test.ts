@@ -779,6 +779,23 @@ describe("egress dimensions — standard V2V video_urls surfaces videoInput", ()
   })
 })
 
+describe("videoToVideo — happyhorse-edit wire shape", () => {
+  it("sends the one input video as a STRING video_url (the schema's type) and references as an array", async () => {
+    // Sent as a one-element array, KIE refused every run at createTask with
+    // `[422] video_url is required` (prod 2026-10-28).
+    await provider.videoToVideo("https://x/v.mp4", "make it cinematic", "happyhorse-edit", {
+      referenceImageUrl: "https://x/ref.png",
+      resolution: "1080p",
+    })
+    const [model, input] = mocks.mockRunKieTask.mock.calls.at(-1) as [string, Record<string, unknown>]
+    expect(model).toBe("happyhorse/video-edit")
+    expect(input.video_url).toBe("https://x/v.mp4")
+    expect(input.reference_image).toEqual(["https://x/ref.png"])
+    expect(input.resolution).toBe("1080p")
+    expect(input.prompt).toBe("make it cinematic")
+  })
+})
+
 describe("egress dimensions — kling-motion sites synthesize resolution from `mode`", () => {
   it("kling-3.0 motion control surfaces resolution (from mode) + videoInput", async () => {
     await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", {

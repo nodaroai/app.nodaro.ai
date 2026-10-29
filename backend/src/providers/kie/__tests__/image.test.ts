@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => {
   const mockCreateSanitizedError = vi.fn((msg: string, ctx: string) => new Error(`[${ctx}] ${msg}`))
   const mockSafeFetch = vi.fn()
   const mockUploadBufferToR2 = vi.fn()
-  return { mockRunKieTask, mockCreateSanitizedError, mockSafeFetch, mockUploadBufferToR2 }
+  const mockRunFluxKontextTask = vi.fn()
+  return { mockRunKieTask, mockCreateSanitizedError, mockSafeFetch, mockUploadBufferToR2, mockRunFluxKontextTask }
 })
 
 vi.mock("../client.js", async (importOriginal) => {
@@ -17,6 +18,10 @@ vi.mock("../client.js", async (importOriginal) => {
       createSanitizedError: mocks.mockCreateSanitizedError,
   }
 })
+// Flux Kontext runs on its own endpoint through this client, not runKieTask.
+vi.mock("../kontext-client.js", () => ({
+  runFluxKontextTask: mocks.mockRunFluxKontextTask,
+}))
 
 // Spread the real module: editImage now imports the shared image-format
 // chokepoint from ../video.js, which pulls the KIE_VIDEO_* maps out of
@@ -32,6 +37,10 @@ vi.mock("../models.js", async (importOriginal) => {
       "seedream-5-flash-i2i": actual.KIE_IMAGE_MODELS["seedream-5-flash-i2i"],
       "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
       "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
+      // Flux Kontext — the REAL configs: their camelCase `extraParams`
+      // (`aspectRatio`, `outputFormat`) are what the aspect-ratio rename is tested against.
+      "flux-kontext": actual.KIE_IMAGE_MODELS["flux-kontext"],
+      "flux-kontext-max": actual.KIE_IMAGE_MODELS["flux-kontext-max"],
       // GPT Image 1.5 — t2i endpoint IGNORES a supplied anchor; the i2i sibling
       // consumes it via input_urls. Mirrors the real models.ts shapes (t2i has no
       // inputType/imageParam) so the t2i→i2i anchor routing is exercised honestly.
@@ -114,6 +123,25 @@ describe("KieImageProvider.generateImage", () => {
     const result = await provider.generateImage("a dog", undefined, "flux")
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith("flux-2/pro-text-to-image", expect.objectContaining({ prompt: "a dog" }), undefined, undefined, expect.objectContaining({ modelKey: "flux" }))
     expect(result.cost).toBe(0.05)
+  })
+
+  it("flux-kontext: the caller's aspect ratio reaches the Kontext endpoint as camelCase `aspectRatio`, never beside the config default", async () => {
+    // The Kontext endpoint reads camelCase fields; the config default
+    // `aspectRatio: "16:9"` beside a snake_case `aspect_ratio` won — every
+    // picture came out 1280×720 (prod 2026-10-28, six 9:16 / 3:4 runs).
+    mocks.mockRunFluxKontextTask.mockResolvedValue({ resultJson: { resultUrls: ["https://kie.example.com/k.png"] } })
+    for (const kontext of ["flux-kontext", "flux-kontext-max"]) {
+      await provider.generateImage("a tall tree", undefined, kontext, { aspect_ratio: "9:16" })
+      const [, input] = mocks.mockRunFluxKontextTask.mock.calls.at(-1) as [string, Record<string, unknown>]
+      expect(input.aspectRatio).toBe("9:16")
+      expect(input).not.toHaveProperty("aspect_ratio")
+      expect(input.outputFormat).toBe("jpeg")
+    }
+    // No caller choice: the config default stands.
+    await provider.generateImage("a wide field", undefined, "flux-kontext")
+    const [, input] = mocks.mockRunFluxKontextTask.mock.calls.at(-1) as [string, Record<string, unknown>]
+    expect(input.aspectRatio).toBe("16:9")
+    expect(input).not.toHaveProperty("aspect_ratio")
   })
 
   it("throws for unsupported model", async () => {
