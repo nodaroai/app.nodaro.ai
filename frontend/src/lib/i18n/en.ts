@@ -6234,6 +6234,8 @@ export const en = {
   "node.avatarLipSyncsToAudio": "The avatar lip-syncs to the connected audio at run time. Clips longer than 10 minutes are trimmed to 600s.",
   "node.connectAudioNodeHint": "Connect an audio node to the Audio input — the avatar lip-syncs to it. Switch the strip to Text (TTS) to type a script instead.",
   "node.urlCopied": "URL copied",
+  // A picture link imported, then adjusted like an upload (upload image node, image input card).
+  "linkImport.addedAsIs": "Added the link as it is. It couldn't be opened for adjusting.",
   "node.copied": "Copied",
   "node.promptCopied": "Prompt copied",
   "node.failed": "Failed",

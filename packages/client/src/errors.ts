@@ -135,8 +135,20 @@ export class CreditCapExceededError extends InsufficientCreditsError {
   }
 }
 
+/**
+ * HTTP 413: what was sent does not fit. `code` is always `storage_exceeded`;
+ * `reason` is the platform's own code, when the answer carried one:
+ * `storage_limit_exceeded` is a full storage, while `file_too_large` is a
+ * single file over the limit, not a full storage (likewise
+ * `payload_too_large`, `post_too_large`, `duration_exceeded`).
+ */
 export class StorageExceededError extends NodaroError {
-  constructor(message = "Storage exceeded", public readonly limitBytes?: number) {
+  constructor(
+    message = "Storage exceeded",
+    public readonly limitBytes?: number,
+    /** The platform's own code for this 413, e.g. `storage_limit_exceeded` or `file_too_large`. */
+    public readonly reason?: string,
+  ) {
     super(message, "storage_exceeded", 413)
     this.name = "StorageExceededError"
   }
@@ -674,6 +686,6 @@ function selectError(status: number, body: ApiErrorBody): never {
     }
     throw new InsufficientCreditsError(read.message, required, available, read.code ?? "insufficient_credits")
   }
-  if (status === 413) throw new StorageExceededError(read.message, envelope.limitBytes)
+  if (status === 413) throw new StorageExceededError(read.message, envelope.limitBytes, read.code)
   throw new NodaroError(message, code, status)
 }

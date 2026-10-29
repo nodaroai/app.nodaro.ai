@@ -6042,6 +6042,7 @@ export const ptBR: ChromeDict = {
   "node.avatarLipSyncsToAudio": "Na execução, o avatar sincroniza os lábios com o áudio conectado. Clipes com mais de 10 minutos são cortados para 600 s.",
   "node.connectAudioNodeHint": "Conecte um nó de áudio à entrada “Áudio” — o avatar sincroniza os lábios com ele. Para digitar um texto, mude a barra para “Texto (TTS)”.",
   "node.urlCopied": "URL copiada",
+  "linkImport.addedAsIs": "O link foi adicionado como está. Não foi possível abri-lo para ajuste.",
   "node.copied": "Copiado",
   "node.promptCopied": "Prompt copiado",
   "node.failed": "Com falha",

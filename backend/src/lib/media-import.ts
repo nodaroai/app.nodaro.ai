@@ -131,14 +131,28 @@ export async function importImageFromUrl(
     }
   }
 
-  const lastPathSegment = new URL(url).pathname.split("/").pop()
   return storeImportedImageBuffer({
     userId,
     body,
     uploadSource: "url_import",
     sourceUrl: url,
-    filename: lastPathSegment ? decodeURIComponent(lastPathSegment) : undefined,
+    filename: filenameFromUrl(url),
   })
+}
+
+/**
+ * The link's last path segment, decoded, as the imported file's display name;
+ * the segment as written when its escapes are malformed (`%E0%A4%A`), so a
+ * name never fails an import. Undefined for a link with no segment.
+ */
+export function filenameFromUrl(url: string): string | undefined {
+  const segment = new URL(url).pathname.split("/").pop()
+  if (!segment) return undefined
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
 }
 
 /**

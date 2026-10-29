@@ -5,6 +5,7 @@ import { memo, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Expand, Upload, Link, Download, Loader2, AlertCircle, X, Pencil, LayoutGrid, Plus, ExternalLink } from "lucide-react"
 import { normalizePinterestUrl } from "@nodaro/shared/social"
+import { toast } from "sonner"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -13,6 +14,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { useLinkImport } from "@/hooks/use-link-import"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -106,6 +108,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const { isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
+  const linkImport = useLinkImport()
   const mediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const result = results[0]
@@ -200,18 +203,21 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
     }
   }
 
-  const handleAddUrl = () => {
-    // Pinterest CDN URLs land in /236x/ /474x/ etc. variants by default;
-    // rewrite to /originals/ so downstream describe-image / image-to-image
-    // get the highest-resolution source.
-    const url = normalizePinterestUrl(pendingUrl.trim())
-    if (!url) return
+  // Read after an import's await, so a link kept as it is appends to the
+  // results as they are then, not as they were when it was submitted.
+  const resultsRef = useRef(results)
+  resultsRef.current = results
+
+  // The link as it is: the node's only path before links were imported, and
+  // still the one taken when an import fails, so no link that worked stops
+  // working.
+  const addLinkAsIs = (url: string) => {
     const newResult: GeneratedResult = {
       url,
       jobId: `upload-url-${Date.now()}`,
       timestamp: new Date().toISOString(),
     }
-    const newResults = [...results, newResult]
+    const newResults = [...resultsRef.current, newResult]
     updateNodeData(id, {
       generatedResults: newResults,
       activeResultIndex: newResults.length - 1,
@@ -226,10 +232,31 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
       metadata: {},
       uploadError: "",
     })
-    setPendingUrl("")
     setShowAddOverlay(false)
     moderate(url)
   }
+
+  // A link is imported into the person's storage and opened in the same
+  // "Adjust image" editor as a picked file; the editor's onComplete then
+  // adds it (and moderates it) exactly as it does an upload. A link that
+  // cannot be imported is added as it is, with a notice.
+  const handleAddUrl = async () => {
+    // Pinterest CDN URLs land in /236x/ /474x/ etc. variants by default;
+    // rewrite to /originals/ so downstream describe-image / image-to-image
+    // get the highest-resolution source.
+    const url = normalizePinterestUrl(pendingUrl.trim())
+    if (!url || linkImport.isImporting) return
+    setPendingUrl("")
+    clearError()
+    const outcome = await linkImport.importLink(url, mediaEditor.openEditor)
+    if (outcome !== "failed") return
+    addLinkAsIs(url)
+    // The node now shows the picture, where its inline notice is not drawn.
+    toast.warning(t("linkImport.addedAsIs"))
+  }
+
+  // An import started from the "add another" overlay spins inside it.
+  const busy = isUploading || Boolean(nodeData.isUploading) || (linkImport.isImporting && !showAddOverlay)
 
   const handleSwitchActive = (i: number) => {
     const target = results[i]
@@ -306,7 +333,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
 
           <div className="relative w-full h-full group">
             {/* Uploading */}
-            {(isUploading || nodeData.isUploading) && (
+            {busy && (
               <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
                 <Loader2 className="w-8 h-8 animate-spin text-[#38BDF8]" />
                 <p className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</p>
@@ -314,7 +341,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {/* Has image */}
-            {!isUploading && !nodeData.isUploading && hasImage && (
+            {!busy && hasImage && (
               <>
                 {results.length > 1 && (
                   <button
@@ -384,7 +411,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {/* Empty - first time picker */}
-            {!isUploading && !nodeData.isUploading && !hasImage && (
+            {!busy && !hasImage && (
               <UploadPicker
                 isDragOver={isDragOver}
                 setIsDragOver={setIsDragOver}
@@ -397,7 +424,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             {/* Error chip */}
-            {!isUploading && !nodeData.isUploading && (uploadError || nodeData.uploadError) && !hasImage && (
+            {!busy && (uploadError || nodeData.uploadError) && !hasImage && (
               <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-500/10 text-red-400 text-xs">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{uploadError || nodeData.uploadError}</span>
@@ -419,16 +446,23 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     <X className="w-3 h-3" />
                   </button>
                 </div>
-                <UploadPicker
-                  isDragOver={isDragOver}
-                  setIsDragOver={setIsDragOver}
-                  onFileClick={() => fileInputRef.current?.click()}
-                  onDrop={handleDrop}
-                  urlValue={pendingUrl}
-                  onUrlChange={setPendingUrl}
-                  onUrlSubmit={handleAddUrl}
-                  compact
-                />
+                {linkImport.isImporting ? (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#38BDF8]" />
+                    <p className="text-xs text-white/70">{t("inputcfg.uploading")}</p>
+                  </div>
+                ) : (
+                  <UploadPicker
+                    isDragOver={isDragOver}
+                    setIsDragOver={setIsDragOver}
+                    onFileClick={() => fileInputRef.current?.click()}
+                    onDrop={handleDrop}
+                    urlValue={pendingUrl}
+                    onUrlChange={setPendingUrl}
+                    onUrlSubmit={handleAddUrl}
+                    compact
+                  />
+                )}
               </div>
             )}
           </div>

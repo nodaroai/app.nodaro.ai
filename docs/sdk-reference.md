@@ -492,11 +492,17 @@ It is an `InsufficientCreditsError`, so an existing
 
 ### `class StorageExceededError extends NodaroError`
 
-HTTP 413. User's storage cap is reached.
+HTTP 413: what was sent does not fit. Every 413 is this class, whatever the
+route; `reason` says which kind it is.
 
 - `code = "storage_exceeded"`, `status = 413`
 - `limitBytes?: number`
-- **Constructor:** `new StorageExceededError(message?: string, limitBytes?: number)`
+- `reason?: string` — the platform's own code for this 413, when the answer
+  carried one: `storage_limit_exceeded` is a full storage; `file_too_large` is
+  a single file over the limit, not a full storage (likewise
+  `payload_too_large`, `post_too_large`, `duration_exceeded`). `undefined` when
+  the answer had no code.
+- **Constructor:** `new StorageExceededError(message?: string, limitBytes?: number, reason?: string)`
 
 ### `class WorkflowConflictError extends NodaroError`
 
@@ -7248,6 +7254,54 @@ to `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened. The
 URL is unguessable but public, so never store a secret in it. It creates no
 library item.
 
+#### `importUrl(url)`
+
+```ts
+importUrl(url: string): Promise<ImportUrlResult>
+```
+
+`POST /v1/media/import-url` with the body `{ url }` → copies a picture from a
+web address into your storage and returns it (unwraps the `{ data }`
+envelope). The platform fetches the address (http(s) only, never a private
+address, up to 20 MB) and keeps it only if it decodes as an image (JPEG, PNG,
+WebP, GIF; HEIC/HEIF and AVIF are converted to JPEG or PNG). The stored copy
+is an upload of yours, served with CORS, so a browser canvas can read its
+pixels (to crop it, for example), which a picture on another site does not
+allow.
+
+Errors:
+
+| Status | Error | When |
+|--------|-------|------|
+| 400 | `NodaroError`, `code: "validation_error"` | Not an http(s) address, an address that is a private or reserved IP, not a decodable image, or an image in a format that is not accepted (SVG, TIFF, …; accepted: JPEG, PNG, WebP, AVIF, GIF, HEIC). |
+| 422 | `NodaroError`, `code: "fetch_failed"` | The address could not be reached (including a host that resolves to a private address), or answered with an error. |
+| 413 | `StorageExceededError`, `reason: "file_too_large"` | The picture is over 20 MB. |
+| 413 | `StorageExceededError`, `reason: "storage_limit_exceeded"` | Your storage is full; `details` carries `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`. |
+
+**`ImportUrlResult`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `string` | Public URL of the stored picture. |
+| `thumbnailUrl` | `string \| null` | Generated thumbnail URL; `null` when it could not be made. |
+| `assetId` | `string \| null` | Storage row id; `null` when no asset row was written. |
+| `mimeType` | `string` | Final MIME type (a HEIC/HEIF or AVIF source is stored as JPEG or PNG). |
+| `sizeBytes` | `number` | Stored byte size. |
+| `filename` | `string` | The address's last path segment, else `imported-<id>.<ext>`. |
+| `width` | `number` | Width in pixels; `0` when it could not be read. |
+| `height` | `number` | Height in pixels; `0` when it could not be read. |
+
+```ts
+try {
+  const picture = await client.uploads.importUrl("https://example.org/photo.jpg")
+  console.log(picture.url, picture.width, picture.height)
+} catch (err) {
+  if (err instanceof StorageExceededError && err.reason === "file_too_large") {
+    // one picture over 20 MB, not a full storage
+  }
+}
+```
+
 ### `client.library`
 
 #### `list(params?)`
@@ -9214,6 +9268,7 @@ not two.
 ### Uploads
 
 - `UploadResult` — `{ url, assetId, thumbnailUrl, category, filename, mimeType, sizeBytes, r2Key }` (see `upload()` table above)
+- `ImportUrlResult` — `uploads.importUrl`'s answer: `{ url, thumbnailUrl, assetId, mimeType, sizeBytes, filename, width, height }` (see `importUrl()` table above)
 
 ### Developer apps
 

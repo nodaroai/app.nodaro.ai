@@ -49,6 +49,30 @@ export class UploadsResource {
   }
 
   /**
+   * Copy a picture from a web address into your storage
+   * (`POST /v1/media/import-url`, body `{ url }`). The platform fetches it
+   * (http(s) only, never a private address, up to 20 MB), keeps it only if it
+   * decodes as an image (JPEG, PNG, WebP, GIF; HEIC/HEIF and AVIF are
+   * converted to JPEG or PNG), and stores it as an upload of yours, so its address serves
+   * the pixels to the browser (a canvas can read it). Returns the stored
+   * picture (unwraps the `{ data }` envelope).
+   *
+   * Throws `StorageExceededError` on a 413, its `reason` telling the two
+   * apart: `storage_limit_exceeded` is a full storage (the quota is in
+   * `details` — `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`), and
+   * `file_too_large` a picture over 20 MB. Throws a `NodaroError` with `code`
+   * `validation_error` (400: not an http(s) address, or not an image) or
+   * `fetch_failed` (422: the address could not be reached or answered with an
+   * error).
+   */
+  async importUrl(url: string): Promise<ImportUrlResult> {
+    const res = await this.client.request<{ data: ImportUrlResult }>("POST", "/v1/media/import-url", {
+      body: { url },
+    })
+    return res.data
+  }
+
+  /**
    * Store a JSON document (`POST /v1/upload-json`, up to 25 MB) and get its
    * public URL — e.g. an image editor's design state, passed to
    * `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened.
@@ -64,4 +88,27 @@ export class UploadsResource {
 export interface UploadJsonResult {
   /** Public URL of the stored JSON document. */
   readonly url: string
+}
+
+/**
+ * Result of {@link UploadsResource.importUrl}. Mirrors the route's `data`:
+ * the fields of {@link UploadResult} it shares, plus the picture's size.
+ */
+export interface ImportUrlResult {
+  /** Public URL of the stored picture. */
+  readonly url: string
+  /** Generated thumbnail URL; `null` when it could not be made. */
+  readonly thumbnailUrl: string | null
+  /** Storage row id; `null` when no asset row was written. */
+  readonly assetId: string | null
+  /** Final MIME type (a HEIC/HEIF or AVIF source is stored as JPEG or PNG). */
+  readonly mimeType: string
+  /** Stored byte size. */
+  readonly sizeBytes: number
+  /** Display filename: the address's last path segment, else `imported-<id>.<ext>`. */
+  readonly filename: string
+  /** Width in pixels; 0 when it could not be read. */
+  readonly width: number
+  /** Height in pixels; 0 when it could not be read. */
+  readonly height: number
 }

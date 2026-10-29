@@ -6188,6 +6188,7 @@ export const he: ChromeDict = {
   "node.avatarLipSyncsToAudio": "האווטאר מסנכרן שפתיים לאודיו המחובר בזמן ההרצה. קטעים ארוכים מ־10 דקות ייחתכו ל־600 שניות.",
   "node.connectAudioNodeHint": "חברו רכיב אודיו למחבר האודיו — האווטאר יסנכרן אליו שפתיים. החליפו את הרצועה לטקסט (TTS) כדי להקליד תסריט במקום.",
   "node.urlCopied": "הכתובת הועתקה",
+  "linkImport.addedAsIs": "הקישור נוסף כפי שהוא. לא ניתן היה לפתוח אותו להתאמה.",
   "node.copied": "הועתק",
   "node.promptCopied": "הפרומפט הועתק",
   "node.failed": "נכשל",
