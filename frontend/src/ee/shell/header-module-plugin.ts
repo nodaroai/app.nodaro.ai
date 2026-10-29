@@ -36,9 +36,17 @@ import type { Plugin } from "vite"
  * writer and its boot call) and its page-wide stylesheet; elsewhere
  * `lib/site-a11y-stub.ts` (`null`: the app keeps its own storage).
  *
- * Types come from `site-header.d.ts`, `lib/site-locale.d.ts` and
- * `lib/site-a11y.d.ts`; `contract/` holds the internal-only check that those
- * types still fit the package.
+ * And `virtual:media-editor`: the shared media editor's parts (range strip,
+ * crop box, ratio chips and their helpers), used by the trend admin's source
+ * clip intake. On the package decision it re-exports the package's editor
+ * entry (and the stylesheet its parts are drawn with) with
+ * `mediaEditorAvailable = true`; elsewhere `media-editor-stub.ts`
+ * (`mediaEditorAvailable = false`, every part `null`), and the admin keeps its
+ * own source editor.
+ *
+ * Types come from `site-header.d.ts`, `media-editor.d.ts`,
+ * `lib/site-locale.d.ts` and `lib/site-a11y.d.ts`; `contract/` holds the
+ * internal-only check that those types still fit the package.
  */
 
 export const SITE_HEADER_ID = "virtual:site-header"
@@ -47,6 +55,8 @@ export const SITE_LOCALE_ID = "virtual:site-locale"
 const RESOLVED_LOCALE_ID = `\0${SITE_LOCALE_ID}`
 export const SITE_A11Y_ID = "virtual:site-a11y"
 const RESOLVED_A11Y_ID = `\0${SITE_A11Y_ID}`
+export const MEDIA_EDITOR_ID = "virtual:media-editor"
+const RESOLVED_MEDIA_EDITOR_ID = `\0${MEDIA_EDITOR_ID}`
 const PACKAGE = "@nodaroai/shell"
 const FLAG = "VITE_SHARED_HEADER"
 
@@ -88,6 +98,8 @@ export interface SiteHeaderModuleOptions {
   readonly localeStubPath: string
   /** The accessibility stub's absolute path. */
   readonly a11yStubPath: string
+  /** The media editor stub's absolute path. */
+  readonly mediaEditorStubPath: string
   /** Test seam; defaults to Node resolution from `root`. */
   readonly isInstalled?: (root: string) => boolean
   /** Test seam; defaults to Vite's own `loadEnv` (the process env plus `.env*` files, `VITE_` only). */
@@ -125,6 +137,15 @@ const A11Y_ADAPTER = [
   "",
 ].join("\n")
 
+const MEDIA_EDITOR_ADAPTER = [
+  `import "${PACKAGE}/shell.css"`,
+  `export * from "${PACKAGE}/media-editor"`,
+  "export const mediaEditorAvailable = true",
+  "",
+].join("\n")
+
+const ADAPTER_IDS: ReadonlySet<string | undefined> = new Set([RESOLVED_ID, RESOLVED_LOCALE_ID, RESOLVED_A11Y_ID, RESOLVED_MEDIA_EDITOR_ID])
+
 export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   const installed = options.isInstalled ?? isPackageInstalled
   const readEnv = options.readEnv ?? viteEnv
@@ -150,10 +171,10 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       if (id === SITE_HEADER_ID) return decision === "package" ? RESOLVED_ID : options.stubPath
       if (id === SITE_LOCALE_ID) return decision === "package" ? RESOLVED_LOCALE_ID : options.localeStubPath
       if (id === SITE_A11Y_ID) return decision === "package" ? RESOLVED_A11Y_ID : options.a11yStubPath
+      if (id === MEDIA_EDITOR_ID) return decision === "package" ? RESOLVED_MEDIA_EDITOR_ID : options.mediaEditorStubPath
       // The adapters have no file of their own: resolve their imports from the
       // frontend directory, as if a file there imported them.
-      const fromAdapter = importer === RESOLVED_ID || importer === RESOLVED_LOCALE_ID || importer === RESOLVED_A11Y_ID
-      if (fromAdapter && id.startsWith(PACKAGE)) {
+      if (ADAPTER_IDS.has(importer) && id.startsWith(PACKAGE)) {
         return this.resolve(id, join(options.root, "package.json"), { skipSelf: true })
       }
       return null
@@ -161,6 +182,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
     load(id) {
       if (id === RESOLVED_ID) return ADAPTER
       if (id === RESOLVED_A11Y_ID) return A11Y_ADAPTER
+      if (id === RESOLVED_MEDIA_EDITOR_ID) return MEDIA_EDITOR_ADAPTER
       return id === RESOLVED_LOCALE_ID ? LOCALE_ADAPTER : null
     },
   }

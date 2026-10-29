@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url"
  * Vite bundles the fixture's config — and the TypeScript plugin it imports —
  * itself, so this runs on any Node the repo supports.
  *
- *   - flag on, another edition → the stub, and the flag compiled to false;
+ *   - flag on, another edition → the stub (and the media editor's stub), and
+ *     the flag compiled to false;
  *   - control: the same flag with no resolver reaches the bundle as true
  *     (so the first case is the resolver's doing);
  *   - cloud + flag on + no package → the build is refused.
@@ -40,12 +41,16 @@ const PLUGIN = join(repo, "frontend", "src", "ee", "shell", "header-module-plugi
 function fixture({ withResolver }) {
   const dir = mkdtempSync(join(tmpdir(), "site-header-build-"))
   writeFileSync(join(dir, "stub.js"), "export const headerAvailable = false\n")
+  writeFileSync(join(dir, "media-editor-stub.js"), "export const mediaEditorAvailable = false\nexport const TrimPanel = null\n")
   writeFileSync(
     join(dir, "main.js"),
     [
       withResolver ? 'import { headerAvailable } from "virtual:site-header"' : "const headerAvailable = null",
+      withResolver ? 'import { mediaEditorAvailable, TrimPanel } from "virtual:media-editor"' : "const mediaEditorAvailable = null, TrimPanel = null",
       'export const flagOn = import.meta.env.VITE_SHARED_HEADER === "true"',
       "export const header = headerAvailable",
+      "export const mediaEditor = mediaEditorAvailable",
+      "export const trimPanel = TrimPanel",
       "",
     ].join("\n"),
   )
@@ -58,7 +63,7 @@ function fixture({ withResolver }) {
       "  root: __dirname,",
       "  envDir: __dirname,",
       "  logLevel: 'silent',",
-      withResolver ? "  plugins: [siteHeaderModule({ root: __dirname, stubPath: path.resolve(__dirname, 'stub.js'), localeStubPath: path.resolve(__dirname, 'locale-stub.js'), a11yStubPath: path.resolve(__dirname, 'a11y-stub.js'), isInstalled: () => false })]," : "",
+      withResolver ? "  plugins: [siteHeaderModule({ root: __dirname, stubPath: path.resolve(__dirname, 'stub.js'), localeStubPath: path.resolve(__dirname, 'locale-stub.js'), a11yStubPath: path.resolve(__dirname, 'a11y-stub.js'), mediaEditorStubPath: path.resolve(__dirname, 'media-editor-stub.js'), isInstalled: () => false })]," : "",
       "  build: { minify: false, outDir: path.resolve(__dirname, 'out'), lib: { entry: path.resolve(__dirname, 'main.js'), formats: ['es'], fileName: 'out' } },",
       "}",
       "",
@@ -105,6 +110,9 @@ test("flag on, another edition: the bundle carries the stub and a literal false"
     assert.equal(r.status, 0, r.output)
     assert.match(r.code, /flagOn = false/)
     assert.match(r.code, /headerAvailable = false/)
+    // The media editor's stub: a part imported by name builds, as null.
+    assert.match(r.code, /mediaEditorAvailable = false/)
+    assert.match(r.code, /TrimPanel = null/)
   })
 })
 

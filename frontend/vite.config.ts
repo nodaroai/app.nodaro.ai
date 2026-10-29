@@ -35,6 +35,7 @@ export default defineConfig({
       stubPath: path.resolve(__dirname, "src/ee/shell/stub.tsx"),
       localeStubPath: path.resolve(__dirname, "src/lib/site-locale-stub.ts"),
       a11yStubPath: path.resolve(__dirname, "src/lib/site-a11y-stub.ts"),
+      mediaEditorStubPath: path.resolve(__dirname, "src/ee/shell/media-editor-stub.ts"),
     }),
   ],
   resolve: {

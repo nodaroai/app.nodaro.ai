@@ -5,7 +5,7 @@ import { join } from "node:path"
 import type { Plugin, UserConfig } from "vite"
 import { describe, expect, it } from "vitest"
 
-import { isPackageInstalled, SITE_A11Y_ID, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
+import { isPackageInstalled, MEDIA_EDITOR_ID, SITE_A11Y_ID, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
 
 /**
  * The shared header's module resolver. `virtual:site-header` is the real
@@ -24,6 +24,8 @@ const RESOLVED = `\0${SITE_HEADER_ID}`
 const RESOLVED_LOCALE = `\0${SITE_LOCALE_ID}`
 const A11Y_STUB = "/stub/site-a11y.ts"
 const RESOLVED_A11Y = `\0${SITE_A11Y_ID}`
+const MEDIA_EDITOR_STUB = "/stub/media-editor.ts"
+const RESOLVED_MEDIA_EDITOR = `\0${MEDIA_EDITOR_ID}`
 const FORCED_OFF = { define: { "import.meta.env.VITE_SHARED_HEADER": JSON.stringify("false") } }
 
 function plugin(installed: boolean, env: Record<string, string>): Plugin {
@@ -32,6 +34,7 @@ function plugin(installed: boolean, env: Record<string, string>): Plugin {
     stubPath: STUB,
     localeStubPath: LOCALE_STUB,
     a11yStubPath: A11Y_STUB,
+    mediaEditorStubPath: MEDIA_EDITOR_STUB,
     isInstalled: () => installed,
     readEnv: () => env,
   })
@@ -130,6 +133,45 @@ describe("siteHeaderModule", () => {
     }
   })
 
+  it("the media editor follows the same decision: the package's editor entry with its stylesheet, flagged available", async () => {
+    const on = plugin(true, ON)
+    await runConfig(on, "build")
+    expect(resolve(on, MEDIA_EDITOR_ID)).toBe(RESOLVED_MEDIA_EDITOR)
+    const source = load(on, RESOLVED_MEDIA_EDITOR) ?? ""
+    expect(source).toMatch(/^import ".+\/shell\.css"$/m)
+    expect(source).toMatch(/^export \* from ".+\/media-editor"$/m)
+    expect(source).toMatch(/^export const mediaEditorAvailable = true$/m)
+    expect(source).not.toMatch(/NodaroShell/)
+
+    for (const [installed, env] of [
+      [true, { ...ON, VITE_EDITION: "community" }],
+      [true, { ...ON, VITE_EDITION: "business" }],
+      [true, { VITE_EDITION: "cloud" }],
+      [true, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "false" }],
+      [false, { VITE_EDITION: "cloud" }],
+    ] as const) {
+      const off = plugin(installed, env)
+      await runConfig(off, "build")
+      expect(resolve(off, MEDIA_EDITOR_ID)).toBe(MEDIA_EDITOR_STUB)
+    }
+    // The dev server with the flag on and no package: the stub too.
+    const missing = plugin(false, ON)
+    await runConfig(missing, "serve")
+    expect(resolve(missing, MEDIA_EDITOR_ID)).toBe(MEDIA_EDITOR_STUB)
+  })
+
+  it("resolves the media editor adapter's imports of the package from the frontend directory", async () => {
+    const p = plugin(true, ON)
+    await runConfig(p, "build")
+    const context = { resolve: async (id: string) => ({ id: `/resolved/${id}` }) }
+    const resolveId = p.resolveId as (this: typeof context, id: string, importer?: string) => Promise<unknown> | unknown
+    const source = load(p, RESOLVED_MEDIA_EDITOR) ?? ""
+    const css = source.match(/^import "(.+)"$/m)?.[1] ?? ""
+    const entry = source.match(/from "(.+\/media-editor)"$/m)?.[1] ?? ""
+    expect(await resolveId.call(context, css, RESOLVED_MEDIA_EDITOR)).toEqual({ id: `/resolved/${css}` })
+    expect(await resolveId.call(context, entry, RESOLVED_MEDIA_EDITOR)).toEqual({ id: `/resolved/${entry}` })
+  })
+
   it("resolves the accessibility adapter's import of the package from the frontend directory", async () => {
     const p = plugin(true, ON)
     await runConfig(p, "build")
@@ -179,6 +221,7 @@ describe("siteHeaderModule", () => {
       stubPath: STUB,
       localeStubPath: LOCALE_STUB,
       a11yStubPath: A11Y_STUB,
+      mediaEditorStubPath: MEDIA_EDITOR_STUB,
       isInstalled: () => false,
       readEnv: (_mode, dir) => {
         dirs.push(dir)

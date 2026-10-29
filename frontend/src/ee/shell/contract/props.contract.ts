@@ -10,11 +10,14 @@ import * as sharedLocale from "@nodaroai/shell/locale"
 import type * as appLocale from "virtual:site-locale"
 import * as sharedA11y from "@nodaroai/shell/a11y"
 import type * as appA11y from "virtual:site-a11y"
+import * as sharedEditor from "@nodaroai/shell/media-editor"
+import type * as appEditor from "virtual:media-editor"
 
 import { HEADER_BALANCE_KEY } from "../../lib/invalidate-balance"
 import { HEADER_QUERY_KEYS } from "../query-keys"
 import type { AccessibilityPreferences, ToggleKey } from "../../../lib/accessibility-preferences"
 import type { SiteHeaderProps, SiteHeaderTranslate } from "../types"
+import type * as appEditorTypes from "../media-editor-types"
 
 /**
  * The app types the shared header with its own subset (`../types.ts`,
@@ -93,3 +96,39 @@ export const appPrefsFit: Fits<AccessibilityPreferences, sharedA11y.Accessibilit
 export const readAccessibilityFits: appA11y.SharedAccessibility["read"] = sharedA11y.readAccessibility
 export const applySavedFits: appA11y.SharedAccessibility["applySaved"] = sharedA11y.applySavedAccessibility
 export const saveAccessibilityFits: appA11y.SharedAccessibility["save"] = sharedA11y.saveAccessibility
+
+/**
+ * The shared media editor (`virtual:media-editor`, typed by
+ * `../media-editor.d.ts` over `../media-editor-types.ts`): every prop the
+ * trend admin passes a part has the type the package expects, and the package
+ * still has it (a rename fails here); every value that comes back from the
+ * package (a player adapter, a range, a box, a size) is the app's type, both
+ * ways; and each part the virtual module types is the package's, at that type.
+ */
+type NoUnknown<App, Pkg> = [Exclude<keyof App, keyof Pkg>] extends [never] ? true : false
+export const trimPropsFit: Fits<appEditorTypes.TrimPanelProps, sharedEditor.TrimPanelProps> = true
+export const noUnknownTrimProps: NoUnknown<appEditorTypes.TrimPanelProps, sharedEditor.TrimPanelProps> = true
+export const cropPropsFit: Fits<appEditorTypes.CropPanelProps, sharedEditor.CropPanelProps> = true
+export const noUnknownCropProps: NoUnknown<appEditorTypes.CropPanelProps, sharedEditor.CropPanelProps> = true
+export const ratioPropsFit: Fits<appEditorTypes.RatioPickerProps, sharedEditor.RatioPickerProps> = true
+export const noUnknownRatioProps: NoUnknown<appEditorTypes.RatioPickerProps, sharedEditor.RatioPickerProps> = true
+export const playerFits: Fits<appEditorTypes.PlayerAdapter, sharedEditor.PlayerAdapter> = true
+export const playerFitsBack: Fits<sharedEditor.PlayerAdapter, appEditorTypes.PlayerAdapter> = true
+export const playerMembersMatch: Same<keyof appEditorTypes.PlayerAdapter, keyof sharedEditor.PlayerAdapter> = true
+export const rangeFits: Fits<sharedEditor.TrimRange, appEditorTypes.TrimRange> = true
+export const rangeFitsBack: Fits<appEditorTypes.TrimRange, sharedEditor.TrimRange> = true
+export const rectFits: Fits<sharedEditor.Rect, appEditorTypes.Rect> = true
+export const rectFitsBack: Fits<appEditorTypes.Rect, sharedEditor.Rect> = true
+export const sizeFits: Fits<sharedEditor.Size, appEditorTypes.Size> = true
+export const ratioIdFits: Fits<appEditorTypes.RatioId, sharedEditor.RatioId> = true
+export const ratioIdFitsBack: Fits<sharedEditor.RatioId, appEditorTypes.RatioId> = true
+
+export const trimPanelIs: NonNullable<typeof appEditor.TrimPanel> = sharedEditor.TrimPanel
+export const cropPanelIs: NonNullable<typeof appEditor.CropPanel> = sharedEditor.CropPanel
+export const ratioPickerIs: NonNullable<typeof appEditor.RatioPicker> = sharedEditor.RatioPicker
+export const htmlMediaAdapterIs: NonNullable<typeof appEditor.htmlMediaAdapter> = sharedEditor.htmlMediaAdapter
+export const defaultRangeIs: NonNullable<typeof appEditor.defaultRange> = sharedEditor.defaultRange
+export const clampRangeIs: NonNullable<typeof appEditor.clampRange> = sharedEditor.clampRange
+export const formatTimeIs: NonNullable<typeof appEditor.formatTime> = sharedEditor.formatTime
+export const fullRectIs: NonNullable<typeof appEditor.fullRect> = sharedEditor.fullRect
+export const isWholeFrameIs: NonNullable<typeof appEditor.isWholeFrame> = sharedEditor.isWholeFrame

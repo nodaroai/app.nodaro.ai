@@ -1,6 +1,7 @@
 #!/bin/sh
-# Installs the shared site header (@nodaroai/shell, a private Nodaro package)
-# into the workspace — on a CLOUD build with VITE_SHARED_HEADER=true only.
+# Installs the shared site header (@nodaroai/shell, a private Nodaro package,
+# which also carries the media editor behind `virtual:media-editor`) into the
+# workspace — on a CLOUD build with VITE_SHARED_HEADER=true only.
 # Every other build (community, business, public CI, cloud with the flag off)
 # exits here untouched, so its node_modules and bundle are as before.
 #
@@ -18,7 +19,7 @@
 # cannot print it.
 set -eu
 
-PIN="0.6.1"
+PIN="0.8.0"
 VERSION="${SHARED_HEADER_PKG_VERSION:-$PIN}"
 
 if [ "${VITE_EDITION:-}" != "cloud" ] || [ "${VITE_SHARED_HEADER:-}" != "true" ]; then

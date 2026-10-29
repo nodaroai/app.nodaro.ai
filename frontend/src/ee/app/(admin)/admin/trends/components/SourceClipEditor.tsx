@@ -3,6 +3,12 @@
 // its display copy (a browser-safe MP4 and poster the platform makes when the
 // clip is stored), shown on the trend's page beside the examples.
 //
+// A new clip comes in by Upload or a library video's address; on a build with
+// the shared media editor also by a link (YouTube, TikTok, Instagram, X,
+// Facebook), and every new clip then shows its range (4–30 s) and shape before
+// it is stored (`source-intake/`). Without the editor this is the editor it
+// always was: the clip is stored as it comes.
+//
 // The preview's INPUT clip (the window cut from the source, made by the server
 // when the draft is saved) is shown under the window: its length, frames and
 // hash, when it was made, and a Play of the stored file itself. The slider
@@ -19,6 +25,11 @@ import { useTrendMedia } from "@/ee/hooks/queries/use-admin-queries"
 import { PREVIEW_SECONDS, clampPreview, formatSeconds, previewClipStatus } from "../model"
 import { MediaPicker } from "./MediaPicker"
 import { uploadLocalFile } from "./uploads"
+import { mediaEditorParts } from "./source-intake/parts"
+import { SourceIntake } from "./source-intake/SourceIntake"
+
+/** The shared media editor's parts, when this build has them (read once: a build decides it). */
+const EDITOR = mediaEditorParts()
 
 interface Props {
   readonly trendId: string
@@ -40,7 +51,8 @@ export function SourceClipEditor({ trendId, source, previewStart, previewClip, o
   const maxStart = Math.max(0, duration - PREVIEW_SECONDS)
   const clipStatus = previewClipStatus({ source, previewStart, previewClip })
 
-  const store = async (url: string) => {
+  /** Stores `url` as the trend's source; true once it is (a failure is toasted here). */
+  const store = async (url: string): Promise<boolean> => {
     try {
       const stored = await media.mutateAsync({ url, kind: "source" })
       if (stored.durationSec === undefined) throw new Error("The clip's length could not be read.")
@@ -55,8 +67,10 @@ export function SourceClipEditor({ trendId, source, previewStart, previewClip, o
       }
       onChange({ source: next, previewStart: clampPreview(previewStart, next.durationSec) })
       toast.success(`Source clip set (${formatSeconds(next.durationSec)}). Save the draft to keep it.`)
+      return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not store the clip")
+      return false
     }
   }
 
@@ -215,15 +229,23 @@ export function SourceClipEditor({ trendId, source, previewStart, previewClip, o
           </div>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">No source clip yet. Upload one (4–30 s) or paste a library video's URL.</p>
+        <p className="text-sm text-muted-foreground">
+          {EDITOR
+            ? "No source clip yet. Upload one, paste a library video's URL or a video's link, then pick its 4–30 s and its shape."
+            : "No source clip yet. Upload one (4–30 s) or paste a library video's URL."}
+        </p>
       )}
-      <MediaPicker
-        accept="video/*"
-        uploadLabel={source ? "Replace clip" : "Upload clip"}
-        busy={busy}
-        onFiles={(files) => void fromFile(files[0]!)}
-        onUrl={(url) => void store(url)}
-      />
+      {EDITOR ? (
+        <SourceIntake parts={EDITOR} hasSource={source !== null} busy={busy} store={store} />
+      ) : (
+        <MediaPicker
+          accept="video/*"
+          uploadLabel={source ? "Replace clip" : "Upload clip"}
+          busy={busy}
+          onFiles={(files) => void fromFile(files[0]!)}
+          onUrl={(url) => void store(url)}
+        />
+      )}
     </div>
   )
 }
