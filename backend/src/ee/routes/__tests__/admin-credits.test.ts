@@ -623,4 +623,18 @@ describe("PUT /v1/admin/models/:identifier/pricing", () => {
     expect(body.model_identifier).toBe("nano-banana")
     expect(mockFrom).toHaveBeenCalledWith("model_pricing")
   })
+
+  it("switching a model off hides it from this process at once, and switching it on shows it again", async () => {
+    const { isModelSwitchedOff, __resetModelSwitchForTests } = await import("@/lib/model-switch.js")
+    __resetModelSwitchForTests([])
+    const put = async (isEnabled: boolean) => {
+      mockFrom.mockReturnValue(supabaseChain({ data: { model_identifier: "nano-banana", credit_cost: 6, is_enabled: isEnabled, tier_restriction: null }, error: null }))
+      return app.inject({ method: "PUT", url: "/v1/admin/models/nano-banana/pricing", headers: { "x-user-id": ADMIN_UUID }, payload: { isEnabled } })
+    }
+    expect((await put(false)).statusCode).toBe(200)
+    expect(isModelSwitchedOff("nano-banana")).toBe(true)
+    expect((await put(true)).statusCode).toBe(200)
+    expect(isModelSwitchedOff("nano-banana")).toBe(false)
+    __resetModelSwitchForTests()
+  })
 })

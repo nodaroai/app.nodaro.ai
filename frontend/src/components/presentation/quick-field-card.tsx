@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react"
 import { AutoCorrectContext } from "./auto-correct-context"
 import {
+  allQuickConfigOptions,
   isInQuickConfigRange,
   quickConfigChoicePatch,
   quickConfigRetainedOption,
@@ -11,6 +12,7 @@ import {
   type QuickConfigControl,
   type QuickConfigOption,
 } from "@/components/nodes/node-quick-configs"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { GlassCard } from "./output-cards/shared"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
@@ -53,11 +55,15 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
   onPatchRef.current = onPatch
   const [customOpen, setCustomOpen] = useState(false)
 
+  // The model menus hide what the deployment does not offer; the set lands
+  // after the first paint, so the version is the memo's dependency.
+  const availability = useSurfaceAvailability()
   const options = useMemo<ReadonlyArray<QuickConfigOption>>(() => {
     const all = resolveQuickConfigOptions(control, nodeData)
     if (!allowedValues) return all
     return all.filter((o) => allowedValues.some((av) => String(av) === o.value))
-  }, [control, nodeData, allowedValues])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `availability` is the version the filter reads through
+  }, [control, nodeData, allowedValues, availability])
 
   const stored = readQuickConfigValue(control, nodeData)
   const effective = stored !== "" ? stored : (control.defaultValue ?? "")
@@ -90,8 +96,10 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
       ? [...options, { value: effective, label: `${effective}${control.customRange?.unit ?? ""}` }]
       : options
   const current = shown.find((o) => o.value === effective)
-  // Labels the trigger only; the menu still never lists it.
-  const shownCurrent = current ?? (keepRetained ? retained : undefined)
+  // Labels the trigger only; the menu still never lists it — a retired value,
+  // or a model the deployment hides that the node still holds.
+  const shownCurrent =
+    current ?? (keepRetained ? retained : undefined) ?? allQuickConfigOptions(control, nodeData).find((o) => o.value === effective)
   const label = customLabel ?? control.ariaLabel
   const range = control.customRange
   // The strip's "Custom…": any in-range number, through the same slider + clamped input pair.

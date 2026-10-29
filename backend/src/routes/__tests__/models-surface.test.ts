@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest"
 import { buildApp } from "../../app.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
+import { __resetModelSwitchForTests } from "../../lib/model-switch.js"
 import type { FastifyInstance } from "fastify"
 
 // These cases are about which models list, not their prices. The prices come from
@@ -73,5 +74,21 @@ describe("GET /v1/models honours models.deny (B1)", () => {
 
     const after = (await app.inject({ method: "GET", url: "/v1/models?kind=video" })).json()
     expect(modelIds(after)).not.toContain(victim)
+  }, 30_000)
+
+  it("omits a model the admin switched off on its pricing row, and lists it again once switched on", async () => {
+    const before = (await app.inject({ method: "GET", url: "/v1/models?kind=image" })).json()
+    const victim = modelIds(before)[0]!
+    try {
+      __resetModelSwitchForTests([victim])
+      const off = (await app.inject({ method: "GET", url: "/v1/models?kind=image" })).json()
+      expect(modelIds(off)).not.toContain(victim)
+
+      __resetModelSwitchForTests([])
+      const on = (await app.inject({ method: "GET", url: "/v1/models?kind=image" })).json()
+      expect(modelIds(on)).toContain(victim)
+    } finally {
+      __resetModelSwitchForTests()
+    }
   }, 30_000)
 })

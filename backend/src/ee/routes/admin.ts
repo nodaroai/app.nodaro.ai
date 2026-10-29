@@ -9,6 +9,7 @@ import { appRunContentRedaction } from "../../lib/app-run-content.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
 import { deleteKeysRecordingFailures } from "../../lib/storage-delete.js"
 import { formatZodError } from "../../lib/zod-error.js"
+import { noteModelSwitch } from "../../lib/model-switch.js"
 
 // ============================================================
 // Admin Routes - Cost Alerts, Model Pricing & Asset Library
@@ -285,6 +286,8 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    // The switch also hides the model (lib/model-switch.ts).
+    noteModelSwitch(modelIdentifier, isEnabled)
     return { data }
   })
 
@@ -336,6 +339,10 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    // The switch also hides the model (lib/model-switch.ts); the row is
+    // addressed by its id, so the identifier comes back with it.
+    const identifier = (data as { model_identifier?: unknown } | null)?.model_identifier
+    if (typeof identifier === "string") noteModelSwitch(identifier, isEnabled)
     return { data }
   })
 
@@ -358,10 +365,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { id } = paramsResult.data
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("model_pricing")
       .delete()
       .eq("id", id)
+      .select("model_identifier")
+      .maybeSingle()
 
     if (error) {
       return reply.status(500).send({
@@ -369,6 +378,10 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    // A deleted row has no switch any more (lib/model-switch.ts): a model
+    // whose row was off stops being hidden here at once, not after the TTL.
+    const identifier = (data as { model_identifier?: unknown } | null)?.model_identifier
+    if (typeof identifier === "string") noteModelSwitch(identifier, true)
     return { success: true }
   })
 

@@ -6,15 +6,18 @@ import {
   isModelDenied,
   filterDeniedModels,
   effectiveDeniedNodeTypes,
+  effectiveDeniedModelIds,
   nodesHiddenFromUsers,
   USER_VIEWER,
   ADMIN_VIEWER,
 } from "../surface-deny.js"
 import { __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
+import { __resetModelSwitchForTests } from "../model-switch.js"
 
 afterEach(() => {
   delete process.env.NODARO_SURFACE_PROFILE
   __resetSurfaceProfileCacheForTests()
+  __resetModelSwitchForTests()
 })
 
 describe("surface-deny — node deny reads the profile", () => {
@@ -144,6 +147,41 @@ describe("surface-deny — admin override REPLACES the factory layer", () => {
     expect(isModelDenied("flux")).toBe(false)
     expect(isModelDenied("kling")).toBe(true)
     expect(isModelDenied("not-in-any-universe")).toBe(false)
+  })
+})
+
+// ── Layer 4: the admin's model switch (model_pricing.is_enabled) ────────────
+
+describe("surface-deny — a model switched off on its pricing row is not offered", () => {
+  it("wins over the profile and over an override that lists it", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { allow: ["flux", "flux-flex"] } })
+    __resetSurfaceProfileCacheForTests()
+    __resetAvailabilityOverridesForTests({ models: new Set(["flux", "flux-flex"]) })
+    __resetModelSwitchForTests(["flux-flex"])
+    expect(isModelDenied("flux-flex")).toBe(true)
+    expect(isModelDenied("flux")).toBe(false)
+    expect(filterDeniedModels([{ id: "flux" }, { id: "flux-flex" }])).toEqual([{ id: "flux" }])
+  })
+
+  it("is exact by identifier: a switched-off variant row hides neither its model nor anything else", () => {
+    __resetModelSwitchForTests(["flux-flex:2K"])
+    expect(isModelDenied("flux-flex")).toBe(false)
+    expect(isModelDenied("flux-flex:2K")).toBe(true)
+  })
+
+  it("is listed in the effective denied set the browser mirrors, with the switch's own ids", () => {
+    __resetModelSwitchForTests(["flux-flex", "flux-flex:2K"])
+    const denied = effectiveDeniedModelIds()
+    expect(denied).toContain("flux-flex")
+    expect(denied).toContain("flux-flex:2K")
+    expect(denied).not.toContain("flux")
+  })
+
+  it("switched back on, the model is offered again", () => {
+    __resetModelSwitchForTests(["flux-flex"])
+    expect(isModelDenied("flux-flex")).toBe(true)
+    __resetModelSwitchForTests([])
+    expect(isModelDenied("flux-flex")).toBe(false)
   })
 })
 

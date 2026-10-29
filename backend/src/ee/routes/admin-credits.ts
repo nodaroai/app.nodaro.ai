@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
+import { noteModelSwitch } from "../../lib/model-switch.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
@@ -556,6 +557,9 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
     if (error) return reply.code(500).send({ error: error.message })
     invalidateModelPricingCache()
+    // The switch also hides the model (lib/model-switch.ts): this process
+    // answers at once, sibling instances within the TTL.
+    if (isEnabled !== undefined) noteModelSwitch(identifier, isEnabled)
     return data
   })
 

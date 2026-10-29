@@ -141,6 +141,12 @@ describe("errorResult — the error bodies older routes send", () => {
     )
   })
 
+  it("a model an admin switched off is a 403 with its own code and sentence — never the 402 'insufficient credits' line", () => {
+    expect(text(403, { error: { code: "model_disabled", message: "This model is currently disabled" } })).toBe(
+      "Nodaro rejected the request (403 model_disabled): This model is currently disabled",
+    )
+  })
+
   it("the envelope reads exactly as before", () => {
     expect(text(400, { error: { code: "candidate_not_ready", message: "Candidate not ready" } })).toBe(
       "Nodaro rejected the request (400 candidate_not_ready): Candidate not ready",

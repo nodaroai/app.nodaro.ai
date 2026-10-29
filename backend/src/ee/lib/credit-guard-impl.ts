@@ -158,6 +158,25 @@ export interface CreditRefusal {
   body: unknown
 }
 
+/** The credit check's code for a model whose pricing row an admin switched off. */
+export const MODEL_DISABLED_CODE = "model_disabled" as const
+
+/**
+ * The guard's answer for a model an admin switched off (`model_pricing.is_enabled`):
+ * a 403 with its own code. Both emit sites of the credit guard's refusal
+ * (`insufficientCreditsRefusal`, which the preHandler and the run-set check
+ * use, and `holdCovered`, the metered hold) answer through this one builder.
+ * The LLM side hold (`llm-side-hold-impl.ts`, a plugin-contract shape) and
+ * the pipeline lanes still answer their own `insufficient_credits` for a
+ * switched-off model — a follow-up, since each means widening a contract.
+ */
+export function modelDisabledRefusal(message: string | undefined): CreditRefusal {
+  return {
+    statusCode: 403,
+    body: { error: { code: MODEL_DISABLED_CODE, message: message ?? "This model is currently disabled" } },
+  }
+}
+
 /**
  * What the guard answers when the payer's pools cannot cover a run — ONE
  * builder for the guard (Step 2) and `checkPayerCanAffordImpl`, so the two
@@ -173,12 +192,19 @@ export interface CreditRefusal {
  *   prepaid instance withholds self-serve purchase, so the stock
  *   "insufficient credits" copy sends them to a dead end. Name the real
  *   condition and the real fixer instead.
+ * - A model an admin switched off (`model_pricing.is_enabled`): 403
+ *   `model_disabled` with the check's own sentence. Not a 402: nothing to buy
+ *   lifts it, and a 402 is read as "out of credits" by every client (the
+ *   SDK's InsufficientCreditsError, the MCP's fixed sentence, the editor's
+ *   buy-credits dialog) — which is what an admin saw after switching a model
+ *   off (2026-10-29).
  * - Otherwise the plain 402 with what the run needs and what the payer has.
  */
 export function insufficientCreditsRefusal(
-  check: { error?: string; required?: number; balance?: number; subscriptionRequired?: boolean },
+  check: { error?: string; required?: number; balance?: number; subscriptionRequired?: boolean; code?: "free_video_limit" | "model_disabled" },
   deploymentPayer: boolean,
 ): CreditRefusal {
+  if (check.code === MODEL_DISABLED_CODE) return modelDisabledRefusal(check.error)
   if (check.subscriptionRequired) return { statusCode: 403, body: SUBSCRIPTION_REQUIRED_BODY }
   if (deploymentPayer) {
     return {
@@ -736,6 +762,11 @@ async function holdCovered(
   }
   if (check.allowed) return true
   if (!options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+  if (check.code === MODEL_DISABLED_CODE) {
+    const refusal = modelDisabledRefusal(check.error)
+    reply.status(refusal.statusCode).send(refusal.body)
+    return false
+  }
   if (check.code === "free_video_limit") {
     reply.status(402).send({ error: { code: "free_video_limit", message: check.error ?? "Not available on free credits" } })
     return false

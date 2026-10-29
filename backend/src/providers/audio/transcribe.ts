@@ -7,6 +7,7 @@ import {
   DEFAULT_TRANSCRIBE_PROVIDER,
 } from "@nodaro/shared/models"
 import { replicate, extractCost } from "../replicate/client.js"
+import { withReplicateRequestFailure } from "../replicate/failure-messages.js"
 import { directSpeechToText } from "../elevenlabs/direct-stt.js"
 import {
   mapWhisperOutput,
@@ -154,12 +155,14 @@ export async function transcribe(
       input.language = "None"
     }
 
-    const prediction = await replicate.predictions.create({
-      version: extractVersion(model),
-      input,
-    })
+    const prediction = await withReplicateRequestFailure("[transcribe]", () =>
+      replicate.predictions.create({
+        version: extractVersion(model),
+        input,
+      }),
+    )
     await options?.onTaskCreated?.(prediction.id)
-    const completed = await replicate.wait(prediction)
+    const completed = await withReplicateRequestFailure("[transcribe]", () => replicate.wait(prediction))
     const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "incredibly-fast-whisper")
     const output = completed.output as FastWhisperOutput
 
@@ -189,12 +192,14 @@ export async function transcribe(
     input.language = language
   }
 
-  const prediction = await replicate.predictions.create({
-    version: extractVersion(model),
-    input,
-  })
+  const prediction = await withReplicateRequestFailure("[transcribe]", () =>
+    replicate.predictions.create({
+      version: extractVersion(model),
+      input,
+    }),
+  )
   await options?.onTaskCreated?.(prediction.id)
-  const completed = await replicate.wait(prediction)
+  const completed = await withReplicateRequestFailure("[transcribe]", () => replicate.wait(prediction))
   const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "whisper")
   const output = completed.output as WhisperOutput
 

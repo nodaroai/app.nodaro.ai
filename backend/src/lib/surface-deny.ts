@@ -5,6 +5,7 @@ import {
   GATEABLE_NODE_TYPES,
   GATEABLE_MODEL_IDS,
 } from "./availability-override.js"
+import { isModelSwitchedOff, switchedOffModelIds } from "./model-switch.js"
 
 /**
  * Backend-authoritative node/model availability for a deployment (B1 + B5).
@@ -16,7 +17,7 @@ import {
  * touching a write guard. A denied node is invisible in discovery, refused at
  * write, and fails honestly at run.
  *
- * THREE LAYERS, resolved here so every chokepoint stays a one-word predicate:
+ * FOUR LAYERS, resolved here so every chokepoint stays a one-word predicate:
  *
  *   1. code/edition — what the build ships (edition gates are their own layer
  *      and always apply on top: cloud-only-nodes etc.).
@@ -26,6 +27,11 @@ import {
  *      heard of is unavailable by default instead of available by omission.
  *   3. admin override (availability-override.ts) — a stored enabled-set that
  *      REPLACES layer 2 while present; "reset to factory" deletes it.
+ *   4. the admin's model switch (model-switch.ts, models only) —
+ *      `model_pricing.is_enabled` off on the admin models page. It wins over
+ *      every layer below it: a model nobody can run is not offered, whatever
+ *      the profile or the override lists (2026-10-29: a switched-off model
+ *      stayed in every menu and only failed at run).
  *
  * INVERSION SCOPE: allow-lists and overrides say "not listed ⇒ denied", so
  * they only invert over the GATEABLE universes (registry minus utility nodes;
@@ -238,6 +244,8 @@ export function nodeNotAvailableError(types: readonly string[]): Error & { code:
 
 /** True when this deployment does not offer this model id. */
 export function isModelDenied(id: string): boolean {
+  // Layer 4 first: the admin's switch is not something an override can lift.
+  if (isModelSwitchedOff(id)) return true
   const override = availabilityOverride("models")
   if (override) return GATEABLE_MODEL_IDS.has(id) && !override.has(id)
   const { deny, allow } = runtimeSurfaceProfile().models
@@ -285,5 +293,8 @@ export function effectiveDeniedModelIds(): string[] {
   const denied = new Set<string>()
   for (const id of GATEABLE_MODEL_IDS) if (isModelDenied(id)) denied.add(id)
   for (const id of runtimeSurfaceProfile().models.deny) if (isModelDenied(id)) denied.add(id)
+  // The switch is keyed by pricing identifier, so a switched-off id outside the
+  // gateable universe is listed too — the browser hides exactly what runs refuse.
+  for (const id of switchedOffModelIds()) if (isModelDenied(id)) denied.add(id)
   return [...denied]
 }

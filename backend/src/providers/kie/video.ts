@@ -2806,12 +2806,16 @@ export class KieVideoProvider
       return { url: outputUrl, cost: modelConfig.cost }
     }
 
-    // HappyHorse Video Edit uses video_url (array, one element) + optional reference_image
+    // HappyHorse Video Edit takes ONE video as a string `video_url` ("URL of the
+    // input video (one video)" — happyhorse/video-edit schema); only
+    // `reference_image` is an array (0–5). Sent as a one-element array, KIE
+    // refused every run at createTask: `[422] video_url is required`
+    // (prod 2026-10-28).
     if (provider === "happyhorse-edit") {
       const input: Record<string, unknown> = {
         ...(modelConfig.extraParams ?? {}),
         prompt: finalPrompt,
-        video_url: [videoUrl],
+        video_url: videoUrl,
       }
       if (options?.referenceImageUrl) {
         input.reference_image = [options.referenceImageUrl]

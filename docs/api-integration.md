@@ -1554,6 +1554,7 @@ All errors share the same shape:
 | 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
 | 403 | `insufficient_scope` | `missingScope` (+ `message`) | (OAuth tokens only) The token is missing a scope the route requires. Re-run the OAuth consent with the broader scope. See [OAuth Flow §4](./oauth-flow.md#4-scope-vocabulary). |
+| 403 | `model_disabled` | — | (Cloud edition only) The platform's admin has switched this model off. Nothing was reserved or charged. Not a balance problem — buying credits does not lift it; pick another model, or try again once the admin switches it back on. |
 | 403 | `sso_required` | — | (Deployments that restrict sign-in to their identity provider) A session JWT for an account that was not provisioned through that provider. Sign in through the provider; API tokens and OAuth app tokens are not affected. |
 | 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `GET /v1/api-tokens`). |
 | 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
@@ -2238,7 +2239,10 @@ source follows the Instagram node's availability).
 
 `GET /v1/models` — the REST twin of the MCP `list_models` tool, for plain
 SDK/HTTP clients. Public (model availability is not a secret), cached 5
-minutes (`Cache-Control: public, max-age=300`). Returns
+minutes (`Cache-Control: public, max-age=300`). A model this deployment does
+not offer is not listed — a model its admin switched off included: the same
+switch refuses a run of it (`403 model_not_available`), so a client that
+caches the list for the five minutes may still name one. Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),

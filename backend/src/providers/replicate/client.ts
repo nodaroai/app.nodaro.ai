@@ -11,6 +11,7 @@ import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { liveProviderClient, requireProviderKey, type ProviderKeyCoverage } from "../provider-keys.js"
 import { egressSdkFetch } from "../egress.js"
+import { replicateRequestFailure } from "./failure-messages.js"
 
 // Singleton Replicate client.
 //
@@ -157,9 +158,23 @@ export async function runReplicatePrediction(opts: {
       ? { version: opts.version, input: opts.input }
       : { model: opts.model as `${string}/${string}`, input: opts.input }
 
-  const prediction = await replicate.predictions.create(createOptions)
+  // A failed API call (a 429 while the account is throttled, a 4xx on the
+  // body, a 5xx) is the SDK's ApiError, whose message names the API address and
+  // echoes the response body — never the user's to read. The status picks the
+  // sentence; the raw text rides on `internalDetails` (failure-messages.ts).
+  let prediction: Awaited<ReturnType<typeof replicate.predictions.create>>
+  try {
+    prediction = await replicate.predictions.create(createOptions)
+  } catch (err) {
+    throw replicateRequestFailure(err, opts.label) ?? err
+  }
   await fireOnTaskCreated(opts.reconcileOpts, prediction.id, opts.label)
-  const completed = await replicate.wait(prediction)
+  let completed: Awaited<ReturnType<typeof replicate.wait>>
+  try {
+    completed = await replicate.wait(prediction)
+  } catch (err) {
+    throw replicateRequestFailure(err, opts.label) ?? err
+  }
   const cost = extractCost(
     completed.metrics as Record<string, unknown> | undefined,
     opts.costModelKey,

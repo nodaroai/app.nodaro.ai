@@ -16,6 +16,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { speakerViewQuickConfigs } from "./speaker-view-quick-configs"
 import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { isModelUnavailable, useSurfaceAvailability } from "@/lib/surface-availability"
 import { llmPickerPriceLabel, useLlmModelPrices } from "@/hooks/use-llm-price"
 import { llmPricingMode, useLlmPricingMode } from "@/hooks/use-llm-pricing-mode"
 import { llmModelFor, llmNodeFeature } from "@/lib/llm-price-ids"
@@ -231,13 +232,34 @@ export function readQuickConfigValue(control: QuickConfigControl, data: Record<s
   return v != null ? String(v) : ""
 }
 
-/** Resolve a control's options against the node's current data. */
-export function resolveQuickConfigOptions(
+/** A control whose options are generation models — the ones a deployment may
+ *  not offer (lib/surface-availability.ts: the profile, the admin override,
+ *  the admin's model switch). Their menus hide what the backend refuses. */
+function listsModels(control: QuickConfigControl): boolean {
+  return control.field === "provider"
+}
+
+/** Every option the control declares for this node, offered or not. */
+export function allQuickConfigOptions(
   control: QuickConfigControl,
   data: Record<string, unknown>,
   ctx?: QuickConfigContext,
 ): ReadonlyArray<QuickConfigOption> {
   return typeof control.options === "function" ? control.options(data, ctx) : control.options
+}
+
+/** Resolve a control's options against the node's current data — minus the
+ *  models this deployment does not offer (the config panels' `withoutDeniedModels`,
+ *  applied here once for every strip and app card). A component that renders
+ *  these must subscribe with `useSurfaceAvailability()`: the set arrives after
+ *  the first paint. */
+export function resolveQuickConfigOptions(
+  control: QuickConfigControl,
+  data: Record<string, unknown>,
+  ctx?: QuickConfigContext,
+): ReadonlyArray<QuickConfigOption> {
+  const all = allQuickConfigOptions(control, data, ctx)
+  return listsModels(control) ? all.filter((o) => !isModelUnavailable(o.value)) : all
 }
 const resolveOptions = resolveQuickConfigOptions
 
@@ -298,6 +320,12 @@ export function quickConfigSnapPatch(
   ctx?: QuickConfigContext,
 ): Record<string, unknown> | undefined {
   if (value === "" || value == null) return undefined
+  // A model the deployment HIDES is not stale: the node keeps it (labelled on
+  // the trigger, refused at run with its own message) — never silently moved
+  // to the first listed model, nor cleared when the hidden one was the only
+  // option, because an admin switched it off. Before the empty-list branch on
+  // purpose: a one-model list whose model is hidden is empty.
+  if (listsModels(control) && allQuickConfigOptions(control, data, ctx).some((o) => o.value === value)) return undefined
   if (options.length === 0) {
     return control.preserveOnHide ? undefined : { [control.field]: undefined }
   }
@@ -1376,6 +1404,10 @@ export function QuickConfigSelect({
 }) {
   const t = useT()
   const localizeOption = useLocalizeOptionLabel()
+  // Re-render, and rebuild the options, when the deployment's model
+  // availability lands (the model menus hide what it denies —
+  // resolveQuickConfigOptions). The version is the memo's dependency.
+  const availability = useSurfaceAvailability()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [customOpen, setCustomOpen] = useState(false)
   // The Select trigger doubles as the popover ANCHOR (not a PopoverTrigger), so
@@ -1405,8 +1437,8 @@ export function QuickConfigSelect({
   // An option builder may word its labels by the server's LLM pricing mode (the
   // effort levels): re-resolved when an answer changes it.
   const pricingMode = useLlmPricingMode()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx, pricingMode])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `pricingMode` and `availability` are the versions the resolver reads through
+  const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx, pricingMode, availability])
   // An LLM model control: each model's estimate beside it (metered pricing
   // only, D7), ONE batch for the list. A model switch here clears Advanced
   // (`additionalClear`), so only the current model is quoted with it.
@@ -1454,6 +1486,8 @@ export function QuickConfigSelect({
     current?.label ??
     // A retired value a saved node keeps (not listed, still runs) → its own name.
     quickConfigRetainedOption(control, effectiveValue)?.label ??
+    // A model the deployment hides from the menu but the node still holds → its own name.
+    (listsModels(control) ? allQuickConfigOptions(control, data, ctx).find((o) => o.value === effectiveValue)?.label : undefined) ??
     // In-range custom numeric (customRange) → render it directly ("46s").
     (effectiveValue !== "" && inRange(effectiveValue) ? `${effectiveValue}${range?.unit ?? ""}` : undefined) ??
     // Fall back to the first option label when the field is unset — avoids

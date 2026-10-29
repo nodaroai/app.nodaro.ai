@@ -8,6 +8,7 @@
 import type { ReconcileOpts } from "../provider.interface.js"
 import { replicate } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { withReplicateRequestFailure } from "./failure-messages.js"
 
 // Pinned per backend/src/providers/replicate/CLAUDE.md: never use floating owner/name.
 // Resolve via: curl -s https://api.replicate.com/v1/models/zsxkib/mmaudio | jq -r .latest_version.id
@@ -42,20 +43,24 @@ export async function generateVideoSfx(
   input: MMAudioInput,
   reconcileOpts?: ReconcileOpts,
 ): Promise<MMAudioOutput> {
-  const prediction = await replicate.predictions.create({
-    version: MMAUDIO_VERSION_HASH,
-    input: {
-      video: input.videoUrl,
-      prompt: input.prompt ?? "",
-      negative_prompt: input.negativePrompt ?? "music",
-      duration: input.duration,
-      cfg_strength: input.cfgStrength,
-      num_steps: input.numSteps,
-      seed: input.seed ?? -1,
-    },
-  })
+  // An API refusal (the SDK's ApiError: address + body in its message) is
+  // told to the user by its status; the raw text stays operator-only.
+  const prediction = await withReplicateRequestFailure("[replicate:videoSfx]", () =>
+    replicate.predictions.create({
+      version: MMAUDIO_VERSION_HASH,
+      input: {
+        video: input.videoUrl,
+        prompt: input.prompt ?? "",
+        negative_prompt: input.negativePrompt ?? "music",
+        duration: input.duration,
+        cfg_strength: input.cfgStrength,
+        num_steps: input.numSteps,
+        seed: input.seed ?? -1,
+      },
+    }),
+  )
   await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:videoSfx]")
-  const completed = await replicate.wait(prediction)
+  const completed = await withReplicateRequestFailure("[replicate:videoSfx]", () => replicate.wait(prediction))
   if (!completed.output || typeof completed.output !== "string") {
     throw new Error(
       `mmaudio prediction returned unexpected output: ${JSON.stringify(completed.output)}`,

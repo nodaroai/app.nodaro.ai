@@ -642,10 +642,20 @@ describe("DELETE /v1/admin/model-pricing/:id", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
-  it("returns 200 on success", async () => {
-    const mockEq = vi.fn().mockResolvedValue({ error: null })
+  // The delete reads the row's identifier back (`.select().maybeSingle()`) so
+  // the model switch (lib/model-switch.ts) forgets a switched-off row at once.
+  const deleteChain = (result: { data: unknown; error: unknown }) => {
+    const mockMaybeSingle = vi.fn().mockResolvedValue(result)
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockMaybeSingle })
+    const mockEq = vi.fn().mockReturnValue({ select: mockSelect })
     const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  }
+
+  it("returns 200 on success, and a switched-off row that is deleted stops being hidden at once", async () => {
+    const { isModelSwitchedOff, __resetModelSwitchForTests } = await import("@/lib/model-switch.js")
+    __resetModelSwitchForTests(["old-model"])
+    deleteChain({ data: { model_identifier: "old-model" }, error: null })
 
     const res = await app.inject({
       method: "DELETE",
@@ -655,12 +665,12 @@ describe("DELETE /v1/admin/model-pricing/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
+    expect(isModelSwitchedOff("old-model")).toBe(false)
+    __resetModelSwitchForTests()
   })
 
   it("returns 500 on DB error", async () => {
-    const mockEq = vi.fn().mockResolvedValue({ error: { message: "delete failed" } })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+    deleteChain({ data: null, error: { message: "delete failed" } })
 
     const res = await app.inject({
       method: "DELETE",

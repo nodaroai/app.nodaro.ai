@@ -5,7 +5,9 @@ import {
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
+  withoutDeniedModels,
 } from "@/components/editor/config-panels/model-options"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
 import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
 import { isSeedanceDraftCapable, normalizeModelInput } from "@nodaro/shared/model-catalog"
@@ -47,6 +49,11 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   // The free-credit video limits: options the server would refuse are listed
   // locked, with why — never removed, never snapped.
   const freeVideoLimits = useFreeVideoLimits()
+  // The menu hides the models this deployment does not offer (the panel's
+  // `withoutDeniedModels`); the set lands after the first paint, so subscribe.
+  // The node's CURRENT model is read off the full list, so a hidden model a
+  // saved node holds keeps its name on the pill.
+  const availability = useSurfaceAvailability()
 
   const currentProvider = data.provider || "seedance-2-fast"
 
@@ -63,8 +70,9 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
 
   const aspectOptions = useMemo(() => getAspectRatiosForVideoModel(currentProvider), [currentProvider])
   const modelOptions = useMemo(
-    () => VIDEO_GEN_MODELS.map((o) => ({ ...o, locked: lockedVideoModel(freeVideoLimits, o.value) })),
-    [freeVideoLimits],
+    () => withoutDeniedModels(VIDEO_GEN_MODELS).map((o) => ({ ...o, locked: lockedVideoModel(freeVideoLimits, o.value) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `availability` is the version the filter reads through
+    [freeVideoLimits, availability],
   )
   const durationOptions = useMemo(
     () => getDurationsForVideoModel(currentProvider).map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) })),

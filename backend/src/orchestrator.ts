@@ -9,6 +9,7 @@ import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
+import { loadSwitchedOffModels } from "./lib/model-switch.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { setEditPlanPerMinuteSource } from "./lib/private-plugins/edit-plan-per-minute.js"
@@ -39,6 +40,9 @@ registerMainlinePromptPolicies()
 // never builds the app, so it loads it here — otherwise the admin switch does
 // not exist for any execution this worker picks up.
 await loadAvailabilityOverrides()
+// The admin's model switch (model_pricing.is_enabled) — read by the same
+// predicate (isModelDenied) on the same lane, loaded here for the same reason.
+await loadSwitchedOffModels()
 
 // Edit Plan per started minute (decided 2026-10-07): this process loads no
 // plugin, so it asks this container's API whether the plugin charges per

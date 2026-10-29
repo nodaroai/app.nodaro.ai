@@ -342,6 +342,18 @@ export class KieImageProvider
       delete input.resolution
     }
 
+    // Flux Kontext's own endpoint (/api/v1/flux/kontext/generate) reads
+    // camelCase fields — `inputImage`, `aspectRatio`, `outputFormat` — so the
+    // caller's `aspect_ratio` has to be renamed, or the model config's
+    // `aspectRatio: "16:9"` default beside it wins and every picture comes out
+    // 1280×720 whatever was asked (prod 2026-10-28: six 9:16 / 3:4 runs).
+    if (provider === "flux-kontext" || provider === "flux-kontext-max") {
+      if (typeof input.aspect_ratio === "string" && input.aspect_ratio) {
+        input.aspectRatio = input.aspect_ratio
+      }
+      delete input.aspect_ratio
+    }
+
     // Imagen4 family: supports negative_prompt natively, no resolution
     if (provider.startsWith("imagen4")) {
       delete input.resolution

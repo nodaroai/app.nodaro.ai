@@ -100,12 +100,17 @@ describe("buildRoutingDecision", () => {
     expect(result.activeProvider).toBe("kie")
   })
 
-  it("kie mode returns ['kie'] chain for shared capability (replicate disabled)", async () => {
-    const result = await buildRoutingDecision("image-to-video", "minimax")
-
-    expect(result.providerChain).toEqual(["kie"])
-    expect(result.markupPercent).toBe(50)
-    expect(result.activeProvider).toBe("kie")
+  it("kie mode returns ['kie', 'replicate'] for the video capabilities Replicate declares models for", async () => {
+    // KIE stays first: the walker serves the id with the first provider that
+    // declares it, so a KIE id never reaches Replicate. Replicate is in the
+    // chain for the ids only it declares (kling-3-omni on image-to-video) —
+    // without it they failed at the router (prod 2026-10-29).
+    const i2v = await buildRoutingDecision("image-to-video", "minimax")
+    expect(i2v.providerChain).toEqual(["kie", "replicate"])
+    expect(i2v.markupPercent).toBe(50)
+    expect(i2v.activeProvider).toBe("kie")
+    const t2v = await buildRoutingDecision("text-to-video", "kling")
+    expect(t2v.providerChain).toEqual(["kie", "replicate"])
   })
 })
 

@@ -18,14 +18,20 @@ const LTX_VIDEO_MODEL_IDS = ["ltx-2.3-pro", "ltx-2.3-fast"] as const
 // added in #2307) was silently dropped from this registration when #2439 rewrote
 // replicateInfo — the router then found NO provider for it and every run failed
 // with "not supported by any registered provider" (caught by live probe
-// 2026-07-16; guarded since by video-provider-dispatch.test.ts). i2v-only:
-// the t2v route 400s first via VIDEO_PROVIDERS_REQUIRING_IMAGE.
+// 2026-07-16; guarded since by video-provider-dispatch.test.ts). Registration
+// alone was not enough: the image-to-video CHAIN (providers/config.ts) stayed
+// KIE-only, so the router never asked Replicate and the same failure came
+// back (prod 2026-10-29; guarded since by provider-chain-reachability.test.ts).
+// i2v-only: the t2v route 400s first via VIDEO_PROVIDERS_REQUIRING_IMAGE.
 const REPLICATE_I2V_ONLY_MODEL_IDS = ["kling-3-omni"] as const
 
 const replicateInfo: ProviderInfo = {
   id: "replicate",
   name: "Replicate",
-  capabilities: ["image-generation", "image-editing", "video-upscale", "audio-separation"],
+  // Every capability `supportedModels` below declares a model for — the
+  // chain-reachability guard reads `supportedModels`; this list is the
+  // registry's own index and must say the same.
+  capabilities: ["image-generation", "image-editing", "image-to-video", "text-to-video", "video-upscale", "sound-effect", "audio-separation"],
   supportedModels: {
     "image-generation": REPLICATE_IMAGE_MODEL_IDS,
     // Topaz image upscale (moved off KIE 2026-10-25).

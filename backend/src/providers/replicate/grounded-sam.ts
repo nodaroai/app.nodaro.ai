@@ -24,7 +24,7 @@ import { replicate } from "./client.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { extractUrl } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
-import { ReplicateSanitizedError, replicateFailureMessage } from "./failure-messages.js"
+import { ReplicateSanitizedError, replicateFailureMessage, replicateRequestFailure } from "./failure-messages.js"
 
 // Verified 2026-06-09 against Replicate (GET model API): version exists, input
 // params (image / mask_prompt / adjustment_factor) and the 4-element output
@@ -104,14 +104,21 @@ export async function runGroundedSam(
   // NOTE: schananas/grounded_sam takes `mask_prompt` (the subject text) and has
   // NO box_threshold lever; `boxThreshold` is kept in the signature for the
   // generate-mask caller but is not a model input for this model.
-  const prediction = await replicate.predictions.create({
-    version: GROUNDED_SAM_VERSION,
-    input: {
-      image: imageUrl,
-      mask_prompt: textPrompt,
-      adjustment_factor: 0,
-    },
-  })
+  let prediction: Awaited<ReturnType<typeof replicate.predictions.create>>
+  try {
+    prediction = await replicate.predictions.create({
+      version: GROUNDED_SAM_VERSION,
+      input: {
+        image: imageUrl,
+        mask_prompt: textPrompt,
+        adjustment_factor: 0,
+      },
+    })
+  } catch (err) {
+    // A failed API call (the SDK's ApiError: address + body in its message) —
+    // the status picks the sentence, the raw text stays on internalDetails.
+    throw replicateRequestFailure(err, "[replicate:groundedSam]") ?? err
+  }
   await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:groundedSam]")
   // A model that found NOTHING dies inside its own forward pass, and the SDK
   // rethrows the PyTorch text verbatim ("Prediction failed: cannot reshape
@@ -126,7 +133,7 @@ export async function runGroundedSam(
     const raw = err instanceof Error ? err.message : String(err)
     const friendly = replicateFailureMessage("generate-mask", raw)
     if (friendly) throw new ReplicateSanitizedError(friendly, raw)
-    throw err
+    throw replicateRequestFailure(err, "[replicate:groundedSam]") ?? err
   }
 
   // White = subject = region to edit (painter convention). See pickMaskFromOutput.

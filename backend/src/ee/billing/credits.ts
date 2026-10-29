@@ -428,9 +428,12 @@ export interface CreditCheckResult {
   /** Pool-aware web block (D1 v2): the free pool can't cover a payg web run —
    *  the guard answers with the subscription_required modal, not a 402. */
   subscriptionRequired?: boolean
-  /** Set when the refusal is the free-credit video limits: the guard answers
-   *  with its own code, so the client names the limit, not a balance. */
-  code?: "free_video_limit"
+  /** Set when the refusal is the free-credit video limits (the guard answers
+   *  with its own code, so the client names the limit, not a balance), or the
+   *  admin switch on the model's pricing row (`model_pricing.is_enabled`): a
+   *  403 `model_disabled`, never a 402 — no purchase can lift it, and a 402
+   *  reads as "out of credits" on every client. */
+  code?: "free_video_limit" | "model_disabled"
 }
 
 export interface UserBalance {
@@ -3577,7 +3580,7 @@ export class CreditsService {
     const unavailable = modelAvailabilityRefusal(modelIdentifier, pricing, gates)
     if (unavailable) {
       return unavailable.reason === "disabled"
-        ? { allowed: false, error: unavailable.error }
+        ? { allowed: false, error: unavailable.error, code: "model_disabled" }
         : { allowed: false, error: unavailable.error, watermark }
     }
 
