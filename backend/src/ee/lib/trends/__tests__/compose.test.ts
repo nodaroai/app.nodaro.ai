@@ -532,22 +532,35 @@ describe("composeTrendRun — engine", () => {
     expect(composeTrendRun(trend(version({ pulseAudio: "generated" })), req()).body).not.toHaveProperty("pulseAudio")
   })
 
-  it("sends prismReferenceAudio on Prism only for the voice or no audio, and no key for the full audio (the default)", () => {
+  it("sends prismReferenceAudio on Prism as its non-full resolutions, and no key when every one is the full audio (the default)", () => {
     expect(composeTrendRun(trend(version()), req()).body).not.toHaveProperty("prismReferenceAudio")
-    expect(composeTrendRun(trend(version({ prismReferenceAudio: "full" })), req()).body).not.toHaveProperty("prismReferenceAudio")
-    for (const prismReferenceAudio of ["voice", "none"] as const) {
-      // A trend naming no engine is Prism, and so is one naming it.
-      for (const over of [{}, { engine: "seedance-2-5" as const }]) {
-        for (const preview of [false, true]) {
-          expect(composeTrendRun(trend(version({ ...over, prismReferenceAudio })), req({ preview })).body, `${prismReferenceAudio} ${preview}`).toMatchObject({
-            prismReferenceAudio,
-          })
-        }
-      }
-      // Kling 4 never gets it.
-      expect(composeTrendRun(trend(version({ engine: "kling-4", prismReferenceAudio })), req()).body).not.toHaveProperty("prismReferenceAudio")
+    for (const full of [{ "480p": "full", "720p": "full", "1080p": "full" } as const, {}]) {
+      expect(composeTrendRun(trend(version({ prismReferenceAudio: full })), req()).body).not.toHaveProperty("prismReferenceAudio")
     }
+    const mixed = { "480p": "full", "720p": "none", "1080p": "voice" } as const
+    // A trend naming no engine is Prism, and so is one naming it; the 480p draft and a 720p run alike
+    // (the run's resolution picks the mode only for an engine that takes one, run-helpers.ts).
+    for (const over of [{}, { engine: "seedance-2-5" as const }]) {
+      for (const r of [req(), req({ preview: true }), req({ resolution: "720p" })]) {
+        const body = composeTrendRun(trend(version({ ...over, prismReferenceAudio: mixed })), r).body
+        expect(body.prismReferenceAudio).toEqual({ "720p": "none", "1080p": "voice" })
+      }
+    }
+    // Kling 4 never gets it.
+    expect(composeTrendRun(trend(version({ engine: "kling-4", prismReferenceAudio: mixed })), req()).body).not.toHaveProperty("prismReferenceAudio")
   })
+
+  it("reads a plain prismReferenceAudio stored before the per-resolution setting as that mode at every resolution", () => {
+    for (const mode of ["voice", "none"] as const) {
+      expect(composeTrendRun(trend(version({ prismReferenceAudio: mode })), req()).body.prismReferenceAudio).toEqual({
+        "480p": mode,
+        "720p": mode,
+        "1080p": mode,
+      })
+    }
+    expect(composeTrendRun(trend(version({ prismReferenceAudio: "full" })), req()).body).not.toHaveProperty("prismReferenceAudio")
+  })
+
 
   it("refuses a Kling 4 run that would send more than 10 pictures, as the route counts them", () => {
     // version(): lead and friend (people: one prepared picture each), place (a location: its own), and a reference of 2.

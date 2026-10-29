@@ -3,10 +3,13 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 /**
  * `/v1/admin/nodaro-motion/prism-reference-audio` — the admin's Prism
- * reference audio for every direct Nodaro Motion Prism run. Admin-only; never
- * saved reads as null (the full audio); a save is strict, clears the settings
- * cache and leaves an `admin_actions` row; `supported` is whether the loaded
- * engine declares `castSwap.prismReferenceAudio`.
+ * reference audio for every direct Nodaro Motion Prism run, a mode per output
+ * resolution. Admin-only; never saved reads as null (the full audio); a plain
+ * mode (the setting's first shape) reads, and saves, as that mode at every
+ * resolution; a save is strict, clears the settings cache and leaves an
+ * `admin_actions` row; `supported` is whether the loaded engine declares
+ * either `castSwap.prismReferenceAudio` flag, `perResolution` whether it takes
+ * the object.
  */
 const h = vi.hoisted(() => ({
   row: null as { value: unknown; updated_at: string } | null,
@@ -82,55 +85,74 @@ describe("GET /v1/admin/nodaro-motion/prism-reference-audio", () => {
   it("answers null until it is saved (the full audio), and whether the engine takes it", async () => {
     const res = await app.inject({ method: "GET", url: URL, headers: as })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toEqual({ prismReferenceAudio: null, updatedAt: null, supported: false })
+    expect(res.json().data).toEqual({ prismReferenceAudio: null, updatedAt: null, supported: false, perResolution: false })
     setPluginSupports({ castSwap: { ...CS, prismReferenceAudio: true } })
-    expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data.supported).toBe(true)
+    expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({ supported: true, perResolution: false })
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudioPerResolution: true } })
+    expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({ supported: true, perResolution: true })
   })
 
-  it("answers the stored value, and a value it does not know as never saved", async () => {
-    h.row = { value: "voice", updated_at: "2026-10-29T10:00:00.000Z" }
+  it("answers the stored value, a plain mode as that mode at every resolution, and a value it does not know as never saved", async () => {
+    h.row = { value: { "720p": "none" }, updated_at: "2026-10-29T10:00:00.000Z" }
     expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({
-      prismReferenceAudio: "voice",
+      prismReferenceAudio: { "720p": "none" },
       updatedAt: "2026-10-29T10:00:00.000Z",
     })
-    h.row = { value: "mute", updated_at: "2026-10-29T10:00:00.000Z" }
-    expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data.prismReferenceAudio).toBeNull()
+    h.row = { value: "voice", updated_at: "2026-10-29T10:00:00.000Z" }
+    expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data.prismReferenceAudio).toEqual({
+      "480p": "voice",
+      "720p": "voice",
+      "1080p": "voice",
+    })
+    for (const value of ["mute", { "720p": "mute" }, { "4k": "none" }]) {
+      h.row = { value, updated_at: "2026-10-29T10:00:00.000Z" }
+      expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data.prismReferenceAudio, JSON.stringify(value)).toBeNull()
+    }
   })
 })
 
 describe("PUT /v1/admin/nodaro-motion/prism-reference-audio", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    expect((await put("voice")).statusCode).toBe(403)
+    expect((await put({ "720p": "voice" })).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
   })
 
   it("saves the value, clears the cache and audits before and after", async () => {
-    const res = await put("voice")
+    const first = { "480p": "full", "720p": "voice", "1080p": "none" } as const
+    const res = await put(first)
     expect(res.statusCode).toBe(200)
     expect(h.upserts).toEqual([
-      { key: "nodaro_motion_prism_reference_audio", value: "voice", updated_at: expect.any(String), updated_by: as["x-user"] },
+      { key: "nodaro_motion_prism_reference_audio", value: first, updated_at: expect.any(String), updated_by: as["x-user"] },
     ])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toMatchObject({ prismReferenceAudio: "voice" })
+    expect(res.json().data).toMatchObject({ prismReferenceAudio: first })
     expect(h.audits).toEqual([
       {
         admin_user_id: as["x-user"],
         action: "update_nodaro_motion_prism_reference_audio",
         target_type: "app_setting",
         target_id: NODARO_MOTION_PRISM_REFERENCE_AUDIO_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_prism_reference_audio", before: null, after: "voice" },
+        payload: { key: "nodaro_motion_prism_reference_audio", before: null, after: first },
       },
     ])
-    expect((await put("none")).json().data.prismReferenceAudio).toBe("none")
-    expect(h.audits[1]?.payload).toEqual({ key: "nodaro_motion_prism_reference_audio", before: "voice", after: "none" })
-    expect((await put("full")).json().data.prismReferenceAudio).toBe("full")
+    expect((await put({ "720p": "none" })).json().data.prismReferenceAudio).toEqual({ "720p": "none" })
+    expect(h.audits[1]?.payload).toEqual({ key: "nodaro_motion_prism_reference_audio", before: first, after: { "720p": "none" } })
+    expect((await put({})).json().data.prismReferenceAudio).toEqual({})
+  })
+
+  it("takes a plain mode from an earlier client as that mode at every resolution", async () => {
+    expect((await put("none")).json().data.prismReferenceAudio).toEqual({ "480p": "none", "720p": "none", "1080p": "none" })
+    expect(h.upserts[0]).toMatchObject({ value: { "480p": "none", "720p": "none", "1080p": "none" } })
   })
 
   it("refuses any other value, and an extra key", async () => {
-    for (const v of ["mute", "", null, 1]) expect((await put(v)).statusCode, JSON.stringify(v)).toBe(400)
+    for (const v of ["mute", "", null, 1, { "720p": "mute" }, { "4k": "none" }, ["voice"]]) {
+      expect((await put(v)).statusCode, JSON.stringify(v)).toBe(400)
+    }
     expect(
-      (await app.inject({ method: "PUT", url: URL, headers: as, payload: { prismReferenceAudio: "voice", engine: "motion-prism" } })).statusCode,
+      (await app.inject({ method: "PUT", url: URL, headers: as, payload: { prismReferenceAudio: { "720p": "voice" }, engine: "motion-prism" } }))
+        .statusCode,
     ).toBe(400)
     expect(h.upserts).toEqual([])
   })
@@ -149,8 +171,14 @@ describe("PUT /v1/admin/nodaro-motion/prism-reference-audio", () => {
 })
 
 describe("parseNodaroMotionPrismReferenceAudio", () => {
-  it("reads full, voice or none, anything else as never saved", () => {
-    for (const v of ["full", "voice", "none"] as const) expect(parseNodaroMotionPrismReferenceAudio(v)).toBe(v)
-    for (const v of [undefined, null, "", "mute", { prismReferenceAudio: "voice" }]) expect(parseNodaroMotionPrismReferenceAudio(v)).toBeNull()
+  it("reads the per-resolution object, a plain mode as every resolution, anything else as never saved", () => {
+    expect(parseNodaroMotionPrismReferenceAudio({ "480p": "full", "1080p": "none" })).toEqual({ "480p": "full", "1080p": "none" })
+    expect(parseNodaroMotionPrismReferenceAudio({})).toEqual({})
+    for (const v of ["full", "voice", "none"] as const) {
+      expect(parseNodaroMotionPrismReferenceAudio(v)).toEqual({ "480p": v, "720p": v, "1080p": v })
+    }
+    for (const v of [undefined, null, "", "mute", { prismReferenceAudio: "voice" }, { "720p": "mute" }]) {
+      expect(parseNodaroMotionPrismReferenceAudio(v), JSON.stringify(v)).toBeNull()
+    }
   })
 })

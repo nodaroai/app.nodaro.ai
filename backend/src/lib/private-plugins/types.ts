@@ -3661,7 +3661,16 @@ export interface PluginSupports {
    *   admin's `nodaro_motion_prism_reference_audio` setting (any caller-sent
    *   value is dropped). Additive-optional: absent ⇒ `false` — the key is
    *   never sent, so the wire is byte-identical
-   *   (lib/cast-swap-prism-reference-audio.ts).
+   *   (lib/cast-swap-prism-reference-audio.ts). An engine declaring only this
+   *   flag is sent the mode of the run's own resolution (a draft is 480p).
+   * - `prismReferenceAudioPerResolution`: a Prism run takes
+   *   `prismReferenceAudio` as one mode PER OUTPUT RESOLUTION,
+   *   `{ "480p"?, "720p"?, "1080p"? }` of `"voice" | "none"`, a missing key
+   *   being the full audio — so a Full Quality render of a draft knows its own
+   *   resolution's mode. The host sends only the non-`"full"` keys, and no key
+   *   at all when every resolution is the full audio. Wins over
+   *   `prismReferenceAudio` when both are declared. Additive-optional: absent
+   *   ⇒ `false` — the string of `prismReferenceAudio` above (or nothing).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3692,6 +3701,7 @@ export interface PluginSupports {
     readonly storedSceneDescription?: boolean
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
+    readonly prismReferenceAudioPerResolution?: boolean
   }
 }
 

@@ -34,7 +34,7 @@ import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
 import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
-import { engineTakesPrismReferenceAudio } from "../../../lib/cast-swap-prism-reference-audio.js"
+import { prismReferenceAudioByResolutionOf, prismReferenceAudioWire, prismRunResolution } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -455,13 +455,21 @@ export function withoutUnsupportedPulseAudio(composed: ComposedTrendRun): void {
 }
 
 /**
- * The body without `prismReferenceAudio` when the loaded engine does not
- * declare it takes one (`castSwap.prismReferenceAudio`): such an engine always
- * sends the clip's full audio in the reference, so it gets exactly the body it
- * got before the setting existed. Mutates `composed.body`.
+ * The body's `prismReferenceAudio` (composed as a mode per output resolution)
+ * as the loaded engine takes it (`prismReferenceAudioWire`): kept as the
+ * object for an engine declaring `castSwap.prismReferenceAudioPerResolution`;
+ * the mode of the run's own resolution (a draft is 480p) for one declaring
+ * only `castSwap.prismReferenceAudio`, dropped when that is the full audio;
+ * dropped for any other engine, which always sends the clip's full audio in
+ * the reference and so gets exactly the body it got before the setting
+ * existed. Mutates `composed.body`.
  */
 export function withoutUnsupportedPrismReferenceAudio(composed: ComposedTrendRun): void {
-  if (composed.body.prismReferenceAudio !== undefined && !engineTakesPrismReferenceAudio()) delete composed.body.prismReferenceAudio
+  const { body } = composed
+  if (body.prismReferenceAudio === undefined) return
+  const sent = prismReferenceAudioWire(prismReferenceAudioByResolutionOf(body.prismReferenceAudio), prismRunResolution(body))
+  if (sent === undefined) delete body.prismReferenceAudio
+  else body.prismReferenceAudio = sent
 }
 
 /**

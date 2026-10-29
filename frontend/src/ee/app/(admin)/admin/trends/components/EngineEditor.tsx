@@ -10,8 +10,8 @@
 // original audio back on the result (the default) or Kling's own track.
 //
 // Prism has its reference audio instead: what the reference video sent to the
-// video model carries (the full audio, the default; the voice only; or none).
-// Shown, and saved, only while the model is Prism.
+// video model carries, per output resolution (the full audio, the default; the
+// voice only; or none). Shown, and saved, only while the model is Prism.
 
 import { useId } from "react"
 import {
@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioId, CastSwapPulseAudioId } from "@/lib/api"
+import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId } from "@/lib/api"
 import { engineOfForm } from "../model"
 import { PulseAudioSelect } from "./PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
@@ -53,12 +53,12 @@ interface Props {
   readonly klingLength: AdminTrendKlingLength | undefined
   /** As stored; undefined = none set (the original audio). */
   readonly pulseAudio: CastSwapPulseAudioId | undefined
-  /** As stored; undefined = none set (the full audio). */
-  readonly prismReferenceAudio: CastSwapPrismReferenceAudioId | undefined
+  /** Per output resolution; undefined (or a resolution left out) = the full audio. */
+  readonly prismReferenceAudio: CastSwapPrismReferenceAudioByResolution | undefined
   readonly onChange: (next: AdminTrendEngine) => void
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
   readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
-  readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioId) => void
+  readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioByResolution) => void
 }
 
 export function EngineEditor({

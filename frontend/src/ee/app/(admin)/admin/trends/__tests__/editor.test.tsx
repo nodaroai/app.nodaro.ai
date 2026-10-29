@@ -222,27 +222,32 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("combobox", { name: "Pulse audio" })).not.toBeInTheDocument()
   })
 
-  it("shows Prism reference audio only for Prism (Full audio by default), and saves the one chosen", async () => {
+  it("shows Prism reference audio, one select per output resolution, only for Prism (Full audio by default), and saves the ones chosen", async () => {
     const user = userEvent.setup()
     routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
     renderEditor()
     await screen.findByRole("combobox", { name: "Model" })
-    // A draft naming no engine is Prism: the select is there from the start.
-    const audio = screen.getByRole("combobox", { name: "Prism reference audio" })
-    expect(audio).toHaveTextContent("Full audio (default)")
-    expect(screen.getByText("What the engine hears in the reference video. The original audio always goes back on the result.")).toBeInTheDocument()
-    await user.click(audio)
+    // A draft naming no engine is Prism: the selects are there from the start.
+    const group = screen.getByRole("group", { name: "Prism reference audio" })
+    for (const r of ["480p", "720p", "1080p"]) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full audio")
+    expect(
+      screen.getByText("What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."),
+    ).toBeInTheDocument()
+    const at720 = within(group).getByRole("combobox", { name: "720p" })
+    await user.click(at720)
     await user.click(screen.getByRole("option", { name: "No audio" }))
-    expect(audio).toHaveTextContent("No audio")
+    expect(at720).toHaveTextContent("No audio")
     await user.click(screen.getByRole("button", { name: /save draft/i }))
     await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
     const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
-    expect(body.data).toMatchObject({ prismReferenceAudio: "none" })
-    // On Pulse the select goes away.
+    // Only the resolutions that are not the full audio.
+    expect(body.data.prismReferenceAudio).toEqual({ "720p": "none" })
+    // On Pulse the selects go away.
     await user.click(screen.getByRole("combobox", { name: "Model" }))
     await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
-    expect(screen.queryByRole("combobox", { name: "Prism reference audio" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("group", { name: "Prism reference audio" })).not.toBeInTheDocument()
   })
+
 
   it("a saved Kling 4 draft tests at 720p or 1080p with no draft switch, and sends no draft", async () => {
     const user = userEvent.setup()

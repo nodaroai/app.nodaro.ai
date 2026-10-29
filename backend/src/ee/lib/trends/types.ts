@@ -21,7 +21,7 @@ import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
-import type { CastSwapPrismReferenceAudio } from "../../../lib/cast-swap-prism-reference-audio.js"
+import type { CastSwapPrismReferenceAudio, CastSwapPrismReferenceAudioMode } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
@@ -401,13 +401,17 @@ export interface TrendVersionData {
   pulseAudio?: CastSwapPulseAudio
   /**
    * HIDDEN. What audio the reference video a Prism run sends to the video
-   * model carries: `"full"` (the default when absent: the clip's audio),
-   * `"voice"` (only the voice, split from the music) or `"none"` (silent). The
-   * original audio goes back on the result in every mode. Read only on a
-   * Prism trend; not part of the face mask's settings, so changing it needs
-   * no new mask.
+   * model carries, per output resolution (`{ "480p"?, "720p"?, "1080p"? }`):
+   * `"full"` (the default, and what a missing key or a missing field means:
+   * the clip's audio), `"voice"` (only the voice, split from the music) or
+   * `"none"` (silent). The original audio goes back on the result in every
+   * mode. A version saved before the per-resolution setting may still hold a
+   * plain mode, which reads as that mode at every resolution: read it through
+   * `prismReferenceAudioByResolutionOf` (a save through the schema writes the
+   * object). Read only on a Prism trend; not part of the face mask's
+   * settings, so changing it needs no new mask.
    */
-  prismReferenceAudio?: CastSwapPrismReferenceAudio
+  prismReferenceAudio?: CastSwapPrismReferenceAudio | CastSwapPrismReferenceAudioMode
   /**
    * HIDDEN. The 4 s preview's INPUT clip, cut ahead of time from the source at
    * `previewStart` (see `TrendPreviewClip`); absent while the draft offers no

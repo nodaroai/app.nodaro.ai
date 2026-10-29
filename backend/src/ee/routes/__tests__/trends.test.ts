@@ -1133,7 +1133,7 @@ describe("a Prism trend's reference audio", () => {
     expectNoHidden(res.body)
   })
 
-  it("is sent to the estimate exactly as to the run (so the quote prices the voice split), and only to an engine that declares it", async () => {
+  it("is sent to the estimate exactly as to the run (so the quote prices the voice split), and only to an engine that declares it (a plain mode stored earlier: every resolution)", async () => {
     for (const value of ["voice", "none"] as const) {
       mem.trends = mem.trends.filter((t) => t.id !== T_AUDIO)
       mem.trends.push(trend(T_AUDIO, "voice-dance", "published", 1, versionData({ prismReferenceAudio: value })))
@@ -1151,6 +1151,25 @@ describe("a Prism trend's reference audio", () => {
       expect(engine.calls).toHaveLength(2)
       for (const c of engine.calls) expect(c.body).not.toHaveProperty("prismReferenceAudio")
     }
+  })
+
+  it("sends a per-resolution engine the object, and a one-mode engine the run's own resolution's mode (the 480p draft by default)", async () => {
+    mem.trends.push(trend(T_AUDIO, "voice-dance", "published", 1, versionData({ prismReferenceAudio: { "480p": "full", "720p": "none" } })))
+    const run = async (payload: Record<string, unknown>) => {
+      engine.calls = []
+      expect((await app.inject({ method: "POST", url: "/v1/trends/voice-dance/estimate", headers: as(), payload })).statusCode).toBe(200)
+      expect((await app.inject({ method: "POST", url: "/v1/trends/voice-dance/runs", headers: as(), payload })).statusCode).toBe(202)
+      expect(engine.calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      return engine.calls.map((c) => c.body as Record<string, unknown>)
+    }
+    setPluginSupports({ castSwap: { ...WITH_AUDIO, prismReferenceAudio: false, prismReferenceAudioPerResolution: true } })
+    for (const payload of [RUN_BODY, { ...RUN_BODY, resolution: "720p" }]) {
+      for (const body of await run(payload)) expect(body.prismReferenceAudio).toEqual({ "720p": "none" })
+    }
+    setPluginSupports({ castSwap: WITH_AUDIO })
+    for (const body of await run(RUN_BODY)) expect(body).not.toHaveProperty("prismReferenceAudio")
+    for (const body of await run({ ...RUN_BODY, resolution: "720p" })) expect(body.prismReferenceAudio).toBe("none")
+    for (const body of await run({ ...RUN_BODY, resolution: "1080p" })) expect(body).not.toHaveProperty("prismReferenceAudio")
   })
 
   it("sends no key for the full audio, set or left out", async () => {
