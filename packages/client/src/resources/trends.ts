@@ -119,14 +119,16 @@ export interface TrendCard {
   /**
    * The original's display copy, the same address as {@link TrendDetail.original}
    * (without its length and preview start). Absent on a version without a
-   * display copy (and from an older server).
+   * display copy (and from an older server). On a trend that hides its
+   * original, its first example instead (then the same as {@link cover}).
    */
   original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
   /**
    * Every example's video, in the page's order, so a list can show each clip
    * without reading the trend's page. Empty on a trend with only its original;
    * absent from an older server. The pictures each slot used are on the page
-   * ({@link TrendDetail.examples}).
+   * ({@link TrendDetail.examples}). On a trend that hides its original, from
+   * its second example (the first is {@link original}).
    */
   examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
   /** How many slots of each kind the trend has. */
@@ -182,15 +184,16 @@ export interface TrendExample {
 
 /**
  * The clip a trend recasts, as you may show it: a browser-safe copy (H.264
- * MP4) of the clip every run starts from. Its fields parallel
- * {@link TrendExample}'s.
+ * MP4) of the clip every run starts from. On a trend that hides its original,
+ * its first example instead (the original clip is then never sent). Its fields
+ * parallel {@link TrendExample}'s.
  */
 export interface TrendOriginal {
   videoUrl: string
   posterUrl?: string
   width: number
   height: number
-  /** The copy's length, in seconds. */
+  /** The copy's length (on a trend that hides its original, the first example's), in seconds. */
   durationSec: number
   /**
    * Where the 4-second preview starts in the clip, in seconds (`0` included),
@@ -209,6 +212,7 @@ export interface TrendDetail extends TrendCard {
   /**
    * The original clip every run starts from, to show beside the examples.
    * Absent only on a version without a display copy (and from an older server).
+   * On a trend that hides its original, its first example (see {@link TrendOriginal}).
    */
   original?: TrendOriginal
   /** The engine every run of this trend uses. Absent (an older server) = `"motion-prism"`. */
@@ -222,7 +226,11 @@ export interface TrendDetail extends TrendCard {
    */
   resolutions: TrendResolution[]
   slots: TrendDetailSlot[]
-  /** Finished runs to show beside the original; may be empty (a trend with only its original). */
+  /**
+   * Finished runs to show beside the original; may be empty (a trend with only
+   * its original). On a trend that hides its original, from its second example
+   * (the first is {@link original}).
+   */
   examples: TrendExample[]
 }
 
@@ -242,8 +250,12 @@ export interface TrendRunRequest {
   slots: Record<string, TrendRunSlot>
   /**
    * 1-based example whose pictures fill the optional slots you leave empty
-   * (never in a Full depth trend, which records `example: 0`). Default 1. Leave it out on a trend with no examples: sending one there
-   * answers 400 `example_out_of_range` (and `0` is a `validation_error`).
+   * (never in a Full depth trend, which records `example: 0`), numbering the
+   * examples as {@link TrendDetail.examples} lists them. Default 1. Leave it out on a trend with no examples: sending one there
+   * answers 400 `example_out_of_range` (and `0` is a `validation_error`). On a
+   * trend that hides its original ({@link TrendDetail.original} is its first
+   * example), `1` is still the first entry of `examples`, and leaving it out
+   * fills the slots from the example shown as the original.
    */
   example?: number
   /** Your own words, at most 1,000 characters. Mention a slot as `{slot:<key>}`. */
@@ -364,10 +376,13 @@ export interface TrendRun {
   /** The trend and version it ran (name in English). */
   trend: { id: string; slug: string; version: number; name: string }
   /**
-   * The 1-based example used for empty optional slots; `0` = none was used (the
-   * trend had no example, or is a Full depth trend): never show it as "Example 0".
+   * The 1-based example used for empty optional slots, numbered as the trend's
+   * page listed its examples for the version the run ran on ({@link trend}'s
+   * `version`); `0` = none was used (the trend had no example, or is a Full
+   * depth trend): never show it as "Example 0". Absent when the run used the
+   * example a trend that hides its original shows as its original.
    */
-  example: number
+  example?: number
   slots: TrendRunDisplaySlot[]
   details?: string
   preview: boolean

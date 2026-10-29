@@ -42,7 +42,7 @@ function addRunFlags(cmd: Command): Command {
     )
     .option(
       "--example <n>",
-      "1-based example whose pictures fill the optional slots you leave empty (default 1); leave it out on a trend with no example, whose empty optional slots stay as in the original; a Full depth trend uses its default image for the role if one is set, otherwise the original's look",
+      "1-based example, as `trends get` lists its examples, whose pictures fill the optional slots you leave empty (default 1); leave it out on a trend with no example, whose empty optional slots stay as in the original; a Full depth trend uses its default image for the role if one is set, otherwise the original's look",
     )
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")

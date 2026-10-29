@@ -11433,6 +11433,13 @@ export interface AdminTrendData {
    * publish). Never in a draft body (`TrendDraftBody`); the server ignores it if sent.
    */
   previewClip?: AdminTrendPreviewClip
+  /**
+   * The original clip is never shown to visitors: the trend's card and page
+   * show Example 1 as its original and list the examples from Example 2.
+   * Absent or false = the original is shown. Publishing it needs an example
+   * (`hide_original_needs_example`).
+   */
+  hideOriginal?: boolean
   examples: AdminTrendExample[]
 }
 

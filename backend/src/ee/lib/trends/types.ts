@@ -14,7 +14,9 @@
  * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
- * trend's page shows it as the original. `engine` is public: the trend's page
+ * trend's page shows it as the original, unless the trend hides its original
+ * (`hideOriginal`), when Example 1 is shown in its place and the display copy
+ * stays hidden too. `engine` is public: the trend's page
  * names it and offers its resolutions.
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
@@ -420,6 +422,14 @@ export interface TrendVersionData {
    * a client's draft body.
    */
   previewClip?: TrendPreviewClip
+  /**
+   * The trend's original clip is never shown: every public response shows
+   * Example 1 as the original (and lists the examples from Example 2), and
+   * neither the source clip nor its display copy leaves the server. Absent or
+   * false = the original is shown (`source.display`). A trend that hides it
+   * publishes only with at least one example (`hide_original_needs_example`).
+   */
+  hideOriginal?: boolean
   examples: TrendExample[]
 }
 

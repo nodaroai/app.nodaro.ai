@@ -1358,6 +1358,17 @@ const TRENDS_FULL_DEPTH_WORDING_BYTES = 330
 // was added, so the fixture does NOT move. Measured by this suite: 508_953 total against the 508_692 budget = 261 B (no headroom left).
 const RUN_CHARGE_STEPS_BYTES = 261
 
+// RAISED 2026-10-29 by a trend that hides its original, and nothing else: `get_trend`'s
+// description says its original is then its first example. No tool was added, so the fixture
+// does NOT move. Measured by this suite: 509_616 total − 509_573 = 43 B (no headroom left).
+const TRENDS_HIDE_ORIGINAL_BYTES = 43
+
+// RAISED 2026-10-29 by the trend `example` numbering, and nothing else: `estimate_trend` /
+// `run_trend` (one shared input shape) say `example` numbers the examples as get_trend lists them.
+// No tool was added, so the fixture does NOT move. Measured by this suite: 509_682 total − 509_616
+// = 66 B (33 B on each of the two tools; no headroom left).
+const TRENDS_EXAMPLE_NUMBERING_BYTES = 66
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1525,7 +1536,9 @@ export const TOOL_WIRE_BUDGET = {
     RUN_CHARGE_STEPS_BYTES +
     NODARO_MOTION_RENAME_BYTES +
     CAST_SWAP_STYLE_BYTES +
-    TRENDS_FULL_DEPTH_WORDING_BYTES,
+    TRENDS_FULL_DEPTH_WORDING_BYTES +
+    TRENDS_HIDE_ORIGINAL_BYTES +
+    TRENDS_EXAMPLE_NUMBERING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

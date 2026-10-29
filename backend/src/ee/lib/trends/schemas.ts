@@ -354,6 +354,8 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     // resolution. Read only on a Prism trend.
     prismReferenceAudio: castSwapPrismReferenceAudioSchema.optional(),
     previewClip: trendPreviewClipSchema.optional(),
+    // Absent = the original is shown. Stored as given, so re-saving a draft that names none is no change.
+    hideOriginal: z.boolean().optional(),
     examples: z.array(trendExampleSchema),
   })
   .superRefine((d, ctx) => {

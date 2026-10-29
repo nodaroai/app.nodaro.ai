@@ -25,7 +25,14 @@
  * INTERNAL request as the caller (the only way a run can carry `trendRun`);
  * the engine keeps the hidden parts in `__` keys of the job's `input_data`,
  * which every job read drops. The run reads redact those keys too and then
- * map each job to the `TrendRun` whitelist. A Full Quality version of a draft is a run of its own.
+ * map each job to the `TrendRun` whitelist.
+ *
+ * A trend that hides its original (`hideOriginal`) shows Example 1 as its
+ * original on the card and the page, and lists its examples from Example 2:
+ * neither the source clip nor its display copy is in any response
+ * (`shownOriginal`, `listedExamples`). A run's `example` numbers the examples
+ * as that page lists them, translated to and from the stored numbering here
+ * (public-examples.ts). A Full Quality version of a draft is a run of its own.
  *
  * Reads need `jobs:read` for an OAuth app; estimate and run `workflows:execute`
  * (as the Cast Swap MCP verb); favorites `assets:write` (as the gallery's).
@@ -56,6 +63,7 @@ import { pickText } from "../lib/trends/localize.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quote.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
+import { listedExamples, shownOriginal, storedExampleRequest } from "../lib/trends/public-examples.js"
 import {
   RUN_JOB_COLS,
   SLOT_KINDS,
@@ -99,10 +107,15 @@ export interface TrendCard {
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
   /**
    * The original's display copy (the same address as the page's `original`),
-   * absent on a version without one. Never the uploaded source clip.
+   * absent on a version without one. Never the uploaded source clip. On a
+   * trend that hides its original: Example 1 (then the same as `cover`).
    */
   original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
-  /** Every example's video, in order (empty on a trend with none); the pictures each slot used are the page's. */
+  /**
+   * Every example's video, in order (empty on a trend with none); the pictures
+   * each slot used are the page's. On a trend that hides its original, from
+   * Example 2 (Example 1 is `original`).
+   */
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
   needs: Record<TrendSlotKind, number>
   durationSec: number
@@ -118,8 +131,9 @@ export interface TrendTag {
 
 /**
  * The clip a trend recasts, as shown: the source's display copy (never the
- * uploaded file a run edits). `previewStartSec` is where the 4 s preview
- * starts, sent whenever the trend offers one (0 included).
+ * uploaded file a run edits), or Example 1 on a trend that hides its original.
+ * `previewStartSec` is where the 4 s preview starts, sent whenever the trend
+ * offers one (0 included).
  */
 export interface TrendOriginal {
   videoUrl: string
@@ -165,7 +179,10 @@ export interface TrendDetail extends TrendCard {
     chips: ChipKey[]
     defaults?: Chips
   }>
-  /** May be empty: a trend can be published with only its original. */
+  /**
+   * May be empty: a trend can be published with only its original. On a trend
+   * that hides its original, from Example 2 (Example 1 is `original`).
+   */
   examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
 }
 
@@ -255,15 +272,17 @@ function needsOf(slots: TrendSlot[]): Record<TrendSlotKind, number> {
  * The card of a published trend. Its cover is Example 1, else the original's
  * display copy — never the uploaded source clip — so a version with neither
  * (or without a source, which no published version has) has no card. It also
- * carries the display copy as `original` and every example's video (never its
- * slots or source job), so a list can show each clip without reading the page.
+ * carries the shown original as `original` and the listed examples' videos
+ * (never their slots or source job), so a list can show each clip without
+ * reading the page. A trend that hides its original never falls back to the
+ * display copy: with no example (none can publish so) it has no card.
  */
 function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorite: boolean): TrendCard | null {
   if (!data.source) return null
-  const cover = data.examples[0] ?? data.source.display
+  const display = shownOriginal(data)
+  const cover = data.examples[0] ?? display
   if (!cover) return null
   const description = pickText(data.description, locale)
-  const display = data.source.display
   return {
     id: row.id,
     slug: row.slug,
@@ -287,7 +306,7 @@ function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorit
           },
         }
       : {}),
-    examples: data.examples.map((ex) => ({
+    examples: listedExamples(data).map((ex) => ({
       videoUrl: ex.videoUrl,
       ...(ex.posterUrl ? { posterUrl: ex.posterUrl } : {}),
       width: ex.width,
@@ -310,9 +329,9 @@ function slotDefaults(slot: TrendSlot): Chips | undefined {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-/** The source's display copy as the trend's original, or undefined when the version has none. */
+/** The shown original (`shownOriginal`) as the trend page's original, or undefined when the version has none. */
 function originalOf(data: TrendVersionData): TrendOriginal | undefined {
-  const display = data.source?.display
+  const display = shownOriginal(data)
   if (!display) return undefined
   return {
     videoUrl: display.videoUrl,
@@ -327,7 +346,7 @@ function originalOf(data: TrendVersionData): TrendOriginal | undefined {
 function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale: string, isFavorite: boolean): TrendDetail | null {
   const shown = toCard(row, data, locale, isFavorite)
   if (!shown) return null
-  // The page's `original` (with its length and preview start) replaces the card's; both are the display copy.
+  // The page's `original` (with its length and preview start) replaces the card's; both are the shown original.
   const { original: _cardOriginal, ...card } = shown
   const keys = new Set(data.slots.map((s) => s.key))
   const original = originalOf(data)
@@ -353,7 +372,7 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
         ...(defaults ? { defaults } : {}),
       }
     }),
-    examples: data.examples.map((ex) => {
+    examples: listedExamples(data).map((ex) => {
       const slots: Record<string, string[]> = {}
       for (const [k, v] of Object.entries(ex.slots)) if (keys.has(k)) slots[k] = [...v]
       return {
@@ -424,7 +443,12 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
 
   let composed: ComposedTrendRun
   try {
-    composed = composeTrendRun({ id: found.row.id, slug: found.row.slug, version: found.version, data: found.data }, parsed.data)
+    // `example` numbers the examples as the trend's page lists them: on a trend that hides its original,
+    // translated to the stored numbering the run is composed and recorded in (public-examples.ts).
+    const example = storedExampleRequest(found.data, parsed.data.example)
+    const { example: _public, ...rest } = parsed.data
+    const request = { ...rest, ...(example !== undefined ? { example } : {}) }
+    composed = composeTrendRun({ id: found.row.id, slug: found.row.slug, version: found.version, data: found.data }, request)
   } catch (e) {
     if (e instanceof TrendRunError) {
       trendRunError(reply, e)

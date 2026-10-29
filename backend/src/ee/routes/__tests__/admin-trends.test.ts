@@ -590,6 +590,45 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(mem.trends[0]!.status).toBe("draft")
   })
 
+  it("a draft that hides its original with no example is a hide_original_needs_example blocker, and nothing is published", async () => {
+    seed({}, draftData({ hideOriginal: true }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("publish_blocked")
+    expect(reasonsOf(res)).toEqual([{ code: "hide_original_needs_example", message: expect.stringContaining("at least one example") }])
+    expect(mem.trends[0]!.status).toBe("draft")
+  })
+
+  it("a draft that hides its original publishes with an example, and the admin still sees the real original", async () => {
+    seed({}, draftData({ hideOriginal: true, examples: [EXAMPLE] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
+    const read = (await call("GET", `/v1/admin/trends/${T1}`)).json().data as { draft: TrendVersionData }
+    expect(read.draft.hideOriginal).toBe(true)
+    expect(read.draft.source?.display).toEqual(DISPLAY)
+  })
+
+  it("hideOriginal saves through the draft PUT, round-trips, and a draft that names none keeps no key", async () => {
+    seed()
+    const put = async (data: TrendVersionData) =>
+      call("PUT", `/v1/admin/trends/${T1}/draft`, { data, revision: await revisionOf() })
+    const draft = async () => ((await call("GET", `/v1/admin/trends/${T1}`)).json().data as { draft: TrendVersionData }).draft
+    expect((await draft())).not.toHaveProperty("hideOriginal")
+    expect((await put(draftData({ hideOriginal: true }))).statusCode).toBe(200)
+    expect((await draft()).hideOriginal).toBe(true)
+    // The stored display copy is kept beside it (same clip, the body sending none).
+    const { display: _d, ...bare } = draftData().source!
+    expect((await put(draftData({ hideOriginal: true, source: bare }))).statusCode).toBe(200)
+    expect((await draft())).toMatchObject({ hideOriginal: true, source: { display: DISPLAY } })
+    expect((await put(draftData({ hideOriginal: false }))).statusCode).toBe(200)
+    expect((await draft()).hideOriginal).toBe(false)
+    expect((await put(draftData())).statusCode).toBe(200)
+    expect((await draft())).not.toHaveProperty("hideOriginal")
+    const bad = await put({ ...draftData(), hideOriginal: "yes" } as unknown as TrendVersionData)
+    expect(bad.statusCode).toBe(400)
+  })
+
   it("refuses a taken slug, a malformed one, and a name without English", async () => {
     seed()
     expect((await call("POST", "/v1/admin/trends", { slug: "neon-dance", name: { en: "Again" } })).json().error.code).toBe("slug_taken")

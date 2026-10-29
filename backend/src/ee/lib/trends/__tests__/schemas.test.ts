@@ -41,6 +41,18 @@ function messages(r: { success: boolean; error?: { issues: Array<{ message: stri
 }
 
 describe("trendVersionDataSchema", () => {
+  it("takes hideOriginal as an optional boolean, read back as written; none stays absent", () => {
+    for (const hideOriginal of [true, false]) {
+      const r = trendVersionDataSchema.safeParse(data({ hideOriginal }))
+      expect(r.success).toBe(true)
+      expect(r.data?.hideOriginal).toBe(hideOriginal)
+      // A stored version re-parses to itself.
+      expect(trendVersionDataSchema.parse(r.data)).toEqual(r.data)
+    }
+    expect(trendVersionDataSchema.parse(data())).not.toHaveProperty("hideOriginal")
+    expect(trendVersionDataSchema.safeParse({ ...data(), hideOriginal: "true" }).success).toBe(false)
+  })
+
   it("accepts a valid trend version", () => {
     const r = trendVersionDataSchema.safeParse(data())
     expect(r.success).toBe(true)

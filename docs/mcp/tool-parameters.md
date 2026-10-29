@@ -822,7 +822,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
 | `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the chosen example's, or with none stays as in the original, except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
-| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none. At least 1. |
+| `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
@@ -2676,7 +2676,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
 | `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the chosen example's, or with none stays as in the original, except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
-| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none. At least 1. |
+| `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
