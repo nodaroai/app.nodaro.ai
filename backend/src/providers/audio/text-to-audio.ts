@@ -1,4 +1,5 @@
 import { replicate } from "../replicate/client.js"
+import { withReplicateRequestFailure } from "../replicate/failure-messages.js"
 
 export type AudioProvider = "tangoflux"
 
@@ -37,9 +38,12 @@ export async function textToAudio(
     input[cfg.durationParam] = duration
   }
 
-  const output = await replicate.run(
-    cfg.model as `${string}/${string}`,
-    { input },
+  // An API refusal is told to the user by its status; the raw text stays operator-only.
+  const output = await withReplicateRequestFailure("[textToAudio]", () =>
+    replicate.run(
+      cfg.model as `${string}/${string}`,
+      { input },
+    ),
   )
 
   const resultUrl = String(output)

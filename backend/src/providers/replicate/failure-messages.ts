@@ -17,6 +17,9 @@
  * matched" for the job type whose model is known to fail that exact way.
  */
 
+import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
+import { redactProviderDetail } from "../../lib/provider-error-detail.js"
+
 /**
  * Grounded SAM (schananas/grounded_sam) with ZERO detections.
  *
@@ -85,4 +88,101 @@ export class ReplicateSanitizedError extends Error {
     this.name = "ReplicateSanitizedError"
     this.internalDetails = internalDetails
   }
+}
+
+/**
+ * The HTTP status of a failed Replicate API call — the SDK throws `ApiError
+ * { request, response }` whose message is `Request to https://api.replicate.com/…
+ * failed with status <N> <text>: <body>`. Undefined for anything else (a
+ * prediction that failed inside the model is a plain Error).
+ */
+export function replicateApiStatus(err: unknown): number | undefined {
+  const status = (err as { response?: { status?: unknown } } | null | undefined)?.response?.status
+  return typeof status === "number" ? status : undefined
+}
+
+/** A 429: the host is throttling the account — transient, retryable. */
+export const REPLICATE_BUSY_MESSAGE = "The provider is busy right now. Try again in a minute."
+/** A 400/422: the host refused the request body — deterministic, so the MCP
+ *  reads it as not retryable (`INPUT_LIMIT_PATTERNS`, "rejected these settings"). */
+export const REPLICATE_REJECTED_MESSAGE =
+  "Generation failed: the provider rejected these settings for this model. " +
+  "Retrying the same request will fail again — change the settings or the input media and try again."
+/** Any other refusal (a 5xx, a 404/409 while polling): nothing the user chose — retryable. */
+export const REPLICATE_PROVIDER_ERROR_MESSAGE = "Generation failed on the provider. Please try again."
+
+/** One credit alert per minute while the account stays throttled, not one per request. */
+const ALERT_EVERY_MS = 60_000
+let lastCreditAlertAt = 0
+
+/** Test hook: forget the last alert so the next credit 429 alerts again. */
+export function __resetReplicateAlertForTests(): void {
+  lastCreditAlertAt = 0
+}
+
+/**
+ * A failed Replicate API CALL (not a failed prediction) as the user should
+ * read it, or `null` when `err` is not the SDK's ApiError. The SDK's message
+ * names the API address and echoes the response body — one reached a user
+ * verbatim on 2026-10-28: "Request to https://api.replicate.com/v1/models/…
+ * failed with status 429 Too Many Requests: {"detail":"… while you have less
+ * than $5.0 in credit …"}" — so the status picks the sentence and the raw text
+ * stays on `internalDetails` for the operator (`jobs.error_detail`).
+ *
+ * The 429 that names the account's credit is the platform's problem, not the
+ * user's: it is logged as an [ALERT] line (like the KIE balance alert) so an
+ * operator can act, and the user is told to try again shortly.
+ */
+export function replicateRequestFailure(err: unknown, label: string): ReplicateSanitizedError | null {
+  const status = replicateApiStatus(err)
+  if (status === undefined) return null
+  const raw = err instanceof Error ? err.message : String(err)
+  if (status === 429 && /credit/i.test(raw) && Date.now() - lastCreditAlertAt > ALERT_EVERY_MS) {
+    lastCreditAlertAt = Date.now()
+    // Operator-only, and redacted like every provider detail we record.
+    console.error(
+      `[ALERT] Replicate account credit is low — requests are being throttled (${label}): ${(redactProviderDetail(raw) ?? "").slice(0, 300)}`,
+    )
+  }
+  // 401/402/403 is the platform's account, not the user's request: the same
+  // sentence the other providers' account refusals carry, so the MCP's
+  // retry guidance (`isPlatformCapacityOutage`) reads it the same way.
+  // 400/422 is the request body — deterministic, so "rejected these
+  // settings" (not retryable); any other 4xx (a 404/409 while polling) is
+  // nothing the user chose and keeps the retryable provider-error sentence.
+  const message =
+    status === 429
+      ? REPLICATE_BUSY_MESSAGE
+      : status === 401 || status === 402 || status === 403
+        ? PLATFORM_CAPACITY_MESSAGE
+        : status === 400 || status === 422
+          ? REPLICATE_REJECTED_MESSAGE
+          : REPLICATE_PROVIDER_ERROR_MESSAGE
+  return new ReplicateSanitizedError(message, raw)
+}
+
+/**
+ * Run one Replicate SDK call under the sanitizer: an API refusal comes out as
+ * the status-chosen sentence (raw text on `internalDetails`), anything else
+ * untouched. For the call sites that use the SDK directly rather than through
+ * `client.ts :: runReplicatePrediction`.
+ */
+export async function withReplicateRequestFailure<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    throw replicateRequestFailure(err, label) ?? err
+  }
+}
+
+/**
+ * The provider's own text for a failure, wherever it sits: a sanitized error's
+ * `internalDetails`, else the message. For a retry predicate that matches on
+ * the host's wording (a 502/503/504 gateway blip) — the sanitized sentence
+ * alone no longer carries the status.
+ */
+export function replicateFailureText(err: unknown): string {
+  const details = (err as { internalDetails?: unknown } | null | undefined)?.internalDetails
+  const message = err instanceof Error ? err.message : String(err)
+  return typeof details === "string" ? `${message} ${details}` : message
 }

@@ -22,6 +22,7 @@ import type {
   ReconcileOpts,
 } from "../provider.interface.js"
 import { runReplicatePrediction, extractUrl } from "./client.js"
+import { replicateFailureText } from "./failure-messages.js"
 
 /** Pinned ryan5453/demucs version (live-verified 2026-06-19). */
 const DEMUCS_VERSION =
@@ -62,7 +63,9 @@ async function runDemucsWithRetry(
       return await runReplicatePrediction(args)
     } catch (err) {
       lastErr = err
-      const msg = String((err as { message?: string })?.message ?? err)
+      // The host's own text — a sanitized API refusal keeps it on
+      // `internalDetails`, so the 502/503/504 signature is still readable here.
+      const msg = replicateFailureText(err)
       const transient = /\b50[234]\b|bad gateway|gateway time|ECONNRESET|EAI_AGAIN|ETIMEDOUT|socket hang up/i.test(msg)
       if (!transient || i === attempts - 1) throw err
       await new Promise((r) => setTimeout(r, 2000 * (i + 1)))

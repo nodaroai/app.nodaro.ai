@@ -21,6 +21,7 @@
  * Cost: extracted via `extractCost(metrics.predict_time * 0.000225)`.
  */
 import { replicate, extractUrl, extractCost } from "./client.js"
+import { replicateRequestFailure } from "./failure-messages.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { snapAspectRatioToken } from "../video/aspect-ratio.js"
@@ -209,12 +210,25 @@ async function dispatchAndWait(
   reconcileOpts: ReconcileOpts | undefined,
   logPrefix: string,
 ): Promise<LtxResult> {
-  const prediction = await replicate.predictions.create({
-    model: modelId,
-    input,
-  })
+  // A failed API call is the SDK's ApiError (address + response body in its
+  // message): the status picks the user's sentence, the raw text stays on
+  // `internalDetails` — see failure-messages.ts.
+  let prediction: Awaited<ReturnType<typeof replicate.predictions.create>>
+  try {
+    prediction = await replicate.predictions.create({
+      model: modelId,
+      input,
+    })
+  } catch (err) {
+    throw replicateRequestFailure(err, logPrefix) ?? err
+  }
   await fireOnTaskCreated(reconcileOpts, prediction.id, logPrefix)
-  const completed = await replicate.wait(prediction)
+  let completed: Awaited<ReturnType<typeof replicate.wait>>
+  try {
+    completed = await replicate.wait(prediction)
+  } catch (err) {
+    throw replicateRequestFailure(err, logPrefix) ?? err
+  }
   if (completed.status === "failed" || completed.status === "canceled") {
     const err = completed.error
       ? String(completed.error)
