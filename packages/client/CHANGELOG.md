@@ -1,5 +1,22 @@
 # @nodaro/sdk
 
+## 2.55.0
+
+### Minor Changes
+
+- 8edc157: `SafetyBlockHint.subject` can now be `"input_image"`: the provider refused one of the job's input images as possibly copyrighted (always with `class: "copyright"`). Send a different picture; changing the prompt or retrying will not help.
+- 15f1456: `Character`, `Creature`, `Location` and `Object` carry their Nodaro Keepers shelf state: `catalog` (on the shared shelf), `catalogSort` (the shelf order) and `catalogCategory` (the shelf heading) — what `setCatalog` writes, now readable from the item's own `get` and `list`. `false` / `0` / `null` on everyone else's rows and on every copy.
+- 370b7d2: `client.media.discard({ url })` (`POST /v1/media/discard`) throws away a file you just made and no longer need — a link download replaced before use, a cut superseded by a newer one, a picture imported then cancelled. Not a general delete: the file goes only when it is your own, was made by `downloadVideo`, `process` or a URL import, is under 24 hours old, and no job of yours uses it (output or input); otherwise 409 `not_discardable` and nothing is touched. `discarded: false` = nothing of yours at that address. New type `MediaDiscardResult`. `downloadVideo` gains `exactSection` (cut the section at exactly its range). `media.process(input, { timeoutMs, signal })` takes per-call options, so a client can wait out a long cut (the platform allows 300 s); the core's request options gain `timeoutMs` for that.
+- 4fcf98d: Trends: support trends that hide their original clip. On such a trend, `TrendCard.original` and `TrendDetail.original` are the trend's first example, `examples` starts from its second example, and the original clip is never sent. A run's `example` (`TrendRunRequest.example`, `TrendRun.example`) numbers the examples as the trend page lists them; `TrendRun.example` is now optional, absent when a run of such a trend used the example shown as its original.
+
+### Patch Changes
+
+- 33960ee: Trends: document that an example may have no pictures for an optional slot (no key in `TrendExample.slots`). A run that leaves that slot empty with that example keeps it as in the original (`fromExample: false`) instead of being refused with `missing_slot`.
+- Updated dependencies [15f1456]
+- Updated dependencies [d8aaf38]
+  - @nodaro/shared@3.48.0
+  - @nodaro/prompts@1.47.0
+
 ## 2.54.0
 
 ### Minor Changes

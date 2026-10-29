@@ -1,5 +1,21 @@
 # @nodaro/cli
 
+## 1.45.2
+
+### Patch Changes
+
+- 4fcf98d: `nodaro trends estimate` / `run`: the `--example` help says it numbers the examples as `nodaro trends get` lists them.
+- Updated dependencies [8edc157]
+- Updated dependencies [15f1456]
+- Updated dependencies [15f1456]
+- Updated dependencies [370b7d2]
+- Updated dependencies [d8aaf38]
+- Updated dependencies [33960ee]
+- Updated dependencies [4fcf98d]
+  - @nodaro/sdk@2.55.0
+  - @nodaro/shared@3.48.0
+  - @nodaro/prompts@1.47.0
+
 ## 1.45.1
 
 ### Patch Changes
