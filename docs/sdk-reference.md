@@ -417,9 +417,33 @@ HTTP 401. Token missing, expired, or invalid.
 HTTP 403. Permission denied. When the server returns
 `code: "insufficient_scope"`, the missing scope is exposed via `missingScope`.
 
-- `code = "forbidden"`, `status = 403`
+- `code = "forbidden"`, `status = 403` (only `ModelUnavailableError` sets its own code)
 - `missingScope?: string` — set when scope check failed
-- **Constructor:** `new ForbiddenError(message?: string, missingScope?: string)`
+- **Constructor:** `new ForbiddenError(message?: string, missingScope?: string, code?: string)`
+
+### `class ModelUnavailableError extends ForbiddenError`
+
+HTTP 403 refusing the **model**, not the caller — answered by the credit guard
+before any credits are held (the LLM and pipeline lanes still answer a
+switched-off model with a 402 `InsufficientCreditsError` for now). Choosing
+another model is the remedy; retrying, topping up or a wider scope changes
+nothing:
+
+| `code` | Refusal |
+|--------|---------|
+| `model_not_available` | this deployment does not offer the model (outside its edition or surface, or hidden by its operator) |
+| `model_disabled` | an admin switched the model off on the models page |
+
+It is a `ForbiddenError`, so an existing `instanceof ForbiddenError` catch still
+catches it; check `instanceof ModelUnavailableError` first to tell the two
+apart, and read `code` to show your own sentence — never the English message.
+`MODEL_UNAVAILABLE_CODES` (a `ReadonlySet<ModelUnavailableCode>`) lists the two
+codes. The envelope names no model: what was refused is the request's own
+`provider` (or, for a fan-out, one of its `models`). A 403 with
+`insufficient_scope`, any other code or none stays a plain `ForbiddenError`.
+
+- `code: "model_not_available" | "model_disabled"`, `status = 403`
+- **Constructor:** `new ModelUnavailableError(code: ModelUnavailableCode, message?: string)`
 
 ### `class NotFoundError extends NodaroError`
 
@@ -2753,6 +2777,13 @@ has no route for them. A `404` about a missing resource (a character id that
 does not exist, say) stays a `NotFoundError`, and so does a `404` for a type
 whose route is in the table above (a platform that predates that route).
 
+A model this deployment does not offer, or one an admin switched off, is
+refused by the credit guard with a
+[`ModelUnavailableError`](#class-modelunavailableerror-extends-forbiddenerror)
+(`code` `model_not_available` / `model_disabled`) before any credits are held —
+pick another model; retrying changes nothing. (The LLM and pipeline lanes still
+answer a switched-off model with a 402 `InsufficientCreditsError` for now.)
+
 Most node types are async: the response includes `{ jobId }` and the actual
 generation runs on a worker. Poll `client.jobs.get(jobId)` until completed.
 Synchronous node types (`meta-ads-scrape`, for one) return their full result
@@ -3326,6 +3357,7 @@ Throws (all typed, catchable by `instanceof`):
   `runAndWait` waits for one, so it refuses before anything is submitted. Use
   [`runBatchAndWait()`](#runbatchandwaittype-params-opts).
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
+- `ModelUnavailableError` — a model this deployment does not offer (or one an admin switched off), refused by the credit guard in `run()` before credits are held.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
 - `JobTimeoutError` — `maxMs` deadline exceeded.
 - `JobAbortedError` — `signal` fired. The job itself keeps running unless `cancelOnAbort` is set; to stop it later, `jobs.cancel(err.jobId)`.

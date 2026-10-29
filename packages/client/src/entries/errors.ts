@@ -9,6 +9,8 @@ export {
   NodaroError,
   UnauthorizedError,
   ForbiddenError,
+  ModelUnavailableError,
+  MODEL_UNAVAILABLE_CODES,
   NotFoundError,
   RateLimitedError,
   InsufficientCreditsError,
@@ -31,4 +33,4 @@ export {
   throwFromResponse,
 } from "../errors.js"
 
-export type { CreditCapCode, HeldFinalRun, WorkflowConflictCode } from "../errors.js"
+export type { CreditCapCode, HeldFinalRun, ModelUnavailableCode, WorkflowConflictCode } from "../errors.js"

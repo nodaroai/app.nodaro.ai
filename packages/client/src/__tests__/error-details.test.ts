@@ -15,7 +15,10 @@ import { describe, it, expect } from "vitest"
 import {
   CREDIT_CAP_CODES,
   CreditCapExceededError,
+  ForbiddenError,
   InsufficientCreditsError,
+  MODEL_UNAVAILABLE_CODES,
+  ModelUnavailableError,
   NodaroError,
   NotFoundError,
   WorkflowConflictError,
@@ -75,6 +78,62 @@ describe("NodaroError.details — the envelope's other fields", () => {
     const a = thrown(400, body)
     ;(a.details as Record<string, unknown>).slot = "b"
     expect(thrown(400, body).details).toEqual({ slot: "a" })
+  })
+})
+
+describe("403 — the model, not the caller", () => {
+  it.each([
+    ["model_not_available", "This model is not available on this deployment."],
+    ["model_disabled", "This model is currently disabled"],
+  ])("%s is a ModelUnavailableError — still a ForbiddenError, with the server's code and sentence", (code, message) => {
+    const err = thrown(403, { error: { code, message } })
+    expect(err).toBeInstanceOf(ModelUnavailableError)
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).toMatchObject({ name: "ModelUnavailableError", code, status: 403, message })
+    expect((err as ForbiddenError).missingScope).toBeUndefined()
+    expect(err.details).toEqual({})
+  })
+
+  it("keeps its own default sentence when the server sent none", () => {
+    const err = thrown(403, { error: { code: "model_disabled" } })
+    expect(err).toBeInstanceOf(ModelUnavailableError)
+    expect(err.message).toBe("This model is not available")
+  })
+
+  it("built directly: the code, a 403, no scope", () => {
+    const err = new ModelUnavailableError("model_disabled")
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect(err).toMatchObject({ name: "ModelUnavailableError", code: "model_disabled", status: 403, missingScope: undefined })
+    expect(err.message).toBe("This model is not available")
+  })
+
+  it("MODEL_UNAVAILABLE_CODES is exactly the two codes", () => {
+    expect([...MODEL_UNAVAILABLE_CODES].sort()).toEqual(["model_disabled", "model_not_available"])
+  })
+
+  it("insufficient_scope is unchanged: a ForbiddenError with missingScope, code forbidden", () => {
+    const err = thrown(403, { error: { code: "insufficient_scope", message: "Missing required scope: workflows:write", missingScope: "workflows:write" } })
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect(err).not.toBeInstanceOf(ModelUnavailableError)
+    expect(err).toMatchObject({ name: "ForbiddenError", code: "forbidden", status: 403, missingScope: "workflows:write" })
+  })
+
+  it.each([
+    ["another code", { error: { code: "access_blocked", message: "Access blocked" } }],
+    ["no code", { error: { message: "Forbidden here" } }],
+    ["an empty body", {}],
+  ])("a 403 with %s stays a plain ForbiddenError with code forbidden", (_label, body) => {
+    const err = thrown(403, body)
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect(err).not.toBeInstanceOf(ModelUnavailableError)
+    expect(err).toMatchObject({ name: "ForbiddenError", code: "forbidden", status: 403 })
+  })
+
+  it("the model codes are read only at 403 — the same code at another status is a generic NodaroError", () => {
+    const err = thrown(400, { error: { code: "model_disabled", message: "x" } })
+    expect(err).not.toBeInstanceOf(ForbiddenError)
+    expect(err).toMatchObject({ name: "NodaroError", code: "model_disabled", status: 400 })
   })
 })
 
