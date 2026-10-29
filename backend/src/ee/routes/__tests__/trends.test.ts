@@ -70,6 +70,12 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
     },
     favoriteIds: async (userId: string, ids: string[]) =>
       new Set(ids.filter((id) => mem.favorites.has(`${userId}:${id}`))),
+    versionsHidingOriginal: async (pairs: Array<{ trendId: string; version: number }>) =>
+      new Set(
+        pairs
+          .filter((p) => mem.trends.find((t) => t.id === p.trendId)?.versions[p.version]?.hideOriginal === true)
+          .map((p) => `${p.trendId}:${p.version}`),
+      ),
   }
 })
 
@@ -83,6 +89,8 @@ import { newSession } from "../../../lib/mcp/session.js"
 import type { Scope } from "../../../lib/scopes.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
+import { registerTrendTools } from "../../../lib/mcp/tools/trends.js"
+import { buildServer, callTool } from "../../../lib/mcp/tools/__tests__/_helpers.js"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
 
@@ -516,6 +524,108 @@ describe("GET /v1/trends/:slug — the original", () => {
     const d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
     expect(d.slots[0].hintImageUrl).toBe("https://cdn.example/trends/t1/hint-lead.png")
     expect(d.slots[1]).not.toHaveProperty("hintImageUrl")
+  })
+})
+
+describe("a trend that hides its original (hideOriginal)", () => {
+  const EX1 = {
+    videoUrl: "https://cdn.example/ex1.mp4",
+    posterUrl: "https://cdn.example/ex1.jpg",
+    width: 720,
+    height: 1280,
+    durationSec: 11.5,
+    slots: { lead: ["https://cdn.example/ex1-lead.png"], place: ["https://cdn.example/ex1-place.png"] },
+    sourceJobId: SOURCE_JOB,
+  }
+  const EX2 = {
+    videoUrl: "https://cdn.example/ex2.mp4",
+    width: 1280,
+    height: 720,
+    durationSec: 12,
+    slots: { lead: ["https://cdn.example/ex2-lead.png"] },
+    sourceJobId: SOURCE_JOB,
+  }
+  /** Every address of the hidden original: the source clip and its display copy (video and poster). */
+  const ORIGINAL_URLS = [SOURCE, DISPLAY.videoUrl, DISPLAY.posterUrl]
+  const expectNoOriginal = (body: string) => {
+    for (const url of ORIGINAL_URLS) expect(body, `leaked ${url}`).not.toContain(url)
+    expectNoHidden(body)
+  }
+  const hidden = (over: Partial<TrendVersionData> = {}) => {
+    mem.trends[0]!.versions[2] = versionData({ hideOriginal: true, examples: [EX1, EX2], ...over })
+  }
+
+  it("the card shows Example 1 as the original and lists the examples from Example 2, with no address of the original", async () => {
+    hidden()
+    const res = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    expect(res.statusCode).toBe(200)
+    const [card] = res.json().data
+    const ex1 = { videoUrl: EX1.videoUrl, posterUrl: EX1.posterUrl, width: 720, height: 1280 }
+    expect(card.cover).toEqual(ex1)
+    expect(card.original).toEqual(ex1)
+    expect(card.examples).toEqual([{ videoUrl: EX2.videoUrl, width: 1280, height: 720 }])
+    expect(card.durationSec).toBe(12)
+    expectNoOriginal(res.body)
+  })
+
+  it("the page shows Example 1 as the original (its length, the trend's preview start) and lists the examples from Example 2", async () => {
+    hidden()
+    const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(res.statusCode).toBe(200)
+    const d = res.json().data
+    expect(d.original).toEqual({ videoUrl: EX1.videoUrl, posterUrl: EX1.posterUrl, width: 720, height: 1280, durationSec: 11.5, previewStartSec: 2 })
+    expect(d.cover).toEqual({ videoUrl: EX1.videoUrl, posterUrl: EX1.posterUrl, width: 720, height: 1280 })
+    expect(d.examples).toEqual([{ videoUrl: EX2.videoUrl, width: 1280, height: 720, slots: { lead: ["https://cdn.example/ex2-lead.png"] } }])
+    expect(d.previewSec).toBe(4)
+    expectNoOriginal(res.body)
+  })
+
+  it("with only one example, the page has its original and no examples", async () => {
+    hidden({ examples: [EX1], previewStart: null })
+    const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    const d = res.json().data
+    expect(d.original).toEqual({ videoUrl: EX1.videoUrl, posterUrl: EX1.posterUrl, width: 720, height: 1280, durationSec: 11.5 })
+    expect(d.examples).toEqual([])
+    expectNoOriginal(res.body)
+    const list = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    expect(list.json().data[0].examples).toEqual([])
+    expectNoOriginal(list.body)
+  })
+
+  it("with no example (published before the gate), never falls back to the display copy: no card and no page", async () => {
+    hidden({ examples: [] })
+    const list = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    expect(list.statusCode).toBe(200)
+    expect(list.json().data).toEqual([])
+    expectNoOriginal(list.body)
+    const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(res.statusCode).toBe(404)
+    expectNoOriginal(res.body)
+  })
+
+  it("hideOriginal false is the original shown, as when it is absent", async () => {
+    mem.trends[0]!.versions[2] = versionData({ examples: [EX1, EX2] })
+    const shown = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    mem.trends[0]!.versions[2] = versionData({ hideOriginal: false, examples: [EX1, EX2] })
+    const explicit = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    expect(explicit).toEqual(shown)
+    expect(shown.original.videoUrl).toBe(DISPLAY.videoUrl)
+    expect(shown.examples.map((e: { videoUrl: string }) => e.videoUrl)).toEqual([EX1.videoUrl, EX2.videoUrl])
+  })
+
+  it("over MCP, list_trends and get_trend carry no address of the original either", async () => {
+    hidden()
+    const server = buildServer()
+    registerTrendTools({ server, session: newSession({ userId: USER, scopes: ["jobs:read"], clientName: "test" }), fastify: app })
+    const listed = await callTool(server, "list_trends", {})
+    expect(listed.isError).not.toBe(true)
+    expectNoOriginal(JSON.stringify(listed))
+    const got = await callTool(server, "get_trend", { slug: "neon-dance" })
+    expect(got.isError).not.toBe(true)
+    const view = got.structuredContent as { original: { videoUrl: string }; examples: Array<{ videoUrl: string }> }
+    expect(view.original.videoUrl).toBe(EX1.videoUrl)
+    expect(view.examples.map((e) => e.videoUrl)).toEqual([EX2.videoUrl])
+    expectNoOriginal(JSON.stringify(got))
   })
 })
 
@@ -1768,6 +1878,129 @@ function feed(rows: unknown[], fq: unknown[] = [], usage: Array<Record<string, u
 
 /** The step lookup a run page makes for its charge: the page's job ids. */
 const stepsLookup = (ids: string[]) => ["parent_job_id", ids]
+
+describe("a run's example on a trend that hides its original: numbered as the page lists them", () => {
+  const ex = (n: number) => ({
+    videoUrl: `https://cdn.example/ex${n}.mp4`,
+    width: 720,
+    height: 1280,
+    durationSec: 12,
+    slots: { lead: [`https://cdn.example/ex${n}-lead.png`], place: [`https://cdn.example/ex${n}-place.png`] },
+    sourceJobId: SOURCE_JOB,
+  })
+  const EXAMPLES = [ex(1), ex(2), ex(3)]
+  /** The stored example a dispatched run was composed with, and the picture its empty optional slot took. */
+  const sent = (i = 0) => {
+    const call = engine.calls[i]!
+    const display = (call.body.trendRun as { display: { example: number } }).display
+    const place = (call.body.roles as Array<{ kind: string; images: string[] }>).find((r) => r.kind === "location")!
+    return { example: display.example, place: place.images }
+  }
+  const hide = (hideOriginal: boolean) => {
+    mem.trends[0]!.versions[2] = versionData({ hideOriginal, examples: EXAMPLES })
+  }
+
+  it("public example n runs stored example n + 1, and no example runs stored 1 (the one shown as the original)", async () => {
+    hide(true)
+    for (const example of [1, 2]) {
+      engine.calls = []
+      const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { ...RUN_BODY, example } })
+      expect(res.statusCode).toBe(202)
+      expect(sent()).toEqual({ example: example + 1, place: [`https://cdn.example/ex${example + 1}-place.png`] })
+    }
+    engine.calls = []
+    expect((await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
+    expect(sent()).toEqual({ example: 1, place: ["https://cdn.example/ex1-place.png"] })
+  })
+
+  it("the estimate is translated the same way", async () => {
+    hide(true)
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: { ...RUN_BODY, example: 2 } })
+    expect(res.statusCode).toBe(200)
+    expect(sent()).toEqual({ example: 3, place: ["https://cdn.example/ex3-place.png"] })
+  })
+
+  it("is checked against the page's list: the stored count − 1 at most, the refusal naming the number asked for", async () => {
+    hide(true)
+    for (const url of ["/v1/trends/neon-dance/runs", "/v1/trends/neon-dance/estimate"]) {
+      const res = await app.inject({ method: "POST", url, headers: as(), payload: { ...RUN_BODY, example: 3 } })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error).toMatchObject({ code: "example_out_of_range", message: "This trend has no example 3." })
+    }
+    expect(engine.calls).toHaveLength(0)
+  })
+
+  it("over MCP, estimate_trend and run_trend take the page's numbering too", async () => {
+    hide(true)
+    const server = buildServer()
+    registerTrendTools({ server, session: newSession({ userId: USER, scopes: ["jobs:read", "workflows:execute"], clientName: "test" }), fastify: app })
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+    expect((await callTool(server, "estimate_trend", { slug: "neon-dance", slots, example: 1 })).isError).not.toBe(true)
+    expect(sent(0).example).toBe(2)
+    expect((await callTool(server, "run_trend", { slug: "neon-dance", slots, example: 2, confirm: true })).isError).not.toBe(true)
+    expect(sent(1).example).toBe(3)
+    const refused = await callTool(server, "run_trend", { slug: "neon-dance", slots, example: 3, confirm: true })
+    expect(refused.isError).toBe(true)
+    expect(JSON.stringify(refused)).toContain("example_out_of_range")
+  })
+
+  it("a trend that shows its original keeps the stored numbering", async () => {
+    hide(false)
+    for (const example of [1, 2, 3]) {
+      engine.calls = []
+      expect((await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { ...RUN_BODY, example } })).statusCode).toBe(202)
+      expect(sent().example).toBe(example)
+    }
+    engine.calls = []
+    expect((await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
+    expect(sent().example).toBe(1)
+    const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { ...RUN_BODY, example: 4 } })
+    expect(res.json().error.code).toBe("example_out_of_range")
+  })
+
+  describe("read back, by the version the run ran on", () => {
+    const J = (n: number) => `00000000-0000-4000-8000-00000000${String(n).padStart(4, "0")}`
+    const onVersion = (version: number, example: number, id: string) =>
+      jobRow(id, { input_data: runInput({ trend: { id: T_PUB, slug: "neon-dance", version, name: "Neon Dance" }, example }) })
+    const examplesOf = async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
+      expect(res.statusCode).toBe(200)
+      return (res.json().data as Array<Record<string, unknown>>).map((r) => [r.jobId, Object.hasOwn(r, "example") ? r.example : "absent"])
+    }
+
+    it("a run on a version that hides its original: stored k → k − 1, stored 1 → no example, 0 stays 0", async () => {
+      hide(true)
+      feed([onVersion(2, 3, J(1)), onVersion(2, 2, J(2)), onVersion(2, 1, J(3)), onVersion(2, 0, J(4))])
+      expect(await examplesOf()).toEqual([[J(1), 2], [J(2), 1], [J(3), "absent"], [J(4), 0]])
+    })
+
+    it("uses the run's own version, not the trend's current one", async () => {
+      // v1 hid its original; the published v2 shows it (and the other way round below).
+      mem.trends[0]!.versions[1] = versionData({ hideOriginal: true, examples: EXAMPLES })
+      hide(false)
+      feed([onVersion(1, 2, J(1)), onVersion(2, 2, J(2))])
+      expect(await examplesOf()).toEqual([[J(1), 1], [J(2), 2]])
+
+      mem.trends[0]!.versions[1] = versionData({ examples: EXAMPLES })
+      hide(true)
+      feed([onVersion(1, 2, J(1)), onVersion(2, 2, J(2))])
+      expect(await examplesOf()).toEqual([[J(1), 2], [J(2), 1]])
+    })
+
+    it("one run (GET /v1/trends/runs/:jobId) is read back the same way", async () => {
+      hide(true)
+      const row = onVersion(2, 1, J(5))
+      db.respond = (q) => {
+        if (q.table !== "jobs") return { data: null, error: null }
+        const many = q.ops.some((op) => op.m === "in")
+        return { data: many ? [] : row, error: null }
+      }
+      const res = await app.inject({ method: "GET", url: `/v1/trends/runs/${J(5)}`, headers: as() })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data).not.toHaveProperty("example")
+    })
+  })
+})
 
 describe("GET /v1/trends/runs", () => {
   it("is not captured by /:slug", async () => {

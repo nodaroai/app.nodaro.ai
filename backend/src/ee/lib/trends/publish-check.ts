@@ -15,7 +15,8 @@
  * `preview_clip_out_of_date` with `why`; the publish route makes it first,
  * so these block only when making it failed), at least one
  * required slot, pictures for every slot in every example (a trend may have
- * no example at all: it shows only its original), valid data
+ * no example at all: it shows only its original; one that hides its original,
+ * `hideOriginal`, needs at least one: `hide_original_needs_example`), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
  * the user's details (`promptBudget`), the 4 s preview's own too when the
  * trend offers one (`promptModesOf`), with each role name a preview can send
@@ -100,6 +101,7 @@ export interface PublishBlocker {
   code:
     | "source_missing"
     | "source_display_missing"
+    | "hide_original_needs_example"
     | "preview_clip_missing"
     | "preview_clip_out_of_date"
     | "no_required_slot"
@@ -134,7 +136,7 @@ export interface PublishBlocker {
    * people a person variant leaves empty, for `face_mask_variant_*`.
    */
   slots?: string[]
-  /** What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images` and the face mask codes. */
+  /** What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images`, `hide_original_needs_example` and the face mask codes. */
   message?: string
   /**
    * Why the face mask is out of date: "settings", "core_recipe" or "plugin_recipe" (with `env`);
@@ -238,6 +240,13 @@ export function publishBlockers(
   const out: PublishBlocker[] = []
   if (!data.source) out.push({ code: "source_missing" })
   else if (!data.source.display) out.push({ code: "source_display_missing" })
+  // A trend that hides its original shows Example 1 in its place: it needs one.
+  if (data.hideOriginal === true && data.examples.length === 0) {
+    out.push({
+      code: "hide_original_needs_example",
+      message: "This trend hides its original, so visitors see Example 1 in its place: add at least one example, or show the original.",
+    })
+  }
   // The preview's input clip, cut ahead of time: a trend that offers a preview publishes with a current one only.
   const clip = previewClipState(data)
   if (clip.kind === "missing") {

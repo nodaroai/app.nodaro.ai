@@ -903,6 +903,33 @@ export async function listPublished(q: {
   return { rows, next }
 }
 
+const VERSION_KEY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Which of these trend versions hide their original (`data.hideOriginal`), as
+ * `<trendId>:<version>` keys: the public run reads number a run's example by
+ * the version it ran on (public-examples.ts). Reads that one key only, never
+ * the version's data. A pair that is not a trend id and a version number (a
+ * run's stamp is read from its job) is skipped, never put in the filter.
+ */
+export async function versionsHidingOriginal(pairs: ReadonlyArray<{ trendId: string; version: number }>): Promise<Set<string>> {
+  const wanted = new Map<string, { trendId: string; version: number }>()
+  for (const p of pairs) {
+    if (VERSION_KEY_UUID.test(p.trendId) && Number.isSafeInteger(p.version) && p.version >= 1) wanted.set(`${p.trendId}:${p.version}`, p)
+  }
+  if (wanted.size === 0) return new Set()
+  const { data, error } = await supabase
+    .from("trend_versions")
+    .select("trend_id, version, hideOriginal:data->hideOriginal")
+    .or([...wanted.values()].map((p) => `and(trend_id.eq.${p.trendId},version.eq.${p.version})`).join(","))
+  if (error) fail("read trend versions", error)
+  const out = new Set<string>()
+  for (const v of (data ?? []) as Array<{ trend_id: string; version: number; hideOriginal?: unknown }>) {
+    if (v.hideOriginal === true) out.add(`${v.trend_id}:${v.version}`)
+  }
+  return out
+}
+
 // ── Favorites ─────────────────────────────────────────────────────────────
 
 export async function setFavorite(userId: string, trendId: string, on: boolean): Promise<void> {

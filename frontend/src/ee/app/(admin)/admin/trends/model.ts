@@ -186,6 +186,8 @@ export interface TrendForm {
    * it through `previewClipStatus`.
    */
   previewClip: AdminTrendPreviewClip | undefined
+  /** Visitors see Example 1 as the original; the original clip is never shown. Saved only when on. */
+  hideOriginal: boolean
 }
 
 let uidSeq = 0
@@ -210,6 +212,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     prismReferenceAudio: prismReferenceAudioByResolutionOf(draft.prismReferenceAudio),
     promptStyle: draft.promptStyle,
     previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
+    hideOriginal: draft.hideOriginal === true,
   }
 }
 
@@ -373,6 +376,8 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(engineOfForm(form) === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),
     // Left out = the clip preparation's default, so loading an old draft is no change.
     ...(form.promptStyle ? { promptStyle: form.promptStyle } : {}),
+    // Left out when off (the original shown), so loading an old draft is no change.
+    ...(form.hideOriginal ? { hideOriginal: true } : {}),
   }
 }
 
@@ -585,6 +590,8 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return "At least one slot must be required."
     case "source_display_missing":
       return "The source clip has no display copy (the copy users see). Upload the clip again to make one."
+    case "hide_original_needs_example":
+      return "This trend hides its original, so visitors see Example 1 in its place: add an example from a test run, or show the original (1. Source clip)."
     case "preview_clip_missing":
       return "The 4 s preview's input clip is not prepared yet. Save the draft, or publish again, to make it (1. Source clip → Preview input)."
     case "preview_clip_out_of_date":

@@ -2299,8 +2299,8 @@ interface TrendCard {
   id: string; slug: string; name: string; description?: string
   tags: string[]; badges: string[]
   cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example, else the original's display copy
-  original?: { videoUrl: string; posterUrl?: string; width: number; height: number } // the original's display copy (as TrendDetail.original); absent without one
-  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }> // every example's video, in order; [] = none, absent from an older server (slot pictures are on the page)
+  original?: { videoUrl: string; posterUrl?: string; width: number; height: number } // the original's display copy (as TrendDetail.original); absent without one; the first example on a trend that hides its original
+  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }> // every example's video, in order; [] = none, absent from an older server (slot pictures are on the page); from the second example on a trend that hides its original
   needs: Record<TrendSlotKind, number>   // slots of each kind
   durationSec: number
   isFavorite: boolean
@@ -2312,15 +2312,15 @@ interface TrendDetail extends TrendCard {
   engine?: "motion-prism" | "motion-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = motion-prism
   engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
   resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p" (draft), "720p", "1080p"], motion-pulse ["720p", "1080p"]
-  original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy
+  original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy; the first example on a trend that hides its original
   slots: TrendDetailSlot[]
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
 }
 
-// A browser-safe copy (H.264 MP4) of the clip the trend recasts
+// A browser-safe copy (H.264 MP4) of the clip the trend recasts; on a trend that hides its original, its first example (the original clip is never sent)
 interface TrendOriginal {
   videoUrl: string; posterUrl?: string; width: number; height: number
-  durationSec: number                    // the copy's length
+  durationSec: number                    // the copy's length (the first example's, on a trend that hides its original)
   previewStartSec?: number               // where the 4 s preview starts (0 included), when previewSec is 4
 }
 
@@ -2333,7 +2333,7 @@ interface TrendDetailSlot {
 
 interface TrendRunRequest {
   slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + the slot's `chips`
-  example?: number      // 1-based; its pictures fill the optional slots you leave out (not in Full depth trends). Default 1; leave it out on a trend with no examples
+  example?: number      // 1-based, as TrendDetail.examples lists them; its pictures fill the optional slots you leave out (not in Full depth trends). Default 1; leave it out on a trend with no examples. On a trend that hides its original, leaving it out uses the example shown as the original
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
@@ -2357,7 +2357,7 @@ interface TrendRun {
   error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | cancelled | failed
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
-  example: number                    // 1-based; 0 = the trend had no example (none was used)
+  example?: number                   // 1-based, as the page listed the examples for the run's version; 0 = the trend had no example (none was used); absent when it used the example shown as the original of a trend that hides it
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean; fromDefault?: true } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean

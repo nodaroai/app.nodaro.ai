@@ -29,7 +29,8 @@ import { getPluginSupports } from "../../../lib/private-plugins/supports-registr
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { faceMaskTargetsOf, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
-import { TrendsUnavailableError } from "./store.js"
+import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
+import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
@@ -55,8 +56,15 @@ export interface TrendRun {
   createdAt: string
   completedAt: string | null
   trend: TrendRunDisplay["trend"]
-  /** 1-based example used for empty optional slots; 0 = the trend had no example. */
-  example: number
+  /**
+   * 1-based example used for empty optional slots, numbered as the trend's
+   * page lists its examples (for the version the run ran on); 0 = the trend
+   * had no example (none was used). Absent when the run used the example a
+   * trend that hides its original shows AS its original (stored Example 1):
+   * a public read only (public-examples.ts); the admin's test runs always
+   * carry the stored number.
+   */
+  example?: number
   slots: TrendRunDisplay["slots"]
   details?: string
   preview: boolean
@@ -225,6 +233,8 @@ export function toTrendRun(
   fq: RunJobRow | undefined,
   credits: RunCredits,
   audience: RunAudience = "public",
+  /** For a public read: the `<trendId>:<version>` keys of the versions that hide their original. */
+  hiding: ReadonlySet<string> = new Set(),
 ): TrendRun | null {
   // Redaction first (drops every `__` key), then the whitelist below.
   const row = redactPrivateJobData(raw)
@@ -249,7 +259,7 @@ export function toTrendRun(
     createdAt: row.created_at,
     completedAt,
     trend,
-    example: typeof input.example === "number" ? input.example : 1,
+    ...exampleField(typeof input.example === "number" ? input.example : 1, audience === "public" && hiding.has(`${trend.id}:${trend.version}`)),
     slots: displaySlots(input.slots),
     ...(details ? { details } : {}),
     preview: input.preview === true,
@@ -355,6 +365,20 @@ export async function listedRunsPage<T extends RunJobRow>(
 }
 
 /** Map a page of run rows to `TrendRun`s, with their credits and, for drafts, their newest Full Quality job. */
+/** The trend versions a page of runs ran on, from each run's own stamp (`input_data.trend`). */
+function runVersionsOf(page: RunJobRow[]): Array<{ trendId: string; version: number }> {
+  return page.flatMap((r) => {
+    const trend = isRec(r.input_data) ? displayTrend(r.input_data.trend) : null
+    return trend ? [{ trendId: trend.id, version: trend.version }] : []
+  })
+}
+
+/** A run's `example` key: the stored number, or (a public read of a version that hides its original) the public one, absent for the original. */
+function exampleField(stored: number, versionHidesOriginal: boolean): { example?: number } {
+  const example = publicExampleOf(stored, versionHidesOriginal)
+  return example === undefined ? {} : { example }
+}
+
 export async function toTrendRuns(
   page: RunJobRow[],
   owners: string | string[],
@@ -362,12 +386,14 @@ export async function toTrendRuns(
 ): Promise<TrendRun[]> {
   if (page.length === 0) return []
   const drafts = page.filter((r) => isRec(r.input_data) && fullQualityEligible(r.input_data)).map((r) => r.id)
-  const [fqByDraft, credits] = await Promise.all([
+  const [fqByDraft, credits, hiding] = await Promise.all([
     fullQualityByDraft(drafts, owners),
     runCreditsFor(page, owners),
+    // A public run numbers its example by the version it ran on (its own stamp), not the trend's current one.
+    audience === "public" ? versionsHidingOriginal(runVersionsOf(page)) : Promise.resolve(new Set<string>()),
   ])
   return page.flatMap((r) => {
-    const run = toTrendRun(r, fqByDraft.get(r.id), credits, audience)
+    const run = toTrendRun(r, fqByDraft.get(r.id), credits, audience, hiding)
     return run ? [run] : []
   })
 }

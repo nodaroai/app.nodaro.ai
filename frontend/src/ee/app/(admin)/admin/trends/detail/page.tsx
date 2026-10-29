@@ -60,6 +60,7 @@ import {
   type TrendForm,
 } from "../model"
 import { SourceClipEditor } from "../components/SourceClipEditor"
+import { HideOriginalToggle } from "../components/HideOriginalToggle"
 import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
@@ -372,6 +373,11 @@ export default function AdminTrendEditorPage() {
               previewClip={server.draft.previewClip}
               onChange={(next) => set(next)}
             />
+            <HideOriginalToggle
+              checked={form.hideOriginal}
+              examples={server.draft.examples.length}
+              onChange={(hideOriginal) => set({ hideOriginal })}
+            />
             {savedSource && (
               <CropPanel
                 trendId={id}
@@ -584,7 +590,14 @@ export default function AdminTrendEditorPage() {
               }
             />
           </Section>
-          <Section title="Examples" description="Example 1 is the cover; with none, the original's display copy is.">
+          <Section
+            title="Examples"
+            description={
+              form.hideOriginal
+                ? "Example 1 is the cover, and visitors see it as the original (the list they see starts at Example 2)."
+                : "Example 1 is the cover; with none, the original's display copy is."
+            }
+          >
             <ExamplesPanel
               examples={server.draft.examples}
               slots={server.draft.slots}

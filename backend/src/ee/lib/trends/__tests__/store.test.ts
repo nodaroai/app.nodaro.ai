@@ -49,6 +49,7 @@ import {
   attachPreviewClip,
   PreviewClipAttachConflictError,
   listVersionsLackingPreviewClip,
+  versionsHidingOriginal,
 } from "../store.js"
 import type { TrendPreviewClip, TrendVersionData } from "../types.js"
 
@@ -912,5 +913,36 @@ describe("listVersionsLackingPreviewClip", () => {
     }
     expect(await listVersionsLackingPreviewClip()).toHaveLength(503)
     expect(queries("trend_versions")).toHaveLength(2)
+  })
+})
+
+describe("versionsHidingOriginal", () => {
+  it("reads only the hideOriginal key of exactly the versions asked for, and keys the ones that hide it", async () => {
+    db.respond = () => ok([
+      { trend_id: T1, version: 2, hideOriginal: true },
+      { trend_id: T2, version: 1, hideOriginal: false },
+      { trend_id: T3, version: 4, hideOriginal: null },
+    ])
+    const out = await versionsHidingOriginal([
+      { trendId: T1, version: 2 },
+      { trendId: T2, version: 1 },
+      { trendId: T3, version: 4 },
+      { trendId: T1, version: 2 },
+    ])
+    expect([...out]).toEqual([`${T1}:2`])
+    const [q] = queries("trend_versions")
+    expect(argOf(q!, "select")).toEqual(["trend_id, version, hideOriginal:data->hideOriginal"])
+    expect(argOf(q!, "or")).toEqual([`and(trend_id.eq.${T1},version.eq.2),and(trend_id.eq.${T2},version.eq.1),and(trend_id.eq.${T3},version.eq.4)`])
+  })
+
+  it("never puts a stamp that is not a trend id and a version number in the filter, and reads nothing for none", async () => {
+    db.respond = () => ok([])
+    expect(await versionsHidingOriginal([{ trendId: "x),or(1.eq.1", version: 1 }, { trendId: T1, version: 1.5 }, { trendId: T1, version: 0 }])).toEqual(new Set())
+    expect(queries("trend_versions")).toHaveLength(0)
+  })
+
+  it.each(["42P01", "PGRST205"])("a missing table (%s) is TrendsUnavailableError", async (code) => {
+    db.respond = () => ({ data: null, error: { code, message: "missing" } })
+    await expect(versionsHidingOriginal([{ trendId: T1, version: 1 }])).rejects.toBeInstanceOf(TrendsUnavailableError)
   })
 })
