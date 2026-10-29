@@ -98,7 +98,9 @@ function pricing(over: Partial<{ is_enabled: boolean; tier_restriction: string |
 const check = (p: CreditProfile, model: string, surface: Parameters<typeof CreditsService.checkCreditsWithProfile>[5] = {}) =>
   CreditsService.checkCreditsWithProfile("user-123", p, model, false, undefined, surface)
 
-const DISABLED = { allowed: false, error: "This model is currently disabled" }
+// The admin switch carries its own code: the guard answers 403 `model_disabled`
+// with it, never the 402 every client reads as "out of credits".
+const DISABLED = { allowed: false, error: "This model is currently disabled", code: "model_disabled" }
 const tierRefusal = (tier: string, watermark: boolean) => ({
   allowed: false,
   error: `This model requires ${tier} tier or higher. Please upgrade your plan.`,

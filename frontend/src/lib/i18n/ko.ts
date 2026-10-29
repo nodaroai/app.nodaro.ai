@@ -11327,6 +11327,7 @@ export const ko: ChromeDict = {
   "apiErr.reason.signIn": "로그인이 만료되었습니다. 다시 로그인하세요.",
   "apiErr.reason.accessBlocked": "접근이 차단되었습니다.",
   "apiErr.reason.forbidden": "이 작업을 수행할 권한이 없습니다.",
+  "apiErr.reason.modelDisabled": "이 모델은 지금 꺼져 있습니다. 다른 모델을 선택하세요.",
   "apiErr.reason.notFound": "대상을 찾을 수 없습니다. 삭제되었을 수 있습니다.",
   "apiErr.reason.server": "서버 측에서 문제가 발생했습니다. 잠시 후 다시 시도하세요.",
   "apiErr.reason.external": "외부 서비스가 예상대로 응답하지 않았습니다. 잠시 후 다시 시도하세요.",

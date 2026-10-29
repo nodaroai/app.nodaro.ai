@@ -11327,6 +11327,7 @@ export const ja: ChromeDict = {
   "apiErr.reason.signIn": "ログインの有効期限が切れました。もう一度ログインしてください。",
   "apiErr.reason.accessBlocked": "アクセスはブロックされています。",
   "apiErr.reason.forbidden": "この操作を行う権限がありません。",
+  "apiErr.reason.modelDisabled": "このモデルは現在オフになっています。別のモデルを選んでください。",
   "apiErr.reason.notFound": "対象が見つかりません。削除された可能性があります。",
   "apiErr.reason.server": "サーバー側で問題が発生しました。しばらくしてからもう一度お試しください。",
   "apiErr.reason.external": "外部サービスから想定どおりの応答がありませんでした。しばらくしてからもう一度お試しください。",

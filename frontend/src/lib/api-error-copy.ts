@@ -28,6 +28,8 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   unauthorized: "apiErr.reason.signIn",
   access_blocked: "apiErr.reason.accessBlocked",
   forbidden: "apiErr.reason.forbidden",
+  // The credit guard's 403 for a model an admin switched off (model_pricing.is_enabled).
+  model_disabled: "apiErr.reason.modelDisabled",
   collection_limit_reached: "apiErr.reason.collectionLimitReached",
   not_found: "apiErr.reason.notFound",
   internal_error: "apiErr.reason.server",

@@ -11627,6 +11627,7 @@ export const en = {
   "apiErr.reason.signIn": "Your sign-in has expired. Sign in again.",
   "apiErr.reason.accessBlocked": "Access has been blocked.",
   "apiErr.reason.forbidden": "You don't have permission to do this.",
+  "apiErr.reason.modelDisabled": "This model is switched off right now. Pick another model.",
   "apiErr.reason.notFound": "It was not found. It may have been deleted.",
   "apiErr.reason.server": "Something went wrong on our side. Try again in a moment.",
   "apiErr.reason.external": "An outside service didn't respond as expected. Try again in a moment.",

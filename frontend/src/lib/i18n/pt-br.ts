@@ -11327,6 +11327,7 @@ export const ptBR: ChromeDict = {
   "apiErr.reason.signIn": "Seu login expirou. Entre novamente.",
   "apiErr.reason.accessBlocked": "O acesso foi bloqueado.",
   "apiErr.reason.forbidden": "Você não tem permissão para fazer isso.",
+  "apiErr.reason.modelDisabled": "Este modelo está desligado no momento. Escolha outro modelo.",
   "apiErr.reason.notFound": "O item não foi encontrado. Ele pode ter sido excluído.",
   "apiErr.reason.server": "Algo deu errado do nosso lado. Tente novamente em instantes.",
   "apiErr.reason.external": "Um serviço externo não respondeu como esperado. Tente novamente em instantes.",
