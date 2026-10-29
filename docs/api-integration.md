@@ -3523,6 +3523,17 @@ answer `{ data: { url, thumbnailUrl, assetId, sizeBytes, mimeType, metadata } }`
 and nothing else references it — the cut replaces the original. The free
 sibling of the priced `trim-video` node. SDK: `client.media.process(input)`.
 
+`POST /v1/media/discard` throws away a file you just made and no longer need
+(a link download replaced before use, a cut superseded by a newer one, a
+picture imported then cancelled): body `{ url }`. It is not a general delete.
+The file goes only when it is your own, was made by `/v1/download-video`,
+`/v1/media/process` or a URL import, is under 24 hours old, and no job of
+yours uses it (as an output, or as an input such as a run's `videoUrl`); the
+answer is then `{ data: { discarded: true } }`. Otherwise nothing is touched
+and the answer is `409 not_discardable`. `{ data: { discarded: false } }`
+means there was nothing of yours at that address (already gone, or not
+yours). SDK: `client.media.discard({ url })`.
+
 ## 12. Credits (Cloud edition)
 
 Three endpoints surface the caller's credit balance and transaction

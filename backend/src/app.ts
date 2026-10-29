@@ -120,6 +120,7 @@ import { uploadRoutes } from "./routes/upload.js"
 import { uploadProxyRoutes } from "./routes/upload-proxy.js"
 import { uploadHandoffRoutes } from "./routes/upload-handoff.js"
 import { mediaProcessRoutes } from "./routes/media-process.js"
+import { mediaDiscardRoutes } from "./routes/media-discard.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
 import { developerAppRoutes } from "./routes/developer-apps.js"
 import { downloadVideoRoutes } from "./routes/download-video.js"
@@ -651,6 +652,7 @@ export async function buildApp() {
   await app.register(uploadProxyRoutes)
   await app.register(uploadHandoffRoutes)
   await app.register(mediaProcessRoutes)
+  await app.register(mediaDiscardRoutes)
   await app.register(youtubeAudioRoutes)
   await app.register(developerAppRoutes)
   await app.register(downloadVideoRoutes)
