@@ -5945,6 +5945,7 @@ downloadVideo(input: {
   maxHeight?: number
   sectionStartSec?: number
   sectionEndSec?: number
+  exactSection?: boolean
   requireAudio?: boolean
 }): Promise<{ downloadId: string }>
 ```
@@ -5952,7 +5953,9 @@ downloadVideo(input: {
 Download a social video (YouTube / TikTok / Instagram / X / Facebook) into your
 storage (`POST /v1/download-video`). `maxHeight` caps the resolution (omit for
 best available); `sectionStartSec` + `sectionEndSec` (both-or-neither) fetch
-only that time range. A download that arrives with no audio stream fails by
+only that time range, with a few seconds of margin on each side for the caller
+to trim (`exactSection: true` cuts it at exactly that range instead). A
+download that arrives with no audio stream fails by
 default — it is usually a degraded source response, and is retried through
 other routes first; pass `requireAudio: false` to accept a clip that really has
 no sound. Returns a `downloadId` — not a job id — whose progress streams from
@@ -6526,7 +6529,7 @@ Probe a social video's metadata (`POST /v1/video-metadata`) — duration,
 dimensions, title, live status — **without** downloading it. A direct read,
 not a job. Use it to decide whether to trim before importing.
 
-#### `process(input)`
+#### `process(input, options?)`
 
 ```ts
 process(input: {
@@ -6536,13 +6539,29 @@ process(input: {
   crop?: { x: number; y: number; width: number; height: number }
   format?: "mp4" | "webm" | "mp3" | "wav" | "m4a" | "aac"
   deleteSource?: boolean
-}): Promise<{ data: { url: string; thumbnailUrl: string | null; assetId: string | null; sizeBytes: number; mimeType: string; metadata: Record<string, unknown> } }>
+}, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<{ data: { url: string; thumbnailUrl: string | null; assetId: string | null; sizeBytes: number; mimeType: string; metadata: Record<string, unknown> } }>
 ```
 
 Cut or crop a stored file (`POST /v1/media/process`) — synchronous and free,
 the source-preparation sibling of the priced `trimVideo` node. `deleteSource:
 true` removes the source afterwards when it is yours and nothing else
-references it.
+references it. The platform may take up to 300 s on a long file: `timeoutMs`
+waits longer than the client's default (60 s).
+
+#### `discard(input)`
+
+```ts
+discard(input: { url: string }): Promise<{ data: { discarded: boolean } }>
+```
+
+Throw away a file you just made and no longer need (`POST /v1/media/discard`):
+a link download replaced before use, a cut superseded by a newer one, a
+picture imported then cancelled. Not a general delete: the file goes only when
+it is your own, was made by `downloadVideo`, `process` or a URL import, is
+under 24 hours old, and no job of yours uses it (as an output or as an input
+such as a run's `videoUrl`). Otherwise it is left untouched and the call fails
+with 409 `not_discardable`. `discarded: false` means there was nothing of
+yours at that address.
 
 ---
 

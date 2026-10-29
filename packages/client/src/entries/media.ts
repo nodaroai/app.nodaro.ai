@@ -7,7 +7,7 @@
  */
 export { MediaResource } from "../resources/media.js"
 
-export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProcessResult, SplitMediaInput, SplitMediaOutput, OverlayPlacement, AddCaptionsInput, CaptionLookInput, CaptionSegmentInput, CaptionEntry } from "../resources/media.js"
+export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProcessResult, MediaDiscardResult, SplitMediaInput, SplitMediaOutput, OverlayPlacement, AddCaptionsInput, CaptionLookInput, CaptionSegmentInput, CaptionEntry } from "../resources/media.js"
 
 // The engine union `media.addCaptions({ transcribeProvider })` takes — re-exported so a
 // consumer can name it without depending on @nodaro/shared directly.

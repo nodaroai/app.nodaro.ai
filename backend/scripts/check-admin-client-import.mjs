@@ -48,6 +48,14 @@ const ADMIN_IMPORT_RE = /^\s*import\b[\s\S]*?from\s+["']([^"']*\/lib\/supabase)(
 // ---------------------------------------------------------------------------
 
 const ALLOWED_PATHS = [
+  // Media discard: reads ONLY the caller's own assets row (user_id = req.userId)
+  // and counts the caller's own jobs referencing the URL, then hands off to
+  // media-process's deleteSourceAfterProcess (that route is in the legacy
+  // baseline), whose ownership verdict and referrer checks need the
+  // cross-user rows naming the same key. Every read is scoped to the caller;
+  // nothing of another user's is returned.
+  /^src\/routes\/media-discard\.ts$/,
+
   // Render final quote (#1922): reads the workflow and a prior execution's node
   // states for the caller, the same reads POST /v1/workflows/:id/run makes (that
   // route is in the legacy baseline). Ownership is checked explicitly before any

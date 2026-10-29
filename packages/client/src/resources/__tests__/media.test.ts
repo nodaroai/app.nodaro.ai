@@ -225,6 +225,43 @@ describe("media resource", () => {
     expect(data.sizeBytes).toBe(123)
   })
 
+  it("downloadVideo() passes exactSection through", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ downloadId: "dl-x" }))
+    const c = make(fetchMock)
+    await c.media.downloadVideo({ url: "https://youtu.be/x", sectionStartSec: 3, sectionEndSec: 15, exactSection: true })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      url: "https://youtu.be/x",
+      sectionStartSec: 3,
+      sectionEndSec: 15,
+      exactSection: true,
+    })
+  })
+
+  it("discard() POSTs { url } to /v1/media/discard and returns the data envelope", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { discarded: true } }))
+    const c = make(fetchMock)
+    const out = await c.media.discard({ url: "https://r2/cut.mp4" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/media/discard")
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ url: "https://r2/cut.mp4" })
+    expect(out.data.discarded).toBe(true)
+  })
+
+  it("process() waits out its own timeoutMs, longer than the client's default", async () => {
+    // A cut that answers after 120 ms: the client's 40 ms default would abort it.
+    const fetchMock = vi.fn(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((resolve, reject) => {
+          const t = setTimeout(() => resolve(mockOk({ data: { url: "https://r2/cut.mp4" } })), 120)
+          init.signal.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("aborted", "AbortError")) })
+        }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock as unknown as typeof fetch, timeoutMs: 40 })
+    const { data } = await c.media.process({ sourceUrl: "https://r2/src.mp4", type: "video" }, { timeoutMs: 1_000 })
+    expect(data.url).toBe("https://r2/cut.mp4")
+    await expect(c.media.process({ sourceUrl: "https://r2/src.mp4", type: "video" })).rejects.toThrow()
+  })
+
   it("addCaptions() carries maxWordsPerLine through to the body, top-level AND on a segment", async () => {
     // The lever rides the plain `...rest` spread — nothing renames it, and a
     // segment carries its own copy so it can override the top-level cap.

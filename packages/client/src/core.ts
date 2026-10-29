@@ -94,6 +94,8 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>
   headers?: Record<string, string>
   signal?: AbortSignal
+  /** This request's timeout in ms, in place of the client's `timeoutMs`. */
+  timeoutMs?: number
 }
 
 /**
@@ -213,7 +215,7 @@ export class NodaroClientCore {
     if (token) headers["Authorization"] = `Bearer ${token}`
 
     const ac = new AbortController()
-    const timeoutId = setTimeout(() => ac.abort(), this.timeoutMs)
+    const timeoutId = setTimeout(() => ac.abort(), options.timeoutMs ?? this.timeoutMs)
     const abort = () => ac.abort(options.signal?.reason)
     options.signal?.addEventListener("abort", abort, { once: true })
     if (options.signal?.aborted) abort()

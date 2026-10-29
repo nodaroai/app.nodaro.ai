@@ -113,13 +113,16 @@ export class MediaResource {
    * `requireAudio: false` to accept a clip that really has no sound. Returns a
    * `downloadId`; progress streams from
    * `GET /v1/download-video/progress/:downloadId` (server-sent events) and the
-   * finished file lands in your library.
+   * finished file lands in your library. A section is fetched with ±3 s of
+   * padding for the caller to trim; `exactSection: true` cuts it exactly at
+   * `sectionStartSec`–`sectionEndSec` instead.
    */
   downloadVideo(input: {
     url: string
     maxHeight?: number
     sectionStartSec?: number
     sectionEndSec?: number
+    exactSection?: boolean
     requireAudio?: boolean
   }): Promise<{ downloadId: string }> {
     return this.client.request<{ downloadId: string }>("POST", "/v1/download-video", { body: input })
@@ -532,10 +535,30 @@ export class MediaResource {
    * free, the source-preparation sibling of the priced `trimVideo` node.
    * `trim` is `[startTime, endTime]` in seconds; `deleteSource: true` removes
    * the source object afterwards when it is yours and nothing else references
-   * it ("the cut replaces the original"). Answers the stored file.
+   * it ("the cut replaces the original"). Answers the stored file. The
+   * platform may take up to 300 s on a long file: pass `timeoutMs` to wait
+   * longer than the client's default.
    */
-  process(input: MediaProcessInput): Promise<{ data: MediaProcessResult }> {
-    return this.client.request<{ data: MediaProcessResult }>("POST", "/v1/media/process", { body: input })
+  process(
+    input: MediaProcessInput,
+    options: { timeoutMs?: number; signal?: AbortSignal } = {},
+  ): Promise<{ data: MediaProcessResult }> {
+    return this.client.request<{ data: MediaProcessResult }>("POST", "/v1/media/process", { body: input, ...options })
+  }
+
+  /**
+   * Throw away a file you just made and no longer need (`POST /v1/media/discard`):
+   * a link download replaced before use, a cut superseded by a newer one, a
+   * picture imported then cancelled. Not a general delete. The file goes only
+   * when it is your own, was made by a link download (`downloadVideo`), a cut
+   * (`process`) or a URL import, is under 24 hours old, and no job of yours
+   * uses it (as an output or as an input such as a run's `videoUrl`);
+   * otherwise it is left untouched and the call fails with 409
+   * `not_discardable`. `discarded: false` means there was nothing of yours at
+   * that address (already gone, or not yours).
+   */
+  discard(input: { url: string }): Promise<{ data: MediaDiscardResult }> {
+    return this.client.request<{ data: MediaDiscardResult }>("POST", "/v1/media/discard", { body: input })
   }
 }
 
@@ -601,6 +624,12 @@ export interface MediaProcessInput {
   crop?: { x: number; y: number; width: number; height: number }
   format?: "mp4" | "webm" | "mp3" | "wav" | "m4a" | "aac"
   deleteSource?: boolean
+}
+
+/** Result of {@link MediaResource.discard}. */
+export interface MediaDiscardResult {
+  /** True when the file was deleted; false when there was nothing of yours at that address. */
+  discarded: boolean
 }
 
 export interface MediaProcessResult {
