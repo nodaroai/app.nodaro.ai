@@ -3397,6 +3397,7 @@ export type PluginNodaroMotionMasking = Partial<
 /** A Cast Swap prompt part's id (`@nodaro/render-rules` `CAST_SWAP_PROMPT_PART_IDS`; a mirror, pinned by a type test). */
 export type PluginPromptPartId =
   | "opener"
+  | "artStyle"
   | "original"
   | "scene"
   | "quality"
