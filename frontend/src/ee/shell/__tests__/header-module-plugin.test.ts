@@ -5,7 +5,7 @@ import { join } from "node:path"
 import type { Plugin, UserConfig } from "vite"
 import { describe, expect, it } from "vitest"
 
-import { isPackageInstalled, MEDIA_EDITOR_ID, SITE_A11Y_ID, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
+import { isPackageInstalled, MEDIA_EDITOR_ID, mediaEditorDecision, SITE_A11Y_ID, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
 
 /**
  * The shared header's module resolver. `virtual:site-header` is the real
@@ -46,6 +46,18 @@ const resolve = (p: Plugin, id: string) => (p.resolveId as (id: string) => strin
 const load = (p: Plugin, id: string) => (p.load as (id: string) => string | null)(id)
 
 const ON = { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "true" }
+
+describe("mediaEditorDecision", () => {
+  it.each([
+    ["cloud", true, "package"],
+    ["cloud", false, "stub"],
+    ["community", true, "stub"],
+    ["business", true, "stub"],
+    [undefined, true, "stub"],
+  ] as const)("edition=%s, installed=%s → %s", (edition, installed, expected) => {
+    expect(mediaEditorDecision(edition, installed)).toBe(expected)
+  })
+})
 
 describe("siteHeaderDecision", () => {
   it.each([
@@ -133,21 +145,25 @@ describe("siteHeaderModule", () => {
     }
   })
 
-  it("the media editor follows the same decision: the package's editor entry with its stylesheet, flagged available", async () => {
-    const on = plugin(true, ON)
-    await runConfig(on, "build")
-    expect(resolve(on, MEDIA_EDITOR_ID)).toBe(RESOLVED_MEDIA_EDITOR)
-    const source = load(on, RESOLVED_MEDIA_EDITOR) ?? ""
-    expect(source).toMatch(/^import ".+\/shell\.css"$/m)
-    expect(source).toMatch(/^export \* from ".+\/media-editor"$/m)
-    expect(source).toMatch(/^export const mediaEditorAvailable = true$/m)
-    expect(source).not.toMatch(/NodaroShell/)
+  it("the media editor is the package on every cloud build that has it, the header flag on or off", async () => {
+    for (const env of [ON, { VITE_EDITION: "cloud" }, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "false" }]) {
+      const on = plugin(true, env)
+      await runConfig(on, "build")
+      expect(resolve(on, MEDIA_EDITOR_ID)).toBe(RESOLVED_MEDIA_EDITOR)
+      const source = load(on, RESOLVED_MEDIA_EDITOR) ?? ""
+      expect(source).toMatch(/^import ".+\/shell\.css"$/m)
+      expect(source).toMatch(/^export \* from ".+\/media-editor"$/m)
+      expect(source).toMatch(/^export const mediaEditorAvailable = true$/m)
+      expect(source).not.toMatch(/NodaroShell/)
+    }
+    // The header itself stays off without the flag.
+    const headerOff = plugin(true, { VITE_EDITION: "cloud" })
+    await runConfig(headerOff, "build")
+    expect(resolve(headerOff, SITE_HEADER_ID)).toBe(STUB)
 
     for (const [installed, env] of [
       [true, { ...ON, VITE_EDITION: "community" }],
       [true, { ...ON, VITE_EDITION: "business" }],
-      [true, { VITE_EDITION: "cloud" }],
-      [true, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "false" }],
       [false, { VITE_EDITION: "cloud" }],
     ] as const) {
       const off = plugin(installed, env)

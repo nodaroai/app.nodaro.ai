@@ -1,15 +1,19 @@
 #!/bin/sh
 # Installs the shared site header (@nodaroai/shell, a private Nodaro package,
 # which also carries the media editor behind `virtual:media-editor`) into the
-# workspace — on a CLOUD build with VITE_SHARED_HEADER=true only.
-# Every other build (community, business, public CI, cloud with the flag off)
-# exits here untouched, so its node_modules and bundle are as before.
+# workspace — on a CLOUD build only. With VITE_SHARED_HEADER=true it is
+# required (no NPM_TOKEN is an error); with the flag off it is installed for
+# the trend admin's media editor when NPM_TOKEN is set, and skipped when it is
+# not (the admin then keeps its own editor; the header stays off either way).
+# Every other build (community, business, public CI) exits here untouched, so
+# its node_modules and bundle are as before.
 #
 # Used by the Dockerfile's frontend stage and by the internal-only contract
 # job (.github/workflows/shared-header-contract.yml).
 #
 #   usage: sh frontend/src/ee/shell/install-package.sh [<workspace root>]   (default /app)
-#   env:   VITE_EDITION, VITE_SHARED_HEADER   the gate
+#   env:   VITE_EDITION                       the gate (cloud only)
+#          VITE_SHARED_HEADER                 true: the package is required
 #          NPM_TOKEN                          a read:packages token for the org's private packages
 #          SHARED_HEADER_PKG_VERSION          optional; the pin below otherwise
 #
@@ -22,8 +26,12 @@ set -eu
 PIN="0.8.0"
 VERSION="${SHARED_HEADER_PKG_VERSION:-$PIN}"
 
-if [ "${VITE_EDITION:-}" != "cloud" ] || [ "${VITE_SHARED_HEADER:-}" != "true" ]; then
-  echo "[site-header] skipped (edition=${VITE_EDITION:-unset}, VITE_SHARED_HEADER=${VITE_SHARED_HEADER:-unset})"
+if [ "${VITE_EDITION:-}" != "cloud" ]; then
+  echo "[site-header] skipped (edition=${VITE_EDITION:-unset})"
+  exit 0
+fi
+if [ "${VITE_SHARED_HEADER:-}" != "true" ] && [ -z "$(printenv NPM_TOKEN || true)" ]; then
+  echo "[site-header] skipped (VITE_SHARED_HEADER=${VITE_SHARED_HEADER:-unset}, no NPM_TOKEN): the admin keeps its own media editor"
   exit 0
 fi
 
