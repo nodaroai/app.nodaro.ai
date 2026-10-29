@@ -24,7 +24,11 @@ vi.mock("../../pipeline-payer.js", () => ({
 }))
 const reserveCreditsMock = vi.fn(async () => ({ usageLogId: "log-1", creditsReserved: 1, watermark: false }))
 vi.mock("../../../billing/credits.js", () => ({
-  CreditsService: { reserveCredits: (...a: unknown[]) => reserveCreditsMock(...(a as [])) },
+  CreditsService: {
+    // The preflight the lane asks before any row exists; allowed here.
+    checkCredits: async () => ({ allowed: true }),
+    reserveCredits: (...a: unknown[]) => reserveCreditsMock(...(a as [])),
+  },
 }))
 const queueAddMock = vi.fn(async () => undefined)
 vi.mock("../../../../lib/queue.js", () => ({

@@ -32,10 +32,20 @@ export type { ImageMaskMode } from "@nodaro/shared/models"
  * in a dropdown — the backend also hides it from discovery and rejects it at
  * run. Single source: never re-derive availability per dropdown. Reads the
  * fetched EFFECTIVE set (surface-availability.ts: profile factory + admin
- * override) with the static profile deny as the pre-fetch fallback.
+ * override + the admin's model switch) with the static profile deny as the
+ * pre-fetch fallback.
+ *
+ * `keep` is the node's STORED model: a saved node that holds a model the
+ * deployment hides keeps it listed (and so labelled on the trigger), never
+ * silently moved to another model — the run refuses it with its own message
+ * (the same rule the quick strips apply, node-quick-configs.tsx).
+ *
+ * A component that renders the result subscribes through `useOfferedModels`
+ * (use-offered-models.ts), so the menu follows an admin's switch; a plain
+ * call is for a memo/effect that re-runs on its own.
  */
-export function withoutDeniedModels<T extends { value: string }>(models: readonly T[]): readonly T[] {
-  return models.filter((m) => !isModelUnavailable(m.value))
+export function withoutDeniedModels<T extends { value: string }>(models: readonly T[], keep?: string): readonly T[] {
+  return models.filter((m) => m.value === keep || !isModelUnavailable(m.value))
 }
 
 export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string; desc: string }[] = [

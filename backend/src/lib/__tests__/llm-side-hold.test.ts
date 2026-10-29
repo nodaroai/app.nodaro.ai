@@ -261,6 +261,32 @@ describe("reserve", () => {
     expect(h.writes).toEqual([])
   })
 
+  it("a model switched off on the LLM models page is refused model_disabled before any pricing — the charge id is the feature's row, which carries no switch for one model", async () => {
+    const { __resetModelSwitchForTests } = await import("../model-switch.js")
+    __resetModelSwitchForTests([MODEL])
+    try {
+      expect(await reserveLlmSideHold({ jobId: JOB, userId: USER, feature: "image-to-text", calls: [CALL], key: "take:x" })).toEqual({
+        ok: false, code: "model_disabled", message: "This model is currently disabled",
+      })
+      expect(h.reserveCalls).toEqual([])
+      expect(h.writes).toEqual([])
+    } finally {
+      __resetModelSwitchForTests()
+    }
+  })
+
+  it("a model an admin switched off is refused model_disabled with the check's sentence — never the balance answer, nothing reserved", async () => {
+    // The check's own code wins over a balance that happens to be short too
+    // (`balance: 0`): the user would otherwise be sent to buy credits that
+    // cannot lift an admin's switch.
+    h.check = { allowed: false, balance: 0, code: "model_disabled", error: "This model is currently disabled" }
+    expect(await reserveLlmSideHold({ jobId: JOB, userId: USER, feature: "image-to-text", calls: [CALL], key: "take:x" })).toEqual({
+      ok: false, code: "model_disabled", message: "This model is currently disabled",
+    })
+    expect(h.reserveCalls).toEqual([])
+    expect(h.writes).toEqual([])
+  })
+
   it("a payer context of another user is refused (never someone else's pocket)", async () => {
     const r = await reserveLlmSideHold({ jobId: JOB, userId: USER, feature: "image-to-text", calls: [CALL], key: "take:x", payer: { billingContext: { payer: "user", userId: OTHER } } })
     expect(r).toMatchObject({ ok: false, code: "conflict" })

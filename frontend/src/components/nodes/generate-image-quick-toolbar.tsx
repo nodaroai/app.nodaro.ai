@@ -7,6 +7,7 @@ import { Sparkles, Ratio, Maximize2, Settings2, Copy } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { IMAGE_GEN_MODELS } from "@/components/editor/config-panels/model-options"
+import { useOfferedModels } from "@/components/editor/config-panels/use-offered-models"
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
 import { AspectRatioItem } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
@@ -169,6 +170,9 @@ export function GenerateImageQuickToolbar({
     onRepeatChange: handleRepeatChange,
     runSingleNode,
   } = useGenerateImageStripModel(nodeId, stripData)
+  // The deployment's hidden models leave the menu; the node's own stays listed
+  // (never silently moved). Subscribed: an admin's switch flips it while open.
+  const offeredImageModels = useOfferedModels(IMAGE_GEN_MODELS, currentProvider)
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
@@ -239,7 +243,7 @@ export function GenerateImageQuickToolbar({
                   value={currentProvider}
                   onChange={handleModelChange}
                   onOpenChange={handleOpenChange}
-                  options={IMAGE_GEN_MODELS}
+                  options={offeredImageModels}
                   triggerClassName={ghostPopoverTriggerClass}
                   contentClassName="node-menu-surface"
                   ariaLabel={t("field.model")}
@@ -327,7 +331,7 @@ export function GenerateImageQuickToolbar({
         isMulti={isMulti}
         modelLabel={modelLabel}
         currentProvider={currentProvider}
-        modelOptions={IMAGE_GEN_MODELS}
+        modelOptions={offeredImageModels}
         onModelChange={handleModelChange}
         aspectOptions={aspectOptions}
         currentAspect={currentAspect}

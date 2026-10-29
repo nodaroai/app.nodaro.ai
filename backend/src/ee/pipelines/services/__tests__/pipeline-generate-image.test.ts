@@ -14,6 +14,9 @@ vi.mock("../../pipeline-payer.js", () => ({
 
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
+    // The preflight the lane asks before any row exists (the route guard's
+    // two up-front refusals); allowed unless a case says otherwise.
+    checkCredits: vi.fn().mockResolvedValue({ allowed: true }),
     reserveCredits: vi.fn().mockResolvedValue({
       usageLogId: "log-1",
       creditsReserved: 2,
@@ -136,6 +139,45 @@ async function runUntilSettled<T>(
 }
 
 describe("pipelineGenerateImage", () => {
+  it("a job that is not a video makes no credit check before its row (as before) — the switch is asked in-process", async () => {
+    const { supabase } = makeSupabaseMock({ jobStates: [{ status: "completed", output_data: { imageUrl: "https://r2/a1.png" }, credits_actual: 2 }], assetRow: { id: "asset-1" } })
+    await runUntilSettled(pipelineGenerateImage({ supabase, pipelineId: "p1", userId: "u1", prompt: "weathered pilot portrait" }))
+    expect(CreditsService.checkCredits).not.toHaveBeenCalled()
+    expect(CreditsService.reserveCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("a model the deployment does not offer (the availability override) is refused in the route guard's words, before any row", async () => {
+    const { __resetAvailabilityOverridesForTests } = await import("../../../../lib/availability-override.js")
+    // An override that lists only one other model: gpt-image-2 is denied.
+    __resetAvailabilityOverridesForTests({ models: new Set(["flux"]) })
+    try {
+      const { supabase, recorded } = makeSupabaseMock({ jobStates: [{ status: "completed", output_data: { imageUrl: "https://r2/a1.png" } }] })
+      await expect(
+        runUntilSettled(pipelineGenerateImage({ supabase, pipelineId: "p1", userId: "u1", prompt: "weathered pilot portrait" })),
+      ).rejects.toThrow(/not available on this deployment: gpt-image-2/)
+      expect(recorded.jobInsert).toBeUndefined()
+      expect(CreditsService.reserveCredits).not.toHaveBeenCalled()
+    } finally {
+      __resetAvailabilityOverridesForTests()
+    }
+  })
+
+  it("a model whose BASE row an admin switched off is refused before the credit check — the switch lives on the base row, not on a composite credit id", async () => {
+    const { __resetModelSwitchForTests } = await import("../../../../lib/model-switch.js")
+    __resetModelSwitchForTests(["gpt-image-2"])
+    try {
+      const { supabase, recorded } = makeSupabaseMock({ jobStates: [{ status: "completed", output_data: { imageUrl: "https://r2/a1.png" } }] })
+      await expect(
+        runUntilSettled(pipelineGenerateImage({ supabase, pipelineId: "p1", userId: "u1", prompt: "weathered pilot portrait" })),
+      ).rejects.toThrow("This model is currently disabled")
+      expect(CreditsService.checkCredits).not.toHaveBeenCalled()
+      expect(recorded.jobInsert).toBeUndefined()
+      expect(CreditsService.reserveCredits).not.toHaveBeenCalled()
+    } finally {
+      __resetModelSwitchForTests()
+    }
+  })
+
   it("returns asset when job completes", async () => {
     const { supabase, recorded } = makeSupabaseMock({
       jobStates: [

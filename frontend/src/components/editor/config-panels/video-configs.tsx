@@ -3,6 +3,7 @@
 import { useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useMemo, useState, useCallback, useEffect, Suspense, memo } from "react"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
+import { useOfferedModels } from "./use-offered-models"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
@@ -1419,6 +1420,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     videoProvider: data.provider || "wan",
   })
   const provider = data.provider || "wan"
+  const offeredV2vModels = useOfferedModels(VIDEO_V2V_MODELS, provider)
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
   const isAleph = provider === "runway-aleph"
@@ -1508,7 +1510,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         <ModelSearchSelect
           value={provider}
           onChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
-          options={VIDEO_V2V_MODELS}
+          options={offeredV2vModels}
           getTooltip={getVideoModelCapabilitiesTooltip}
           ariaLabel={t("field.provider")}
         />
@@ -1971,6 +1973,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
     videoProvider: data.provider || "kling",
   })
   const provider = data.provider || "kling"
+  const offeredMotionModels = useOfferedModels(MOTION_TRANSFER_MODELS, provider)
 
   // Detect video duration from connected upstream video node's metadata or URL
   const connectedVideoInfo = useMemo(() => {
@@ -2034,7 +2037,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
         <ModelSearchSelect
           value={provider}
           onChange={(v) => onUpdate({ provider: v as MotionTransferData["provider"] })}
-          options={MOTION_TRANSFER_MODELS}
+          options={offeredMotionModels}
           ariaLabel={t("field.provider")}
         />
       </MappableField>
@@ -2304,6 +2307,7 @@ export function VideoDepthConfig({ data, onUpdate, sources, fieldMappings, onMap
   // The provider the run uses — the route, the payload builder and the strip
   // resolve an unknown / missing value the same way.
   const provider = resolveVideoDepthProvider(data.provider)
+  const offeredDepthModels = useOfferedModels(VIDEO_DEPTH_MODELS, provider)
   const levers = videoDepthLevers(provider)
   const colormaps = videoDepthColormaps(provider)
   useEffect(() => {
@@ -2334,7 +2338,7 @@ export function VideoDepthConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as VideoDepthData["provider"] })}>
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {VIDEO_DEPTH_MODELS.map((m) => <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecond />)}
+            {offeredDepthModels.map((m) => <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecond />)}
           </SelectContent>
         </Select>
       </MappableField>
@@ -4235,6 +4239,7 @@ function GVP_ANCHOR_MODE_HINTS(): Record<GvpAnchorChoice, string> {
 function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<GenerateVideoProNodeData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
+  const offeredGvpProviders = useOfferedModels(GVP_PROVIDERS, data.provider || "seedance-2")
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
   const maxDuration = GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK
@@ -4347,7 +4352,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         >
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {GVP_PROVIDERS.map((m) => (
+            {offeredGvpProviders.map((m) => (
               <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
@@ -4889,6 +4894,7 @@ export const EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK = 120
 function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<EditVideoProNodeData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
+  const offeredEvpProviders = useOfferedModels(EVP_PROVIDERS, data.provider || "seedance-2")
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
   const spanStart = Math.max(0, data.spanStart ?? 0)
@@ -4914,7 +4920,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         >
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {EVP_PROVIDERS.map((m) => (
+            {offeredEvpProviders.map((m) => (
               <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
@@ -5006,6 +5012,7 @@ export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   // Extending video is not on free credits: the models stay listed, locked, with why.
   const freeVideoLimits = useFreeVideoLimits()
+  const offeredExtendModels = useOfferedModels(EXTEND_VIDEO_MODELS, data.provider || "veo-extend")
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
@@ -5063,7 +5070,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         >
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {EXTEND_VIDEO_MODELS.map((m) => (
+            {offeredExtendModels.map((m) => (
               <LockableSelectItem key={m.value} value={m.value} locked={lockedVideoModel(freeVideoLimits, m.value)}>{localizeOption(m.label)}</LockableSelectItem>
             ))}
           </SelectContent>

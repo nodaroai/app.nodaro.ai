@@ -232,11 +232,16 @@ export function readQuickConfigValue(control: QuickConfigControl, data: Record<s
   return v != null ? String(v) : ""
 }
 
-/** A control whose options are generation models — the ones a deployment may
- *  not offer (lib/surface-availability.ts: the profile, the admin override,
- *  the admin's model switch). Their menus hide what the backend refuses. */
+/** The node-data fields that hold a MODEL id: a generation provider, an LLM
+ *  model, a Suno / voice model. A control over one of them lists models. */
+export const MODEL_ID_FIELDS: ReadonlySet<string> = new Set(["provider", "llmModel", "model"])
+
+/** A control whose options are models — the ones a deployment may not offer
+ *  (lib/surface-availability.ts: the profile, the admin override, the admin's
+ *  model switch — the LLM models page included). Their menus hide what the
+ *  backend refuses. */
 function listsModels(control: QuickConfigControl): boolean {
-  return control.field === "provider"
+  return MODEL_ID_FIELDS.has(control.field)
 }
 
 /** Every option the control declares for this node, offered or not. */

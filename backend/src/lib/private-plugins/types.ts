@@ -2902,7 +2902,9 @@ export interface PluginLlmSideHoldRefusal {
   /**
    * `unavailable` (metered pricing is off: bill as before), `job_not_live`,
    * `conflict`, `llm_model_unpriced`, `insufficient_credits`,
-   * `subscription_required`, `free_video_limit`, `consent_required`,
+   * `subscription_required`, `free_video_limit`, `model_disabled` (an admin
+   * switched the model off — not a balance problem), `model_not_available`
+   * (the deployment does not offer the model), `consent_required`,
    * `invalid_request`, a reserve refusal (`budget_exceeded`,
    * `member_cap_exceeded`, `user_allowance_exceeded`, `access_blocked`, …)
    * or `reservation_failed`.

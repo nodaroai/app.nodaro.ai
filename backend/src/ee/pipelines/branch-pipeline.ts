@@ -158,7 +158,9 @@ export async function branchPipeline(
       const check = await CreditsService.checkCredits(userId, modelId, false, undefined, { billingContext })
       if (!check.allowed) {
         throw new BranchPipelineError(
-          "model_pin_forbidden",
+          // A model an admin switched off keeps the guard's own code (the route
+          // answers it 403); a plan restriction is the pin refusal.
+          check.code === "model_disabled" ? "model_disabled" : "model_pin_forbidden",
           check.error ?? `Model '${modelId}' is not available on your current plan`,
         )
       }

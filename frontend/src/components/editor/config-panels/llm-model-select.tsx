@@ -19,6 +19,7 @@ import {
   type LlmModelDef
 } from "@nodaro/shared/llm-models"
 import { modelMatchesQuery } from "@/lib/model-search"
+import { isModelUnavailable, useSurfaceAvailability } from "@/lib/surface-availability"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { llmPickerPriceLabel, useLlmModelPrices } from "@/hooks/use-llm-price"
 
@@ -79,7 +80,15 @@ export function LlmModelSelect({ feature, value, onChange, filter, labelAction, 
 
   const defaultModel = LLM_FEATURE_DEFAULTS[feature]
   const currentValue = value || defaultModel
-  const models = filter ? LLM_MODELS.filter(filter) : LLM_MODELS
+  // A model the deployment does not offer (the profile, the admin override,
+  // the admin's switch on the LLM models page) leaves the menu; the node's
+  // stored model stays listed, never silently moved. Subscribed, so an
+  // admin's switch flips the menu while the panel is open.
+  const availability = useSurfaceAvailability()
+  const models = useMemo(() => {
+    const declared = filter ? LLM_MODELS.filter(filter) : LLM_MODELS
+    return declared.filter((m) => m.id === currentValue || !isModelUnavailable(m.id))
+  }, [filter, currentValue, availability])
   const current = models.find((m) => m.id === currentValue) ?? LLM_MODELS.find((m) => m.id === currentValue)
   // Each model's estimated price beside its tier badge — only while the server
   // prices them as estimates (metered pricing on, D7); none under rollback.

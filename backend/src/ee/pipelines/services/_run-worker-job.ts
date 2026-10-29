@@ -3,6 +3,8 @@ import { insertInternalJob } from "../../../lib/insert-job.js"
 import { JobBlockedError } from "../../../lib/job-policy.js"
 import { sideHoldChargesFor, withSideCharge } from "../../../lib/job-step-charge.js"
 import { freeVideoRequestForJob, isVideoModelId } from "../../billing/free-video-limits.js"
+import { deniedModelRejectionMessage, isModelDenied } from "../../../lib/surface-deny.js"
+import { isModelSwitchedOff } from "../../../lib/model-switch.js"
 import { pollForAssetId, pollJobUntilComplete } from "./_poll.js"
 
 /**
@@ -107,11 +109,12 @@ export async function runPipelineWorkerJob(
   // reporting pair + the DB privacy clamp), read ONCE here and reused below.
   const { getPipelineBillingContext } = await import("../pipeline-payer.js")
   const billingContext = await getPipelineBillingContext(supabase, pipelineId, userId)
-  // The free-credit video limits: pipeline jobs reserve without the route
-  // guard's preflight, so a video job is judged here, before any row exists —
-  // an account that never paid cannot reach Kling (the director's default) or
-  // a long / high-resolution clip through a pipeline either.
-  await assertFreeVideoAllowed(userId, jobName, modelIdentifier, inputData, billingContext, creditOverride)
+  // Pipeline jobs reserve without the route guard's preflight, so the two
+  // refusals that guard answers BEFORE a row exists are asked here: a model an
+  // admin switched off (any job), and the free-credit video limits (a video
+  // job — an account that never paid cannot reach Kling, the director's
+  // default, or a long / high-resolution clip through a pipeline either).
+  await assertModelAdmitted(userId, jobName, modelIdentifier, inputData, billingContext, creditOverride)
   const { data: job, error: insertErr } = await insertInternalJob(
     `pipeline:${jobName}`,
     {
@@ -185,8 +188,23 @@ export async function runPipelineWorkerJob(
   }
 }
 
-/** Throws the free-credit video refusal for a video job the limits forbid; any other preflight answer is left to the reservation, as before. */
-async function assertFreeVideoAllowed(
+/**
+ * Throws the refusals the route guard answers before anything exists — the
+ * reservation itself reads none of them, so without this a pipeline RAN a
+ * model nobody may pick:
+ *
+ * 1. The deployment's model availability (`isModelDenied`: the surface
+ *    profile, the admin override, the admin's switch), asked of the job's
+ *    BASE model id as well as its credit id — a shot priced under a composite
+ *    (`kling:5s:720p`) has no pricing row of its own to carry the switch,
+ *    which lives on the base row (`lib/model-switch.ts`).
+ * 2. For a video job, the credit check's free-credit video refusal (and its
+ *    own `model_disabled`, read fresh off the pricing row). Any other answer
+ *    (a short balance) is left to the reservation, as before; a job that is
+ *    not a video makes no check here, as before — the switch above is asked
+ *    of every job.
+ */
+async function assertModelAdmitted(
   userId: string,
   jobName: string,
   modelIdentifier: string,
@@ -194,9 +212,16 @@ async function assertFreeVideoAllowed(
   billingContext: Awaited<ReturnType<typeof import("../pipeline-payer.js").getPipelineBillingContext>>,
   creditOverride: number | undefined,
 ): Promise<void> {
+  const base = modelIdentifier.split(":")[0] || modelIdentifier
+  for (const id of new Set([base, modelIdentifier])) {
+    if (isModelSwitchedOff(id)) throw new Error("This model is currently disabled")
+    if (isModelDenied(id)) throw new Error(deniedModelRejectionMessage([base]))
+  }
   const video = freeVideoRequestForJob(jobName, modelIdentifier, inputData)
-  if (!video && !isVideoModelId(modelIdentifier.split(":")[0] ?? "")) return
+  if (!video && !isVideoModelId(base)) return
   const { CreditsService } = await import("../../billing/credits.js")
   const check = await CreditsService.checkCredits(userId, modelIdentifier, false, creditOverride, { billingContext, ...(video ? { video } : {}) })
-  if (!check.allowed && check.code === "free_video_limit") throw new Error(check.error ?? "Not available on free credits")
+  if (check.allowed) return
+  if (check.code === "model_disabled") throw new Error(check.error ?? "This model is currently disabled")
+  if (check.code === "free_video_limit") throw new Error(check.error ?? "Not available on free credits")
 }

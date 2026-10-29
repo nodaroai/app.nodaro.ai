@@ -1,12 +1,30 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { LlmModelSelect } from "../llm-model-select"
 import { STRUCTURED_VISION_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
+import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 
 // The hint fetches credits behind hasCredits(); stub it so renders are pure.
 vi.mock("../model-description-hint", () => ({ ModelDescriptionHint: () => null }))
 
+afterEach(() => __resetSurfaceAvailabilityForTests(null))
+
 describe("LlmModelSelect (grouped searchable combobox)", () => {
+  it("a model switched off on the LLM models page leaves the menu, while a node that still holds it keeps it on the trigger", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: ["grok-4.6"] })
+    const { unmount } = render(<LlmModelSelect feature="llm-chat" onChange={() => {}} />)
+    fireEvent.click(screen.getByRole("combobox", { name: "AI Model" }))
+    expect(screen.queryByText("Grok 4.6")).toBeNull()
+    unmount()
+
+    render(<LlmModelSelect feature="llm-chat" value="grok-4.6" onChange={() => {}} />)
+    const trigger = screen.getByRole("combobox", { name: "AI Model" })
+    expect(trigger).toHaveTextContent("Grok 4.6")
+    fireEvent.click(trigger)
+    // Listed once, for the node that holds it — never silently moved.
+    expect(screen.getAllByText("Grok 4.6").length).toBeGreaterThanOrEqual(1)
+  })
+
   it("shows the selected model's display name and tier on the trigger", () => {
     render(<LlmModelSelect feature="llm-chat" value="grok-4.6" onChange={() => {}} />)
     const trigger = screen.getByRole("combobox", { name: "AI Model" })

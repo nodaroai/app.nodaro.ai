@@ -85,6 +85,7 @@ import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, DIALOGUE_MODELS, SUNO_MODELS } from "./model-options"
+import { useOfferedModels } from "./use-offered-models"
 import { PromptLengthCounter } from "./prompt-length-counter"
 // The speech price as the run reserves it (flat, or by length when the server
 // serves the unit row) — an `ee/` hook; allowlisted in tools/check-ee-imports.mjs
@@ -178,6 +179,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   // follow — a known gap), so it shows that. The legacy `elevenlabs` id still shows as v3 although it runs as turbo
   // — a known display mismatch, unchanged here (it has no entry in TTS_MODELS).
   const shownModel = data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || DEFAULT_TTS_PROVIDER)
+  const offeredTtsModels = useOfferedModels(TTS_MODELS, shownModel)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "directText")
   const finalPrompt = useFinalPromptSegments({
@@ -216,7 +218,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {TTS_MODELS.map((m) => (
+            {offeredTtsModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
@@ -471,6 +473,7 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
 
 export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoGenerateData> & { nodeId?: string }) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -536,7 +539,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-generate")} />
             ))}
           </SelectContent>
@@ -620,6 +623,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
 
 export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoCoverData> & { nodeId?: string }) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -668,7 +672,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-cover")} />
             ))}
           </SelectContent>
@@ -746,6 +750,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
 
 export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoExtendData> & { nodeId?: string }) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -802,7 +807,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-extend")} />
             ))}
           </SelectContent>
@@ -1274,6 +1279,7 @@ export function SunoMusicVideoConfig({ data, onUpdate, nodes, edges, nodeId }: C
 
 export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoMashupData>) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">{t("audiocfg.hintMashup")}</p>
@@ -1281,7 +1287,7 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-mashup")} />
             ))}
           </SelectContent>
@@ -1439,6 +1445,7 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
 
 export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddInstrumentalData> & { nodeId?: string }) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -1451,7 +1458,7 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-add-instrumental")} />
             ))}
           </SelectContent>
@@ -1464,6 +1471,7 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
 
 export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddVocalsData> & { nodeId?: string }) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -1476,7 +1484,7 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-add-vocals")} />
             ))}
           </SelectContent>
@@ -1503,6 +1511,7 @@ export function SunoConvertWavConfig({ data, onUpdate, nodes, edges, nodeId }: C
 
 export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoUploadExtendData> & { nodeId?: string }) {
   const t = useT()
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -1520,7 +1529,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         <Select value={data.model || DEFAULT_SUNO_MODEL} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.map((m) => (
+            {offeredSunoModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-upload-extend")} />
             ))}
           </SelectContent>
@@ -1695,6 +1704,7 @@ function lipSyncResolutionOptions(
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
   const t = useT()
+  const offeredLipSyncModels = useOfferedModels(LIP_SYNC_MODELS, data.provider || "kling-avatar")
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -1746,7 +1756,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {LIP_SYNC_MODELS.map((m) => (
+            {offeredLipSyncModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecond={isPerSecondLipSyncProvider(m.value)} />
             ))}
           </SelectContent>
@@ -2136,6 +2146,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   // what the backend accepts (three copies drifted before). An unset provider
   // reads as v3 dialogue, which is what the node runs as.
   const shownModel = dialogueProviderOf(data.provider)
+  const offeredDialogueModels = useOfferedModels(DIALOGUE_MODELS, shownModel)
   const maxChars = getDialogueCapabilities(data.provider).maxChars
   // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
   const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
@@ -2204,7 +2215,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {DIALOGUE_MODELS.map((m) => (
+            {offeredDialogueModels.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
@@ -2340,6 +2351,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 
 export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceChangerData>) {
   const localizeOption = useLocalizeOptionLabel()
+  const offeredVoiceChangerModels = useOfferedModels(VOICE_CHANGER_MODELS, data.model || DEFAULT_VOICE_CHANGER_MODEL)
   const t = useT()
   const localizeDesc = useLocalizeModelDescription()
   const voiceLabelId = useId()
@@ -2372,7 +2384,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         >
           <SelectTrigger id="vc-model" aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {VOICE_CHANGER_MODELS.map((m) => (
+            {offeredVoiceChangerModels.map((m) => (
               <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
@@ -2731,6 +2743,7 @@ const VOICE_FX_NONE = "__none__"
 
 export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChangerProData>) {
   const localizeOption = useLocalizeOptionLabel()
+  const offeredVoiceChangerModels = useOfferedModels(VOICE_CHANGER_MODELS, data.model || DEFAULT_VOICE_CHANGER_MODEL)
   const t = useT()
   const voices = data.orderedVoices ?? []
   const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
@@ -2897,7 +2910,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {VOICE_CHANGER_MODELS.map((m) => (
+            {offeredVoiceChangerModels.map((m) => (
               <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>

@@ -7,6 +7,7 @@ import { PromptEditor } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { useT } from "@/lib/i18n"
+import { isModelUnavailable, useSurfaceAvailability } from "@/lib/surface-availability"
 import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
@@ -38,6 +39,9 @@ const NO_ZONE: VideoMaskZone = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 
  */
 export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<VideoMaskNodeData> & { nodeId?: string }) {
   const t = useT()
+  // The deployment's hidden models drop out of the menu (the node's stored one
+  // stays); subscribed, so an admin's switch flips it while the panel is open.
+  useSurfaceAvailability()
   const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId ?? "")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -127,7 +131,7 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {VIDEO_MASK_PROVIDERS.map((p) => (
+            {VIDEO_MASK_PROVIDERS.filter((p) => p === provider || !isModelUnavailable(p)).map((p) => (
               <SelectItem key={p} value={p}>{VIDEO_MASK_PROVIDER_LABELS[p]}</SelectItem>
             ))}
           </SelectContent>
