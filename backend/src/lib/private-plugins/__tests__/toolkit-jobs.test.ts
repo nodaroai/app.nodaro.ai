@@ -16,10 +16,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const { mockSingle, mockCoreMarkJobCompletedDetailed } = vi.hoisted(() => ({
+const { mockSingle, mockCoreMarkJobCompletedDetailed, mockWarmCompletedJobVideo } = vi.hoisted(() => ({
   mockSingle: vi.fn(),
   mockCoreMarkJobCompletedDetailed: vi.fn(),
+  mockWarmCompletedJobVideo: vi.fn(),
 }))
+
+// The CDN light-copy warm-up after a completion: recorded, never fetched.
+vi.mock("@/lib/warm-video-copies.js", () => ({ warmCompletedJobVideo: mockWarmCompletedJobVideo }))
 
 vi.mock(import("@/lib/config.js"), async (importOriginal) => {
   const actual = await importOriginal()
@@ -202,3 +206,66 @@ describe("tk.jobs.markJobCompleted — policy outcomes", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// A completed job's video is handed to the CDN warm-up with the row's job type
+// and the MERGED output (its videoUrl and recorded width); the warm-up itself
+// decides which job types it warms (lib/__tests__/warm-video-copies.test.ts).
+// A job that did not complete hands it nothing.
+// ---------------------------------------------------------------------------
+describe("tk.jobs.markJobCompleted — the CDN warm-up", () => {
+  let tk: PluginToolkit
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    tk = buildToolkit()
+  })
+
+  const VIDEO = "https://cdn.nodaro.ai/videos/run-1.mp4"
+
+  it("a completed cast-swap job: its job type and merged output", async () => {
+    mockSingle.mockResolvedValueOnce({ data: { output_data: { pro: 1 }, job_type: "cast-swap" }, error: null })
+    mockCoreMarkJobCompletedDetailed.mockResolvedValue("completed")
+
+    await expect(tk.jobs.markJobCompleted("job-w1", { videoUrl: VIDEO, width: 720 })).resolves.toBe(true)
+    expect(mockWarmCompletedJobVideo).toHaveBeenCalledTimes(1)
+    expect(mockWarmCompletedJobVideo).toHaveBeenCalledWith("cast-swap", { pro: 1, videoUrl: VIDEO, width: 720 })
+  })
+
+  it("a completion whose answer was lost but that did commit is warmed too", async () => {
+    mockSingle
+      .mockResolvedValueOnce({ data: { output_data: {}, job_type: "cast-swap-full-quality" }, error: null })
+      .mockResolvedValueOnce({ data: { status: "completed", output_data: { videoUrl: VIDEO } }, error: null })
+    mockCoreMarkJobCompletedDetailed.mockResolvedValue("lost_race")
+
+    await expect(tk.jobs.markJobCompleted("job-w2", { videoUrl: VIDEO })).resolves.toBe(true)
+    expect(mockWarmCompletedJobVideo).toHaveBeenCalledWith("cast-swap-full-quality", { videoUrl: VIDEO })
+  })
+
+  it.each(["blocked", "held"] as const)("a %s job warms nothing", async (outcome) => {
+    mockSingle.mockResolvedValueOnce({ data: { output_data: {}, job_type: "cast-swap" }, error: null })
+    mockCoreMarkJobCompletedDetailed.mockResolvedValue(outcome)
+
+    await expect(tk.jobs.markJobCompleted("job-w3", { videoUrl: VIDEO })).resolves.toBe(false)
+    expect(mockWarmCompletedJobVideo).not.toHaveBeenCalled()
+  })
+
+  it("a cancelled or failed job (the completion lost to a terminal row) warms nothing", async () => {
+    mockSingle
+      .mockResolvedValueOnce({ data: { output_data: {}, job_type: "cast-swap" }, error: null })
+      .mockResolvedValueOnce({ data: { status: "failed", output_data: {} }, error: null })
+    mockCoreMarkJobCompletedDetailed.mockResolvedValue("lost_race")
+
+    await expect(tk.jobs.markJobCompleted("job-w4", { videoUrl: VIDEO })).resolves.toBe(false)
+    expect(mockWarmCompletedJobVideo).not.toHaveBeenCalled()
+  })
+
+  it("a warm-up that throws never fails the completion", async () => {
+    mockSingle.mockResolvedValueOnce({ data: { output_data: {}, job_type: "cast-swap" }, error: null })
+    mockCoreMarkJobCompletedDetailed.mockResolvedValue("completed")
+    mockWarmCompletedJobVideo.mockImplementationOnce(() => {
+      throw new Error("boom")
+    })
+
+    await expect(tk.jobs.markJobCompleted("job-w5", { videoUrl: VIDEO })).resolves.toBe(true)
+  })
+})
