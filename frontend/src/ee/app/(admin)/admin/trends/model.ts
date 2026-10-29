@@ -573,6 +573,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   storedFaceMaskRequired: "stored face masks a run must use (marks, person masks)",
   "faceMaskTarget:face": "face-only masks",
   "faceMaskTarget:body": "whole-person masks (Keep people)",
+  "faceMaskHideTarget:body": "whole-person hiding (Faces hidden)",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",

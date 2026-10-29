@@ -390,6 +390,23 @@ describe("engineSupports — what the masks cover", () => {
     setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["face", "head"] } })
     expect(engineSupports(target("face"))).toBe(true)
   })
+
+  it("runs a trend that hides whole people (faces hidden) only on an engine whose `faceMaskHideTargets` names it", () => {
+    const hide = (source: "faces" | null) => {
+      const c = composed(false)
+      c.needs.faceMaskTarget = "body"
+      c.needs.faceMaskSource = source
+      return c
+    }
+    // An engine from before the declaration lists "body" for keep people while refusing it with faces hidden.
+    setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["face", "head", "body"] } })
+    expect(engineSupports(hide("faces"))).toBe(false)
+    expect(engineSupports(hide(null))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head"] } })
+    expect(engineSupports(hide("faces"))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head", "body"] } })
+    expect(engineSupports(hide("faces"))).toBe(true)
+  })
 })
 
 /**

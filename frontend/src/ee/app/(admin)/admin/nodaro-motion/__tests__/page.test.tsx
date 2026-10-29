@@ -14,7 +14,8 @@ vi.mock("@/lib/edition", async (orig) => ({
 }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
-import { fetchMock, renderWith, resetRoutes, routes, sentTo } from "../../trends/__tests__/harness"
+import type { TrendEngineEnvironment } from "@/lib/api"
+import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "../../trends/__tests__/harness"
 import AdminNodaroMotionPage from "../page"
 import { motionEngineGaps, motionIssues, motionToSaved, toSaved } from "../model"
 
@@ -35,6 +36,20 @@ const ENGINES = [
   { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
   { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
 ]
+const ENVS_URL = "/v1/admin/trends/engine-environments"
+/** An engine that hides whole people with faces hidden (`faceMaskHideTargets`), and one from before (keeps them only). */
+const hides = (env: string): TrendEngineEnvironment => ({
+  ...ENVIRONMENTS[0]!,
+  env,
+  supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head", "body"] } },
+})
+const keepsOnly = (env: string): TrendEngineEnvironment => ({
+  ...ENVIRONMENTS[0]!,
+  env,
+  supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, faceMaskTargets: ["face", "head", "body"] } },
+})
+/** Every environment the setting is shared by can hide whole people. */
+const HIDE_ENVS: TrendEngineEnvironment[] = [hides("production"), hides("staging")]
 
 beforeEach(() => {
   resetRoutes()
@@ -45,6 +60,7 @@ beforeEach(() => {
   routes[`GET ${MOTION_URL}`] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
   routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes[`GET ${ENVS_URL}`] = () => ({ body: { data: ENVIRONMENTS } })
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -77,6 +93,44 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-pulse": { mode: "auto", target: "face" } } }]))
     expect(await screen.findByText(/^Saved /)).toBeInTheDocument()
+  })
+
+  it("offers Body greyed out, naming the environments that lack it, while no environment's engine hides whole people", async () => {
+    const user = userEvent.setup()
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    await user.click(within(prism).getByRole("combobox", { name: "Covers" }))
+    // Staging has no recorded engine (unknown counts as lacking); production's predates it.
+    await waitFor(() => expect(screen.getByRole("option", { name: "Body (not supported yet: staging, production)" })).toHaveAttribute("aria-disabled", "true"))
+  })
+
+  it("keeps Body greyed out until EVERY environment's engine hides whole people (the setting is shared)", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [keepsOnly("production"), hides("staging")] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    await user.click(within(prism).getByRole("combobox", { name: "Covers" }))
+    await waitFor(() => expect(screen.getByRole("option", { name: "Body (not supported yet: production)" })).toHaveAttribute("aria-disabled", "true"))
+  })
+
+  it("saves Body (the whole person hidden) once an environment's engine can", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: HIDE_ENVS } })
+    routes[`PUT ${URL}`] = (init) => ({
+      body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-10-29T12:00:00.000Z", engines: ENGINES } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    await user.click(within(prism).getByRole("combobox", { name: "Covers" }))
+    await user.click(await screen.findByRole("option", { name: "Body" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", target: "body" } } }]))
   })
 
   it("starts from what is stored, and holds Save while a value is out of range", async () => {
@@ -243,6 +297,37 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     await waitFor(() => expect(within(motion).getByRole("combobox", { name: "Motion masking" })).toHaveTextContent("Faces hidden"))
     expect(within(motion).getByRole("combobox", { name: "Covers" })).toHaveTextContent("Face")
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("the Motion column's face mask keeps Body greyed out until every environment's engine hides whole people", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [hides("production"), keepsOnly("staging")] } })
+    routes[`GET ${MOTION_URL}`] = () => ({
+      body: { data: { motion: { "motion-prism": { masking: { mode: "always" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Prism/)
+    await waitFor(() => expect(within(motion).getByRole("combobox", { name: "Covers" })).toBeInTheDocument())
+    await user.click(within(motion).getByRole("combobox", { name: "Covers" }))
+    await waitFor(() => expect(screen.getByRole("option", { name: "Body (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true"))
+  })
+
+  it("the Motion column's face mask offers Body once every environment's engine hides whole people", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: HIDE_ENVS } })
+    routes[`GET ${MOTION_URL}`] = () => ({
+      body: { data: { motion: { "motion-prism": { masking: { mode: "always" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    routes[`PUT ${MOTION_URL}`] = (init) => ({
+      body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-10-29T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Prism/)
+    await waitFor(() => expect(within(motion).getByRole("combobox", { name: "Covers" })).toBeInTheDocument())
+    await user.click(within(motion).getByRole("combobox", { name: "Covers" }))
+    await user.click(await screen.findByRole("option", { name: "Body" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-prism": { masking: { mode: "always", target: "body" } } } }]))
   })
 
   it("says under the Motion column when this environment's engine plugin is out of date for it", async () => {

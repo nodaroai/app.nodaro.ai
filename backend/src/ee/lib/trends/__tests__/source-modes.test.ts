@@ -190,8 +190,10 @@ describe("the schema", () => {
     }
   })
 
-  it("refuses the whole-person target and a main mark outside keep people", () => {
-    expect(issues({ ...MASKING, target: "body" }).join("\n")).toMatch(/faceMasking\.target: /)
+  it("takes the whole-person target with faces hidden (either fill) and keep people, never full depth; a main mark is keep people's alone", () => {
+    expect(issues({ ...MASKING, target: "body" })).toEqual([])
+    expect(issues({ ...MASKING, source: "faces", fill: "depth", target: "body" })).toEqual([])
+    expect(issues({ ...KEEP, target: "body" })).toEqual([])
     expect(issues({ ...FULL, target: "body" }).join("\n")).toMatch(/faceMasking\.target: /)
     expect(issues({ ...MASKING, marks: [MAIN] }).join("\n")).toMatch(/faceMasking\.marks\.0\.label: /)
     expect(issues({ ...MASKING, source: "faces", marks: [MAIN] }).join("\n")).toMatch(/faceMasking\.marks\.0\.label: /)
@@ -207,7 +209,8 @@ describe("the schema", () => {
     expect(faceMaskingSchema.safeParse({ ...MASKING, source: "faces" }).success).toBe(true)
     expect(faceMaskingSchema.safeParse(FULL).success).toBe(false)
     expect(faceMaskingSchema.safeParse(KEEP).success).toBe(false)
-    expect(faceMaskingSchema.safeParse({ ...MASKING, target: "body" }).success).toBe(false)
+    // Hiding the whole person is a faces-hidden setting: a direct run may.
+    expect(faceMaskingSchema.safeParse({ ...MASKING, target: "body" }).success).toBe(true)
   })
 })
 
@@ -295,6 +298,22 @@ describe("publishing", () => {
   it("keep people's whole-person target is a need of its own", () => {
     const blockers = publishBlockers(approved(KEEP), envs({ ...DEPTH, faceMaskTargets: ["face", "head"] }), REQUIRED)
     expect(blockers).toContainEqual({ code: "engine_unsupported", env: "staging", need: "faceMaskTarget:body" })
+    // Keep people reads `faceMaskTargets`: an engine that cannot hide whole people still keeps them.
+    expect(publishBlockers(approved(KEEP), envs({ ...DEPTH, faceMaskHideTargets: ["face", "head"] }), REQUIRED)).toEqual([])
+  })
+
+  it("hiding the whole person (faces hidden) needs `faceMaskHideTargets` to name it, never `faceMaskTargets`", () => {
+    const hide = { ...MASKING, target: "body" as const }
+    // An engine from before the declaration lists "body" for keep people while refusing it with faces hidden.
+    const before = publishBlockers(approved(hide), envs(DEPTH), REQUIRED)
+    expect(before).toContainEqual({ code: "engine_unsupported", env: "staging", need: "faceMaskHideTarget:body" })
+    expect(before).not.toContainEqual(expect.objectContaining({ need: "faceMaskTarget:body" }))
+    expect(publishBlockers(approved(hide), envs({ ...DEPTH, faceMaskHideTargets: ["face", "head"] }), REQUIRED)).toContainEqual({
+      code: "engine_unsupported",
+      env: "staging",
+      need: "faceMaskHideTarget:body",
+    })
+    expect(publishBlockers(approved(hide), envs({ ...DEPTH, faceMaskHideTargets: ["face", "head", "body"] }), REQUIRED)).toEqual([])
   })
 
   it("the person-variant gates are skipped for keep people", () => {

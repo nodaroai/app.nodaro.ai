@@ -28,7 +28,7 @@ import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import { faceMaskTargetsOf, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
+import { engineMasksTarget, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
 import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
@@ -414,10 +414,11 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   for (const kind of composed.needs.roleKinds) if (!cs.roleKinds.includes(kind)) return false
   if (composed.needs.fixedReferences && cs.fixedReferences !== true) return false
   if (composed.needs.faceMasking && cs.faceMasking !== true) return false
-  // An engine that does not declare the target strips it and masks heads: never send it a face-only trend.
-  if (composed.needs.faceMaskTarget && !faceMaskTargetsOf(cs).includes(composed.needs.faceMaskTarget)) return false
   // A depth mode the engine does not declare: it would strip `source` and mask faces instead.
   const source = composed.needs.faceMaskSource
+  // An engine that does not declare the target strips it and masks heads (or, for a faces-hidden whole
+  // person, refuses it): never send it a face-only trend, or one that hides whole people.
+  if (composed.needs.faceMaskTarget && !engineMasksTarget(cs, composed.needs.faceMaskTarget, source ?? "faces")) return false
   if (source && source !== "faces" && !(cs.sourceModes ?? []).includes(source)) return false
   if (composed.needs.trendPrePrompt && cs.trendPrePrompt !== true) return false
   // A trend with marks runs on its stored mask only, never masked per run: the engine must take it

@@ -28,6 +28,10 @@
  * `fullDepthScenes`; each absent = an engine from before it), so the screen
  * can say when the engine is out of date.
  *
+ * A save whose masking hides whole people (faces hidden, target "body") is
+ * 409 `engine_unsupported` while any environment's engine cannot do it
+ * (`nodaro-motion-hide-body.ts`: the row is shared by every environment).
+ *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_motion`)
  * with the setting before and after.
  */
@@ -44,6 +48,8 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
 import { directRunPromptPartsInvalid, directRunPromptProblems, loadedEngineHasPromptStyles, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { listEngineEnvironments } from "../lib/engine-environments.js"
+import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /**
@@ -90,6 +96,13 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
     const parsed = putBody.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
+      // A whole-person masking is saved only once every environment's engine can hide whole people.
+      if (NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.motion[engine]?.masking))) {
+        const blocked = environmentsThatCannotHideBodies(await listEngineEnvironments())
+        if (blocked.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotHideBodiesMessage(blocked), envs: blocked } })
+        }
+      }
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style
       // change can leave a part unused, or the prompt too long): any problem refuses the save.
       if (loadedEngineHasPromptParts() && loadedEngineHasPromptStyles()) {

@@ -11751,6 +11751,8 @@ export interface TrendEngineEnvironment {
       storedFaceMask?: boolean
       faceMaskRecipe?: string
       faceMaskTargets?: AdminTrendFaceMaskingTarget[]
+      /** What a Faces hidden setting may hide ("body": the whole person); absent = `faceMaskTargets` without "body". */
+      faceMaskHideTargets?: AdminTrendFaceMaskingTarget[]
       faceMaskErase?: boolean
       storedFaceMaskRequired?: boolean
       /** The clip preparations a trend may use (absent = faces only). */
