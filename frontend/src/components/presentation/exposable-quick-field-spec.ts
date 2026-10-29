@@ -1,4 +1,5 @@
 import {
+  allQuickConfigOptions,
   getQuickConfigs,
   quickConfigOptionValue,
   resolveQuickConfigOptions,
@@ -62,7 +63,9 @@ function optionsReading(control: QuickConfigControl, data: Record<string, unknow
       return Reflect.has(target, prop)
     },
   })
-  return resolveQuickConfigOptions(control, proxy)
+  // The DECLARED options: the generated table must not depend on what this
+  // deployment happens to offer at generation time.
+  return allQuickConfigOptions(control, proxy)
 }
 
 /**

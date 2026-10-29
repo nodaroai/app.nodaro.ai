@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
+import { noteModelSwitch } from "../../lib/model-switch.js"
 import {
   LLM_MODELS,
   LLM_FEATURE_DEFAULTS,
@@ -120,6 +121,8 @@ export async function adminLlmModelsRoutes(app: FastifyInstance) {
       })
     }
 
+    // The switch also hides the model (lib/model-switch.ts).
+    noteModelSwitch(modelId, isEnabled)
     return { data }
   })
 }

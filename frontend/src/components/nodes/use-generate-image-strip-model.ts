@@ -6,8 +6,10 @@ import {
   IMAGE_GEN_MODELS,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
+  withoutDeniedModels,
 } from "@/components/editor/config-panels/model-options"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { shortenLabel } from "./strip-label"
 import type { GenerateImageData } from "@/types/nodes"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
@@ -30,6 +32,12 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
   const localizeOption = useLocalizeOptionLabel()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  // The menu hides the models this deployment does not offer (the panel's
+  // `withoutDeniedModels`); the set lands after the first paint, so subscribe.
+  // The node's CURRENT model is read off the full list: a hidden model a saved
+  // node holds keeps its name on the pill.
+  const availability = useSurfaceAvailability()
+  const modelOptions = useMemo(() => withoutDeniedModels(IMAGE_GEN_MODELS), [availability])
 
   const providers = data.providers && data.providers.length > 0
     ? data.providers
@@ -87,7 +95,7 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
     modelLabel,
     modelShort,
     currentProvider,
-    modelOptions: IMAGE_GEN_MODELS,
+    modelOptions,
     aspectOptions,
     currentAspect,
     aspectShort,

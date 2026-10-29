@@ -44,6 +44,7 @@ import {
   __availabilityUniverseReadyForTests,
 } from "../../lib/availability-override.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
+import { __resetModelSwitchForTests } from "../../lib/model-switch.js"
 
 const USER = "user-1"
 const ADMIN = "admin-1"
@@ -68,6 +69,7 @@ afterEach(async () => {
   __resetAvailabilityOverridesForTests()
   delete process.env.NODARO_SURFACE_PROFILE
   __resetSurfaceProfileCacheForTests()
+  __resetModelSwitchForTests()
 })
 
 const get = (userId?: string) =>
@@ -83,6 +85,14 @@ describe("GET /v1/surface/availability", () => {
       const body = (await get(who)).json()
       expect(body.nodes).toEqual({ denied: [], hiddenFromUsers: [] })
       expect(body.models).toEqual({ denied: [] })
+    }
+  })
+
+  it("a model the admin switched off on its pricing row is denied for everyone — admins too", async () => {
+    __resetModelSwitchForTests(["flux-flex"])
+    for (const who of [USER, ADMIN]) {
+      const body = (await get(who)).json()
+      expect(body.models.denied).toEqual(["flux-flex"])
     }
   })
 

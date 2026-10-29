@@ -212,6 +212,7 @@ import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
+import { loadSwitchedOffModels } from "./lib/model-switch.js"
 import { configureDeploymentPayer, deploymentPayerActive, payerWebFreeConflict } from "./lib/deployment-payer.js"
 import { deploymentBillingRoutes } from "./ee/routes/deployment-billing.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
@@ -438,6 +439,9 @@ export async function buildApp() {
   // serve the surface profile's FACTORY set (the deployment's safe baseline,
   // same guarantee class as the 60s TTL drift between sibling instances).
   await loadAvailabilityOverrides()
+  // The admin's model switch (model_pricing.is_enabled) — the fourth layer of
+  // the same funnel, warmed the same way: kicked, never awaited.
+  await loadSwitchedOffModels()
 
   // Deployment payer (item 9) — BLOCKING and fail-loud, the opposite
   // posture from the availability warm above: a payer that is configured but

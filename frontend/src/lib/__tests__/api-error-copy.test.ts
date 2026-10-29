@@ -12,6 +12,9 @@ describe("apiErrorReasonKey", () => {
     // The credit guard's 403 for a model an admin switched off — its own
     // sentence, never the buy-credits dialog a 402 would open.
     expect(apiErrorReasonKey("model_disabled")).toBe("apiErr.reason.modelDisabled")
+    // The credit guard's door for a model the deployment does not offer (a
+    // switched-off model included) — its own sentence in every language.
+    expect(apiErrorReasonKey("model_not_available")).toBe("apiErr.reason.modelNotAvailable")
     expect(apiErrorReasonKey("validation_error")).toBeUndefined()
     expect(apiErrorReasonKey("bad_request")).toBeUndefined()
     expect(apiErrorReasonKey(undefined)).toBeUndefined()

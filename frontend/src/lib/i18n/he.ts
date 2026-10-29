@@ -11539,6 +11539,7 @@ export const he: ChromeDict = {
   "apiErr.reason.forbidden": "אין לכם הרשאה לבצע את הפעולה הזו.",
   "apiErr.reason.modelDisabled": "המודל הזה כבוי כרגע. בחרו מודל אחר.",
   "apiErr.reason.notFound": "הפריט לא נמצא. ייתכן שהוא נמחק.",
+  "apiErr.reason.modelNotAvailable": "המודל הזה לא זמין כרגע. בחרו מודל אחר.",
   "apiErr.reason.server": "משהו השתבש אצלנו. נסו שוב בעוד רגע.",
   "apiErr.reason.external": "שירות חיצוני לא הגיב כמצופה. נסו שוב בעוד רגע.",
   "apiErr.reason.ai": "מודל ה־AI לא החזיר תשובה שמישה. נסו שוב.",

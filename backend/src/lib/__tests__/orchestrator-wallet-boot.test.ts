@@ -12,6 +12,7 @@ vi.mock("../deployment-payer.js", () => ({ configureDeploymentPayer: mocks.confi
 vi.mock("../../ee/billing/external-wallet.js", () => ({ validateExternalWallet: mocks.validateWallet }))
 vi.mock("../overlay/load.js", () => ({ loadOverlay: async () => { mocks.events.push("overlay") } }))
 vi.mock("../availability-override.js", () => ({ loadAvailabilityOverrides: async () => {} }))
+vi.mock("../model-switch.js", () => ({ loadSwitchedOffModels: async () => {} }))
 vi.mock("../prompt-policies/index.js", () => ({ registerMainlinePromptPolicies: () => {} }))
 vi.mock("../worker-drain.js", () => ({ beginWorkerDrain: () => {}, SHUTDOWN_DRAIN_MS: 1000 }))
 vi.mock("../../workers/orchestrator-worker.js", () => ({ createOrchestratorWorker: mocks.startWorker }))

@@ -2239,7 +2239,10 @@ source follows the Instagram node's availability).
 
 `GET /v1/models` — the REST twin of the MCP `list_models` tool, for plain
 SDK/HTTP clients. Public (model availability is not a secret), cached 5
-minutes (`Cache-Control: public, max-age=300`). Returns
+minutes (`Cache-Control: public, max-age=300`). A model this deployment does
+not offer is not listed — a model its admin switched off included: the same
+switch refuses a run of it (`403 model_not_available`), so a client that
+caches the list for the five minutes may still name one. Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
