@@ -12,9 +12,9 @@ import { unitRateBaseCredits } from "./credit-base-cost.js"
  * runs. Before it existed both reserved the flat `ltx-2.3-pro` row (a 6-second
  * generation) whatever the length asked for.
  *
- * The run settles on the measured cost of the render (`meteredCost`), so this
- * amount is the hold and the most the run can be charged; anything unused is
- * refunded when the job completes. 0 when credits are off.
+ * The run is charged exactly this amount: LTX is priced by its output, so the
+ * finalize commits the reservation rather than metering the host's compute
+ * figure (which is a small fraction of the price). 0 when credits are off.
  */
 export async function ltxExtendBaseCredits(duration: unknown): Promise<number> {
   return unitRateBaseCredits(LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec(duration))
