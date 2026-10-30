@@ -339,12 +339,145 @@ describe("GET /v1/trends", () => {
     expect((mem.listCalls[0] as { favoritesOf?: string }).favoritesOf).toBeUndefined()
   })
 
-  it("needs a signed-in caller, and jobs:read for an OAuth app", async () => {
-    expect((await app.inject({ method: "GET", url: "/v1/trends" })).statusCode).toBe(401)
+  it("a guest reads it (the guests block below); an OAuth app needs jobs:read", async () => {
+    expect((await app.inject({ method: "GET", url: "/v1/trends" })).statusCode).toBe(200)
     const res = await app.inject({ method: "GET", url: "/v1/trends", headers: as({ "x-app-scopes": "assets:write" }) })
     expect(res.statusCode).toBe(403)
     const ok = await app.inject({ method: "GET", url: "/v1/trends", headers: as({ "x-app-scopes": "jobs:read" }) })
     expect(ok.statusCode).toBe(200)
+  })
+})
+
+// ── guests ─────────────────────────────────────────────────────────────────
+
+describe("guests: the catalog, its tags and a trend's page take no credential", () => {
+  it("lists the published catalog: the signed-in cards with isFavorite false, no favorites or profile read", async () => {
+    mem.trends.push(trend(T_PET, "pet-party", "published", 1))
+    mem.favorites.add(`${USER}:${T_PUB}`)
+    const signedIn = await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    db.log.length = 0
+    const res = await app.inject({ method: "GET", url: "/v1/trends" })
+    expect(res.statusCode).toBe(200)
+    const cards = res.json().data as Array<{ slug: string; isFavorite: boolean }>
+    expect(cards.map((c) => [c.slug, c.isFavorite])).toEqual([["neon-dance", false], ["pet-party", false]])
+    expect(cards).toEqual((signedIn.json().data as typeof cards).map((c) => ({ ...c, isFavorite: false })))
+    expect((mem.listCalls.at(-1) as { favoritesOf?: string }).favoritesOf).toBeUndefined()
+    expect(db.log.filter((q) => q.table === "profiles")).toHaveLength(0)
+    expectNoHidden(res.body)
+  })
+
+  it("favorites=1 is an account read: 401 before the store", async () => {
+    for (const v of ["1", "true"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/trends?favorites=${v}` })
+      expect(res.statusCode, v).toBe(401)
+      expect(res.json().error.code).toBe("unauthorized")
+    }
+    expect(mem.listCalls).toHaveLength(0)
+    expect((await app.inject({ method: "GET", url: "/v1/trends?favorites=0" })).statusCode).toBe(200)
+  })
+
+  it("reads a published trend's page with nothing hidden, isFavorite false", async () => {
+    mem.favorites.add(`${USER}:${T_PUB}`)
+    const signedIn = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ ...signedIn.json().data, isFavorite: false })
+    expect(signedIn.json().data.isFavorite).toBe(true)
+    expectNoHidden(res.body)
+  })
+
+  it("a draft, an unpublished or an unknown slug is a 404 for a guest too", async () => {
+    for (const slug of ["wip", "old", "nope"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/trends/${slug}` })
+      expect(res.statusCode, slug).toBe(404)
+      expect(res.json().error.code).toBe("not_found")
+    }
+  })
+
+  it("reads the tags", async () => {
+    db.respond = (q) => {
+      if (q.table === "trends") return { data: [{ tags: ["dance"] }], error: null }
+      if (q.table === "trend_tags") return { data: [{ tag: "dance", labels: { en: "Dance", he: "ריקוד" } }], error: null }
+      return { data: null, error: null }
+    }
+    const res = await app.inject({ method: "GET", url: "/v1/trends/tags", headers: { "accept-language": "he-IL,he;q=0.9" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: [{ tag: "dance", label: "ריקוד", count: 1 }] })
+  })
+
+  it("the language: ?locale= first, then Accept-Language (by weight, any case, its primary language), else English", async () => {
+    const name = async (url: string, accept?: string) =>
+      (await app.inject({ method: "GET", url, headers: accept ? { "accept-language": accept } : {} })).json().data.name as string
+    expect(await name("/v1/trends/neon-dance", "he-IL,he;q=0.9,en;q=0.8")).toBe("ריקוד ניאון")
+    expect(await name("/v1/trends/neon-dance", "en;q=0.5, he;q=0.9")).toBe("ריקוד ניאון")
+    expect(await name("/v1/trends/neon-dance", "he;q=0, en")).toBe("Neon Dance")
+    expect(await name("/v1/trends/neon-dance?locale=en", "he")).toBe("Neon Dance")
+    expect(await name("/v1/trends/neon-dance", "xx, yy")).toBe("Neon Dance")
+    expect(await name("/v1/trends/neon-dance")).toBe("Neon Dance")
+    expect(db.log.filter((q) => q.table === "profiles")).toHaveLength(0)
+  })
+
+  it("a guest's answer may be cached a minute, varied by language and credential; a signed-in one is private", async () => {
+    db.respond = (q) => (q.table === "trends" ? { data: [], error: null } : { data: null, error: null })
+    for (const url of ["/v1/trends", "/v1/trends/neon-dance", "/v1/trends/tags"]) {
+      const guest = await app.inject({ method: "GET", url })
+      expect(guest.statusCode, url).toBe(200)
+      expect(guest.headers["cache-control"], url).toBe("public, max-age=60")
+      expect(guest.headers.vary, url).toBe("Accept-Language, Authorization")
+      const own = await app.inject({ method: "GET", url, headers: as() })
+      expect(own.headers["cache-control"], url).toBe("private, no-store")
+    }
+  })
+
+  it("keeps a Vary already on the reply (CORS's Origin)", async () => {
+    const withCors = Fastify({ logger: false })
+    withCors.addHook("onRequest", async (_req, reply) => {
+      reply.header("Vary", "Origin")
+    })
+    await withCors.register(trendRoutes)
+    await withCors.ready()
+    try {
+      const res = await withCors.inject({ method: "GET", url: "/v1/trends" })
+      expect(res.headers.vary).toBe("Origin, Accept-Language, Authorization")
+    } finally {
+      await withCors.close()
+    }
+  })
+
+  it("a failure carries no cache header", async () => {
+    const miss = await app.inject({ method: "GET", url: "/v1/trends/nope" })
+    expect(miss.statusCode).toBe(404)
+    expect(miss.headers["cache-control"]).toBeUndefined()
+    mem.missingTables = true
+    const down = await app.inject({ method: "GET", url: "/v1/trends" })
+    expect(down.statusCode).toBe(503)
+    expect(down.headers["cache-control"]).toBeUndefined()
+  })
+
+  it("a list that fails while its cards are built carries no cache header", async () => {
+    mem.trends[0]!.versions[2] = { ...versionData(), examples: undefined } as unknown as TrendVersionData
+    const res = await app.inject({ method: "GET", url: "/v1/trends" })
+    expect(res.statusCode).toBe(500)
+    expect(res.headers["cache-control"]).toBeUndefined()
+  })
+
+  it("everything else still needs a caller: runs, one run, estimate, run, favorite", async () => {
+    const JOB = "00000000-0000-4000-8000-0000000000f1"
+    const calls: Array<{ method: "GET" | "POST" | "PUT" | "DELETE"; url: string; payload?: Record<string, unknown> }> = [
+      { method: "GET", url: "/v1/trends/runs" },
+      { method: "GET", url: `/v1/trends/runs/${JOB}` },
+      { method: "POST", url: "/v1/trends/neon-dance/estimate", payload: RUN_BODY },
+      { method: "POST", url: "/v1/trends/neon-dance/runs", payload: RUN_BODY },
+      { method: "PUT", url: "/v1/trends/neon-dance/favorite" },
+      { method: "DELETE", url: "/v1/trends/neon-dance/favorite" },
+    ]
+    for (const c of calls) {
+      const res = await app.inject(c)
+      expect(res.statusCode, `${c.method} ${c.url}`).toBe(401)
+    }
+    expect(engine.calls).toHaveLength(0)
+    expect(mem.favorites.size).toBe(0)
+    expect(db.log.filter((q) => q.table === "jobs")).toHaveLength(0)
   })
 })
 
@@ -2620,9 +2753,9 @@ describe("GET /v1/trends/tags", () => {
     expect(res.json().error.code).toBe("not_available")
   })
 
-  it("needs a signed-in caller, and jobs:read for an OAuth app", async () => {
+  it("a guest reads it (the guests block); an OAuth app needs jobs:read", async () => {
     feedTags([], [])
-    expect((await app.inject({ method: "GET", url: "/v1/trends/tags" })).statusCode).toBe(401)
+    expect((await app.inject({ method: "GET", url: "/v1/trends/tags" })).statusCode).toBe(200)
     const denied = await app.inject({ method: "GET", url: "/v1/trends/tags", headers: as({ "x-app-scopes": "assets:write" }) })
     expect(denied.statusCode).toBe(403)
     const ok = await app.inject({ method: "GET", url: "/v1/trends/tags", headers: as({ "x-app-scopes": "jobs:read" }) })
