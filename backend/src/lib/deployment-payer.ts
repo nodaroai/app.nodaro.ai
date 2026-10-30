@@ -38,7 +38,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Grade to run at when the payer's profile row cannot be read on a refresh —
  *  the SMALLEST paid grade, never free (a deployment payer is never free-tier
  *  work), so a transient DB blip narrows entitlements instead of widening. */
-const FALLBACK_TIER = "basic"
+export const FALLBACK_TIER = "basic"
 
 const TIER_TTL_MS = 60_000
 

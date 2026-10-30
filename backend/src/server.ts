@@ -37,6 +37,7 @@ import { ensureStorageBucket } from "./lib/storage.js"
 import { archiveThisBuild } from "./lib/site-asset-archive.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
+import { startEnforcementMirror } from "./lib/concurrency-lanes/enforcement.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -149,6 +150,11 @@ async function main() {
   // picker opened after a deploy usually finds them done. Fire-and-forget;
   // no-op without a key.
   warmHeygenCatalog()
+
+  // Concurrency lanes: copy this environment's `lanes_enforced` setting (or
+  // LANES_ENFORCED) and the provider ceilings into the gate's Redis every 30 s
+  // — ALL editions. Never throws; an error is retried on the next pass.
+  const stopEnforcementMirror = startEnforcementMirror()
 
   // Start schedule cron for workflow triggers
   startScheduleCron()
@@ -270,6 +276,7 @@ async function main() {
     // instead of a silent exit 0.
     try {
       stopScheduleCron()
+      stopEnforcementMirror()
       stopScheduledPostsCron()
       stopRecastDriverCron()
       stopCompetitorScanCron()

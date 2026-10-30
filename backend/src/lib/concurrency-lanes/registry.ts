@@ -124,9 +124,23 @@ export function registerPluginJobLanes(entries: Record<string, LaneClass>): void
   }
 }
 
-/** The plugin job types the loader merged handlers for (each plugin's `handlers()` keys). */
+/** Whether the loader has recorded this process's plugin job types (notePluginJobTypes ran at least once). */
+let pluginJobTypesRecorded = false
+
+/**
+ * The plugin job types the loader merged handlers for (each plugin's
+ * `handlers()` keys). The loader calls it once its load is done, with no types
+ * at all when there is no plugin, so "every plugin job type declares its lane"
+ * is never reported as met before anyone looked.
+ */
 export function notePluginJobTypes(types: Iterable<string>): void {
+  pluginJobTypesRecorded = true
   for (const t of types) pluginJobTypes.add(t)
+}
+
+/** Whether this process has recorded its plugin job types; until it has, undeclaredPluginJobTypes() proves nothing. */
+export function pluginJobTypesKnown(): boolean {
+  return pluginJobTypesRecorded
 }
 
 /** The plugin handler keys with no declaration, sorted — every one declared is an enforcement precondition. */

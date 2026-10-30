@@ -188,7 +188,16 @@ export const TIER_STORAGE_BYTES: Record<string, number> = {
   enterprise: 500 * 1024 * 1024 * 1024,  // 500 GB
 }
 
-/** Max concurrent nodes per workflow execution, by tier. Must match the backend's per-tier provider sizes in backend/src/lib/concurrency-lanes/defaults.ts (from which stripe-config.ts derives TIER_PARALLELISM). */
+/**
+ * Max concurrent nodes per workflow execution, by tier. Must match the backend's
+ * per-tier provider sizes in backend/src/lib/concurrency-lanes/defaults.ts (from
+ * which stripe-config.ts derives TIER_PARALLELISM).
+ *
+ * Kept only for the editor's list fan-out cap (list-execution.ts). It is not a
+ * display figure: a plan's parallelism as sold is `parallelism` on
+ * `GET /v1/billing/plans`, which reports the live lane sizes once concurrency
+ * lanes are enforced. Do not render this copy on a pricing surface.
+ */
 export const TIER_PARALLELISM: Record<string, number> = {
   free: 2,
   payg: 4, // derived tier, = basic

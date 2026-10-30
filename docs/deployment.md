@@ -179,7 +179,7 @@ here for each one anyway.
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling. Limits one run while lanes are not enforced; ignored once they are (see [Concurrency lanes](#concurrency-lanes)) |
 | `LANE_PROVIDER_PER_USER` · `LANE_LLM_PER_USER` · `LANE_LOCAL_PER_USER` · `LANE_RUN_PER_USER` | `12` · `24` · `24` · `12` (1 to 500) | Community and Business — how many jobs of each lane one person runs at once. See [Concurrency lanes](#concurrency-lanes) |
 | `LANE_QUEUE_TIMEOUT_MINUTES` · `LANE_LIVE_WAIT_MINUTES` | `120` (5 to 1440) · `10` (1 to 60) | How long a queued job, and a request answered while you wait, may wait for a free slot. See [Concurrency lanes](#concurrency-lanes) |
-| `LANES_ENFORCED` | off | Community and Business — whether jobs wait for a free slot in their lane. Strict parse: only `true` / `1` enable it. Not read yet: in this release setting it changes nothing. See [Concurrency lanes](#concurrency-lanes) |
+| `LANES_ENFORCED` | off | Whether jobs wait for a free slot in their lane, where the Admin lanes switch has no value for this environment (the switch wins once set). Strict parse: only `true` / `1` enable it. Nothing waits yet in this release. See [Concurrency lanes](#concurrency-lanes) |
 | `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced. Not read yet: in this release setting it changes nothing. See [Concurrency lanes](#concurrency-lanes) |
 | `LANE_SERVER_COORDINATOR_SHARE` · `LANE_SERVER_USER_SHARE` | `0.4` (0.1 to 1) · `0.25` (0.05 to 1) | Shares of a server's background worker pools: what coordinating jobs may hold of the media worker pool, and what one person may hold of each pool |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
@@ -1189,7 +1189,7 @@ every line:
 | `LANE_RUN_PER_USER` | `12` (1 to 500) | Runs one line has going at once |
 | `LANE_QUEUE_TIMEOUT_MINUTES` | `120` (5 to 1440) | Minutes a queued job may wait for a free slot; past it the job fails |
 | `LANE_LIVE_WAIT_MINUTES` | `10` (1 to 60) | Minutes a request answered while you wait may wait for a free slot; past it the request answers that the server is busy |
-| `LANES_ENFORCED` | off | Whether jobs wait for a free slot. Strict parse: only `true` / `1` enable it. Not read yet (see below) |
+| `LANES_ENFORCED` | off | Whether jobs wait for a free slot, where the Admin lanes switch has no value for this environment. Strict parse: only `true` / `1` enable it. Nothing waits yet (see below) |
 | `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced (the lanes then do the limiting). Not read yet (see below) |
 | `LANE_SERVER_COORDINATOR_SHARE` | `0.4` (0.1 to 1) | Share of the media worker pool that coordinating jobs may hold at once |
 | `LANE_SERVER_USER_SHARE` | `0.25` (0.05 to 1) | Share of each background worker pool one person (all their lines together) may hold at once |
@@ -1198,8 +1198,15 @@ every line:
 enforced; it is ignored once they are. Nodaro Cloud sizes each line by
 its plan and ignores the four `LANE_*_PER_USER` values.
 
-Lanes are being introduced in stages: in this release nothing reads these
-settings yet, and no job waits.
+On an install with an admin, the lanes switch (`PUT /v1/admin/lanes/enforced`)
+turns lanes on or off for one environment and wins over `LANES_ENFORCED`. Its
+value is kept per runtime environment — `RUNTIME_ENV`, else Railway's
+`RAILWAY_ENVIRONMENT_NAME`, else `local` — so two installs sharing one
+database (staging and production) each keep their own. Every server copies it
+into Redis every 30 seconds; turning it off starts every waiting job.
+
+Lanes are being introduced in stages: in this release no job waits, whatever
+the switch says.
 
 ### Plugin daemon host (Cloud)
 

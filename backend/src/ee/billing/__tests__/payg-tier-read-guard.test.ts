@@ -43,6 +43,8 @@ const EFFECTIVE_SITES: Array<{ file: string; mustContain: string[] }> = [
   { file: "utils/file-validation.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "workers/orchestrator-worker.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "workers/render-worker.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
+  // Concurrency lanes: a personal or deployment line is sized by the account's effective tier.
+  { file: "ee/concurrency-lanes/plan-sizes.ts", mustContain: ["effectiveTierOf", "lifetime_topup_credits"] },
 ]
 
 describe("payg tier-read guard", () => {

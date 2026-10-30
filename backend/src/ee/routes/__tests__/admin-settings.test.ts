@@ -273,6 +273,31 @@ describe("PUT /v1/admin/settings/copilot_enabled — the runtime kill switch", (
   })
 })
 
+describe("PUT /v1/admin/settings — concurrency lane keys have their own routes", () => {
+  // The switch is a map keyed by runtime environment: a write here would
+  // replace the whole map (one environment erasing the other's key) and skip
+  // the preconditions and the wake on off. The waiting limits have ranges.
+  it("refuses lanes_enforced and names the lanes switch route", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/lanes_enforced",
+      payload: { value: { production: true }, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("/v1/admin/lanes/enforced")
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it.each(["lane_queue_timeout_minutes", "lane_live_wait_minutes"])("refuses %s and names the lane settings route", async (key) => {
+    const res = await app.inject({
+      method: "PUT", url: `/v1/admin/settings/${key}`,
+      payload: { value: 30, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("/v1/admin/lanes/settings")
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+})
+
 describe("PUT /v1/admin/settings — copilot tier controls", () => {
   it("rejects a default tier outside the ladder", async () => {
     const res = await app.inject({
