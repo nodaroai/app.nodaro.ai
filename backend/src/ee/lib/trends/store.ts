@@ -8,26 +8,30 @@
  *   - a version row that was ever published (`published_at` set) is never
  *     written again: saving a trend whose draft IS its published version
  *     writes version + 1 and moves the draft pointer (copy-on-write), and every
- *     data write is guarded on `published_at IS NULL`. The TWO exceptions are
+ *     data write is guarded on `published_at IS NULL`. The THREE exceptions are
  *     {@link attachDisplayCopy} (trends "show the original", S7): it adds
  *     `data.source.display` — derived display media a run never reads — to a
  *     version that lacks it, published or not, and {@link attachPreviewClip}:
  *     it adds `data.previewClip` — a deterministic cut of the version's own
  *     source at its own `previewStart`, which a preview run then edits in
  *     place of cutting the same window itself — to a version that lacks one;
+ *     and {@link attachWebCopies}: it adds a `web` copy — a light re-encode
+ *     clients play, never read by a run — to the display copy and examples
+ *     that lack a current one;
  *     each leaves every other byte of `data`, the `revision` and
  *     `published_at` as they were ("byte" as JSONB keeps it: key order,
  *     whitespace and number spelling are Postgres's);
  *   - unpublishing keeps `published_version`, so the next save still copies;
  *   - every write of a version's data gives it a new `revision` (except the
- *     two attaches above), so a write or publish conditioned on the
+ *     three attaches above), so a write or publish conditioned on the
  *     revision the caller read fails when it moved;
  *   - every write to `trends` sets `updated_at`.
  */
 import { randomUUID } from "node:crypto"
 import { supabase } from "../../../lib/supabase.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import type { TrendBadge, TrendPreviewClip, TrendRow, TrendSourceDisplay, TrendStatus, TrendVersionData } from "./types.js"
+import { hasCurrentWebCopy } from "./web-copy-plan.js"
+import type { TrendBadge, TrendPreviewClip, TrendRow, TrendSourceDisplay, TrendStatus, TrendVersionData, TrendWebCopy } from "./types.js"
 
 const TREND_COLS = "id, slug, status, tags, badges, sort_order, draft_version, published_version, created_at, updated_at"
 
@@ -551,6 +555,134 @@ export async function listVersionsLackingDisplay(): Promise<VersionLackingDispla
     published: r.published_at !== null,
     sourceVideoUrl: r.source!.videoUrl,
   }))
+}
+
+// ── Web copies (made after a publish; backfill) ───────────────────────────
+
+/** The version row is gone (its trend deleted?), or it kept changing while web copies were attached. Nothing was written. */
+export class WebCopyAttachConflictError extends Error {
+  constructor(readonly trendId: string, readonly version: number, readonly reason: "version_missing" | "concurrent_write") {
+    super(
+      `Trend ${trendId} version ${version}: ${reason === "version_missing" ? "the version is gone (its trend was deleted?)" : "it kept changing while its web copies were attached"}.`,
+    )
+    this.name = "WebCopyAttachConflictError"
+  }
+}
+
+/** What `attachWebCopies` did with each copy: set on its entry, already there (another copy is current), or stale (no entry shows that video any more). */
+export interface WebCopyAttachResult {
+  set: number
+  already: number
+  stale: number
+}
+
+/**
+ * Attach web copies to one version row — published or draft — each to the
+ * display copy or example whose `videoUrl` is its `madeFrom`: the third
+ * documented exception to "a published version is never written" (header),
+ * because a web copy is derived playback media that no run reads. An entry
+ * with a current web copy keeps it (`already`); a copy whose video no entry
+ * shows any more is not written (`stale`).
+ *
+ * As `attachDisplayCopy`: the row is read and its whole `data` written back
+ * with only the `web` keys added, as a compare-and-set on what was read —
+ * `revision` unchanged (an admin's write in between makes it match nothing)
+ * and EVERY entry's `web` still as read (absent, or the copy it had), so
+ * two attaches at once (a publish's and the backfill's) never drop each
+ * other's copies: the second matches nothing, re-reads and retries. It sets
+ * neither `revision` nor `published_at`.
+ */
+export async function attachWebCopies(trendId: string, version: number, copies: readonly TrendWebCopy[]): Promise<WebCopyAttachResult> {
+  for (const c of copies) {
+    if (![c.videoUrl, c.madeFrom].every((u) => /^https?:\/\//i.test(u))) {
+      throw new Error(`Trend ${trendId} version ${version}: a web copy's addresses must be http(s) (is R2_PUBLIC_URL set?).`)
+    }
+    if (c.videoUrl === c.madeFrom) throw new Error(`Trend ${trendId} version ${version}: a web copy must be its own file, never the video it stands for.`)
+  }
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const { data: row, error } = await supabase
+      .from("trend_versions")
+      .select("data, revision")
+      .eq("trend_id", trendId)
+      .eq("version", version)
+      .maybeSingle()
+    if (error) fail(`read trend ${trendId} version ${version}`, error)
+    if (!row) throw new WebCopyAttachConflictError(trendId, version, "version_missing")
+    const { data, revision } = row as { data: TrendVersionData; revision: string }
+
+    const result: WebCopyAttachResult = { set: 0, already: 0, stale: 0 }
+    // EVERY entry's JSON path and its `web` as read (not only the ones set here): the compare-and-set's
+    // other half, so a copy another attach wrote after this read is never overwritten by it.
+    const guards: Array<{ path: string; web: TrendWebCopy | undefined }> = []
+    const used = new Set<TrendWebCopy>()
+    const withCopy = <E extends { videoUrl: string; web?: TrendWebCopy }>(entry: E, path: string): E => {
+      guards.push({ path, web: entry.web })
+      const copy = copies.find((c) => c.madeFrom === entry.videoUrl)
+      if (!copy) return entry
+      used.add(copy)
+      if (hasCurrentWebCopy(entry)) {
+        result.already += 1
+        return entry
+      }
+      result.set += 1
+      return { ...entry, web: { videoUrl: copy.videoUrl, sizeBytes: copy.sizeBytes, madeFrom: copy.madeFrom } }
+    }
+    const display = data.source?.display
+    const nextDisplay = display ? withCopy(display, "data->source->display") : undefined
+    const examples = data.examples.map((ex, i) => withCopy(ex, `data->examples->${i}`))
+    result.stale = copies.filter((c) => !used.has(c)).length
+    if (result.set === 0) return result
+
+    const next: TrendVersionData = {
+      ...data,
+      ...(data.source && nextDisplay ? { source: { ...data.source, display: nextDisplay } } : {}),
+      examples,
+    }
+    let write = supabase
+      .from("trend_versions")
+      .update({ data: next })
+      .eq("trend_id", trendId)
+      .eq("version", version)
+      .eq("revision", revision)
+    for (const g of guards) {
+      write = g.web ? write.eq(`${g.path}->web->>madeFrom`, g.web.madeFrom) : write.is(`${g.path}->>web`, null)
+    }
+    const { data: written, error: writeError } = await write.select("version")
+    if (writeError) fail(`attach web copies to trend ${trendId} version ${version}`, writeError)
+    if ((written ?? []).length > 0) return result
+  }
+  throw new WebCopyAttachConflictError(trendId, version, "concurrent_write")
+}
+
+/** A published trend's published version (`data` as stored), for the web copy backfill. */
+export interface PublishedTrendVersion { trendId: string; slug: string; version: number; data: TrendVersionData }
+
+/**
+ * Every trend that is published now, with the version users see, in slug
+ * order (what the public catalog serves; drafts, unpublished and archived
+ * trends are never shown, and get their web copies at their next publish).
+ */
+export async function listPublishedTrendVersions(): Promise<PublishedTrendVersion[]> {
+  const trends: Array<{ id: string; slug: string; published_version: number }> = []
+  for (let from = 0; ; from += LACKING_PAGE) {
+    const { data, error } = await supabase
+      .from("trends")
+      .select("id, slug, published_version")
+      .eq("status", "published")
+      .not("published_version", "is", null)
+      .order("slug", { ascending: true })
+      .range(from, from + LACKING_PAGE - 1)
+    if (error) fail("list published trends", error)
+    const page = (data ?? []) as typeof trends
+    trends.push(...page)
+    if (page.length < LACKING_PAGE) break
+  }
+  const out: PublishedTrendVersion[] = []
+  for (const t of trends) {
+    const data = await getVersion(t.id, t.published_version)
+    if (data) out.push({ trendId: t.id, slug: t.slug, version: t.published_version, data })
+  }
+  return out
 }
 
 // ── Preview input clips (backfill) ────────────────────────────────────────

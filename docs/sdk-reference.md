@@ -2323,12 +2323,19 @@ interface ListTrendsParams {
   cursor?: string; limit?: number  // 1–60, default 30
 }
 
+// One of a trend's videos, as the card and the page show it
+interface TrendVideo {
+  videoUrl: string; posterUrl?: string; width: number; height: number
+  webUrl?: string                        // a light copy made by the platform for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s): play it as it is, no CDN transform; absent on an older version until it is made (play videoUrl then)
+  webSizeBytes?: number                  // that file's size, in bytes; present exactly when webUrl is
+}
+
 interface TrendCard {
   id: string; slug: string; name: string; description?: string
   tags: string[]; badges: string[]
-  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example, else the original's display copy
-  original?: { videoUrl: string; posterUrl?: string; width: number; height: number } // the original's display copy (as TrendDetail.original); absent without one; the first example on a trend that hides its original
-  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }> // every example's video, in order; [] = none, absent from an older server (slot pictures are on the page); from the second example on a trend that hides its original
+  cover: TrendVideo                      // the first example, else the original's display copy
+  original?: TrendVideo                  // the original's display copy (as TrendDetail.original); absent without one; the first example on a trend that hides its original
+  examples?: TrendVideo[]                // every example's video, in order; [] = none, absent from an older server (slot pictures are on the page); from the second example on a trend that hides its original
   needs: Record<TrendSlotKind, number>   // slots of each kind
   durationSec: number
   isFavorite: boolean
@@ -2342,12 +2349,11 @@ interface TrendDetail extends TrendCard {
   resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p" (draft), "720p", "1080p"], motion-pulse ["720p", "1080p"]
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy; the first example on a trend that hides its original
   slots: TrendDetailSlot[]
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
+  examples: Array<TrendVideo & { slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
 }
 
 // A browser-safe copy (H.264 MP4) of the clip the trend recasts; on a trend that hides its original, its first example (the original clip is never sent)
-interface TrendOriginal {
-  videoUrl: string; posterUrl?: string; width: number; height: number
+interface TrendOriginal extends TrendVideo {
   durationSec: number                    // the copy's length (the first example's, on a trend that hides its original)
   previewStartSec?: number               // where the 4 s preview starts (0 included), when previewSec is 4
 }

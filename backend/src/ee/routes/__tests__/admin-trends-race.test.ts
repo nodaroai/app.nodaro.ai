@@ -32,6 +32,12 @@ const world = vi.hoisted(() => ({
   downloads: new Map<string, string>(),
 }))
 
+// A publish's background web copies (web-copy.ts, pinned in its own tests): never made here.
+vi.mock("../../lib/trends/web-copy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/trends/web-copy.js")>()),
+  startWebCopies: () => Promise.resolve(),
+}))
+
 vi.mock("../../../lib/supabase.js", () => {
   /** `col`, `a->>b` or `a->b->>c`. */
   const read = (row: Row, path: string): unknown => {

@@ -202,6 +202,21 @@ vi.mock("../../../lib/warm-video-copies.js", () => ({
   },
 }))
 
+// The web copies a publish starts in the background (web-copy.ts, pinned in its own tests): recorded, never made.
+const webCopyStarts = vi.hoisted(() => [] as Array<{ trendId: string; version: number; data: TrendVersionData }>)
+/** When set, the next start fails this way: thrown at once, or a rejected promise. */
+const webCopyFails = vi.hoisted(() => ({ next: null as null | "throw" | "reject" }))
+vi.mock("../../lib/trends/web-copy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/trends/web-copy.js")>()),
+  startWebCopies: (trendId: string, version: number, data: TrendVersionData) => {
+    webCopyStarts.push({ trendId, version, data: structuredClone(data) })
+    const fail = webCopyFails.next
+    webCopyFails.next = null
+    if (fail === "throw") throw new Error("could not start")
+    return fail === "reject" ? Promise.reject(new Error("could not finish")) : Promise.resolve()
+  },
+}))
+
 vi.mock("../../../lib/admin-check.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../lib/admin-check.js")>()
   return { ...actual, checkIsAdmin: async (userId: string) => mem.admins.has(userId) }
@@ -477,6 +492,8 @@ beforeEach(async () => {
   db.log.length = 0
   db.respond = respond
   warmed.length = 0
+  webCopyStarts.length = 0
+  webCopyFails.next = null
   mem.revs = 0
   mem.onUpload = null
   mem.onEnvRead = null
@@ -611,6 +628,75 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     seed({}, draftData({ hideOriginal: true }))
     expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(409)
     expect(warmed).toEqual([])
+  })
+
+  it("a publish starts the web copies of the version it published, in the background; a blocked one starts none", async () => {
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(webCopyStarts).toHaveLength(1)
+    expect(webCopyStarts[0]).toMatchObject({ trendId: T1, version: mem.trends[0]!.publishedVersion })
+    expect(webCopyStarts[0]!.data.examples.map((e) => e.videoUrl)).toEqual([EXAMPLE.videoUrl])
+    expect(webCopyStarts[0]!.data.source?.display?.videoUrl).toBe(DISPLAY.videoUrl)
+
+    webCopyStarts.length = 0
+    const blocked = "00000000-0000-4000-8000-0000000000a9"
+    seed({ id: blocked, slug: "blocked" }, draftData({ hideOriginal: true }))
+    expect((await call("POST", `/v1/admin/trends/${blocked}/publish`)).statusCode).toBe(409)
+    expect(webCopyStarts).toEqual([])
+  })
+
+  it.each(["throw", "reject"] as const)("a publish whose web copies fail to start (%s) is still published and answered 200", async (how) => {
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    webCopyFails.next = how
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
+    expect(webCopyStarts).toHaveLength(1)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(mem.warns.some((w) => w[1] === "admin-trends: the web copies could not be started")).toBe(true)
+  })
+
+  it("a version whose display copy and examples carry web copies saves, reorders and publishes as any other (the schema takes them)", async () => {
+    const web = (from: string) => ({ videoUrl: `${from.replace(/\.mp4$/, "")}-web.mp4`, sizeBytes: 7_000_000, madeFrom: from })
+    const ex2 = { ...EXAMPLE, videoUrl: `https://cdn.test/trends/${T1}/ex2.mp4` }
+    seed({}, draftData({
+      source: { ...draftData().source!, display: { ...DISPLAY, web: web(DISPLAY.videoUrl) } },
+      examples: [{ ...EXAMPLE, web: web(EXAMPLE.videoUrl) }, { ...ex2, web: web(ex2.videoUrl) }],
+    }))
+    const reorder = await call("PUT", `/v1/admin/trends/${T1}/examples/order`, { order: [1, 0], revision: await revisionOf() })
+    expect(reorder.statusCode, JSON.stringify(reorder.json())).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.examples.map((e) => e.web?.madeFrom)).toEqual([ex2.videoUrl, EXAMPLE.videoUrl])
+    const pub = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(pub.statusCode, JSON.stringify(pub.json())).toBe(200)
+    const page = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as(USER) })).json().data
+    expect(page.original).toMatchObject({ videoUrl: DISPLAY.videoUrl, webUrl: web(DISPLAY.videoUrl).videoUrl, webSizeBytes: 7_000_000 })
+    expect(page.examples.map((e: { webUrl?: string }) => e.webUrl)).toEqual([web(ex2.videoUrl).videoUrl, web(EXAMPLE.videoUrl).videoUrl])
+  })
+
+  it("a draft save keeps the display copy's stored web copy, never the body's own, and drops it with another display copy", async () => {
+    const stored = { videoUrl: `https://cdn.test/trends/${T1}/display-web.mp4`, sizeBytes: 7_000_000, madeFrom: DISPLAY.videoUrl }
+    seed({}, draftData({ source: { ...draftData().source!, display: { ...DISPLAY, web: stored } } }))
+    // A builder that rebuilds the display copy field by field (no `web`) keeps the stored one.
+    let res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), name: { en: "Renamed" } }, revision: await revisionOf() })
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.source?.display?.web).toEqual(stored)
+    // A body's own web copy is never taken.
+    const forged = { videoUrl: "https://elsewhere.example/forged.mp4", sizeBytes: 1, madeFrom: DISPLAY.videoUrl }
+    res = await call("PUT", `/v1/admin/trends/${T1}/draft`, {
+      data: { ...draftData(), source: { ...draftData().source!, display: { ...DISPLAY, web: forged } } },
+      revision: await revisionOf(),
+    })
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.source?.display?.web).toEqual(stored)
+    // Another display copy (a new clip) never carries the old one's web copy, nor a body's.
+    const other = { ...DISPLAY, videoUrl: `https://cdn.test/trends/${T1}/display2.mp4`, web: forged }
+    res = await call("PUT", `/v1/admin/trends/${T1}/draft`, {
+      data: { ...draftData(), source: { ...draftData().source!, videoUrl: `https://cdn.test/trends/${T1}/src2.mp4`, display: other } },
+      revision: await revisionOf(),
+    })
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.source?.display).not.toHaveProperty("web")
   })
 
   it("a source with no display copy is a source_display_missing blocker, and nothing is published", async () => {

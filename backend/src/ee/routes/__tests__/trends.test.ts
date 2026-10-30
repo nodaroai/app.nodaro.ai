@@ -2677,3 +2677,71 @@ describe("the spend surface rides the internal hop (x-web-free-mode)", () => {
     expect(engine.calls[0]!.headers).not.toHaveProperty("x-web-free-mode")
   })
 })
+
+// ── web copies ─────────────────────────────────────────────────────────────
+
+describe("web copies on the public answers: webUrl / webSizeBytes beside each shown video, only when current", () => {
+  const webOf = (from: string, sizeBytes = 7_000_000) => ({ videoUrl: from.replace(/\.mp4$/, "-web.mp4"), sizeBytes, madeFrom: from })
+  const EX1_URL = "https://cdn.example/ex1.mp4"
+  const EX2 = { videoUrl: "https://cdn.example/ex2.mp4", width: 1280, height: 720, durationSec: 12, slots: {}, sourceJobId: SOURCE_JOB }
+  const withWeb = (over: Partial<TrendVersionData> = {}) => {
+    const base = versionData()
+    mem.trends[0]!.versions[2] = versionData({
+      source: { ...base.source!, display: { ...DISPLAY, web: webOf(DISPLAY.videoUrl, 6_800_000) } },
+      examples: [{ ...base.examples[0]!, web: webOf(EX1_URL) }, { ...EX2, web: webOf(EX2.videoUrl, 3_100_000) }],
+      ...over,
+    })
+  }
+
+  it("the card's cover, original and examples carry their web copies", async () => {
+    withWeb()
+    const [card] = (await app.inject({ method: "GET", url: "/v1/trends", headers: as() })).json().data
+    expect(card.cover).toEqual({ videoUrl: EX1_URL, posterUrl: "https://cdn.example/ex1.jpg", width: 720, height: 1280, webUrl: "https://cdn.example/ex1-web.mp4", webSizeBytes: 7_000_000 })
+    expect(card.original).toEqual({ videoUrl: DISPLAY.videoUrl, posterUrl: DISPLAY.posterUrl, width: 720, height: 1280, webUrl: webOf(DISPLAY.videoUrl).videoUrl, webSizeBytes: 6_800_000 })
+    expect(card.examples.map((e: { webUrl?: string; webSizeBytes?: number }) => [e.webUrl, e.webSizeBytes])).toEqual([
+      ["https://cdn.example/ex1-web.mp4", 7_000_000],
+      ["https://cdn.example/ex2-web.mp4", 3_100_000],
+    ])
+  })
+
+  it("the page's original and examples carry theirs; the recorded made-from address never leaves the server", async () => {
+    withWeb()
+    const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    const d = res.json().data
+    expect(d.original).toEqual({
+      videoUrl: DISPLAY.videoUrl, posterUrl: DISPLAY.posterUrl, width: 720, height: 1280,
+      webUrl: webOf(DISPLAY.videoUrl).videoUrl, webSizeBytes: 6_800_000, durationSec: 12.04, previewStartSec: 2,
+    })
+    expect(d.examples[1]).toEqual({ videoUrl: EX2.videoUrl, width: 1280, height: 720, webUrl: "https://cdn.example/ex2-web.mp4", webSizeBytes: 3_100_000, slots: {} })
+    expect(res.body).not.toContain("madeFrom")
+    expect(res.body).not.toContain("sizeBytes\"")
+    expectNoHidden(res.body)
+  })
+
+  it("a video with no web copy, or one made from a video since replaced, has neither field", async () => {
+    withWeb({
+      examples: [
+        { ...versionData().examples[0]!, web: webOf("https://cdn.example/ex1-before-upscale.mp4") },
+        EX2,
+      ],
+    })
+    const d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    for (const ex of d.examples) {
+      expect(ex).not.toHaveProperty("webUrl")
+      expect(ex).not.toHaveProperty("webSizeBytes")
+    }
+    expect(d.cover).not.toHaveProperty("webUrl")
+    expect(d.original.webUrl).toBe(webOf(DISPLAY.videoUrl).videoUrl)
+  })
+
+  it("a trend that hides its original never sends the display copy's web copy: Example 1's is the original's", async () => {
+    withWeb({ hideOriginal: true })
+    for (const url of ["/v1/trends", "/v1/trends/neon-dance"]) {
+      const res = await app.inject({ method: "GET", url, headers: as() })
+      expect(res.body).not.toContain(webOf(DISPLAY.videoUrl).videoUrl)
+      const shown = url === "/v1/trends" ? res.json().data[0] : res.json().data
+      expect(shown.original.webUrl).toBe("https://cdn.example/ex1-web.mp4")
+      expect(shown.examples.map((e: { webUrl?: string }) => e.webUrl)).toEqual(["https://cdn.example/ex2-web.mp4"])
+    }
+  })
+})

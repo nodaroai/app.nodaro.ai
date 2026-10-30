@@ -43,6 +43,12 @@ const db = vi.hoisted(() => ({
   respond: null as null | ((q: RecordedQuery) => QueryResult),
 }))
 
+// A publish's background web copies (web-copy.ts, pinned in its own tests): never made here.
+vi.mock("../../lib/trends/web-copy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/trends/web-copy.js")>()),
+  startWebCopies: () => Promise.resolve(),
+}))
+
 vi.mock("../../../lib/supabase.js", async () => {
   const { makeFakeFrom } = await import("../../../lib/__tests__/fake-supabase-query.js")
   return { supabase: { from: makeFakeFrom(db.log, (q) => db.respond!(q)) } }

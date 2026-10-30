@@ -50,6 +50,9 @@ import {
   PreviewClipAttachConflictError,
   listVersionsLackingPreviewClip,
   versionsHidingOriginal,
+  attachWebCopies,
+  WebCopyAttachConflictError,
+  listPublishedTrendVersions,
 } from "../store.js"
 import type { TrendPreviewClip, TrendVersionData } from "../types.js"
 
@@ -752,6 +755,118 @@ describe("attachDisplayCopy — the one write a published version may get (S7 ba
     expect((notHttp as Error).message).toMatch(/http\(s\)/)
     expect(notHttp).not.toBeInstanceOf(DisplayAttachConflictError)
     expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+})
+
+describe("attachWebCopies — the third write a published version may get (web copies)", () => {
+  const REV = "22222222-2222-4222-8222-222222222222"
+  const DISPLAY = { videoUrl: "https://cdn.example.com/display.mp4", posterUrl: "https://cdn.example.com/poster.png", width: 720, height: 1280, durationSec: 12 }
+  const EX = (n: number) => ({ videoUrl: `https://cdn.example.com/ex${n}.mp4`, width: 720, height: 1280, durationSec: 12, slots: {}, sourceJobId: `job-${n}` })
+  const copy = (from: string, sizeBytes = 7_000_000) => ({ videoUrl: from.replace(/\.mp4$/, "-web.mp4"), sizeBytes, madeFrom: from })
+  const FULL: TrendVersionData = {
+    ...DATA,
+    name: { en: "Dance off", he: "קרב ריקוד" },
+    source: { videoUrl: "https://cdn.example.com/src.mov", durationSec: 12, width: 1080, height: 1920, display: DISPLAY },
+    previewStart: 3,
+    examples: [EX(1), EX(2)],
+  }
+  const readRow = (data: TrendVersionData, revision = REV) => ok({ data, revision, published_at: "2026-10-20T10:00:00+00:00" })
+
+  it("adds `web` to the display copy and each example it was made from, on a PUBLISHED row, and nothing else", async () => {
+    const before = structuredClone(FULL)
+    db.respond = (q) => (argOf(q, "update") ? ok([{ version: 2 }]) : readRow(FULL))
+    const copies = [copy(DISPLAY.videoUrl), copy(EX(2).videoUrl, 3_000_000)]
+    expect(await attachWebCopies(T1, 2, copies)).toEqual({ set: 2, already: 0, stale: 0 })
+
+    const write = queries("trend_versions", "update")
+    expect(write).toHaveLength(1)
+    const payload = argOf(write[0]!, "update")![0] as Record<string, unknown>
+    expect(Object.keys(payload)).toEqual(["data"])
+    const next = payload.data as TrendVersionData
+    expect(next.source!.display).toEqual({ ...DISPLAY, web: copies[0] })
+    expect(next.examples).toEqual([EX(1), { ...EX(2), web: copies[1] }])
+    // Everything else as read.
+    const strip = (d: TrendVersionData) => JSON.stringify({ ...d, source: { ...d.source, display: { ...d.source!.display, web: undefined } }, examples: d.examples.map((e) => ({ ...e, web: undefined })) })
+    expect(strip(next)).toBe(strip(before))
+    expect(FULL).toEqual(before)
+
+    // Guarded on the revision read and on EVERY entry's `web` as read (example 1 included, though not set here:
+    // a copy another attach wrote after this read is never overwritten) — never on published_at.
+    expect(has(write[0]!, "eq", "revision", REV)).toBe(true)
+    expect(has(write[0]!, "is", "data->source->display->>web", null)).toBe(true)
+    expect(has(write[0]!, "is", "data->examples->0->>web", null)).toBe(true)
+    expect(has(write[0]!, "is", "data->examples->1->>web", null)).toBe(true)
+    expect(write[0]!.ops.some((op) => op.a[0] === "published_at")).toBe(false)
+    expect(queries("trends", "update")).toHaveLength(0)
+  })
+
+  it("an entry with a current copy keeps it ('already'); a copy whose video no entry shows is 'stale'; nothing to set writes nothing", async () => {
+    const current = copy(EX(1).videoUrl, 1)
+    db.respond = () => readRow({ ...FULL, examples: [{ ...EX(1), web: current }, EX(2)] })
+    expect(await attachWebCopies(T1, 2, [copy(EX(1).videoUrl), copy("https://cdn.example.com/replaced.mp4")])).toEqual({ set: 0, already: 1, stale: 1 })
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("replaces a stale copy (made from a video since replaced), guarded on that stale copy still being there", async () => {
+    const stale = copy("https://cdn.example.com/before-upscale.mp4")
+    const kept = copy(EX(2).videoUrl, 5)
+    db.respond = (q) => (argOf(q, "update") ? ok([{ version: 2 }]) : readRow({ ...FULL, examples: [{ ...EX(1), web: stale }, { ...EX(2), web: kept }] }))
+    expect(await attachWebCopies(T1, 2, [copy(EX(1).videoUrl)])).toEqual({ set: 1, already: 0, stale: 0 })
+    const write = queries("trend_versions", "update")[0]!
+    expect(has(write, "eq", "data->examples->0->web->>madeFrom", stale.madeFrom)).toBe(true)
+    // An entry with a copy it does not touch is guarded on that copy too.
+    expect(has(write, "eq", "data->examples->1->web->>madeFrom", kept.madeFrom)).toBe(true)
+    expect((argOf(write, "update")![0] as { data: TrendVersionData }).data.examples[0]!.web).toEqual(copy(EX(1).videoUrl))
+  })
+
+  it("a guarded write that matched nothing re-reads: a copy attached meanwhile is 'already'", async () => {
+    let reads = 0
+    db.respond = (q) => {
+      if (argOf(q, "update")) return ok([])
+      reads += 1
+      return reads === 1 ? readRow(FULL) : readRow({ ...FULL, examples: [{ ...EX(1), web: copy(EX(1).videoUrl) }, EX(2)] })
+    }
+    expect(await attachWebCopies(T1, 2, [copy(EX(1).videoUrl)])).toEqual({ set: 0, already: 1, stale: 0 })
+    expect(queries("trend_versions", "update")).toHaveLength(1)
+  })
+
+  it("retries on a moved revision, then gives up with WebCopyAttachConflictError; a row gone is version_missing", async () => {
+    db.respond = (q) => (argOf(q, "update") ? ok([]) : readRow(FULL, randomRevision()))
+    const err = await attachWebCopies(T1, 2, [copy(EX(1).videoUrl)]).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(WebCopyAttachConflictError)
+    expect((err as WebCopyAttachConflictError).reason).toBe("concurrent_write")
+    expect(queries("trend_versions", "update")).toHaveLength(3)
+
+    db.log.length = 0
+    db.respond = () => ok(null)
+    const gone = await attachWebCopies(T1, 9, [copy(EX(1).videoUrl)]).catch((e: unknown) => e)
+    expect((gone as WebCopyAttachConflictError).reason).toBe("version_missing")
+    expect(queries("trend_versions", "update")).toHaveLength(0)
+  })
+
+  it("throws (a plain error, before reading) for a non-http(s) address or a copy that IS its video", async () => {
+    db.respond = () => readRow(FULL)
+    const notHttp = await attachWebCopies(T1, 2, [{ ...copy(EX(1).videoUrl), videoUrl: "/trends/x.mp4" }]).catch((e: unknown) => e)
+    expect((notHttp as Error).message).toMatch(/http\(s\)/)
+    expect(notHttp).not.toBeInstanceOf(WebCopyAttachConflictError)
+    await expect(attachWebCopies(T1, 2, [{ ...copy(EX(1).videoUrl), videoUrl: EX(1).videoUrl }])).rejects.toThrow(/own file/)
+    expect(db.log).toHaveLength(0)
+  })
+})
+
+describe("listPublishedTrendVersions", () => {
+  it("the published version of every PUBLISHED trend, in slug order", async () => {
+    db.respond = (q) => {
+      if (q.table === "trends") return ok([{ id: T1, slug: "a", published_version: 2 }, { id: T2, slug: "b", published_version: 1 }])
+      if (has(q, "eq", "trend_id", T2)) return ok(null)
+      return ok({ data: DATA })
+    }
+    expect(await listPublishedTrendVersions()).toEqual([{ trendId: T1, slug: "a", version: 2, data: DATA }])
+    const list = queries("trends")[0]!
+    expect(has(list, "eq", "status", "published")).toBe(true)
+    expect(has(list, "order", "slug", { ascending: true })).toBe(true)
+    const read = queries("trend_versions").find((q) => has(q, "eq", "trend_id", T1))!
+    expect(has(read, "eq", "version", 2)).toBe(true)
   })
 })
 

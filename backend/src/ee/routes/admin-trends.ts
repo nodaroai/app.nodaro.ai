@@ -92,6 +92,7 @@ import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/tr
 import { TREND_SOURCE_SECONDS, TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
 import { publishBlockers } from "../lib/trends/publish-check.js"
 import { warmTrendVersionVideos } from "../lib/trends/warm-videos.js"
+import { startWebCopies } from "../lib/trends/web-copy.js"
 import { trendPromptPartProblems } from "../lib/trends/prompt-parts-check.js"
 import { replyPromptPartsFailure } from "../lib/cast-swap-prompt-parts.js"
 import { allTagUsage, readTagLabels, saveTagLabels, type TagLabels } from "../lib/trends/tags.js"
@@ -113,7 +114,7 @@ import {
   type RunKeyset,
   type TrendRun,
 } from "../lib/trends/run-helpers.js"
-import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
+import type { TrendExample, TrendRow, TrendSourceDisplay, TrendVersionData } from "../lib/trends/types.js"
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
 import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes, withMarksForSource } from "./admin-trends-face-mask.js"
 import { SUPERSEDED, closeAbandonedVariantJobs } from "./admin-trends-face-mask-variants.js"
@@ -377,18 +378,24 @@ function exampleFor(draft: TrendVersionData, run: RunJobRow, media: CopiedRunMed
  * opened before the backfill set it, or a builder that predates the field,
  * would otherwise drop it and block publishing), and its stored `sha256`
  * whatever the body says. A different clip never keeps the old clip's copy or
- * hash. A slot's `hintImageUrl` is NOT carried this way: the
- * builder removes a hint picture by leaving the key out.
+ * hash. The display copy's `web` copy is the server's too (`attachWebCopies`):
+ * a body's is never taken, and the stored one is kept whenever the body's
+ * display copy is the stored one (same `videoUrl`). A slot's `hintImageUrl`
+ * is NOT carried this way: the builder removes a hint picture by leaving the
+ * key out.
  */
 function keepDisplayCopy(body: Record<string, unknown>, stored: TrendVersionData): Record<string, unknown> {
   const source = body.source
   const kept = stored.source
-  if (!kept || !isRec(source) || source.videoUrl !== kept.videoUrl) return body
+  if (!isRec(source)) return body
+  const bodyDisplay = isRec(source.display) ? withStoredWebCopy(source.display, kept?.display) : source.display
+  const withDisplay = bodyDisplay === source.display ? source : { ...source, display: bodyDisplay }
+  if (!kept || source.videoUrl !== kept.videoUrl) return withDisplay === source ? body : { ...body, source: withDisplay }
   const display = kept.display
   // The stored clip's hash is the server's (recorded when the clip was stored): a body naming the same clip
   // never sets it — a tab from before it was recorded would drop it, and a run's provenance must not be a
   // client's word. A different clip takes the body's, which came from the media route.
-  const { sha256: _client, ...rest } = source
+  const { sha256: _client, ...rest } = withDisplay
   const hash = kept.sha256
   return {
     ...body,
@@ -397,6 +404,27 @@ function keepDisplayCopy(body: Record<string, unknown>, stored: TrendVersionData
       ...(hash ? { sha256: hash } : {}),
       ...(display && !Object.hasOwn(source, "display") ? { display } : {}),
     },
+  }
+}
+
+/** A body's display copy with its `web` the stored one's (when it is the same display copy), never its own. */
+function withStoredWebCopy(display: Record<string, unknown>, stored: TrendSourceDisplay | undefined): Record<string, unknown> {
+  const { web: _client, ...rest } = display
+  const web = stored && stored.videoUrl === display.videoUrl ? stored.web : undefined
+  return web ? { ...rest, web } : Object.hasOwn(display, "web") ? rest : display
+}
+
+/**
+ * `startWebCopies` for a version just published. It never throws; this
+ * guards it anyway, since the publish has already happened when it runs: a
+ * failure here is logged, never the publish's answer.
+ */
+function startWebCopiesAfterPublish(req: FastifyRequest, trendId: string, version: number, data: TrendVersionData): void {
+  const warn = (err: unknown) => req.log.warn({ err, trendId, version }, "admin-trends: the web copies could not be started")
+  try {
+    startWebCopies(trendId, version, data, req.log).catch(warn)
+  } catch (err) {
+    warn(err)
   }
 }
 
@@ -879,6 +907,8 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       await publish(trend.id, { version, revision })
       // The CDN's light copies of what the catalog now shows, warmed for its first viewers (never awaited).
       warmTrendVersionVideos(draft)
+      // The web copies of what it shows and has none yet, made in the background (never awaited, never failing the publish).
+      startWebCopiesAfterPublish(req, trend.id, version, draft)
       return { data: (await getTrendById(trend.id)) ?? trend }
     } catch (e) {
       if (e instanceof DraftConflictError) return draftConflict(reply)

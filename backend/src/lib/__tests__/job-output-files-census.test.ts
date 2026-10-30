@@ -113,6 +113,8 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
     `${NOT_A_JOB} (a trend source clip's display copy, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
   'ee/lib/trends/media.ts :: trendMediaKey(trendId, "png") → posterUrl':
     `${NOT_A_JOB} (the display copy's poster, \`trends/<trendId>/<uuid>.png\`: the trend owns it, never a job)`,
+  'ee/lib/trends/web-copy.ts :: trendMediaKey(trendId, "mp4") → videoUrl':
+    `${NOT_A_JOB} (a trend video's web copy for playback, \`trends/<trendId>/<uuid>.mp4\`, made once a version is published: the trend owns it, never a job)`,
   'ee/lib/trends/preview-clip-media.ts :: trendMediaKey(trendId, "mp4") → videoUrl':
     `${NOT_A_JOB} (a trend's preview input clip, \`trends/<trendId>/<uuid>.mp4\`, cut from its source once at save: the trend owns it, never a job)`,
   'ee/lib/trends/preview-clip-media.ts :: trendMediaKey(trendId, "mp4")':
