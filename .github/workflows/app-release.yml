@@ -77,8 +77,13 @@ jobs:
           # margin/markup/wholesale only with financial context on the same line
           # ("sidebar margin", "HTML markup" subjects must not block a release);
           # MEASURED is case-sensitive (lowercase "measured duration" is benign).
+          # Figures per month or per year (month, mo, year, yr, annum) are what
+          # a user pays for a plan, so they pass; a dollar figure per any other
+          # unit (second, image, minute) still fails. Each figure is judged on
+          # its own, so a plan figure on the same line never hides a rate.
           BAD=0
-          grep -nEi '\$[0-9]+(\.[0-9]+)?[[:space:]]*/[[:space:]]*[A-Za-z]|\$[0-9]+\.[0-9]+.*\$[0-9]+\.[0-9]+|at[-]cost|below[ -]cost|contracted rate|st[a]ging measurement|[0-9]+-run measurement' /tmp/notes.md && BAD=1
+          grep -oEi '\$[0-9]+(\.[0-9]+)?[[:space:]]*/[[:space:]]*[A-Za-z]+' /tmp/notes.md | grep -viE '/[[:space:]]*(month|mo|year|yr|annum)$' && BAD=1
+          grep -nEi '\$[0-9]+\.[0-9]+.*\$[0-9]+\.[0-9]+|at[-]cost|below[ -]cost|contracted rate|st[a]ging measurement|[0-9]+-run measurement' /tmp/notes.md && BAD=1
           grep -nE '\bMEASURED\b' /tmp/notes.md && BAD=1
           grep -nEi '\b(margin|markup|wholesale)\b' /tmp/notes.md | grep -Ei '\$|cost|credit|provider|price|rate|billing' && BAD=1
           if [ "$BAD" = "1" ]; then
