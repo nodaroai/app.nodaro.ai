@@ -280,6 +280,23 @@ export interface TrendSourceCrop {
 /** The shapes a source clip can be cropped to (`@nodaro/render-rules`, the rule the trend builder shows). */
 export type { TrendCropAspect }
 
+/**
+ * A shown video's WEB copy: a light MP4 the platform made once for playback
+ * (`makeWebCopy`, web-copy.ts: H.264 about 2.5 Mbit/s, AAC 160 kbit/s
+ * stereo, faststart), in its own file under `trends/<id>/`, which clients
+ * play as it is. Made in the background after a publish (and by the
+ * backfill) for what the catalog shows, and attached by `attachWebCopies`.
+ * `madeFrom` is the `videoUrl` of the display copy or example it stands
+ * for: a copy whose `madeFrom` is no longer that entry's `videoUrl` (the
+ * video was replaced since) is never served. Public as `webUrl` /
+ * `webSizeBytes` beside the entry's own `videoUrl`.
+ */
+export interface TrendWebCopy {
+  videoUrl: string
+  sizeBytes: number
+  madeFrom: string
+}
+
 /** A promoted example run: its result video and the pictures used per slot. */
 export interface TrendExample {
   videoUrl: string
@@ -290,6 +307,8 @@ export interface TrendExample {
   /** Slot key → the images that example used for it. */
   slots: Record<string, string[]>
   sourceJobId: string
+  /** Its web copy (see `TrendWebCopy`), once made. */
+  web?: TrendWebCopy
 }
 
 /**
@@ -305,6 +324,8 @@ export interface TrendSourceDisplay {
   width: number
   height: number
   durationSec: number
+  /** Its web copy (see `TrendWebCopy`; made from the uploaded clip, which has the fuller sound), once made. */
+  web?: TrendWebCopy
 }
 
 /**

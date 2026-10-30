@@ -189,7 +189,8 @@ function applied(
   if (target.target === "source") return withNewSourceClip(data, stored)
   const examples = data.examples.map((ex, i) => {
     if (i !== target.index) return ex
-    const { posterUrl: _old, ...rest } = ex
+    // Its poster and web copy were of the video replaced here: a new poster comes with it, a web copy at the next publish.
+    const { posterUrl: _old, web: _web, ...rest } = ex
     return {
       ...rest,
       videoUrl: stored.url,

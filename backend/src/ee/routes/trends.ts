@@ -64,6 +64,7 @@ import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quot
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { listedExamples, shownOriginal, storedExampleRequest } from "../lib/trends/public-examples.js"
+import { publicWebCopy } from "../lib/trends/web-copy-plan.js"
 import {
   RUN_JOB_COLS,
   SLOT_KINDS,
@@ -85,7 +86,9 @@ import type {
   TrendResolution,
   TrendRow,
   TrendSlot,
+  TrendExample,
   TrendSlotKind,
+  TrendSourceDisplay,
   TrendVersionData,
 } from "../lib/trends/types.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
@@ -96,6 +99,20 @@ export type { TrendRun } from "../lib/trends/run-helpers.js"
 
 type Chips = Partial<Record<"body" | "outfit" | "hair" | "coat" | "shape" | "finish", Choice>>
 
+/**
+ * One video as a public answer shows it. `webUrl` / `webSizeBytes`: its web
+ * copy (a light MP4 the platform made for playback: H.264 ~2.5 Mbit/s, AAC
+ * 160 kbit/s; played as it is, no CDN transform), absent until it is made.
+ */
+export interface TrendVideo {
+  videoUrl: string
+  posterUrl?: string
+  width: number
+  height: number
+  webUrl?: string
+  webSizeBytes?: number
+}
+
 export interface TrendCard {
   id: string
   slug: string
@@ -104,19 +121,19 @@ export interface TrendCard {
   tags: string[]
   badges: string[]
   /** Example 1, else (a trend with no example) the original's display copy. */
-  cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  cover: TrendVideo
   /**
    * The original's display copy (the same address as the page's `original`),
    * absent on a version without one. Never the uploaded source clip. On a
    * trend that hides its original: Example 1 (then the same as `cover`).
    */
-  original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  original?: TrendVideo
   /**
    * Every example's video, in order (empty on a trend with none); the pictures
    * each slot used are the page's. On a trend that hides its original, from
    * Example 2 (Example 1 is `original`).
    */
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
+  examples: TrendVideo[]
   needs: Record<TrendSlotKind, number>
   durationSec: number
   isFavorite: boolean
@@ -135,11 +152,7 @@ export interface TrendTag {
  * `previewStartSec` is where the 4 s preview starts, sent whenever the trend
  * offers one (0 included).
  */
-export interface TrendOriginal {
-  videoUrl: string
-  posterUrl?: string
-  width: number
-  height: number
+export interface TrendOriginal extends TrendVideo {
   durationSec: number
   previewStartSec?: number
 }
@@ -183,7 +196,7 @@ export interface TrendDetail extends TrendCard {
    * May be empty: a trend can be published with only its original. On a trend
    * that hides its original, from Example 2 (Example 1 is `original`).
    */
-  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
+  examples: Array<TrendVideo & { slots: Record<string, string[]> }>
 }
 
 
@@ -277,6 +290,17 @@ function needsOf(slots: TrendSlot[]): Record<TrendSlotKind, number> {
  * reading the page. A trend that hides its original never falls back to the
  * display copy: with no example (none can publish so) it has no card.
  */
+/** One shown video's public fields (its web copy's, when it has a current one: `publicWebCopy`). */
+function videoOf(v: TrendExample | TrendSourceDisplay): TrendVideo {
+  return {
+    videoUrl: v.videoUrl,
+    ...(v.posterUrl ? { posterUrl: v.posterUrl } : {}),
+    width: v.width,
+    height: v.height,
+    ...publicWebCopy(v),
+  }
+}
+
 function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorite: boolean): TrendCard | null {
   if (!data.source) return null
   const display = shownOriginal(data)
@@ -290,28 +314,9 @@ function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorit
     ...(description ? { description } : {}),
     tags: [...row.tags],
     badges: [...row.badges],
-    cover: {
-      videoUrl: cover.videoUrl,
-      ...(cover.posterUrl ? { posterUrl: cover.posterUrl } : {}),
-      width: cover.width,
-      height: cover.height,
-    },
-    ...(display
-      ? {
-          original: {
-            videoUrl: display.videoUrl,
-            ...(display.posterUrl ? { posterUrl: display.posterUrl } : {}),
-            width: display.width,
-            height: display.height,
-          },
-        }
-      : {}),
-    examples: listedExamples(data).map((ex) => ({
-      videoUrl: ex.videoUrl,
-      ...(ex.posterUrl ? { posterUrl: ex.posterUrl } : {}),
-      width: ex.width,
-      height: ex.height,
-    })),
+    cover: videoOf(cover),
+    ...(display ? { original: videoOf(display) } : {}),
+    examples: listedExamples(data).map(videoOf),
     needs: needsOf(data.slots),
     durationSec: data.source.durationSec,
     isFavorite,
@@ -334,10 +339,7 @@ function originalOf(data: TrendVersionData): TrendOriginal | undefined {
   const display = shownOriginal(data)
   if (!display) return undefined
   return {
-    videoUrl: display.videoUrl,
-    ...(display.posterUrl ? { posterUrl: display.posterUrl } : {}),
-    width: display.width,
-    height: display.height,
+    ...videoOf(display),
     durationSec: display.durationSec,
     ...(data.previewStart !== null ? { previewStartSec: data.previewStart } : {}),
   }
@@ -375,13 +377,7 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     examples: listedExamples(data).map((ex) => {
       const slots: Record<string, string[]> = {}
       for (const [k, v] of Object.entries(ex.slots)) if (keys.has(k)) slots[k] = [...v]
-      return {
-        videoUrl: ex.videoUrl,
-        ...(ex.posterUrl ? { posterUrl: ex.posterUrl } : {}),
-        width: ex.width,
-        height: ex.height,
-        slots,
-      }
+      return { ...videoOf(ex), slots }
     }),
   }
 }

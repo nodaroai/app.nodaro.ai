@@ -162,6 +162,13 @@ const trendReferenceSchema = z.strictObject({
   previewLine: z.string().max(500).optional(),
 })
 
+/** A shown video's web copy (types.ts `TrendWebCopy`): written only by `attachWebCopies`, carried as it is through draft writes. */
+const trendWebCopySchema = z.strictObject({
+  videoUrl: httpUrl,
+  sizeBytes: z.int().positive(),
+  madeFrom: httpUrl,
+})
+
 const trendExampleSchema = z.strictObject({
   videoUrl: httpUrl,
   posterUrl: httpUrl.optional(),
@@ -170,6 +177,7 @@ const trendExampleSchema = z.strictObject({
   durationSec: z.number().positive(),
   slots: slotRecord(z.record(slotKeySchema, z.array(httpUrl).min(1).max(MAX_IMAGES_PER_SLOT))),
   sourceJobId: z.string().min(1),
+  web: trendWebCopySchema.optional(),
 })
 
 const nonNegative = z.number().min(0)
@@ -315,6 +323,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
             width: z.int().positive(),
             height: z.int().positive(),
             durationSec: z.number().positive(),
+            web: trendWebCopySchema.optional(),
           })
           .optional(),
         // Recorded as the clip is stored (media.ts); absent on a clip stored before.

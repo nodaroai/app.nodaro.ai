@@ -102,6 +102,28 @@ export type TrendResolution = "480p" | "720p" | "1080p"
  */
 export type TrendEngine = CastSwapEngine
 
+/**
+ * One of a trend's videos as a list or page shows it: the card's
+ * {@link TrendCard.cover}, {@link TrendCard.original} and
+ * {@link TrendCard.examples}, and the fields {@link TrendExample} and
+ * {@link TrendOriginal} share.
+ */
+export interface TrendVideo {
+  videoUrl: string
+  posterUrl?: string
+  width: number
+  height: number
+  /**
+   * A light copy made by the platform for playback: H.264 ~2.5 Mbit/s, AAC
+   * 160 kbit/s; play it as it is (no CDN transform). Absent on an older
+   * version (until it is made) and from an older server: play
+   * {@link videoUrl} then.
+   */
+  webUrl?: string
+  /** The size of {@link webUrl}'s file, in bytes; present exactly when {@link webUrl} is. */
+  webSizeBytes?: number
+}
+
 /** A trend in the catalog (`list()`). Text is in the resolved locale. */
 export interface TrendCard {
   id: string
@@ -115,14 +137,14 @@ export interface TrendCard {
    * The trend's first example, else (a trend with no example) its original's
    * display copy, as {@link TrendDetail.original}.
    */
-  cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  cover: TrendVideo
   /**
    * The original's display copy, the same address as {@link TrendDetail.original}
    * (without its length and preview start). Absent on a version without a
    * display copy (and from an older server). On a trend that hides its
    * original, its first example instead (then the same as {@link cover}).
    */
-  original?: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  original?: TrendVideo
   /**
    * Every example's video, in the page's order, so a list can show each clip
    * without reading the trend's page. Empty on a trend with only its original;
@@ -130,7 +152,7 @@ export interface TrendCard {
    * ({@link TrendDetail.examples}). On a trend that hides its original, from
    * its second example (the first is {@link original}).
    */
-  examples?: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number }>
+  examples?: TrendVideo[]
   /** How many slots of each kind the trend has. */
   needs: Record<TrendSlotKind, number>
   /** The length of a full run, in seconds. */
@@ -169,11 +191,7 @@ export interface TrendDetailSlot {
 }
 
 /** A finished run shown on a trend's page, with the pictures it used per slot. */
-export interface TrendExample {
-  videoUrl: string
-  posterUrl?: string
-  width: number
-  height: number
+export interface TrendExample extends TrendVideo {
   /**
    * Slot key → the pictures this example used for it. An optional slot the
    * example kept as in the original has no key; a run that leaves that slot
@@ -188,11 +206,7 @@ export interface TrendExample {
  * its first example instead (the original clip is then never sent). Its fields
  * parallel {@link TrendExample}'s.
  */
-export interface TrendOriginal {
-  videoUrl: string
-  posterUrl?: string
-  width: number
-  height: number
+export interface TrendOriginal extends TrendVideo {
   /** The copy's length (on a trend that hides its original, the first example's), in seconds. */
   durationSec: number
   /**

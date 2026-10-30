@@ -17,6 +17,7 @@ export {
   type TrendDetailSlot,
   type TrendExample,
   type TrendOriginal,
+  type TrendVideo,
   type TrendDetail,
   type TrendRunSlot,
   type TrendRunRequest,

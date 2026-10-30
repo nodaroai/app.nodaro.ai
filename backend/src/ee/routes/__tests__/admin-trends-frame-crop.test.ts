@@ -24,6 +24,12 @@ import type { TrendRow, TrendVersionData } from "../../lib/trends/types.js"
 
 const db = vi.hoisted(() => ({ log: [] as Array<{ table: string; ops: Array<{ m: string; a: unknown[] }> }> }))
 
+// A publish's background web copies (web-copy.ts, pinned in its own tests): never made here.
+vi.mock("../../lib/trends/web-copy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/trends/web-copy.js")>()),
+  startWebCopies: () => Promise.resolve(),
+}))
+
 vi.mock("../../../lib/supabase.js", async () => {
   const { makeFakeFrom } = await import("../../../lib/__tests__/fake-supabase-query.js")
   return { supabase: { from: makeFakeFrom(db.log as RecordedQuery[], (_q: RecordedQuery): QueryResult => ({ data: null, error: null })) } }
