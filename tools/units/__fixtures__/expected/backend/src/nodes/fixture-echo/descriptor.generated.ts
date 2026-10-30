@@ -65,5 +65,7 @@ export const descriptor = {
       "noun": "a video"
     }
   },
-  "capabilities": []
+  "capabilities": [
+    "lane:local"
+  ]
 } as const

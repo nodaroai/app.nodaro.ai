@@ -26,6 +26,9 @@ const MEDIA_KINDS = ["audio", "video", "image"]
 // @nodaro/prompts. A key that names a price is refused anywhere in the manifest.
 const PRICE_KEY = /credit|price|cost/i
 const PROMPT_KEY = /prompt|doctrine|instruction/i
+const LANE_PREFIX = "lane:"
+/** The concurrency-lane capabilities (tools/units/capabilities.mjs): a worker unit carries exactly one. */
+export const LANE_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.startsWith(LANE_PREFIX))
 
 export const pascalCase = (type) => type.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("")
 /** The `<Pascal>Data` interface a unit's types.ts exports — the same name gen:skills looks for. */
@@ -488,6 +491,14 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   else {
     for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
     if (m.capabilities.includes("length:pass-video") && m.capabilities.includes("length:exact-video")) errors.push("capabilities: \"length:exact-video\" already keeps the length — drop \"length:pass-video\"")
+    // A worker's job counts in one concurrency lane (backend/src/lib/concurrency-lanes/registry.ts); only a worker runs a job.
+    const lanes = m.capabilities.filter((c) => typeof c === "string" && c.startsWith(LANE_PREFIX))
+    if (isObject(ex) && ex.kind === "worker") {
+      if (lanes.length === 0) errors.push(`a worker needs one concurrency lane capability (${LANE_CAPABILITIES.join(", ")}): the lane its job counts in`)
+      else if (lanes.length > 1) errors.push(`a worker counts in exactly one concurrency lane — ${lanes.map((l) => JSON.stringify(l)).join(", ")} name ${lanes.length === 2 ? "two" : lanes.length}`)
+    } else if (isObject(ex) && EXECUTION_KINDS.includes(ex.kind)) {
+      for (const l of lanes) errors.push(`capability "${l}" is a worker's concurrency lane; execution.kind "${ex.kind}" runs no worker job`)
+    }
     // The entity lands in imageUrl (both input resolvers), so the node must read it there, on an input that takes images.
     if (m.capabilities.includes("input:entity-subject")) {
       const imageUrlInputs = Array.isArray(m.handles?.inputs) ? m.handles.inputs.filter((h) => isObject(h) && h.field === "imageUrl") : []

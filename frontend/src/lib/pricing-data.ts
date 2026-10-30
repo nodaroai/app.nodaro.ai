@@ -184,7 +184,7 @@ export const TIER_STORAGE_BYTES: Record<string, number> = {
   enterprise: 500 * 1024 * 1024 * 1024,  // 500 GB
 }
 
-/** Max concurrent nodes per workflow execution, by tier. Must match backend TIER_PARALLELISM in stripe-config.ts. */
+/** Max concurrent nodes per workflow execution, by tier. Must match the backend's per-tier provider sizes in backend/src/lib/concurrency-lanes/defaults.ts (from which stripe-config.ts derives TIER_PARALLELISM). */
 export const TIER_PARALLELISM: Record<string, number> = {
   free: 2,
   payg: 4, // derived tier, = basic

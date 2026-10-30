@@ -6,6 +6,7 @@
  */
 
 import { VIDEO_DURATION_TIERS } from "@nodaro/shared/models"
+import { defaultLaneSizesForTier, PARALLELISM_TIERS } from "../../lib/concurrency-lanes/defaults.js"
 
 /**
  * Every Vidu Q4 4K composite the credit identifier can emit
@@ -97,15 +98,14 @@ export const TIER_CREDITS: Record<string, number> = {
   business: 52000,
 }
 
-/** Max concurrent nodes per workflow execution, by tier. */
-export const TIER_PARALLELISM: Record<string, number> = {
-  free: 2,
-  payg: 4, // derived tier (effective-tier.ts) — entitlements = basic's
-  basic: 4,
-  standard: 6,
-  pro: 10,
-  business: 12,
-}
+/**
+ * Max concurrent nodes per workflow execution, by tier — each tier's default
+ * provider-lane size, whose one code copy is lib/concurrency-lanes/defaults.ts
+ * (payg = basic there: a derived tier, effective-tier.ts). No `enterprise` key.
+ */
+export const TIER_PARALLELISM: Record<string, number> = Object.fromEntries(
+  PARALLELISM_TIERS.map((t) => [t, defaultLaneSizesForTier(t).provider]),
+)
 
 export const TIER_STORAGE_LIMITS: Record<string, number> = {
   free: 1 * 1024 * 1024 * 1024,          // 1 GB

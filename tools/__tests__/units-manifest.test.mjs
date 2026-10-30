@@ -8,7 +8,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, optionTypesFrom, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
+import { LANE_CAPABILITIES, familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, optionTypesFrom, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../units/seams.mjs"
 import { useCaseBuildersFrom } from "../units/use-case-rules.mjs"
 import { CAPABILITIES } from "../units/capabilities.mjs"
@@ -29,6 +29,7 @@ function tree() {
   cpSync(FIXTURE, dir, { recursive: true })
   return dir
 }
+const LANES = Object.fromEntries(LANE_CAPABILITIES.map((c) => [c, CAPABILITIES[c]]))
 const allLive = () => liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, true])))
 const ctxFor = (root, over = {}) => ({
   legacyTypes: new Set(["text-prompt", "upload-video"]),
@@ -39,6 +40,8 @@ const ctxFor = (root, over = {}) => ({
   exists: (p) => { try { readFileSync(path.join(root, p)); return true } catch { return false } },
   readText: (p) => { try { return readFileSync(path.join(root, p), "utf8") } catch { return null } },
   ...over,
+  // The fixture worker carries "lane:local": every worker counts in one concurrency lane.
+  capabilities: { ...LANES, ...over.capabilities },
 })
 function withManifest(root, edit, dir = UNIT) {
   const file = path.join(root, dir, "unit.json")
@@ -138,7 +141,7 @@ test("\"input:entity-subject\" needs an input whose field is imageUrl (both inpu
   try {
     const ctx = ctxFor(root, { capabilities: { "input:entity-subject": CAPABILITIES["input:entity-subject"] } })
     const rule = /capability "input:entity-subject" puts a wired entity in imageUrl/
-    withManifest(root, (m) => { m.capabilities = ["input:entity-subject"] })
+    withManifest(root, (m) => { m.capabilities = ["input:entity-subject", "lane:local"] })
     assert.ok(problems(root, ctx).some((e) => rule.test(e)), "an input on videoUrl only is refused")
     withManifest(root, (m) => { m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["image"] })
     assert.deepEqual(problems(root, ctx), [])
@@ -150,7 +153,7 @@ test("\"input:entity-subject\" needs its imageUrl input to accept image (an enti
   try {
     const ctx = ctxFor(root, { capabilities: { "input:entity-subject": CAPABILITIES["input:entity-subject"] } })
     const rule = /capability "input:entity-subject": its imageUrl input must accept "image"/
-    withManifest(root, (m) => { m.capabilities = ["input:entity-subject"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["video"] })
+    withManifest(root, (m) => { m.capabilities = ["input:entity-subject", "lane:local"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["video"] })
     const errs = problems(root, ctx)
     assert.ok(errs.some((e) => rule.test(e)), errs.join("\n"))
     assert.ok(!errs.some((e) => /it needs an input whose field is "imageUrl"/.test(e)), "the field rule is met: only the accepts rule fires")
@@ -163,7 +166,7 @@ test("a capability read by both trees needs each tree's seam live (\"input:entit
   assert.deepEqual(CAPABILITIES["input:entity-subject"].seams, ["definitions", "registry"])
   const root = tree()
   try {
-    withManifest(root, (m) => { m.capabilities = ["input:entity-subject"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["image"] })
+    withManifest(root, (m) => { m.capabilities = ["input:entity-subject", "lane:local"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["image"] })
     for (const seam of ["definitions", "registry"]) {
       const ctx = ctxFor(root, { capabilities: { "input:entity-subject": CAPABILITIES["input:entity-subject"] }, live: liveSeams({ ...Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, true])), [seam]: false }) })
       const errs = problems(root, ctx)
@@ -524,6 +527,19 @@ test("use-case: a worker's capability is refused", () => {
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["ffmpeg-media"] }, CASE), { capabilities: ffmpeg }), /capability "ffmpeg-media" describes a worker; a use-case node runs none/)
 })
 
+// A worker's job counts in one concurrency lane (backend/src/lib/concurrency-lanes/registry.ts reads it).
+test("a worker unit with no lane capability fails validation", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = [] })), /^fixture-echo: a worker needs one concurrency lane capability \(lane:provider, lane:llm, lane:local\)/)
+})
+
+test("a worker unit with two lane capabilities fails validation", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["lane:local", "lane:llm"] })), /^fixture-echo: a worker counts in exactly one concurrency lane — "lane:local", "lane:llm" name two$/)
+})
+
+test("a lane capability is a worker's: any other kind is refused", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = [...m.capabilities, "lane:provider"] }, CASE)), /^fixture-case: capability "lane:provider" is a worker's concurrency lane; execution\.kind "use-case" runs no worker job$/)
+})
+
 test("runtimeTyped: only on a media output, and only with contract.producer \"dynamic\"", () => {
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[1].runtimeTyped = true }, CASE)), /^fixture-case: handles\.outputs\[1\]\.runtimeTyped: only true, and only on an audio\/video\/image output/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[0].runtimeTyped = true })), /^fixture-echo: handles\.outputs\[0\]\.runtimeTyped needs contract\.producer "dynamic"/)
@@ -638,13 +654,13 @@ test("length:unknown: a video unit may hold it alone, and it adds no kept-length
     const reason = "Its length is the fixture's, which only the file says."
     // The fixture tree holds fixture-case (the use-case fixture) beside fixture-echo: read echo's descriptor by type.
     const echo = () => loadUnits(root).find((u) => u.manifest.type === "fixture-echo")
-    withManifest(root, (m) => { m.capabilities = ["length:unknown"]; m.lengthUnknownReason = reason })
+    withManifest(root, (m) => { m.capabilities = ["length:unknown", "lane:local"]; m.lengthUnknownReason = reason })
     assert.deepEqual(problems(root, ctxFor(root, { capabilities: CAPABILITIES })), [])
     assert.deepEqual(CAPABILITIES["length:unknown"].seams, ["registry"])
     assert.doesNotMatch(keptLengthsSource(loadUnits(root)), /fixture-echo/)
     // The descriptor carries the reason the server's UNBOUNDED_LENGTH_REASONS reads, and only when stated.
     assert.match(descriptorSource(echo()), new RegExp(`"lengthUnknownReason": ${JSON.stringify(reason).replace(/[.']/g, "\\$&")}`))
-    withManifest(root, (m) => { m.capabilities = ["length:pass-video"]; delete m.lengthUnknownReason })
+    withManifest(root, (m) => { m.capabilities = ["length:pass-video", "lane:local"]; delete m.lengthUnknownReason })
     assert.match(keptLengthsSource(loadUnits(root)), /\["fixture-echo", "bound"\]/)
     assert.doesNotMatch(descriptorSource(echo()), /lengthUnknownReason/)
   } finally { rmSync(root, { recursive: true, force: true }) }

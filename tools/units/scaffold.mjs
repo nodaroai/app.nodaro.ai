@@ -7,7 +7,7 @@
 // @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts backend/src/providers/video/__characterization__/operations.ts packages/render-rules/src/use-case-specs.ts
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { dataInterfaceName, loadUnits, repoContext, TYPE_ID, validateUnits } from "./manifest.mjs"
+import { dataInterfaceName, LANE_CAPABILITIES, loadUnits, repoContext, TYPE_ID, validateUnits } from "./manifest.mjs"
 import { UNIT_ROOTS } from "./seams.mjs"
 import { EXECUTION_KINDS } from "./vocabulary.mjs"
 import { apiTs, characterizeTs, configTsx, execTs, nodeTsx, optionTsx, payloadTs, priceTs, routeTs, typesTs, unitJson, useCaseTs, workerTs } from "./scaffold-templates.mjs"
@@ -20,11 +20,12 @@ export const USAGE = [
   "         --after <type|first> --description \"<one sentence for /v1/nodes>\"",
   "         (--family <family id> --picker-after <type|first> | --no-picker)",
   "         [--label \"<Label>\"] [--price <credits>   (worker, sync and use-case: required)]",
+  `         [--lane <${LANE_CAPABILITIES.map((c) => c.slice("lane:".length)).join("|")}>   (worker: required — the concurrency lane its job counts in)]`,
   "         [--builder <key>   (use-case: required — its graph builder's key in packages/render-rules/src/use-case-specs.ts)]",
   "         [--characterize <operation it follows|first>   (worker: its ffmpeg characterization, characterize.char.ts)]",
 ].join("\n")
 
-const FLAGS_WITH_VALUE = new Set(["--new", "--category", "--kind", "--after", "--description", "--family", "--picker-after", "--label", "--price", "--characterize", "--builder"])
+const FLAGS_WITH_VALUE = new Set(["--new", "--category", "--kind", "--after", "--description", "--family", "--picker-after", "--label", "--price", "--characterize", "--builder", "--lane"])
 const BOOLEAN_FLAGS = new Set(["--no-picker"])
 
 /** `--flag value` / `--flag=value` into { new, category, … }; unknown or valueless flags are errors. */
@@ -82,6 +83,12 @@ export function scaffoldOptions(raw) {
   } else if (raw.price !== undefined) errors.push(`--price is only for --kind worker, sync or use-case (--kind ${raw.kind} runs no route, so nothing charges)`)
   if (chargesAFee && (raw.builder === undefined || raw.builder === "")) errors.push("--builder is required for --kind use-case: its graph builder's key in packages/render-rules/src/use-case-specs.ts — write the builder first")
   else if (!chargesAFee && raw.builder !== undefined) errors.push(`--builder is only for --kind use-case (--kind ${raw.kind} runs no graph builder)`)
+  // A worker's job counts in one concurrency lane (backend/src/lib/concurrency-lanes/registry.ts): stated, never defaulted.
+  const lanes = LANE_CAPABILITIES.map((c) => c.slice("lane:".length))
+  if (raw.kind === "worker") {
+    if (raw.lane === undefined || raw.lane === "") errors.push(`--lane is required for --kind worker: the concurrency lane its job counts in (${lanes.join(", ")}) — provider for a call to an external AI provider, llm for an LLM text call, local for in-house compute (ffmpeg, sharp, Remotion)`)
+    else if (!lanes.includes(raw.lane)) errors.push(`--lane "${raw.lane}" is not one of ${lanes.join(", ")}`)
+  } else if (raw.lane !== undefined) errors.push(`--lane is only for --kind worker (--kind ${raw.kind} runs no worker job)`)
   if (raw.characterize !== undefined && raw.kind !== "worker") errors.push(`--characterize is only for --kind worker: the characterization harness renders an ffmpeg worker's output (--kind ${raw.kind} runs none)`)
   const type = raw.new ?? ""
   if (type && !TYPE_ID.test(type)) errors.push(`"${type}" is not a kebab-case type id`)
@@ -97,6 +104,8 @@ export function scaffoldOptions(raw) {
     price,
     // The operation its characterization runs after (null = first); undefined = none.
     characterizeAfter: raw.characterize === undefined ? undefined : place(raw.characterize),
+    // worker: the concurrency lane its job counts in; set only for that kind.
+    ...(raw.kind === "worker" ? { lane: raw.lane } : {}),
     // use-case: its graph builder's key (USE_CASE_SPECS); set only for that kind.
     ...(chargesAFee ? { builder: raw.builder } : {}),
   }

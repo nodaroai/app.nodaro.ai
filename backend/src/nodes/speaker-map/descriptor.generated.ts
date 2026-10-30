@@ -66,6 +66,7 @@ export const descriptor = {
   },
   "capabilities": [
     "panel:generate-button",
-    "finalize:own-writer"
+    "finalize:own-writer",
+    "lane:local"
   ]
 } as const

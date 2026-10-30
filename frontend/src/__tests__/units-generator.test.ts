@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { generate, staleFiles, writeOutputs } from "../../../tools/units/gen.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../../../tools/units/seams.mjs"
 import { staticCostsOf, loadTypeScript } from "../../../tools/units/price-reader.mjs"
+import { LANE_CAPABILITIES } from "../../../tools/units/manifest.mjs"
+import { CAPABILITIES } from "../../../tools/units/capabilities.mjs"
 
 /**
  * gen:units on the fixture units — `fixture-echo` (a worker with every optional
@@ -30,7 +32,8 @@ beforeAll(async () => {
     legacyTypes: new Set(["text-prompt", "upload-video"]),
     families: new Set(["fixture-family"]),
     live: liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id: string) => [id, true]))),
-    capabilities: {},
+    // The fixture worker carries "lane:local": every worker counts in one concurrency lane.
+    capabilities: Object.fromEntries(LANE_CAPABILITIES.map((c) => [c, CAPABILITIES[c as keyof typeof CAPABILITIES]])),
     exists: (p: string) => existsSync(path.join(tree, p)),
   }
   // The real (lazy, TypeScript) price reader, rooted at the repo so it finds `typescript`.

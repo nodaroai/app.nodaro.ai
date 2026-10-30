@@ -55,7 +55,8 @@ export const descriptor = {
     "panel:generate-button",
     "finalize:own-writer",
     "length:unknown",
-    "input:entity-subject"
+    "input:entity-subject",
+    "lane:local"
   ],
   "mcp": {
     "widgetModelFor": [

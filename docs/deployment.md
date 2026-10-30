@@ -176,7 +176,12 @@ here for each one anyway.
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
 | `SITE_ASSET_ARCHIVE` | `auto` | Keeps every build's styling files (CSS, fonts, images under `/assets/`) in storage under `site-assets/`, so a page an earlier deploy served — a session replay, a tab left open — still gets its stylesheet at its original URL. Each boot copies the build's files once; nothing deletes them. `auto` = on for a production Cloud server only (`NODE_ENV=production`, as the image sets — never a developer's checkout); `on` / `off` decide for any edition. Needs storage configured. |
 | `R2_SHARED_WITH_RELAY_TARGET` | `false` | Set `true` ONLY when `R2_PUBLIC_URL` names the same bucket the instance's relay target (`NODARO_CLOUD_URL`) writes to. It keys on the SOURCE URL, not on the lane: **any** source URL that is already an object in this bucket is then referenced in place instead of being copied under a second key. That covers relayed outputs — which this instance also stops deleting and stops counting against its quota, because another instance created them — and it covers non-relayed sources too: the `save-to-storage` node stores a reference rather than an independent copy when its input is already in the bucket, so deleting that input's library item removes the object the save node points at. Strict parse: only `true` / `1` enable it |
-| `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
+| `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling. Limits one run while lanes are not enforced; ignored once they are (see [Concurrency lanes](#concurrency-lanes)) |
+| `LANE_PROVIDER_PER_USER` · `LANE_LLM_PER_USER` · `LANE_LOCAL_PER_USER` · `LANE_RUN_PER_USER` | `12` · `24` · `24` · `12` (1 to 500) | Community and Business — how many jobs of each lane one person runs at once. See [Concurrency lanes](#concurrency-lanes) |
+| `LANE_QUEUE_TIMEOUT_MINUTES` · `LANE_LIVE_WAIT_MINUTES` | `120` (5 to 1440) · `10` (1 to 60) | How long a queued job, and a request answered while you wait, may wait for a free slot. See [Concurrency lanes](#concurrency-lanes) |
+| `LANES_ENFORCED` | off | Community and Business — whether jobs wait for a free slot in their lane. Strict parse: only `true` / `1` enable it. Not read yet: in this release setting it changes nothing. See [Concurrency lanes](#concurrency-lanes) |
+| `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced. Not read yet: in this release setting it changes nothing. See [Concurrency lanes](#concurrency-lanes) |
+| `LANE_SERVER_COORDINATOR_SHARE` · `LANE_SERVER_USER_SHARE` | `0.4` (0.1 to 1) · `0.25` (0.05 to 1) | Shares of a server's background worker pools: what coordinating jobs may hold of the media worker pool, and what one person may hold of each pool |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | unset (Railway's default window) | Railway only: the SIGTERM → SIGKILL window of a replaced container. The media worker reads the same variable and drains for that long minus 5 seconds, so a long model call already in progress (a [3D Render Pro](nodes/composition/pro-3d-render.md) planning or review step can take up to 6 minutes) finishes and is saved before the job moves to the new container. Set it to `420` on a service that runs 3D Render Pro. Unset, the worker keeps its 25-second drain. The container only stays up as long as work is still running |
 | `PLUGIN_DAEMONS_IN_CONTAINER` | unset | Cloud edition, read by `start.sh` only — `true` runs the [plugin daemon host](#plugin-daemon-host-cloud) inside the app container, supervised like the workers. Only while the app runs ONE replica; the alternative is its own service. Never both |
@@ -1163,6 +1168,38 @@ It likewise deletes temporary provider uploads under `tmp/provider-input/`
 once they are older than 7 days. These are copies of a user's media made only
 so a provider can fetch them; a job deletes its own when it ends, and the
 sweep removes the ones a crashed attempt left behind.
+
+### Concurrency lanes
+
+Each person's jobs are counted in four lanes: `provider` (calls to an
+outside AI provider other than text models), `llm` (text-model calls),
+`local` (work this server does itself: ffmpeg, image compositing,
+Remotion renders) and `run` (whole runs: workflow runs, pipelines,
+directors). A person's personal work, their workspace work and work a
+deployment payer funds are separate lines, each with its own lanes.
+
+Community and Business have no plans, so one size per lane applies to
+every line:
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `LANE_PROVIDER_PER_USER` | `12` (1 to 500) | Provider jobs one line runs at once |
+| `LANE_LLM_PER_USER` | `24` (1 to 500) | Text-model calls one line runs at once |
+| `LANE_LOCAL_PER_USER` | `24` (1 to 500) | Local jobs one line runs at once |
+| `LANE_RUN_PER_USER` | `12` (1 to 500) | Runs one line has going at once |
+| `LANE_QUEUE_TIMEOUT_MINUTES` | `120` (5 to 1440) | Minutes a queued job may wait for a free slot; past it the job fails |
+| `LANE_LIVE_WAIT_MINUTES` | `10` (1 to 60) | Minutes a request answered while you wait may wait for a free slot; past it the request answers that the server is busy |
+| `LANES_ENFORCED` | off | Whether jobs wait for a free slot. Strict parse: only `true` / `1` enable it. Not read yet (see below) |
+| `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced (the lanes then do the limiting). Not read yet (see below) |
+| `LANE_SERVER_COORDINATOR_SHARE` | `0.4` (0.1 to 1) | Share of the media worker pool that coordinating jobs may hold at once |
+| `LANE_SERVER_USER_SHARE` | `0.25` (0.05 to 1) | Share of each background worker pool one person (all their lines together) may hold at once |
+
+`MAX_CONCURRENT_NODES_PER_EXECUTION` limits one run while lanes are not
+enforced; it is ignored once they are. Nodaro Cloud sizes each line by
+its plan and ignores the four `LANE_*_PER_USER` values.
+
+Lanes are being introduced in stages: in this release nothing reads these
+settings yet, and no job waits.
 
 ### Plugin daemon host (Cloud)
 

@@ -1052,7 +1052,7 @@ jobs:
         # The declaration check fails the job, but never hides the result.
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         working-directory: backend
-        run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts src/lib/__tests__/download-slot-ledger.redis.test.ts src/ee/lib/__tests__/presence-redis.redis.test.ts
+        run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts src/lib/__tests__/download-slot-ledger.redis.test.ts src/ee/lib/__tests__/presence-redis.redis.test.ts src/lib/concurrency-lanes/__tests__/lane-gate.redis.test.ts
 
   typecheck:
     name: Type Check

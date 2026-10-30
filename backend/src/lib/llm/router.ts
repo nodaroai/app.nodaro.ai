@@ -24,6 +24,8 @@ import {
 import { noLlmProviderError } from "./provider-unavailable.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 import { claudeMustServeDirect } from "./claude-direct.js"
+import { directLaneVendor } from "./direct-vendor.js"
+import { directLaneLatch } from "../llm-platform-exhaustion.js"
 
 // The KIE Claude-proxy passthrough facts (`KIE_CLAUDE_EFFORT_VERIFIED`,
 // `KIE_CLAUDE_TOOLS_VERIFIED`) and the rule built on them live in
@@ -65,11 +67,12 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
     if (req.requireLane === "kie") return callKie(model, req)
     // Past the keyless branch, a direct pin falls back only from a platform-account refusal, retried once on KIE
     // serving the same model (exhaustionKieFallback) — never for Advanced mode, whose refusal is re-typed instead.
+    const google = directLaneVendor(model) === "google"
     try {
       return await withExhaustionFallback(
-        { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini (pinned)" : "direct-anthropic (pinned)", fallback: "kie" },
-        model.directGeminiModel ? "google" : "anthropic",
-        () => model.directGeminiModel
+        { modelId: model.id, primary: google ? "direct-gemini (pinned)" : "direct-anthropic (pinned)", fallback: "kie" },
+        google ? "google" : "anthropic",
+        () => google
           ? callGeminiDirect(model, req, deriveParams(model, req))
           : callAnthropicDirect(model, req),
         exhaustionKieFallback(model, req),
@@ -80,7 +83,7 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   }
 
   if (model.directFallbackModel && anthropicKeySet()) {
-    if (!model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY) {
+    if (claudeDirectFirst(model, req)) {
       // Direct is the primary lane here, but it is not incident-free — Anthropic
       // logged four elevated-error incidents across 2026-08-04/05, two of them
       // naming Opus 5. `callKieMessagesCollapsed` is a genuine second lane
@@ -233,6 +236,11 @@ export function __resetKeylessPinWarning(): void {
   keylessPinWarned = false
 }
 
+/** A Claude call (with an Anthropic key set) whose PRIMARY lane is the direct SDK: it does not prefer KIE, KIE cannot honour it, or there is no KIE key. */
+function claudeDirectFirst(model: LlmModelDef, req: LlmRequest): boolean {
+  return !model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY
+}
+
 /** The direct Google lane is usable when the registry names a Gemini model id
  *  for this entry AND a key is configured. Both halves are required — a model
  *  with no `directGeminiModel` stays on KIE no matter what is in the env. */
@@ -292,11 +300,12 @@ export async function llmStream(
     assertLanePinnable(model, req.requireLane)
     if (req.requireLane === "kie") return streamKie(model, req, onToken, signal)
     // Past the keyless branch, as llmComplete: a refusal only, never for Advanced mode.
+    const google = directLaneVendor(model) === "google"
     try {
       return await streamWithExhaustionFallback(
-        { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini stream (pinned)" : "direct-anthropic stream (pinned)", fallback: "kie stream" },
-        model.directGeminiModel ? "google" : "anthropic",
-        (cb) => model.directGeminiModel
+        { modelId: model.id, primary: google ? "direct-gemini stream (pinned)" : "direct-anthropic stream (pinned)", fallback: "kie stream" },
+        google ? "google" : "anthropic",
+        (cb) => google
           ? streamGeminiDirect(model, req, deriveParams(model, req), cb, signal)
           : streamAnthropicDirect(model, req, cb, signal),
         exhaustionKieStreamFallback(model, req, signal),
@@ -311,7 +320,7 @@ export async function llmStream(
     // A streamed tool call is read on the KIE path too (parseSseStream collects
     // its `input_json_delta` fragments), so a structured stream no longer has
     // to go direct — only what KIE cannot honour does.
-    if (!model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY) {
+    if (claudeDirectFirst(model, req)) {
       return streamWithExhaustionFallback(
         { modelId: model.id, primary: "direct-anthropic stream", fallback: "kie stream" },
         "anthropic",
@@ -355,4 +364,59 @@ export async function llmStream(
   // Same typed, lane-aware sentence as llmComplete — the stream routes' SSE
   // error event and the sync routes' 503 read one shape.
   throw await noLlmProviderError(model)
+}
+
+// ---------------------------------------------------------------------------
+// Who serves a call made now
+// ---------------------------------------------------------------------------
+
+/** The provider whose API one LLM call runs on: KIE, or a model's own vendor. */
+export type LlmCallProvider = "kie" | "anthropic" | "google"
+
+/**
+ * The provider a call to `model` made NOW is served by when its first lane
+ * answers — the lane `llmComplete` / `llmStream` dispatch to first, read with
+ * the same predicates and the same process state: which keys are set, and
+ * whether a direct account is latched as refused (a latched lane goes straight
+ * to the KIE leg). Null when the call cannot be served at all (the router
+ * throws before any provider request). Used to count the call against its
+ * provider; `__tests__/lane-for-call-now.test.ts` drives this and both
+ * entry points over the key and latch matrix.
+ *
+ * One spot where the two entry points differ: a KIE-first Gemini with a
+ * Google key and no KIE key. `llmStream` goes to Google; `llmComplete` asks
+ * KIE first, which refuses the missing key at once, and Google serves the
+ * fallback (unless `cheapLanesOnly`) — so both answer "google" here.
+ */
+export function laneForCallNow(model: LlmModelDef, req: LlmRequest): LlmCallProvider | null {
+  try {
+    assertInlineVideoLane(req, model)
+  } catch {
+    return null
+  }
+  const kieLeg = exhaustionKieFallback(model, req) !== undefined
+  // withExhaustionFallback / streamWithExhaustionFallback: a latched direct account is skipped for that KIE leg.
+  const direct = (vendor: "anthropic" | "google"): LlmCallProvider => (kieLeg && directLaneLatch(vendor) ? "kie" : vendor)
+
+  if (req.requireLane) {
+    try {
+      assertAdvancedModeServable(model, req)
+    } catch {
+      return null
+    }
+    if (keylessClaudePin(model, req) && kieLeg) return "kie"
+    try {
+      assertLanePinnable(model, req.requireLane)
+    } catch {
+      return null
+    }
+    if (req.requireLane === "kie") return "kie"
+    return direct(directLaneVendor(model) === "google" ? "google" : "anthropic")
+  }
+  if (model.directFallbackModel && anthropicKeySet()) {
+    return claudeDirectFirst(model, req) ? direct("anthropic") : "kie"
+  }
+  if (model.directOnly) return geminiDirectAvailable(model) ? "google" : null
+  if (geminiDirectAvailable(model)) return model.preferDirect || !config.KIE_API_KEY ? "google" : "kie"
+  return config.KIE_API_KEY ? "kie" : null
 }

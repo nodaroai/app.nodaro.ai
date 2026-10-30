@@ -91,7 +91,8 @@ export function unitJson(o) {
     defaultData: { label: o.label, fieldMappings: {}, ...shape.extraData },
     execution: o.kind === "use-case" ? { ...shape.execution, builder: o.builder } : shape.execution,
     // ffmpeg-media: its inputs follow the canvas's ffmpeg media rule; a characterized worker needs it.
-    capabilities: o.characterizeAfter !== undefined ? ["ffmpeg-media"] : [],
+    // lane:<lane>: the concurrency lane a worker's job counts in.
+    capabilities: [...(o.characterizeAfter !== undefined ? ["ffmpeg-media"] : []), ...(o.lane !== undefined ? [`lane:${o.lane}`] : [])],
     registry: { description: o.description, outputType: shape.outputType },
     ...(shape.producer || shape.contract ? { contract: { ...(shape.producer ? { producer: shape.producer } : {}), ...shape.contract } } : {}),
     docs: { awaiting: `scaffolded: write docs/nodes/<folder>/${o.type}.md, then set docs.page` },

@@ -13,6 +13,8 @@ export interface ScaffoldOptions {
   price: number | null
   /** The characterization operation it follows (null = first); undefined = none. */
   characterizeAfter?: string | null
+  /** worker: the concurrency lane its job counts in (its `lane:*` capability). */
+  lane?: "provider" | "llm" | "local"
   /** use-case: its graph builder's key in USE_CASE_SPECS (packages/render-rules/src/use-case-specs.ts). */
   builder?: string
 }

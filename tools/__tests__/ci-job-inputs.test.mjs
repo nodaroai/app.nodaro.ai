@@ -211,7 +211,7 @@ test("each Vitest job checks its declaration before its tests, and every test fi
   assert.deepEqual(vitestJobs.sort(), ["characterize", "ffmpeg_ledger", "remotion"])
   assert.deepEqual(vitestInvocation(jobs["remotion-tests"], scriptOf), { project: "packages/remotion", config: null, files: null })
   assert.deepEqual(vitestInvocation(jobs.characterize, scriptOf), { project: "backend", config: "vitest.characterize.config.ts", files: null })
-  assert.equal(vitestInvocation(jobs["ffmpeg-ledger-redis"], scriptOf).files.length, 3)
+  assert.equal(vitestInvocation(jobs["ffmpeg-ledger-redis"], scriptOf).files.length, 4)
 })
 
 test("what each job's steps run is declared: its scripts, their imports and reads, the actions it uses, the SQL it applies", () => {

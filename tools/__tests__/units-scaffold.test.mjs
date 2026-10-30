@@ -13,7 +13,8 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { main } from "../units/gen.mjs"
-import { loadUnits, repoContext } from "../units/manifest.mjs"
+import { LANE_CAPABILITIES, loadUnits, repoContext } from "../units/manifest.mjs"
+import { CAPABILITIES } from "../units/capabilities.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../units/seams.mjs"
 import { nextSteps, parseScaffoldArgs, planScaffold, scaffoldFiles, scaffoldMain, scaffoldOptions } from "../units/scaffold.mjs"
 import { typesTs } from "../units/scaffold-templates.mjs"
@@ -32,7 +33,8 @@ const ctxFor = (root) => ({
   legacyTypes: new Set(["text-prompt", "upload-video"]),
   families: new Set(["fixture-family"]),
   live: liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, true]))),
-  capabilities: {},
+  // The fixture worker carries "lane:local": every worker counts in one concurrency lane.
+  capabilities: Object.fromEntries(LANE_CAPABILITIES.map((c) => [c, CAPABILITIES[c]])),
   useCaseBuilders: new Set(["fixture", "scaffold"]),
   exists: (p) => existsSync(path.join(root, p)),
 })
@@ -51,6 +53,7 @@ const argsFor = (type, kind, extra = []) => [
   "--family", "fixture-family", "--picker-after", "first", "--description", `A ${kind} scaffold.`,
   ...(kind === "worker" || kind === "sync" || kind === "use-case" ? ["--price", "5"] : []),
   ...(kind === "use-case" ? ["--builder", "scaffold"] : []),
+  ...(kind === "worker" ? ["--lane", "local"] : []),
   ...extra,
 ]
 const plan = (argv, root, ctx = ctxFor(root)) => planScaffold(parseScaffoldArgs(argv).opts, { root, ctx })
@@ -81,6 +84,11 @@ test("scaffoldOptions: the place, the picker and the description are always stat
   assert.match(errs(argsFor("A_b", "source")).join(), /not a kebab-case type id/)
   assert.match(errs(argsFor("a-b", "teleport")).join(), /--kind "teleport" is not one of/)
   assert.match(errs(argsFor("a-b", "inline", ["--characterize", "first"])).join(), /--characterize is only for --kind worker/)
+  // A worker's concurrency lane: stated, one of the lane capabilities, and only for a worker.
+  assert.match(errs(argsFor("a-b", "worker").filter((a) => a !== "--lane" && a !== "local")).join(), /--lane is required for --kind worker: the concurrency lane its job counts in \(provider, llm, local\)/)
+  assert.match(errs(argsFor("a-b", "worker").map((a) => (a === "local" ? "run" : a))).join(), /--lane "run" is not one of provider, llm, local/)
+  assert.match(errs(argsFor("a-b", "sync", ["--lane", "llm"])).join(), /--lane is only for --kind worker \(--kind sync runs no worker job\)/)
+  assert.equal(scaffoldOptions(parseScaffoldArgs(argsFor("a-b", "worker")).opts).o.lane, "local")
   const { o, errors } = scaffoldOptions(parseScaffoldArgs(["--new", "echo-twice", "--category", "utility", "--kind", "source", "--after", "first", "--no-picker", "--description", "d"]).opts)
   assert.deepEqual(errors, [])
   assert.deepEqual(o, { type: "echo-twice", category: "utility", kind: "source", label: "Echo Twice", description: "d", after: null, family: null, pickerAfter: null, price: null, characterizeAfter: undefined })
@@ -118,6 +126,8 @@ test("scaffoldFiles: the files each execution.kind requires, and option.tsx only
   const characterized = scaffoldFiles({ type: "x-y", category: "processing", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1, characterizeAfter: "op" })
   assert.match(characterized.get(be("characterize.char.ts")), /after: "op",/)
   assert.deepEqual(JSON.parse(characterized.get(fe("unit.json"))).capabilities, ["ffmpeg-media"])
+  const laned = scaffoldFiles({ type: "x-y", category: "processing", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1, characterizeAfter: "op", lane: "local" })
+  assert.deepEqual(JSON.parse(laned.get(fe("unit.json"))).capabilities, ["ffmpeg-media", "lane:local"])
   assert.deepEqual(JSON.parse(scaffoldFiles({ type: "x-y", category: "processing", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1 }).get(fe("unit.json"))).capabilities, [])
 })
 
@@ -165,17 +175,18 @@ test("the real repo today: a worker unit scaffolds; sync, inline and source wait
     "--new", "scaffold-probe", "--category", "processing", "--kind", kind, "--after", "remove-audio",
     "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.",
     ...(kind === "worker" || kind === "sync" ? ["--price", "1"] : []),
+    ...(kind === "worker" ? ["--lane", "local"] : []),
   ]).opts, { root: REPO })
   assert.deepEqual(real("worker").errors, [])
   const characterize = (op) => planScaffold(parseScaffoldArgs(["--new", "scaffold-probe", "--category", "processing", "--kind", "worker", "--after", "remove-audio",
-    "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1", "--characterize", op]).opts, { root: REPO }).errors
+    "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1", "--lane", "local", "--characterize", op]).opts, { root: REPO }).errors
   assert.deepEqual(characterize("remove-audio"), [], "a unit's own characterization is an operation to follow")
   assert.deepEqual(characterize("first"), [])
   assert.match(characterize("no-such-op").join("\n"), /"no-such-op" is not a characterization operation/)
   // Names no legacy node has but a composer's wider table does: refused before anything is written.
   const named = (type, why) => {
     const errors = planScaffold(parseScaffoldArgs(["--new", type, "--category", "processing", "--kind", "worker", "--after", "remove-audio",
-      "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1"]).opts, { root: REPO }).errors.join("\n")
+      "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1", "--lane", "local"]).opts, { root: REPO }).errors.join("\n")
     assert.match(errors, new RegExp(`"${type}" is reserved: .*${why}`), type)
   }
   named("constructor", "Object\\.prototype")
@@ -183,7 +194,7 @@ test("the real repo today: a worker unit scaffolds; sync, inline and source wait
   named("ai-writer", "credit id")
   named("seedance-2", "credit id")
   const crossFamily = planScaffold(parseScaffoldArgs(["--new", "scaffold-probe", "--category", "processing", "--kind", "worker", "--after", "remove-audio",
-    "--family", "video-sound", "--picker-after", "text-prompt", "--description", "A probe.", "--price", "1"]).opts, { root: REPO }).errors.join("\n")
+    "--family", "video-sound", "--picker-after", "text-prompt", "--description", "A probe.", "--price", "1", "--lane", "local"]).opts, { root: REPO }).errors.join("\n")
   assert.match(crossFamily, /picker\.after: "text-prompt" is not in family "video-sound"/)
   for (const kind of ["sync", "inline", "source"]) {
     assert.match(real(kind).errors.join("\n"), new RegExp(`execution\\.kind "${kind}" \\(a server-run workflow cannot run it: .*\\) needs the "run-${kind}" seam, which is not live`), kind)
@@ -198,7 +209,7 @@ const reservedOf = (errors, type) => errors.filter((e) => e.includes(`"${type}" 
 
 test("clip-pack and episode-trailer are free type ids (their fee rows reserve nothing)", () => {
   const plan = (type) => planScaffold(parseScaffoldArgs(["--new", type, "--category", "processing", "--kind", "worker", "--after", "remove-audio",
-    "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1"]).opts, { root: REPO }).errors
+    "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1", "--lane", "local"]).opts, { root: REPO }).errors
   // The control: the same arguments do reach the reserved check — a credit-id
   // type is refused — so the empty answers below are not vacuous.
   assert.match(reservedOf(plan("ai-writer"), "ai-writer").join("\n"), /"ai-writer" is reserved: .*credit id/)

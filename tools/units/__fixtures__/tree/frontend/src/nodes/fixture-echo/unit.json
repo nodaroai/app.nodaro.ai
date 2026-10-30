@@ -16,7 +16,7 @@
   },
   "defaultData": { "label": "Fixture Echo", "fieldMappings": {} },
   "execution": { "kind": "worker", "queue": "video", "requires": { "anyOf": ["videoUrl"], "kind": "video", "noun": "a video" } },
-  "capabilities": [],
+  "capabilities": ["lane:local"],
   "registry": { "description": "Echo the input video back unchanged (the gen:units fixture).", "outputType": "video" },
   "contract": { "producer": "video" },
   "docs": { "page": "docs/nodes/utility/fixture-echo.md", "useCase": "Prove every gen:units emitter" }

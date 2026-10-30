@@ -72,7 +72,8 @@ export const definition = {
     "panel:generate-button",
     "finalize:own-writer",
     "length:unknown",
-    "input:entity-subject"
+    "input:entity-subject",
+    "lane:local"
   ],
   "producer": "video",
   "docs": {
