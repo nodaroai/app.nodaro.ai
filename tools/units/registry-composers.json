@@ -175,7 +175,7 @@
       ]
     },
     "backend/src/lib/unit-descriptors.ts": {
-      "composes": "UNIT_NODE_DESCRIPTORS = the registry aggregate — the one door through which the server registries derived from a unit's manifest (required media, saved output, the finalize set, the video-length rules, the worker map, the MCP handle table) read it",
+      "composes": "UNIT_NODE_DESCRIPTORS = the registry aggregate — the one door through which the server registries derived from a unit's manifest (required media, saved output, the finalize set, the video-length rules, the worker map, the MCP handle table, the concurrency-lane registry) read it",
       "exports": {
         "registry": [
           "UNIT_NODE_DESCRIPTORS"
@@ -186,7 +186,8 @@
       ],
       "lookups": [
         "unitDescriptorOf",
-        "unitInputHandleOf"
+        "unitInputHandleOf",
+        "laneOf"
       ]
     },
     "backend/src/services/workflow-engine/payload-builder.ts": {

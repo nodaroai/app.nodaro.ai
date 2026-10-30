@@ -52,7 +52,7 @@ vi.mock("@/ee/billing/stripe-client.js", () => ({
 }))
 
 vi.mock("@/ee/billing/stripe-config.js", () => ({
-  PRICE_TO_PLAN: {
+  ON_SALE_PRICE_TO_PLAN: {
     "pri_basic": { plan: "basic", interval: "monthly" },
     "pri_standard": { plan: "standard", interval: "monthly" },
     "pri_pro": { plan: "pro", interval: "monthly" },

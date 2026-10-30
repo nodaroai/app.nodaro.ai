@@ -54,6 +54,7 @@ export const descriptor = {
     "ffmpeg-media",
     "panel:generate-button",
     "finalize:own-writer",
-    "length:exact-video"
+    "length:exact-video",
+    "lane:local"
   ]
 } as const

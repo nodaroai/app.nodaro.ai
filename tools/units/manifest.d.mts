@@ -34,6 +34,8 @@ export interface ValidationContext {
   readText?: (repoPath: string) => string | null
 }
 export const TYPE_ID: RegExp
+/** The concurrency-lane capabilities (tools/units/capabilities.mjs): a worker unit carries exactly one. */
+export const LANE_CAPABILITIES: readonly string[]
 export function pascalCase(type: string): string
 export function dataInterfaceName(type: string): string
 export function unitBinding(type: string): string

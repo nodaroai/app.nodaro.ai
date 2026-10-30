@@ -6,6 +6,7 @@ import {
   PRICING_TIERS,
   getTierPrice,
   getTierPriceId,
+  getTierIdFromPriceId,
   getAnnualSavingsDollars,
   type BillingCycle,
   type TierFeature,
@@ -115,13 +116,7 @@ export default function PricingPage() {
   // Derive current tier from active subscription
   const isActiveSub = subscription &&
     (subscription.status === "active" || subscription.status === "past_due")
-  const currentTierId = isActiveSub
-    ? PRICING_TIERS.find(
-        (t) =>
-          t.priceIdAnnual === subscription.stripe_price_id ||
-          t.priceIdMonthly === subscription.stripe_price_id,
-      )?.id ?? null
-    : null
+  const currentTierId = isActiveSub ? getTierIdFromPriceId(subscription.stripe_price_id) : null
 
   // Auto-open Stripe checkout when redirected from login with ?plan= param
   useEffect(() => {

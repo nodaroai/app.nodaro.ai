@@ -76,7 +76,9 @@ export const definition = {
       "noun": "a video"
     }
   },
-  "capabilities": [],
+  "capabilities": [
+    "lane:local"
+  ],
   "producer": "video",
   "docs": {
     "page": "docs/nodes/utility/fixture-echo.md",

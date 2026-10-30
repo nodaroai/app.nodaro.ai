@@ -21,7 +21,7 @@
     "queue": "video",
     "requires": { "anyOf": ["imageUrl", "gifUrl"], "kind": "image", "noun": "a GIF" }
   },
-  "capabilities": ["panel:generate-button", "finalize:own-writer", "length:unknown", "input:entity-subject"],
+  "capabilities": ["panel:generate-button", "finalize:own-writer", "length:unknown", "input:entity-subject", "lane:local"],
   "lengthUnknownReason": "its length is the GIF's, which only the file says",
   "registry": {
     "description": "Convert an animated GIF into a widely-compatible H.264 MP4 so it can be used as a motion reference for video models that reject GIF input. Optional loop-to-minimum, seam-aware looping (ping-pong for non-seamless GIFs), and 24fps interpolation. Local FFmpeg — no provider, zero credits.",

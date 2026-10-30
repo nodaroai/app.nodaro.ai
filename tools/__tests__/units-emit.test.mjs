@@ -14,7 +14,8 @@ import { createRequire } from "node:module"
 import { GEN_UNITS_OUTPUTS, generate, main, staleFiles, writeOutputs } from "../units/gen.mjs"
 import { GEN_UNITS_PRUNES, NODE_HANDLES_TABLE, pruneUnitRows } from "../units/handle-prune.mjs"
 import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../units/seams.mjs"
-import { loadUnits } from "../units/manifest.mjs"
+import { LANE_CAPABILITIES, loadUnits } from "../units/manifest.mjs"
+import { CAPABILITIES } from "../units/capabilities.mjs"
 import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, useCaseRowsSource } from "../units/templates.mjs"
 import { memberLineTypes } from "../test-select/registry.mjs"
 import { USE_CASE_INPUT_HANDLES } from "../units/vocabulary.mjs"
@@ -32,7 +33,8 @@ const ctxFor = (root, live = liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) 
   legacyTypes: new Set(["text-prompt", "upload-video"]),
   families: new Set(["fixture-family"]),
   live,
-  capabilities: {},
+  // The fixture worker carries "lane:local": every worker counts in one concurrency lane.
+  capabilities: Object.fromEntries(LANE_CAPABILITIES.map((c) => [c, CAPABILITIES[c]])),
   exists: (p) => existsSync(path.join(root, p)),
 })
 const PRICES = { "fixture-case": { "use-case-fee:fixture-case": 1 }, "fixture-echo": { "fixture-echo": 3 } }

@@ -31,7 +31,7 @@
     "kind": "worker",
     "queue": "video"
   },
-  "capabilities": ["panel:generate-button", "finalize:own-writer"],
+  "capabilities": ["panel:generate-button", "finalize:own-writer", "lane:local"],
   "registry": {
     "description": "Work out which camera each speaker is on, from the cameras' own microphones: 2–6 recordings, their Audio Sync offsets and a diarized transcript.",
     "outputType": "data"

@@ -57,7 +57,7 @@ beforeAll(async () => {
       "--new", typeOf(kind), "--category", "processing", "--kind", kind, "--after", "upload-video",
       "--family", "fixture-family", "--picker-after", "first", "--description", `A ${kind} scaffold.`,
       ...(kind === "worker" || kind === "sync" || kind === "use-case" ? ["--price", "5"] : []),
-      ...(kind === "worker" ? ["--characterize", "first"] : []),
+      ...(kind === "worker" ? ["--characterize", "first", "--lane", "local"] : []),
       ...(kind === "use-case" ? ["--builder", "scaffold"] : []),
     ]
     const err = sink()

@@ -4,6 +4,8 @@ import { modelAvailabilityRefusal } from "../model-availability.js"
 import {
   STRIPE_PRODUCTS,
   PRICE_TO_PLAN,
+  ON_SALE_PRICE_TO_PLAN,
+  RETIRED_PRICE_TO_PLAN,
   TOP_UPS,
   TIER_CREDITS,
   TIER_PARALLELISM,
@@ -33,22 +35,45 @@ describe("stripe-config", () => {
     })
   })
 
-  describe("PRICE_TO_PLAN", () => {
+  describe("ON_SALE_PRICE_TO_PLAN", () => {
     it("has 8 entries (4 tiers x 2 intervals)", () => {
-      expect(Object.keys(PRICE_TO_PLAN)).toHaveLength(8)
+      expect(Object.keys(ON_SALE_PRICE_TO_PLAN)).toHaveLength(8)
     })
 
-    it("every STRIPE_PRODUCTS price ID exists in PRICE_TO_PLAN", () => {
+    it("every STRIPE_PRODUCTS price ID exists in ON_SALE_PRICE_TO_PLAN", () => {
       for (const [tier, product] of Object.entries(STRIPE_PRODUCTS)) {
-        expect(PRICE_TO_PLAN[product.monthly], `${tier} monthly`).toEqual({
+        expect(ON_SALE_PRICE_TO_PLAN[product.monthly], `${tier} monthly`).toEqual({
           plan: tier,
           interval: "monthly",
         })
-        expect(PRICE_TO_PLAN[product.yearly], `${tier} yearly`).toEqual({
+        expect(ON_SALE_PRICE_TO_PLAN[product.yearly], `${tier} yearly`).toEqual({
           plan: tier,
           interval: "yearly",
         })
       }
+    })
+  })
+
+  describe("retired prices", () => {
+    it("are never on sale", () => {
+      for (const id of Object.keys(RETIRED_PRICE_TO_PLAN)) {
+        expect(ON_SALE_PRICE_TO_PLAN[id], id).toBeUndefined()
+      }
+    })
+
+    it("still resolve to their plan, so subscriptions renewing on them keep their tier", () => {
+      for (const [id, plan] of Object.entries(RETIRED_PRICE_TO_PLAN)) {
+        expect(PRICE_TO_PLAN[id], id).toEqual(plan)
+        expect(getTierFromPriceId(id), id).toBe(plan.plan)
+      }
+    })
+
+    it("keeps the $108/year Basic price on Basic yearly", () => {
+      expect(PRICE_TO_PLAN["price_1T92PK6EOX16l3P8f7VcNi21"]).toEqual({ plan: "basic", interval: "yearly" })
+    })
+
+    it("PRICE_TO_PLAN is exactly the on-sale and retired prices", () => {
+      expect(PRICE_TO_PLAN).toEqual({ ...ON_SALE_PRICE_TO_PLAN, ...RETIRED_PRICE_TO_PLAN })
     })
   })
 

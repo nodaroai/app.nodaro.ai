@@ -11,6 +11,7 @@ import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { LlmStreamAbortedError, LlmStreamResponseError } from "./llm-errors.js"
 import { kieCostUsd, kieInputUntrusted, requestChars } from "./llm/kie-cost.js"
 import { calculateLlmCost, llmPrimaryLane } from "./pricing/llm-cost.js"
+import { directLaneVendor } from "./llm/direct-vendor.js"
 import type { StructuredLlmOutput } from "./llm/structured.js"
 import type { LlmAttemptSpend, LlmRequest, LlmResponse, LlmServedLane } from "./llm/types.js"
 
@@ -72,7 +73,7 @@ export function llmAttemptCostUsd(a: LlmAttemptSpend): number {
 function primaryServedLane(modelId: string, request: LlmRequest): LlmServedLane {
   const model = getLlmModel(modelId)
   if (!model || llmPrimaryLane(model, request) === "kie") return "kie"
-  return model.directGeminiModel ? "direct-gemini" : "direct-anthropic"
+  return directLaneVendor(model) === "google" ? "direct-gemini" : "direct-anthropic"
 }
 
 const SERVED_LANES: ReadonlySet<string> = new Set<LlmServedLane>(["kie", "direct-gemini", "direct-anthropic"])

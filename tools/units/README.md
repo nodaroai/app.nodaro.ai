@@ -29,7 +29,7 @@ New nodes are units (decided 2026-10-16). Start one with the scaffold:
 npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inline|source|use-case> \
   --after <type|first> --description "One sentence for /v1/nodes." \
   (--family <family id> --picker-after <type|first> | --no-picker) \
-  [--label "<Label>"] [--price <credits>] [--builder <key>] [--characterize <operation|first>]
+  [--label "<Label>"] [--price <credits>] [--lane <provider|llm|local>] [--builder <key>] [--characterize <operation|first>]
 ```
 
 - Every flag but `--label` is stated, never guessed: `--after` is the place in
@@ -39,6 +39,11 @@ npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inli
   `worker`, `sync` and `use-case`, refused otherwise) is the `price.ee.ts`
   row — 0 for a free node, stated; for a use-case node it is the per-run fee,
   the row `use-case-fee:<type>`.
+- `--lane <provider|llm|local>` (`worker` only, required): the concurrency
+  lane its job counts in — `provider` for a call to an external AI provider
+  (other than LLM text), `llm` for an LLM text call, `local` for in-house
+  compute (ffmpeg, sharp, Remotion). It becomes the unit's `lane:*`
+  capability; stated, never defaulted.
 - `--builder <key>` (`use-case` only, required): the node's graph builder, a
   key of `USE_CASE_SPECS` in `packages/render-rules/src/use-case-specs.ts`
   (read as text: a `  <key>: defineUseCase<…>({` line). Write the builder
@@ -224,7 +229,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | `nodeTypes`, config panels, `NODE_OPTIONS` + families, executors, label tables | `components/nodes/index.ts`, `config-panel.tsx`, `node-options.tsx` + `node-families.ts`, `execute-node.ts` (kit: `workflow-editor/unit-exec-kit.ts`), `lib/i18n/labels.ts` |
 | everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
 | `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
-| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability), `TEXT_SOURCE_NODE_TYPES` (a first output of kind `text`), the MCP handle table `lib/node-handles.ts`, the MCP verbs' widget model `lib/mcp/widget-models.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability), `TEXT_SOURCE_NODE_TYPES` (a first output of kind `text`), the MCP handle table `lib/node-handles.ts`, the MCP verbs' widget model `lib/mcp/widget-models.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`, a worker's concurrency lane — its `lane:*` capability, read by `laneOf` for `lib/concurrency-lanes/registry.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
 | `USE_CASE_BODIES` (a use-case unit's request body) and its `GET /v1/nodes` input schema (`usecaseInputSchemaOf`) | `backend/src/lib/use-case/bodies.ts` ∪ the `use-cases` aggregate. A unit's `use-case.ts` spreads the shared shapes of `lib/use-case/body-shapes.ts` (never `bodies.ts`, a composer — G5) and, being a declaration only (G7), writes an enum over a list as `z.enum(LIST as unknown as [string, ...string[]])`: a helper call such as `z.enum(tuple(LIST))` is not a pure argument |
 | the entity-subject targets (`ENTITY_SUBJECT_TARGET_TYPES`; capability `input:entity-subject`: a wired Character / Face / Object / Creature / Location is the node's subject, so it lands in `imageUrl`, not `referenceImageUrls`; the validator requires an input whose `field` is `imageUrl` and whose `accepts` includes `image`) | both input resolvers, legacy rows ∪ the units declaring it: `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) and `workflow-engine/input-resolver.ts` (through `unit-descriptors.ts`). The server's legacy rows lack `gif-to-video`, which the editor's have, so declaring it on that node changes how a server-run workflow routes it |
 | the render video sources (`VIDEO_SOURCE_TYPES_FOR_RENDER`: what a Render / composition node's `collectMediaAssets` collects as a video, and `detectPreviewItemType` types as one; every unit whose `contract.producer` is `video` — projected as `producer` into its editor definition — so a `dynamic` unit such as `tighten-episode` is not a member) | `lib/preview-node-types.ts` (re-exported by `workflow-editor/execution-graph.ts`; the store's `classifyPreviewValue` types a URL with no extension by it too), legacy rows ∪ those units (through `unit-definitions.ts`). The server's twin, `VIDEO_SOURCE_TYPES` of `workflow-engine/execution-graph.ts`, is `VIDEO_PRODUCER_TYPES` and so already composes them. `gif-to-video` stays a legacy row until its migration |
@@ -415,6 +420,13 @@ which the two engines' parity tests read.)
   is also added by hand to the shrink-only unbounded-producers pin in
   `backend/src/lib/__tests__/video-output-length.test.ts` (a migrating legacy
   node is already in it).
+- A worker counts its job in exactly one concurrency lane: one of
+  `lane:provider` / `lane:llm` / `lane:local` (none is refused, two are
+  refused). The job lane registry (`backend/src/lib/concurrency-lanes/registry.ts`)
+  reads it through `laneOf` (`lib/unit-descriptors.ts`), since no central list
+  names a unit. Only a worker runs a job: any other kind with a `lane:*`
+  capability is refused (a use-case node dispatches existing nodes, each
+  counted in its own lane).
 - A use-case node takes no `length:*` capability: its length rule is its
   spec's `outputLength` (above), which `lib/video-output-length.ts` turns
   into its row of `VIDEO_OUTPUT_LENGTH_RULES`.

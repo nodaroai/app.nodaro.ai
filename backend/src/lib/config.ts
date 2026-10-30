@@ -362,6 +362,27 @@ export const envSchema = z.object({
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
   /**
+   * Concurrency lanes (lib/concurrency-lanes/). Community / Business: how many
+   * jobs of each lane one line (user × payer) runs at once. Nodaro Cloud sizes
+   * lines by plan and ignores these four.
+   */
+  LANE_PROVIDER_PER_USER: z.coerce.number().int().min(1).max(500).default(12),
+  LANE_LLM_PER_USER: z.coerce.number().int().min(1).max(500).default(24),
+  LANE_LOCAL_PER_USER: z.coerce.number().int().min(1).max(500).default(24),
+  LANE_RUN_PER_USER: z.coerce.number().int().min(1).max(500).default(12),
+  /** Minutes a queued job may wait for a free slot before it fails and is refunded. */
+  LANE_QUEUE_TIMEOUT_MINUTES: z.coerce.number().int().min(5).max(1440).default(120),
+  /** Minutes a live (synchronous) request may wait for a free slot before it answers busy. */
+  LANE_LIVE_WAIT_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
+  /** Community / Business: the fallback of the lanes-enforced switch. Strict parse: only "true" or "1" enable it. */
+  LANES_ENFORCED: z.string().optional().transform((v) => v === "true" || v === "1"),
+  /** Nodes one run may dispatch at once while lanes are enforced (the lanes then do the limiting). */
+  ORCHESTRATOR_DISPATCH_WIDTH: z.coerce.number().int().min(1).max(500).default(50),
+  /** Share of the video worker pool coordinator jobs may hold at once. */
+  LANE_SERVER_COORDINATOR_SHARE: z.coerce.number().min(0.1).max(1).default(0.4),
+  /** Share of every background worker pool one user (all payer lines together) may hold at once. */
+  LANE_SERVER_USER_SHARE: z.coerce.number().min(0.05).max(1).default(0.25),
+  /**
    * Collections (migration 462) off Nodaro Cloud: how many collections one
    * account may have, and how many records one collection may hold — past the
    * records ceiling the OLDEST records are evicted after each write. Unset =

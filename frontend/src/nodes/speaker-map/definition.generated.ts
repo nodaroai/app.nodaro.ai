@@ -81,7 +81,8 @@ export const definition = {
   },
   "capabilities": [
     "panel:generate-button",
-    "finalize:own-writer"
+    "finalize:own-writer",
+    "lane:local"
   ],
   "producer": null,
   "docs": {

@@ -6,6 +6,7 @@
  */
 
 import { VIDEO_DURATION_TIERS } from "@nodaro/shared/models"
+import { defaultLaneSizesForTier, PARALLELISM_TIERS } from "../../lib/concurrency-lanes/defaults.js"
 
 /**
  * Every Vidu Q4 4K composite the credit identifier can emit
@@ -20,7 +21,7 @@ export const STRIPE_PRODUCTS = {
   basic: {
     productId: "prod_U6gPUNpvVGjE2f",
     monthly: "price_1T8T2r6EOX16l3P8KLqPT0Gp",
-    yearly: "price_1T92PK6EOX16l3P8f7VcNi21",
+    yearly: "price_1UW3116EOX16l3P8cfayw1lX",
   },
   standard: {
     productId: "prod_U6gOhMrAS056Lg",
@@ -39,8 +40,10 @@ export const STRIPE_PRODUCTS = {
   },
 } as const
 
-/** Map every Stripe price ID → { plan, interval } */
-export const PRICE_TO_PLAN: Record<string, { plan: string; interval: "monthly" | "yearly" }> = {
+type PlanPrice = { plan: string; interval: "monthly" | "yearly" }
+
+/** The prices on sale → { plan, interval }. Checkout and plan changes accept only these. */
+export const ON_SALE_PRICE_TO_PLAN: Record<string, PlanPrice> = {
   [STRIPE_PRODUCTS.basic.monthly]: { plan: "basic", interval: "monthly" },
   [STRIPE_PRODUCTS.basic.yearly]: { plan: "basic", interval: "yearly" },
   [STRIPE_PRODUCTS.standard.monthly]: { plan: "standard", interval: "monthly" },
@@ -49,6 +52,22 @@ export const PRICE_TO_PLAN: Record<string, { plan: string; interval: "monthly" |
   [STRIPE_PRODUCTS.pro.yearly]: { plan: "pro", interval: "yearly" },
   [STRIPE_PRODUCTS.business.monthly]: { plan: "business", interval: "monthly" },
   [STRIPE_PRODUCTS.business.yearly]: { plan: "business", interval: "yearly" },
+}
+
+/**
+ * Prices no longer sold that existing subscriptions still renew on. They must
+ * keep resolving to their plan (tier, monthly credits on a yearly plan), but a
+ * new checkout or plan change can never pick them.
+ */
+export const RETIRED_PRICE_TO_PLAN: Record<string, PlanPrice> = {
+  // Basic yearly at $108/year, replaced by $120/year on 2026-10-30.
+  "price_1T92PK6EOX16l3P8f7VcNi21": { plan: "basic", interval: "yearly" },
+}
+
+/** Every price a subscription can be on (on sale or retired) → { plan, interval }. */
+export const PRICE_TO_PLAN: Record<string, PlanPrice> = {
+  ...ON_SALE_PRICE_TO_PLAN,
+  ...RETIRED_PRICE_TO_PLAN,
 }
 
 export const TOP_UPS: Record<string, number> = {
@@ -97,15 +116,14 @@ export const TIER_CREDITS: Record<string, number> = {
   business: 52000,
 }
 
-/** Max concurrent nodes per workflow execution, by tier. */
-export const TIER_PARALLELISM: Record<string, number> = {
-  free: 2,
-  payg: 4, // derived tier (effective-tier.ts) — entitlements = basic's
-  basic: 4,
-  standard: 6,
-  pro: 10,
-  business: 12,
-}
+/**
+ * Max concurrent nodes per workflow execution, by tier — each tier's default
+ * provider-lane size, whose one code copy is lib/concurrency-lanes/defaults.ts
+ * (payg = basic there: a derived tier, effective-tier.ts). No `enterprise` key.
+ */
+export const TIER_PARALLELISM: Record<string, number> = Object.fromEntries(
+  PARALLELISM_TIERS.map((t) => [t, defaultLaneSizesForTier(t).provider]),
+)
 
 export const TIER_STORAGE_LIMITS: Record<string, number> = {
   free: 1 * 1024 * 1024 * 1024,          // 1 GB

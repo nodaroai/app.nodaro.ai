@@ -18,6 +18,7 @@ import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallbac
 import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
 import { requestChars } from "./kie-cost.js"
+import { directLaneVendor } from "./direct-vendor.js"
 import type { LlmAttemptSpend, LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -467,7 +468,7 @@ function primaryServedLane(req: LlmRequest): LlmServedLane {
     return "kie"
   }
   if (llmPrimaryLane(model, req) === "kie") return "kie"
-  return model.directGeminiModel ? "direct-gemini" : "direct-anthropic"
+  return directLaneVendor(model) === "google" ? "direct-gemini" : "direct-anthropic"
 }
 
 /** An attempt that threw ends the call; the usage it reported (if any) joins the total. */

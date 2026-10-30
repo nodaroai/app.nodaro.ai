@@ -13,6 +13,7 @@ import {
   getAnnualSavingsPercent,
   getAnnualSavingsDollars,
   getBillingCycleFromPriceId,
+  getTierIdFromPriceId,
 } from "../pricing-data"
 import type { PricingTier } from "../pricing-data"
 
@@ -258,6 +259,24 @@ describe("getBillingCycleFromPriceId", () => {
     if (withMonthly) {
       expect(getBillingCycleFromPriceId(withMonthly.priceIdMonthly)).toBe("monthly")
     }
+  })
+})
+
+describe("getTierIdFromPriceId", () => {
+  it("finds the tier of every on-sale price", () => {
+    for (const tier of PRICING_TIERS.filter((t) => t.priceIdMonthly !== null)) {
+      expect(getTierIdFromPriceId(tier.priceIdMonthly)).toBe(tier.id)
+      expect(getTierIdFromPriceId(tier.priceIdAnnual)).toBe(tier.id)
+    }
+  })
+
+  it("keeps a subscription on a retired price on its tier", () => {
+    expect(getTierIdFromPriceId("price_1T92PK6EOX16l3P8f7VcNi21")).toBe("basic")
+  })
+
+  it("returns null for no price or an unknown one", () => {
+    expect(getTierIdFromPriceId(null)).toBeNull()
+    expect(getTierIdFromPriceId("pri_unknown_id")).toBeNull()
   })
 })
 

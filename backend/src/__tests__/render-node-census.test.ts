@@ -63,6 +63,7 @@ const ALLOWLIST: readonly Entry[] = [
 
   // ── Backend registration ──────────────────────────────────────────────────
   ["backend/src/lib/job-budget.ts", `"apply-edl"`, "DECLARED_JOB_BUDGETS row"],
+  ["backend/src/lib/concurrency-lanes/registry.ts", `"combine-videos", "apply-edl"`, "JOB_LANE_CLASSES row (its worker job counts in the local lane)"],
   ["backend/src/lib/mcp/generated/node-handles.ts", `"apply-edl"`, "generated handle map"],
   ["backend/src/lib/node-registry.ts", `{ type: "apply-edl"`, "GET /v1/nodes descriptor"],
   ["backend/src/lib/tutorial-seed/templates/podcast-clip-pack.json", `"apply-edl"`, "template"],

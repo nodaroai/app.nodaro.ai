@@ -21,7 +21,7 @@
     "queue": "video",
     "requires": { "anyOf": ["videoUrl"], "kind": "video", "noun": "a video" }
   },
-  "capabilities": ["ffmpeg-media", "panel:generate-button", "finalize:own-writer", "length:exact-video"],
+  "capabilities": ["ffmpeg-media", "panel:generate-button", "finalize:own-writer", "length:exact-video", "lane:local"],
   "registry": {
     "description": "Strip the audio track from a video, leaving a silent clip (stream-copied, lossless).",
     "outputType": "video",
