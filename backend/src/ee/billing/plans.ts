@@ -11,7 +11,11 @@
  *    picks it up;
  *  - the credits a price grants, a plan's parallelism and storage:
  *    `TIER_CREDITS`, `TIER_PARALLELISM` and `TIER_STORAGE_LIMITS`, the constants
- *    provisioning and the orchestrator apply;
+ *    provisioning and the orchestrator apply — except that while concurrency
+ *    lanes are enforced a plan's parallelism is its provider lane size from the
+ *    admin-edited plan table (`cloudPlanSizes`), because that is then what runs.
+ *    It is laid over the cached list on every read (withLiveParallelism), so a
+ *    flip of the switch or a size edit never waits for a Stripe re-read;
  *  - the credit packs and the custom-amount range: the load rate
  *    (load-rate.ts), the function the top-up checkout prices with — each pack's
  *    price confirmed against the Stripe price the fixed-pack checkout sells it
@@ -38,6 +42,8 @@ import { config } from "../../lib/config.js"
 import { getStripe } from "./stripe-client.js"
 import { STRIPE_PRODUCTS, TIER_CREDITS, TIER_PARALLELISM, TIER_STORAGE_LIMITS, TOP_UPS } from "./stripe-config.js"
 import { LOAD_CURRENCY, LOAD_RATE_ANCHORS, MAX_LOAD_USD, MIN_LOAD_USD, type LoadRateAnchor } from "./load-rate.js"
+import { lastMirroredEnforced } from "../../lib/concurrency-lanes/sizes.js"
+import { cloudPlanSizes } from "../concurrency-lanes/plan-sizes.js"
 
 /** A sum of money in its currency's major unit (12 = 12.00), with the ISO-4217 code. */
 export interface PlanMoney {
@@ -80,7 +86,11 @@ export interface BillingPlan {
   prices: PlanPrices | null
   /** The free plan's one-time grant at sign-up; null on a paid plan, whose credits come with each price. */
   signupCredits: number | null
-  /** How many nodes of one workflow run at once. */
+  /**
+   * How many generations run at once. While concurrency lanes are not enforced:
+   * how many nodes of one workflow run at once (`TIER_PARALLELISM`). While they
+   * are: the plan's provider lane size, shared by all of an account's runs.
+   */
   parallelism: number
   storageBytes: number
 }
@@ -162,10 +172,41 @@ export async function readBillingPlans(): Promise<BillingPlansResult> {
   // Never getStripe() without a key: it throws, and a deployment that takes no
   // card is not broken, it has nothing to quote (deployment-billing.ts, R4).
   if (!config.STRIPE_SECRET_KEY) return { ok: false, code: "stripe_not_configured" }
+  let plans: BillingPlans
   try {
-    return { ok: true, plans: (await currentSnapshot()).plans }
+    plans = (await currentSnapshot()).plans
   } catch (error) {
     return { ok: false, code: "plan_prices_unavailable", error }
+  }
+  return { ok: true, plans: await withLiveParallelism(plans) }
+}
+
+/**
+ * The list with each plan's parallelism as its provider lane size, while lanes
+ * are enforced; otherwise the list itself, untouched (and the lane table is not
+ * read). "Enforced" is this process's copy of the switch, kept by the
+ * enforcement mirror (up to 30 s behind): this public route never calls Redis.
+ * A failed read of the lane table answers the list as cached — the per-run
+ * values — never an error. Copies: `plans` is the shared snapshot.
+ */
+async function withLiveParallelism(plans: BillingPlans): Promise<BillingPlans> {
+  if (!lastMirroredEnforced()) return plans
+  let sizes: Awaited<ReturnType<typeof cloudPlanSizes>>
+  try {
+    sizes = await cloudPlanSizes()
+  } catch (error) {
+    console.warn(
+      "[billing] plan parallelism: lane sizes unreadable, reporting the per-run values:",
+      error instanceof Error ? error.message : error,
+    )
+    return plans
+  }
+  return {
+    ...plans,
+    data: plans.data.map((plan) => {
+      const live = Object.hasOwn(sizes, plan.id) ? sizes[plan.id]?.provider : undefined
+      return typeof live === "number" ? { ...plan, parallelism: live } : plan
+    }),
   }
 }
 

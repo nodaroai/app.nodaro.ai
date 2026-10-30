@@ -223,6 +223,25 @@ sees every connected instance with its spend this month, and can:
   past it), and
 - **Disconnect** an instance — its tokens die immediately.
 
+## Concurrency on a connected install
+
+Work your instance sends through the connection runs on Nodaro Cloud **as
+the connected nodaro.ai account**. The cloud does not tell your instance's
+users apart: every person on a connected install shares that one account's
+lanes, at the sizes of the account's plan. Ten people running at once on a
+connected install draw on those lanes just as one person running ten things
+at once from that account does. Work your instance runs itself, with your own
+provider keys, is counted by your own instance's
+[concurrency lanes](deployment.md#concurrency-lanes) instead.
+
+This applies once Nodaro Cloud enforces its concurrency limits. Until then
+(the current state) no job waits for a free slot, and a run's parallelism is
+the per-run limit it has today.
+
+If the plan's size is too small for the people on your install, ask us to
+raise the connected account: Nodaro Cloud can give one account larger lanes
+than its plan, and every user of the install then shares the raised size.
+
 ## Configuration reference
 
 | Where | Variable | Meaning |

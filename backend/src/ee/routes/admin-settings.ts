@@ -14,11 +14,19 @@ import {
 } from "../lib/admin-message-config.js"
 import { isSlackWebhookValid } from "../notifications/slack-client.js"
 import { MODEL_MAKER_LOGOS_KEY, modelMakerLogosError } from "../../lib/maker-logo-settings.js"
+import { LANE_LIVE_WAIT_KEY, LANE_QUEUE_TIMEOUT_KEY, LANES_ENFORCED_KEY } from "../../lib/concurrency-lanes/settings-keys.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 
 const updateSettingBody = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.array(z.unknown()), z.record(z.string(), z.unknown())]),
+})
+
+/** The lane settings this route refuses, and the route that sets each. */
+const LANE_SETTING_ROUTES: Readonly<Record<string, string>> = Object.freeze({
+  [LANES_ENFORCED_KEY]: "PUT /v1/admin/lanes/enforced",
+  [LANE_QUEUE_TIMEOUT_KEY]: "PUT /v1/admin/lanes/settings",
+  [LANE_LIVE_WAIT_KEY]: "PUT /v1/admin/lanes/settings",
 })
 
 const settingKeyParams = z.object({
@@ -110,6 +118,17 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
 
     const { key } = paramsResult.data
     const { value } = bodyResult.data
+
+    // Concurrency lanes have their own routes. The switch is a map with one key
+    // per runtime environment, changed through a merge that keeps the other
+    // environment's key, its preconditions and the wake on off; the two waiting
+    // limits have ranges a stray value here would silently miss.
+    const laneRoute = Object.hasOwn(LANE_SETTING_ROUTES, key) ? LANE_SETTING_ROUTES[key] : undefined
+    if (laneRoute) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: `${key} is set through ${laneRoute}` },
+      })
+    }
 
     // Validate specific settings
     if (key === "ai_provider") {

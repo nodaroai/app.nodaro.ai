@@ -7198,7 +7198,7 @@ window.location.assign(url!)
 | `prices` | `{ monthly, yearly } \| null` | `null` for the free plan. `monthly` is `{ priceId, amount, currency, credits }` (`BillingMonthlyPrice`); `yearly` adds `perMonth`, the yearly amount spread over its months (`BillingYearlyPrice`). `priceId` is the Stripe price id: what `checkout()` and `changePlan()` take, and what the subscription's `stripe_price_id` matches (so the slot it matches is the current interval). `amount` is in the currency's major unit (`12` = 12.00) and `currency` is the ISO-4217 code (`"USD"`). Either may be `null` when Stripe cannot sell it right now (it could not be read, or it is archived) — show it as unavailable, never as free. |
 | `prices.*.credits` | `BillingPriceCredits \| null` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does. `null` when the price does not state it. |
 | `signupCredits` | `number \| null` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
-| `parallelism` | `number` | How many nodes of one workflow run at once. |
+| `parallelism` | `number` | How many nodes of one workflow run at once. Once Nodaro Cloud enforces its concurrency limits, the plan's limit on generations running at once, shared by all of an account's runs (it then follows the plan sizes the platform sets). |
 | `storageBytes` | `number` | Storage for your media, in bytes. |
 
 `topUps` are the credit packs (`{ id, credits, price, priceId }`), smallest

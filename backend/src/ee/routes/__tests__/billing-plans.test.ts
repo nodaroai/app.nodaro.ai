@@ -7,20 +7,31 @@ import Fastify, { type FastifyInstance } from "fastify"
  *
  * Every assertion below compares against the AUTHORITY a figure comes from,
  * never a literal: a plan's prices are the Stripe Prices its checkout charges
- * (the Stripe client is the only mock), its credits / parallelism / storage are
- * the stripe-config constants provisioning and the orchestrator enforce, and
+ * (the Stripe client is mocked, and the two lane seams: the enforcement switch
+ * and the admin-edited plan sizes), its credits / parallelism / storage are
+ * the stripe-config constants provisioning and the orchestrator enforce (a
+ * plan's parallelism is its provider lane size while lanes are enforced), and
  * the packs are the load rate's anchors, confirmed against the Stripe prices
  * the fixed-pack checkout sells them by. A re-price or a new tier must not
  * need this file edited — only a change to where a figure comes from does.
  */
 
-const h = vi.hoisted(() => ({ retrieve: vi.fn() }))
+const h = vi.hoisted(() => ({ retrieve: vi.fn(), lanesEnforced: vi.fn(), lastMirroredEnforced: vi.fn(), cloudPlanSizes: vi.fn() }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/ee/billing/stripe-client.js", () => ({
   getStripe: () => ({ prices: { retrieve: h.retrieve } }),
 }))
 vi.mock("@/ee/billing/provision-credits.js", () => ({ ensureStripeCustomer: vi.fn() }))
+// The two lane seams a plan's parallelism reads while lanes are enforced: the
+// switch (this process's copy, kept by the enforcement mirror) and the
+// admin-edited plan table (cached). `lanesEnforced` (the Redis read) is mocked
+// only to prove this public route never calls it.
+vi.mock("@/lib/concurrency-lanes/sizes.js", () => ({
+  lanesEnforced: h.lanesEnforced,
+  lastMirroredEnforced: h.lastMirroredEnforced,
+}))
+vi.mock("@/ee/concurrency-lanes/plan-sizes.js", () => ({ cloudPlanSizes: h.cloudPlanSizes }))
 
 import { billingRoutes } from "../billing.js"
 import { config } from "../../../lib/config.js"
@@ -92,6 +103,9 @@ beforeEach(async () => {
   __resetSurfaceProfileCacheForTests()
   config.STRIPE_SECRET_KEY = "sk_test_plans"
   h.retrieve.mockImplementation(async (id: string) => stripePrice(id))
+  h.lanesEnforced.mockRejectedValue(new Error("the plans route must not read the switch from Redis"))
+  h.lastMirroredEnforced.mockReturnValue(false)
+  h.cloudPlanSizes.mockRejectedValue(new Error("cloudPlanSizes is not read in this test"))
 
   app = Fastify({ logger: false })
   await app.register(async (i) => {
@@ -476,5 +490,85 @@ describe("a deployment that does not sell to its users", () => {
     expect(res.statusCode).toBe(403)
     expect(res.json().error.code).toBe("self_serve_disabled")
     expect(h.retrieve).not.toHaveBeenCalled()
+  })
+})
+
+describe("a plan's parallelism follows the lane switch", () => {
+  /** An admin-edited plan table: every tier's provider size differs from today's constant. */
+  function editedSizes(): Record<string, { provider: number; llm: number; local: number; run: number }> {
+    return Object.fromEntries(
+      Object.entries(TIER_PARALLELISM).map(([tier, n]) => [tier, { provider: n + 7, llm: 99, local: 98, run: 3 }]),
+    )
+  }
+
+  it("GET /v1/plans reports the admin-edited provider size when enforcement is on", async () => {
+    const sizes = editedSizes()
+    h.lastMirroredEnforced.mockReturnValue(true)
+    h.cloudPlanSizes.mockResolvedValue(sizes)
+    const body = (await getPlans()).json()
+    for (const plan of body.data as Plan[]) {
+      expect(plan.parallelism, plan.id).toBe(sizes[plan.id]!.provider)
+    }
+  })
+
+  it("GET /v1/plans keeps today's value while enforcement is off", async () => {
+    h.cloudPlanSizes.mockResolvedValue(editedSizes())
+    const body = (await getPlans()).json()
+    for (const plan of body.data as Plan[]) {
+      expect(plan.parallelism, plan.id).toBe(TIER_PARALLELISM[plan.id])
+    }
+    expect(h.cloudPlanSizes).not.toHaveBeenCalled()
+  })
+
+  it("GET /v1/plans with enforcement off changes nothing", async () => {
+    const before = await getPlans()
+    h.cloudPlanSizes.mockResolvedValue(editedSizes())
+    const after = await getPlans()
+    expect(after.statusCode).toBe(before.statusCode)
+    expect(after.headers["cache-control"]).toBe(before.headers["cache-control"])
+    expect(after.body).toBe(before.body)
+    expect(h.cloudPlanSizes).not.toHaveBeenCalled()
+  })
+
+  it("a failed lane-size read while enforcement is on keeps today's value and still answers 200", async () => {
+    const { warn } = quiet()
+    h.lastMirroredEnforced.mockReturnValue(true)
+    h.cloudPlanSizes.mockRejectedValue(new Error("lane table unreachable"))
+    const res = await getPlans()
+    expect(res.statusCode).toBe(200)
+    for (const plan of res.json().data as Plan[]) {
+      expect(plan.parallelism, plan.id).toBe(TIER_PARALLELISM[plan.id])
+    }
+    expect(warn.mock.calls.flat().join(" ")).toContain("lane table unreachable")
+  })
+
+  it("a tier missing from the lane table keeps today's value", async () => {
+    const sizes = editedSizes()
+    delete sizes.free
+    h.lastMirroredEnforced.mockReturnValue(true)
+    h.cloudPlanSizes.mockResolvedValue(sizes)
+    const body = (await getPlans()).json()
+    expect(planOf(body, "free").parallelism).toBe(TIER_PARALLELISM.free)
+  })
+
+  it("the live sizes are applied per request, never written into the cached plans", async () => {
+    h.lastMirroredEnforced.mockReturnValue(true)
+    h.cloudPlanSizes.mockResolvedValue(editedSizes())
+    await getPlans()
+    h.lastMirroredEnforced.mockReturnValue(false)
+    const body = (await getPlans()).json()
+    for (const plan of body.data as Plan[]) {
+      expect(plan.parallelism, plan.id).toBe(TIER_PARALLELISM[plan.id])
+    }
+    expect(h.retrieve.mock.calls.length).toBe(ALL_PRICE_IDS.length)
+  })
+
+  it("never asks Redis for the switch, on or off: it reads the mirror's in-process copy", async () => {
+    h.cloudPlanSizes.mockResolvedValue(editedSizes())
+    await getPlans()
+    h.lastMirroredEnforced.mockReturnValue(true)
+    await getPlans()
+    expect(h.lastMirroredEnforced).toHaveBeenCalled()
+    expect(h.lanesEnforced).not.toHaveBeenCalled()
   })
 })

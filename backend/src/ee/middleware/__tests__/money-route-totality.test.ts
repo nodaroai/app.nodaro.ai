@@ -54,6 +54,12 @@ const MONEY_MARKERS: ReadonlyArray<{ re: RegExp; what: string }> = [
   // account) or restores exactly what was taken (credits come back).
   { re: /revokeSignupGrant\(/, what: "takes credits back (signup grant take-back)" },
   { re: /reinstateSignupGrant\(/, what: "grants credits (restore after a take-back)" },
+  // Concurrency lanes: a plan size, an account's override or a provider's
+  // platform ceiling decides how much a payer (on a deployment-payer instance,
+  // the payer's credits) and the platform's provider accounts run at once.
+  { re: /from\("lane_(plan_sizes|user_overrides|provider_ceilings)"\)/, what: "writes lane sizes or provider ceilings (how much a payer runs at once)" },
+  // The lanes switch lifts or applies every lane limit and provider ceiling.
+  { re: /setLanesEnforced\(/, what: "switches lane enforcement (every lane limit and provider ceiling)" },
 ]
 
 /**
@@ -161,6 +167,12 @@ describe("money-route totality", () => {
       "PUT /v1/admin/model-pricing/:id/toggle",
       "PATCH /v1/admin/llm-models/:modelId",
       "PUT /v1/admin/settings/:key",
+      // Concurrency lanes (ee/routes/admin-lanes.ts).
+      "PUT /v1/admin/lanes/enforced",
+      "PUT /v1/admin/lanes/plans/:tier",
+      "PUT /v1/admin/lanes/providers/:provider",
+      "PUT /v1/admin/lanes/users/:id",
+      "PUT /v1/admin/lanes/settings",
     ]) {
       expect(gatedPaths, `${expected} must carry requirePlatformOperator`).toContain(expected)
     }

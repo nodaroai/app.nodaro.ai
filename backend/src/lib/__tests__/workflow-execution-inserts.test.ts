@@ -104,6 +104,8 @@ const TABLE_NAME_ELSEWHERE: Record<string, readonly string[]> = {
   "lib/app-report-sweep.ts": ["<top>"],
   // The tables a run id is looked up in (select only).
   "middleware/token-workflow-scope.ts": ["workflowOfRun"],
+  // The tables whose lane columns the enforcement switch checks for (a zero-row select only).
+  "lib/concurrency-lanes/enforcement.ts": ["<top>"],
 }
 
 /** The lane literals a `trigger_type` value can be, or `null` when it is not spelled out. */

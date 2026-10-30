@@ -3844,7 +3844,10 @@ Each figure is read from what charges or grants it: a plan's prices are the
 Stripe prices its checkout charges; the credits a price grants, a plan's
 parallelism and its storage are the limits the platform applies; and a pack's
 price is the rate the top-up checkout charges, confirmed against the price the
-fixed-pack checkout sells it for. The shape, with placeholders for the figures:
+fixed-pack checkout sells it for. `parallelism` is how many nodes of one
+workflow run at once; once Nodaro Cloud enforces its concurrency limits it is
+instead the plan's limit on generations running at once, shared by all of an
+account's runs. The shape, with placeholders for the figures:
 
 ```text
 {

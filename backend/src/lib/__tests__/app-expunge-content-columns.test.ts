@@ -51,6 +51,12 @@ const KEPT_EXECUTION_COLUMNS = [
   "mcp_client",
   // The job a use-case node's hidden run reports to (509): a pointer, not content.
   "wrapper_job_id",
+  // Concurrency-lane queue bookkeeping (568): when it waited, in which
+  // environment, and for how long — not content.
+  "lane_queued_at",
+  "lane_env",
+  "lane_env_id",
+  "lane_wait_ms",
 ]
 
 /** `jobs` columns expunge keeps: billing, status, provenance and pointers. */
@@ -80,6 +86,14 @@ const KEPT_JOB_COLUMNS = [
   "completed_at",
   "stop_requested_at",
   "slot_wait_ms",
+  // Concurrency-lane queue bookkeeping (568): when it waited, in which
+  // environment, its BullMQ queue and id, and for how long — not content.
+  "lane_queued_at",
+  "lane_env",
+  "lane_env_id",
+  "lane_bull_queue",
+  "lane_bull_job_id",
+  "lane_wait_ms",
   "usage_log_id",
   // The generation session the job was born in (518): a pointer, not content.
   "session_id",

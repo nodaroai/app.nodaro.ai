@@ -896,7 +896,7 @@ await check("a provider key pasted on /setup is stored, shown, and clearable —
 await check("billing routes are absent on an edition with no billing", async () => {
   // /v1/billing/plans is a PUBLIC route on Cloud, so its 404 here is a clean
   // registered-vs-absent signal: nothing on sale, not a credential refusal.
-  const probes = ["/v1/credits/balance", "/v1/billing/subscription", "/v1/billing/plans", "/v1/admin/users"]
+  const probes = ["/v1/credits/balance", "/v1/billing/subscription", "/v1/billing/plans", "/v1/admin/users", "/v1/admin/lanes/config"]
   const answered = []
   for (const path of probes) {
     const { status } = await api(path, { token: ctx.token })

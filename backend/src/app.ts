@@ -235,6 +235,7 @@ import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminHostedDeploymentsRoutes } from "./ee/routes/admin-hosted-deployments.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
+import { adminLanesRoutes } from "./ee/routes/admin-lanes.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
 import { recordThisEngineEnvironment } from "./ee/lib/engine-environments.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
@@ -796,6 +797,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminHostedDeploymentsRoutes)
   if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
   if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
+  // Concurrency lanes: the switch in every edition with an admin; sizes and ceilings on Cloud (the route checks).
+  if (hasAdmin()) await app.register(adminLanesRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasAdmin()) await app.register(adminMessagesRoutes)
   if (hasAdmin()) await app.register(adminReviewRoutes)

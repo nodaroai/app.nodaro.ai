@@ -13,8 +13,25 @@ vi.mock("../../config.js", async (importOriginal) => ({
 }))
 vi.mock("../instance.js", () => ({ concurrencyGate: () => gateRef.gate }))
 
+/** The Cloud reader, stood in: each function answers what the test sets, or throws. */
+const cloud = vi.hoisted(() => ({
+  sizes: null as null | ((s: unknown) => Promise<unknown>),
+  ceilings: null as null | (() => Promise<unknown>),
+  ceilingsAsRead: null as null | (() => Promise<unknown>),
+  settings: null as null | (() => Promise<unknown>),
+}))
+vi.mock("../../../ee/concurrency-lanes/plan-sizes.js", () => ({
+  cloudLaneSizesFor: (s: unknown) => (cloud.sizes ? cloud.sizes(s) : Promise.reject(new Error("no stand-in"))),
+  cloudProviderCeilings: () => (cloud.ceilings ? cloud.ceilings() : Promise.reject(new Error("no stand-in"))),
+  cloudProviderCeilingsAsRead: () => (cloud.ceilingsAsRead ? cloud.ceilingsAsRead() : Promise.reject(new Error("no stand-in"))),
+  cloudLaneSettings: () => (cloud.settings ? cloud.settings() : Promise.reject(new Error("no stand-in"))),
+}))
+
 const { config } = await import("../../config.js")
-const { defaultLaneSizesForTier, laneSettings, laneSizesFor, lanesEnforced, providerCeilings } = await import("../sizes.js")
+const {
+  defaultLaneSizesForTier, laneSettings, laneSizesFor, lanesEnforced, lastMirroredEnforced, noteEnforcedApplied,
+  providerCeilings, providerCeilingsForGate, resetLastMirroredEnforcedForTests,
+} = await import("../sizes.js")
 const { TIER_PARALLELISM } = await import("../../../ee/billing/stripe-config.js")
 
 const subject = (tier: string | null) => ({ userId: "u1", payer: "user:u1" as const, tier })
@@ -35,6 +52,10 @@ describe("defaultLaneSizesForTier", () => {
 
   it("business is {12, 24, 24, 12}", () => {
     expect(defaultLaneSizesForTier("business")).toEqual({ provider: 12, llm: 24, local: 24, run: 12 })
+  })
+
+  it("enterprise defaults to business's sizes", () => {
+    expect(defaultLaneSizesForTier("enterprise")).toEqual(defaultLaneSizesForTier("business"))
   })
 
   it("payg equals basic", () => {
@@ -93,25 +114,154 @@ describe("laneSizesFor", () => {
     expect(await laneSizesFor(subject("pro"))).toEqual({ provider: 7, llm: 9, local: 11, run: 3 })
   })
 
-  it("Cloud sizes a line by its tier, and an unknown tier as free", async () => {
+  it("Cloud asks the Cloud reader for the line", async () => {
     edition.credits = true
-    config.LANE_PROVIDER_PER_USER = 7
-    expect(await laneSizesFor(subject("pro"))).toEqual(defaultLaneSizesForTier("pro"))
-    expect(await laneSizesFor(subject(null))).toEqual(defaultLaneSizesForTier("free"))
+    const seen: unknown[] = []
+    cloud.sizes = async (s) => {
+      seen.push(s)
+      return { provider: 20, llm: 21, local: 22, run: 9 }
+    }
+    try {
+      const line = { userId: "u1", payer: "deployment:p1" as const, tier: "basic" }
+      expect(await laneSizesFor(line)).toEqual({ provider: 20, llm: 21, local: 22, run: 9 })
+      expect(seen).toEqual([line])
+    } finally {
+      cloud.sizes = null
+    }
+  })
+
+  it("Cloud falls back to the tier's code defaults, and an unknown tier to free, when the reader throws", async () => {
+    edition.credits = true
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    try {
+      cloud.sizes = () => Promise.reject(new Error("db down"))
+      config.LANE_PROVIDER_PER_USER = 7
+      expect(await laneSizesFor(subject("pro"))).toEqual(defaultLaneSizesForTier("pro"))
+      expect(await laneSizesFor(subject(null))).toEqual(defaultLaneSizesForTier("free"))
+    } finally {
+      cloud.sizes = null
+      warn.mockRestore()
+    }
+  })
+
+  it("a deployment line falls back to the deployment payer's grade, never free, when the reader throws", async () => {
+    edition.credits = true
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const line = (tier: string | null) => ({ userId: "m1", payer: "deployment:p1" as const, tier })
+    try {
+      cloud.sizes = () => Promise.reject(new Error("db down"))
+      expect(await laneSizesFor(line(null))).toEqual(defaultLaneSizesForTier("basic"))
+      expect(await laneSizesFor(line("retired-tier"))).toEqual(defaultLaneSizesForTier("basic"))
+      expect(await laneSizesFor(line("pro"))).toEqual(defaultLaneSizesForTier("pro"))
+      expect(await laneSizesFor(line("free"))).toEqual(defaultLaneSizesForTier("free"))
+      expect(await laneSizesFor(line("enterprise"))).toEqual(defaultLaneSizesForTier("business"))
+    } finally {
+      cloud.sizes = null
+      warn.mockRestore()
+    }
   })
 })
 
 describe("providerCeilings", () => {
-  it("has none in either edition", async () => {
+  afterEach(() => {
     edition.credits = false
+    cloud.ceilings = null
+  })
+
+  it("has none on Community / Business, and never asks the Cloud reader", async () => {
+    edition.credits = false
+    cloud.ceilings = async () => ({ kie: 40 })
     expect(await providerCeilings()).toEqual({})
+  })
+
+  it("Cloud reads the admin ceilings", async () => {
     edition.credits = true
-    expect(await providerCeilings()).toEqual({})
+    cloud.ceilings = async () => ({ kie: 40 })
+    expect(await providerCeilings()).toEqual({ kie: 40 })
+  })
+
+  it("Cloud has none when the reader throws", async () => {
+    edition.credits = true
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    try {
+      cloud.ceilings = () => Promise.reject(new Error("db down"))
+      expect(await providerCeilings()).toEqual({})
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
+describe("providerCeilingsForGate", () => {
+  afterEach(() => {
     edition.credits = false
+    cloud.ceilingsAsRead = null
+  })
+
+  it("has none on Community / Business: {}", async () => {
+    cloud.ceilingsAsRead = async () => ({ kie: 40 })
+    expect(await providerCeilingsForGate()).toEqual({})
+  })
+
+  it("Cloud: the table as read, {} for an empty one", async () => {
+    edition.credits = true
+    cloud.ceilingsAsRead = async () => ({ kie: 40 })
+    expect(await providerCeilingsForGate()).toEqual({ kie: 40 })
+    cloud.ceilingsAsRead = async () => ({})
+    expect(await providerCeilingsForGate()).toEqual({})
+  })
+
+  it("Cloud: null (not {}) when the ceilings could not be read", async () => {
+    edition.credits = true
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    try {
+      cloud.ceilingsAsRead = () => Promise.reject(new Error("db down"))
+      expect(await providerCeilingsForGate()).toBeNull()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
+describe("lastMirroredEnforced", () => {
+  afterEach(() => resetLastMirroredEnforcedForTests())
+
+  it("is false until a value is copied, then the value copied, with no gate call", async () => {
+    const isEnforced = vi.fn()
+    gateRef.gate = { isEnforced }
+    resetLastMirroredEnforcedForTests()
+    expect(lastMirroredEnforced()).toBe(false)
+    noteEnforcedApplied(true)
+    expect(lastMirroredEnforced()).toBe(true)
+    noteEnforcedApplied(false)
+    expect(lastMirroredEnforced()).toBe(false)
+    expect(isEnforced).not.toHaveBeenCalled()
   })
 })
 
 describe("laneSettings", () => {
+  afterEach(() => {
+    edition.credits = false
+    cloud.settings = null
+  })
+
+  it("Cloud reads the admin settings", async () => {
+    edition.credits = true
+    cloud.settings = async () => ({ queueTimeoutMs: 1_800_000, liveWaitLimitMs: 120_000 })
+    expect(await laneSettings()).toEqual({ queueTimeoutMs: 1_800_000, liveWaitLimitMs: 120_000 })
+  })
+
+  it("Cloud uses the env minutes when the reader throws", async () => {
+    edition.credits = true
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    try {
+      cloud.settings = () => Promise.reject(new Error("db down"))
+      expect(await laneSettings()).toEqual({ queueTimeoutMs: 7_200_000, liveWaitLimitMs: 600_000 })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it("laneSettings() defaults {queueTimeoutMs: 7_200_000, liveWaitLimitMs: 600_000}", async () => {
     expect(await laneSettings()).toEqual({ queueTimeoutMs: 7_200_000, liveWaitLimitMs: 600_000 })
   })
