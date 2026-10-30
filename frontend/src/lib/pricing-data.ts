@@ -28,6 +28,8 @@ export interface PricingTier {
   readonly priceAnnual: number
   readonly priceIdMonthly: string | null
   readonly priceIdAnnual: string | null
+  /** Prices no longer sold that existing subscriptions on this tier still renew on. */
+  readonly priceIdsRetired?: readonly string[]
   readonly credits: number
   readonly llmRequests: number | null
   readonly storage: string
@@ -89,7 +91,9 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     priceMonthly: 12,
     priceAnnual: 10,
     priceIdMonthly: "price_1T8T2r6EOX16l3P8KLqPT0Gp",
-    priceIdAnnual: "price_1T92PK6EOX16l3P8f7VcNi21",
+    priceIdAnnual: "price_1UW3116EOX16l3P8cfayw1lX",
+    // $108/year, replaced by $120/year on 2026-10-30.
+    priceIdsRetired: ["price_1T92PK6EOX16l3P8f7VcNi21"],
     credits: 4500,
     llmRequests: 100,
     storage: "10 GB",
@@ -244,6 +248,15 @@ export function getBillingCycleFromPriceId(priceId: string | null | undefined): 
     if (tier.priceIdAnnual === priceId) return "annual"
   }
   return "annual"
+}
+
+/** The tier a subscription's Stripe price belongs to, retired prices included. */
+export function getTierIdFromPriceId(priceId: string | null | undefined): string | null {
+  if (!priceId) return null
+  const tier = PRICING_TIERS.find(
+    (t) => t.priceIdMonthly === priceId || t.priceIdAnnual === priceId || t.priceIdsRetired?.includes(priceId),
+  )
+  return tier?.id ?? null
 }
 
 export interface TopupPackage {

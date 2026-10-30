@@ -47,7 +47,7 @@ vi.mock("@/ee/billing/stripe-client.js", () => ({
 }))
 
 vi.mock("@/ee/billing/stripe-config.js", () => ({
-  PRICE_TO_PLAN: { pri_pro: { plan: "pro", interval: "monthly" } } as Record<string, unknown>,
+  ON_SALE_PRICE_TO_PLAN: { pri_pro: { plan: "pro", interval: "monthly" } } as Record<string, unknown>,
   TOP_UPS: { pri_topup: 3300 } as Record<string, number>,
   getTierFromPriceId: () => "pro",
   TIER_CREDITS: { free: 1500, basic: 4500, standard: 11000, pro: 23000 } as Record<string, number>,

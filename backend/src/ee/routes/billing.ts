@@ -23,7 +23,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { getStripe } from "../billing/stripe-client.js"
 import { createStripeCustomer, createCheckoutSession, createPortalSession } from "../billing/stripe-english.js"
-import { PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
+import { ON_SALE_PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
 import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { readBillingPlans } from "../billing/plans.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
@@ -243,10 +243,10 @@ export async function billingRoutes(app: FastifyInstance) {
     }
 
     const { priceId, mode, embedded, returnPath } = parsed.data
-    const checkoutMode = mode ?? (PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
+    const checkoutMode = mode ?? (ON_SALE_PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
 
     // Validate price ID
-    if (checkoutMode === "subscription" && !PRICE_TO_PLAN[priceId]) {
+    if (checkoutMode === "subscription" && !ON_SALE_PRICE_TO_PLAN[priceId]) {
       return reply.status(400).send({ error: "Invalid subscription price ID" })
     }
     if (checkoutMode === "payment" && !TOP_UPS[priceId]) {
@@ -570,7 +570,7 @@ export async function billingRoutes(app: FastifyInstance) {
     const { newPriceId } = parsed.data
 
     // Only allow known subscription price IDs (reject topup IDs)
-    if (!PRICE_TO_PLAN[newPriceId]) {
+    if (!ON_SALE_PRICE_TO_PLAN[newPriceId]) {
       return reply.status(400).send({ error: "Invalid price ID" })
     }
 

@@ -114,7 +114,9 @@ describe("YEARLY_PRICE_IDS", () => {
     const yearly = Object.entries(PRICE_TO_PLAN).filter(([, p]) => p.interval === "yearly").map(([id]) => id)
     const monthly = Object.entries(PRICE_TO_PLAN).filter(([, p]) => p.interval === "monthly").map(([id]) => id)
     expect([...YEARLY_PRICE_IDS].sort()).toEqual([...yearly].sort())
-    expect(YEARLY_PRICE_IDS.length).toBe(4)
+    // 4 on sale + the retired $108/year Basic price its subscribers still renew on.
+    expect(YEARLY_PRICE_IDS.length).toBe(5)
+    expect(YEARLY_PRICE_IDS).toContain("price_1T92PK6EOX16l3P8f7VcNi21")
     for (const id of monthly) expect(YEARLY_PRICE_IDS).not.toContain(id)
   })
 })
