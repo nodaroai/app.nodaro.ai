@@ -328,6 +328,10 @@ export interface TrendEstimate {
   expectedCredits: number
   /** What is reserved when the run starts; the run is charged what it actually costs. */
   holdCredits: number
+  /** The engine the run was priced on: the trend's own. Absent from an older server. */
+  engine?: TrendEngine
+  /** Its name to show: "Nodaro Motion Prism" or "Nodaro Motion Pulse". Absent from an older server. */
+  engineName?: string
   /**
    * The parts of the quote, by name, for display only: some are alternatives
    * or sit outside the totals (`privacy`, the retry's, beside

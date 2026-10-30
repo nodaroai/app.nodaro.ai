@@ -48,7 +48,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, nodaroMotionEngineName, nodaroMotionEngineOf, type NodaroMotionEngine } from "@nodaro/shared/models"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom, nodaroMotionEngineName, nodaroMotionEngineOf, type NodaroMotionEngine } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -672,10 +672,14 @@ export async function trendRoutes(app: FastifyInstance) {
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : quote.totalCredits
         // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
         const privacyCredits = privacyCreditsOf(quote)
+        // The engine it priced: the engine's own answer when it names one, else the trend's (what the body sent).
+        const priced = castSwapEngineFrom(quote.engine) ?? prepared.composed.needs.engine
         return {
           data: {
             expectedCredits: expected,
             holdCredits: quote.totalCredits,
+            engine: nodaroMotionEngineOf(priced),
+            engineName: nodaroMotionEngineName(priced),
             breakdown: neutralBreakdown(quote.breakdown),
             // A retry of a refused clip: charged only if it runs (not in the hold).
             ...(privacyCredits !== undefined ? { privacyCredits } : {}),

@@ -1212,7 +1212,9 @@ describe("POST /v1/trends/:slug/estimate", () => {
   it("posts the composed body to the Cast Swap estimate and maps hold and expected", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: RUN_BODY })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: { expectedCredits: 120, holdCredits: 120, breakdown: { base: 40, motion: 80 } } })
+    expect(res.json()).toEqual({
+      data: { expectedCredits: 120, holdCredits: 120, engine: "motion-prism", engineName: "Nodaro Motion Prism", breakdown: { base: 40, motion: 80 } },
+    })
     expect(engine.calls[0]!.url).toBe("/v1/cast-swap/estimate")
     expect(engine.calls[0]!.headers["x-internal-user-id"]).toBe(USER)
     expect(engine.calls[0]!.body.videoUrl).toBe(SOURCE)
@@ -1265,6 +1267,13 @@ describe("a Kling 4 trend", () => {
     expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
     expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
     for (const c of engine.calls) expect(c.body).toMatchObject({ engine: "kling-4", resolution: "720p", draft: false })
+  })
+
+  it("its quote names the engine it priced: Pulse, or the engine's own answer when it names another", async () => {
+    const quoted = async () => (await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).json().data
+    expect(await quoted()).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse" })
+    engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80 }, engine: "seedance-2-5" }
+    expect(await quoted()).toMatchObject({ engine: "motion-prism", engineName: "Nodaro Motion Prism" })
   })
 
   it("sends a Pulse trend's length fit as klingLength to an older engine, and as motionLength where the engine takes Nodaro Motion's names", async () => {
@@ -1705,7 +1714,14 @@ describe("trend face masking and pre prompt", () => {
   })
 
   it("the estimate answers the engine's privacy credits and parts by their neutral names, whichever names the engine sent", async () => {
-    const answered = { expectedCredits: 120, holdCredits: 120, breakdown: { base: 40, motion: 80, privacy: 30 }, privacyCredits: 30 }
+    const answered = {
+      expectedCredits: 120,
+      holdCredits: 120,
+      engine: "motion-prism",
+      engineName: "Nodaro Motion Prism",
+      breakdown: { base: 40, motion: 80, privacy: 30 },
+      privacyCredits: 30,
+    }
     for (const body of [
       // An engine before 0.394.0: the old names only.
       { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80, masking: 30 }, maskingCredits: 30 },
