@@ -270,6 +270,8 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     ...(zone !== undefined ? { zone } : {}),
     ...(maskingUsesBlur(m) && num(m.blurStrengthPct) ? { blurStrengthPct: m.blurStrengthPct } : {}),
     ...(num(m.threshold) ? { threshold: m.threshold } : {}),
+    // The face mesh: only when on (off is no key, as before it existed), and never with Keep people.
+    ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" ? { faceMesh: true } : {}),
     // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
     ...(m.marks && m.marks.length > 0 ? { marks: m.marks.map((mark) => ({ ...mark })) } : {}),
   }
@@ -574,6 +576,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   "faceMaskTarget:face": "face-only masks",
   "faceMaskTarget:body": "whole-person masks (Keep people)",
   "faceMaskHideTarget:body": "whole-person hiding (Faces hidden)",
+  faceMesh: "the face mesh",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",

@@ -46,6 +46,7 @@ import {
 } from "@nodaro/shared/credits"
 import {
   videoMaskCreditId,
+  videoFaceMeshCreditId,
   resolveVideoMaskProvider,
   maskCompositeUnits,
   videoDepthCreditId,
@@ -1931,6 +1932,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // Mask Erase (an internal step of a trend face mask's marks): local ffmpeg,
   // ONE pricing unit = 5 s of the mask (`maskEraseUnits`), the video-utility unit.
   "mask-erase": 10,
+  // Video Face Mesh (an internal step of Nodaro Motion's face masking): local
+  // drawing, ONE base credit per second of the clip's bucket at the 30 fps
+  // basis (`videoFaceMeshCreditId` in @nodaro/shared; a run past 300 s, Video
+  // Mask's own cap, is refused).
+  "video-face-mesh:5s": 5,
+  "video-face-mesh:10s": 10,
+  "video-face-mesh:15s": 15,
+  "video-face-mesh:30s": 30,
+  "video-face-mesh:60s": 60,
+  "video-face-mesh:120s": 120,
+  "video-face-mesh:300s": 300,
   "transcribe": 10,
   // ── Web Scrape (Apify + direct RSS) ──
   "web-scrape": 20,
@@ -5387,6 +5399,8 @@ function estimateNodeCredits(
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, wireSec, prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
+    // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire, priced as Video Mask's (the 30 fps basis).
+    videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
   })
   return (meteredChargedOrThrow(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
@@ -6429,6 +6443,8 @@ export function getNodeModelIdentifier(
     pitchTempoSec?: number
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
+    /** Video Face Mesh: the input clip's PRICED length a run estimate knows (the 30 fps basis; undefined = not known yet). */
+    videoFaceMeshSec?: number
     /** A video generation node with a reference video wired (a GRAPH fact; undefined = unknown → the plain ladder). */
     videoRefWired?: boolean
   } = {},
@@ -6669,6 +6685,12 @@ export function getNodeModelIdentifier(
   // tells is quoted at that length's row at the 30 fps basis; any other clip at
   // the longest row (an upper bound — the run is charged its measured row).
   if (nodeType === "video-mask") return videoMaskCreditId(graph.videoMaskSec, resolveVideoMaskProvider(data.provider))
+
+  // Video Face Mesh (an internal step of the Cast Swap engine, priced in its
+  // quote graph): the `video-face-mesh:<n>s` row for the clip's priced length,
+  // as the route charges it (lib/video-face-mesh-length.ts); a clip whose
+  // length the graph does not tell at the longest row.
+  if (nodeType === "video-face-mesh") return videoFaceMeshCreditId(graph.videoFaceMeshSec)
 
   // A render (Apply EDL, Speaker View): the per-minute row its registry entry
   // names for the render's quality (and, priced in tiers, the tier its graph

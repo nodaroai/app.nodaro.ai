@@ -40,6 +40,7 @@ import { videoAIHandlers } from "./handlers/video-ai.js"
 import { videoSfxHandlers } from "./handlers/video-sfx.js"
 import { videoDepthHandlers } from "./handlers/video-depth.js"
 import { videoMaskHandlers } from "./handlers/video-mask.js"
+import { videoFaceMeshHandlers } from "./handlers/video-face-mesh.js"
 import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
@@ -80,6 +81,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...videoSfxHandlers,
   ...videoDepthHandlers,
   ...videoMaskHandlers,
+  ...videoFaceMeshHandlers,
   ...ffmpegHandlers,
   ...audioAIHandlers,
   ...sunoHandlers,

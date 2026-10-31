@@ -3403,6 +3403,13 @@ export interface PluginFaceMasking {
   zone?: { leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number } | null
   blurStrengthPct?: number
   threshold?: number
+  /**
+   * The face mesh: thin face lines drawn on the masked heads (faces hidden) or
+   * on every face of the depth clip (full depth); never with keep people.
+   * Sent (and answered by `tk.settings`) only as `true`, and only to an
+   * engine that declares `supports.castSwap.faceMesh`.
+   */
+  faceMesh?: boolean
 }
 
 /**
@@ -3431,6 +3438,7 @@ export type PluginPromptPartId =
   | "audio"
   | "face"
   | "depthGuard"
+  | "faceMesh"
   | "person"
   | "pet"
   | "product"
@@ -3705,6 +3713,18 @@ export interface PluginSupports {
    *   at all when every resolution is the full audio. Wins over
    *   `prismReferenceAudio` when both are declared. Additive-optional: absent
    *   ⇒ `false` — the string of `prismReferenceAudio` above (or nothing).
+   * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
+   *   the Nodaro Motion settings read through `tk.settings`) takes
+   *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
+   *   outlines) drawn through the core `video-face-mesh` job on the masked
+   *   heads (faces hidden) or on every face of the depth clip (full depth),
+   *   with the engine's `faceMesh` prompt part saying what they mean; never
+   *   with keep people. Additive-optional: absent ⇒ `false` — the platform
+   *   never sends `faceMesh` (it strips the key from a run, refuses a make,
+   *   holds a trend that draws it back from publishing there, answers the
+   *   settings without it, and refuses to save a shared Nodaro Motion setting
+   *   with it while any environment lacks it), so the wire is byte-identical
+   *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMesh`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3737,6 +3757,7 @@ export interface PluginSupports {
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
     readonly prismReferenceAudioPerResolution?: boolean
+    readonly faceMesh?: boolean
   }
 }
 

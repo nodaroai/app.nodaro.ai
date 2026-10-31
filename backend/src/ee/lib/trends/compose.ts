@@ -232,7 +232,7 @@ export interface TrendRunBody {
    * without `faceMasking`). `required: true` (a trend with marks): the engine
    * fails the run rather than masking per run (`castSwap.storedFaceMaskRequired`).
    */
-  storedFaceMask?: { url: string; frames: number; required?: true }
+  storedFaceMask?: { url: string; frames: number; required?: true; facesDrawn?: number }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
@@ -547,7 +547,8 @@ export function composeTrendRun(
   const runMasking = unmasked ? undefined : masking
   const storedFaceMask =
     variant && variant !== "unmasked"
-      ? { ...variant, required: true as const }
+      // A person variant is the base mask less some people: a base that drew no face mesh leaves it none.
+      ? { ...variant, required: true as const, ...(stored?.facesDrawn === 0 ? { facesDrawn: 0 } : {}) }
       : variant === undefined && stored
         ? faceMaskStoredRequired(data) ? { ...stored, required: true as const } : stored
         : undefined

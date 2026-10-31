@@ -173,6 +173,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "video-analysis": "video analysis",
   "video-audit": "the Video Audit route",
   "video-director": "the Video Director",
+  "video-face-mesh": "an internal step of Nodaro Motion's face masking (refuses every caller but the platform's own jobs)",
   "webhook-output": "the Webhook Output node's route",
   "workflow-triggers": "workflow triggers",
   "youtube-audio": "YouTube audio downloads",

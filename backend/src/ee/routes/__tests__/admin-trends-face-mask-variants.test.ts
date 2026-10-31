@@ -305,6 +305,8 @@ describe("POST /face-mask/variants", () => {
       [draft([]), "no_person_marks"],
       [{ ...draft([slotMark("amy", 10)]), faceMask: { ...draft([slotMark("amy", 10)]).faceMask!, rawMaskUrl: undefined } }, "no_raw_mask"],
       [draft([slotMark("amy", 10)]), "engine_unsupported", () => setPluginSupports({ castSwap: { ...SUPPORTS, faceMaskErase: false } as never })],
+      // A trend that draws the face mesh, on an engine that cannot: its person masks would lack the lines.
+      [draft([slotMark("amy", 10)], { faceMasking: { ...MASKING, marks: [slotMark("amy", 10)], faceMesh: true } }), "engine_unsupported"],
     ]
     for (const [d, code, before] of cases) {
       mem.data = d

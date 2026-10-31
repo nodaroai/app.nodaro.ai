@@ -25,7 +25,10 @@
  * (`castSwap.sourceModes`), its target (`faceMaskTargets`, keep people's
  * `"body"`) and a main mark's label (`faceMaskMarkLabels`). A face mask
  * (absent or `"faces"`) needs none of them, but one that hides the whole
- * person (`"body"`) needs `faceMaskHideTargets` to name it.
+ * person (`"body"`) needs `faceMaskHideTargets` to name it. One that draws
+ * the face mesh (`faceMesh: true`) is held back unless the loaded engine
+ * declares `castSwap.faceMesh`: an older one refuses the key, so an approved
+ * mask never claims a mesh it was made without.
  *
  * Marks (`faceMasking.marks`, decided 2026-10-26): a make sends the `"erased"`
  * ones to the engine, which leaves their faces out of the mask; slot marks
@@ -55,7 +58,18 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { deriveJobSource } from "../../lib/job-source.js"
-import { faceMaskMarksOf, faceMaskTargetOf, faceMaskingOn, faceMaskingSent, faceMaskingSourceOf, loadedEngineMasksTarget, makeMarksOf, withoutMarks } from "../../lib/cast-swap-face-masking.js"
+import {
+  faceMaskMarksOf,
+  faceMaskTargetOf,
+  faceMaskingOn,
+  faceMaskingSent,
+  faceMaskingSourceOf,
+  faceMeshOn,
+  loadedEngineDrawsFaceMesh,
+  loadedEngineMasksTarget,
+  makeMarksOf,
+  withoutMarks,
+} from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, type EngineEnvironment } from "../lib/engine-environments.js"
@@ -64,6 +78,7 @@ import { trendVersionDataSchema } from "../lib/trends/schemas.js"
 import { TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
 import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 import {
+  faceMeshFacesDrawnOf,
   FACE_MASK_JOB_TYPE,
   faceMaskBaseKey,
   faceMaskHasErasedMarks,
@@ -238,6 +253,11 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
             : "This environment's Cast Swap engine cannot mask the face alone yet: choose Head, or wait for the engine.",
         )
       }
+      // The face mesh an engine does not declare: its strict schema refuses the key (and stripping it would
+      // store a mask without the lines under the mesh's settings key), so it is refused before anything is paid.
+      if (faceMeshOn(draft.faceMasking) && !loadedEngineDrawsFaceMesh()) {
+        return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw the face mesh yet: turn the face mesh off, or wait for the engine.")
+      }
       const settingsKey = faceMaskSettingsKey(draft)!
       // The job is paid for once the engine is asked: the draft that records it must save, so it is
       // checked first (with a stand-in job), and a draft that cannot is refused before anything is paid.
@@ -348,6 +368,7 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         }
       }
       const frames = output.frames
+      const facesDrawn = faceMeshFacesDrawnOf(output)
       const recipe = isRec(output.recipe) ? output.recipe : {}
       const plugin = str(recipe.plugin)
       if (typeof frames !== "number" || !Number.isInteger(frames) || frames <= 0 || !plugin) {
@@ -363,6 +384,8 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         stats: faceMaskStats(output.stats),
         approvedAt: new Date().toISOString(),
         approvedBy: req.userId!,
+        // The faces its make drew the face mesh on (a setting with the mesh only): 0 = no lines on it.
+        ...(faceMeshOn(draft.faceMasking) && facesDrawn !== undefined ? { facesDrawn } : {}),
         // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts).
         ...(source === "full-depth" ? sceneDescriptionsOf(output, input) : {}),
       }

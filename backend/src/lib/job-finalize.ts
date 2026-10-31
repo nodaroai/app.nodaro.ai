@@ -258,6 +258,9 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENE
   // Mask Erase — local ffmpeg on a mask (an internal child step), finished by
   // completeFfmpegVideoJob like the ffmpeg nodes above.
   "mask-erase",
+  // Video Face Mesh — local drawing (an internal child step), its own
+  // markJobCompleted with output_data.{frames, facesDrawn, …}.
+  "video-face-mesh",
   // Video Mask calls fal but registers no onTaskCreated (its RLE is rendered
   // locally — providers/fal/sam3-video.ts) and writes its own output_data.
   "video-mask",

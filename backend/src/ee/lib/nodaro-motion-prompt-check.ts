@@ -17,7 +17,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { CAST_SWAP_ENGINE_OF_NODARO_MOTION, type CastSwapStyle, type NodaroMotionEngine } from "@nodaro/shared/models"
 import { largeDirectRun, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
-import { directRunPromptShape, type NodaroMotionMotionEntry } from "../../lib/nodaro-motion-motion.js"
+import { directRunDrawsFaceMesh, directRunPromptShape, type NodaroMotionMotionEntry } from "../../lib/nodaro-motion-motion.js"
+import type { FaceMasking } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { askPromptParts } from "./cast-swap-prompt-parts.js"
 
@@ -29,17 +30,26 @@ export function loadedEngineHasPromptStyles(): boolean {
   return (getPluginSupports().castSwap?.promptStyles ?? []).length > 0
 }
 
-/** What the engine is asked for a direct run of this engine and style, with `body` (the run's roles, prompts and overrides). */
+/**
+ * What the engine is asked for a direct run of this engine and style, with
+ * `body` (the run's roles, prompts and overrides). `preciseMasking` is the
+ * engine's masking setting (`nodaro_motion_masking`): a run that draws the
+ * face mesh says so (`faceMesh: true`, `directRunDrawsFaceMesh`), so the
+ * engine counts the mesh's line (sent only to an engine that draws it,
+ * `forLoadedEngine`).
+ */
 export function directRunRequest(
   engine: NodaroMotionEngine,
   style: CastSwapStyle,
   entry: NodaroMotionMotionEntry | undefined,
   body: Omit<PromptPartsRequest, "engine" | "style">,
+  preciseMasking?: FaceMasking,
 ): PromptPartsRequest {
   return {
     engine: CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine],
     style,
     ...(loadedEngineHasPromptStyles() ? directRunPromptShape(style, entry) : {}),
+    ...(directRunDrawsFaceMesh(style, entry, preciseMasking) ? { faceMesh: true as const } : {}),
     ...body,
   }
 }
@@ -57,9 +67,10 @@ export async function directRunPromptProblems(
   style: CastSwapStyle,
   texts: PromptPartTexts,
   entry: NodaroMotionMotionEntry | undefined,
+  preciseMasking?: FaceMasking,
 ): Promise<DirectRunPromptProblem[] | null> {
   const run = largeDirectRun(CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine])
-  const answer = await askPromptParts(app, req, reply, directRunRequest(engine, style, entry, { ...run, overrides: texts }))
+  const answer = await askPromptParts(app, req, reply, directRunRequest(engine, style, entry, { ...run, overrides: texts }, preciseMasking))
   if (!answer) return null
   return answer.problems.map((p) => ({ ...p, engine, style }))
 }

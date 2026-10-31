@@ -2438,6 +2438,36 @@ describe("the stored face mask", () => {
       expect(key).not.toBe(faceMaskSettingsKey(draftData({ faceMasking: { mode: "always", source: "keep-people", threshold: 0.4 } })))
     })
 
+    it("draws the face mesh only on an engine that declares it (refused before anything is paid), sending it as true", async () => {
+      const MESHED = { ...MASKING, faceMesh: true }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      seed({}, draftData({ faceMasking: MESHED }))
+      for (const extra of [{}, { faceMesh: false }]) {
+        supports(extra)
+        const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+        expect(held.statusCode, JSON.stringify(extra)).toBe(503)
+        expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/cannot draw the face mesh/) })
+      }
+      expect(engine.calls).toEqual([])
+
+      supports({ faceMesh: true })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: { ...withResolvedZone(MASKING), faceMesh: true } })
+      const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+      expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: MESHED })))
+      expect(key).not.toBe(KEY())
+    })
+
+    it("a face mesh left off (false) is made exactly as before it existed, on any engine", async () => {
+      seed({}, draftData({ faceMasking: { ...MASKING, faceMesh: false } }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone(MASKING) })
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(KEY())
+    })
+
     it("makes a head mask (the default, named or not) on an engine that declares no targets", async () => {
       seed({}, draftData({ faceMasking: { ...MASKING, target: "head" } }))
       const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
@@ -2545,6 +2575,21 @@ describe("the stored face mask", () => {
   })
 
   describe("approving one", () => {
+    it("keeps the faces its make drew the face mesh on (0 included), only for a setting that draws the mesh", async () => {
+      const MESHED = { ...MASKING, faceMesh: true }
+      const meshKey = faceMaskSettingsKey(draftData({ faceMasking: MESHED }))!
+      seed({}, draftData({ faceMasking: MESHED, faceMaskJob: pendingJob({ settingsKey: meshKey }) }))
+      world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { faceMesh: { frames: 360, framesWithFaces: 0, facesDrawn: 0, recipe: "2026-10-31" } }))
+      expect((await approve()).statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ settingsKey: meshKey, facesDrawn: 0 })
+
+      mem.trends = []
+      seed({}, making())
+      world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { faceMesh: { facesDrawn: 12 } }))
+      expect((await approve()).statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("facesDrawn")
+    })
+
     it("takes the draft's pending job (whatever defaults the engine filled into its copy), stores the clip and clears the pending job", async () => {
       seed({}, making())
       world.jobs.set(FACE_MASK_JOB, fmJob())

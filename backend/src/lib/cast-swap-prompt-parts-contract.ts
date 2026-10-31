@@ -67,6 +67,13 @@ export interface PromptPartsRequest {
    * engine that declares `castSwap.fullDepthScenes` (`askPromptParts`).
    */
   scene?: CastSwapFullDepthScene
+  /**
+   * The setting draws the face mesh (`faceMasking.faceMesh`, on): the engine
+   * counts the `faceMesh` part's line in the prompt's length. Only ever
+   * `true`, and sent only to an engine that declares `castSwap.faceMesh`
+   * (`askPromptParts`).
+   */
+  faceMesh?: true
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

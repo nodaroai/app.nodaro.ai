@@ -29,6 +29,7 @@ export const PROMPT_PART_LABELS: Readonly<Record<CastSwapPromptPartId, string>> 
   audio: "Sound and lip sync",
   face: "Identity",
   depthGuard: "Depth guard",
+  faceMesh: "Face mesh lines",
   person: "Each person",
   pet: "Each pet",
   product: "Each product",

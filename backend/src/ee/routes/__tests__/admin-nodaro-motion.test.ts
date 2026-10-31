@@ -174,6 +174,35 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
     expect(h.audits).toEqual([])
   })
 
+  it("saves the face mesh only once every environment's engine draws it (the row is shared), naming those that cannot", async () => {
+    const MESH = { castSwap: { ...HIDES.castSwap, faceMesh: true } }
+    const masking = { "motion-pulse": { mode: "always", fill: "depth", faceMesh: true } }
+    for (const [envs, blocked] of [
+      [[envRow("production", HIDES), envRow("staging", MESH)], ["production"]],
+      [[envRow("staging", MESH)], ["production"]],
+      [[envRow("production", { castSwap: { ...HIDES.castSwap, faceMesh: false } }), envRow("staging", {})], ["staging", "production"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot draw the face mesh/) })
+    }
+    expect(h.upserts).toEqual([])
+    h.envs = [envRow("production", MESH), envRow("staging", MESH)]
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.masking).toEqual(masking)
+  })
+
+  it("never asks the environments for a face mesh that is off (false, or the masking off)", async () => {
+    h.envs = []
+    for (const m of [{ "motion-prism": { mode: "always", faceMesh: false } }, { "motion-prism": { mode: "off", faceMesh: true } }]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+      expect(res.statusCode, JSON.stringify(m)).toBe(200)
+    }
+    expect(h.envReads).toBe(0)
+  })
+
   it("never asks the environments for a setting that hides no whole person (head, face, or Body left off)", async () => {
     h.envs = []
     for (const m of [{ "motion-prism": { mode: "always", target: "face" } }, { "motion-prism": { mode: "off", target: "body" } }]) {

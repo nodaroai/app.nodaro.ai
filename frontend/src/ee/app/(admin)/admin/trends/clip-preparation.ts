@@ -13,8 +13,9 @@
  *   ("body", its own target), and a box may mark the main character.
  *
  * The server refuses a depth mode without "always", the whole-person target
- * with Full depth and a main character box outside Keep people: switching
- * modes here never leaves the draft in one of those states.
+ * with Full depth, a main character box outside Keep people and the face mesh
+ * with Keep people: switching modes here never leaves the draft in one of
+ * those states.
  */
 import type { AdminTrendFaceMasking, AdminTrendFaceMaskingSource, AdminTrendFaceMaskingTarget, TrendEngineEnvironment } from "@/lib/api"
 
@@ -102,12 +103,31 @@ export function environmentsThatCannotHideBodies(envs: readonly TrendEngineEnvir
 }
 
 /**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot draw the face mesh — none recorded, or
+ * one that does not declare `castSwap.faceMesh`. Unknown while the
+ * environments are (undefined). The setting is shared, so the switch is
+ * offered only when this is empty; the server refuses the save otherwise
+ * (409 `engine_unsupported`).
+ */
+export function environmentsThatCannotDrawFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.faceMesh !== true)
+}
+
+/** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
+export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
+  return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)
+}
+
+/**
  * The setting prepared another way (a new object; undefined stays undefined
  * for Faces hidden, the default). A depth mode is mode "always". Leaving Keep
  * people drops what only it takes: its whole-person target (kept there, it
  * would be HIDDEN with Faces hidden), and the main character boxes
  * (`removedMain` counts them, for the screen to say so). Full depth drops the
- * whole person too (it masks no one).
+ * whole person too (it masks no one). Keep people drops the face mesh (the
+ * faces stay as filmed there: nothing to draw on).
  */
 export function withClipPreparation(
   m: AdminTrendFaceMasking | undefined,
@@ -118,6 +138,8 @@ export function withClipPreparation(
   const next: AdminTrendFaceMasking = isDepthPreparation(source) ? { ...rest, mode: "always", source } : { ...rest }
   // The scene source is Full depth's alone.
   if (source !== "full-depth") delete next.scene
+  // The face mesh is never Keep people's.
+  if (source === "keep-people") delete next.faceMesh
   let removedMain = 0
   if (next.target === "body" && (source === "full-depth" || (source === "faces" && clipPreparationOf(m) === "keep-people"))) delete next.target
   if (source !== "keep-people") {
@@ -137,6 +159,7 @@ export function clipPreparationIssues(m: AdminTrendFaceMasking): string[] {
   const source = clipPreparationOf(m)
   if (isDepthPreparation(source) && m.mode !== "always") out.push(`Clip preparation: ${clipPreparationName(source)} runs every time (mode Always).`)
   if (source === "full-depth" && m.target === "body") out.push("Clip preparation: Full depth masks no one, so it has no whole-person target.")
+  if (source === "keep-people" && m.faceMesh === true) out.push("Clip preparation: Keep people keeps the faces as filmed, so it takes no face mesh.")
   const main = (m.marks ?? []).filter((mark) => mark.label === "main").length
   if (source !== "keep-people" && main > 0) {
     out.push(`Face masking: ${main} box${main === 1 ? " marks" : "es mark"} the main character, which only Keep people takes. Remove ${main === 1 ? "it" : "them"} first (6. Face masking).`)

@@ -11,6 +11,7 @@ import { videoAIHandlers } from "../../../workers/handlers/video-ai.js"
 import { videoSfxHandlers } from "../../../workers/handlers/video-sfx.js"
 import { videoDepthHandlers } from "../../../workers/handlers/video-depth.js"
 import { videoMaskHandlers } from "../../../workers/handlers/video-mask.js"
+import { videoFaceMeshHandlers } from "../../../workers/handlers/video-face-mesh.js"
 import { ffmpegHandlers } from "../../../workers/handlers/ffmpeg.js"
 import { audioAIHandlers } from "../../../workers/handlers/audio-ai.js"
 import { sunoHandlers } from "../../../workers/handlers/suno.js"
@@ -39,6 +40,7 @@ const VIDEO_WORKER_NAMES: readonly string[] = Object.keys({
   ...videoSfxHandlers,
   ...videoDepthHandlers,
   ...videoMaskHandlers,
+  ...videoFaceMeshHandlers,
   ...ffmpegHandlers,
   ...audioAIHandlers,
   ...sunoHandlers,
@@ -94,7 +96,7 @@ describe("job lane registry", () => {
   })
 
   it("ffmpeg and sharp jobs are local", () => {
-    for (const n of ["trim-video", "combine-videos", "apply-edl", "image-collage", "image-overlay", "add-captions", "mask-composite", "mask-erase"]) {
+    for (const n of ["trim-video", "combine-videos", "apply-edl", "image-collage", "image-overlay", "add-captions", "mask-composite", "mask-erase", "video-face-mesh"]) {
       expect(`${n}:${JSON.stringify(reg.laneClassOf("video-generation", n, {}))}`).toBe(`${n}:${JSON.stringify(leaf("local"))}`)
     }
     for (const n of RENDER_WORKER_NAMES) expect(reg.laneClassOf("video-render", n, {})).toEqual(leaf("local"))

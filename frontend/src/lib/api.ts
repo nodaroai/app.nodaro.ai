@@ -11312,6 +11312,13 @@ export interface AdminTrendFaceMasking {
   /** 0.05–0.95; default 0.5. Lower finds more faces. */
   threshold?: number
   /**
+   * The face mesh: thin face lines drawn on the masked heads (Faces hidden) or
+   * on the depth clip (Full depth); never with Keep people. Saved only as
+   * `true` (off = no key), and offered only where the engine declares
+   * `castSwap.faceMesh`.
+   */
+  faceMesh?: boolean
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11350,6 +11357,8 @@ export interface AdminTrendFaceMask {
   stats: AdminTrendFaceMaskStats
   approvedAt: string
   approvedBy: string
+  /** The faces its make drew the face mesh on (0 = none: its runs carry no lines); absent without the mesh. */
+  facesDrawn?: number
   /** The mask before any mark (the base the next edit of the marks is made from), when kept. Absent: the first edit makes the mask whole. */
   rawMaskUrl?: string
   depthUrl?: string
@@ -11767,6 +11776,8 @@ export interface TrendEngineEnvironment {
       promptStyles?: CastSwapPromptStyleId[]
       /** What full depth's `scene` may name (absent: the original only). */
       fullDepthScenes?: AdminTrendFullDepthScene[]
+      /** The engine draws the face mesh (`faceMasking.faceMesh`); absent = it cannot. */
+      faceMesh?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -12157,6 +12168,13 @@ export interface AdminTrendFaceMaskJob {
     reason?: string
     frames?: number
     stats?: Partial<AdminTrendFaceMaskStats>
+    /**
+     * The face mesh drawn on the mask (a setting with `faceMasking.faceMesh`):
+     * `facesDrawn` 0 = no face got lines, so a run with this mask has none. A
+     * make whose face mesh step failed fails as a whole (its `error_message`
+     * says why), never storing a clip without the lines its setting promises.
+     */
+    faceMesh?: { frames?: number; framesWithFaces?: number; facesDrawn?: number; recipe?: string }
     [key: string]: unknown
   } | null
 }

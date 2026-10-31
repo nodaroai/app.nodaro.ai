@@ -26,7 +26,7 @@
  * Usage: node scripts/copy-build-assets.mjs   (cwd = backend/)
  */
 
-// @reads backend/src/lib/tutorial-seed/templates/** backend/src/lib/hosting-ranges.generated.json backend/src/assets/fonts/** backend/src/services/face-detect/model/**
+// @reads backend/src/lib/tutorial-seed/templates/** backend/src/lib/hosting-ranges.generated.json backend/src/assets/fonts/** backend/src/services/face-detect/model/** backend/src/services/face-mesh/model/**
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises"
 import { dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -67,6 +67,13 @@ export const BUILD_ASSETS = Object.freeze([
     // src/ for provenance only.
     dir: "services/face-detect/model",
     match: /^(?:face_detection_yunet_2023mar-dyn\.onnx|LICENSE\.yunet\.txt)$/,
+  },
+  {
+    // The pinned MediaPipe face landmark model — read (and hash-checked) by
+    // src/services/face-mesh/face-mesh-model.ts — and its Apache-2.0 licence,
+    // which ships beside it.
+    dir: "services/face-mesh/model",
+    match: /^(?:face_landmark\.onnx|LICENSE\.mediapipe\.txt)$/,
   },
 ])
 

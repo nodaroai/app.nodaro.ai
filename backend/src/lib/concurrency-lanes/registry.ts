@@ -51,6 +51,8 @@ export const JOB_LANE_CLASSES: Readonly<Record<string, LaneClass>> = Object.free
     "still-to-video", "slideshow", "resize-video", "adjust-volume", "audio-fx", "pitch-tempo", "add-captions",
     "mix-audio", "combine-audio", "transcode-video", "social-media-format", "split-media", "extract-audio",
     "silence-detect", "audio-sync", "mask-composite", "mask-erase", "reference-sheet",
+    // Video Face Mesh: YuNet + the landmark model (onnxruntime, one thread) and sharp, local.
+    "video-face-mesh",
   ]),
   // LLM-only jobs.
   ...rows("video-generation", LLM, ["generate-script", "llm-structured", "motion-graphics-lottie", "generate-3d-scene", "edit-3d-scene"]),

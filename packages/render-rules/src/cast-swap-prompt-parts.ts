@@ -19,6 +19,7 @@ export const CAST_SWAP_PROMPT_PART_IDS = [
   "audio",
   "face",
   "depthGuard",
+  "faceMesh",
   "person",
   "pet",
   "product",
@@ -46,6 +47,8 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   audio: [],
   face: [],
   depthGuard: ["{video}"],
+  // Runs whose clip has the face mesh drawn on it only (`faceMasking.faceMesh`, faces drawn > 0): what the lines mean.
+  faceMesh: ["{video}"],
   person: ["{name}", "{image}", "{face}", "{outfit}", "{body}", "{hair}"],
   pet: ["{name}", "{image}", "{body}", "{coat}"],
   product: ["{name}", "{image}", "{shape}", "{finish}"],

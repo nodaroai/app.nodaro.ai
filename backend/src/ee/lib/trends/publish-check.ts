@@ -48,7 +48,10 @@
  * (`storedFaceMaskRequired`), and keep people's whole-person target is a need
  * of its own (`faceMaskTarget:body`), as is a face mask's that hides the whole
  * person (`faceMaskHideTarget:body`, `castSwap.faceMaskHideTargets`). The
- * person-variant gates below are a face mask's alone.
+ * person-variant gates below are a face mask's alone. A trend that draws the
+ * face mesh (`faceMasking.faceMesh: true`, faces hidden or full depth) needs
+ * an engine that declares it (`castSwap.faceMesh`, need `FACE_MESH_NEED`):
+ * one from before it would refuse the key, and a run there is sent without it.
  *
  * A trend whose prompt style is not its clip preparation's default
  * (`promptStyle`), or a full-depth trend whose scene source an engine does not
@@ -78,7 +81,16 @@
  * trend, like one with erased marks, needs `storedFaceMaskRequired`.
  */
 import type { EngineEnvironment } from "../engine-environments.js"
-import { engineMasksTarget, faceMaskTargetOf, faceMaskTargetsOf, faceMaskingOn, faceMaskingSourceOf, type FaceMaskingSource } from "../../../lib/cast-swap-face-masking.js"
+import {
+  engineDrawsFaceMesh,
+  engineMasksTarget,
+  faceMaskTargetOf,
+  faceMaskTargetsOf,
+  faceMaskingOn,
+  faceMaskingSourceOf,
+  faceMeshOn,
+  type FaceMaskingSource,
+} from "../../../lib/cast-swap-face-masking.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
 import {
   CAST_SWAP_ENGINES,
@@ -126,7 +138,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -175,6 +187,9 @@ export const BODY_NEED = "faceMaskTarget:body"
 /** The need of a faces-hidden trend whose masks hide the whole person (`faceMasking.target: "body"`, `castSwap.faceMaskHideTargets`). */
 export const HIDE_BODY_NEED = "faceMaskHideTarget:body"
 
+/** The need of a trend that draws the face mesh (`faceMasking.faceMesh: true`, `castSwap.faceMesh`). */
+export const FACE_MESH_NEED = "faceMesh"
+
 const SOURCE_MODE_NAMES: Readonly<Record<FaceMaskingSource, string>> = {
   faces: "Faces hidden",
   "full-depth": "Full depth",
@@ -201,6 +216,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...(faceMaskingOn(data.faceMasking) && faceMaskTargetOf(data.faceMasking) === "body"
       ? [faceMaskingSourceOf(data.faceMasking) === "faces" ? HIDE_BODY_NEED : BODY_NEED]
       : []),
+    // The face mesh: an engine from before it refuses the key (and a run there is sent without it).
+    ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? [FACE_MESH_NEED] : []),
     // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
     ...(promptModesOf(data).some((mode) => withPromptsFor(data, mode).prePrompt) ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
@@ -223,6 +240,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === FACE_ONLY_NEED) return !faceMaskTargetsOf(cs).includes("face")
     if (need === BODY_NEED) return !faceMaskTargetsOf(cs).includes("body")
     if (need === HIDE_BODY_NEED) return !engineMasksTarget(cs, "body", "faces")
+    if (need === FACE_MESH_NEED) return !engineDrawsFaceMesh(cs)
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)

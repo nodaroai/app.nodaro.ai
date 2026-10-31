@@ -131,6 +131,13 @@ describe("ffmpeg admission census", () => {
     "providers/audio/pcm-stream.ts": { how: "streamPcm: withFfmpegSlot around the spawn" },
     "providers/video/video-mask.ts": { how: "renderMaskVideo: withFfmpegSlot (the canvas model at the mask's size) around the stdin-fed encode" },
     "providers/video/mask-erase.ts": { how: "decodeMaskVideoRle: withFfmpegSlot (the canvas model at the mask's size) around the stdout-read gray decode" },
+    "services/face-mesh/draw-face-mesh.ts": {
+      how:
+        "drawFaceMeshVideo: ONE withFfmpegSlot hold around the run's decoders, its encoder AND both onnxruntime " +
+        "sessions' inference, reserving faceMeshPeakMemoryMiB (the canvas predictions + the sessions + sharp)",
+      // streamFrames only spawns a decode; its one caller holds the slot around it.
+      heldBy: { streamFrames: "drawFaceMeshVideo" },
+    },
     "services/face-detect/detect-faces.ts": {
       how:
         "detectFacesInMedia: ONE withFfmpegSlot hold around a window's decode child AND its onnxruntime " +

@@ -86,6 +86,14 @@ export function stableJson(v: unknown): string {
  * (`faceMaskingSent`: full depth, the mode alone; keep people, all but the
  * fill, its target resolved) and its make's marks (erased and main,
  * `makeMarksOf`), so a mask made under one mode is out of date under another.
+ *
+ * The face mesh (`faceMesh`) is hashed only when it is on (`true`, faces
+ * hidden or full depth: `withResolvedZone` / `faceMaskingSent` drop a
+ * `false`), so every setting without it hashes exactly as before it existed
+ * and every mask approved then stays up to date, while turning it on or off
+ * makes a stored mask out of date. The base key (`faceMaskBaseKey`) carries it
+ * too, so a raw mask made without the mesh is never the base of a mask with it
+ * (`reusableFaceMaskBase`), nor the other way round.
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks): string {
   const marks = makeMarksOf(masking).map(stableJson).sort()
@@ -244,13 +252,28 @@ export function faceMaskState(
 /**
  * What a run sends of the stored mask: `{ url, frames }` when the trend masks
  * and its mask was made from these exact settings, else undefined (the run
- * masks per run, as before stored masks).
+ * masks per run, as before stored masks). With the faces its make drew the
+ * face mesh on (`facesDrawn`) when it reported them; only an engine that
+ * draws the mesh is sent that (`withoutUnsupportedStoredMask`).
  */
-export function storedFaceMaskFor(data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): { url: string; frames: number } | undefined {
+export function storedFaceMaskFor(
+  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">,
+): { url: string; frames: number; facesDrawn?: number } | undefined {
   const mask = data.faceMask
   const key = faceMaskSettingsKey(data)
   if (!mask || key === null || mask.settingsKey !== key) return undefined
-  return { url: mask.url, frames: mask.frames }
+  return { url: mask.url, frames: mask.frames, ...(typeof mask.facesDrawn === "number" ? { facesDrawn: mask.facesDrawn } : {}) }
+}
+
+/**
+ * The faces a finished face mask job drew the face mesh on
+ * (`output_data.faceMesh.facesDrawn`): a whole number ≥ 0, else undefined (no
+ * mesh, or an engine that does not report it).
+ */
+export function faceMeshFacesDrawnOf(output: unknown): number | undefined {
+  const mesh = output && typeof output === "object" ? (output as Record<string, unknown>).faceMesh : undefined
+  const n = mesh && typeof mesh === "object" ? (mesh as Record<string, unknown>).facesDrawn : undefined
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : undefined
 }
 
 const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0)

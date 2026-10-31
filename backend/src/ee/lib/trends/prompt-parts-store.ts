@@ -29,6 +29,7 @@ import { CHIPS_BY_KIND, MAX_IMAGES_PER_SLOT, engineOf } from "./schemas.js"
 import { withPromptsFor, type TrendPromptMode } from "./prompt-parts.js"
 import { promptStyleOf, trendSceneOf, trendSourceOf } from "./prompt-style.js"
 import type { TrendPromptPartOverrides, TrendSlot, TrendVersionData } from "./types.js"
+import { faceMaskingOn, faceMeshOn } from "../../../lib/cast-swap-face-masking.js"
 
 /** The texts a run sends (`{ [id]: text }`, in part order), or undefined when the trend overrides none. */
 export function promptPartTexts(stored: TrendPromptPartOverrides | undefined): PromptPartTexts | undefined {
@@ -84,6 +85,8 @@ export function promptPartsRequestFor(
     source: trendSourceOf(data),
     promptStyle: promptStyleOf(data),
     ...(scene ? { scene } : {}),
+    // A trend that draws the face mesh: the engine counts the mesh's line (`faceMesh` part) in the length.
+    ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? { faceMesh: true as const } : {}),
     // The longest prompt: a clip with sound keeps its audio line.
     hasAudio: true,
     roles: texts.slots.map((slot, i) => ({

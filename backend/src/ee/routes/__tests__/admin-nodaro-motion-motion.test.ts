@@ -150,6 +150,21 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect(h.upserts).toHaveLength(1)
   })
 
+  it("takes a masking that draws the face mesh (faces or full depth) only while every environment's engine draws it", async () => {
+    const MESH = { ...HIDES, faceMesh: true }
+    h.envs = [envRow("production", MESH), envRow("staging", MESH)]
+    const motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true } },
+      "motion-pulse": { masking: { mode: "auto", faceMesh: true } },
+    }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    h.envs = [envRow("production", MESH), envRow("staging", HIDES)]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/cannot draw the face mesh/) })
+    expect(h.upserts).toHaveLength(1)
+  })
+
   it("refuses what a Motion run cannot take, writing nothing", async () => {
     for (const bad of [
       // Keep people is a trend's alone.

@@ -115,6 +115,14 @@ export interface TrendFaceMask {
   /** The admin who approved it. */
   approvedBy: string
   /**
+   * The face mesh (a setting with `faceMasking.faceMesh`): how many faces its
+   * make drew lines on, summed over the frames (`output_data.faceMesh.facesDrawn`).
+   * 0 = the clip has no lines, so a run is told so (`storedFaceMask.facesDrawn`)
+   * and the engine leaves the mesh's prompt line out. Absent on a mask made
+   * without the mesh, or by an engine that does not report it.
+   */
+  facesDrawn?: number
+  /**
    * The raw mask, made from the base settings (`faceMaskBaseKey`: the
    * settings with the marks left out) BEFORE any mark was applied, copied into
    * the trend's storage like `url`, with `baseKey` the base it was made from

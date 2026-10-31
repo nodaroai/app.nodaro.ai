@@ -218,6 +218,7 @@ const trendFaceMaskSchema = z.strictObject({
   stats: z.strictObject({ shots: nonNegative, heldFrames: nonNegative, coverage: nonNegative, droppedRegions: nonNegative, erasedRegions: nonNegative.optional() }),
   approvedAt: z.string().min(1),
   approvedBy: z.string().min(1),
+  facesDrawn: z.int().min(0).optional(),
   rawMaskUrl: httpUrl.optional(),
   depthUrl: httpUrl.optional(),
   baseKey: z.string().min(1).max(200).optional(),
