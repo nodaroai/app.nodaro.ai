@@ -2394,6 +2394,8 @@ interface TrendRunRequest {
 interface TrendEstimate {
   expectedCredits: number            // what the run is expected to be charged
   holdCredits: number                // what is reserved when it starts
+  engine?: "motion-prism" | "motion-pulse" // the engine it was priced on, the trend's own; absent from an older server
+  engineName?: string                // its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; absent from an older server
   breakdown: Record<string, number>  // the parts of the quote, for display (some sit outside the totals: read the totals)
   privacyCredits?: number            // charged only if the clip is refused and the trend's retry runs; not in the totals
                                      // (0 on a trend whose clip was prepared ahead of time)
