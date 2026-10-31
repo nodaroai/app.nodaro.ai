@@ -12041,6 +12041,11 @@ export async function restoreAdminTrend(id: string): Promise<AdminTrendRow> {
   return (await apiRequest<{ data: AdminTrendRow }>(`${trendPath(id)}/restore`, "apiErr.saveTrend", { method: "POST" })).data
 }
 
+/** Drop every kept copy of the guest catalog (ours and, when configured, the edge's): guests see it as stored now. */
+export async function refreshAdminTrendCatalog(): Promise<{ refreshedAt: string }> {
+  return (await apiRequest<{ data: { refreshedAt: string } }>(`${ADMIN_TRENDS}/catalog/refresh`, "apiErr.saveTrend", { method: "POST" })).data
+}
+
 /** What deleting a test run removed. */
 export interface AdminTrendRunDeleteResult {
   deleted: boolean

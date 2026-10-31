@@ -4645,10 +4645,23 @@ an unknown slug is a `404` on every route.
 `GET /v1/trends/:slug` take no credential, so an app can show every published
 trend to a visitor and ask them to sign in only to run one. A guest gets the
 same published data with `isFavorite: false`; `favorites=1` is an account read
-and answers `401`. A guest's answer carries
-`Cache-Control: public, max-age=60` (and `Vary: Accept-Language, Authorization`),
-so a CDN may serve it for a minute; a signed-in answer is
-`Cache-Control: private, no-store`. Each of the three allows 60 requests a
+and answers `401`. The server keeps a guest's answer for the next guest until
+the catalog changes (a search, `q`, is never kept), so a change shows within
+seconds. Cache headers:
+
+- A guest whose language came from `Accept-Language`:
+  `Cache-Control: private, max-age=60` (`Vary: Accept-Language, Authorization`).
+  Only the browser keeps it, since a shared cache keyed by the address would
+  serve one language to everyone.
+- A guest who names the language with `?locale=`:
+  `Cache-Control: public, max-age=60` (`Vary: Authorization`), so a shared cache
+  may keep it. A deployment that drops its edge's copies on every change to the
+  catalog (`CLOUDFLARE_API_TOKEN`, [deployment](./deployment.md)) sends
+  `public, max-age=60, s-maxage=86400` instead: the edge keeps it a day. For
+  guests, pass `locale`.
+- Signed in: `Cache-Control: private, no-store`.
+
+Each of the three allows 60 requests a
 minute per address for a guest, and per account when signed in (`429`
 `rate_limit_exceeded` past it). A request with an invalid or expired token is
 answered as a guest. Every other route below needs a signed-in caller.

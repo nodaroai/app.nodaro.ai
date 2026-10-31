@@ -25,12 +25,18 @@
  *   - every write of a version's data gives it a new `revision` (except the
  *     three attaches above), so a write or publish conditioned on the
  *     revision the caller read fails when it moved;
- *   - every write to `trends` sets `updated_at`.
+ *   - every write to `trends` sets `updated_at`;
+ *   - a write that changes what a public trend read shows (a publish, an
+ *     unpublish, an archive, catalog fields, an attached display or web copy,
+ *     a tag's labels in tags.ts) then calls `trendCatalogChanged()`, so the
+ *     guest answers kept from before it are never served again
+ *     (catalog-stamp.ts; `__tests__/catalog-change-census.test.ts`).
  */
 import { randomUUID } from "node:crypto"
 import { supabase } from "../../../lib/supabase.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { hasCurrentWebCopy } from "./web-copy-plan.js"
+import { trendCatalogChanged } from "./catalog-stamp.js"
 import type { TrendBadge, TrendPreviewClip, TrendRow, TrendSourceDisplay, TrendStatus, TrendVersionData, TrendWebCopy } from "./types.js"
 
 const TREND_COLS = "id, slug, status, tags, badges, sort_order, draft_version, published_version, created_at, updated_at"
@@ -385,6 +391,7 @@ export async function publish(trendId: string, expected?: { version: number; rev
     if (expected) throw new DraftConflictError(trendId)
     throw new Error(`Could not publish trend ${trendId}: its draft changed while publishing; try again.`)
   }
+  await trendCatalogChanged()
 }
 
 /** Take a published trend off the catalog. `published_version` is kept. */
@@ -397,6 +404,7 @@ export async function unpublish(trendId: string): Promise<void> {
     .eq("id", trendId)
     .eq("status", "published")
   if (error) fail(`unpublish trend ${trendId}`, error)
+  await trendCatalogChanged()
 }
 
 /**
@@ -412,6 +420,7 @@ export async function archive(trendId: string): Promise<void> {
     .eq("id", trendId)
     .neq("status", "archived")
   if (error) fail(`archive trend ${trendId}`, error)
+  await trendCatalogChanged()
 }
 
 /**
@@ -505,7 +514,10 @@ export async function attachDisplayCopy(
       .is("data->source->>display", null)
       .select("version")
     if (writeError) fail(`attach a display copy to trend ${trendId} version ${version}`, writeError)
-    if ((written ?? []).length > 0) return "set"
+    if ((written ?? []).length > 0) {
+      await trendCatalogChanged()
+      return "set"
+    }
   }
   throw new DisplayAttachConflictError(trendId, version, "concurrent_write")
 }
@@ -649,7 +661,10 @@ export async function attachWebCopies(trendId: string, version: number, copies: 
     }
     const { data: written, error: writeError } = await write.select("version")
     if (writeError) fail(`attach web copies to trend ${trendId} version ${version}`, writeError)
-    if ((written ?? []).length > 0) return result
+    if ((written ?? []).length > 0) {
+      await trendCatalogChanged()
+      return result
+    }
   }
   throw new WebCopyAttachConflictError(trendId, version, "concurrent_write")
 }
@@ -886,7 +901,9 @@ export async function updateTrendMeta(
     if (error.code === "23505" && patch.slug !== undefined) throw new TrendSlugTakenError(patch.slug)
     fail(`update trend ${trendId}`, error)
   }
-  return data ? toTrendRow(data as TrendDbRow) : null
+  if (!data) return null
+  await trendCatalogChanged()
+  return toTrendRow(data as TrendDbRow)
 }
 
 // ── The public catalog ────────────────────────────────────────────────────

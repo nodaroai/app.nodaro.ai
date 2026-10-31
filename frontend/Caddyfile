@@ -320,12 +320,25 @@
 	# `^[^.]*$` matches paths with no dot (the SPA routes) and `/.*\.html$`
 	# matches .html files — both disjoint from the hashed *.js/*.css/*.png/etc.
 	# assets above, which keep their 1yr immutable header.
+	#
+	# The dot-less pattern also catches the API and every proxy (/v1/*, /mcp,
+	# /storage/*, …), where this header is ADDED beside the backend's own
+	# Cache-Control: an answer then carries both, and every cache revalidates
+	# it each time. The trend catalog's answers choose their own (a guest's
+	# may be kept by the edge, ee/lib/trends/public-read.ts), so under
+	# /v1/trends `no-cache` is only a DEFAULT: `?` writes it only when the
+	# answer carries none (Caddy defers it to the response). Widening that to
+	# the whole API would make some twenty routes' long-masked max-ages live
+	# at once (prices, voices, models): a decision for each of them, not this.
 	@html {
 		path_regexp html ^([^.]*|/.*\.html)$
 		# The archive fallback above writes its own Cache-Control.
 		not path /assets/*
+		not path /v1/trends /v1/trends/*
 	}
 	header @html Cache-Control "no-cache"
+	@trendReads path /v1/trends /v1/trends/*
+	header @trendReads ?Cache-Control "no-cache"
 	# Another Nodaro surface on the same site may prerender the app before a
 	# click (speculation rules); Chrome activates a same-site, cross-origin
 	# prerender only when the document allows it with credentials. HTML

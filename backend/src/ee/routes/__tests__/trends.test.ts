@@ -88,6 +88,7 @@ import { mcpInject } from "../../../lib/mcp/internal-request.js"
 import { newSession } from "../../../lib/mcp/session.js"
 import type { Scope } from "../../../lib/scopes.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
+import { _resetTrendCatalogCacheForTests, trendCatalogChanged } from "../../lib/trends/catalog-stamp.js"
 import { faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
 import { registerTrendTools } from "../../../lib/mcp/tools/trends.js"
 import { buildServer, callTool } from "../../../lib/mcp/tools/__tests__/_helpers.js"
@@ -212,6 +213,8 @@ beforeEach(async () => {
   engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80 }, settlesLower: true }
   _resetPluginSupportsForTests()
   setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+  // A guest's kept answers live in the module: none carries over from another test.
+  _resetTrendCatalogCacheForTests()
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -417,15 +420,47 @@ describe("guests: the catalog, its tags and a trend's page take no credential", 
     expect(db.log.filter((q) => q.table === "profiles")).toHaveLength(0)
   })
 
-  it("a guest's answer may be cached a minute, varied by language and credential; a signed-in one is private", async () => {
+  it("cache headers: a guest by Accept-Language, the browser only; a guest who names the language, shared; signed in, none", async () => {
     db.respond = (q) => (q.table === "trends" ? { data: [], error: null } : { data: null, error: null })
     for (const url of ["/v1/trends", "/v1/trends/neon-dance", "/v1/trends/tags"]) {
-      const guest = await app.inject({ method: "GET", url })
-      expect(guest.statusCode, url).toBe(200)
-      expect(guest.headers["cache-control"], url).toBe("public, max-age=60")
-      expect(guest.headers.vary, url).toBe("Accept-Language, Authorization")
-      const own = await app.inject({ method: "GET", url, headers: as() })
-      expect(own.headers["cache-control"], url).toBe("private, no-store")
+      // The edge keys a copy by its address alone: an answer that depends on Accept-Language is the browser's.
+      for (const byHeader of [url, `${url}?locale=xx`]) {
+        const guest = await app.inject({ method: "GET", url: byHeader, headers: { "accept-language": "he" } })
+        expect(guest.statusCode, byHeader).toBe(200)
+        expect(guest.headers["cache-control"], byHeader).toBe("private, max-age=60")
+        expect(guest.headers.vary, byHeader).toBe("Accept-Language, Authorization")
+        expect(guest.headers["cache-tag"], byHeader).toBeUndefined()
+      }
+      // The address names the language: any cache may keep it, a day only where it can be dropped (below).
+      const named = await app.inject({ method: "GET", url: `${url}?locale=he` })
+      expect(named.headers["cache-control"], url).toBe("public, max-age=60")
+      expect(named.headers.vary, url).toBe("Authorization")
+      expect(named.headers["cache-tag"], url).toBeUndefined()
+      for (const own of [url, `${url}?locale=he`]) {
+        const res = await app.inject({ method: "GET", url: own, headers: as() })
+        expect(res.headers["cache-control"], own).toBe("private, no-store")
+        expect(res.headers["cache-tag"], own).toBeUndefined()
+      }
+    }
+  })
+
+  it("where the edge's copies can be dropped, a guest who names the language may be kept a day there, tagged", async () => {
+    db.respond = (q) => (q.table === "trends" ? { data: [], error: null } : { data: null, error: null })
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", "test-token")
+    vi.stubEnv("CLOUDFLARE_ZONE_ID", "test-zone")
+    try {
+      for (const url of ["/v1/trends", "/v1/trends/neon-dance", "/v1/trends/tags"]) {
+        const named = await app.inject({ method: "GET", url: `${url}?locale=en` })
+        expect(named.headers["cache-control"], url).toBe("public, max-age=60, s-maxage=86400")
+        expect(named.headers["cache-tag"], url).toBe("trends-catalog")
+        // Still the browser's alone when the language came from the request's header, and never a signed-in answer.
+        expect((await app.inject({ method: "GET", url })).headers["cache-control"], url).toBe("private, max-age=60")
+        const own = await app.inject({ method: "GET", url: `${url}?locale=en`, headers: as() })
+        expect(own.headers["cache-control"], url).toBe("private, no-store")
+        expect(own.headers["cache-tag"], url).toBeUndefined()
+      }
+    } finally {
+      vi.unstubAllEnvs()
     }
   })
 
@@ -454,11 +489,124 @@ describe("guests: the catalog, its tags and a trend's page take no credential", 
     expect(down.headers["cache-control"]).toBeUndefined()
   })
 
-  it("a list that fails while its cards are built carries no cache header", async () => {
+  it("a list that fails while its cards are built carries no cache header, and is not kept", async () => {
+    const good = mem.trends[0]!.versions[2]!
     mem.trends[0]!.versions[2] = { ...versionData(), examples: undefined } as unknown as TrendVersionData
     const res = await app.inject({ method: "GET", url: "/v1/trends" })
     expect(res.statusCode).toBe(500)
     expect(res.headers["cache-control"]).toBeUndefined()
+    mem.trends[0]!.versions[2] = good
+    const next = await app.inject({ method: "GET", url: "/v1/trends" })
+    expect(next.statusCode).toBe(200)
+    expect(mem.listCalls).toHaveLength(2)
+  })
+})
+
+// ── a guest's kept answers ─────────────────────────────────────────────────
+
+describe("a guest's answer is kept for the next guest until the catalog changes", () => {
+  /** The catalog stamp as the database holds it (app_settings `trends_catalog_stamp`); null = unreadable. */
+  function stampIs(stamp: string | null) {
+    db.respond = (q) => {
+      if (q.table !== "app_settings") return { data: null, error: null }
+      return stamp === null ? { data: null, error: { message: "down" } } : { data: { value: stamp }, error: null }
+    }
+  }
+  const guestList = (url = "/v1/trends", headers: Record<string, string> = {}) => app.inject({ method: "GET", url, headers })
+
+  it("the catalog is read once for many guests; a signed-in caller is never served a kept answer", async () => {
+    stampIs("s1")
+    for (let i = 0; i < 3; i++) expect((await guestList()).statusCode).toBe(200)
+    expect(mem.listCalls).toHaveLength(1)
+    await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    await app.inject({ method: "GET", url: "/v1/trends", headers: as() })
+    expect(mem.listCalls).toHaveLength(3)
+  })
+
+  it("a kept answer is the body a guest would have been sent, with its own headers each time", async () => {
+    stampIs("s1")
+    const first = await guestList("/v1/trends?locale=he")
+    const kept = await guestList("/v1/trends", { "accept-language": "he-IL" })
+    expect(mem.listCalls).toHaveLength(1)
+    expect(kept.json()).toEqual(first.json())
+    expect(first.headers["cache-control"]).toBe("public, max-age=60")
+    expect(kept.headers["cache-control"]).toBe("private, max-age=60")
+    expectNoHidden(kept.body)
+  })
+
+  it("kept by language, tag, cursor and limit; a stray parameter shares the key; a search is never kept", async () => {
+    stampIs("s1")
+    await guestList("/v1/trends")
+    await guestList("/v1/trends?utm_source=x&favorites=0")
+    expect(mem.listCalls).toHaveLength(1)
+    await guestList("/v1/trends?locale=he")
+    await guestList("/v1/trends?tag=dance")
+    await guestList("/v1/trends?limit=10")
+    expect(mem.listCalls).toHaveLength(4)
+    await guestList("/v1/trends?q=neon")
+    await guestList("/v1/trends?q=neon")
+    expect(mem.listCalls).toHaveLength(6)
+    // Blank search text is no search.
+    await guestList("/v1/trends?q=%20")
+    expect(mem.listCalls).toHaveLength(6)
+  })
+
+  it("a change made in this process is seen at once: the page, the list and the tags", async () => {
+    stampIs("s1")
+    expect((await guestList("/v1/trends/neon-dance")).json().data.name).toBe("Neon Dance")
+    mem.trends[0]!.versions[2] = versionData({ name: { en: "Neon Dance II" } })
+    expect((await guestList("/v1/trends/neon-dance")).json().data.name).toBe("Neon Dance")
+    await guestList("/v1/trends/tags")
+    await guestList("/v1/trends/tags")
+    expect(db.log.filter((q) => q.table === "trends")).toHaveLength(1)
+
+    await trendCatalogChanged()
+    expect((await guestList("/v1/trends/neon-dance")).json().data.name).toBe("Neon Dance II")
+    await guestList("/v1/trends/tags")
+    expect(db.log.filter((q) => q.table === "trends")).toHaveLength(2)
+  })
+
+  it("a change made elsewhere (a new stamp in the database) is seen within the stamp's two seconds", async () => {
+    stampIs("s1")
+    await guestList()
+    stampIs("s2")
+    await guestList()
+    expect(mem.listCalls).toHaveLength(1)
+    const later = Date.now() + 2_500
+    const clock = vi.spyOn(Date, "now").mockReturnValue(later)
+    try {
+      await guestList()
+      expect(mem.listCalls).toHaveLength(2)
+      await guestList()
+      expect(mem.listCalls).toHaveLength(2)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it("a stamp that cannot be read keeps nothing: every guest is answered from the database", async () => {
+    stampIs(null)
+    for (let i = 0; i < 3; i++) expect((await guestList()).statusCode).toBe(200)
+    expect(mem.listCalls).toHaveLength(3)
+  })
+
+  it("a 404 is not kept: a trend published after it is seen at once", async () => {
+    stampIs("s1")
+    expect((await guestList("/v1/trends/old")).statusCode).toBe(404)
+    mem.trends[2] = trend(T_UNPUB, "old", "published", 1)
+    expect((await guestList("/v1/trends/old")).statusCode).toBe(200)
+  })
+
+  it("an empty page of a tag is not kept: made-up tags never push the real pages out", async () => {
+    stampIs("s1")
+    for (const tag of ["no-such-tag-1", "no-such-tag-1", "no-such-tag-2"]) {
+      expect((await guestList(`/v1/trends?tag=${tag}`)).json().data).toEqual([])
+    }
+    expect(mem.listCalls).toHaveLength(3)
+    // A real tag's page is kept.
+    await guestList("/v1/trends?tag=dance")
+    await guestList("/v1/trends?tag=dance")
+    expect(mem.listCalls).toHaveLength(4)
   })
 
   it("everything else still needs a caller: runs, one run, estimate, run, favorite", async () => {
