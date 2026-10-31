@@ -2309,6 +2309,14 @@ unfavorite(slug: string): Promise<void>                                         
 `run()`, `getRun()` and `tags()` resolve to the payload, out of the route's
 `{ data }` envelope.
 
+**Signed out:** `list()`, `tags()` and `get()` work with no credential (an
+`Auth` whose `getToken()` returns `null` sends no `Authorization` header), so an
+app can show the catalog to a visitor and ask them to sign in only to run a
+trend. A guest gets the same published trends with `isFavorite: false`, text in
+`locale` else the request's `Accept-Language` else English, and
+`list({ favorites: true })` throws `UnauthorizedError` (401); every other
+method needs a signed-in caller.
+
 ```ts
 type TrendSlotKind = "person" | "location" | "product" | "pet"
 type TrendChoice = "new" | "original"       // make the trait anew from your pictures, or keep the clip's
@@ -2318,8 +2326,8 @@ type TrendChipKey = keyof TrendChips          // "body" | "outfit" | "hair" | "c
 
 interface ListTrendsParams {
   q?: string; tag?: string
-  favorites?: boolean   // true → only yours (sent as favorites=1)
-  locale?: string       // default: your profile's language, then English
+  favorites?: boolean   // true → only yours (sent as favorites=1; signed in only)
+  locale?: string       // default: your profile's language (signed out: Accept-Language), then English
   cursor?: string; limit?: number  // 1–60, default 30
 }
 

@@ -14,6 +14,13 @@ import type { CastSwapEngine } from "./cast-swap.js"
  * `client.jobs.get(jobId)` / `client.jobs.getStatus(jobId)` like any other
  * job, or read it back as a trend run with `getRun(jobId)` / `runs()`.
  *
+ * Signed out: `list()`, `tags()` and `get()` work with no credential (a
+ * client whose `Auth` returns no token sends no `Authorization` header), so
+ * an app can show the catalog to a visitor and ask them to sign in only to
+ * run a trend. A guest gets the same published trends with `isFavorite:
+ * false`, text in `locale` else the browser's `Accept-Language` else English,
+ * and no `favorites: true` (401). Every other method needs a signed-in caller.
+ *
  * Repeats: pass `{ idempotencyKey }` to `run()` and it is sent as the
  * `Idempotency-Key` header. A repeat with the same key answers with the first
  * run's `jobId`; nothing new is started or charged.
@@ -35,7 +42,8 @@ import type { CastSwapEngine } from "./cast-swap.js"
  *   than 10 pictures: send fewer per slot). The slot errors carry the
  *   slot's key as `slot` (in `NodaroError.details`), and `chip_not_offered`
  *   the chip as `chip` too.
- * - 401 `unauthorized`.
+ * - 401 `unauthorized`: no signed-in caller, on every method but `list()`,
+ *   `tags()` and `get()` (and on `list({ favorites: true })`).
  * - 404 `not_found`: the trend is not published (every method), or `run()`'s
  *   `sessionId` is not a session you may use.
  * - 409 `trend_unavailable` (`estimate()` / `run()`): the trend's setup is out
@@ -157,6 +165,7 @@ export interface TrendCard {
   needs: Record<TrendSlotKind, number>
   /** The length of a full run, in seconds. */
   durationSec: number
+  /** Whether it is in your favorites; always `false` signed out. */
   isFavorite: boolean
 }
 
@@ -319,6 +328,10 @@ export interface TrendEstimate {
   expectedCredits: number
   /** What is reserved when the run starts; the run is charged what it actually costs. */
   holdCredits: number
+  /** The engine the run was priced on: the trend's own. Absent from an older server. */
+  engine?: TrendEngine
+  /** Its name to show: "Nodaro Motion Prism" or "Nodaro Motion Pulse". Absent from an older server. */
+  engineName?: string
   /**
    * The parts of the quote, by name, for display only: some are alternatives
    * or sit outside the totals (`privacy`, the retry's, beside
@@ -442,9 +455,12 @@ export interface ListTrendsParams {
   /** Search text. */
   q?: string
   tag?: string
-  /** `true` lists only your favorites. */
+  /** `true` lists only your favorites (signed in only: a guest gets a 401). */
   favorites?: boolean
-  /** A platform language for names and descriptions; default your profile's, then English. */
+  /**
+   * A platform language for names and descriptions; default your profile's
+   * (signed out: the request's `Accept-Language`), then English.
+   */
   locale?: string
   /** The previous page's `next`. */
   cursor?: string
@@ -480,7 +496,7 @@ export interface TrendPage<T> {
 export class TrendsResource {
   constructor(private client: NodaroClientCore) {}
 
-  /** The published catalog in its curated order (`GET /v1/trends`), a page at a time. */
+  /** The published catalog in its curated order (`GET /v1/trends`), a page at a time. Works signed out. */
   list(params: ListTrendsParams = {}): Promise<TrendPage<TrendCard>> {
     const query: Record<string, string> = {}
     if (params.q) query.q = params.q
@@ -492,7 +508,7 @@ export class TrendsResource {
     return this.client.request("GET", "/v1/trends", { query })
   }
 
-  /** A published trend's page (`GET /v1/trends/:slug`). */
+  /** A published trend's page (`GET /v1/trends/:slug`). Works signed out. */
   async get(slug: string, params: { locale?: string } = {}): Promise<TrendDetail> {
     const query: Record<string, string> = {}
     if (params.locale) query.locale = params.locale
@@ -551,7 +567,7 @@ export class TrendsResource {
 
   /**
    * The tags in use on the published catalog, each with its label in the
-   * resolved locale (`GET /v1/trends/tags`), most used first.
+   * resolved locale (`GET /v1/trends/tags`), most used first. Works signed out.
    */
   async tags(params: { locale?: string } = {}): Promise<TrendTag[]> {
     const query: Record<string, string> = {}

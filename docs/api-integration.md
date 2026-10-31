@@ -4610,6 +4610,18 @@ installs (SDK: [`client.trends`](./sdk-reference.md#clienttrends), MCP: the
 Only **published** trends exist here: a draft, an unpublished, an archived or
 an unknown slug is a `404` on every route.
 
+**Guests read the catalog.** `GET /v1/trends`, `GET /v1/trends/tags` and
+`GET /v1/trends/:slug` take no credential, so an app can show every published
+trend to a visitor and ask them to sign in only to run one. A guest gets the
+same published data with `isFavorite: false`; `favorites=1` is an account read
+and answers `401`. A guest's answer carries
+`Cache-Control: public, max-age=60` (and `Vary: Accept-Language, Authorization`),
+so a CDN may serve it for a minute; a signed-in answer is
+`Cache-Control: private, no-store`. Each of the three allows 60 requests a
+minute per address for a guest, and per account when signed in (`429`
+`rate_limit_exceeded` past it). A request with an invalid or expired token is
+answered as a guest. Every other route below needs a signed-in caller.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Every video (`cover`, `original`, each of `examples`, and the page's `original` and `examples`) may also carry `webUrl` and `webSizeBytes`: a light copy the platform made for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s), to play as it is with no CDN transform, and its size in bytes; both are absent until it is made (a version published before it), and `videoUrl` is then the one to play. A trend can hide its original clip: its `original` is then its first example, and `examples` starts from its second example, so the original clip is never sent. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
@@ -4623,7 +4635,9 @@ an unknown slug is a `404` on every route.
 | `DELETE` | `/v1/trends/:slug/favorite` | Remove it from your favorites. `204`. |
 
 Names, descriptions, slot labels and hints come in `?locale=` when it is a
-platform language, else your profile's language, else English.
+platform language, else your profile's language (a guest: the first platform
+language the request's `Accept-Language` asks for, by its weights; `pt` or
+`pt-br` reads as `pt-BR`), else English.
 
 The estimate and run body is
 `{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId?, origin?, previewJobId? }`:
@@ -4713,8 +4727,9 @@ anything is charged:
 | `400` | `invalid_slot_mention` | `details` mentions `{slot:<key>}` with a key the trend does not have. |
 | `400` | `prompt_too_long` | `details` is too long for this trend; shorten it. |
 | `400` | `validation_error` | (`/runs`) The `Idempotency-Key` is not 8–200 characters. |
-| `401` | `unauthorized` | No authenticated user. |
+| `401` | `unauthorized` | No authenticated user, on every route but the catalog, its tags and a trend's page (and on `GET /v1/trends?favorites=1`). |
 | `404` | `not_found` | The trend is not published, or `sessionId` names a session you may not use (`/runs` only). |
+| `429` | `rate_limit_exceeded` | More than 60 catalog, tag or page reads in a minute from one address (a guest) or one account. |
 | `409` | `trend_unavailable` | (estimate and run) The trend's setup is out of date: it cannot run until it is updated. A retry gets the same answer. |
 | `502` | `engine_error` | Nodaro Motion answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |

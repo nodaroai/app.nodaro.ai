@@ -171,8 +171,12 @@ export function invalidateAuthCache(userId: string): void {
  * bearer itself (the MCP transport's OAuth, the API-token lane). Every other
  * public route needs no credential at all — what the OpenAPI document tells
  * callers (`isAnonymousRoute`).
+ *
+ * A route is matched by its exact `path`, by `prefix`, or — for one path
+ * parameter among private siblings — by `pattern`, a whole-path expression
+ * (`path` then only names it).
  */
-const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?: true }[] = [
+const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?: RegExp; bearer?: true }[] = [
   { path: "/health" },
   // Version + update availability — presence data only, same class as /health.
   { path: "/v1/version" },
@@ -203,6 +207,16 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   // sign in only when they use one. Exact path, GET only — copying one
   // (`/copy`) and curating it stay behind a credential.
   { method: "GET", path: "/v1/keepers/catalog" },
+  // The published Trends catalog (ee/routes/trends.ts, Cloud): the catalog, its
+  // tags and a trend's page — published versions only, built field by field,
+  // so a guest sees every trend and is asked to sign in only to run one. GET
+  // only. The page is ONE slug segment (migration 549's shape) and never
+  // `runs` or `tags` (no slug can be either: migrations 549 and 555): the
+  // caller's runs (`/runs`, `/runs/:jobId`), estimate, run and favorite stay
+  // behind a credential.
+  { method: "GET", path: "/v1/trends" },
+  { method: "GET", path: "/v1/trends/tags" },
+  { method: "GET", path: "/v1/trends/:slug", pattern: /^\/v1\/trends\/(?!(?:runs|tags)$)[a-z0-9][a-z0-9-]{0,63}$/ },
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },
   // Public share-by-link read of an OPT-IN-shared workflow (studio /example/:id).
@@ -339,7 +353,11 @@ function matchPublicRoute(method: string, url: string): (typeof PUBLIC_ROUTES)[n
   const path = url.split("?")[0] ?? url
   for (const route of PUBLIC_ROUTES) {
     if (route.method && route.method !== method) continue
-    if (route.prefix ? path.startsWith(route.path) : path === route.path) return route
+    if (route.pattern) {
+      if (route.pattern.test(path)) return route
+    } else if (route.prefix ? path.startsWith(route.path) : path === route.path) {
+      return route
+    }
   }
   return undefined
 }

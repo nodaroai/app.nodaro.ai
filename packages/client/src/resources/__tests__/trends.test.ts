@@ -338,3 +338,35 @@ describe("trends resource", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe("trends signed out: the catalog, its tags and a trend's page are public", () => {
+  /** An Auth with no credential at all — an app showing the catalog to a visitor who is not signed in. */
+  const guest = (fetchMock: ReturnType<typeof vi.fn>) =>
+    createClient({
+      baseUrl: "https://api.example.com",
+      auth: { getToken: async () => null },
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+
+  it("list, get and tags send no Authorization header and return the answer", async () => {
+    const page = { data: [card], next: null }
+    const tags = [{ tag: "dance", label: "Dance", count: 3 }]
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk(page))
+      .mockReturnValueOnce(mockOk({ data: detail }))
+      .mockReturnValueOnce(mockOk({ data: tags }))
+    const client = guest(fetchMock)
+
+    expect(await client.trends.list({ locale: "he" })).toEqual(page)
+    expect(await client.trends.get("dance-off")).toEqual(detail)
+    expect(await client.trends.tags()).toEqual(tags)
+
+    expect([0, 1, 2].map((i) => call(fetchMock, i).url.pathname)).toEqual(["/v1/trends", "/v1/trends/dance-off", "/v1/trends/tags"])
+    expect(call(fetchMock, 0).url.searchParams.get("locale")).toBe("he")
+    for (const i of [0, 1, 2]) {
+      expect(call(fetchMock, i).init.method).toBe("GET")
+      expect(call(fetchMock, i).init.headers.Authorization).toBeUndefined()
+    }
+  })
+})

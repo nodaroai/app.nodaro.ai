@@ -1,5 +1,11 @@
 # @nodaro/sdk
 
+## 2.59.0
+
+### Minor Changes
+
+- ea0557c: Trends: a trend's quote (`trends.estimate`) names the engine it priced the run on, `engine` (`"motion-prism"` / `"motion-pulse"`) and `engineName`, as the trend's detail does. Absent from an older server.
+
 ## 2.58.0
 
 ### Minor Changes

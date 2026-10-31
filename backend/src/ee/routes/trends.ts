@@ -34,13 +34,21 @@
  * as that page lists them, translated to and from the stored numbering here
  * (public-examples.ts). A Full Quality version of a draft is a run of its own.
  *
- * Reads need `jobs:read` for an OAuth app; estimate and run `workflows:execute`
- * (as the Cast Swap MCP verb); favorites `assets:write` (as the gallery's).
+ * GUESTS read the catalog: `GET /v1/trends`, `/tags` and `/:slug` take no
+ * credential (middleware/auth.ts lists them public), so a visitor sees every
+ * published trend and is asked to sign in only to run one. A guest's answer
+ * is the signed-in one's published data with `isFavorite: false`, its language
+ * from `?locale=` then `Accept-Language`, and a cache may keep it a minute;
+ * `favorites=1` is an account read (401). Every other route needs a caller.
+ *
+ * A signed-in caller's reads need `jobs:read` for an OAuth app; estimate and
+ * run `workflows:execute` (as the Cast Swap MCP verb); favorites
+ * `assets:write` (as the gallery's).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, nodaroMotionEngineName, nodaroMotionEngineOf, type NodaroMotionEngine } from "@nodaro/shared/models"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom, nodaroMotionEngineName, nodaroMotionEngineOf, type NodaroMotionEngine } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -59,7 +67,8 @@ import {
   setFavorite,
 } from "../lib/trends/store.js"
 import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
-import { pickText } from "../lib/trends/localize.js"
+import { acceptedLocale, pickText } from "../lib/trends/localize.js"
+import { PUBLIC_READ_LIMIT, publicReadCache } from "../lib/trends/public-read.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quote.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
@@ -205,7 +214,8 @@ export interface TrendDetail extends TrendCard {
 /** Same shape as migration 549's CHECK on `trends.slug`. */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const LOCALES: ReadonlySet<string> = new Set(LANGUAGES.map((l) => l.id))
+const LOCALE_IDS: ReadonlyArray<string> = LANGUAGES.map((l) => l.id)
+const LOCALES: ReadonlySet<string> = new Set(LOCALE_IDS)
 const PREVIEW_SEC = 4 as const
 
 const WRITE_LIMIT = { rateLimit: { max: 30, timeWindow: "1 minute" } }
@@ -257,11 +267,26 @@ function reader(req: FastifyRequest, reply: FastifyReply): string | null {
   return req.userId
 }
 
+/**
+ * Who reads a public route (the catalog, its tags, a trend's page): the
+ * signed-in caller as `reader` admits one, or `null` for a guest. An OAuth
+ * app without `jobs:read` is refused, never read as a guest. `undefined`
+ * after replying.
+ */
+function publicReader(req: FastifyRequest, reply: FastifyReply): string | null | undefined {
+  if (!req.userId) return null
+  return reader(req, reply) ?? undefined
+}
+
 // ── locale ──────────────────────────────────────────────────────────────────
 
-/** `?locale=` when it is a platform language, else the profile's preferredLocale, else English. */
-async function resolveLocale(req: FastifyRequest, userId: string, raw: string | undefined): Promise<string> {
+/**
+ * `?locale=` when it is a platform language; else the signed-in caller's
+ * profile preferredLocale, or a guest's `Accept-Language`; else English.
+ */
+async function resolveLocale(req: FastifyRequest, userId: string | null, raw: string | undefined): Promise<string> {
   if (raw && LOCALES.has(raw)) return raw
+  if (userId === null) return acceptedLocale(req.headers["accept-language"], LOCALE_IDS) ?? "en"
   try {
     const { data, error } = await supabase.from("profiles").select("preferred_locale").eq("id", userId).maybeSingle()
     const pref = (data as { preferred_locale?: unknown } | null)?.preferred_locale
@@ -471,13 +496,15 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
 // ── routes ──────────────────────────────────────────────────────────────────
 
 export async function trendRoutes(app: FastifyInstance) {
-  app.get("/v1/trends", async (req, reply) => {
-    const userId = reader(req, reply)
-    if (!userId) return
+  app.get("/v1/trends", { config: PUBLIC_READ_LIMIT }, async (req, reply) => {
+    const userId = publicReader(req, reply)
+    if (userId === undefined) return
     const parsed = listQuery.safeParse(req.query)
     if (!parsed.success) return badRequest(reply, parsed.error)
     const { q, tag, favorites, locale: rawLocale, cursor, limit } = parsed.data
     const onlyFavorites = favorites === "1" || favorites === "true"
+    // A guest has no favorites: listing them is an account read.
+    if (onlyFavorites && userId === null) return err(reply, 401, "unauthorized", "Authentication required")
 
     try {
       const [locale, page] = await Promise.all([
@@ -485,21 +512,24 @@ export async function trendRoutes(app: FastifyInstance) {
         listPublished({
           ...(q?.trim() ? { q } : {}),
           ...(tag ? { tag } : {}),
-          ...(onlyFavorites ? { favoritesOf: userId } : {}),
+          ...(onlyFavorites && userId !== null ? { favoritesOf: userId } : {}),
           ...(cursor ? { cursor } : {}),
           limit,
         }),
       ])
-      const favs = onlyFavorites
-        ? new Set(page.rows.map((r) => r.id))
-        : await favoriteIds(userId, page.rows.map((r) => r.id))
-      return {
-        data: page.rows.flatMap((r) => {
-          const card = toCard(r, r.data, locale, favs.has(r.id))
-          return card ? [card] : []
-        }),
-        next: page.next,
-      }
+      const favs =
+        userId === null
+          ? new Set<string>()
+          : onlyFavorites
+            ? new Set(page.rows.map((r) => r.id))
+            : await favoriteIds(userId, page.rows.map((r) => r.id))
+      const data = page.rows.flatMap((r) => {
+        const card = toCard(r, r.data, locale, favs.has(r.id))
+        return card ? [card] : []
+      })
+      // Once the answer is built: a failure above is never cached.
+      publicReadCache(reply, userId)
+      return { data, next: page.next }
     } catch (e) {
       if (e instanceof InvalidTrendCursorError) return err(reply, 400, "validation_error", "Invalid cursor")
       return unavailableOrInternal(reply, req, e, "Failed to list trends")
@@ -578,9 +608,9 @@ export async function trendRoutes(app: FastifyInstance) {
   })
 
   // Registered before /:slug (and `tags` can never be a slug: migration 555).
-  app.get("/v1/trends/tags", async (req, reply) => {
-    const userId = reader(req, reply)
-    if (!userId) return
+  app.get("/v1/trends/tags", { config: PUBLIC_READ_LIMIT }, async (req, reply) => {
+    const userId = publicReader(req, reply)
+    if (userId === undefined) return
     const parsed = detailQuery.safeParse(req.query)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
@@ -595,15 +625,16 @@ export async function trendRoutes(app: FastifyInstance) {
         req.log.warn("trends: tag labels unavailable, listing tags as themselves")
       }
       const data: TrendTag[] = usage.map(({ tag, count }) => ({ tag, label: tagLabel(tag, labels.get(tag), locale), count }))
+      publicReadCache(reply, userId)
       return { data }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to list the trend tags")
     }
   })
 
-  app.get("/v1/trends/:slug", async (req, reply) => {
-    const userId = reader(req, reply)
-    if (!userId) return
+  app.get("/v1/trends/:slug", { config: PUBLIC_READ_LIMIT }, async (req, reply) => {
+    const userId = publicReader(req, reply)
+    if (userId === undefined) return
     const parsed = detailQuery.safeParse(req.query)
     if (!parsed.success) return badRequest(reply, parsed.error)
     const { slug } = req.params as { slug: string }
@@ -612,10 +643,11 @@ export async function trendRoutes(app: FastifyInstance) {
       if (!found?.data) return notFound(reply)
       const [locale, favs] = await Promise.all([
         resolveLocale(req, userId, parsed.data.locale),
-        favoriteIds(userId, [found.row.id]),
+        userId === null ? new Set<string>() : favoriteIds(userId, [found.row.id]),
       ])
       const detail = toDetail(found.row, found.version, found.data, locale, favs.has(found.row.id))
       if (!detail) return notFound(reply)
+      publicReadCache(reply, userId)
       return { data: detail }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read trend")
@@ -640,10 +672,14 @@ export async function trendRoutes(app: FastifyInstance) {
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : quote.totalCredits
         // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
         const privacyCredits = privacyCreditsOf(quote)
+        // The engine it priced: the engine's own answer when it names one, else the trend's (what the body sent).
+        const priced = castSwapEngineFrom(quote.engine) ?? prepared.composed.needs.engine
         return {
           data: {
             expectedCredits: expected,
             holdCredits: quote.totalCredits,
+            engine: nodaroMotionEngineOf(priced),
+            engineName: nodaroMotionEngineName(priced),
             breakdown: neutralBreakdown(quote.breakdown),
             // A retry of a refused clip: charged only if it runs (not in the hold).
             ...(privacyCredits !== undefined ? { privacyCredits } : {}),
