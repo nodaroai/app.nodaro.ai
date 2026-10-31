@@ -270,8 +270,29 @@ describe("sweepLaneQueuedJobs — the queue timeout", () => {
     expect(await gate.describeWait("job-1")).toBeNull()
     expect(parked.remove).toHaveBeenCalledTimes(1)
     expect(db.rows("lane_requeue_payloads")).toEqual([])
-    expect(recorded).toEqual([{ table: "jobs", rowId: "job-1", userId: "U", reason: "timeout", waitedMs: 121 * MIN }])
+    expect(recorded).toEqual([{ table: "jobs", rowId: "job-1", userId: "U", payer: "user:U", reason: "timeout", waitedMs: 121 * MIN }])
     expect(res.swept).toBe(1)
+  })
+
+  it("a workspace job's timeout is recorded on the line it waited in, read before it leaves the line", async () => {
+    const r = await gate.acquire({ meta: meta("job-w", { payer: "workspace:W" }), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+    expect(r.granted).toBe(true) // the workspace line's own slot
+    expect((await gate.acquire({ meta: meta("job-w2", { payer: "workspace:W" }), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })).granted).toBe(false)
+    parkedJob("job-w2", { workspace_id: null }, 121 * MIN) // the row alone would say personal: the gate entry wins
+    const recorded: Array<Record<string, unknown>> = []
+    registerLaneQueueOutcomeRecorder((e) => recorded.push(e as unknown as Record<string, unknown>))
+    await sweepLaneQueuedJobs(result())
+    expect(recorded).toEqual([expect.objectContaining({ rowId: "job-w2", payer: "workspace:W", reason: "timeout" })])
+    expect(await gate.describeWait("job-w2")).toBeNull()
+  })
+
+  it("without a gate entry, the payer line comes from the row: its workspace, else personal", async () => {
+    parkedJob("job-a", { workspace_id: "W" }, 121 * MIN)
+    parkedJob("job-b", {}, 121 * MIN)
+    const recorded: Array<Record<string, unknown>> = []
+    registerLaneQueueOutcomeRecorder((e) => recorded.push(e as unknown as Record<string, unknown>))
+    await sweepLaneQueuedJobs(result())
+    expect(Object.fromEntries(recorded.map((e) => [e.rowId, e.payer]))).toEqual({ "job-a": "workspace:W", "job-b": "user:U" })
   })
 
   it("refunds only when the failure write won", async () => {
@@ -527,7 +548,7 @@ describe("sweepLaneQueuedJobs — lost entries", () => {
     expect(refundJobCredits).toHaveBeenCalledTimes(1)
     expect((vi.mocked(refundJobCredits).mock.calls[0]![2] as { failureHint: unknown }).failureHint)
       .toEqual({ kind: "queue-timeout", reason: "lost", waitedMinutes: 40 })
-    expect(recorded).toEqual([{ table: "jobs", rowId: "job-1", userId: "U", reason: "lost", waitedMs: 40 * MIN }])
+    expect(recorded).toEqual([{ table: "jobs", rowId: "job-1", userId: "U", payer: "user:U", reason: "lost", waitedMs: 40 * MIN }])
   })
 
   it("a lost job refunds every reserved log", async () => {

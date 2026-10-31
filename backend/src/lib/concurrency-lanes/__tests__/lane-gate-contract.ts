@@ -642,8 +642,26 @@ export function runLaneGateContract(makeFixture: () => LaneGateFixture): void {
     })
     expect(byUser.V).toMatchObject({ oldestWaitMs: 0, lanes: { provider: { running: 2, overLimit: 1, queued: 0 }, llm: { running: 1, overLimit: 0, queued: 0 } } })
     const kie = snap.providers.find((p) => p.provider === "kie")
-    expect(kie).toEqual({ provider: "kie", running: 3, byUser: { U: 1, V: 2 }, completed15m: 0, failed15m: 0 })
+    expect(kie).toEqual({ provider: "kie", running: 3, byUser: { U: 1, V: 2 }, completed15m: 0, failed15m: 0, ceiling: null, outcomesByMinute: [] })
     expect(snap.providers.find((p) => p.provider === "anthropic")).toMatchObject({ running: 1, byUser: { V: 1 } })
+  })
+
+  it("snapshot counts a line's MCP entries by client name, running and waiting, and no other source's detail", async () => {
+    await gate.setEnforced(false)
+    const mcp = (sourceDetail: string | null) => ({ provider: "kie", source: "mcp", sourceDetail })
+    await acquire("a", { size: 1, meta: mcp("client-a") })
+    await acquire("b", { size: 1, meta: mcp("client-a") })
+    await acquire("c", { size: 1, meta: mcp("client-b") })
+    await acquire("d", { size: 1, meta: mcp(null) })
+    await acquire("e", { size: 1, meta: { provider: "kie", source: "app", sourceDetail: "app-id-1" } })
+    await acquire("f", { size: 1, meta: { provider: "kie", source: "api", sourceDetail: "sdk/1.0" } })
+    await gate.setEnforced(true)
+    await acquire("g", { size: 1, meta: mcp("client-b") })
+    await acquire("h", { size: 1, meta: { userId: "V", payer: "user:V", provider: "kie" } })
+    const byUser = Object.fromEntries((await gate.snapshot()).lines.map((l) => [l.userId, l]))
+    expect(byUser.U).toMatchObject({ sources: { mcp: 5, app: 1, api: 1 }, mcpClients: { "client-a": 2, "client-b": 2 } })
+    expect(byUser.U!.lanes.provider).toMatchObject({ running: 6, queued: 1 })
+    expect(byUser.V!.mcpClients).toEqual({})
   })
 
   it("release counts outcomes into the 15-minute window", async () => {
@@ -658,5 +676,87 @@ export function runLaneGateContract(makeFixture: () => LaneGateFixture): void {
     clock += 16 * 60_000
     const later = (await gate.snapshot()).providers.find((p) => p.provider === "kie")
     expect(later ?? { completed15m: 0, failed15m: 0 }).toMatchObject({ completed15m: 0, failed15m: 0 })
+  })
+
+  it("snapshot reports each line's limit per lane, as the gate last sized it", async () => {
+    await acquire("a", { size: 3 })
+    await acquire("b", { size: 5, meta: { lane: "llm" } })
+    await acquire("c", { size: 4 }) // the latest size of the line is the one reported
+    const line = (await gate.snapshot()).lines[0]!
+    expect(line.limits).toEqual({ provider: 4, llm: 5, local: 0, run: 0 })
+  })
+
+  it("a waiting job names its payer line; a running or unknown one names none", async () => {
+    await acquire("a", { size: 1, meta: { payer: "workspace:W" } })
+    await acquire("b", { size: 1, meta: { payer: "workspace:W" } })
+    expect(await gate.waitingPayer("b")).toBe("workspace:W")
+    expect(await gate.waitingPayer("a")).toBeNull()
+    expect(await gate.waitingPayer("nobody")).toBeNull()
+    await gate.withdraw("b")
+    expect(await gate.waitingPayer("b")).toBeNull()
+  })
+
+  it("snapshot reports a provider's ceiling, null without one", async () => {
+    await gate.setProviderCeilings({ kie: 2 })
+    await acquire("a", { size: 5, meta: { provider: "kie" } })
+    await acquire("b", { size: 5, meta: { provider: "fal" } })
+    const snap = await gate.snapshot()
+    expect(snap.providers.find((p) => p.provider === "kie")).toMatchObject({ running: 1, ceiling: 2 })
+    expect(snap.providers.find((p) => p.provider === "fal")).toMatchObject({ running: 1, ceiling: null })
+  })
+
+  it("snapshot reports each provider's outcomes per minute of the last 15, oldest first", async () => {
+    const leases: string[] = []
+    for (const id of ["a", "b", "c", "d"]) leases.push(leaseOf(await acquire(id, { size: 5, ttl: LONG, meta: { provider: "kie" } })))
+    const m0 = Math.floor(clock / 60_000)
+    await gate.release(leases[0]!, "completed")
+    await gate.release(leases[1]!, "failed")
+    clock += 2 * 60_000
+    await gate.release(leases[2]!, "completed")
+    await gate.release(leases[3]!, "completed")
+    expect((await gate.snapshot()).providers.find((p) => p.provider === "kie")!.outcomesByMinute).toEqual([
+      { minute: m0, completed: 1, failed: 1 },
+      { minute: m0 + 2, completed: 2, failed: 0 },
+    ])
+    clock += 13 * 60_000 // m0 is now 15 minutes old: out of the window
+    expect((await gate.snapshot()).providers.find((p) => p.provider === "kie")!.outcomesByMinute).toEqual([
+      { minute: m0 + 2, completed: 2, failed: 0 },
+    ])
+  })
+
+  it("userEntries lists one user's running and waiting entries with what each is", async () => {
+    await acquire("a", { size: 1, meta: { provider: "kie", source: "mcp", sourceDetail: "client-a desktop", jobType: "generate-video", model: "kling-3" } })
+    clock += 5_000
+    await acquire("b", { size: 1, meta: { provider: "kie", source: "web", jobType: "generate-image", model: "flux-2" } })
+    await acquire("c", { size: 1 })
+    await acquire("d", { size: 3, meta: { payer: "workspace:W", lane: "llm", jobType: "llm-chat" } })
+    clock += 2_000
+    expect(await gate.userEntries("U")).toEqual([
+      { jobId: "a", payer: "user:U", lane: "provider", state: "running", provider: "kie", source: "mcp", sourceDetail: "client-a desktop",
+        jobType: "generate-video", model: "kling-3", overLimit: false, runningMs: 7_000, waitedMs: null, position: null, reason: null },
+      { jobId: "b", payer: "user:U", lane: "provider", state: "queued", provider: "kie", source: "web", sourceDetail: null,
+        jobType: "generate-image", model: "flux-2", overLimit: false, runningMs: null, waitedMs: 2_000, position: 1, reason: "user_lane" },
+      { jobId: "c", payer: "user:U", lane: "provider", state: "queued", provider: null, source: null, sourceDetail: null,
+        jobType: "generate-image", model: null, overLimit: false, runningMs: null, waitedMs: 2_000, position: 2, reason: "user_lane" },
+      { jobId: "d", payer: "workspace:W", lane: "llm", state: "running", provider: null, source: null, sourceDetail: null,
+        jobType: "llm-chat", model: null, overLimit: false, runningMs: 2_000, waitedMs: null, position: null, reason: null },
+    ])
+  })
+
+  it("userEntries never lists another user's entries, whatever the ids look like", async () => {
+    await acquire("u", { size: 2 })
+    await acquire("u2", { size: 2, meta: { userId: "U2", payer: "user:U2" } })
+    // A workspace whose id is the user's: its line names "U" but belongs to V.
+    await acquire("v", { size: 2, meta: { userId: "V", payer: "workspace:U" } })
+    expect((await gate.userEntries("U")).map((e) => e.jobId)).toEqual(["u"])
+    expect((await gate.userEntries("V")).map((e) => e.jobId)).toEqual(["v"])
+    expect(await gate.userEntries("nobody")).toEqual([])
+  })
+
+  it("userEntries marks a lease that runs over its limit while limits are off", async () => {
+    await gate.setEnforced(false)
+    await acquire("a", { size: 1 })
+    await acquire("b", { size: 1 })
+    expect((await gate.userEntries("U")).map((e) => [e.jobId, e.state, e.overLimit])).toEqual([["a", "running", false], ["b", "running", true]])
   })
 }

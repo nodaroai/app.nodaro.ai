@@ -1,6 +1,6 @@
 // An in-memory stand-in for the slice of the Supabase client the lane config
 // reads and writes: select (eq / in / is / not-is / gte / lt / order / limit /
-// maybeSingle), insert, upsert, update (… .select()), delete. Enough of PostgREST's answers to test the
+// range / single / maybeSingle), insert, upsert, update (… .select()), delete. Enough of PostgREST's answers to test the
 // tolerant paths: a missing table (42P01) or column (42703), a unique
 // violation (23505), a foreign key (23503), and an injected failure.
 
@@ -31,6 +31,8 @@ export interface FakeLaneDb {
   failUpdate: ((table: string, payload: Row) => { code: string; message: string } | null) | null
   /** Every select run, as `table:cols` (to assert what a reader asked for). */
   selects: string[]
+  /** Rows the requested order leaves tied come back in a random order, as Postgres may return them. */
+  shuffleTies: boolean
   /** The longest `.in()` list the gateway accepts (null: any); a longer one fails the call. */
   maxInList: number | null
   /** The length of every `.in()` list sent. */
@@ -57,6 +59,7 @@ export function makeFakeLaneDb(): FakeLaneDb {
     beforeUpdate: null,
     failUpdate: null,
     selects: [],
+    shuffleTies: false,
     maxInList: null,
     inLengths: [],
     rows(table) {
@@ -73,9 +76,13 @@ class Query implements PromiseLike<Result> {
   private cols = "*"
   private filters: Filter[] = []
   private limitN: number | null = null
-  private orderBy: { col: string; ascending: boolean } | null = null
+  /** Every `.order()` in turn: the first decides, each later one breaks the ties of those before. */
+  private orderBy: Array<{ col: string; ascending: boolean }> = []
   private payload: Row[] = []
-  private single = false
+  private one = false
+  /** `.single()`: exactly one row, else PostgREST's PGRST116. */
+  private exactlyOne = false
+  private rangeOf: { from: number; to: number } | null = null
   private returning = false
 
   constructor(private readonly db: FakeLaneDb, private readonly table: string) {}
@@ -99,9 +106,12 @@ class Query implements PromiseLike<Result> {
   }
   gte(col: string, val: string | number): this { this.filters.push({ kind: "gte", col, val }); return this }
   lt(col: string, val: string | number): this { this.filters.push({ kind: "lt", col, val }); return this }
-  order(col: string, opts?: { ascending?: boolean }): this { this.orderBy = { col, ascending: opts?.ascending !== false }; return this }
+  order(col: string, opts?: { ascending?: boolean }): this { this.orderBy.push({ col, ascending: opts?.ascending !== false }); return this }
   limit(n: number): this { this.limitN = n; return this }
-  maybeSingle(): Promise<Result> { this.single = true; return Promise.resolve(this.run()) }
+  /** Rows `from` to `to`, both inclusive (PostgREST's Range). */
+  range(from: number, to: number): this { this.rangeOf = { from, to }; return this }
+  maybeSingle(): Promise<Result> { this.one = true; return Promise.resolve(this.run()) }
+  single(): Promise<Result> { this.one = true; this.exactlyOne = true; return Promise.resolve(this.run()) }
 
   then<A = Result, B = never>(ok?: ((v: Result) => A | PromiseLike<A>) | null, ko?: ((e: unknown) => B | PromiseLike<B>) | null): PromiseLike<A | B> {
     return Promise.resolve(this.run()).then(ok, ko)
@@ -138,19 +148,29 @@ class Query implements PromiseLike<Result> {
       db.selects.push(`${table}:${this.cols}`)
       const named = this.cols === "*" ? [] : this.cols.split(",").map((c) => c.trim())
       const filtered = this.filters.map((f) => f.col)
-      const gone = [...named, ...filtered, ...(this.orderBy ? [this.orderBy.col] : [])].find((c) => db.missingColumns.has(`${table}.${c}`))
+      const gone = [...named, ...filtered, ...this.orderBy.map((o) => o.col)].find((c) => db.missingColumns.has(`${table}.${c}`))
       if (gone) return this.fail("42703", `column ${table}.${gone} does not exist`)
       let out = db.rows(table).filter((r) => this.matches(r)).map((r) => ({ ...r }))
-      if (this.orderBy) {
-        const { col, ascending } = this.orderBy
+      if (db.shuffleTies) {
+        for (let i = out.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[out[i], out[j]] = [out[j]!, out[i]!]
+        }
+      }
+      if (this.orderBy.length > 0) {
         out.sort((a, b) => {
-          const x = a[col] as string | number
-          const y = b[col] as string | number
-          return x === y ? 0 : (x < y) === ascending ? -1 : 1
+          for (const { col, ascending } of this.orderBy) {
+            const x = a[col] as string | number
+            const y = b[col] as string | number
+            if (x !== y) return (x < y) === ascending ? -1 : 1
+          }
+          return 0
         })
       }
+      if (this.rangeOf !== null) out = out.slice(this.rangeOf.from, this.rangeOf.to + 1)
       if (this.limitN !== null) out = out.slice(0, this.limitN)
-      return { data: this.single ? (out[0] ?? null) : out, error: null }
+      if (this.exactlyOne && out.length !== 1) return this.fail("PGRST116", `JSON object requested, ${out.length} rows returned`)
+      return { data: this.one ? (out[0] ?? null) : out, error: null }
     }
     const keyCols = (db.keys[table] ?? "id").split(",")
     const sameKey = (a: Row, b: Row) => keyCols.every((c) => a[c] === b[c])

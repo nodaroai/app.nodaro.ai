@@ -21,7 +21,7 @@
 // would hang through an outage. See ConcurrencyGate for what a timeout means.
 import type { Redis } from "ioredis"
 import { LANE_GATE_SCRIPTS } from "./gate-scripts.js"
-import type { ConcurrencyLane, LaneEntryMeta, LaneQueueName, LaneSnapshot, PayerKey, WaitInfo, WaitReason } from "./types.js"
+import type { ConcurrencyLane, LaneEntryMeta, LaneQueueName, LaneSnapshot, LaneUserEntry, PayerKey, WaitInfo, WaitReason } from "./types.js"
 import { randomUUID } from "node:crypto"
 
 /** The slice of an ioredis client the gate uses. */
@@ -142,6 +142,9 @@ const toWait = (v: Record<string, unknown>): WaitInfo => ({
   enqueuedAtMs: Number(v.enqueuedAtMs),
 })
 
+/** Code-point order, the same in every locale. */
+const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
 /** The Lua null of a JSON reply (`cjson.null`) arrives as null; a missing key as undefined. */
 const present = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v)
 
@@ -227,6 +230,12 @@ export class ConcurrencyGate {
     return present(r.wait) ? toWait(r.wait) : null
   }
 
+  /** The payer line a job waits in; null when it waits in none (or only for a server share). */
+  async waitingPayer(jobId: string): Promise<PayerKey | null> {
+    const r = await this.run("describe", { jobId })
+    return typeof r.payer === "string" && r.payer.length > 0 ? (r.payer as PayerKey) : null
+  }
+
   async hasReservation(jobId: string): Promise<boolean> {
     return (await this.run("hasReservation", { jobId })).reserved === true
   }
@@ -271,12 +280,36 @@ export class ConcurrencyGate {
     const r = await this.run("snapshot", {})
     type RawLine = Omit<LaneSnapshot["lines"][number], "payer"> & { payer: string }
     return {
-      lines: asArray<RawLine>(r.lines).map((l) => ({ ...l, payer: l.payer as PayerKey, sources: present(l.sources) ? (l.sources as Record<string, number>) : {} })),
-      providers: asArray<LaneSnapshot["providers"][number]>(r.providers).map((p) => ({ ...p, byUser: present(p.byUser) ? p.byUser : {} })),
+      lines: asArray<RawLine>(r.lines).map((l) => ({ ...l, payer: l.payer as PayerKey, sources: present(l.sources) ? (l.sources as Record<string, number>) : {},
+        mcpClients: present(l.mcpClients) ? (l.mcpClients as Record<string, number>) : {} })),
+      providers: asArray<LaneSnapshot["providers"][number]>(r.providers).map((p) => ({
+        ...p,
+        byUser: present(p.byUser) ? p.byUser : {},
+        ceiling: typeof p.ceiling === "number" ? p.ceiling : null,
+        outcomesByMinute: asArray<LaneSnapshot["providers"][number]["outcomesByMinute"][number]>(p.outcomesByMinute),
+      })),
       ungated: {},
       notLimited: {},
       enforced: r.enforced === true,
     }
+  }
+
+  /**
+   * One user's running and queued entries on every payer line, with what each
+   * job is, for the Live usage drill-down. Ordered by payer, lane, then
+   * running (longest first) before queued (by place in line).
+   */
+  async userEntries(userId: string): Promise<LaneUserEntry[]> {
+    const LANE_ORDER: Record<ConcurrencyLane, number> = { provider: 0, llm: 1, local: 2, run: 3 }
+    const entries = asArray<LaneUserEntry>((await this.run("userEntries", { userId })).entries)
+    return entries
+      .map((e) => ({ ...e, overLimit: e.overLimit === true }))
+      .sort((a, b) =>
+        byText(a.payer, b.payer)
+        || LANE_ORDER[a.lane] - LANE_ORDER[b.lane]
+        || (a.state === b.state ? 0 : a.state === "running" ? -1 : 1)
+        || (a.state === "running" ? (b.runningMs ?? -1) - (a.runningMs ?? -1) : (a.position ?? 0) - (b.position ?? 0))
+        || byText(a.jobId, b.jobId))
   }
 
   private async run(name: keyof typeof LANE_GATE_SCRIPTS, req: Record<string, unknown>): Promise<Reply> {

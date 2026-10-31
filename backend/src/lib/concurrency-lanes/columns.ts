@@ -267,6 +267,8 @@ export interface LaneQueuedRow {
   lane_queued_at: string
   /** `jobs` only: the reservation a failed job is refunded from. */
   usage_log_id: string | null
+  /** `jobs` and `workflow_executions` (pipelines have none): the workspace it runs for, for the history's payer line. */
+  workspace_id?: string | null
   lane_bull_queue: string | null
   lane_bull_job_id: string | null
 }
@@ -279,8 +281,8 @@ export const LANE_WAITING_STATUS: Record<LaneTable, string> = {
 }
 
 const QUEUED_ROW_COLUMNS: Record<LaneTable, string> = {
-  jobs: "id, user_id, usage_log_id, lane_queued_at, lane_bull_queue, lane_bull_job_id",
-  workflow_executions: "id, user_id, lane_queued_at",
+  jobs: "id, user_id, workspace_id, usage_log_id, lane_queued_at, lane_bull_queue, lane_bull_job_id",
+  workflow_executions: "id, user_id, workspace_id, lane_queued_at",
   pipelines: "id, user_id, lane_queued_at",
 }
 
@@ -323,6 +325,7 @@ export async function readLaneQueuedRows(
       .map((r) => ({
         id: r.id as string,
         user_id: str(r.user_id),
+        workspace_id: str(r.workspace_id),
         lane_queued_at: r.lane_queued_at as string,
         usage_log_id: str(r.usage_log_id),
         lane_bull_queue: str(r.lane_bull_queue),

@@ -1,4 +1,4 @@
-import { config, hasCredits, isMultiUser } from "./lib/config.js"
+import { config, hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
@@ -165,6 +165,20 @@ async function main() {
   // Live usage page (none yet: the orchestrator and director pools size theirs
   // when they are gated). Stopped on shutdown.
   const stopServerOccupancy = startServerOccupancyPublisher()
+  // The lanes' daily history for Admin → Live usage (admin editions): this
+  // environment's gate sampled every minute, its rows written every 5 minutes
+  // and kept 90 days; it also counts queue timeouts and live-wait expiries and
+  // answers the switch's "days of measure-only data". Never throws; stopped on
+  // shutdown.
+  let stopLaneHistory: (() => void) | null = null
+  if (hasAdmin()) {
+    try {
+      const { startLaneHistory } = await import("./ee/concurrency-lanes/history.js")
+      stopLaneHistory = await startLaneHistory()
+    } catch (err) {
+      console.error("[concurrency-lanes] the daily lane history did not start:", err)
+    }
+  }
 
   // Start schedule cron for workflow triggers
   startScheduleCron()
@@ -288,6 +302,7 @@ async function main() {
       stopScheduleCron()
       stopEnforcementMirror()
       stopServerOccupancy()
+      stopLaneHistory?.()
       stopScheduledPostsCron()
       stopRecastDriverCron()
       stopCompetitorScanCron()

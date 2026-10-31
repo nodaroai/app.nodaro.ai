@@ -69,7 +69,10 @@ class Cmd {
 }
 
 type Json = Record<string, unknown>
-interface Meta { jobId: string; userId: string; payer: string; lane: string; provider: string | null; source: string | null; queue: string; bullJobId: string | null }
+interface Meta {
+  jobId: string; userId: string; payer: string; lane: string; provider: string | null; source: string | null; queue: string; bullJobId: string | null
+  sourceDetail?: string | null; jobType?: string | null; model?: string | null
+}
 interface WaitOut { lane: string; position: number; limit: number; running: number; reason: string; waitedMs: number; enqueuedAtMs: number }
 interface Wake { jobId: string; queue: string | null; bullJobId: string | null }
 
@@ -146,12 +149,19 @@ class Run {
     if (p) this.r.zadd(this.pk(p, "run"), exp, lid)
   }
 
+  describeEntry(k: string, m: Meta) {
+    if (opt(m.jobType)) this.r.hset(k, { type: m.jobType! })
+    if (opt(m.model)) this.r.hset(k, { model: m.model! })
+    if (opt(m.sourceDetail)) this.r.hset(k, { sdet: m.sourceDetail! })
+  }
+
   createLease(lid: string, line: string, m: Meta, ttl: number, over: string) {
     const exp = this.NOW + ttl
     const k = this.lsk(lid)
-    this.r.hset(k, { job: m.jobId, line, user: m.userId, payer: m.payer, lane: m.lane, over, queue: m.queue })
+    this.r.hset(k, { job: m.jobId, line, user: m.userId, payer: m.payer, lane: m.lane, over, queue: m.queue, at: this.NOW })
     if (opt(m.source)) this.r.hset(k, { src: m.source! })
     if (opt(m.bullJobId)) this.r.hset(k, { bull: m.bullJobId! })
+    this.describeEntry(k, m)
     const p = opt(m.provider)
     if (p) {
       this.r.hset(k, { prov: p })
@@ -448,6 +458,7 @@ const acquire: Body = (x, req) => {
       x.r.hset(k, { line, user: m.userId, payer: m.payer, lane: m.lane, mode: String(req.mode), enq, queue: m.queue })
       if (opt(m.source)) x.r.hset(k, { src: m.source! })
       if (opt(m.bullJobId)) x.r.hset(k, { bull: m.bullJobId! })
+      x.describeEntry(k, m)
       if (p) {
         x.r.hset(k, { prov: p })
         x.r.hincrby(x.pk(p, "wl"), line, 1)
@@ -558,7 +569,7 @@ const describe: Body = (x, req) => {
   let out: WaitOut | null = null
   if (x.hget(x.sk(J), "pool")) out = x.serverWaitInfo(J)
   else if (x.hget(x.ek(J), "line")) out = x.waitInfo(J)
-  return x.reply({ wait: out })
+  return x.reply({ wait: out, payer: x.hget(x.ek(J), "payer") })
 }
 
 const hasReservation: Body = (x, req) => {
@@ -639,8 +650,14 @@ const snapshot: Body = (x) => {
   x.purge()
   x.settle()
   const zero = () => ({ running: 0, overLimit: 0, queued: 0 })
-  type Group = { userId: string; payer: string; lanes: Record<string, ReturnType<typeof zero>>; oldestWaitMs: number; sources: Record<string, number> }
+  type Group = { userId: string; payer: string; lanes: Record<string, ReturnType<typeof zero>>; limits: Record<string, number>; oldestWaitMs: number; sources: Record<string, number>; mcpClients: Record<string, number> }
   const groups = new Map<string, Group>()
+  // As the script's countSource: an MCP entry's client name is counted too.
+  const countSource = (g: Group, src: string | null, sdet: string | null) => {
+    if (!src) return
+    g.sources[src] = (g.sources[src] ?? 0) + 1
+    if (src === "mcp" && sdet) g.mcpClients[sdet] = (g.mcpClients[sdet] ?? 0) + 1
+  }
   for (const line of x.r.smembers(`${x.P}lines`).sort()) {
     const mk = x.lk(line, "m")
     const u = x.hget(mk, "user"), py = x.hget(mk, "payer"), ln = x.hget(mk, "lane")
@@ -648,22 +665,21 @@ const snapshot: Body = (x) => {
     const key = `${py}|${u}`
     let g = groups.get(key)
     if (!g) {
-      g = { userId: u, payer: py, lanes: { provider: zero(), llm: zero(), local: zero(), run: zero() }, oldestWaitMs: 0, sources: {} }
+      g = { userId: u, payer: py, lanes: { provider: zero(), llm: zero(), local: zero(), run: zero() }, limits: { provider: 0, llm: 0, local: 0, run: 0 }, oldestWaitMs: 0, sources: {}, mcpClients: {} }
       groups.set(key, g)
     }
     const e = g.lanes[ln]!
+    g.limits[ln] = x.lineSize(line)
     for (const lid of x.r.zrange(x.lk(line, "run"))) {
       e.running += 1
       if (x.hget(x.lsk(lid), "over") === "1") e.overLimit += 1
-      const src = x.hget(x.lsk(lid), "src")
-      if (src) g.sources[src] = (g.sources[src] ?? 0) + 1
+      countSource(g, x.hget(x.lsk(lid), "src"), x.hget(x.lsk(lid), "sdet"))
     }
     for (const j of x.r.zrange(x.lk(line, "wait"))) {
       e.queued += 1
       const enq = x.hget(x.ek(j), "enq")
       if (enq !== null && x.NOW - Number(enq) > g.oldestWaitMs) g.oldestWaitMs = x.NOW - Number(enq)
-      const src = x.hget(x.ek(j), "src")
-      if (src) g.sources[src] = (g.sources[src] ?? 0) + 1
+      countSource(g, x.hget(x.ek(j), "src"), x.hget(x.ek(j), "sdet"))
     }
   }
   const minute = Math.floor(x.NOW / 60000)
@@ -678,14 +694,21 @@ const snapshot: Body = (x) => {
       if (u) byUser[u] = (byUser[u] ?? 0) + 1
     }
     let done = 0, failed = 0
+    const perMinute = new Map<number, { minute: number; completed: number; failed: number }>()
     for (const [f, v] of x.r.hgetall(x.pk(p, "o"))) {
       const mm = /^(\d+):(.+)$/.exec(f)!
-      if (Number(mm[1]) >= minute - 14) {
-        if (mm[2] === "completed") done += Number(v)
-        if (mm[2] === "failed") failed += Number(v)
+      const at = Number(mm[1]), what = mm[2]
+      if (at >= minute - 14 && (what === "completed" || what === "failed")) {
+        if (what === "completed") done += Number(v)
+        else failed += Number(v)
+        const b = perMinute.get(at) ?? perMinute.set(at, { minute: at, completed: 0, failed: 0 }).get(at)!
+        b[what] += Number(v)
       }
     }
-    if (running > 0 || done > 0 || failed > 0) providers.push({ provider: p, running, byUser, completed15m: done, failed15m: failed })
+    if (running > 0 || done > 0 || failed > 0) {
+      const outcomesByMinute = [...perMinute.values()].sort((a, b) => a.minute - b.minute)
+      providers.push({ provider: p, running, byUser, completed15m: done, failed15m: failed, ceiling: x.ceilOf(p), outcomesByMinute })
+    }
     if (x.occ(p) === 0 && x.r.hlen(x.pk(p, "wl")) === 0 && x.r.hlen(x.pk(p, "o")) === 0) {
       x.r.srem(`${x.P}provs`, p)
     }
@@ -693,7 +716,38 @@ const snapshot: Body = (x) => {
   return x.reply({ lines: [...groups.values()], providers, enforced: x.r.get(`${x.P}enforced`) === "1" })
 }
 
-const BODIES: Record<LaneGateScriptName, Body> = { acquire, renew, release, borrow, serverWait, withdraw, describe, hasReservation, allWaiters, heads, setEnforced, setProviderCeilings, isEnforced, snapshot }
+const userEntries: Body = (x, req) => {
+  x.purge()
+  x.settle()
+  const U = String(req.userId)
+  const needle = `:${U}:`
+  const out: Json[] = []
+  const entry = (k: string, j: string, state: string): Json => ({
+    jobId: j, payer: x.hget(k, "payer"), lane: x.hget(k, "lane"), state, provider: x.hget(k, "prov"), source: x.hget(k, "src"),
+    sourceDetail: x.hget(k, "sdet"), jobType: x.hget(k, "type"), model: x.hget(k, "model"),
+  })
+  for (const line of x.r.smembers(`${x.P}lines`)) {
+    if (!line.includes(needle) || x.hget(x.lk(line, "m"), "user") !== U) continue
+    for (const lid of x.r.zrange(x.lk(line, "run"))) {
+      const k = x.lsk(lid)
+      const job = x.hget(k, "job")
+      if (!job) continue
+      const at = x.hget(k, "at")
+      out.push({ ...entry(k, job, "running"), overLimit: x.hget(k, "over") === "1", runningMs: at === null ? null : x.NOW - Number(at), waitedMs: null, position: null, reason: null })
+    }
+    let rank = 0
+    for (const j of x.r.zrange(x.lk(line, "wait"))) {
+      rank += 1
+      const k = x.ek(j)
+      const enq = x.hget(k, "enq")
+      if (enq === null) continue
+      out.push({ ...entry(k, j, "queued"), overLimit: false, runningMs: null, waitedMs: x.NOW - Number(enq), position: rank, reason: x.hget(k, "held") ? "server_busy" : x.hget(k, "why") })
+    }
+  }
+  return x.reply({ entries: out })
+}
+
+const BODIES: Record<LaneGateScriptName, Body> = { acquire, renew, release, borrow, serverWait, withdraw, describe, hasReservation, allWaiters, heads, setEnforced, setProviderCeilings, isEnforced, snapshot, userEntries }
 const BY_SOURCE = new Map<string, Body>(Object.entries(LANE_GATE_SCRIPTS).map(([name, src]) => [src, BODIES[name as LaneGateScriptName]]))
 
 export interface FakeLaneClient {

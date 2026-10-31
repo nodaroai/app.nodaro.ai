@@ -60,7 +60,8 @@ import { LaneGateTimeoutError, type ConcurrencyGate } from "./gate.js"
 import { loadConcurrencyGate, warnLaneRateLimited } from "./hold.js"
 import { LANE_PARK_BACKSTOP_MS, promoteQuietly, queueOf } from "./park.js"
 import { laneSettings } from "./sizes.js"
-import type { LaneQueueName } from "./types.js"
+import { payerOfRow } from "./payer.js"
+import type { LaneQueueName, PayerKey } from "./types.js"
 import { withdrawFromLane } from "./withdraw.js"
 import { LANE_READD_PREFIX } from "./worker-admit.js"
 
@@ -107,6 +108,13 @@ export interface LaneQueueOutcome {
   table: LaneTable
   rowId: string
   userId: string | null
+  /**
+   * The payer line it waited in: read from its gate entry before the withdraw;
+   * without one (Redis lost it, or it waited only for a server share), from
+   * its row (a workspace job or run counts on the workspace's line, anything
+   * else on the personal one); null with no owner.
+   */
+  payer: PayerKey | null
   reason: "timeout" | "lost"
   waitedMs: number
 }
@@ -243,9 +251,24 @@ async function refundEveryHold(row: LaneQueuedRow, err: LaneWaitTimeoutError, pa
   }
 }
 
+/** The payer line a row waited in, for the history (see LaneQueueOutcome.payer). Never throws. */
+async function payerOfWaiting(row: LaneQueuedRow, pass: Pass): Promise<PayerKey | null> {
+  if (!pass.redisDown && pass.gate) {
+    try {
+      const payer = await pass.gate.waitingPayer(row.id)
+      if (payer) return payer
+    } catch (err) {
+      warnLaneRateLimited("could not read a waiting row's payer line", err)
+    }
+  }
+  if (!row.user_id) return null
+  return payerOfRow({ user_id: row.user_id, workspace_id: row.workspace_id ?? null }).payer
+}
+
 /** Fail a waiting row (the timeout, or a lost entry) and refund it only when the failure write won. */
 async function endWaiting(table: LaneTable, row: LaneQueuedRow, reason: "timeout" | "lost", waitedMs: number, pass: Pass): Promise<void> {
   const err = new LaneWaitTimeoutError({ reason, waitedMs, timeoutMinutes: Math.round(pass.timeoutMs / MINUTE_MS) })
+  const payer = await payerOfWaiting(row, pass)
   if (!pass.redisDown) await withdrawFromLane(row.id)
   let won: boolean
   if (table === "jobs") {
@@ -276,7 +299,7 @@ async function endWaiting(table: LaneTable, row: LaneQueuedRow, reason: "timeout
   pass.result.swept++
   void deleteRequeuePayloads(laneRowKindOf(table), [row.id])
   try {
-    recordOutcome({ table, rowId: row.id, userId: row.user_id, reason, waitedMs })
+    recordOutcome({ table, rowId: row.id, userId: row.user_id, payer, reason, waitedMs })
   } catch (recordErr) {
     warnLaneRateLimited("could not count a queue timeout into the history", recordErr)
   }

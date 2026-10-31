@@ -127,6 +127,15 @@ describe("GET /v1/admin/lanes/config", () => {
     expect(body.preconditions).toEqual(expect.objectContaining({ columnsPresent: true, liveCeilingMeasured: false, measureDays: 0 }))
   })
 
+  it("the config GET serves the bounds every write is checked against, so the page never copies them", async () => {
+    expect((await call("GET", "/v1/admin/lanes/config")).json().bounds).toEqual({
+      laneSize: { min: 1, max: 500 },
+      providerCeiling: { min: 1, max: 100_000 },
+      queueTimeoutMinutes: { min: 5, max: 1440 },
+      liveWaitMinutes: { min: 1, max: 60 },
+    })
+  })
+
   it("the config GET states that sizes, overrides, ceilings and timeouts are shared by every environment", async () => {
     expect((await call("GET", "/v1/admin/lanes/config")).json().sharedAcrossEnvironments).toBe(true)
   })

@@ -38,6 +38,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Free credits on a new account** (what the signup grant is, and when it waits for a first purchase; Cloud) → [Free credits](./features/free-credits.md)
 - **Keep the posts worth coming back to** (save Social Search results with notes and tags, find them again; Cloud) → [Inspiration](./features/inspiration.md)
 - **Give a workflow a place to keep what it produces** (collections of records a workflow saves and reads back: one record per story, caps per plan, CSV / JSON export) → [Collections](./features/collections.md)
+- **See who is running what right now, and set how much each plan runs at once** (Admin → Live usage: users, providers and servers live, the last 30 days, plan sizes, provider ceilings and the concurrency-limits switch; Business + Cloud) → [Admin live usage](./features/admin-live-usage.md)
 - **Know what your competitors are doing, and what to do about it** (tracked brands, scheduled scans, action cards; Cloud) → [Competitors](./features/competitors.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)

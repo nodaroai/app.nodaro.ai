@@ -1203,7 +1203,9 @@ turns lanes on or off for one environment and wins over `LANES_ENFORCED`. Its
 value is kept per runtime environment — `RUNTIME_ENV`, else Railway's
 `RAILWAY_ENVIRONMENT_NAME`, else `local` — so two installs sharing one
 database (staging and production) each keep their own. Every server copies it
-into Redis every 30 seconds; turning it off starts every waiting job.
+into Redis every 30 seconds; turning it off starts every waiting job. The
+switch, the sizes and the waiting limits are also on the Admin page — see
+[Admin live usage](./features/admin-live-usage.md).
 
 **Concurrency limits cannot be turned on yet in this release.** Lanes are
 being introduced in stages, and what waiting needs around it lands in a later
