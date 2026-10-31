@@ -21,9 +21,11 @@ vi.mock("../../supabase.js", () => ({
   },
 }))
 vi.mock("../../reconcile/cancel-inflight-jobs.js", () => ({ cancelInFlightChildJobs: m.children }))
+const lanes = vi.hoisted(() => ({ withdrawFromLane: vi.fn(async (_id: string) => {}) }))
+vi.mock("../../concurrency-lanes/withdraw.js", () => lanes)
 import { cancelUseCaseInnerExecution } from "../cancel-run.js"
 
-beforeEach(() => { m.error = null; m.filters.length = 0; m.update = null; m.children.mockClear() })
+beforeEach(() => { m.error = null; m.filters.length = 0; m.update = null; m.children.mockClear(); lanes.withdrawFromLane.mockClear() })
 
 describe("cancelUseCaseInnerExecution", () => {
   it("cancels the run's not-yet-started jobs, then flips the owner's live run to cancelled", async () => {
@@ -31,6 +33,10 @@ describe("cancelUseCaseInnerExecution", () => {
     expect(m.children).toHaveBeenCalledWith("exec-in", "u1")
     expect(m.update).toMatchObject({ status: "cancelled", error_message: "Cancelled with its node" })
     expect(m.filters).toEqual(["id=exec-in", "user_id=u1", "status in pending|running|stopping"])
+  })
+  it("a hidden run still waiting to start leaves its run lane", async () => {
+    await cancelUseCaseInnerExecution("exec-in", "u1", "Cancelled with its node")
+    expect(lanes.withdrawFromLane).toHaveBeenCalledWith("exec-in")
   })
   it("a failed flip throws (the caller logs it; a silent no-op would leave the run billing)", async () => {
     m.error = { message: "db down" }

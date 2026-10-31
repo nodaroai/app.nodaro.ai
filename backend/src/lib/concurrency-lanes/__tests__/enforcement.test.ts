@@ -6,20 +6,27 @@ import { ConcurrencyGate } from "../gate.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "./fake-lane-redis.js"
 import { makeFakeLaneDb, type FakeLaneDb } from "./fake-lane-db.js"
 
-const refs = vi.hoisted(() => ({ gate: null as unknown, db: null as unknown as { client: { from(t: string): unknown } }, credits: true }))
+const refs = vi.hoisted(() => ({ gate: null as unknown, db: null as unknown as { client: { from(t: string): unknown } }, credits: true, available: true }))
 
 vi.mock("../../config.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../config.js")>()),
   hasCredits: () => refs.credits,
 }))
 vi.mock("../instance.js", () => ({ concurrencyGate: () => refs.gate }))
+// The release lock (a constant in code) is read through this getter, so the
+// switch's own behaviour stays testable; "while turning limits on is not
+// available" below runs with the shipped value.
+vi.mock("../enforcement-available.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../enforcement-available.js")>()
+  return { get LANES_ENFORCEMENT_AVAILABLE() { return refs.available ?? real.LANES_ENFORCEMENT_AVAILABLE } }
+})
 vi.mock("../../supabase.js", () => ({ supabase: { from: (t: string) => refs.db.client.from(t) } }))
 
 const { config } = await import("../../config.js")
 const enforcement = await import("../enforcement.js")
 const {
   ENFORCEMENT_MIRROR_INTERVAL_MS, LANES_ENFORCED_KEY, enforcementPreconditions, lastMirroredEnforced, mirrorEnforcementOnce,
-  registerMeasureDaysReader, registerOffTransitionWaker, resetEnforcementHooksForTests, setLanesEnforced,
+  LanesNotAvailableError, registerMeasureDaysReader, registerOffTransitionWaker, resetEnforcementHooksForTests, setLanesEnforced,
   startEnforcementMirror, unmetPreconditions,
 } = enforcement
 const { invalidateLaneConfigCache } = await import("../../../ee/concurrency-lanes/plan-sizes.js")
@@ -39,6 +46,7 @@ beforeEach(() => {
   db = makeFakeLaneDb()
   refs.db = db
   refs.credits = true
+  refs.available = true
   const store = makeFakeLaneStore()
   gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(store), now: () => 1_000 })
   refs.gate = gate
@@ -129,6 +137,50 @@ describe("the mirror", () => {
     expect(waker).toHaveBeenCalledTimes(1)
   })
 
+  it("two passes that both see the off apply it, and only one of them wakes", async () => {
+    setRow({ production: true })
+    await mirrorEnforcementOnce()
+    const waker = vi.fn(async () => 2)
+    registerOffTransitionWaker(waker)
+    setRow({ production: false })
+    // Two replicas' mirrors on the same Redis, at the same moment.
+    await Promise.all([mirrorEnforcementOnce(), mirrorEnforcementOnce()])
+    expect(await gate.isEnforced()).toBe(false)
+    expect(waker).toHaveBeenCalledTimes(1)
+  })
+
+  it("a pass that read the setting before an admin's off never turns it back on", async () => {
+    setRow({ production: true })
+    await mirrorEnforcementOnce()
+    const waker = vi.fn(async () => 4)
+    registerOffTransitionWaker(waker)
+
+    // The pass reads `on` (the row as it was), then stalls before writing Redis.
+    const stale = { value: { production: true }, updated_at: "2026-10-30T09:00:00.000Z" }
+    let resume!: () => void
+    const held = new Promise<void>((r) => { resume = r })
+    const real = db
+    let first = true
+    refs.db = {
+      client: {
+        from: (t: string) => {
+          if (t !== "app_settings" || !first) return real.client.from(t)
+          first = false
+          const q = { select: () => q, eq: () => q, maybeSingle: async () => { await held; return { data: stale, error: null } } }
+          return q
+        },
+      },
+    }
+    const pass = mirrorEnforcementOnce()
+    // Meanwhile the admin turns lanes off: written, applied, everyone woken.
+    expect(await setLanesEnforced(false, ADMIN)).toEqual({ woke: 4, mirrored: true })
+    resume()
+    await pass
+    expect(await gate.isEnforced()).toBe(false)
+    expect(lastMirroredEnforced()).toBe(false)
+    expect(waker).toHaveBeenCalledTimes(1)
+  })
+
   it("the mirror copies provider ceilings into the gate", async () => {
     const spy = vi.spyOn(gate, "setProviderCeilings")
     db.rows("lane_provider_ceilings").push({ provider: "kie", ceiling: 40 }, { provider: "replicate", ceiling: 8 })
@@ -207,7 +259,7 @@ describe("the mirror", () => {
 
   it("a Redis error skips the step; the ceilings are still tried and the pass never throws", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined)
-    vi.spyOn(gate, "isEnforced").mockRejectedValue(new Error("redis down"))
+    vi.spyOn(gate, "setEnforced").mockRejectedValue(new Error("redis down"))
     const ceilings = vi.spyOn(gate, "setProviderCeilings")
     await expect(mirrorEnforcementOnce()).resolves.toBeUndefined()
     expect(ceilings).toHaveBeenCalledTimes(1)
@@ -283,6 +335,32 @@ describe("setLanesEnforced", () => {
     expect(storedMap()).toEqual({ production: false })
   })
 
+  it("a repeated admin off wakes again", async () => {
+    // An admin's explicit off always wakes (waking is idempotent); only the mirror is edge-only.
+    await setLanesEnforced(true, ADMIN)
+    const waker = vi.fn(async () => 3)
+    registerOffTransitionWaker(waker)
+    expect(await setLanesEnforced(false, ADMIN)).toEqual({ woke: 3, mirrored: true })
+    expect(await setLanesEnforced(false, ADMIN)).toEqual({ woke: 3, mirrored: true })
+    expect(waker).toHaveBeenCalledTimes(2)
+    // The mirror, seeing the same off, wakes nobody.
+    await mirrorEnforcementOnce()
+    expect(waker).toHaveBeenCalledTimes(2)
+  })
+
+  it("each write's version is newer than the row's, even when this clock is behind it", async () => {
+    // The other environment, on a clock ahead of ours, wrote the row last.
+    db.tables.set("app_settings", [{ key: LANES_ENFORCED_KEY, value: { production: true }, updated_at: "2099-01-01T00:00:00.000Z" }])
+    await mirrorEnforcementOnce()
+    expect(await gate.isEnforced()).toBe(true)
+    await setLanesEnforced(false, ADMIN)
+    const row = db.rows("app_settings")[0]!
+    expect(Date.parse(String(row.updated_at))).toBeGreaterThan(Date.parse("2099-01-01T00:00:00.000Z"))
+    expect(await gate.isEnforced()).toBe(false)
+    await mirrorEnforcementOnce()
+    expect(await gate.isEnforced()).toBe(false)
+  })
+
   it("with no waker registered (nothing parks yet) turning off wakes nobody", async () => {
     await setLanesEnforced(true, ADMIN)
     expect(await setLanesEnforced(false, ADMIN)).toEqual({ woke: 0, mirrored: true })
@@ -343,10 +421,84 @@ describe("enforcementPreconditions", () => {
     expect(unmetPreconditions({ ...p, undeclaredPluginTypes: [] })).not.toContain("plugins")
   })
 
+  it("a failed plugin load in this process leaves the plugin item unmet, and the preconditions say so", async () => {
+    const met = { available: true, columnsPresent: true, pluginTypesKnown: true, undeclaredPluginTypes: [], liveCeilingMeasured: true, measureDays: 7 }
+    expect(unmetPreconditions({ ...met, pluginLoadFailed: false })).toEqual([])
+    expect(unmetPreconditions({ ...met, pluginLoadFailed: true })).toEqual(["plugins"])
+
+    expect((await enforcementPreconditions()).pluginLoadFailed).toBe(false)
+    registry.notePluginLoadFailed()
+    expect((await enforcementPreconditions()).pluginLoadFailed).toBe(true)
+  })
+
   it("unmetPreconditions lists each unmet item, and none when all are met", () => {
-    const met = { columnsPresent: true, pluginTypesKnown: true, undeclaredPluginTypes: [], liveCeilingMeasured: true, measureDays: 7 }
+    const met = { available: true, columnsPresent: true, pluginTypesKnown: true, undeclaredPluginTypes: [], liveCeilingMeasured: true, measureDays: 7 }
     expect(unmetPreconditions(met)).toEqual([])
-    expect(unmetPreconditions({ columnsPresent: false, pluginTypesKnown: true, undeclaredPluginTypes: ["x"], liveCeilingMeasured: false, measureDays: 6 }))
-      .toEqual(["columns", "plugins", "liveCeiling", "measureDays"])
+    expect(unmetPreconditions({ available: false, columnsPresent: false, pluginTypesKnown: true, undeclaredPluginTypes: ["x"], liveCeilingMeasured: false, measureDays: 6 }))
+      .toEqual(["available", "columns", "plugins", "liveCeiling", "measureDays"])
+  })
+})
+
+describe("while turning limits on is not available (this release)", () => {
+  beforeEach(() => {
+    refs.available = false
+  })
+
+  it("ships unavailable", async () => {
+    const { LANES_ENFORCEMENT_AVAILABLE } = await vi.importActual<typeof import("../enforcement-available.js")>("../enforcement-available.js")
+    expect(LANES_ENFORCEMENT_AVAILABLE).toBe(false)
+    expect(enforcement.lanesEnforcementAvailable()).toBe(false)
+  })
+
+  it("setLanesEnforced(true) refuses before writing anything; off is still allowed", async () => {
+    await expect(setLanesEnforced(true, ADMIN)).rejects.toBeInstanceOf(LanesNotAvailableError)
+    await expect(setLanesEnforced(true, ADMIN)).rejects.toMatchObject({ code: "not_available_yet" })
+    expect(db.rows("app_settings")).toEqual([])
+    expect(await gate.isEnforced()).toBe(false)
+    expect(await setLanesEnforced(false, ADMIN)).toEqual({ woke: 0, mirrored: true })
+    expect(storedMap()).toEqual({ production: false })
+  })
+
+  it("LANES_ENFORCED cannot turn limits on: the mirror copies off, and an on the gate held at that version is replaced and wakes the waiters", async () => {
+    config.LANES_ENFORCED = true
+    // A self-host with the seeded row and the env var on: an earlier build put the gate on at the row's version.
+    setRow({})
+    await gate.setEnforced(true, Date.parse("2026-10-30T09:00:00.000Z"))
+    const waker = vi.fn(async () => 2)
+    registerOffTransitionWaker(waker)
+    await mirrorEnforcementOnce()
+    expect(await gate.isEnforced()).toBe(false)
+    expect(waker).toHaveBeenCalledTimes(1)
+    expect(lastMirroredEnforced()).toBe(false)
+    // No row at all: still off.
+    db.tables.set("app_settings", [])
+    await mirrorEnforcementOnce()
+    expect(await gate.isEnforced()).toBe(false)
+  })
+
+  it("the mirror writes off even when the setting row says on", async () => {
+    setRow({ production: true })
+    await gate.setEnforced(true, Date.parse("2026-10-30T09:00:00.000Z"))
+    await mirrorEnforcementOnce()
+    expect(await gate.isEnforced()).toBe(false)
+    expect(await enforcement.readLanesEnforcedSetting()).toBe(false)
+  })
+
+  it("the preconditions say it is not available, and list it first among the unmet items", async () => {
+    const p = await enforcementPreconditions()
+    expect(p.available).toBe(false)
+    expect(unmetPreconditions(p)[0]).toBe("available")
+  })
+
+  it("measuring goes on: an acquire over the limit with the flag off is granted as an over-limit lease", async () => {
+    await mirrorEnforcementOnce()
+    const meta = (jobId: string) => ({
+      jobId, userId: "U", payer: "user:U" as const, lane: "provider" as const, provider: "kie", source: null, sourceDetail: null,
+      jobType: "image-to-video", model: null, queue: "video-generation" as const, bullJobId: `bull-${jobId}`,
+    })
+    expect(await gate.acquire({ meta: meta("a"), size: 1, mode: "fresh", leaseTtlMs: 60_000 })).toMatchObject({ granted: true, overLimit: false })
+    expect(await gate.acquire({ meta: meta("b"), size: 1, mode: "fresh", leaseTtlMs: 60_000 }))
+      .toMatchObject({ granted: true, overLimit: true, wouldWait: { lane: "provider", position: 1, limit: 1 } })
+    expect((await gate.snapshot()).lines[0]!.lanes.provider).toMatchObject({ running: 2, overLimit: 1 })
   })
 })

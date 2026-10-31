@@ -424,6 +424,36 @@ export function runLaneGateContract(makeFixture: () => LaneGateFixture): void {
     expect(ids(await gate.release(a, "completed"))).toEqual(["u2"])
   })
 
+  it("setEnforced reports the flag it replaced, so exactly one caller sees an on→off edge", async () => {
+    expect(await gate.setEnforced(false, 10)).toEqual({ was: true, enforced: false })
+    // A second process applying the same off sees no edge.
+    expect(await gate.setEnforced(false, 10)).toEqual({ was: false, enforced: false })
+    expect(await gate.setEnforced(true, 10)).toEqual({ was: false, enforced: true })
+    expect(await gate.isEnforced()).toBe(true)
+  })
+
+  it("an older version of the flag never overwrites a newer one; an equal one does", async () => {
+    expect(await gate.setEnforced(false, 2_000)).toEqual({ was: true, enforced: false })
+    // A mirror tick that read the setting before the off was written.
+    expect(await gate.setEnforced(true, 1_000)).toEqual({ was: false, enforced: false })
+    expect(await gate.isEnforced()).toBe(false)
+    // The same version again (an env fallback that changed with no new row write) applies.
+    expect(await gate.setEnforced(true, 2_000)).toEqual({ was: false, enforced: true })
+    expect(await gate.setEnforced(false, 3_000)).toEqual({ was: true, enforced: false })
+  })
+
+  it("a readmit that finds the job's lease held by another BullMQ entry gets it as foreign", async () => {
+    // The captions render took the job's slot under its own entry.
+    const render = await acquire("j", { mode: "readmit", meta: { queue: "video-render", bullJobId: "render-j" } })
+    expect(render).toMatchObject({ granted: true, foreign: false })
+    // The video job that handed it over is picked up again (a stall): same job id, its own entry.
+    const video = await acquire("j", { mode: "readmit", meta: { queue: "video-generation", bullJobId: "bull-j" } })
+    expect(video).toMatchObject({ granted: true, leaseId: leaseOf(render), foreign: true })
+    // The render entry itself, re-picked, still owns it.
+    expect(await acquire("j", { mode: "readmit", meta: { queue: "video-render", bullJobId: "render-j" } })).toMatchObject({ granted: true, leaseId: leaseOf(render), foreign: false })
+    expect((await gate.snapshot()).lines[0]!.lanes.provider).toMatchObject({ running: 1 })
+  })
+
   it("with enforcement off every acquire is granted and over-limit leases are counted", async () => {
     await gate.setEnforced(false)
     expect(await gate.isEnforced()).toBe(false)
@@ -491,6 +521,96 @@ export function runLaneGateContract(makeFixture: () => LaneGateFixture): void {
     expect(await gate.describeWait("s1")).toBeNull()
     await gate.withdraw("s2")
     expect(await gate.describeWait("s2")).toBeNull()
+  })
+
+  const shareWait = (id: string) => gate.markServerWait({ ...meta(id), pool: "video" })
+
+  it("a share-held head keeps its place and the slot passes to the next startable waiter", async () => {
+    await gate.setProviderCeilings({ kie: 1 })
+    const v = { userId: "V", payer: "user:V" } as const
+    const u1 = leaseOf(await acquire("u1", { size: 5, ttl: LONG, meta: { provider: "kie" } }))
+    expect(waitOf(await acquire("u2", { size: 5, meta: { provider: "kie" } }))).toMatchObject({ reason: "provider_ceiling", position: 1 })
+    await acquire("u3", { size: 5, meta: { provider: "kie" } })
+    clock += 1_000
+    await acquire("v1", { size: 5, meta: { provider: "kie", ...v } })
+    expect(ids(await gate.release(u1, "completed"))).toEqual(["u2"])
+    published = []
+    // u2 is picked up where its user's share is full: the slot goes on to V, not down U's line.
+    expect(await shareWait("u2")).toMatchObject({ reason: "server_busy" })
+    expect(published.map((x) => x.target)).toEqual([target("v1")])
+    expect(await gate.hasReservation("u2")).toBe(false)
+    expect(await gate.hasReservation("u3")).toBe(false)
+    expect(await gate.hasReservation("v1")).toBe(true)
+    // u2 kept its place: first in its line, its first enqueue time.
+    expect(waitOf(await acquire("u2", { size: 5, meta: { provider: "kie" } }))).toMatchObject({ position: 1, enqueuedAtMs: T0, reason: "provider_ceiling" })
+  })
+
+  it("a share-held head is reserved again at its place once its user has room", async () => {
+    const a = leaseOf(await acquire("a", { size: 1, ttl: LONG }))
+    for (const id of ["b", "c", "d"]) await acquire(id, { size: 1 })
+    expect(ids(await gate.release(a, "completed"))).toEqual(["b"])
+    await shareWait("b")
+    // A job of the user that can start (another server, or this one with room) takes the free slot.
+    const c = leaseOf(await acquire("c", { size: 1 }))
+    // b's user has room again: it is still first in line and keeps its enqueue time.
+    clock += 5_000
+    expect(waitOf(await acquire("b", { size: 1 }))).toMatchObject({ position: 1, enqueuedAtMs: T0, waitedMs: 5_000 })
+    expect(ids(await gate.release(c, "completed"))).toEqual(["b"])
+    expect((await acquire("b", { size: 1 })).granted).toBe(true)
+  })
+
+  it("no promote/withdraw cascade through one user's line on a share refusal", async () => {
+    const a = leaseOf(await acquire("a", { size: 1, ttl: 2 * LANE_WAITER_TTL_MS }))
+    for (const id of ["b", "c", "d"]) await acquire(id, { size: 1 })
+    expect(ids(await gate.release(a, "completed"))).toEqual(["b"])
+    published = []
+    await shareWait("b")
+    // Refused again on every re-pick: nothing is reserved or woken down the line.
+    clock += LANE_WAITER_TTL_MS - 60_000
+    await shareWait("b")
+    clock += 120_000
+    await shareWait("b")
+    expect(published).toEqual([])
+    for (const id of ["b", "c", "d"]) expect(await gate.hasReservation(id)).toBe(false)
+    // c and d were not seen for the waiter TTL and are gone; b, re-checked as it bounced, kept its place.
+    expect((await gate.snapshot()).lines[0]!.lanes.provider).toMatchObject({ running: 0, queued: 1 })
+    expect((await acquire("b", { size: 1 })).granted).toBe(true)
+  })
+
+  // The `local` lane runs on two pools: ffmpeg jobs on the video workers, renders on the render workers.
+  const localJob = (queue: "video-generation" | "video-render") => ({ lane: "local" as const, provider: "local", queue })
+
+  it("a held render job does not block the same user's ffmpeg job behind it in the local line", async () => {
+    const a = leaseOf(await acquire("a", { size: 1, ttl: LONG, meta: localJob("video-generation") }))
+    await acquire("r1", { size: 1, meta: localJob("video-render") })
+    await acquire("r2", { size: 1, meta: localJob("video-render") })
+    await acquire("f1", { size: 1, meta: localJob("video-generation") })
+    expect(ids(await gate.release(a, "completed"))).toEqual(["r1"])
+    published = []
+    // r1 is held back by the render pool's share: the slot goes to the ffmpeg job,
+    // past r2, which waits behind r1 on the same pool.
+    await gate.markServerWait({ ...meta("r1", localJob("video-render")), pool: "render" })
+    expect(published.map((x) => x.target)).toEqual([target("f1")])
+    expect(await gate.hasReservation("r2")).toBe(false)
+    expect(await gate.hasReservation("f1")).toBe(true)
+    // The renders keep their order: once f1 is done, r1 (back with room) goes first.
+    const f1 = leaseOf(await acquire("f1", { size: 1, meta: localJob("video-generation") }))
+    expect(waitOf(await acquire("r1", { size: 1, meta: localJob("video-render") }))).toMatchObject({ position: 1, enqueuedAtMs: T0 })
+    expect(ids(await gate.release(f1, "completed"))).toEqual(["r1"])
+  })
+
+  it("a held ffmpeg job does not block the same user's render job behind it in the local line", async () => {
+    const a = leaseOf(await acquire("a", { size: 1, ttl: LONG, meta: localJob("video-render") }))
+    await acquire("f1", { size: 1, meta: localJob("video-generation") })
+    await acquire("f2", { size: 1, meta: localJob("video-generation") })
+    await acquire("r1", { size: 1, meta: localJob("video-render") })
+    expect(ids(await gate.release(a, "completed"))).toEqual(["f1"])
+    published = []
+    await gate.markServerWait({ ...meta("f1", localJob("video-generation")), pool: "video" })
+    expect(published.map((x) => x.target)).toEqual([target("r1", "video-render")])
+    expect(await gate.hasReservation("f2")).toBe(false)
+    // An acquire that can start goes past a held waiter, never past one of another pool still able to start.
+    expect((await acquire("r1", { size: 1, meta: localJob("video-render") })).granted).toBe(true)
   })
 
   it("waitedMs grows and enqueuedAtMs is kept across re-checks", async () => {

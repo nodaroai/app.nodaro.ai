@@ -48,7 +48,18 @@ export interface AcquireRequest {
 }
 
 export type AcquireResult =
-  | { granted: true; leaseId: string; overLimit: boolean; wouldWait: WaitInfo | null }
+  | {
+    granted: true
+    leaseId: string
+    overLimit: boolean
+    wouldWait: WaitInfo | null
+    /**
+     * The job's existing lease, held under ANOTHER BullMQ entry of the same job
+     * (the captions `render` it handed its slot to). The caller may run under
+     * it but must never renew, hand off or release it: that entry does.
+     */
+    foreign: boolean
+  }
   | { granted: false; wait: WaitInfo }
 
 export interface WakeTarget { jobId: string; queue: LaneQueueName; bullJobId: string | null }
@@ -66,6 +77,14 @@ export interface ConcurrencyGateOptions {
   prefix?: string
   /** How long one Redis call may take before the gate call rejects (> 0). Default LANE_GATE_CALL_TIMEOUT_MS. */
   callTimeoutMs?: number
+  /**
+   * Whether the client is connected now. When given and false, a call rejects
+   * at once with LaneGateUnavailableError instead of queueing behind a
+   * connection that is down (and waiting out callTimeoutMs): a cancel's
+   * withdraw, or a pickup, during a Redis outage costs nothing. Absent: always
+   * tried.
+   */
+  connected?: () => boolean
 }
 
 /**
@@ -77,6 +96,19 @@ export class LaneGateTimeoutError extends Error {
   constructor(readonly call: string, readonly timeoutMs: number) {
     super(`concurrency gate call "${call}" got no answer from Redis within ${timeoutMs} ms`)
     this.name = "LaneGateTimeoutError"
+  }
+}
+
+/**
+ * A gate call not sent at all: the client is not connected (it is connecting,
+ * reconnecting or closed). A LaneGateTimeoutError, so every caller's rule for
+ * an unanswered call applies — though here the command certainly did not run.
+ */
+export class LaneGateUnavailableError extends LaneGateTimeoutError {
+  constructor(call: string) {
+    super(call, 0)
+    this.message = `concurrency gate call "${call}" not sent: Redis is not connected`
+    this.name = "LaneGateUnavailableError"
   }
 }
 
@@ -149,7 +181,9 @@ export class ConcurrencyGate {
   async acquire(req: AcquireRequest): Promise<AcquireResult> {
     const r = await this.run("acquire", { meta: req.meta, size: req.size, mode: req.mode, leaseId: randomUUID(), leaseTtl: req.leaseTtlMs })
     if (r.granted === true) {
-      return { granted: true, leaseId: String(r.leaseId), overLimit: r.overLimit === true, wouldWait: present(r.wait) ? toWait(r.wait) : null }
+      return {
+        granted: true, leaseId: String(r.leaseId), overLimit: r.overLimit === true, wouldWait: present(r.wait) ? toWait(r.wait) : null, foreign: r.foreign === true,
+      }
     }
     return { granted: false, wait: toWait(r.wait as Record<string, unknown>) }
   }
@@ -208,8 +242,15 @@ export class ConcurrencyGate {
       .map((h) => ({ jobId: h.jobId, queue: h.queue, lastSeenMs: h.lastSeenMs ?? 0 }))
   }
 
-  async setEnforced(on: boolean): Promise<void> {
-    await this.run("setEnforced", { on })
+  /**
+   * Set the enforcement flag at `version` (the setting row's `updated_at`, in
+   * ms; 0 when there is none). A version older than the stored one changes
+   * nothing. Returns the flag before and after, read atomically with the
+   * write: only the caller that sees `was && !enforced` saw the on→off edge.
+   */
+  async setEnforced(on: boolean, version = 0): Promise<{ was: boolean; enforced: boolean }> {
+    const r = await this.run("setEnforced", { on, version })
+    return { was: r.was === true, enforced: r.enforced === true }
   }
 
   /**
@@ -239,6 +280,7 @@ export class ConcurrencyGate {
   }
 
   private async run(name: keyof typeof LANE_GATE_SCRIPTS, req: Record<string, unknown>): Promise<Reply> {
+    if (this.opts.connected && !this.opts.connected()) throw new LaneGateUnavailableError(name)
     // Redis EVAL of the constant scripts in gate-scripts.ts — nothing user-supplied is evaluated.
     const raw = await withinTimeout(this.opts.client().eval(
       LANE_GATE_SCRIPTS[name], 0, this.prefix, this.now(), LANE_RESERVATION_TTL_MS, LANE_WAITER_TTL_MS, LANE_RELEASED_TTL_MS, JSON.stringify(req),
@@ -250,6 +292,11 @@ export class ConcurrencyGate {
   }
 
   private async publish(targets: WakeTarget[]): Promise<void> {
+    if (this.opts.connected && !this.opts.connected()) {
+      // The reservation stands; the waiter's backstop brings it back.
+      console.warn(`[concurrency-lanes] could not publish ${targets.length} wake(s): Redis is not connected`)
+      return
+    }
     const client = this.opts.client()
     await Promise.all(targets.map((t) =>
       withinTimeout(client.publish(this.channel, JSON.stringify(t)), this.callTimeoutMs, "publish").catch((err: unknown) => {

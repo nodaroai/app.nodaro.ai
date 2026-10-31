@@ -26,10 +26,19 @@
 //   leases, resv, wseen, sseen, rel            global expiry / last-seen ZSETs
 //   jl             HASH jobId → its leaseId    lines, provs, pools, ceils  SETs
 //   seq            order counter               enforced      "1" when on
+//   enforced:v     the version of `enforced` (the setting row's updated_at, ms)
 // A line is `<payer>:<userId>:<lane>`. A job waits in at most ONE line: entering
 // another drops it from the first. A reserved waiter stays in its line's wait
 // ZSET until it converts; `passed` marks a waiter whose reservation lapsed — the
-// pass-on skips it, and it blocks no one, until it is seen again.
+// pass-on skips it, and it blocks no one, until it is seen again. `held` marks
+// a waiter its server share holds back (SERVER_WAIT), and names that share's
+// pool: it keeps its place, and the pass-on reserves nothing at or behind it
+// for a waiter of the SAME pool — the same user on the same share — so a freed
+// slot does not cycle through them. Waiters of another pool (one line can span
+// two: the `local` lane runs on the video and the render workers) go past it
+// in their own order, and so may an acquire that can start. Its next acquire
+// clears the mark. A queue's pool is POOL_OF; a live or inline waiter has none
+// and is never held back.
 
 const PRELUDE = `
 local P = ARGV[1]
@@ -42,6 +51,9 @@ local NULL = cjson.null
 local FRONT = 1000000000000
 
 local touchedLines, touchedProvs, wakes, occCache = {}, {}, {}, {}
+-- The server pool each worker queue runs on (server-share.ts).
+local POOL_OF = { ['video-generation'] = 'video', ['video-render'] = 'render', ['workflow-orchestration'] = 'orchestrator',
+  ['pipeline-orchestration'] = 'pipeline', ['video-director'] = 'director' }
 
 local function opt(v) if v == nil or v == false or v == NULL or v == '' then return nil end return v end
 local function int(x) return string.format('%.0f', x) end
@@ -179,16 +191,20 @@ end
 
 -- The first waiter of a line with room that could start now: reserved and
 -- passed-over waiters are skipped, and so is a waiter whose provider is at its
--- ceiling: a later waiter on another provider may go past it.
+-- ceiling: a later waiter on another provider may go past it. A waiter held
+-- back by its server share is skipped, and so is every later waiter of its pool.
 local function lineHead(line)
   if lineSize(line) - lineRunning(line) - lineReserved(line) <= 0 then return nil end
-  local blocked = {}
+  local blocked, heldPools = {}, {}
   for _, j in ipairs(redis.call('ZRANGE', lk(line, 'wait'), 0, -1)) do
     if not isReserved(j) then
-      local f = redis.call('HMGET', ek(j), 'prov', 'passed', 'enq')
+      local f = redis.call('HMGET', ek(j), 'prov', 'passed', 'enq', 'held', 'queue')
+      local wpool = POOL_OF[opt(f[5]) or '']
       if not opt(f[3]) then
         redis.call('ZREM', lk(line, 'wait'), j) -- an entry with no hash is no waiter
-      elseif opt(f[2]) ~= '1' then
+      elseif opt(f[4]) then
+        heldPools[f[4]] = true
+      elseif opt(f[2]) ~= '1' and not (wpool and heldPools[wpool]) then
         local p = opt(f[1])
         if not p then return j, nil end
         if not blocked[p] then
@@ -321,7 +337,11 @@ local function decide()
   if held and hget(lsk(held), 'line') == line then
     extendLease(held, REQ.leaseTtl)
     dropWaiter(J)
-    return { granted = true, leaseId = held, overLimit = hget(lsk(held), 'over') == '1' }
+    -- Foreign: another BullMQ entry of the job holds it (the captions render
+    -- it was handed to). The caller runs under it but must never release it.
+    local f = redis.call('HMGET', lsk(held), 'queue', 'bull')
+    local foreign = opt(f[1]) ~= opt(m.queue) or opt(f[2]) ~= opt(m.bullJobId)
+    return { granted = true, leaseId = held, overLimit = hget(lsk(held), 'over') == '1', foreign = foreign }
   end
   if REQ.mode == 'readmit' or isReserved(J) then
     dropWaiter(J)
@@ -338,7 +358,7 @@ local function decide()
   if cur then
     score = tonumber(cur)
     enq = tonumber(hget(ek(J), 'enq'))
-    redis.call('HDEL', ek(J), 'passed')
+    redis.call('HDEL', ek(J), 'passed', 'held')
   else
     local seq = redis.call('INCR', P .. 'seq')
     score = seq
@@ -352,15 +372,18 @@ local function decide()
     if isReserved(w) then behind[#behind + 1] = w end
   end
   local free = size - running - (resAll - #behind)
-  local tentative, blocked, reason = {}, {}, nil
+  local tentative, blocked, reason, heldPools = {}, {}, nil, {}
   -- Every waiter ahead that could start takes a slot first; one blocked only
   -- by its provider's ceiling does not (it never holds back a waiter on
-  -- another provider).
+  -- another provider), nor does one held back by its server share or behind
+  -- such a waiter of its pool.
   for _, w in ipairs(redis.call('ZRANGEBYSCORE', wl, '-inf', '(' .. int(score))) do
     if reason then break end
     if not isReserved(w) then
-      local f = redis.call('HMGET', ek(w), 'prov', 'passed')
-      if opt(f[2]) ~= '1' then
+      local f = redis.call('HMGET', ek(w), 'prov', 'passed', 'held', 'queue')
+      local wpool = POOL_OF[opt(f[4]) or '']
+      if opt(f[3]) then heldPools[f[3]] = true end
+      if opt(f[2]) ~= '1' and not opt(f[3]) and not (wpool and heldPools[wpool]) then
         if free <= 0 then
           reason = 'user_lane'
         else
@@ -498,7 +521,11 @@ if lid and hget(lsk(lid), 'lane') ~= 'run' then out = lid end
 return reply({ leaseId = out })
 `
 
-/** REQ: { meta, pool } → { wait } */
+/**
+ * REQ: { meta, pool } → { wait }. A job that also waits in a lane line keeps
+ * its place there, marked `held`: a slot reserved for it is passed on, and its
+ * line reserves nothing at or behind it until its next acquire.
+ */
 const SERVER_WAIT = `${PRELUDE}
 purge()
 local m = REQ.meta
@@ -518,6 +545,13 @@ if old ~= REQ.pool then
 end
 redis.call('HSET', k, 'seen', NOW)
 redis.call('ZADD', P .. 'sseen', NOW, J)
+local held = hget(ek(J), 'line')
+if held then
+  if isReserved(J) then unreserve(J) end
+  redis.call('HSET', ek(J), 'held', REQ.pool, 'seen', NOW)
+  redis.call('ZADD', P .. 'wseen', NOW, J)
+  touchLine(held)
+end
 settle()
 return reply({ wait = serverWaitInfo(J) })
 `
@@ -588,12 +622,23 @@ end
 return reply({ heads = out })
 `
 
-/** REQ: { on } */
+/**
+ * REQ: { on, version } → { was, enforced } — the flag before and after. A
+ * version older than the stored one changes nothing (a mirror that read the
+ * setting before a newer write); an equal or newer one applies. `was` lets
+ * exactly one caller see an on→off edge.
+ */
 const SET_ENFORCED = `${PRELUDE}
 purge()
-if REQ.on then redis.call('SET', P .. 'enforced', '1') else redis.call('SET', P .. 'enforced', '0') end
+local was = redis.call('GET', P .. 'enforced') == '1'
+local v = tonumber(REQ.version) or 0
+local stored = tonumber(opt(redis.call('GET', P .. 'enforced:v')) or '0')
+if v >= stored then
+  if REQ.on then redis.call('SET', P .. 'enforced', '1') else redis.call('SET', P .. 'enforced', '0') end
+  redis.call('SET', P .. 'enforced:v', int(v))
+end
 settle()
-return reply({})
+return reply({ was = was, enforced = redis.call('GET', P .. 'enforced') == '1' })
 `
 
 /**

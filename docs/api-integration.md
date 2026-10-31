@@ -1582,7 +1582,7 @@ backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
 The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
-plus, for four classes of failure, a structured `error_hint`.
+plus, for five classes of failure, a structured `error_hint`.
 
 A provider content-policy block:
 
@@ -1628,6 +1628,22 @@ content-policy class (its message is about the file, not a policy):
 
 Treat it like any other failure — no fallback model is offered — except that
 the input to change is known: send a different clip.
+
+Or, when the job never got one of your account's concurrency slots, so it did
+not run:
+
+```json
+{ "kind": "queue-timeout", "reason": "timeout" | "lost" | "live-wait", "waitedMinutes": number }
+```
+
+`reason: "timeout"` — the job waited longer than the platform's queue timeout
+for a free slot; `"lost"` — its place in line was lost and could not be put
+back; `"live-wait"` — a synchronous call could not get a slot within its wait
+limit. `waitedMinutes` is the whole minutes it waited, rounded down. The job's
+credits are refunded; run it again. Treat an unknown `reason` like `"timeout"`.
+This hint only occurs once the deployment enforces concurrency limits (an admin
+setting, off by default, that cannot be turned on yet in this release); until
+then no job waits for a slot.
 
 `reason` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is.
 `hookPoint` says whether the request was refused before the job ran or the
@@ -1743,6 +1759,21 @@ job nobody reviews in time is auto-rejected — `failed` with the
 `policy-block` hint (`hookPoint: "result"`), the reservation refunded and
 the withheld output deleted; it is never auto-approved. Without that
 setting a hold waits for a reviewer indefinitely.
+
+A job reports `status: "queued"` while it is **waiting for a free slot**
+(when your account's concurrency limit is reached): your plan runs a set
+number of jobs at once, and a job past that waits in line until one of yours
+finishes. `queued` is an in-flight status like `pending` — keep polling; the
+job then moves to `processing` and on as usual, and it is cancellable while it
+waits. Your credits stay reserved (`credit_status: "reserved"`) for the whole
+wait. A job that waits longer than the platform's queue timeout, or that loses
+its place in line, ends `failed` with the `queue-timeout` hint
+([above](#job-failure-hints-error_hint-and-credit-status)) and is refunded —
+run it again. Measure your client's own deadlines from when the job started
+running, not from when it was created. Both `queued` and the `queue-timeout`
+hint occur only once an administrator turns concurrency limits on (an admin
+setting, off by default, that cannot be turned on yet in this release); until
+then every job starts at once and never reports `queued`.
 
 ## 8b. Pay-as-you-go accounts
 

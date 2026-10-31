@@ -4,10 +4,12 @@
  * cancelled; the orchestrator stops at its next level check, and its finally
  * finds the wrapper already final (the cancel that called this flipped it and
  * refunded its fee). The same two writes the component timeout path makes
- * (node-executor.ts executeComponentNode).
+ * (node-executor.ts executeComponentNode). A run still waiting to start
+ * leaves its concurrency lane too (its waiter is keyed by the execution id).
  */
 import { supabase } from "../supabase.js"
 import { cancelInFlightChildJobs } from "../reconcile/cancel-inflight-jobs.js"
+import { withdrawFromLane } from "../concurrency-lanes/withdraw.js"
 
 export async function cancelUseCaseInnerExecution(innerExecutionId: string, ownerId: string, reason: string): Promise<void> {
   await cancelInFlightChildJobs(innerExecutionId, ownerId)
@@ -18,4 +20,5 @@ export async function cancelUseCaseInnerExecution(innerExecutionId: string, owne
     .eq("user_id", ownerId)
     .in("status", ["pending", "running", "stopping"])
   if (error) throw new Error(`use-case run ${innerExecutionId} not cancelled: ${error.message}`)
+  await withdrawFromLane(innerExecutionId)
 }

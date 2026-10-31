@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, expectTypeOf, vi, beforeEach, afterEach } from "vitest"
 import type { FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------
@@ -45,12 +45,32 @@ vi.mock("@/ee/pipelines/llms/prompt-registry.js", () => ({
   registerPipelinePrompts: mockRegisterPipelinePrompts,
 }))
 
+// The concurrency-lane registry is process-global and never cleared, so the
+// jobLanes tests read it through spies wrapping the REAL functions: the calls
+// (and their order) are asserted per test, the lookups stay real.
+vi.mock(import("@/lib/concurrency-lanes/registry.js"), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    notePluginJobTypes: vi.fn(actual.notePluginJobTypes),
+    registerPluginJobLanes: vi.fn(actual.registerPluginJobLanes),
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { getPluginEngines, getPluginRecipes, getPluginServices, getPluginSupports, loadPrivatePlugins } from "../load.js"
-import type { NodaroPrivatePlugin, PluginToolkit } from "../types.js"
+import type { NodaroPrivatePlugin, PluginJobLaneClass, PluginToolkit } from "../types.js"
+import type { LaneClass } from "@/lib/concurrency-lanes/types.js"
+import {
+  laneClassOf,
+  notePluginJobTypes,
+  pluginJobTypesKnown,
+  registerPluginJobLanes,
+  undeclaredPluginJobTypes,
+} from "@/lib/concurrency-lanes/registry.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -618,5 +638,282 @@ describe("pluginBuildId — which plugin build this process runs", () => {
     })
     expect(result.pluginBuildId).toBeNull()
     logSpy.mockRestore()
+  })
+})
+
+describe("jobLanes — the lane each plugin job type declares", () => {
+  const noteSpy = vi.mocked(notePluginJobTypes)
+  const registerSpy = vi.mocked(registerPluginJobLanes)
+  const exit = vi.fn() as unknown as (code: number) => never
+  const handler = vi.fn()
+  const load = (plugins: NodaroPrivatePlugin[]) =>
+    loadPrivatePlugins({ importer: async () => ({ contractVersion: 1, plugins }), toolkit: fakeToolkit, exit })
+
+  beforeEach(() => {
+    mockHasCreditsRef.value = true
+    delete process.env.PRIVATE_MODULES
+    noteSpy.mockClear()
+    registerSpy.mockClear()
+    vi.mocked(exit).mockClear()
+    vi.spyOn(console, "log").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    delete process.env.PRIVATE_MODULES
+  })
+
+  it("PluginJobLaneClass is LaneClass, both ways", () => {
+    expectTypeOf<PluginJobLaneClass>().toEqualTypeOf<LaneClass>()
+  })
+
+  it("the loader merges a plugin's jobLanes", async () => {
+    const result = await load([
+      makePlugin({
+        name: "lanes-a",
+        handlers: () => ({ "jl-merge-leaf": handler, "jl-merge-coord": handler }),
+        jobLanes: () => ({
+          "jl-merge-leaf": { kind: "leaf", lane: "provider" },
+          "jl-merge-coord": { kind: "coordinator" },
+        }),
+      }),
+      makePlugin({
+        name: "lanes-b",
+        handlers: () => ({ "jl-merge-llm": handler }),
+        jobLanes: () => ({ "jl-merge-llm": { kind: "leaf", lane: "llm" } }),
+      }),
+    ])
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(result.loaded).toEqual(["lanes-a", "lanes-b"])
+    expect(laneClassOf("video-generation", "jl-merge-leaf", {})).toEqual({ kind: "leaf", lane: "provider" })
+    expect(laneClassOf("video-generation", "jl-merge-llm", {})).toEqual({ kind: "leaf", lane: "llm" })
+    expect(laneClassOf("video-generation", "jl-merge-coord", {})).toEqual({ kind: "coordinator" })
+    expect(undeclaredPluginJobTypes().filter((t) => t.startsWith("jl-merge-"))).toEqual([])
+    // The handler keys are noted first, then the declarations registered — once each.
+    expect(noteSpy).toHaveBeenCalledTimes(1)
+    expect(noteSpy).toHaveBeenCalledWith(["jl-merge-leaf", "jl-merge-coord", "jl-merge-llm"])
+    expect(registerSpy).toHaveBeenCalledTimes(1)
+    expect(noteSpy.mock.invocationCallOrder[0]).toBeLessThan(registerSpy.mock.invocationCallOrder[0]!)
+  })
+
+  it("a plugin without jobLanes loads unchanged and its types are listed undeclared", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const result = await load([makePlugin({ name: "no-lanes", handlers: () => ({ "jl-plain": handler }) })])
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(result.loaded).toEqual(["no-lanes"])
+    expect(result.handlers["jl-plain"]).toBe(handler)
+    expect(pluginJobTypesKnown()).toBe(true)
+    expect(undeclaredPluginJobTypes()).toContain("jl-plain")
+    expect(laneClassOf("video-generation", "jl-plain", {})).toEqual({ kind: "coordinator" })
+    // Listed at boot.
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("jl-plain"))).toBe(true)
+  })
+
+  it("a throwing jobLanes() is logged and the plugin still loads, its types undeclared", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const result = await load([
+      makePlugin({
+        name: "lanes-throw",
+        handlers: () => ({ "jl-throw": handler }),
+        jobLanes: () => { throw new Error("boom") },
+      }),
+    ])
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(result.loaded).toEqual(["lanes-throw"])
+    expect(result.handlers["jl-throw"]).toBe(handler)
+    expect(undeclaredPluginJobTypes()).toContain("jl-throw")
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("lanes-throw") && String(c[0]).includes("boom"))).toBe(true)
+  })
+
+  it.each([
+    ["null", null],
+    ["an array", [["jl-shape", { kind: "coordinator" }]]],
+    ["a string", "coordinator"],
+  ])("a jobLanes() that returns %s is refused and its types stay undeclared", async (_label, value) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const type = `jl-shape-${_label.replace(/\s/g, "-")}`
+    const result = await load([
+      makePlugin({
+        name: "lanes-shape",
+        handlers: () => ({ [type]: handler }),
+        jobLanes: (() => value) as unknown as NodaroPrivatePlugin["jobLanes"],
+      }),
+    ])
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(result.loaded).toEqual(["lanes-shape"])
+    expect(undeclaredPluginJobTypes()).toContain(type)
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it("an entry that is not a valid lane class is refused, and the plugin's other entries stand", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    await load([
+      makePlugin({
+        name: "lanes-bad-entry",
+        handlers: () => ({ "jl-bad": handler, "jl-good": handler }),
+        jobLanes: () => ({
+          "jl-bad": { kind: "leaf", lane: "run" } as unknown as PluginJobLaneClass,
+          "jl-good": { kind: "leaf", lane: "local" },
+        }),
+      }),
+    ])
+
+    expect(undeclaredPluginJobTypes()).toContain("jl-bad")
+    expect(undeclaredPluginJobTypes()).not.toContain("jl-good")
+    expect(laneClassOf("video-generation", "jl-good", {})).toEqual({ kind: "leaf", lane: "local" })
+  })
+
+  it("a declaration for a type the plugin's own handlers() do not return is refused, so it cannot reclassify a core job", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await load([
+      makePlugin({
+        name: "lanes-foreign",
+        handlers: () => ({ "jl-own": handler }),
+        jobLanes: () => ({ "jl-own": { kind: "leaf", lane: "provider" }, "combine-videos": { kind: "coordinator" } }),
+      }),
+    ])
+
+    expect(laneClassOf("video-generation", "combine-videos", {})).toEqual({ kind: "leaf", lane: "local" })
+    expect(laneClassOf("video-generation", "jl-own", {})).toEqual({ kind: "leaf", lane: "provider" })
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("combine-videos"))).toBe(true)
+  })
+
+  it("a plugin cannot declare another plugin's job type", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await load([
+      makePlugin({ name: "lanes-owner", handlers: () => ({ "jl-others": handler }) }),
+      makePlugin({
+        name: "lanes-meddler",
+        handlers: () => ({ "jl-meddler-own": handler }),
+        jobLanes: () => ({ "jl-others": { kind: "leaf", lane: "provider" }, "jl-meddler-own": { kind: "leaf", lane: "llm" } }),
+      }),
+    ])
+
+    expect(undeclaredPluginJobTypes()).toContain("jl-others")
+    expect(laneClassOf("video-generation", "jl-others", {})).toEqual({ kind: "coordinator" })
+    expect(laneClassOf("video-generation", "jl-meddler-own", {})).toEqual({ kind: "leaf", lane: "llm" })
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("lanes-meddler") && String(c[0]).includes("jl-others"))).toBe(true)
+  })
+
+  it("a later plugin that takes over a handler without declaring it drops the earlier declaration", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    await load([
+      makePlugin({
+        name: "lanes-first",
+        handlers: () => ({ "jl-taken-over": handler }),
+        jobLanes: () => ({ "jl-taken-over": { kind: "leaf", lane: "provider" } }),
+      }),
+      makePlugin({ name: "lanes-second", handlers: () => ({ "jl-taken-over": handler }) }),
+    ])
+
+    expect(undeclaredPluginJobTypes()).toContain("jl-taken-over")
+  })
+
+  it("a module with no plugins records that there are no plugin job types", async () => {
+    await load([])
+    expect(noteSpy).toHaveBeenCalledWith([])
+  })
+
+  describe("with a fresh registry (it is process-global and never cleared)", () => {
+    // A fresh, REAL registry: vi.resetModules() alone would hand back the cached
+    // spy-wrapped mock above, state and all, so the mock is dropped first.
+    async function fresh() {
+      vi.doUnmock("@/lib/concurrency-lanes/registry.js")
+      vi.resetModules()
+      const loader = await import("../load.js")
+      const registry = await import("@/lib/concurrency-lanes/registry.js")
+      const { unmetPreconditions } = await import("@/lib/concurrency-lanes/enforcement.js")
+      const pluginItemUnmet = () => unmetPreconditions({
+        available: true,
+        columnsPresent: true,
+        pluginTypesKnown: registry.pluginJobTypesKnown(),
+        undeclaredPluginTypes: registry.undeclaredPluginJobTypes(),
+        pluginLoadFailed: registry.pluginLoadFailed(),
+        liveCeilingMeasured: true,
+        measureDays: 7,
+      }).includes("plugins")
+      const loadPlugins = (plugins: NodaroPrivatePlugin[]) =>
+        loader.loadPrivatePlugins({ importer: async () => ({ contractVersion: 1, plugins }), toolkit: fakeToolkit, exit })
+      return { loader, registry, pluginItemUnmet, loadPlugins }
+    }
+
+    it("community/business (no plugins at all) records that there are no plugin job types", async () => {
+      mockHasCreditsRef.value = false
+      const { loader, registry, pluginItemUnmet } = await fresh()
+      expect(registry.pluginJobTypesKnown()).toBe(false)
+
+      await loader.loadPrivatePlugins({ importer: vi.fn(), exit })
+
+      expect(registry.pluginJobTypesKnown()).toBe(true)
+      expect(registry.undeclaredPluginJobTypes()).toEqual([])
+      expect(registry.pluginLoadFailed()).toBe(false)
+      expect(pluginItemUnmet()).toBe(false)
+    })
+
+    it("an optional-mode failure records no plugin job types and leaves the plugin item unmet", async () => {
+      process.env.PRIVATE_MODULES = "optional"
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      const { registry, pluginItemUnmet, loadPlugins } = await fresh()
+
+      const result = await loadPlugins([
+        makePlugin({
+          name: "lanes-ok",
+          handlers: () => ({ "jl-before-failure": handler }),
+          jobLanes: () => ({ "jl-before-failure": { kind: "leaf", lane: "provider" } }),
+        }),
+        makePlugin({ name: "lanes-broken", handlers: () => { throw new Error("broken") } }),
+      ])
+
+      expect(result.loaded).toEqual([])
+      expect(registry.pluginJobTypesKnown()).toBe(false)
+      expect(registry.undeclaredPluginJobTypes()).toEqual([])
+      expect(registry.pluginLoadFailed()).toBe(true)
+      expect(registry.laneClassOf("video-generation", "jl-before-failure", {})).toEqual({ kind: "coordinator" })
+      expect(pluginItemUnmet()).toBe(true)
+    })
+
+    it("an optional-mode import failure leaves the plugin item unmet", async () => {
+      process.env.PRIVATE_MODULES = "optional"
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      const { loader, registry, pluginItemUnmet } = await fresh()
+
+      await loader.loadPrivatePlugins({ importer: async () => { throw new Error("unavailable") }, exit })
+
+      expect(registry.pluginJobTypesKnown()).toBe(false)
+      expect(registry.pluginLoadFailed()).toBe(true)
+      expect(pluginItemUnmet()).toBe(true)
+    })
+
+    it("a plugin that takes over a core job and declares it a provider leaf runs it as one", async () => {
+      const { registry, pluginItemUnmet, loadPlugins } = await fresh()
+      expect(registry.laneClassOf("video-generation", "combine-videos", {})).toEqual({ kind: "leaf", lane: "local" })
+
+      await loadPlugins([
+        makePlugin({
+          name: "lanes-core-takeover",
+          handlers: () => ({ "combine-videos": handler }),
+          jobLanes: () => ({ "combine-videos": { kind: "leaf", lane: "provider" } }),
+        }),
+      ])
+
+      expect(registry.laneClassOf("video-generation", "combine-videos", {})).toEqual({ kind: "leaf", lane: "provider" })
+      expect(registry.undeclaredPluginJobTypes()).toEqual([])
+      expect(pluginItemUnmet()).toBe(false)
+    })
+
+    it("a plugin that takes over a core job without declaring it runs it as a coordinator, listed undeclared", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      const { registry, pluginItemUnmet, loadPlugins } = await fresh()
+
+      await loadPlugins([makePlugin({ name: "lanes-core-undeclared", handlers: () => ({ "combine-videos": handler }) })])
+
+      expect(registry.laneClassOf("video-generation", "combine-videos", {})).toEqual({ kind: "coordinator" })
+      expect(registry.undeclaredPluginJobTypes()).toEqual(["combine-videos"])
+      expect(pluginItemUnmet()).toBe(true)
+    })
   })
 })

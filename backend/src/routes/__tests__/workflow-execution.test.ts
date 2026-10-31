@@ -145,7 +145,14 @@ vi.mock("@/lib/use-case/execution-wrappers.js", () => ({ liveUseCaseWrappersOf: 
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+// Concurrency lanes: the real withdraw on the gate's JS twin (a fresh store per test).
+const lanes = vi.hoisted(() => ({ gate: null as unknown }))
+vi.mock("@/lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
+
 import { workflowExecutionRoutes, toExecutionSummary, jobToExecutionSummary } from "../workflow-execution.js"
+import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"
+import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
+import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 import { supabase } from "../../lib/supabase.js"
 import type { RunCredits } from "../../lib/job-credit-status.js"
 
@@ -162,6 +169,8 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   callStarted.at = null
+  const laneStore = makeFakeLaneStore()
+  lanes.gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(laneStore) })
   previewFlag.on = true
   vi.clearAllMocks()
 
@@ -1318,6 +1327,88 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(mockRefundCredits).not.toHaveBeenCalledWith("metered-log")
     expect(mockAppReport).toHaveBeenCalledWith(expect.objectContaining({ kind: "metered-hold-unsettled-on-cancel", jobId: METERED_JOB }))
   })
+
+  // ── concurrency lanes ──────────────────────────────────────────────────
+  const laneMeta = (jobId: string, userId: string, over: Partial<LaneEntryMeta> = {}): LaneEntryMeta => ({
+    jobId, userId, payer: `user:${userId}`, lane: "provider", provider: null, source: null, sourceDetail: null,
+    jobType: "generate-image", model: null, queue: "video-generation", bullJobId: `bull-${jobId}`, ...over,
+  })
+  const enterLane = (jobId: string, userId: string, over: Partial<LaneEntryMeta> = {}) =>
+    (lanes.gate as ConcurrencyGate).acquire({ meta: laneMeta(jobId, userId, over), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+  /** The execution read, its status write, and its jobs (`children`) for the bulk cancel. */
+  function executionTables(status: string, children: Array<{ id: string; provider: string }>, holds: Array<{ id: string; job_id: string; action: string }> = []) {
+    const executionUpdates: unknown[] = []
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "workflow_executions") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ single: async () => ({ data: { id: TEST_EXEC_ID, status }, error: null }) }) }) }),
+          update: (u: unknown) => { executionUpdates.push(u); return { eq: async () => ({ data: null, error: null }) } },
+        }
+      }
+      if (table === "usage_logs") {
+        return { select: () => ({ in: () => ({ eq: async () => ({ data: holds, error: null }) }), eq: () => ({ eq: async () => ({ data: holds, error: null }) }) }) }
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ in: async () => ({ data: children, error: null }) }),
+            maybeSingle: async () => ({ data: { reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: null }, error: null }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: () => ({ in: () => ({ in: async () => ({ data: null, error: null }) }) }),
+      }
+    }) as never)
+    return executionUpdates
+  }
+
+  it("cancelling an execution withdraws and refunds its queued children (two queued + one processing child; another user's waiter keeps its position)", async () => {
+    const gate = lanes.gate as ConcurrencyGate
+    await gate.setEnforced(true)
+    const RUNNING = "00000000-0000-4000-8000-0000000000a1"
+    const QUEUED_1 = "00000000-0000-4000-8000-0000000000a2"
+    const QUEUED_2 = "00000000-0000-4000-8000-0000000000a3"
+    await enterLane(RUNNING, TEST_USER_ID) // the processing child holds the user's only slot
+    await enterLane(QUEUED_1, TEST_USER_ID)
+    await enterLane(QUEUED_2, TEST_USER_ID)
+    await enterLane("other-running", "other-user")
+    await enterLane("other-waiting", "other-user")
+    executionTables("running",
+      [{ id: RUNNING, provider: "kie" }, { id: QUEUED_1, provider: "kie" }, { id: QUEUED_2, provider: "kie" }],
+      [{ id: "log-r", job_id: RUNNING, action: "nano-banana" }, { id: "log-q1", job_id: QUEUED_1, action: "nano-banana" }, { id: "log-q2", job_id: QUEUED_2, action: "nano-banana" }])
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`)
+
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(async () => expect(await gate.describeWait(QUEUED_2)).toBeNull())
+    expect(await gate.describeWait(QUEUED_1)).toBeNull()
+    await vi.waitFor(() => expect(mockRefundCredits).toHaveBeenCalledWith("log-q2"))
+    expect(mockRefundCredits).toHaveBeenCalledWith("log-q1")
+    expect(mockRefundCredits).toHaveBeenCalledWith("log-r")
+    expect(await gate.describeWait("other-waiting")).toMatchObject({ position: 1 })
+    // The processing child's lease is its worker's to release: still running, so a newcomer waits.
+    expect(await enterLane("newcomer", TEST_USER_ID)).toMatchObject({ granted: false, wait: { position: 1, running: 1 } })
+  })
+
+  for (const mode of [undefined, "after_current"] as const) {
+    it(`cancelling a waiting execution withdraws its run-lane waiter${mode ? ` (${mode}: a never-claimed pending run moved to stopping)` : ""}`, async () => {
+      const gate = lanes.gate as ConcurrencyGate
+      await gate.setEnforced(true)
+      const run = { lane: "run" as const, queue: "workflow-orchestration" as const, jobType: "workflow-execution" }
+      await enterLane("earlier-run", TEST_USER_ID, run) // the user's only run slot
+      await enterLane(TEST_EXEC_ID, TEST_USER_ID, run)
+      await enterLane("later-run", TEST_USER_ID, run)
+      expect(await gate.describeWait(TEST_EXEC_ID)).toMatchObject({ lane: "run", position: 1 })
+      const updates = executionTables("pending", [])
+
+      const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`, mode ? { mode } : undefined)
+
+      expect(res.statusCode).toBe(200)
+      expect(updates).toEqual([expect.objectContaining({ status: mode ? "stopping" : "cancelled" })])
+      expect(await gate.describeWait(TEST_EXEC_ID)).toBeNull()
+      expect(await gate.describeWait("later-run")).toMatchObject({ position: 1 })
+    })
+  }
 
   it("returns success for pending execution (immediate cancel)", async () => {
     const mockFrom = vi.mocked(supabase.from)

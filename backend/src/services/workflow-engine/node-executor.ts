@@ -129,6 +129,7 @@ import { BudgetedDeadline, executionBudgetExcessMs } from "../../lib/execution-b
 import { isParkedJobStatus } from "../../lib/job-status.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
+import { withdrawFromLane } from "../../lib/concurrency-lanes/withdraw.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
@@ -2762,6 +2763,9 @@ async function cancelJobAndThrow(
     .select("id, user_id, provider_task_id, provider_kind, credits")
 
   if (flipped && flipped.length > 0) {
+    // A job waiting for a concurrency slot leaves its line (harmless for one
+    // that was running: only wait entries are dropped). Bounded, never throws.
+    await withdrawFromLane(jobId)
     // 552: the job's metered SIDE holds settle on their own call-start
     // markers, after the flip, whatever its own hold's verdict below.
     await settleSideHoldsAfterFlip([jobId])
@@ -3277,6 +3281,8 @@ async function executeComponentNode(
         // The inner run is this run's owner's (component-execute creates it for them).
         .eq("user_id", ctx.userId)
         .in("status", ["pending", "running", "stopping"])
+      // An inner run still waiting to start leaves its line (keyed by its id).
+      await withdrawFromLane(innerExecutionId)
     }
     const { data: failedWrapper } = await supabase
       .from("jobs")

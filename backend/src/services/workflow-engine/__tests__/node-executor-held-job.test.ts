@@ -93,6 +93,9 @@ vi.mock("../../../ee/billing/credits.js", () => ({
 vi.mock("../../../lib/queue.js", () => ({ videoQueue: { add: mockVideoAdd } }))
 vi.mock("../../../lib/render-queue.js", () => ({ renderQueue: { add: mockRenderAdd } }))
 vi.mock("../../../workers/shared.js", () => ({ refundJobCredits: mockRefund }))
+// Concurrency lanes: a cancelled job leaves its line (withdraw.test.ts).
+const lanes = vi.hoisted(() => ({ withdrawFromLane: vi.fn(async (_jobId: string) => {}) }))
+vi.mock("../../../lib/concurrency-lanes/withdraw.js", () => lanes)
 vi.mock("../../../lib/app-settings.js", () => ({
   getAppSettings: vi.fn().mockResolvedValue({ cost_markup_percent: 0 }),
 }))
@@ -232,6 +235,27 @@ describe("pollJobToCompletion — a job parked in pending_review", () => {
     expect(settled[0].ok).toBe(false)
     expect((settled[0].value as Error).message).toBe("Execution cancelled")
     expect(jobUpdates.filter((u) => u.status === "cancelled")).toHaveLength(1)
+    expect(mockRefund).toHaveBeenCalled()
+  }, 30_000)
+
+  it("a run cancelled while its job waits for a concurrency slot cancels the queued job and withdraws it from its lane", async () => {
+    jobRecord = { status: "queued", output_data: null, error_message: null, progress: 0 }
+    lanes.withdrawFromLane.mockClear()
+    const ctx = makeCtx()
+
+    const settled: Array<{ ok: boolean; value: unknown }> = []
+    const running = executeNode(vaNode(), {}, [], [vaNode()], {}, ctx).then(
+      (v) => settled.push({ ok: true, value: v }),
+      (e) => settled.push({ ok: false, value: e }),
+    )
+    await advance(1 * MINUTE)
+    ctx.cancelled = true
+    await advance(1 * MINUTE)
+    await running
+
+    expect((settled[0]!.value as Error).message).toBe("Execution cancelled")
+    expect(jobUpdates.filter((u) => u.status === "cancelled")).toHaveLength(1)
+    expect(lanes.withdrawFromLane).toHaveBeenCalledTimes(1)
     expect(mockRefund).toHaveBeenCalled()
   }, 30_000)
 

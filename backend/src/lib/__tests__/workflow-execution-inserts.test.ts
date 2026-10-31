@@ -106,6 +106,8 @@ const TABLE_NAME_ELSEWHERE: Record<string, readonly string[]> = {
   "middleware/token-workflow-scope.ts": ["workflowOfRun"],
   // The tables whose lane columns the enforcement switch checks for (a zero-row select only).
   "lib/concurrency-lanes/enforcement.ts": ["<top>"],
+  // The tables the queued sweep reads parked rows from and the table a line head's row is read in (select only; its one write is in place).
+  "lib/concurrency-lanes/queued-sweep.ts": ["<top>", "headRow"],
 }
 
 /** The lane literals a `trigger_type` value can be, or `null` when it is not spelled out. */

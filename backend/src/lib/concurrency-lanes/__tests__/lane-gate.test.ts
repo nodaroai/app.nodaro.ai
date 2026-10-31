@@ -2,9 +2,11 @@
 // needed. The twin is trusted only because lane-gate.redis.test.ts runs the
 // SAME contract against a real Redis and the real Lua.
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ConcurrencyGate, LANE_GATE_CALL_TIMEOUT_MS, LANE_WAKE_CHANNEL, LaneGateTimeoutError, type LaneClient } from "../gate.js"
+import { ConcurrencyGate, LANE_GATE_CALL_TIMEOUT_MS, LANE_WAKE_CHANNEL, LaneGateTimeoutError, LaneGateUnavailableError, type LaneClient } from "../gate.js"
 import { runLaneGateContract } from "./lane-gate-contract.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "./fake-lane-redis.js"
+import { LANE_GATE_SCRIPTS } from "../gate-scripts.js"
+import { SERVER_POOL_OF } from "../server-share.js"
 
 describe("ConcurrencyGate — the contract on the JS twin", () => {
   runLaneGateContract(() => {
@@ -98,5 +100,39 @@ describe("ConcurrencyGate — a Redis that never answers", () => {
     for (const callTimeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => new ConcurrencyGate({ client: hangingClient, callTimeoutMs }), String(callTimeoutMs)).toThrow(RangeError)
     }
+  })
+})
+
+describe("ConcurrencyGate — a client that is not connected", () => {
+  const meta = (jobId: string) => ({ jobId, userId: "U", payer: "user:U" as const, lane: "local" as const, provider: null, source: null, sourceDetail: null, jobType: "trim-video", model: null, queue: "video-generation" as const, bullJobId: jobId })
+
+  it("rejects at once with LaneGateUnavailableError (a LaneGateTimeoutError), sending nothing", async () => {
+    const evalFn = vi.fn()
+    const gate = new ConcurrencyGate({ client: () => ({ eval: evalFn, publish: vi.fn() }) as unknown as LaneClient, connected: () => false })
+    const started = Date.now()
+    const err = await gate.withdraw("job-1").catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LaneGateUnavailableError)
+    expect(err).toBeInstanceOf(LaneGateTimeoutError)
+    expect(Date.now() - started).toBeLessThan(100)
+    expect(evalFn).not.toHaveBeenCalled()
+  })
+
+  it("is tried again once connected; with no `connected` option every call is tried", async () => {
+    const store = makeFakeLaneStore()
+    let up = false
+    const gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(store), connected: () => up })
+    await expect(gate.acquire({ meta: meta("a"), size: 1, mode: "fresh", leaseTtlMs: 60_000 })).rejects.toBeInstanceOf(LaneGateUnavailableError)
+    up = true
+    expect(await gate.acquire({ meta: meta("a"), size: 1, mode: "fresh", leaseTtlMs: 60_000 })).toMatchObject({ granted: true })
+    const plain = new ConcurrencyGate({ client: () => makeFakeLaneClient(store) })
+    expect(await plain.acquire({ meta: meta("b"), size: 1, mode: "fresh", leaseTtlMs: 60_000 })).toMatchObject({ granted: true })
+  })
+})
+
+describe("the gate's queue → server pool table", () => {
+  it("is the server share's SERVER_POOL_OF, entry for entry", () => {
+    const table = /local POOL_OF = \{([^}]*)\}/.exec(LANE_GATE_SCRIPTS.acquire)?.[1] ?? ""
+    const lua = Object.fromEntries([...table.matchAll(/\['([^']+)'\] = '([^']+)'/g)].map((m) => [m[1], m[2]]))
+    expect(lua).toEqual(SERVER_POOL_OF)
   })
 })

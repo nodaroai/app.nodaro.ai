@@ -41,7 +41,14 @@ const NON_LITERAL_WRITES: Record<string, { count: number; why: string }> = {
   "workers/shared.ts": { count: 1, why: "markJobCompleted — its callers' completion literals" },
   "middleware/credit-guard.ts": { count: 1, why: "writes back fields read from the same row" },
   "routes/component-execute.ts": { count: 1, why: "spreads a literal built in the same function" },
+  // The pickup claims spread `bullEntryFields(...)` (concurrency-lanes/columns.ts):
+  // `lane_bull_queue` + `lane_bull_job_id`, or nothing — pinned below.
+  "workers/video-worker.ts": { count: 1, why: "the pickup claim — its literal plus the BullMQ-entry fields" },
+  "workers/render-worker.ts": { count: 1, why: "the pickup claim — its literal plus the BullMQ-entry fields" },
 }
+
+/** What the pickup claims spread besides their literal (bullEntryFields). */
+const BULL_ENTRY_FIELDS = ["lane_bull_queue", "lane_bull_job_id"]
 
 const WRITE_METHODS = new Set(["update", "insert", "upsert"])
 const FILTER_METHODS = new Set(["eq", "neq", "in", "is", "gt", "gte", "lt", "lte", "like", "ilike", "contains", "containedBy", "not", "filter", "order"])
@@ -209,6 +216,12 @@ describe("the jobs columns census", () => {
     const { unknown } = scan()
     expect(unknown.map((f) => `${f.where} ${f.what}`)).toEqual([])
   }, SCAN_TIMEOUT_MS)
+
+  it("the BullMQ-entry fields the pickup claims spread are jobs columns", async () => {
+    const { bullEntryFields } = await import("../concurrency-lanes/columns.js")
+    expect(Object.keys(bullEntryFields("video-generation", "b")).sort()).toEqual([...BULL_ENTRY_FIELDS].sort())
+    expect(BULL_ENTRY_FIELDS.filter((c) => !COLUMNS.has(c))).toEqual([])
+  })
 
   it("every non-literal jobs write is one of the reviewed funnels", () => {
     const { nonLiteral } = scan()

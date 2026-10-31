@@ -60,6 +60,8 @@ vi.mock("../../queue.js", () => ({ videoQueue: { getJobs: vi.fn(async () => []),
 // R38's cancelled-hold pass has its own suite (cancelled-metered-holds.test.ts).
 vi.mock("../cancelled-metered-holds.js", () => ({ sweepCancelledMeteredHolds: vi.fn(async () => {}) }))
 vi.mock("../hold-expiry.js", () => ({ sweepExpiredHolds: vi.fn(async () => ({ expired: 0, errors: 0 })) }))
+// The lanes' queued sweep has its own suite (concurrency-lanes/__tests__/queued-sweep.test.ts).
+vi.mock("../../concurrency-lanes/queued-sweep.js", () => ({ sweepLaneQueuedJobs: vi.fn(async () => {}), sweepLaneGhosts: vi.fn(async () => {}) }))
 vi.mock("../sync-sweep.js", () => ({
   sweepStaleSyncJob: vi.fn(async (job: { id: string }) => {
     const row = db.jobs.find((candidate) => candidate.id === job.id)

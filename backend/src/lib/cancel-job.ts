@@ -496,6 +496,11 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   }
   // An MCP conversation node waiting on this job stops showing it running (lib/mcp/flows/hydrate.ts).
   void import("./mcp/flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
+  // Out of its concurrency lane again, now that the row is cancelled: a pickup
+  // between the removal above and the flip could have parked it once more, and
+  // a cancelled row can no longer park. Bounded, never throws; lazy so this
+  // module's static graph stays supabase + queue.
+  await (await import("./concurrency-lanes/withdraw.js")).withdrawFromLane(jobId)
 
   // R38: a `not-started` verdict is re-checked AFTER the flip (the worker may
   // have started its call in between): the job is not marked already-settled.

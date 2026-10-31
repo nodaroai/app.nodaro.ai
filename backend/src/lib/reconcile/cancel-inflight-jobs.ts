@@ -1,5 +1,7 @@
 import { supabase } from "../supabase.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { withdrawFromLane } from "../concurrency-lanes/withdraw.js"
+import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { declaredJobBudgetMs } from "../job-budget.js"
 import type { AdoptedJobClocks } from "../../services/workflow-engine/types.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
@@ -209,6 +211,13 @@ export async function cancelInFlightChildJobs(
   opts: CancelInFlightOptions = {},
 ): Promise<NeutralizeResult> {
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
+  // A cancel that ENDS the run also takes the children waiting for a
+  // concurrency slot (`queued`): left alone they would run and bill later for
+  // a run that is over. The resume does not touch them — it keeps the
+  // statuses it always read (adopting queued children is a change of its own).
+  const resume = opts.adoptLiveBudgetedRenders === true
+  const failable = IN_FLIGHT_JOB_STATUSES.filter((s) => !isParkedJobStatus(s))
+  const liveStatuses = resume ? failable.filter((s) => s !== "queued") : failable
   const { data: inFlight, error: selErr } = await readJobsWithSlotWait<Array<Record<string, unknown>>>(
     "id, status, input_data, provider, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key, reconcile_attempts, reconcile_last_error",
     (columns) => supabase
@@ -218,7 +227,7 @@ export async function cancelInFlightChildJobs(
       // A row naming this execution is not proof it is this run's: adopting
       // one would make its result the node's output.
       .eq("user_id", ownerId)
-      .in("status", ["pending", "processing"]),
+      .in("status", liveStatuses),
   )
 
   if (selErr) {
@@ -329,7 +338,7 @@ export async function cancelInFlightChildJobs(
         ...(isExecutionRequestKey(row.idempotency_key, executionId) ? { idempotency_key: null } : {}),
       })
       .eq("id", id)
-      .in("status", ["pending", "processing"]) // CAS — don't trample a row that just finished
+      .in("status", liveStatuses) // CAS — don't trample a row that just finished
     if (renderCandidate) {
       // Pinned to the stamp we judged dead — a beat or a pickup since the read
       // rewrites it, and a render that came alive is never cancelled (see the
@@ -353,6 +362,9 @@ export async function cancelInFlightChildJobs(
       continue
     }
     result.cancelled++
+    // A cancelled child leaves its concurrency lane (only on a cancel that
+    // ends the run: the resume is left exactly as it was). Bounded, never throws.
+    if (!resume) await withdrawFromLane(id)
     // 554: the job's metered SIDE holds settle on their own call-start markers, after the flip.
     const { settleSideHoldsAfterFlip } = await import("../llm-side-hold.js")
     await settleSideHoldsAfterFlip([id])

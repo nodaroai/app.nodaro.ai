@@ -3,6 +3,13 @@ import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../config.js"
 import { buildToolkit, type BuildToolkitOptions } from "./toolkit.js"
 import { daemonListProblem } from "./daemons.js"
+import {
+  notePluginJobTypes,
+  notePluginLoadFailed,
+  registerPluginJobLanes,
+  undeclaredPluginJobTypes,
+} from "../concurrency-lanes/registry.js"
+import type { LaneClass } from "../concurrency-lanes/types.js"
 import { CONTRACT_VERSION } from "./types.js"
 import type {
   NodaroPrivatePlugin,
@@ -175,6 +182,9 @@ function handleLoadFailure(
   reason: string,
   exit: (code: number) => never,
 ): LoadPrivatePluginsResult {
+  // Nothing was checked: the plugin job types stay unrecorded, and the
+  // enforcement precondition says the load failed in this process.
+  notePluginLoadFailed()
   if (isOptionalMode()) {
     console.warn(
       `[private-plugins] ${reason} — PRIVATE_MODULES=optional, continuing without private plugins.`,
@@ -239,7 +249,12 @@ function workerAppOf(opts: LoadPrivatePluginsOpts): BuildToolkitOptions["workerA
 export async function loadPrivatePlugins(
   opts: LoadPrivatePluginsOpts = {},
 ): Promise<LoadPrivatePluginsResult> {
-  if (!hasCredits()) return emptyResult()
+  if (!hasCredits()) {
+    // No plugins in this edition: recorded, so the enforcement precondition
+    // "every plugin job type declares its lane" reads as met, not unknown.
+    notePluginJobTypes([])
+    return emptyResult()
+  }
 
   const importer = opts.importer ?? ((name: string) => import(name))
   const exit = opts.exit ?? process.exit
@@ -288,8 +303,13 @@ export async function loadPrivatePlugins(
   const recipes: RecipeTable = {}
   const supports: PluginSupports = {}
   let daemons: readonly PluginDaemon[] = []
+  // Each job type's declared lane, by handler key, last write wins. Applied
+  // to the registry only after every plugin loaded: a load that fails part
+  // way reports no plugins, and must record none of their types.
+  const jobLanes = new Map<string, unknown>()
 
   for (const plugin of plugins) {
+    let ownTypes: string[] = []
     // A capability that THROWS while being constructed is a load failure like
     // any other, and must inherit the same semantics: fatal on cloud, and
     // survivable under PRIVATE_MODULES=optional. Without this the rejection
@@ -304,7 +324,12 @@ export async function loadPrivatePlugins(
         await plugin.registerRoutes(opts.app, getToolkit())
       }
       if (plugin.handlers) {
-        Object.assign(handlers, plugin.handlers(getToolkit()))
+        const pluginHandlers = plugin.handlers(getToolkit())
+        Object.assign(handlers, pluginHandlers)
+        ownTypes = Object.keys(pluginHandlers ?? {})
+        // A plugin that takes over a handler takes over its lane too: an
+        // earlier plugin's declaration for it no longer describes it.
+        for (const type of ownTypes) jobLanes.delete(type)
       }
       if (plugin.staticCreditCosts) {
         await applyStaticCreditCosts(plugin.staticCreditCosts())
@@ -338,8 +363,11 @@ export async function loadPrivatePlugins(
       const detail = err instanceof Error ? err.message : String(err)
       return handleLoadFailure(`plugin "${plugin.name}" failed to initialise: ${detail}`, exit)
     }
+    for (const [type, cls] of Object.entries(ownJobLanes(plugin, ownTypes))) jobLanes.set(type, cls)
     loaded.push(plugin.name)
   }
+
+  applyJobLanes(Object.keys(handlers), jobLanes)
 
   setPluginServices(services)
   setPluginEngines(engines)
@@ -355,6 +383,61 @@ export async function loadPrivatePlugins(
     supports,
     ...(opts.daemons ? { daemons: [...daemons] } : {}),
     pluginBuildId: typeof buildId === "string" ? buildId : null,
+  }
+}
+
+/**
+ * A plugin's `jobLanes()` declaration, or none. Never fails the load: a
+ * declaration that throws or is not a plain object is logged and dropped, and
+ * the plugin's types run as coordinators (which cannot deadlock). The
+ * entries themselves are validated by the registry, one by one.
+ */
+function readJobLanes(plugin: NodaroPrivatePlugin): Record<string, unknown> {
+  if (!plugin.jobLanes) return {}
+  let declared: unknown
+  try {
+    declared = plugin.jobLanes()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    console.warn(`[private-plugins] plugin "${plugin.name}" jobLanes() threw: ${detail} — its job types run as coordinators`)
+    return {}
+  }
+  if (declared === null || typeof declared !== "object" || Array.isArray(declared)) {
+    console.warn(`[private-plugins] plugin "${plugin.name}" jobLanes() returned no object — its job types run as coordinators`)
+    return {}
+  }
+  return declared as Record<string, unknown>
+}
+
+/**
+ * The entries of a plugin's declaration for job types its OWN `handlers()`
+ * returns. Any other key is refused (logged): a plugin declares only what it
+ * runs, so it can neither reclassify a core job nor another plugin's type.
+ */
+function ownJobLanes(plugin: NodaroPrivatePlugin, ownTypes: readonly string[]): Record<string, unknown> {
+  const own = new Set(ownTypes)
+  const kept: Record<string, unknown> = {}
+  for (const [type, cls] of Object.entries(readJobLanes(plugin))) {
+    if (own.has(type)) kept[type] = cls
+    else console.warn(`[private-plugins] plugin "${plugin.name}" declares a lane for job type "${type}", which its handlers() do not return — ignored`)
+  }
+  return kept
+}
+
+/**
+ * Records this process's plugin job types (every merged handler key) and then
+ * their declared lanes, and lists at boot the types left undeclared — each
+ * one an unmet enforcement precondition.
+ */
+function applyJobLanes(handlerKeys: string[], declared: ReadonlyMap<string, unknown>): void {
+  notePluginJobTypes(handlerKeys)
+  // Unvalidated here on purpose: registerPluginJobLanes refuses an invalid class.
+  registerPluginJobLanes(Object.fromEntries(declared) as Record<string, LaneClass>)
+  const undeclared = undeclaredPluginJobTypes()
+  if (undeclared.length > 0) {
+    console.warn(
+      `[private-plugins] ${undeclared.length} plugin job type(s) declare no concurrency lane and run as coordinators: ${undeclared.join(", ")}`,
+    )
   }
 }
 

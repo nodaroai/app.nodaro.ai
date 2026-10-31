@@ -1378,6 +1378,17 @@ export type PluginJobErrorHint =
       kind: "credits"
       code: string
     }
+  | {
+      /**
+       * The job never got a concurrency slot, so it did not run (refunded):
+       * the queue timeout ran out (`timeout`), its place in line was lost
+       * (`lost`), or a live call's wait ran out (`live-wait`).
+       * `waitedMinutes`: whole minutes waited, rounded down. ADDITIVE-OPTIONAL.
+       */
+      kind: "queue-timeout"
+      reason: "timeout" | "lost" | "live-wait"
+      waitedMinutes: number
+    }
 
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */
 export interface PluginOwnedJobRow {
@@ -3353,6 +3364,19 @@ export interface PluginCapabilities {
    * Flexible prompt).
    */
   readonly nodaroMotionMotion?: boolean
+  /**
+   * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
+   * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
+   * never calls it, and runs every plugin job type as a coordinator.
+   */
+  readonly jobLanes?: boolean
+  /**
+   * `tk.jobs.waitForJob` is queue-aware: the time the awaited job spends
+   * waiting for a free slot does not count against the caller's timeout.
+   * False (or absent) — the wait counts from when it was called, so a plugin
+   * that waits on a job which may queue keeps a timeout that allows for it.
+   */
+  readonly queueAwareWait?: boolean
 }
 
 /**
@@ -4600,6 +4624,19 @@ export interface PluginRecipe {
 }
 export type RecipeTable = Record<string, PluginRecipe>
 
+/**
+ * The concurrency lane a plugin job type runs in (the host's `LaneClass` in
+ * `lib/concurrency-lanes/types.ts`; a structural mirror, pinned to it by a
+ * type test). A `leaf` job holds one slot of its lane for its whole run:
+ * `provider` (a call to an external AI provider), `llm` (an LLM call) or
+ * `local` (in-house compute: ffmpeg, image compositing). A `coordinator`
+ * holds no leaf slot itself — each toolkit call it makes acquires its own —
+ * and, when it is a top-level job, one of its user's run slots.
+ */
+export type PluginJobLaneClass =
+  | { kind: "leaf"; lane: "provider" | "llm" | "local" }
+  | { kind: "coordinator" }
+
 export interface NodaroPrivatePlugin {
   name: string
   registerRoutes?(app: FastifyInstance, tk: PluginToolkit): Promise<void>
@@ -4645,6 +4682,17 @@ export interface NodaroPrivatePlugin {
    * `PluginSupports` — plugin → host, the reverse of `tk.capabilities`).
    */
   supports?(): PluginSupports
+  /**
+   * Additive: the concurrency lane of each job type this plugin's `handlers()`
+   * returns, keyed by handler key (see `PluginJobLaneClass`). A type left out
+   * runs as a coordinator, which never deadlocks but takes a run slot; the
+   * host lists undeclared types at boot. Merged by the loader last write wins
+   * per type, like `handlers`; an entry for a key this plugin's own
+   * `handlers()` does not return, or one that is not a valid class, is
+   * refused (logged). Read only when
+   * `tk.capabilities.jobLanes` is true on the host.
+   */
+  jobLanes?(): Record<string, PluginJobLaneClass>
 }
 
 export interface PrivatePluginsModule {

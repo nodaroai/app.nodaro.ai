@@ -23,6 +23,22 @@ const mocks = vi.hoisted(() => ({
   updateResult: { data: [{ id: "u1" }] as any[] | null, error: null as { message: string } | null },
   // Quietly stopped accounts (lib/access-blocks.ts): their pending jobs are left alone.
   quietUsers: new Set<string>(),
+  // Every jobs status filter a scan applied: [method, column, value].
+  statusFilters: [] as Array<[string, string, unknown]>,
+  // The BullMQ entry each row was stamped with (lane_bull_queue / lane_bull_job_id).
+  bullStamps: new Map<string, { queue: string; bullJobId: string; status: string | null }>(),
+  // BullMQ entries by id, as videoQueue.getJob finds them.
+  bullById: new Map<string, { data: Record<string, unknown>; getState: () => Promise<string> }>(),
+}))
+
+// The lanes' queued sweep has its own suite (concurrency-lanes/__tests__/queued-sweep.test.ts):
+// here only its place in the tick matters.
+vi.mock("../../concurrency-lanes/queued-sweep.js", () => ({
+  sweepLaneQueuedJobs: vi.fn(async () => {}),
+  sweepLaneGhosts: vi.fn(async () => {}),
+}))
+vi.mock("../../concurrency-lanes/columns.js", () => ({
+  readBullEntry: vi.fn(async (jobId: string) => mocks.bullStamps.get(jobId) ?? null),
 }))
 
 vi.mock("../../access-blocks.js", () => ({
@@ -56,13 +72,15 @@ vi.mock("../../supabase.js", () => ({
             ? Promise.resolve({ data: mocks.updateResult.data, error: mocks.updateResult.error })
             : chain,
         ),
-        in: vi.fn((col?: string) => {
+        in: vi.fn((col?: string, vals?: unknown) => {
           if (col === "input_data->>type") isRender = true
+          if (col === "status") mocks.statusFilters.push(["in", col, vals])
           return chain
         }),
         not: vi.fn(() => chain),
         eq: vi.fn((col?: string, val?: unknown) => {
           if (col === "provider" && val === "component") isComponentWrapper = true
+          if (col === "status") mocks.statusFilters.push(["eq", col, val])
           return chain
         }),
         is: vi.fn(() => {
@@ -93,6 +111,7 @@ vi.mock("../../supabase.js", () => ({
 vi.mock("../../queue.js", () => ({
   videoQueue: {
     getJobs: vi.fn(async () => mocks.queueJobs),
+    getJob: vi.fn(async (id: string) => mocks.bullById.get(id)),
     add: vi.fn(async (name: string, data: Record<string, unknown>) => {
       mocks.queueAddCalls.push([name, data])
     }),
@@ -144,6 +163,7 @@ import { reconcileElevenLabsJob } from "../elevenlabs.js"
 import { reconcileFalJob } from "../fal.js"
 import { sweepExpiredHolds } from "../hold-expiry.js"
 import { sweepUseCaseWrappers } from "../use-case-wrapper-sweep.js"
+import { sweepLaneGhosts, sweepLaneQueuedJobs } from "../../concurrency-lanes/queued-sweep.js"
 import { STALE_THRESHOLD_MS, type ProviderKind } from "../types.js"
 
 /**
@@ -175,6 +195,9 @@ describe("reconcileInflightJobs", () => {
     mocks.updateCalls.length = 0
     mocks.updateResult.data = [{ id: "u1" }]
     mocks.updateResult.error = null
+    mocks.statusFilters.length = 0
+    mocks.bullStamps.clear()
+    mocks.bullById.clear()
     ;(sweepStaleSyncJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileKieJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileReplicateJob as ReturnType<typeof vi.fn>).mockClear()
@@ -499,6 +522,35 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).toHaveBeenCalledTimes(1)
   })
 
+  it("the never-started sweep and the main scan ignore queued rows", async () => {
+    // A job waiting for a concurrency slot is `queued`; its own clock is the
+    // lanes' queue timeout, never these sweeps'.
+    await reconcileInflightJobs()
+    const statusValues = mocks.statusFilters.flatMap(([, , v]) => (Array.isArray(v) ? v : [v]))
+    expect(mocks.statusFilters).toContainEqual(["in", "status", ["pending", "processing"]])
+    expect(mocks.statusFilters).toContainEqual(["eq", "status", "pending"])
+    expect(statusValues).not.toContain("queued")
+  })
+
+  it("runs the lanes' queued and ghost sweeps once per tick, with the tick's result", async () => {
+    ;(sweepLaneQueuedJobs as ReturnType<typeof vi.fn>).mockClear()
+    ;(sweepLaneGhosts as ReturnType<typeof vi.fn>).mockClear()
+    const result = await reconcileInflightJobs()
+    expect(sweepLaneQueuedJobs).toHaveBeenCalledTimes(1)
+    expect(sweepLaneGhosts).toHaveBeenCalledTimes(1)
+    expect((sweepLaneQueuedJobs as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe(result)
+  })
+
+  it("a lane sweep that throws does not abort the tick", async () => {
+    ;(sweepLaneQueuedJobs as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"))
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    ;(sweepExpiredHolds as ReturnType<typeof vi.fn>).mockClear()
+    const result = await reconcileInflightJobs()
+    expect(result.errors).toBe(1)
+    expect(sweepExpiredHolds).toHaveBeenCalledTimes(1)
+    error.mockRestore()
+  })
+
   it("sweeps stuck render jobs (processing, no provider_call_started_at) invisible to every other path", async () => {
     // Render jobs leak when a render stalls past BullMQ's stall cap: the row stays
     // 'processing' with no provider_call_started_at and provider != 'component', so
@@ -658,6 +710,33 @@ describe("reconcileInflightJobs", () => {
       expect(result.notStale).toBe(1)
       expect(result.swept).toBe(0)
       expect(result.recovered).toBe(0)
+    })
+
+    it("a drained gvp entry beyond the first 500 delayed jobs is not requeued", async () => {
+      // The scan's first 500 entries do not include it; the entry the row was
+      // stamped with, looked up by id, is alive on the delayed set.
+      mocks.bullStamps.set("j-gvp-1", { queue: "video-generation", bullJobId: "bull-9001", status: "processing" })
+      mocks.bullById.set("bull-9001", { data: { jobId: "j-gvp-1" }, getState: async () => "delayed" })
+      mocks.renderRows.push(gvpRow())
+      const result = await reconcileInflightJobs()
+
+      expect(mocks.queueAddCalls).toHaveLength(0)
+      expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+      expect(mocks.updateCalls).toHaveLength(0)
+      expect(result.notStale).toBe(1)
+    })
+
+    it("a stamped entry that ended, or carries another job, falls back to the scan", async () => {
+      mocks.bullStamps.set("j-gvp-1", { queue: "video-generation", bullJobId: "bull-1", status: "processing" })
+      mocks.bullById.set("bull-1", { data: { jobId: "j-gvp-1" }, getState: async () => "completed" })
+      mocks.renderRows.push(gvpRow())
+      expect((await reconcileInflightJobs()).recovered).toBe(1)
+
+      mocks.queueAddCalls.length = 0
+      mocks.bullById.set("bull-1", { data: { jobId: "someone-else" }, getState: async () => "delayed" })
+      mocks.renderRows.length = 0
+      mocks.renderRows.push(gvpRow())
+      expect((await reconcileInflightJobs()).recovered).toBe(1)
     })
 
     it("CAS lost (0 rows updated — cancel/complete landed or another tick won) → falls through to sweep, no requeue", async () => {

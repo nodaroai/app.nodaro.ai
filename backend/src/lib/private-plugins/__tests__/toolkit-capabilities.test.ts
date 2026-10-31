@@ -51,6 +51,17 @@ describe("tk.capabilities", () => {
     expect(typeof tk.http.quoteSeedanceRefVideo).toBe("function")
   })
 
+  it("advertises that a plugin can declare its job types' concurrency lanes", () => {
+    // tk.capabilities.jobLanes === true: the loader reads NodaroPrivatePlugin.jobLanes().
+    expect(buildToolkit().capabilities?.jobLanes).toBe(true)
+  })
+
+  it("does not yet advertise a queue-aware tk.jobs.waitForJob", () => {
+    // The wait still counts a child's queued time against the plugin's timeout;
+    // the marker turns true with the change that makes it queue-aware.
+    expect(buildToolkit().capabilities?.queueAwareWait).toBe(false)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

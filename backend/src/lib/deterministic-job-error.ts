@@ -19,6 +19,11 @@
  * that could succeed on a retry (network, provider, storage, a probe that
  * timed out) must NOT use it.
  *
+ * One deliberate exception: a wait for a concurrency slot that ran past the
+ * queue timeout (`LaneWaitTimeoutError`, lib/concurrency-lanes/errors.ts) is
+ * a subclass. A retry would only stand in the same line for the whole timeout
+ * again, so the job is failed and refunded on this attempt.
+ *
  * WHY A MARKER PROPERTY (not just `instanceof`): same reason as
  * `PostProcessingError` — a re-thrown or wrapped error can lose its prototype
  * but keep own properties; `isDeterministicJobError` also walks the `cause`

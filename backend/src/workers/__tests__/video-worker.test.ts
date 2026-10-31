@@ -39,7 +39,9 @@ const mocks = vi.hoisted(() => {
   // to [] simulates a concurrent completer/cancel having already moved the row.
   const mockCasSelect = vi.fn().mockResolvedValue({ data: [{ id: "job-1" }], error: null })
   const mockIn = vi.fn().mockReturnValue({ select: mockCasSelect })
-  const mockEq = vi.fn().mockReturnValue({ single: mockSingle, in: mockIn })
+  // A park's first-park stamp: update({ lane_queued_at }).eq("id").is("lane_queued_at", null).
+  const mockIs = vi.fn().mockResolvedValue({ data: null, error: null })
+  const mockEq = vi.fn().mockReturnValue({ single: mockSingle, in: mockIn, is: mockIs })
   const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
   const mockFrom = vi.fn().mockReturnValue({
@@ -47,8 +49,9 @@ const mocks = vi.hoisted(() => {
     update: mockUpdate,
   })
 
-  // Captured processor callback from Worker constructor
+  // Captured processor callback (and options) from the Worker constructor
   let capturedProcessor: ((job: unknown, token?: string) => Promise<void>) | null = null
+  let capturedOptions: Record<string, unknown> | undefined
 
   return {
     mockHasCreditsRef,
@@ -73,6 +76,8 @@ const mocks = vi.hoisted(() => {
     mockSelect,
     mockUpdate,
     getCapturedProcessor: () => capturedProcessor,
+    getCapturedOptions: () => capturedOptions,
+    setCapturedOptions: (o: Record<string, unknown> | undefined) => { capturedOptions = o },
     setCapturedProcessor: (p: ((job: unknown, token?: string) => Promise<void>) | null) => { capturedProcessor = p },
   }
 })
@@ -82,8 +87,9 @@ vi.mock("bullmq", () => {
   class MockWorker {
     on = vi.fn()
     close = vi.fn()
-    constructor(_queue: string, processor: (job: unknown, token?: string) => Promise<void>) {
+    constructor(_queue: string, processor: (job: unknown, token?: string) => Promise<void>, opts?: Record<string, unknown>) {
       mocks.setCapturedProcessor(processor)
+      mocks.setCapturedOptions(opts)
     }
   }
   // The REAL class shape matters: the worker throws `new DelayedError()` after
@@ -100,8 +106,19 @@ vi.mock("ioredis", () => {
   return { default: FakeRedis }
 })
 
+// Concurrency lanes: the real admission on the gate's JS twin (a fresh store
+// per test, enforcement off unless a test turns it on), so every case below
+// also runs through admission exactly as production does with lanes off.
+const lanes = vi.hoisted(() => ({
+  gate: null as unknown,
+  sizes: { provider: 1, llm: 2, local: 1, run: 1 },
+}))
+vi.mock("../../lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
+vi.mock("../../lib/concurrency-lanes/sizes.js", () => ({ laneSizesFor: async () => lanes.sizes }))
+vi.mock("../../lib/concurrency-lanes/provider-of.js", () => ({ primaryProviderOfJob: () => "kie" }))
+
 vi.mock("@/lib/config.js", () => ({
-  config: { REDIS_URL: "redis://localhost:6379", EDITION: "cloud" },
+  config: { REDIS_URL: "redis://localhost:6379", EDITION: "cloud", VIDEO_WORKER_CONCURRENCY: 4 },
   hasCredits: () => mocks.mockHasCreditsRef.value,
   isCloud: () => mocks.mockHasCreditsRef.value,
   isCommunity: () => false,
@@ -233,6 +250,17 @@ import { DrainAbortError, beginWorkerDrain, _resetWorkerDrainForTests } from "..
 import { createStageJournal } from "../../lib/private-plugins/stage-journal.js"
 import type { PluginStageKey, PluginStageToolkit } from "../../lib/private-plugins/scene3d-contract.js"
 import { DelayedError } from "bullmq"
+import { ConcurrencyGate, type WakeTarget } from "../../lib/concurrency-lanes/gate.js"
+import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
+import { registerWakeTargetsHandler, resetWorkerAdmitHooksForTests } from "../../lib/concurrency-lanes/worker-admit.js"
+import { resetServerShareForTests, serverShareOf } from "../../lib/concurrency-lanes/server-share.js"
+import { resetLaneColumnsForTests } from "../../lib/concurrency-lanes/columns.js"
+
+/** A gate on a fresh in-memory twin of Redis. */
+function newLaneGate(): ConcurrencyGate {
+  const store = makeFakeLaneStore()
+  return new ConcurrencyGate({ client: () => makeFakeLaneClient(store) })
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -266,6 +294,10 @@ function makeBullJob(name: string, data: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  lanes.gate = newLaneGate()
+  resetWorkerAdmitHooksForTests()
+  resetLaneColumnsForTests()
+  resetServerShareForTests()
   mocks.mockHasCreditsRef.value = true
   mocks.mockSingle.mockResolvedValue({ data: mockJobRecord(), error: null })
   mocks.mockSignScene3DDeliveryUrls.mockImplementation(async (payload: Record<string, unknown>) => payload)
@@ -442,16 +474,24 @@ describe("video worker processor", () => {
     const { resetSlotWaitColumnForTests } = await import("../../lib/jobs-slot-wait-column.js")
     try {
       mocks.mockSingle.mockResolvedValue({ data: mockJobRecord(), error: null })
-      mocks.mockCasSelect
-        .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column jobs.slot_wait_ms does not exist" } })
-        .mockResolvedValueOnce({ data: [{ id: "job-1" }], error: null })
+      // The database has the lane columns but not slot_wait_ms: any statement selecting it fails whole.
+      mocks.mockCasSelect.mockImplementation(async (columns: string) => (columns.includes("slot_wait_ms")
+        ? { data: null, error: { code: "42703", message: "column jobs.slot_wait_ms does not exist" } }
+        : { data: [{ id: "job-1" }], error: null }))
 
       await processor(makeBullJob("generate-image"))
 
-      expect(mocks.mockCasSelect.mock.calls[0]?.[0]).toContain("slot_wait_ms")
-      expect(mocks.mockCasSelect.mock.calls[1]?.[0]).toBe("id")
+      const selects = mocks.mockCasSelect.mock.calls.map(([c]) => c)
+      expect(selects[0]).toContain("slot_wait_ms")
+      expect(selects.at(-1)).toBe("id")
       expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+      // The claim that won still recorded the job's BullMQ entry: the lane columns are not blamed for slot_wait_ms.
+      const claims = mocks.mockUpdate.mock.calls.map(([f]) => f as Record<string, unknown>).filter((f) => f.status === "processing")
+      expect(claims.at(-1)).toMatchObject({ lane_bull_queue: "video-generation", lane_bull_job_id: "bull-1" })
+      const { laneColumnsAbsent } = await import("../../lib/concurrency-lanes/columns.js")
+      expect(laneColumnsAbsent("jobs")).toBe(false)
     } finally {
+      mocks.mockCasSelect.mockReset().mockResolvedValue({ data: [{ id: "job-1" }], error: null })
       resetSlotWaitColumnForTests()
     }
   })
@@ -697,12 +737,12 @@ describe("video worker processor", () => {
     const job = makeBullJob("generate-image")
     await expect(processor(job)).rejects.toThrow("post-provider upload 500")
 
-    // The CAS guard was applied. Two DIFFERENT guards run in this path: the
-    // worker's own pickup CAS (["pending","processing"] — unchanged, D9 keeps
-    // completion single-shot) and the failure CAS, which is markJobFailed's
-    // FAILABLE_STATUSES: "queued" is newly failable, "pending_review" never is.
-    expect(mocks.mockIn).toHaveBeenCalledWith("status", ["pending", "processing"])
-    expect(mocks.mockIn).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    // The CAS guard was applied. Two DIFFERENT guards run in this path, in
+    // order: the worker's own pickup CAS — a parked job is `queued`, so the
+    // claim accepts it too (pickupStatusesFor) — and the failure CAS, which is
+    // markJobFailed's FAILABLE_STATUSES: "pending_review" never is either.
+    const statusFilters = mocks.mockIn.mock.calls.filter((c) => c[0] === "status").map((c) => c[1])
+    expect(statusFilters).toEqual([["pending", "queued", "processing"], ["pending", "queued", "processing"]])
     expect(
       mocks.mockIn.mock.calls.every((c) => !(c[1] as string[]).includes("pending_review")),
     ).toBe(true)
@@ -1282,5 +1322,231 @@ describe("video worker processor", () => {
       expect(job.moveToDelayed).not.toHaveBeenCalled()
       expect(mocks.mockRefundJobCredits).toHaveBeenCalled()
     })
+  })
+})
+
+const JobCancelledErrorRef: { value: (new (jobId: string) => Error) | null } = { value: null }
+
+// ---------------------------------------------------------------------------
+// Concurrency lanes at pickup (lib/concurrency-lanes/worker-admit.ts)
+// ---------------------------------------------------------------------------
+
+describe("video worker — concurrency slot", () => {
+  let processor: (job: unknown, token?: string) => Promise<void>
+  let gate: ConcurrencyGate
+  let wakes: WakeTarget[][]
+
+  const waiterMeta = {
+    jobId: "waiter", userId: "user-1", payer: "user:user-1" as const, lane: "provider" as const, provider: "kie", source: null,
+    sourceDetail: null, jobType: "generate-image", model: null, queue: "video-generation" as const, bullJobId: "bull-waiter",
+  }
+
+  beforeEach(async () => {
+    createVideoWorker()
+    processor = mocks.getCapturedProcessor()!
+    gate = lanes.gate as ConcurrencyGate
+    wakes = []
+    registerWakeTargetsHandler(async (t) => { wakes.push(t) })
+    // Enforced, size 1: a job of the same user that arrives while ours runs waits behind it.
+    await gate.setEnforced(true)
+    mocks.mockHandler.mockImplementation(async () => {
+      expect((await gate.acquire({ meta: waiterMeta, size: 1, mode: "fresh", leaseTtlMs: 60_000 })).granted).toBe(false)
+    })
+  })
+
+  afterEach(() => {
+    mocks.mockHandler.mockReset()
+    mocks.mockHandler.mockResolvedValue(undefined)
+    _resetWorkerDrainForTests()
+  })
+
+  /** The handler's run, then the error it ends with (if any). */
+  function failWith(err: unknown) {
+    mocks.mockHandler.mockImplementationOnce(async () => {
+      expect((await gate.acquire({ meta: waiterMeta, size: 1, mode: "fresh", leaseTtlMs: 60_000 })).granted).toBe(false)
+      throw err
+    })
+  }
+
+  const expectReleasedOnce = (release: ReturnType<typeof vi.spyOn>, outcome: string) => {
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(release.mock.calls[0]![1]).toBe(outcome)
+    expect(wakes).toEqual([[{ jobId: "waiter", queue: "video-generation", bullJobId: "bull-waiter" }]])
+  }
+
+  it("releases the slot on success, failure, cancel, non-final retry and drain", async () => {
+    const cases: Array<[string, () => void, (job: ReturnType<typeof makeBullJob>) => Promise<unknown>]> = [
+      ["completed", () => {}, (job) => processor(job)],
+      ["failed", () => failWith(new Error("provider 500")), (job) => processor(job).catch(() => undefined)],
+      ["cancelled", () => failWith(new JobCancelledErrorRef.value!("job-1")), (job) => processor(job)],
+      ["requeued", () => { mocks.mockIsFinalJobAttempt.mockReturnValueOnce(false); failWith(new Error("transient")) }, (job) => processor(job).catch(() => undefined)],
+      ["requeued", () => failWith(new DrainAbortError()), (job) => processor(job, "lock-token").catch(() => undefined)],
+    ]
+    const { JobCancelledError } = await import("../../lib/job-cancellation.js")
+    JobCancelledErrorRef.value = JobCancelledError
+    for (const [outcome, arrange, run] of cases) {
+      lanes.gate = newLaneGate()
+      gate = lanes.gate as ConcurrencyGate
+      await gate.setEnforced(true)
+      wakes = []
+      const release = vi.spyOn(gate, "release")
+      arrange()
+      await run(makeBullJob("generate-image"))
+      expectReleasedOnce(release, outcome)
+    }
+  })
+
+  it("the handler runs under the job's leaf hold", async () => {
+    const { currentConcurrencyHold } = await import("../../lib/concurrency-lanes/hold.js")
+    let hold: unknown
+    mocks.mockHandler.mockImplementationOnce(async () => { hold = currentConcurrencyHold() })
+    await processor(makeBullJob("generate-image"))
+    expect(hold).toMatchObject({ role: "leaf", lane: "provider", userId: "user-1", jobId: "job-1", leaseId: expect.any(String) })
+  })
+
+  it("a job discarded at pickup releases its slot as cancelled", async () => {
+    const release = vi.spyOn(gate, "release")
+    mocks.mockCasSelect.mockResolvedValueOnce({ data: [], error: null })
+    await processor(makeBullJob("generate-image"))
+    expect(mocks.mockHandler).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(release.mock.calls[0]![1]).toBe("cancelled")
+  })
+
+  it("the pickup CAS accepts a queued row", async () => {
+    await processor(makeBullJob("generate-image"))
+    expect(mocks.mockIn.mock.calls[0]).toEqual(["status", ["pending", "queued", "processing"]])
+  })
+
+  it("a lane-readd entry's CAS accepts only queued", async () => {
+    await processor({ ...makeBullJob("generate-image"), id: "lane-readd-job-1" })
+    expect(mocks.mockIn.mock.calls[0]).toEqual(["status", ["queued"]])
+  })
+
+  it("the pickup claim records the job's BullMQ entry in the same UPDATE: one statement per pickup", async () => {
+    await gate.setEnforced(false)
+    mocks.mockHandler.mockImplementation(async () => undefined)
+    await processor(makeBullJob("generate-image"))
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    const updates = mocks.mockUpdate.mock.calls.map(([f]) => f as Record<string, unknown>)
+    const claims = updates.filter((f) => f.status === "processing")
+    expect(claims).toHaveLength(1)
+    expect(claims[0]).toMatchObject({ status: "processing", job_type: "generate-image", lane_bull_queue: "video-generation", lane_bull_job_id: "bull-1" })
+    // No separate statement names a lane column.
+    expect(updates.filter((f) => f.status !== "processing" && Object.keys(f).some((k) => k.startsWith("lane_")))).toEqual([])
+    // Its status set is unchanged.
+    expect(mocks.mockIn.mock.calls[0]).toEqual(["status", ["pending", "queued", "processing"]])
+  })
+
+  it("with the lane columns absent the claim succeeds once without them, and never names them again", async () => {
+    await gate.setEnforced(false)
+    mocks.mockHandler.mockImplementation(async () => undefined)
+    const namesLane = (fields: unknown) => Object.keys((fields ?? {}) as object).some((k) => k.startsWith("lane_"))
+    // The database answers PGRST204 for any write naming a lane_* column (a statement naming a missing column fails whole).
+    const base = mocks.mockUpdate.getMockImplementation()
+    mocks.mockUpdate.mockImplementation((fields: unknown) => {
+      if (namesLane(fields)) {
+        const failed = { data: null, error: { code: "PGRST204", message: "Could not find the 'lane_bull_job_id' column of 'jobs' in the schema cache" } }
+        return { eq: () => ({ in: () => ({ select: async () => failed }) }) }
+      }
+      return base ? base(fields) : { eq: mocks.mockEq }
+    })
+    try {
+      await processor(makeBullJob("generate-image"))
+      await processor(makeBullJob("generate-image"))
+      expect(mocks.mockHandler).toHaveBeenCalledTimes(2)
+      const claims = mocks.mockUpdate.mock.calls.map(([f]) => f as Record<string, unknown>).filter((f) => f.status === "processing")
+      // The first pickup: the claim with the columns, then without; the second: without only.
+      expect(claims.map(namesLane)).toEqual([true, false, false])
+      expect(mocks.mockUpdate.mock.calls.filter(([f]) => namesLane(f))).toHaveLength(1)
+    } finally {
+      mocks.mockUpdate.mockImplementation(base ?? (() => ({ eq: mocks.mockEq })))
+    }
+  })
+
+  it("a job that waited has its requeue payload deleted once its claim wins; one that never waited does not", async () => {
+    await gate.setEnforced(false)
+    mocks.mockHandler.mockImplementation(async () => undefined)
+    const deletes: Array<[string, unknown, string, unknown]> = []
+    const base = mocks.mockFrom.getMockImplementation()
+    mocks.mockFrom.mockImplementation((table: string) => ({
+      select: mocks.mockSelect,
+      update: mocks.mockUpdate,
+      delete: () => ({ eq: (c: string, v: unknown) => ({ in: async (c2: string, v2: unknown) => { deletes.push([table, [c, v], c2, v2]); return { error: null } } }) }),
+    }))
+    mocks.mockSingle.mockResolvedValueOnce({ data: mockJobRecord({ status: "queued" }), error: null })
+    await processor(makeBullJob("generate-image"))
+    await vi.waitFor(() => expect(deletes).toEqual([["lane_requeue_payloads", ["kind", "job"], "row_id", ["job-1"]]]))
+
+    mocks.mockSingle.mockResolvedValueOnce({ data: mockJobRecord({ status: "pending" }), error: null })
+    await processor(makeBullJob("generate-image"))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(deletes).toHaveLength(1)
+    if (base) mocks.mockFrom.mockImplementation(base)
+    else mocks.mockFrom.mockReturnValue({ select: mocks.mockSelect, update: mocks.mockUpdate })
+  })
+
+  it("a queue-timeout error writes its hint on the failed row", async () => {
+    const { LaneWaitTimeoutError } = await import("../../lib/concurrency-lanes/errors.js")
+    failWith(new LaneWaitTimeoutError({ reason: "timeout", waitedMs: 121 * 60_000, timeoutMinutes: 120 }))
+    await processor(makeBullJob("generate-image")).catch(() => undefined)
+    const failed = mocks.mockUpdate.mock.calls.map((c) => c[0] as Record<string, unknown>).find((c) => c.status === "failed")
+    expect(failed?.error_hint).toEqual({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 121 })
+    expect(failed?.error_message).toBe("Waited longer than 120 min for a free slot.")
+  })
+
+  it("a job its lane refuses is parked: row queued, delayed by the backstop, nothing runs and no slot is released", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    // Another job of the user holds the line's one slot.
+    await gate.acquire({ meta: { ...waiterMeta, jobId: "other" }, size: 1, mode: "fresh", leaseTtlMs: 60_000 })
+    const release = vi.spyOn(gate, "release")
+    const job = makeBullJob("generate-image")
+    const before = Date.now()
+    await expect(processor(job, "lock-token")).rejects.toBeInstanceOf(DelayedError)
+    expect(mocks.mockHandler).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ status: "queued" })
+    expect(mocks.mockUpdate.mock.calls.some(([f]) => (f as { status?: string }).status === "processing")).toBe(false)
+    expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+    const [ts, token] = job.moveToDelayed.mock.calls[0] as unknown as [number, string]
+    expect(token).toBe("lock-token")
+    expect(ts).toBeGreaterThanOrEqual(before + 600_000)
+    expect(release).not.toHaveBeenCalled()
+    expect((await gate.snapshot()).lines[0]?.lanes.provider).toMatchObject({ running: 1, queued: 1 })
+  })
+
+  it("with enforcement off changes nothing", async () => {
+    await gate.setEnforced(false)
+    // The user's line is already full: the job still runs at once, on an over-limit lease.
+    await gate.acquire({ meta: { ...waiterMeta, jobId: "other" }, size: 1, mode: "fresh", leaseTtlMs: 60_000 })
+    let lanes: unknown
+    mocks.mockHandler.mockImplementationOnce(async () => { lanes = (await gate.snapshot()).lines[0]?.lanes.provider })
+    const job = makeBullJob("generate-image")
+    await processor(job)
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    expect(job.moveToDelayed).not.toHaveBeenCalled()
+    expect(lanes).toMatchObject({ running: 2, overLimit: 1, queued: 0 })
+  })
+
+  it("a job over its user's server share is parked as queued with reason server_busy", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    // A pool of 4: one job per user, and another of the user's jobs runs on this process.
+    expect(serverShareOf("video").occupancy()).toMatchObject({ poolSize: 4, userCap: 1 })
+    const running = serverShareOf("video").tryEnter({ userId: "user-1", jobId: "other", coordinator: false, exempt: false })
+    expect(running.entered).toBe(true)
+    const acquire = vi.spyOn(gate, "acquire")
+    const job = makeBullJob("generate-image")
+    await expect(processor(job, "lock-token")).rejects.toBeInstanceOf(DelayedError)
+    expect(mocks.mockHandler).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ status: "queued" })
+    expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+    expect(acquire).not.toHaveBeenCalled()
+    expect(await gate.describeWait("job-1")).toMatchObject({ reason: "server_busy" })
+  })
+
+  it("maxStartedAttempts stays unset on the video worker", () => {
+    // A parked job is moved back to the delayed set on every refused pickup;
+    // BullMQ's started-attempts limit would fail it for waiting.
+    expect(mocks.getCapturedOptions()).toBeDefined()
+    expect(mocks.getCapturedOptions()).not.toHaveProperty("maxStartedAttempts")
   })
 })

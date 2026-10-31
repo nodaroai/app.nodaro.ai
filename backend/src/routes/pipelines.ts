@@ -10,6 +10,7 @@ import { RESERVE_STATUS_BY_CODE } from "../lib/reserve-errors.js"
 import { createSSEStream } from "../lib/sse.js"
 import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 import { supabase } from "../lib/supabase.js"
+import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { completedJobColumns } from "../lib/job-status.js"
@@ -440,6 +441,11 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           current_progress_message: null,
         })
         .eq("id", pipeline.id)
+
+      // A pipeline still waiting to start (its run-lane or server-share wait,
+      // keyed by the pipeline id) leaves its line now. Harmless for one that
+      // is running (only wait entries are dropped). Bounded, never throws.
+      await withdrawFromLane(pipeline.id)
 
       // Propagate cancellation to in-flight pipeline_stages rows. Without
       // this, any stage that was actively running at cancel time stays

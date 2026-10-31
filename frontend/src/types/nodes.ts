@@ -277,6 +277,19 @@ export interface InputRefusedHint {
 }
 
 /**
+ * The job never got a concurrency slot, so it did not run (and was refunded):
+ * `timeout` — it waited longer than the queue timeout; `lost` — its place in
+ * line was lost and could not be put back; `live-wait` — a live call's wait
+ * ran out. `waitedMinutes` is whole minutes waited, rounded down. Mirrors
+ * `QueueTimeoutHint` in `backend/src/lib/safety-block.ts`.
+ */
+export interface QueueTimeoutHint {
+  readonly kind: "queue-timeout"
+  readonly reason: "timeout" | "lost" | "live-wait"
+  readonly waitedMinutes: number
+}
+
+/**
  * Structured hint attached to a job's failure. One jsonb column, several verdict
  * sources — a DISCRIMINATED UNION on `kind`, which was already the
  * discriminant every reader tested, so widening it breaks none of them.
@@ -287,7 +300,7 @@ export interface InputRefusedHint {
  * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
  * change (that file's comment says the same thing).
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {

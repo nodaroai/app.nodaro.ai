@@ -113,6 +113,12 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
   // An MCP conversation node waiting on this job shows the failure
   // (lib/mcp/flows/hydrate.ts). Not awaited and never throws.
   void import("./mcp/flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
+  // A job that failed while it waited for a concurrency slot (the queue
+  // timeout, a sweep) leaves its line, or it would stand at the head and block
+  // it. Not awaited — a failure write never waits on Redis — and harmless for
+  // a job that never waited (only wait entries are dropped, never a lease).
+  // Lazy, so this module's static graph stays supabase + job-status.
+  void import("./concurrency-lanes/withdraw.js").then((m) => m.withdrawFromLane(jobId)).catch(() => undefined)
   return "flipped"
 }
 

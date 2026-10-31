@@ -74,6 +74,11 @@ interface WaitOut { lane: string; position: number; limit: number; running: numb
 interface Wake { jobId: string; queue: string | null; bullJobId: string | null }
 
 const FRONT = 1_000_000_000_000
+/** The server pool each worker queue runs on (POOL_OF in the Lua). */
+const POOL_OF: Record<string, string | undefined> = {
+  "video-generation": "video", "video-render": "render", "workflow-orchestration": "orchestrator",
+  "pipeline-orchestration": "pipeline", "video-director": "director",
+}
 const opt = (v: string | null | undefined): string | null => (v === undefined || v === null || v === "" ? null : v)
 
 // ── the prelude, ported ──────────────────────────────────────────────────────
@@ -209,13 +214,18 @@ class Run {
   lineHead(line: string): [string, string | null] | null {
     if (this.lineSize(line) - this.lineRunning(line) - this.lineReserved(line) <= 0) return null
     const blocked = new Set<string>()
+    const heldPools = new Set<string>()
     for (const j of this.r.zrange(this.lk(line, "wait"))) {
       if (this.isReserved(j)) continue
       if (!this.hget(this.ek(j), "enq")) {
         this.r.zrem(this.lk(line, "wait"), j) // an entry with no hash is no waiter
         continue
       }
+      const held = this.hget(this.ek(j), "held")
+      if (held) { heldPools.add(held); continue }
       if (this.hget(this.ek(j), "passed") === "1") continue
+      const wpool = POOL_OF[this.hget(this.ek(j), "queue") ?? ""]
+      if (wpool && heldPools.has(wpool)) continue
       const p = this.hget(this.ek(j), "prov")
       if (!p) return [j, null]
       if (!blocked.has(p)) {
@@ -335,7 +345,8 @@ const acquire: Body = (x, req) => {
     if (held && x.hget(x.lsk(held), "line") === line) {
       x.extendLease(held, leaseTtl)
       x.dropWaiter(J)
-      return { granted: true, leaseId: held, overLimit: x.hget(x.lsk(held), "over") === "1" }
+      const foreign = x.hget(x.lsk(held), "queue") !== opt(m.queue) || x.hget(x.lsk(held), "bull") !== opt(m.bullJobId)
+      return { granted: true, leaseId: held, overLimit: x.hget(x.lsk(held), "over") === "1", foreign }
     }
     if (req.mode === "readmit" || x.isReserved(J)) {
       x.dropWaiter(J)
@@ -353,6 +364,7 @@ const acquire: Body = (x, req) => {
       score = cur
       enq = Number(x.hget(x.ek(J), "enq"))
       x.r.hdel(x.ek(J), "passed")
+      x.r.hdel(x.ek(J), "held")
     } else {
       const seq = x.r.incr(`${x.P}seq`)
       score = req.mode === "front" ? seq - FRONT : seq
@@ -363,11 +375,15 @@ const acquire: Body = (x, req) => {
     let free = size - running - (resAll - behind.length)
     const tentative = new Map<string, number>()
     const blocked = new Set<string>()
+    const heldPools = new Set<string>()
     let reason: string | null = null
     for (const w of x.r.zrangeByScore(wl, -Infinity, score, false, true)) {
       if (reason) break
       if (x.isReserved(w)) continue
-      if (x.hget(x.ek(w), "passed") === "1") continue
+      const held = x.hget(x.ek(w), "held")
+      if (held) heldPools.add(held)
+      const wpool = POOL_OF[x.hget(x.ek(w), "queue") ?? ""]
+      if (x.hget(x.ek(w), "passed") === "1" || held || (wpool && heldPools.has(wpool))) continue
       if (free <= 0) {
         reason = "user_lane"
       } else {
@@ -516,6 +532,13 @@ const serverWait: Body = (x, req) => {
   }
   x.r.hset(k, { seen: x.NOW })
   x.r.zadd(`${x.P}sseen`, x.NOW, J)
+  const held = x.hget(x.ek(J), "line")
+  if (held) {
+    if (x.isReserved(J)) x.unreserve(J)
+    x.r.hset(x.ek(J), { held: pool, seen: x.NOW })
+    x.r.zadd(`${x.P}wseen`, x.NOW, J)
+    x.touchLine(held)
+  }
   x.settle()
   return x.reply({ wait: x.serverWaitInfo(J) })
 }
@@ -575,9 +598,15 @@ const heads: Body = (x) => {
 
 const setEnforced: Body = (x, req) => {
   x.purge()
-  x.r.set(`${x.P}enforced`, req.on ? "1" : "0")
+  const was = x.r.get(`${x.P}enforced`) === "1"
+  const v = Number(req.version ?? 0) || 0
+  const stored = Number(opt(x.r.get(`${x.P}enforced:v`)) ?? "0")
+  if (v >= stored) {
+    x.r.set(`${x.P}enforced`, req.on ? "1" : "0")
+    x.r.set(`${x.P}enforced:v`, String(Math.round(v)))
+  }
   x.settle()
-  return x.reply({})
+  return x.reply({ was, enforced: x.r.get(`${x.P}enforced`) === "1" })
 }
 
 const setProviderCeilings: Body = (x, req) => {

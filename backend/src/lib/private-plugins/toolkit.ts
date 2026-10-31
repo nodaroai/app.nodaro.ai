@@ -1582,6 +1582,10 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   seedanceRefVideoQuote: true,
   nodaroMotionPromptParts: true,
   nodaroMotionMotion: true,
+  jobLanes: true,
+  // Turns true with the change that makes tk.jobs.waitForJob discount a
+  // job's queued time; until then a plugin must not rely on it.
+  queueAwareWait: false,
 })
 
 export interface BuildToolkitOptions {

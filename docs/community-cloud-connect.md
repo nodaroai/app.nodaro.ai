@@ -234,9 +234,10 @@ at once from that account does. Work your instance runs itself, with your own
 provider keys, is counted by your own instance's
 [concurrency lanes](deployment.md#concurrency-lanes) instead.
 
-This applies once Nodaro Cloud enforces its concurrency limits. Until then
-(the current state) no job waits for a free slot, and a run's parallelism is
-the per-run limit it has today.
+This applies once Nodaro Cloud turns its concurrency limits on. Once they
+are on, a job over the account's limit waits in line instead of starting;
+they ship off, and until they are turned on no job waits for a free slot and
+a run's parallelism is the per-run limit it has today.
 
 If the plan's size is too small for the people on your install, ask us to
 raise the connected account: Nodaro Cloud can give one account larger lanes

@@ -27,8 +27,14 @@ vi.mock("@/lib/queue.js", () => ({
     remove: vi.fn(),
   },
   tryRemoveFromQueue: vi.fn().mockResolvedValue(undefined),
+  oneScanAtATime: () => (scan: () => Promise<void>) => scan(),
   redis: {},
 }))
+
+// Concurrency lanes: the real withdraw on the gate's JS twin (a fresh store per
+// test), so a cancel is seen taking a waiting job out of its line.
+const lanes = vi.hoisted(() => ({ gate: null as unknown }))
+vi.mock("@/lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
 
 vi.mock("@/lib/config.js", () => ({
   config: {
@@ -89,6 +95,9 @@ vi.mock("@/ee/billing/llm-cancel-settle.js", () => ({
 import { cancelJobsRoutes } from "../cancel-jobs.js"
 import { supabase } from "../../lib/supabase.js"
 import { tryRemoveFromQueue } from "../../lib/queue.js"
+import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"
+import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
+import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -100,6 +109,8 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  const laneStore = makeFakeLaneStore()
+  lanes.gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(laneStore) })
 
   app = Fastify({ logger: false })
 
@@ -447,12 +458,73 @@ describe("POST /v1/jobs/cancel-all", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ success: true, cancelled: 2 })
-    expect(tryRemoveFromQueue).toHaveBeenCalledWith("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-2")
+    // Cancel-all hands every removal one shared scan runner.
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", expect.any(Function))
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-2", expect.any(Function))
+    const runners = vi.mocked(tryRemoveFromQueue).mock.calls.map((c) => c[1])
+    expect(new Set(runners).size).toBe(1)
     // Both reserved holds refunded — bulk cancel previously also leaked credits.
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-2")
     expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
+  })
+})
+
+describe("POST /v1/jobs/cancel-all — concurrency lanes", () => {
+  const laneMeta = (jobId: string, userId: string): LaneEntryMeta => ({
+    jobId, userId, payer: `user:${userId}`, lane: "provider", provider: null, source: null, sourceDetail: null,
+    jobType: "generate-image", model: null, queue: "video-generation", bullJobId: `bull-${jobId}`,
+  })
+  const enter = (gate: ConcurrencyGate, jobId: string, userId: string) =>
+    gate.acquire({ meta: laneMeta(jobId, userId), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+
+  it("removes the jobs from the queue at most 10 at a time, every one of them before the flip", async () => {
+    const ids = Array.from({ length: 25 }, (_, i) => `job-${i}`)
+    let inFlight = 0
+    let peak = 0
+    const removed: string[] = []
+    vi.mocked(tryRemoveFromQueue).mockImplementation(async (id: string) => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await new Promise((r) => setTimeout(r, 1))
+      removed.push(id)
+      inFlight--
+    })
+    setupTableMocks({ jobs: jobsHandler({ jobsList: { data: ids.map((id) => ({ id, status: "pending" })), error: null } }) })
+
+    const res = await app.inject({ method: "POST", url: "/v1/jobs/cancel-all", payload: { userId: TEST_USER_ID } })
+
+    expect(res.json()).toEqual({ success: true, cancelled: 25 })
+    expect(removed.sort()).toEqual([...ids].sort())
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(10)
+  })
+
+  it("bulk cancel withdraws queued jobs; another user's waiter keeps its place", async () => {
+    const gate = lanes.gate as ConcurrencyGate
+    await gate.setEnforced(true)
+    await enter(gate, "running-1", TEST_USER_ID) // holds the user's only slot
+    await enter(gate, "queued-1", TEST_USER_ID)
+    await enter(gate, "queued-2", TEST_USER_ID)
+    await enter(gate, "other-running", "other-user")
+    await enter(gate, "other-waiting", "other-user")
+    expect(await gate.describeWait("queued-2")).toMatchObject({ position: 2 })
+
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobsList: { data: [{ id: "queued-1", status: "queued" }, { id: "queued-2", status: "queued" }], error: null },
+      }),
+      usage_logs: usageLogsHandler([{ id: "usage-q1" }, { id: "usage-q2" }]),
+    })
+
+    const res = await app.inject({ method: "POST", url: "/v1/jobs/cancel-all", payload: { userId: TEST_USER_ID } })
+
+    expect(res.json()).toEqual({ success: true, cancelled: 2 })
+    expect(await gate.describeWait("queued-1")).toBeNull()
+    expect(await gate.describeWait("queued-2")).toBeNull()
+    expect(await gate.describeWait("other-waiting")).toMatchObject({ position: 1 })
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-q1")
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-q2")
   })
 })
 
@@ -569,7 +641,7 @@ describe("POST /v1/jobs/cancel-all — held jobs", () => {
     // The held row is NOT part of the bulk queue-removal pass: there is no
     // BullMQ entry left for a job that already finished running.
     expect(tryRemoveFromQueue).not.toHaveBeenCalledWith(HELD)
-    expect(tryRemoveFromQueue).toHaveBeenCalledWith(LIVE)
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith(LIVE, expect.any(Function))
   })
 
   it("a held job a reviewer resolved first is not counted", async () => {

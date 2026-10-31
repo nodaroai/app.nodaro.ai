@@ -67,6 +67,7 @@ import { edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, type Edl
 import { transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
+import { handOffConcurrencySlot } from "../../lib/concurrency-lanes/handoff.js"
 // Node units (tools/units/README.md): every worker unit on the video queue
 // (backend/src/nodes/<type>/worker.ts), keyed by its node type.
 // @registry-enumerates ffmpegHandlers carries every video-queue node unit's worker
@@ -978,6 +979,13 @@ async function dispatchKineticCaptions(
     .from("jobs")
     .update({ provider_kind: null, provider_call_started_at: null })
     .eq("id", ctx.jobId)
+
+  // Hand this job's concurrency slot over BEFORE the render job exists: the
+  // render runs under the same jobs.id and is re-admitted at its own pickup
+  // (the row is `processing`). Released after the enqueue, a render picked up
+  // in between would be handed this job's lease and then lose it to the
+  // video worker's own release (lib/concurrency-lanes/handoff.ts).
+  await handOffConcurrencySlot(ctx.jobId)
 
   // Deterministic BullMQ job id so a video-worker stall-retry (which would
   // re-run this handler) coalesces onto the SAME render job instead of

@@ -26,6 +26,7 @@ import {
   inputImageRefusedOf,
   sentVideoInput,
   creditsHintOf,
+  queueTimeoutHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
   hasUserSafeMessage,
@@ -58,6 +59,12 @@ import { withPreTaskHeartbeat } from "./pre-task-heartbeat.js"
 import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"
 import { signScene3DDeliveryUrlsForProvider } from "../services/scene3d-artifacts/delivery-provider-access.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../lib/jobs-slot-wait-column.js"
+import { admitOrPark, pickupStatusesFor, workerRowOf } from "../lib/concurrency-lanes/worker-admit.js"
+import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
+import { serverShare } from "../lib/concurrency-lanes/server-share.js"
+import { claimWithBullEntry, dropRequeuePayload } from "../lib/concurrency-lanes/columns.js"
+import { runHolding } from "../lib/concurrency-lanes/hold.js"
+import type { ReleaseOutcome } from "../lib/concurrency-lanes/gate.js"
 
 /** How far back into the queue a drain-interrupted job is moved (ms) — a
  *  moment, not a park: Railway brings the replacement container up BEFORE
@@ -159,6 +166,12 @@ export function createVideoWorker() {
   // now — registering whatever they unlock — and re-read on the TTL so a key
   // saved by the API process reaches this worker without a restart.
   watchProviderCredentials()
+  // A job its concurrency lane refuses at pickup is parked (put back on the
+  // delayed set, row `queued`) and promoted when a slot is reserved for it
+  // (lib/concurrency-lanes/park.ts). With enforcement off nothing is refused.
+  registerLaneParking()
+  // No user holds more than a quarter of this pool (server-share.ts).
+  serverShare("video", config.VIDEO_WORKER_CONCURRENCY)
 
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -175,7 +188,7 @@ export function createVideoWorker() {
       // recover the row via the same handler the reconcile cron uses.
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, input_data, profiles!user_id(public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, input_data, status, started_at, parent_job_id, pipeline_id, workspace_id, org_id, source, source_detail, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
 
@@ -195,6 +208,10 @@ export function createVideoWorker() {
       // 30+ min. All reconcile handlers are idempotent (finalize is CAS-guarded;
       // bumpAttempts is safe to repeat), so the cron remains the safety net if
       // this inline pass throws or KIE is still processing.
+      //
+      // It runs BEFORE admission and holds no concurrency slot: it only polls
+      // the provider for a task that already ran, and a stalled job's old
+      // lease simply expires. Accepted on purpose.
       if (jobRecord?.provider_task_id) {
         await tryInlineReconcile({
           id: jobId,
@@ -275,6 +292,17 @@ export function createVideoWorker() {
       const modelId = jobModelIdOf(job.data)
       let safetyRetried = false
 
+      // The job's concurrency slot (lib/concurrency-lanes/worker-admit.ts),
+      // taken BEFORE the pickup claim: a job that has to wait for one is put
+      // back without claiming its row. With enforcement off every job is
+      // admitted. The slot is released exactly once, in the `finally` below,
+      // with the outcome of whichever exit the job took.
+      const admission = await admitOrPark({
+        job, token, queue: "video-generation", row: workerRowOf(jobId, jobRecord, jobData.userId),
+      })
+      if (!admission) throw new DelayedError()
+      let laneOutcome: ReleaseOutcome = "failed"
+
       try {
         // `provider_kind="pre-task"` + `provider_call_started_at=now` make
         // this row visible to the reconcile cron BEFORE the handler fires
@@ -300,9 +328,14 @@ export function createVideoWorker() {
         // 0.13) rides on the pickup — retried without it while migration 451 has
         // not reached this (shared) database: a statement naming a missing column
         // is not applied at all, and every job would be discarded below.
-        const pickUp = (columns: string) => supabase
+        // The same UPDATE records the job's BullMQ entry (`lane_bull_queue`,
+        // `lane_bull_job_id`, migration 568) for a cancel or a reconcile to find
+        // it by id — retried without those columns while they are missing
+        // (claimWithBullEntry), so a pickup is still one statement.
+        const pickUp = (columns: string, laneFields: Record<string, string>) => supabase
           .from("jobs")
           .update({
+            ...laneFields,
             status: "processing",
             started_at: nowIso,
             provider_call_started_at: nowIso,
@@ -344,11 +377,12 @@ export function createVideoWorker() {
             job_type: job.name,
           })
           .eq("id", jobId)
-          .in("status", ["pending", "processing"])
+          // A parked job is `queued`; one re-added after Redis lost it runs only from there.
+          .in("status", pickupStatusesFor(job.id))
           .select(columns)
-        let { data: pickedRows, error: pickupError } = await pickUp(withSlotWaitColumn("id"))
+        let { data: pickedRows, error: pickupError } = await claimWithBullEntry("video-generation", job.id, (f) => pickUp(withSlotWaitColumn("id"), f))
         if (pickupError && noteSlotWaitColumnError(pickupError)) {
-          ;({ data: pickedRows, error: pickupError } = await pickUp("id"))
+          ;({ data: pickedRows, error: pickupError } = await claimWithBullEntry("video-generation", job.id, (f) => pickUp("id", f)))
         }
         if (!pickedRows || pickedRows.length === 0) {
           console.log(
@@ -357,8 +391,11 @@ export function createVideoWorker() {
           // R38 (m5): a cancelled metered LLM job requeued for a retry or by a
           // drain still holds its hold — settled here, not left to the sweep.
           await settleDiscardedCancelledMeteredHold(usageLogId, jobId)
+          laneOutcome = "cancelled"
           return
         }
+        // A job that waited (parked as `queued`) runs now: the payload it was parked with is not needed any more. Best effort, not awaited.
+        if ((jobRecord as { status?: unknown } | null)?.status === "queued") void dropRequeuePayload(jobId)
 
         // ── Scene3D delivery artifacts, for an EXTERNAL provider ──────────
         // A 3D Render Pro shot still's URL is the AUTHENTICATED delivery
@@ -422,7 +459,7 @@ export function createVideoWorker() {
         // Bind a cancellation context so provider poll loops abort the moment
         // the user cancels — instead of polling the upstream job to completion.
         try {
-          await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
+          await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
         } catch (firstErr) {
           const firstBlock = safetyBlockOf(firstErr, modelId)
           if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
@@ -436,7 +473,7 @@ export function createVideoWorker() {
           console.warn(
             `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
           )
-          await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
+          await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
         }
 
         // Record execution duration for progress bar estimation
@@ -458,6 +495,7 @@ export function createVideoWorker() {
 
         // Create asset records so generated media appears in /library
         await createAssetFromJob(jobId, jobUserId)
+        laneOutcome = "completed"
       } catch (err) {
         // User cancelled mid-flight (queue-pickup race or poll abort). The row
         // is already at status='cancelled' (+ refunded) by the cancel route, so
@@ -469,6 +507,7 @@ export function createVideoWorker() {
           // it billed, refunded when nothing was. A no-op (no read) for every
           // other job, whose refund the cancel route owns.
           await settleCancelledMeteredJob(usageLogId, jobId, err)
+          laneOutcome = "cancelled"
           console.log(`[worker] Job ${jobId} cancelled by user — discarding result, leaving status='cancelled'`)
           return
         }
@@ -503,6 +542,7 @@ export function createVideoWorker() {
         // handed them back and the successor found a paid call it could not
         // resolve.
         if (isDrainAbortError(err)) {
+          laneOutcome = "requeued"
           try {
             await job.moveToDelayed(Date.now() + DRAIN_REQUEUE_DELAY_MS, token)
           } catch (moveErr) {
@@ -526,6 +566,7 @@ export function createVideoWorker() {
         // billed charged, the rest refunded); the row stays cancelled and is not
         // retried. A no-op (no read) for every job that is not metered.
         if (await settleCancelledMeteredJob(usageLogId, jobId, err)) {
+          laneOutcome = "cancelled"
           console.log(`[worker] Job ${jobId} failed after it was cancelled — its metered hold settled, leaving status='cancelled'`)
           return
         }
@@ -601,6 +642,8 @@ export function createVideoWorker() {
             )
             // No rethrow: the BullMQ job ends here; the jobs row stays
             // `processing` and the reconcile cron owns the terminal outcome.
+            // The provider delivered: its slot is released as completed.
+            laneOutcome = "completed"
             return
           }
         }
@@ -647,7 +690,7 @@ export function createVideoWorker() {
           // (`subject: "input_image"`), so a caller can send a different picture.
           // Shared with the reconcile path (lib/reconcile/kie.ts).
           const errorHint =
-            refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err)) ?? creditsHintOf(err)
+            refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
           const flipped = await markJobFailed(jobId, {
             error_message: errorMessage,
             // W0: the provider's own error, redacted — the sanitized message
@@ -657,8 +700,9 @@ export function createVideoWorker() {
             // can act on (offer the fallback model, say "top up") without
             // parsing prose. A classified content-policy block, else a
             // refused input video, else a handler's credits refusal (`failureHint` on the error or its
-            // cause chain — a plugin's child job refused for credits); NULL
-            // for anything else. The refund below is unchanged either way.
+            // cause chain — a plugin's child job refused for credits), else a
+            // wait for a concurrency slot that ran out; NULL for anything
+            // else. The refund below is unchanged either way.
             ...(errorHint ? { error_hint: errorHint } : {}),
           })
 
@@ -689,6 +733,8 @@ export function createVideoWorker() {
             throw new UnrecoverableError(errorMessage)
           }
         }
+        // A non-final attempt goes back to BullMQ for a retry.
+        if (!finalAttempt) laneOutcome = "requeued"
         throw err
       } finally {
         // Temporary provider uploads (decided 2026-10-09): the job's scratch
@@ -698,6 +744,8 @@ export function createVideoWorker() {
         // the job is still in flight (a retry, a drain hand-back, a provider
         // task left for the reconcile cron). Never throws.
         await discardJobScratch(jobId)
+        // Every exit frees the job's concurrency slot, once (never throws).
+        await admission.release(laneOutcome)
       }
     },
     {

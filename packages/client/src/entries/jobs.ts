@@ -26,6 +26,7 @@ export type {
   PolicyBlockHint,
   CreditsHint,
   InputRefusedHint,
+  QueueTimeoutHint,
   CreditStatus,
   JobRating,
   JobRatingFilter,

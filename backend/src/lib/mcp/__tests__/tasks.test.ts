@@ -34,6 +34,9 @@ vi.mock("../../cancel-job.js", () => ({
 // 554: a job the fast CAS cancels settles its metered side holds after the flip.
 const sideHolds = vi.hoisted(() => ({ settleSideHoldsAfterFlip: vi.fn(async (_ids: readonly string[]) => {}) }))
 vi.mock("../../llm-side-hold.js", () => sideHolds)
+// Concurrency lanes: a job the fast CAS cancels leaves its line (withdraw.test.ts).
+const lanes = vi.hoisted(() => ({ withdrawFromLane: vi.fn(async (_jobId: string) => {}) }))
+vi.mock("../../concurrency-lanes/withdraw.js", () => lanes)
 // Mock supabase so cancelTask -> markJobCancelled is a no-op in unit tests.
 // The path is relative to tasks.ts, not to this test file.
 vi.mock("../../supabase.js", () => {
@@ -239,6 +242,30 @@ describe("task lifecycle", () => {
 
     expect(taskDb.cancelProviderFilter).toHaveBeenCalledWith("provider.is.null,provider.neq.use-case")
     expect(taskDb.cancelOwnedJob).toHaveBeenCalledWith("j-wrapper", "u1")
+  })
+
+  // Concurrency lanes: a job parked waiting for a slot is `queued`. No worker
+  // will refund it or take its parked entry off the queue, so it never takes
+  // the bare flip: the narrow CAS misses it and it goes through cancelOwnedJob,
+  // which withdraws it, removes its entry by its stored id and refunds it.
+  it("the MCP task cancel cancels a queued job (through the funnel that withdraws, removes and refunds it)", async () => {
+    taskDb.cancelFlipped = [] // the fast CAS does not match a queued row
+    registerTask({ taskId: "j-queued", userId: "u1", kind: "video" })
+
+    expect(await cancelTask("j-queued", "u1")).toBe(true)
+
+    expect(taskDb.cancelStatusFilter).toHaveBeenCalledWith("status", ["pending", "processing"])
+    expect(taskDb.cancelOwnedJob).toHaveBeenCalledWith("j-queued", "u1")
+  })
+
+  it("a job the fast CAS cancelled leaves its concurrency lane", async () => {
+    taskDb.cancelFlipped = [{ id: "j-pending" }]
+    registerTask({ taskId: "j-pending", userId: "u1", kind: "image" })
+    lanes.withdrawFromLane.mockClear()
+
+    await cancelTask("j-pending", "u1")
+
+    expect(lanes.withdrawFromLane).toHaveBeenCalledWith("j-pending")
   })
 
   it("does NOT reach cancelOwnedJob when the fast CAS already flipped the row", async () => {

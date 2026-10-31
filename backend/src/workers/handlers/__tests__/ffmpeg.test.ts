@@ -307,6 +307,26 @@ describe("add-captions handler — kinetic render handoff", () => {
       mocks.mockRenderQueueAdd.mock.invocationCallOrder[0],
     )
   })
+
+  it("hands the job's concurrency slot over (outcome handoff) BEFORE the render job exists", async () => {
+    // The render runs under the same jobs.id: a lease still held when it is
+    // picked up would be handed to it, then freed by the video worker.
+    const { registerSlotHandOff } = await import("../../../lib/concurrency-lanes/handoff.js")
+    const handOff = vi.fn(async () => undefined)
+    const unregister = registerSlotHandOff("job-1", handOff)
+    try {
+      const job = makeJob("add-captions", {
+        videoUrl: "https://v.mp4",
+        style: "karaoke",
+        captions: [{ text: "hi", startMs: 0, endMs: 1000 }],
+      })
+      await handler(job as never, makeCtx())
+      expect(handOff).toHaveBeenCalledTimes(1)
+      expect(handOff.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockRenderQueueAdd.mock.invocationCallOrder[0]!)
+    } finally {
+      unregister()
+    }
+  })
 })
 
 /**

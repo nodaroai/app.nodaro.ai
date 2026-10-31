@@ -2,10 +2,14 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { tryRemoveFromQueue } from "../lib/queue.js"
+import { oneScanAtATime, tryRemoveFromQueue } from "../lib/queue.js"
+import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { cancelOwnedJob, cancelRunningChildJobs, refundReservedHolds } from "../lib/cancel-job.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
+
+/** How many queue removals cancel-all runs at once. */
+const REMOVE_CONCURRENCY = 10
 
 export async function cancelJobsRoutes(app: FastifyInstance) {
   // Cancel a single job
@@ -133,9 +137,17 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
 
       // Try to remove each job from BullMQ queue. Held jobs are deliberately
       // absent: their BullMQ entry is long gone by the time a result is held.
-      for (const jobId of jobIds) {
-        await tryRemoveFromQueue(jobId)
+      // At most REMOVE_CONCURRENCY at a time (each removal withdraws the job
+      // from its lane and reads its stored BullMQ entry); the fallback scans,
+      // for jobs with no stored entry, still run one at a time, as they did
+      // when the removals ran one by one (lib/queue.ts oneScanAtATime). All of
+      // them finish before the flip.
+      const scans = oneScanAtATime()
+      let next = 0
+      const remover = async (): Promise<void> => {
+        while (next < jobIds.length) await tryRemoveFromQueue(jobIds[next++]!, scans)
       }
+      await Promise.all(Array.from({ length: Math.min(REMOVE_CONCURRENCY, jobIds.length) }, remover))
 
       // CAS-update to cancelled (live rows only) and refund ONLY the rows we
       // actually flipped — a job that completed between the SELECT and this
@@ -152,6 +164,10 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       }
 
       const cancelledIds = (cancelledRows ?? []).map((r) => r.id as string)
+      // Out of their concurrency lanes again, now that the rows are cancelled:
+      // a pickup between the removal above and the flip could have parked one
+      // once more. Bounded, never throws.
+      await Promise.all(cancelledIds.map((id) => withdrawFromLane(id)))
       if (cancelledIds.length > 0) {
         // Refund reserved credits for every cancelled job in one pass.
         await refundReservedHolds(cancelledIds)

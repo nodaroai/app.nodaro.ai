@@ -21,6 +21,7 @@ import { isUserQuietStopped } from "../access-blocks.js"
 import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
 import { sweepCancelledMeteredHolds } from "./cancelled-metered-holds.js"
 import { sweepSideLlmHolds } from "./side-llm-holds.js"
+import { readBullEntry } from "../concurrency-lanes/columns.js"
 
 export interface ReconcileResult {
   scanned: number
@@ -247,6 +248,10 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   }
 
   await sweepNeverStartedJobs(result)
+  // Rows waiting for a concurrency slot (`queued`, which neither the main scan
+  // nor the never-started sweep reads): the queue timeout, entries Redis lost,
+  // and line heads whose row ended — this environment's rows only.
+  await sweepLaneQueue(result)
   await sweepStuckComponentWrappers(result)
   await sweepStuckUseCaseWrappers(result)
   await sweepStuckOrchestratorJobs(result)
@@ -262,6 +267,19 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   await sweepSideLlmHolds(result)
 
   return result
+}
+
+/** The concurrency lanes' queued and ghost sweeps (lib/concurrency-lanes/queued-sweep.ts), loaded
+ *  lazily so this module's graph stays light; one that throws never aborts the tick. */
+async function sweepLaneQueue(result: ReconcileResult): Promise<void> {
+  try {
+    const { sweepLaneQueuedJobs, sweepLaneGhosts } = await import("../concurrency-lanes/queued-sweep.js")
+    await sweepLaneQueuedJobs(result)
+    await sweepLaneGhosts(result)
+  } catch (err) {
+    console.error(`[reconcile/cron] concurrency-lane queue sweep failed:`, err)
+    result.errors++
+  }
 }
 
 /** Jobs created but never picked up by a worker sit at `status='pending'` with
@@ -399,6 +417,9 @@ export const CHECKPOINT_RESUMABLE_JOB_TYPES: ReadonlySet<string> =
  *  at the next encounter instead of looping forever. */
 const MAX_RESUME_ATTEMPTS = 1
 
+/** BullMQ states in which an entry will still run (the scan's, plus waiting-children). */
+const LIVE_BULL_STATES: ReadonlySet<string> = new Set(["active", "prioritized", "waiting", "delayed", "waiting-children"])
+
 interface StuckOrchestratorRow {
   id: string
   provider_kind: string | null
@@ -441,6 +462,21 @@ async function tryResumeCheckpointedPluginJob(
   row: StuckOrchestratorRow, jobType: string,
 ): Promise<"live" | "requeued" | "sweep"> {
   if (!CHECKPOINT_RESUMABLE_JOB_TYPES.has(jobType)) return "sweep"
+
+  // The entry the row was stamped with at pickup or park (lane_bull_queue /
+  // lane_bull_job_id), looked up by id: a drained or parked entry can sit
+  // beyond any scan's reach. Only ever a "live" answer — a missing stamp or
+  // entry falls through to the scan, exactly as before the stamp existed.
+  try {
+    const stored = await readBullEntry(row.id)
+    if (stored?.queue === "video-generation") {
+      const entry = await videoQueue.getJob(stored.bullJobId)
+      if (entry && (entry.data as { jobId?: string } | undefined)?.jobId === row.id
+        && LIVE_BULL_STATES.has(await entry.getState())) return "live"
+    }
+  } catch {
+    // Redis hiccup — the scan below decides, as it always has.
+  }
 
   // Same states tryRemoveFromQueue scans (queue.ts), plus "active".
   try {

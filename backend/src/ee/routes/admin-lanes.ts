@@ -22,6 +22,8 @@ import { supabase } from "../../lib/supabase.js"
 import { LANE_PLAN_TIERS } from "../../lib/concurrency-lanes/defaults.js"
 import {
   enforcementPreconditions,
+  lanesEnforcementAvailable,
+  LanesNotAvailableError,
   readLanesEnforcedSetting,
   setLanesEnforced,
   unmetPreconditions,
@@ -88,6 +90,14 @@ function envLaneSizes(): LaneSizes {
   }
 }
 
+/** The refusal of an "on" while concurrency limits cannot be turned on in this release. */
+function notAvailableYet(): { error: { code: "not_available_yet"; message: string }; available: false } {
+  return {
+    error: { code: "not_available_yet", message: "Concurrency limits cannot be turned on yet in this release." },
+    available: false,
+  }
+}
+
 /** This environment's switch: the setting, or the gate's flag when the database cannot be read. */
 async function enforcedNow(): Promise<boolean> {
   try {
@@ -119,6 +129,8 @@ export async function adminLanesRoutes(app: FastifyInstance): Promise<void> {
           liveWaitMaxMinutes: LANE_LIVE_WAIT_RANGE.max,
         },
         enforced,
+        // false: limits cannot be turned on in this release (the switch refuses on).
+        available: preconditions.available,
         preconditions,
         unmet: unmetPreconditions(preconditions),
         editable,
@@ -135,6 +147,9 @@ export async function adminLanesRoutes(app: FastifyInstance): Promise<void> {
     const body = enforcedBody.safeParse(req.body)
     if (!body.success) return reply.status(400).send(invalid(body.error))
     const { on, confirmUnmet } = body.data
+    // Not in this release: refused before the preconditions are read, confirmed
+    // or not, and nothing is written. Turning limits off is always allowed.
+    if (on && !lanesEnforcementAvailable()) return reply.status(409).send(notAvailableYet())
     try {
       if (on) {
         const preconditions = await enforcementPreconditions()
@@ -150,6 +165,7 @@ export async function adminLanesRoutes(app: FastifyInstance): Promise<void> {
       const result = await setLanesEnforced(on, req.userId as string)
       return { enforced: on, env: getRuntimeEnv(), woke: result.woke, mirrored: result.mirrored }
     } catch (err) {
+      if (err instanceof LanesNotAvailableError) return reply.status(409).send(notAvailableYet())
       return sendInternalError(reply, req, err, "Failed to change the lane switch")
     }
   })
