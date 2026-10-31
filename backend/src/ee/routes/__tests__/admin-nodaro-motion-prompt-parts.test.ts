@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   row: null as { value: unknown; updated_at: string } | null,
   /** The Motion setting's row (`nodaro_motion_motion`), which the preview and the save read for the Motion style's shape. */
   motionRow: null as { value: unknown; updated_at: string } | null,
+  /** The masking setting's row (`nodaro_motion_masking`): its face mesh shapes the check. */
+  maskingRow: null as { value: unknown; updated_at: string } | null,
   upserts: [] as unknown[],
   audits: [] as Record<string, unknown>[],
   admin: true,
@@ -34,8 +36,8 @@ vi.mock("@/lib/supabase.js", () => ({
       let key = ""
       const chain = {
         select: () => chain,
-        eq: (_c: string, k: string) => (expect(["nodaro_motion_prompt_parts", "nodaro_motion_motion"]).toContain(k), (key = k), chain),
-        maybeSingle: async () => ({ data: key === "nodaro_motion_motion" ? h.motionRow : h.row, error: null }),
+        eq: (_c: string, k: string) => (expect(["nodaro_motion_prompt_parts", "nodaro_motion_motion", "nodaro_motion_masking"]).toContain(k), (key = k), chain),
+        maybeSingle: async () => ({ data: key === "nodaro_motion_motion" ? h.motionRow : key === "nodaro_motion_masking" ? h.maskingRow : h.row, error: null }),
         upsert: async (row: { key: string; value: unknown; updated_at: string }, opts: unknown) => {
           expect(row.key).toBe("nodaro_motion_prompt_parts")
           expect(opts).toEqual({ onConflict: "key" })
@@ -79,6 +81,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   h.row = null
   h.motionRow = null
+  h.maskingRow = null
   h.upserts = []
   h.audits = []
   h.admin = true
@@ -266,5 +269,36 @@ describe("PUT /v1/admin/nodaro-motion/prompt-parts", () => {
     h.admin = false
     expect((await put({ "motion-prism": { precise: { face: "x" } } })).statusCode).toBe(403)
     expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe("the face mesh in a direct run's check", () => {
+  const MESH_ENGINE = { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, faceMesh: true }
+  const maskingWithMesh = { "motion-prism": { mode: "always", faceMesh: true } }
+
+  it("a Precise run whose masking draws the mesh says so, to an engine that draws it", async () => {
+    setPluginSupports({ castSwap: MESH_ENGINE as never })
+    h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
+    expect((await previewOf({ engine: "motion-prism", style: "precise" })).statusCode).toBe(200)
+    expect(h.calls.at(-1)).toMatchObject({ faceMesh: true })
+    // The other engine's masking draws none.
+    await previewOf({ engine: "motion-pulse", style: "precise" })
+    expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
+  })
+
+  it("a Motion run with no masking of its own falls back to it; one with its own masking reads that", async () => {
+    setPluginSupports({ castSwap: MESH_ENGINE as never })
+    h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
+    await previewOf({ engine: "motion-prism", style: "motion" })
+    expect(h.calls.at(-1)).toMatchObject({ faceMesh: true })
+    h.motionRow = { value: { "motion-prism": { masking: { mode: "always", source: "full-depth" } } }, updated_at: "2026-10-31T00:00:00.000Z" }
+    await previewOf({ engine: "motion-prism", style: "motion" })
+    expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
+  })
+
+  it("never to an engine that does not draw the mesh", async () => {
+    h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
+    await previewOf({ engine: "motion-prism", style: "precise" })
+    expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
   })
 })

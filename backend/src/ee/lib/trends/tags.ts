@@ -11,6 +11,7 @@ import { LANGUAGES } from "@nodaro/shared/i18n"
 import { supabase } from "../../../lib/supabase.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { TrendsUnavailableError } from "./store.js"
+import { trendCatalogChanged } from "./catalog-stamp.js"
 import type { Locale } from "./types.js"
 
 /** A tag's labels by platform language. Every one optional; none means the tag reads as itself. */
@@ -99,11 +100,13 @@ export async function saveTagLabels(tag: string, labels: TagLabels): Promise<Tag
   if (Object.keys(clean).length === 0) {
     const { error } = await supabase.from("trend_tags").delete().eq("tag", tag)
     if (error) fail(`clear the labels of tag ${tag}`, error)
+    await trendCatalogChanged()
     return {}
   }
   const { error } = await supabase
     .from("trend_tags")
     .upsert({ tag, labels: clean, updated_at: new Date().toISOString() }, { onConflict: "tag" })
   if (error) fail(`save the labels of tag ${tag}`, error)
+  await trendCatalogChanged()
   return clean
 }

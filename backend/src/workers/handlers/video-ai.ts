@@ -1,5 +1,9 @@
 // @reads-none reads only the media it renders or extracts into work dirs
 import { dirname } from "node:path"
+import {
+  IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER,
+  VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
+} from "./default-models.js"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
   imageToVideo,
@@ -356,7 +360,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // not through the KIE poll loop.
   if (await dispatchLtxIfRequested(job, ctx, "image-to-video")) return
 
-  console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
+  console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? IMAGE_TO_VIDEO_DEFAULT_PROVIDER})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
   // Map frontend shots/elements to provider format for Kling 3.0
   const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
@@ -383,7 +387,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   await setJobProgress(job, ctx.jobId, 5)
   const ramp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 35 })
 
-  const resolvedI2vProvider = provider ?? "minimax"
+  const resolvedI2vProvider = provider ?? IMAGE_TO_VIDEO_DEFAULT_PROVIDER
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
     providerKindForVideoModel(resolvedI2vProvider),
@@ -574,7 +578,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     audioSetting?: "auto" | "origin"
     promptExtend?: boolean
   }
-  const resolvedV2vProvider = provider ?? "wan"
+  const resolvedV2vProvider = provider ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
   console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${resolvedV2vProvider})`)
 
   const v2vOnTaskCreated = makeOnTaskCreated(
@@ -665,7 +669,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // for both.
   if (await dispatchLtxIfRequested(job, ctx, "text-to-video")) return
 
-  console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${removeWatermark ? " [remove watermark]" : ""}`)
+  console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? TEXT_TO_VIDEO_DEFAULT_PROVIDER})${removeWatermark ? " [remove watermark]" : ""}`)
 
   // Map frontend shots/elements to provider format for Kling 3.0
   const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
@@ -680,7 +684,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // movement instead of pinning at 0%.
   await setJobProgress(job, ctx.jobId, 5)
   const t2vRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 40 })
-  const resolvedT2vProvider = provider ?? "minimax"
+  const resolvedT2vProvider = provider ?? TEXT_TO_VIDEO_DEFAULT_PROVIDER
   const t2vOnTaskCreated = makeOnTaskCreated(
     ctx.jobId,
     providerKindForVideoModel(resolvedT2vProvider),
@@ -841,7 +845,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     templStartSeconds?: number
   }
 
-  const resolvedProvider = provider ?? "kling-avatar"
+  const resolvedProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
   console.log(`[worker] lip-sync ${ctx.jobId} (provider: ${resolvedProvider})`)
 
   // Lip-sync providers (KIE Kling Avatar / InfiniTalk, Replicate models,
@@ -1082,7 +1086,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
     provider?: string
     backgroundSource?: "input_video" | "input_image"
   }
-  const mtProvider = provider ?? "kling"
+  const mtProvider = provider ?? MOTION_TRANSFER_DEFAULT_PROVIDER
   console.log(`[worker] motion-transfer ${ctx.jobId} (provider: ${mtProvider}, orientation: ${characterOrientation ?? "image"}, resolution: ${resolution ?? "720p"})`)
 
   const onProgress: ProgressCallback = async (progress: number) => {
@@ -1145,7 +1149,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     /** Seedance draft finalize: the stored draft clip (audio-copy fallback). */
     draftVideoUrl?: string
   }
-  const upscaleProvider = provider ?? "topaz"
+  const upscaleProvider = provider ?? VIDEO_UPSCALE_DEFAULT_PROVIDER
   console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
 
   // Wrap each branch in a progress ramp — none of these (VEO upscale,
@@ -1914,7 +1918,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     /** The dialogue model the route reserved for a multi-speaker track (`DIALOGUE_PROVIDERS`); absent on jobs enqueued before it travelled → v3 dialogue. */
     dialogueProvider?: string
   }
-  const provider = d.provider ?? "minimax"
+  const provider = d.provider ?? VOICED_VIDEO_DEFAULT_PROVIDER
   const audioAddon = d.voicedAudioAddon ?? 0
   const mode = getVideoAudioCapability(provider).mode
 

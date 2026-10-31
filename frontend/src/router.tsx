@@ -95,6 +95,7 @@ const AdminDashboard = lazy(() => import("@/ee/app/(admin)/admin/page"))
 const AdminUsers = lazy(() => import("@/ee/app/(admin)/admin/users/page"))
 const AdminJobs = lazy(() => import("@/ee/app/(admin)/admin/jobs/page"))
 const AdminUsage = lazy(() => import("@/ee/app/(admin)/admin/usage/page"))
+const AdminLiveUsage = lazy(() => import("@/ee/app/(admin)/admin/live-usage/page"))
 const AdminAlerts = lazy(() => import("@/ee/app/(admin)/admin/alerts/page"))
 const AdminModels = lazy(() => import("@/ee/app/(admin)/admin/models/page"))
 const AdminReports = lazy(() => import("@/ee/app/(admin)/admin/reports/page"))
@@ -152,6 +153,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "blocks", element: <SuspenseWrapper><AdminBlocks /></SuspenseWrapper> },
       { path: "jobs", element: <SuspenseWrapper><AdminJobs /></SuspenseWrapper> },
       { path: "usage", element: <SuspenseWrapper><AdminUsage /></SuspenseWrapper> },
+      { path: "live-usage", element: <SuspenseWrapper><AdminLiveUsage /></SuspenseWrapper> },
       { path: "alerts", element: <SuspenseWrapper><AdminAlerts /></SuspenseWrapper> },
       { path: "models", element: <SuspenseWrapper><AdminModels /></SuspenseWrapper> },
       { path: "reports", element: <SuspenseWrapper><AdminReports /></SuspenseWrapper> },

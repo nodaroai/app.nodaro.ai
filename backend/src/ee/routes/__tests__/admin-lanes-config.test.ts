@@ -12,7 +12,7 @@ import { makeFakeLaneDb, type FakeLaneDb } from "../../../lib/concurrency-lanes/
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const USER = "00000000-0000-4000-8000-0000000000aa"
-const refs = vi.hoisted(() => ({ gate: null as unknown, db: null as unknown as { client: { from(t: string): unknown } }, credits: true }))
+const refs = vi.hoisted(() => ({ gate: null as unknown, db: null as unknown as { client: { from(t: string): unknown } }, credits: true, available: true }))
 
 vi.mock("@/lib/config.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/config.js")>()),
@@ -21,6 +21,9 @@ vi.mock("@/lib/config.js", async (importOriginal) => ({
 }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: (t: string) => refs.db.client.from(t) } }))
 vi.mock("@/lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => refs.gate }))
+// The release lock is read through this getter, so the switch stays testable;
+// "while limits cannot be turned on" below runs with it off, as shipped.
+vi.mock("@/lib/concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return refs.available } }))
 vi.mock("@/ee/middleware/require-admin.js", () => ({
   requireAdmin: async (req: { userId?: string }, reply: { status: (c: number) => { send: (b: unknown) => unknown } }) => {
     if (req.userId !== "00000000-0000-4000-8000-0000000000ad") return reply.status(403).send({ error: { code: "forbidden", message: "Admin access required" } })
@@ -65,6 +68,7 @@ beforeEach(async () => {
   db = makeFakeLaneDb()
   refs.db = db
   refs.credits = true
+  refs.available = true
   db.rows("profiles").push({ id: ADMIN }, { id: USER, tier: "pro", subscription_tier: "pro", lifetime_topup_credits: 0 })
   const store = makeFakeLaneStore()
   gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(store), now: () => 1_000 })
@@ -121,6 +125,15 @@ describe("GET /v1/admin/lanes/config", () => {
     expect(body.env).toBe("production")
     expect(body.envSizes).toBeNull()
     expect(body.preconditions).toEqual(expect.objectContaining({ columnsPresent: true, liveCeilingMeasured: false, measureDays: 0 }))
+  })
+
+  it("the config GET serves the bounds every write is checked against, so the page never copies them", async () => {
+    expect((await call("GET", "/v1/admin/lanes/config")).json().bounds).toEqual({
+      laneSize: { min: 1, max: 500 },
+      providerCeiling: { min: 1, max: 100_000 },
+      queueTimeoutMinutes: { min: 5, max: 1440 },
+      liveWaitMinutes: { min: 1, max: 60 },
+    })
   })
 
   it("the config GET states that sizes, overrides, ceilings and timeouts are shared by every environment", async () => {
@@ -272,6 +285,38 @@ describe("PUT /v1/admin/lanes/enforced", () => {
 
   it("refuses a body without a boolean", async () => {
     expect((await call("PUT", "/v1/admin/lanes/enforced", { on: "yes" })).statusCode).toBe(400)
+  })
+})
+
+describe("while limits cannot be turned on (this release)", () => {
+  beforeEach(() => {
+    refs.available = false
+  })
+
+  it("the PUT refuses on with 409 not_available_yet, confirmed or not, met or not, and writes nothing", async () => {
+    allPreconditionsMet()
+    for (const body of [{ on: true }, { on: true, confirmUnmet: true }]) {
+      const res = await call("PUT", "/v1/admin/lanes/enforced", body)
+      expect(res.statusCode).toBe(409)
+      expect(res.json()).toMatchObject({ error: { code: "not_available_yet" }, available: false })
+    }
+    expect(db.rows("app_settings")).toEqual([])
+    expect(await gate.isEnforced()).toBe(false)
+  })
+
+  it("turning off is still allowed", async () => {
+    const res = await call("PUT", "/v1/admin/lanes/enforced", { on: false })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ enforced: false })
+  })
+
+  it("the config GET says it is not available yet, and reads a stored on as off", async () => {
+    db.rows("app_settings").push({ key: LANES_ENFORCED_KEY, value: { production: true }, updated_at: "2026-10-30T09:00:00.000Z" })
+    const body = (await call("GET", "/v1/admin/lanes/config")).json()
+    expect(body.available).toBe(false)
+    expect(body.preconditions.available).toBe(false)
+    expect(body.unmet[0]).toBe("available")
+    expect(body.enforced).toBe(false)
   })
 })
 

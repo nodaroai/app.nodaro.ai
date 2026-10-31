@@ -37,10 +37,11 @@ import { sunoHandlers } from "../../../workers/handlers/suno.js"
 import { entityHandlers } from "../../../workers/handlers/entity.js"
 import { referenceSheetHandlers } from "../../../workers/handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "../../../workers/handlers/motion-graphics-lottie.js"
+import { videoFaceMeshHandlers } from "../../../workers/handlers/video-face-mesh.js"
 import { FINALIZE_JOB_TYPES, NOT_GENERIC_RECOVERABLE } from "../../job-finalize.js"
 import { ENTITY_MEDIA_JOB_SPECS } from "../../entity-finalize.js"
 
-/** The ten maps video-worker.ts spreads statically into `allHandlers`. */
+/** The maps video-worker.ts spreads statically into `allHandlers` (the ten first, then Video Face Mesh's). */
 const STATIC_HANDLER_JOB_NAMES: readonly string[] = Object.keys({
   ...imageAIHandlers,
   ...videoAIHandlers,
@@ -52,6 +53,7 @@ const STATIC_HANDLER_JOB_NAMES: readonly string[] = Object.keys({
   ...entityHandlers,
   ...referenceSheetHandlers,
   ...motionGraphicsLottieHandlers,
+  ...videoFaceMeshHandlers,
 })
 
 /** DAG node types that reach a jobs row with an async provider_kind. Pinned —

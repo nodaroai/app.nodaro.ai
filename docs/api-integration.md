@@ -1582,7 +1582,7 @@ backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
 The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
-plus, for four classes of failure, a structured `error_hint`.
+plus, for five classes of failure, a structured `error_hint`.
 
 A provider content-policy block:
 
@@ -1628,6 +1628,22 @@ content-policy class (its message is about the file, not a policy):
 
 Treat it like any other failure — no fallback model is offered — except that
 the input to change is known: send a different clip.
+
+Or, when the job never got one of your account's concurrency slots, so it did
+not run:
+
+```json
+{ "kind": "queue-timeout", "reason": "timeout" | "lost" | "live-wait", "waitedMinutes": number }
+```
+
+`reason: "timeout"` — the job waited longer than the platform's queue timeout
+for a free slot; `"lost"` — its place in line was lost and could not be put
+back; `"live-wait"` — a synchronous call could not get a slot within its wait
+limit. `waitedMinutes` is the whole minutes it waited, rounded down. The job's
+credits are refunded; run it again. Treat an unknown `reason` like `"timeout"`.
+This hint only occurs once the deployment enforces concurrency limits (an admin
+setting, off by default, that cannot be turned on yet in this release); until
+then no job waits for a slot.
 
 `reason` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is.
 `hookPoint` says whether the request was refused before the job ran or the
@@ -1743,6 +1759,21 @@ job nobody reviews in time is auto-rejected — `failed` with the
 `policy-block` hint (`hookPoint: "result"`), the reservation refunded and
 the withheld output deleted; it is never auto-approved. Without that
 setting a hold waits for a reviewer indefinitely.
+
+A job reports `status: "queued"` while it is **waiting for a free slot**
+(when your account's concurrency limit is reached): your plan runs a set
+number of jobs at once, and a job past that waits in line until one of yours
+finishes. `queued` is an in-flight status like `pending` — keep polling; the
+job then moves to `processing` and on as usual, and it is cancellable while it
+waits. Your credits stay reserved (`credit_status: "reserved"`) for the whole
+wait. A job that waits longer than the platform's queue timeout, or that loses
+its place in line, ends `failed` with the `queue-timeout` hint
+([above](#job-failure-hints-error_hint-and-credit-status)) and is refunded —
+run it again. Measure your client's own deadlines from when the job started
+running, not from when it was created. Both `queued` and the `queue-timeout`
+hint occur only once an administrator turns concurrency limits on (an admin
+setting, off by default, that cannot be turned on yet in this release); until
+then every job starts at once and never reports `queued`.
 
 ## 8b. Pay-as-you-go accounts
 
@@ -4614,10 +4645,23 @@ an unknown slug is a `404` on every route.
 `GET /v1/trends/:slug` take no credential, so an app can show every published
 trend to a visitor and ask them to sign in only to run one. A guest gets the
 same published data with `isFavorite: false`; `favorites=1` is an account read
-and answers `401`. A guest's answer carries
-`Cache-Control: public, max-age=60` (and `Vary: Accept-Language, Authorization`),
-so a CDN may serve it for a minute; a signed-in answer is
-`Cache-Control: private, no-store`. Each of the three allows 60 requests a
+and answers `401`. The server keeps a guest's answer for the next guest until
+the catalog changes (a search, `q`, is never kept), so a change shows within
+seconds. Cache headers:
+
+- A guest whose language came from `Accept-Language`:
+  `Cache-Control: private, max-age=60` (`Vary: Accept-Language, Authorization`).
+  Only the browser keeps it, since a shared cache keyed by the address would
+  serve one language to everyone.
+- A guest who names the language with `?locale=`:
+  `Cache-Control: public, max-age=60` (`Vary: Authorization`), so a shared cache
+  may keep it. A deployment that drops its edge's copies on every change to the
+  catalog (`CLOUDFLARE_API_TOKEN`, [deployment](./deployment.md)) sends
+  `public, max-age=60, s-maxage=86400` instead: the edge keeps it a day. For
+  guests, pass `locale`.
+- Signed in: `Cache-Control: private, no-store`.
+
+Each of the three allows 60 requests a
 minute per address for a guest, and per account when signed in (`429`
 `rate_limit_exceeded` past it). A request with an invalid or expired token is
 answered as a guest. Every other route below needs a signed-in caller.
@@ -4626,7 +4670,7 @@ answered as a guest. Every other route below needs a signed-in caller.
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Every video (`cover`, `original`, each of `examples`, and the page's `original` and `examples`) may also carry `webUrl` and `webSizeBytes`: a light copy the platform made for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s), to play as it is with no CDN transform, and its size in bytes; both are absent until it is made (a version published before it), and `videoUrl` is then the one to play. A trend can hide its original clip: its `original` is then its first example, and `examples` starts from its second example, so the original clip is never sent. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
 | `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"motion-prism"` or `"motion-pulse"`, with its name in `engineName`: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Prism (480p is the draft), `["720p", "1080p"]` on Nodaro Motion Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
-| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"motion-prism"` or `"motion-pulse"`, as on its page), with its name in `engineName` ("Nodaro Motion Prism" or "Nodaro Motion Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
 | `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |

@@ -100,9 +100,10 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // and pitch-tempo (a local ffmpeg lane with its own markJobCompleted) to 66,
   // and Speaker Map (a worker unit declaring finalize:own-writer: a local
   // analysis that writes its own completion, like audio-sync) to 67, and
-  // Mask Erase (local ffmpeg on a mask, completeFfmpegVideoJob) to 68.
-  it("has exactly 68 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(68)
+  // Mask Erase (local ffmpeg on a mask, completeFfmpegVideoJob) to 68, and
+  // Video Face Mesh (local drawing, its own markJobCompleted) to 69.
+  it("has exactly 69 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(69)
   })
 
   it("denies generate-script and no other entity handler key", () => {

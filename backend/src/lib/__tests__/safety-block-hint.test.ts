@@ -28,6 +28,7 @@ import {
   errorHintFor,
   inputRefusedHint,
   policyBlockHint,
+  queueTimeoutHintOf,
   safetyBlockOf,
   type CreditsHint,
   type ErrorHint,
@@ -84,6 +85,8 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
           return `credits:${hint.code}`
         case "input-refused":
           return `input:${hint.subject}`
+        case "queue-timeout":
+          return `queue:${hint.reason}:${hint.waitedMinutes}`
         default: {
           const exhaustive: never = hint
           return exhaustive
@@ -94,6 +97,7 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
     expect(describeHint(policy)).toBe("nodaro:sai-moderation")
     expect(describeHint({ kind: "credits", code: "insufficient_credits" })).toBe("credits:insufficient_credits")
     expect(describeHint(inputRefusedHint())).toBe("input:input_video")
+    expect(describeHint({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 120 })).toBe("queue:timeout:120")
   })
 
   it("keeps errorHintFor producing the safety arm (migration 376 readers unchanged)", () => {
@@ -187,5 +191,40 @@ describe("safetyBlockOf never throws", () => {
   ])("a throwing %s reads as not a block", (_label, make) => {
     expect(() => safetyBlockOf(make(), "gpt-image-2")).not.toThrow()
     expect(safetyBlockOf(make(), "gpt-image-2")).toBeNull()
+  })
+})
+
+describe("queueTimeoutHintOf — a wait for a concurrency slot that ran out", () => {
+  const timedOut = (failureHint: unknown) => Object.assign(new Error("Waited longer than 120 min for a free slot."), { failureHint })
+
+  it("reads the hint a LaneWaitTimeoutError carries", async () => {
+    const { LaneWaitTimeoutError } = await import("../concurrency-lanes/errors.js")
+    const err = new LaneWaitTimeoutError({ reason: "timeout", waitedMs: 125 * 60_000, timeoutMinutes: 120 })
+    expect(queueTimeoutHintOf(err)).toEqual({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 125 })
+    expect(queueTimeoutHintOf(new Error("outer", { cause: err }))).toEqual({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 125 })
+  })
+
+  it("copies only the three fields, as a fresh object, the minutes whole and non-negative", () => {
+    const hint = { kind: "queue-timeout", reason: "lost", waitedMinutes: 7.9, internal: "x" }
+    const read = queueTimeoutHintOf(timedOut(hint))
+    expect(read).toEqual({ kind: "queue-timeout", reason: "lost", waitedMinutes: 7 })
+    expect(read).not.toBe(hint)
+    expect(Object.keys(read ?? {})).toEqual(["kind", "reason", "waitedMinutes"])
+    expect(queueTimeoutHintOf(timedOut({ kind: "queue-timeout", reason: "live-wait", waitedMinutes: -3 }))?.waitedMinutes).toBe(0)
+  })
+
+  it.each([
+    ["another kind", { kind: "credits", reason: "timeout", waitedMinutes: 1 }],
+    ["a reason outside the set", { kind: "queue-timeout", reason: "busy", waitedMinutes: 1 }],
+    ["no minutes", { kind: "queue-timeout", reason: "timeout" }],
+    ["non-finite minutes", { kind: "queue-timeout", reason: "timeout", waitedMinutes: Number.NaN }],
+    ["a string hint", "queue-timeout"],
+  ])("ignores a malformed hint: %s", (_label, failureHint) => {
+    expect(queueTimeoutHintOf(timedOut(failureHint))).toBeNull()
+  })
+
+  it("never throws", () => {
+    expect(queueTimeoutHintOf(Object.defineProperty(new Error("x"), "failureHint", { get() { throw new Error("boom") } }))).toBeNull()
+    expect(queueTimeoutHintOf(null)).toBeNull()
   })
 })

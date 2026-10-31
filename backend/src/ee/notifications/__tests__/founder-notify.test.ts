@@ -189,6 +189,29 @@ describe("notifyPaidConversion — fires only on a real free→paid transition",
     expect(sendSlack).toHaveBeenCalledOnce()
   })
 
+  it("carries the celebration banner from the deployment's own origin, text unchanged", async () => {
+    setPublicUrl("https://app.nodaro.ai/")
+    await notifyPaidConversion("u1", "free", "basic")
+    const msg = vi.mocked(sendSlack).mock.calls[0][1]
+    expect(msg.text).toBe(":tada: Paid conversion — user@example.com → basic")
+    expect(msg.blocks).toEqual([
+      { type: "section", text: { type: "mrkdwn", text: msg.text } },
+      {
+        type: "image",
+        image_url: "https://app.nodaro.ai/notifications/paid-conversion.jpg",
+        alt_text: "New paying customer",
+      },
+    ])
+  })
+
+  it("falls back to the Nodaro app for the banner when no public URL is set", async () => {
+    await notifyPaidConversion("u1", "free", "pro")
+    const msg = vi.mocked(sendSlack).mock.calls[0][1]
+    expect((msg.blocks as Array<{ image_url?: string }>)[1].image_url).toBe(
+      "https://app.nodaro.ai/notifications/paid-conversion.jpg",
+    )
+  })
+
   it("fires when prior tier is null (treated as free)", async () => {
     await notifyPaidConversion("u1", null, "basic")
     expect(sendSlack).toHaveBeenCalledOnce()

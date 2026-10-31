@@ -124,6 +124,17 @@ export type InputRefusedHint = {
   subject: "input_video"
 }
 
+/** The job never got a concurrency slot, so it did not run (it is refunded):
+ *  the queue timeout ran out (`timeout`), its place in line was lost and could
+ *  not be put back (`lost`), or a live call's wait limit ran out
+ *  (`live-wait`). `waitedMinutes`: whole minutes waited, rounded down.
+ *  Carried by `LaneWaitTimeoutError` (`lib/concurrency-lanes/errors.ts`). */
+export type QueueTimeoutHint = {
+  kind: "queue-timeout"
+  reason: "timeout" | "lost" | "live-wait"
+  waitedMinutes: number
+}
+
 /** One jsonb column, several verdict sources. A DISCRIMINATED UNION on `kind` —
  *  which was already the discriminant every reader tested
  *  (`hint.kind === "safety-block"`), so widening it breaks none of them.
@@ -134,7 +145,7 @@ export type InputRefusedHint = {
  *  `lib/private-plugins/types.ts` `PluginJobErrorHint` (and the plugin repo's
  *  copy of that contract).
  *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
-export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
+export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint
 
 /** A credits refusal code as a route sends it; anything else is not passed on. */
 const CREDITS_CODE_RE = /^[a-z0-9_]{1,64}$/
@@ -157,6 +168,38 @@ export function creditsHintOf(err: unknown): CreditsHint | null {
         const { kind, code } = hint as { kind?: unknown; code?: unknown }
         if (kind === "credits" && typeof code === "string" && CREDITS_CODE_RE.test(code)) {
           return { kind: "credits", code }
+        }
+      }
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const QUEUE_TIMEOUT_REASONS: ReadonlySet<QueueTimeoutHint["reason"]> = new Set(["timeout", "lost", "live-wait"])
+
+/** A wait for a concurrency slot that ran out, read off the thrown error (or
+ *  anything on its `cause` chain): a duck-typed `failureHint: { kind:
+ *  "queue-timeout", reason, waitedMinutes }` (`LaneWaitTimeoutError`,
+ *  lib/concurrency-lanes/errors.ts). Returns a FRESH object of exactly those
+ *  three fields — `reason` one of the closed set, `waitedMinutes` a whole,
+ *  non-negative number — so nothing else the thrower attached reaches the
+ *  column. Anything malformed is null. Never throws, like `creditsHintOf`. */
+export function queueTimeoutHintOf(err: unknown): QueueTimeoutHint | null {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      const hint = (cur as { failureHint?: unknown }).failureHint
+      if (typeof hint === "object" && hint !== null) {
+        const { kind, reason, waitedMinutes } = hint as { kind?: unknown; reason?: unknown; waitedMinutes?: unknown }
+        if (
+          kind === "queue-timeout" &&
+          typeof reason === "string" && QUEUE_TIMEOUT_REASONS.has(reason as QueueTimeoutHint["reason"]) &&
+          typeof waitedMinutes === "number" && Number.isFinite(waitedMinutes)
+        ) {
+          return { kind: "queue-timeout", reason: reason as QueueTimeoutHint["reason"], waitedMinutes: Math.max(0, Math.floor(waitedMinutes)) }
         }
       }
       cur = (cur as { cause?: unknown }).cause

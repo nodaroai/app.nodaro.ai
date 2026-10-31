@@ -47,7 +47,7 @@ import { markJobCompleted } from "../../workers/shared.js"
 import { TREND_VARIANT_ANCHOR_TYPE, touchTrendVariantAnchor } from "../../lib/reconcile/trend-variant-anchor-sweep.js"
 import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
-import { withResolvedZone, withoutMarks } from "../../lib/cast-swap-face-masking.js"
+import { engineDrawsFaceMesh, faceMeshOn, withResolvedZone, withoutMarks } from "../../lib/cast-swap-face-masking.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
 import { DraftConflictError, getDraftState, saveDraft } from "../lib/trends/store.js"
@@ -249,6 +249,11 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
       const castSwap = getPluginSupports().castSwap
       if (castSwap?.storedFaceMask !== true || castSwap.faceMaskErase !== true) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot make person masks yet.")
+      }
+      // A person mask is filled (and its face mesh drawn) as the base was: an engine that cannot draw the
+      // mesh would refuse the key, or make a person mask without the lines the approved one has.
+      if (faceMeshOn(draft.faceMasking) && !engineDrawsFaceMesh(castSwap)) {
+        return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw the face mesh yet: person masks of a trend that draws it are made where it can.")
       }
       if (state.baseProblem === "no_raw_mask" || !reusableFaceMaskBase(draft, castSwap.faceMaskRecipe)) {
         return err(reply, 409, "no_raw_mask", "The approved face mask kept no copy from before its marks: make the face mask again first.")

@@ -18,6 +18,7 @@ import { createSceneRenderPorts } from "../lib/private-plugins/scene3d-render-st
 import { requireSceneRenderParent, isRunnableSceneRenderStatus, SceneRenderParentInactiveError } from "../lib/private-plugins/scene3d-render-toolkit.js"
 import { Scene3DArtifactError } from "../services/scene3d-artifacts/types.js"
 import { sceneRenderCancellationCheck } from "./scene3d-cancellation-check.js"
+import { pickupStatusesFor } from "../lib/concurrency-lanes/worker-admit.js"
 import { sceneRenderChildId } from "../lib/private-plugins/scene3d-render-identity.js"
 import { createScene3DArtifactToolkit } from "../lib/private-plugins/scene3d-artifact-toolkit.js"
 import { writeScene3DPng, receiveScene3DPngIfPresent } from "../lib/private-plugins/scene3d-write-json.js"
@@ -40,7 +41,7 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
   try {
     await requireSceneRenderParent(ports, input, true)
     const { data, error } = await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() })
-      .eq("id", child.id).eq("user_id", child.userId).in("status", ["pending", "processing"]).select("id")
+      .eq("id", child.id).eq("user_id", child.userId).in("status", pickupStatusesFor(job.id)).select("id")
     if (error) throw new Error("Could not claim scene render child")
     if (!data?.length) return
     const result = await withRenderCancellation({ jobId: child.id, timeoutMs: 25 * 60 * 1000,

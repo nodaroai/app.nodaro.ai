@@ -1397,7 +1397,12 @@ without naming a content-policy class (`kind: "input-refused"`, `subject:
 "input_video"` — send a different clip; a `safety-block` carries the same
 `subject` when the refused input video also has a class, and `subject:
 "input_image"` on a `copyright` block when the provider refused one of the
-input images as possibly copyrighted — send a different picture). Admin callers
+input images as possibly copyrighted — send a different picture), or that never
+got one of the account's concurrency slots and did not run (`kind:
+"queue-timeout"`, carrying `reason` — `"timeout"`, `"lost"` or `"live-wait"` —
+and `waitedMinutes`; the job was refunded, so run it again — it only occurs
+once the deployment enforces concurrency limits, an admin setting that is off by
+default and cannot be turned on yet in this release). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
@@ -2389,6 +2394,8 @@ interface TrendRunRequest {
 interface TrendEstimate {
   expectedCredits: number            // what the run is expected to be charged
   holdCredits: number                // what is reserved when it starts
+  engine?: "motion-prism" | "motion-pulse" // the engine it was priced on, the trend's own; absent from an older server
+  engineName?: string                // its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; absent from an older server
   breakdown: Record<string, number>  // the parts of the quote, for display (some sit outside the totals: read the totals)
   privacyCredits?: number            // charged only if the clip is refused and the trend's retry runs; not in the totals
                                      // (0 on a trend whose clip was prepared ahead of time)

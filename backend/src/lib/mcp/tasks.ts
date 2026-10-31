@@ -138,6 +138,11 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   // settles it (its fee would stay reserved) and its hidden run would go on —
   // it falls through to `cancelOwnedJob`, which refunds and stops the run.
   // `.or`, not `.neq` (which also skips every row whose provider is NULL).
+  // A `queued` row — a job parked waiting for a concurrency slot — is kept off
+  // this flip on purpose: no worker holds it, so nothing would refund it or
+  // take its parked entry off the queue. It falls through to `cancelOwnedJob`
+  // too, which withdraws it from its lane, removes the entry by its stored
+  // BullMQ id and refunds it.
   const { data: flipped } = await supabase
     .from("jobs")
     .update({ status: "cancelled" })
@@ -148,6 +153,9 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   if (flipped && flipped.length > 0) {
     // The conversation node waiting on this job stops showing it running (flows/hydrate.ts).
     void import("./flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
+    // Out of its concurrency lane (a `pending` job may stand in its line before
+    // it parks). Bounded, never throws; lazy like the imports below.
+    await (await import("../concurrency-lanes/withdraw.js")).withdrawFromLane(jobId)
     // 554: the job's metered SIDE holds settle on their own markers, after the flip.
     const { settleSideHoldsAfterFlip } = await import("../llm-side-hold.js")
     await settleSideHoldsAfterFlip([jobId])

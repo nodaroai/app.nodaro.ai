@@ -125,6 +125,7 @@ import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideH
 import { appBaseUrl } from "../deployment-urls.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
+import { loadedEngineDrawsFaceMesh, withFaceMeshFor } from "../cast-swap-face-masking.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -1582,6 +1583,10 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   seedanceRefVideoQuote: true,
   nodaroMotionPromptParts: true,
   nodaroMotionMotion: true,
+  jobLanes: true,
+  // Turns true with the change that makes tk.jobs.waitForJob discount a
+  // job's queued time; until then a plugin must not rely on it.
+  queueAwareWait: false,
 })
 
 export interface BuildToolkitOptions {
@@ -2131,7 +2136,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const masking = settings.nodaro_motion_masking
         // Under the current AND the earlier keys (a transition shim: a plugin up to
         // 0.397.0 reads only "motion-pro" / "motion-lite"), each a fresh copy.
-        return masking ? withEarlierMaskingKeys(masking) : null
+        // The face mesh only to an engine that draws it, and only as `true`: an older
+        // engine's strict schema would refuse the whole entry, and that engine would mask nothing.
+        if (!masking) return null
+        const draws = loadedEngineDrawsFaceMesh()
+        return Object.fromEntries(
+          Object.entries(withEarlierMaskingKeys(masking)).map(([engine, m]) => [engine, m && withFaceMeshFor(m, draws)]),
+        ) as ReturnType<typeof withEarlierMaskingKeys>
       },
       // Same rules: a failed read throws (null would put every direct run back on the defaults).
       nodaroMotionPromptParts: async () => {
@@ -2147,7 +2158,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_motion: the app settings could not be read")
         const motion = settings.nodaro_motion_motion
         // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
-        return motion ? withEarlierMotionKeys(motion) : null
+        // Each entry's masking with the face mesh only for an engine that draws it (the masking read's rule).
+        if (!motion) return null
+        const draws = loadedEngineDrawsFaceMesh()
+        return Object.fromEntries(
+          Object.entries(withEarlierMotionKeys(motion)).map(([engine, entry]) => [
+            engine,
+            entry?.masking ? { ...entry, masking: withFaceMeshFor(entry.masking, draws) } : entry,
+          ]),
+        ) as ReturnType<typeof withEarlierMotionKeys>
       },
     },
     deployment: { publicUrl: appBaseUrl() },

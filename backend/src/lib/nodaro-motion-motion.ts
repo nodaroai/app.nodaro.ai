@@ -28,7 +28,7 @@
 import { z } from "zod"
 import { CAST_SWAP_PROMPT_STYLES, type CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { CastSwapStyle } from "@nodaro/shared/models"
-import { faceMaskingMotionSchema, faceMaskingSourceOf, fullDepthSceneOf, type FaceMasking, type FaceMaskingScene } from "./cast-swap-face-masking.js"
+import { faceMaskingMotionSchema, faceMaskingOn, faceMaskingSourceOf, faceMeshOn, fullDepthSceneOf, type FaceMasking, type FaceMaskingScene } from "./cast-swap-face-masking.js"
 import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_MOTION_KEY = "nodaro_motion_motion"
@@ -104,4 +104,19 @@ export function directRunPromptShape(style: CastSwapStyle, entry: NodaroMotionMo
     source,
     ...(scene ? { scene } : {}),
   }
+}
+
+/**
+ * Whether a direct run of this engine and style draws the face mesh: Precise
+ * — the engine's masking setting (`preciseMasking`, `nodaro_motion_masking`);
+ * Motion — the Motion setting's own masking (`entry.masking`), else (none
+ * there) the same Precise masking it falls back to. On and `faceMesh: true`.
+ */
+export function directRunDrawsFaceMesh(
+  style: CastSwapStyle,
+  entry: NodaroMotionMotionEntry | undefined,
+  preciseMasking: FaceMasking | undefined,
+): boolean {
+  const masking = style === "motion" && entry?.masking ? entry.masking : preciseMasking
+  return !!masking && faceMaskingOn(masking) && faceMeshOn(masking)
 }

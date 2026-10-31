@@ -5,7 +5,10 @@
 // Stored: `app_settings.lanes_enforced`, a map of runtime environment →
 // boolean (staging and production share one database; each environment reads
 // and writes only its own key — getRuntimeEnv()). With no boolean for this
-// environment, LANES_ENFORCED applies; with neither, lanes are off.
+// environment, LANES_ENFORCED applies; with neither, lanes are off. In this
+// release none of that can turn them on: LANES_ENFORCEMENT_AVAILABLE is false
+// (enforcement-available.ts), so the setting reads as off whatever is stored,
+// and a request to turn it on is refused (LanesNotAvailableError).
 //
 // Mirrored: every 30 s the setting is copied into the gate's Redis flag, which
 // every acquire reads atomically, and the provider ceilings into the gate. The
@@ -13,15 +16,25 @@
 // or by the mirror after a database edit, an env change or a PUT handled by
 // another process) wakes every waiting job through the registered waker.
 //
+// Versioned: the flag is written with the setting row's `updated_at`, and the
+// gate ignores a version older than the one it holds — so a mirror pass that
+// read the row before an admin's write can never undo it. The gate answers the
+// flag it replaced in the same script, so of every mirror applying one off
+// exactly one sees the edge and wakes the waiters. An admin's explicit off
+// always wakes, edge or not (waking is idempotent: promoting a job that is not
+// delayed is a no-op). Every write of the row moves `updated_at` forward, also
+// on a clock behind the row's.
+//
 // The mirror never stops: a database or Redis error skips that step for the
 // tick (logged at most once a minute) and the next tick tries again. A failed
 // read never counts as "off": it leaves the Redis flag as it is.
 import { config } from "../config.js"
 import { getRuntimeEnv } from "../runtime-env.js"
 import { supabase } from "../supabase.js"
+import { LANES_ENFORCEMENT_AVAILABLE } from "./enforcement-available.js"
 import { concurrencyGate } from "./instance.js"
 import { LIVE_CEILINGS_MEASURED } from "./live-ceilings.js"
-import { pluginJobTypesKnown, undeclaredPluginJobTypes } from "./registry.js"
+import { pluginJobTypesKnown, pluginLoadFailed, undeclaredPluginJobTypes } from "./registry.js"
 import { LANES_ENFORCED_KEY } from "./settings-keys.js"
 import { noteEnforcedApplied, providerCeilingsForGate } from "./sizes.js"
 
@@ -74,10 +87,46 @@ function warnRateLimited(what: string, err: unknown): void {
 
 // -------------------------------------------------------------- the setting
 
+/** Turning concurrency limits on is not available in this release (enforcement-available.ts). */
+export class LanesNotAvailableError extends Error {
+  readonly code = "not_available_yet"
+  constructor() {
+    super("Concurrency limits cannot be turned on in this release.")
+    this.name = "LanesNotAvailableError"
+  }
+}
+
+/** Whether concurrency limits may be turned on in this release. */
+export function lanesEnforcementAvailable(): boolean {
+  return LANES_ENFORCEMENT_AVAILABLE
+}
+
 type EnforcedMap = Record<string, unknown>
 
 function asMap(value: unknown): EnforcedMap {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? { ...(value as EnforcedMap) } : {}
+}
+
+/** A row's `updated_at` as the flag's version (ms); 0 for no row or an unreadable stamp. */
+function versionOf(updatedAt: unknown): number {
+  const ms = typeof updatedAt === "string" ? Date.parse(updatedAt) : Number.NaN
+  return Number.isFinite(ms) ? ms : 0
+}
+
+/**
+ * This environment's setting with its version: its boolean in the map, else
+ * LANES_ENFORCED — and off, whatever either says, while turning limits on is
+ * not available; the version is the row's `updated_at` (0 with no row), so an
+ * "off" copied this way still replaces an "on" the gate holds at that version.
+ * Throws when the database cannot be read — the caller must not treat that as "off".
+ */
+async function readLanesEnforcedVersioned(): Promise<{ on: boolean; version: number }> {
+  const { data, error } = await supabase.from("app_settings").select("value, updated_at").eq("key", LANES_ENFORCED_KEY).maybeSingle()
+  if (error) throw new Error(`could not read ${LANES_ENFORCED_KEY}: ${error.message ?? "unknown error"}`)
+  const row = data as { value?: unknown; updated_at?: unknown } | null
+  const own = asMap(row?.value)[getRuntimeEnv()]
+  const stored = typeof own === "boolean" ? own : config.LANES_ENFORCED === true
+  return { on: lanesEnforcementAvailable() && stored, version: versionOf(row?.updated_at) }
 }
 
 /**
@@ -86,10 +135,7 @@ function asMap(value: unknown): EnforcedMap {
  * not treat that as "off".
  */
 export async function readLanesEnforcedSetting(): Promise<boolean> {
-  const { data, error } = await supabase.from("app_settings").select("value").eq("key", LANES_ENFORCED_KEY).maybeSingle()
-  if (error) throw new Error(`could not read ${LANES_ENFORCED_KEY}: ${error.message ?? "unknown error"}`)
-  const own = asMap((data as { value?: unknown } | null)?.value)[getRuntimeEnv()]
-  return typeof own === "boolean" ? own : config.LANES_ENFORCED === true
+  return (await readLanesEnforcedVersioned()).on
 }
 
 const WRITE_ATTEMPTS = 4
@@ -97,9 +143,11 @@ const WRITE_ATTEMPTS = 4
 /**
  * Set this environment's key, keeping every other environment's: a
  * compare-and-swap on the row's `updated_at`, so a concurrent write from the
- * other environment is never overwritten.
+ * other environment is never overwritten. The new `updated_at` is always
+ * later than the row's (by 1 ms when this clock is behind it), so it is a
+ * version newer than any the gate holds. Returns that version.
  */
-async function writeOwnKey(on: boolean, actorId: string): Promise<void> {
+async function writeOwnKey(on: boolean, actorId: string): Promise<number> {
   const env = getRuntimeEnv()
   for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt++) {
     const { data, error } = await supabase
@@ -108,53 +156,60 @@ async function writeOwnKey(on: boolean, actorId: string): Promise<void> {
       .eq("key", LANES_ENFORCED_KEY)
       .maybeSingle()
     if (error) throw new Error(`could not read ${LANES_ENFORCED_KEY}: ${error.message ?? "unknown error"}`)
-    const now = new Date().toISOString()
     if (!data) {
+      const now = new Date().toISOString()
       const ins = await supabase.from("app_settings").insert({ key: LANES_ENFORCED_KEY, value: { [env]: on }, updated_at: now, updated_by: actorId })
-      if (!ins.error) return
+      if (!ins.error) return versionOf(now)
       if (ins.error.code === "23505") continue // the other environment created it first
       throw new Error(`could not write ${LANES_ENFORCED_KEY}: ${ins.error.message ?? "unknown error"}`)
     }
     const row = data as { value: unknown; updated_at: string }
     const value = { ...asMap(row.value), [env]: on }
+    const stamp = new Date(Math.max(Date.now(), versionOf(row.updated_at) + 1)).toISOString()
     const upd = await supabase
       .from("app_settings")
-      .update({ value, updated_at: now, updated_by: actorId })
+      .update({ value, updated_at: stamp, updated_by: actorId })
       .eq("key", LANES_ENFORCED_KEY)
       .eq("updated_at", row.updated_at)
-      .select("key")
+      .select("key, updated_at")
     if (upd.error) throw new Error(`could not write ${LANES_ENFORCED_KEY}: ${upd.error.message ?? "unknown error"}`)
-    if (Array.isArray(upd.data) && upd.data.length > 0) return
+    if (Array.isArray(upd.data) && upd.data.length > 0) {
+      return versionOf((upd.data[0] as { updated_at?: unknown }).updated_at) || versionOf(stamp)
+    }
     // Someone wrote the row between the read and the update: read it again.
   }
   throw new Error(`could not write ${LANES_ENFORCED_KEY}: the row kept changing`)
 }
 
 /**
- * Copy `target` into the gate's flag; on an on→off edge (or `forceWake`, for
- * an off the admin asked for) wake every waiter — after the flag is off, so
- * no woken waiter re-checks into an enforced gate and parks again.
+ * Copy `target` at `version` into the gate's flag, and wake every waiter —
+ * after the flag is off, so no woken waiter re-checks into an enforced gate
+ * and parks again — when this write turned it from on to off, or, with
+ * `wakeWhenOff` (an admin's explicit off), whenever the flag ends off. A stale
+ * version changes nothing, and the value noted in-process is the gate's.
  */
-async function applyToGate(target: boolean, forceWake: boolean): Promise<number> {
-  const gate = concurrencyGate()
-  const was = await gate.isEnforced()
-  await gate.setEnforced(target)
-  noteEnforcedApplied(target)
-  if (target || (!was && !forceWake)) return 0
-  return offTransitionWaker()
+async function applyToGate(target: boolean, version: number, wakeWhenOff: boolean): Promise<number> {
+  const { was, enforced } = await concurrencyGate().setEnforced(target, version)
+  noteEnforcedApplied(enforced)
+  if (enforced) return 0
+  return was || (wakeWhenOff && !target) ? offTransitionWaker() : 0
 }
 
 /**
  * Turn enforcement on or off in THIS environment: write its key, copy it into
- * Redis at once, and on off wake every waiting job. Throws only when the
+ * Redis at once, and on off wake every waiting job (also when the flag was
+ * already off: waking is idempotent). Turning it on throws
+ * LanesNotAvailableError, before anything is written, while that is not
+ * available; turning it off is always allowed. Otherwise throws only when the
  * setting could not be saved; when it was saved but Redis could not be
  * reached, `mirrored` is false and the mirror applies it within one interval
  * (an off is then seen as an edge and wakes the waiters).
  */
 export async function setLanesEnforced(on: boolean, actorId: string): Promise<{ woke: number; mirrored: boolean }> {
-  await writeOwnKey(on, actorId)
+  if (on && !lanesEnforcementAvailable()) throw new LanesNotAvailableError()
+  const version = await writeOwnKey(on, actorId)
   try {
-    return { woke: await applyToGate(on, !on), mirrored: true }
+    return { woke: await applyToGate(on, version, true), mirrored: true }
   } catch (err) {
     warnRateLimited("could not copy the enforcement switch into Redis; the mirror retries", err)
     return { woke: 0, mirrored: false }
@@ -169,15 +224,15 @@ export async function setLanesEnforced(on: boolean, actorId: string): Promise<{ 
  * (`lastMirroredEnforced`) for reads that must not call Redis.
  */
 export async function mirrorEnforcementOnce(): Promise<void> {
-  let target: boolean | null = null
+  let target: { on: boolean; version: number } | null = null
   try {
-    target = await readLanesEnforcedSetting()
+    target = await readLanesEnforcedVersioned()
   } catch (err) {
     warnRateLimited("enforcement mirror: the setting could not be read, the flag is left as it is", err)
   }
   if (target !== null) {
     try {
-      await applyToGate(target, false)
+      await applyToGate(target.on, target.version, false)
     } catch (err) {
       warnRateLimited("enforcement mirror: could not copy the switch into Redis", err)
     }
@@ -221,12 +276,16 @@ export function startEnforcementMirror(): () => void {
 
 /** What the switch lists before enforcement is turned on. */
 export interface EnforcementPreconditions {
+  /** Turning limits on is available in this release at all (false: the switch refuses on, whatever else is met). */
+  available: boolean
   /** The lane columns and tables of migration 568 are in this database. */
   columnsPresent: boolean
   /** Whether this process has recorded its plugin job types (until then the list below proves nothing). */
   pluginTypesKnown: boolean
   /** Plugin job types with no lane declaration. */
   undeclaredPluginTypes: string[]
+  /** The plugins failed to load in this process, so its plugin job types were never checked (unmet when true). */
+  pluginLoadFailed?: boolean
   /** The live-wait ceiling comes from a measurement. */
   liveCeilingMeasured: boolean
   /** Days of measure-only data in this environment. */
@@ -276,21 +335,24 @@ async function measureDays(): Promise<number> {
 export async function enforcementPreconditions(): Promise<EnforcementPreconditions> {
   const [columnsPresent, days] = await Promise.all([laneSchemaPresent(), measureDays()])
   return {
+    available: lanesEnforcementAvailable(),
     columnsPresent,
     pluginTypesKnown: pluginJobTypesKnown(),
     undeclaredPluginTypes: undeclaredPluginJobTypes(),
+    pluginLoadFailed: pluginLoadFailed(),
     liveCeilingMeasured: LIVE_CEILINGS_MEASURED,
     measureDays: days,
   }
 }
 
-export type EnforcementPrecondition = "columns" | "plugins" | "liveCeiling" | "measureDays"
+export type EnforcementPrecondition = "available" | "columns" | "plugins" | "liveCeiling" | "measureDays"
 
 /** The preconditions not met, in the order the switch lists them; empty = all met. */
 export function unmetPreconditions(p: EnforcementPreconditions): EnforcementPrecondition[] {
   const unmet: EnforcementPrecondition[] = []
+  if (!p.available) unmet.push("available")
   if (!p.columnsPresent) unmet.push("columns")
-  if (!p.pluginTypesKnown || p.undeclaredPluginTypes.length > 0) unmet.push("plugins")
+  if (!p.pluginTypesKnown || p.undeclaredPluginTypes.length > 0 || p.pluginLoadFailed === true) unmet.push("plugins")
   if (!p.liveCeilingMeasured) unmet.push("liveCeiling")
   if (p.measureDays < MIN_MEASURE_DAYS) unmet.push("measureDays")
   return unmet

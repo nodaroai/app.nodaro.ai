@@ -1378,6 +1378,17 @@ export type PluginJobErrorHint =
       kind: "credits"
       code: string
     }
+  | {
+      /**
+       * The job never got a concurrency slot, so it did not run (refunded):
+       * the queue timeout ran out (`timeout`), its place in line was lost
+       * (`lost`), or a live call's wait ran out (`live-wait`).
+       * `waitedMinutes`: whole minutes waited, rounded down. ADDITIVE-OPTIONAL.
+       */
+      kind: "queue-timeout"
+      reason: "timeout" | "lost" | "live-wait"
+      waitedMinutes: number
+    }
 
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */
 export interface PluginOwnedJobRow {
@@ -3353,6 +3364,19 @@ export interface PluginCapabilities {
    * Flexible prompt).
    */
   readonly nodaroMotionMotion?: boolean
+  /**
+   * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
+   * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
+   * never calls it, and runs every plugin job type as a coordinator.
+   */
+  readonly jobLanes?: boolean
+  /**
+   * `tk.jobs.waitForJob` is queue-aware: the time the awaited job spends
+   * waiting for a free slot does not count against the caller's timeout.
+   * False (or absent) — the wait counts from when it was called, so a plugin
+   * that waits on a job which may queue keeps a timeout that allows for it.
+   */
+  readonly queueAwareWait?: boolean
 }
 
 /**
@@ -3379,6 +3403,13 @@ export interface PluginFaceMasking {
   zone?: { leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number } | null
   blurStrengthPct?: number
   threshold?: number
+  /**
+   * The face mesh: thin face lines drawn on the masked heads (faces hidden) or
+   * on every face of the depth clip (full depth); never with keep people.
+   * Sent (and answered by `tk.settings`) only as `true`, and only to an
+   * engine that declares `supports.castSwap.faceMesh`.
+   */
+  faceMesh?: boolean
 }
 
 /**
@@ -3407,6 +3438,7 @@ export type PluginPromptPartId =
   | "audio"
   | "face"
   | "depthGuard"
+  | "faceMesh"
   | "person"
   | "pet"
   | "product"
@@ -3681,6 +3713,18 @@ export interface PluginSupports {
    *   at all when every resolution is the full audio. Wins over
    *   `prismReferenceAudio` when both are declared. Additive-optional: absent
    *   ⇒ `false` — the string of `prismReferenceAudio` above (or nothing).
+   * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
+   *   the Nodaro Motion settings read through `tk.settings`) takes
+   *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
+   *   outlines) drawn through the core `video-face-mesh` job on the masked
+   *   heads (faces hidden) or on every face of the depth clip (full depth),
+   *   with the engine's `faceMesh` prompt part saying what they mean; never
+   *   with keep people. Additive-optional: absent ⇒ `false` — the platform
+   *   never sends `faceMesh` (it strips the key from a run, refuses a make,
+   *   holds a trend that draws it back from publishing there, answers the
+   *   settings without it, and refuses to save a shared Nodaro Motion setting
+   *   with it while any environment lacks it), so the wire is byte-identical
+   *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMesh`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3713,6 +3757,7 @@ export interface PluginSupports {
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
     readonly prismReferenceAudioPerResolution?: boolean
+    readonly faceMesh?: boolean
   }
 }
 
@@ -4600,6 +4645,19 @@ export interface PluginRecipe {
 }
 export type RecipeTable = Record<string, PluginRecipe>
 
+/**
+ * The concurrency lane a plugin job type runs in (the host's `LaneClass` in
+ * `lib/concurrency-lanes/types.ts`; a structural mirror, pinned to it by a
+ * type test). A `leaf` job holds one slot of its lane for its whole run:
+ * `provider` (a call to an external AI provider), `llm` (an LLM call) or
+ * `local` (in-house compute: ffmpeg, image compositing). A `coordinator`
+ * holds no leaf slot itself — each toolkit call it makes acquires its own —
+ * and, when it is a top-level job, one of its user's run slots.
+ */
+export type PluginJobLaneClass =
+  | { kind: "leaf"; lane: "provider" | "llm" | "local" }
+  | { kind: "coordinator" }
+
 export interface NodaroPrivatePlugin {
   name: string
   registerRoutes?(app: FastifyInstance, tk: PluginToolkit): Promise<void>
@@ -4645,6 +4703,17 @@ export interface NodaroPrivatePlugin {
    * `PluginSupports` — plugin → host, the reverse of `tk.capabilities`).
    */
   supports?(): PluginSupports
+  /**
+   * Additive: the concurrency lane of each job type this plugin's `handlers()`
+   * returns, keyed by handler key (see `PluginJobLaneClass`). A type left out
+   * runs as a coordinator, which never deadlocks but takes a run slot; the
+   * host lists undeclared types at boot. Merged by the loader last write wins
+   * per type, like `handlers`; an entry for a key this plugin's own
+   * `handlers()` does not return, or one that is not a valid class, is
+   * refused (logged). Read only when
+   * `tk.capabilities.jobLanes` is true on the host.
+   */
+  jobLanes?(): Record<string, PluginJobLaneClass>
 }
 
 export interface PrivatePluginsModule {

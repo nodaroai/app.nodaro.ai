@@ -38,8 +38,11 @@
  * credential (middleware/auth.ts lists them public), so a visitor sees every
  * published trend and is asked to sign in only to run one. A guest's answer
  * is the signed-in one's published data with `isFavorite: false`, its language
- * from `?locale=` then `Accept-Language`, and a cache may keep it a minute;
- * `favorites=1` is an account read (401). Every other route needs a caller.
+ * from `?locale=` then `Accept-Language`; `favorites=1` is an account read
+ * (401). Every other route needs a caller. A guest's answer is KEPT here for
+ * the next guest until the catalog changes (catalog-stamp.ts; a search is
+ * never kept), and one that names its language may be kept a day at the edge
+ * when this deployment can drop the edge's copies (public-read.ts).
  *
  * A signed-in caller's reads need `jobs:read` for an OAuth app; estimate and
  * run `workflows:execute` (as the Cast Swap MCP verb); favorites
@@ -67,8 +70,9 @@ import {
   setFavorite,
 } from "../lib/trends/store.js"
 import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
-import { acceptedLocale, pickText } from "../lib/trends/localize.js"
-import { PUBLIC_READ_LIMIT, publicReadCache } from "../lib/trends/public-read.js"
+import { pickText } from "../lib/trends/localize.js"
+import { PUBLIC_READ_LIMIT, guestKeep, guestLocale, keptHit, sendPublicRead } from "../lib/trends/public-read.js"
+import { watchTrendCatalogForEdge } from "../lib/trends/catalog-stamp.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quote.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
@@ -214,8 +218,7 @@ export interface TrendDetail extends TrendCard {
 /** Same shape as migration 549's CHECK on `trends.slug`. */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const LOCALE_IDS: ReadonlyArray<string> = LANGUAGES.map((l) => l.id)
-const LOCALES: ReadonlySet<string> = new Set(LOCALE_IDS)
+const LOCALES: ReadonlySet<string> = new Set(LANGUAGES.map((l) => l.id))
 const PREVIEW_SEC = 4 as const
 
 const WRITE_LIMIT = { rateLimit: { max: 30, timeWindow: "1 minute" } }
@@ -285,8 +288,8 @@ function publicReader(req: FastifyRequest, reply: FastifyReply): string | null |
  * profile preferredLocale, or a guest's `Accept-Language`; else English.
  */
 async function resolveLocale(req: FastifyRequest, userId: string | null, raw: string | undefined): Promise<string> {
+  if (userId === null) return guestLocale(req, raw)
   if (raw && LOCALES.has(raw)) return raw
-  if (userId === null) return acceptedLocale(req.headers["accept-language"], LOCALE_IDS) ?? "en"
   try {
     const { data, error } = await supabase.from("profiles").select("preferred_locale").eq("id", userId).maybeSingle()
     const pref = (data as { preferred_locale?: unknown } | null)?.preferred_locale
@@ -496,6 +499,9 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
 // ── routes ──────────────────────────────────────────────────────────────────
 
 export async function trendRoutes(app: FastifyInstance) {
+  // Every API process drops the edge's copies when it sees the catalog change, wherever the change was made.
+  watchTrendCatalogForEdge()
+
   app.get("/v1/trends", { config: PUBLIC_READ_LIMIT }, async (req, reply) => {
     const userId = publicReader(req, reply)
     if (userId === undefined) return
@@ -507,6 +513,14 @@ export async function trendRoutes(app: FastifyInstance) {
     if (onlyFavorites && userId === null) return err(reply, 401, "unauthorized", "Authentication required")
 
     try {
+      // A search is any text: never kept. A page of the catalog, of a tag, at a cursor is.
+      const kept = await guestKeep(
+        userId,
+        q?.trim() ? null : JSON.stringify(["list", guestLocale(req, rawLocale), tag ?? "", cursor ?? "", limit]),
+      )
+      const hit = keptHit(kept)
+      if (hit !== undefined) return sendPublicRead(reply, userId, rawLocale, null, hit)
+
       const [locale, page] = await Promise.all([
         resolveLocale(req, userId, rawLocale),
         listPublished({
@@ -527,9 +541,9 @@ export async function trendRoutes(app: FastifyInstance) {
         const card = toCard(r, r.data, locale, favs.has(r.id))
         return card ? [card] : []
       })
-      // Once the answer is built: a failure above is never cached.
-      publicReadCache(reply, userId)
-      return { data, next: page.next }
+      // Once the answer is built: a failure above is never cached or kept. Nor is an empty page
+      // of a tag: any text names a tag, and a made-up one must not push the real pages out.
+      return sendPublicRead(reply, userId, rawLocale, tag && data.length === 0 ? null : kept, { data, next: page.next })
     } catch (e) {
       if (e instanceof InvalidTrendCursorError) return err(reply, 400, "validation_error", "Invalid cursor")
       return unavailableOrInternal(reply, req, e, "Failed to list trends")
@@ -613,8 +627,13 @@ export async function trendRoutes(app: FastifyInstance) {
     if (userId === undefined) return
     const parsed = detailQuery.safeParse(req.query)
     if (!parsed.success) return badRequest(reply, parsed.error)
+    const rawLocale = parsed.data.locale
     try {
-      const [locale, usage] = await Promise.all([resolveLocale(req, userId, parsed.data.locale), publishedTagUsage()])
+      const kept = await guestKeep(userId, JSON.stringify(["tags", guestLocale(req, rawLocale)]))
+      const hit = keptHit(kept)
+      if (hit !== undefined) return sendPublicRead(reply, userId, rawLocale, null, hit)
+
+      const [locale, usage] = await Promise.all([resolveLocale(req, userId, rawLocale), publishedTagUsage()])
       let labels = new Map<string, TagLabels>()
       try {
         labels = await readTagLabels(usage.map((u) => u.tag))
@@ -625,8 +644,7 @@ export async function trendRoutes(app: FastifyInstance) {
         req.log.warn("trends: tag labels unavailable, listing tags as themselves")
       }
       const data: TrendTag[] = usage.map(({ tag, count }) => ({ tag, label: tagLabel(tag, labels.get(tag), locale), count }))
-      publicReadCache(reply, userId)
-      return { data }
+      return sendPublicRead(reply, userId, rawLocale, kept, { data })
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to list the trend tags")
     }
@@ -638,17 +656,21 @@ export async function trendRoutes(app: FastifyInstance) {
     const parsed = detailQuery.safeParse(req.query)
     if (!parsed.success) return badRequest(reply, parsed.error)
     const { slug } = req.params as { slug: string }
+    const rawLocale = parsed.data.locale
     try {
+      const kept = await guestKeep(userId, JSON.stringify(["page", slug, guestLocale(req, rawLocale)]))
+      const hit = keptHit(kept)
+      if (hit !== undefined) return sendPublicRead(reply, userId, rawLocale, null, hit)
+
       const found = await findPublished(slug)
       if (!found?.data) return notFound(reply)
       const [locale, favs] = await Promise.all([
-        resolveLocale(req, userId, parsed.data.locale),
+        resolveLocale(req, userId, rawLocale),
         userId === null ? new Set<string>() : favoriteIds(userId, [found.row.id]),
       ])
       const detail = toDetail(found.row, found.version, found.data, locale, favs.has(found.row.id))
       if (!detail) return notFound(reply)
-      publicReadCache(reply, userId)
-      return { data: detail }
+      return sendPublicRead(reply, userId, rawLocale, kept, { data: detail })
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read trend")
     }

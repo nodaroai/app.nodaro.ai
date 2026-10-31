@@ -245,6 +245,11 @@ export function FaceMaskPanel({
       {faceMask && (!jobId || !current) && (
         <MaskResult url={faceMask.url} stats={faceMask.stats} label="The approved face mask" editor={editable} />
       )}
+      {faceMask && (!jobId || !current) && faceMask.facesDrawn === 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="face-mesh-none-drawn-approved">
+          The approved mask has no face lines: its make drew the face mesh on no face.
+        </p>
+      )}
       {faceMask && sceneDescription && (
         <SceneDescriptionEditor
           trendId={trendId}
@@ -276,6 +281,11 @@ export function FaceMaskPanel({
       )}
       {jobId && maskedUrl && (
         <MaskResult url={maskedUrl} stats={statsOf(j?.output_data?.stats)} label="The new face mask" editor={editable && current} />
+      )}
+      {jobId && maskedUrl && j?.output_data?.faceMesh?.facesDrawn === 0 && (
+        <p className="text-sm text-amber-700 dark:text-amber-400" role="status" data-testid="face-mesh-none-drawn">
+          No faces were drawn with the face mesh on this mask: approved as it is, its runs carry no face lines.
+        </p>
       )}
       {editable && shown && (
         <div className="flex flex-col gap-2 rounded-md border border-dashed p-2" aria-label="Face mask marks">

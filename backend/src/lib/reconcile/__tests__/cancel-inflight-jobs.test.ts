@@ -12,26 +12,37 @@ const mocks = vi.hoisted(() => {
     data: rows.filter((r) => Object.entries(filters).every(([c, v]) => (r[c] ?? ROW_DEFAULTS[c]) === v)),
     error: null as { message: string } | null,
   }))
+  /** The status lists the in-flight read and the cancel CAS ask for, in order. */
+  const statusLists: Array<{ op: "read" | "cas"; statuses: unknown }> = []
   const selectChain = (filters: Record<string, unknown>): Record<string, unknown> => ({
     eq: (col: string, v: unknown) => selectChain({ ...filters, [col]: v }),
-    in: () => selectInMock(filters),
+    in: (_col: string, statuses: unknown) => {
+      statusLists.push({ op: "read", statuses })
+      return selectInMock(filters)
+    },
   })
   const selectMock = vi.fn(() => selectChain({}))
   // update chain: from("jobs").update(...).eq(...).in(...).select("id") → flipped
   const updateCalls: Array<Record<string, unknown>> = []
   const updSelectMock = vi.fn(() => Promise.resolve({ data: [{ id: "flipped" }], error: null }))
-  const updInMock = vi.fn(() => ({ select: updSelectMock }))
+  const updInMock = vi.fn((_col: string, statuses: unknown) => {
+    statusLists.push({ op: "cas", statuses })
+    return { select: updSelectMock }
+  })
   const updEqMock = vi.fn(() => ({ in: updInMock }))
   const updateMock = vi.fn((arg: Record<string, unknown>) => {
     updateCalls.push(arg)
     return { eq: updEqMock }
   })
   const fromMock = vi.fn(() => ({ select: selectMock, update: updateMock }))
-  return { refundMock, rows, selectInMock, updateMock, updateCalls, fromMock }
+  return { refundMock, rows, selectInMock, updateMock, updateCalls, fromMock, statusLists }
 })
 
 vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
+// Concurrency lanes: a child the run's cancel takes leaves its line (withdraw.test.ts).
+const lanes = vi.hoisted(() => ({ withdrawFromLane: vi.fn(async (_jobId: string) => {}) }))
+vi.mock("../../concurrency-lanes/withdraw.js", () => lanes)
 const owned = vi.hoisted(() => ({
   cancel: vi.fn(async (_id: string, _owner: string) => ({ kind: "cancelled" as string })),
   // D10: the reconcile sweep's metered rule, applied before a stale row is
@@ -57,8 +68,48 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
     vi.clearAllMocks()
     mocks.rows.length = 0
     mocks.updateCalls.length = 0
+    mocks.statusLists.length = 0
     mocks.refundMock.mockResolvedValue(1)
     owned.meteredVerdict.mockResolvedValue("not-metered")
+  })
+
+  // Concurrency lanes: a job waiting for a slot is `queued`. A cancel that ends
+  // the run (a blocked account, a refused UGC pick, a timed-out component, a
+  // use-case node cancelled with its hidden run) takes those children too —
+  // or they would run and bill later for a run that is over — and each child
+  // it cancels leaves its line. The RESUME is unchanged: it never cancels a
+  // queued child (a later change adopts them) and withdraws nothing.
+  it("a cancel that ends the run takes its queued children too, and withdraws each child it cancelled", async () => {
+    mocks.rows.push(
+      { id: "j-queued", status: "queued", input_data: { node_id: "node-q", type: "generate-image" }, provider_task_id: null },
+      { id: "j-pending", status: "pending", input_data: { node_id: "node-p", type: "generate-image" }, provider_task_id: null },
+    )
+
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1")
+
+    expect(cancelled).toBe(2)
+    expect(mocks.statusLists[0]).toEqual({ op: "read", statuses: ["pending", "queued", "processing"] })
+    expect(mocks.statusLists.filter((l) => l.op === "cas").map((l) => l.statuses)).toEqual([
+      ["pending", "queued", "processing"], ["pending", "queued", "processing"],
+    ])
+    expect(lanes.withdrawFromLane.mock.calls.map((c) => c[0])).toEqual(["j-queued", "j-pending"])
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-queued")
+  })
+
+  it("the resume path's status list is exactly [\"pending\", \"processing\"] — read and CAS — and it withdraws nothing", async () => {
+    mocks.rows.push({ id: "j-pre", input_data: { node_id: "node-1", type: "generate-image" }, provider_task_id: null })
+
+    await cancelInFlightChildJobs("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })
+
+    // Exact lists, order included: the resume never reads or cancels a `queued`
+    // (waiting) child and never a held (`pending_review`) one.
+    const RESUME_STATUSES = ["pending", "processing"]
+    expect(mocks.statusLists).toEqual([
+      { op: "read", statuses: RESUME_STATUSES },
+      { op: "cas", statuses: RESUME_STATUSES },
+    ])
+    for (const l of mocks.statusLists) expect(l.statuses).not.toContain("queued")
+    expect(lanes.withdrawFromLane).not.toHaveBeenCalled()
   })
 
   it("a use-case wrapper → the shared single-job cancel (fee refunded, hidden run stopped), never the bare flip", async () => {

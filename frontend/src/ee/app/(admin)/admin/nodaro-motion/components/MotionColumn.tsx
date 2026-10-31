@@ -51,9 +51,11 @@ interface Props {
   readonly supports?: NodaroMotionEngineSupports
   /** The environments whose engine cannot hide whole people (`environmentsThatCannotHideBodies`); unknown when left out. */
   readonly bodyMissingIn?: readonly string[]
+  /** The environments whose engine cannot draw the face mesh (`environmentsThatCannotDrawFaceMesh`); unknown when left out. */
+  readonly faceMeshMissingIn?: readonly string[]
 }
 
-export function MotionColumn({ value, onChange, supports, bodyMissingIn }: Props) {
+export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMeshMissingIn }: Props) {
   const id = useId()
   const choice = maskingChoiceOf(value?.masking)
   const hint = MASKING_CHOICES.find((c) => c.value === choice)?.hint
@@ -86,6 +88,7 @@ export function MotionColumn({ value, onChange, supports, bodyMissingIn }: Props
           value={value.masking}
           source={choice === "full-depth" ? "full-depth" : "faces"}
           bodyMissingIn={bodyMissingIn}
+          faceMeshMissingIn={faceMeshMissingIn}
           // Off is kept as Off ({ mode: "off" }), never read as "Same as Precise".
           onChange={(m) => onChange({ ...value, masking: m ?? { mode: "off" } })}
         />

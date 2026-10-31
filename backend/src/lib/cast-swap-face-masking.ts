@@ -99,6 +99,20 @@ export interface FaceMasking {
   blurStrengthPct?: number
   /** How sure the face finder must be, 0.05–0.95. */
   threshold?: number
+  /**
+   * The face mesh (decided 2026-10-31): thin face lines (a mesh, the lip
+   * outline, the eye outlines) drawn on the masked heads (faces hidden, any
+   * target and fill) or on every face found (full depth), so the video model
+   * keeps the mouth and the blinks it can no longer see. Absent or `false` =
+   * off, exactly the run before it existed: `false` is never sent nor hashed
+   * (`faceMeshOn`). Keep people refuses it (the faces stay as filmed there:
+   * `face_mesh_not_with_keep_people`). An engine draws it only when it
+   * declares `castSwap.faceMesh` (`engineDrawsFaceMesh`): the key is stripped
+   * for one that does not (its strict schema would refuse it), and the
+   * settings every environment shares are saved with it only once every one
+   * does.
+   */
+  faceMesh?: boolean
 }
 
 /**
@@ -170,6 +184,7 @@ const faceMaskingShape = {
   zone: faceMaskingZoneSchema.nullable().optional(),
   blurStrengthPct: within(CAST_SWAP_FACE_MASKING_BOUNDS.blurStrengthPct).optional(),
   threshold: within(CAST_SWAP_FACE_MASKING_BOUNDS.threshold).optional(),
+  faceMesh: z.boolean().optional(),
 }
 
 const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHeightPct">) =>
@@ -178,11 +193,16 @@ const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHe
   m.maxFaceHeightPct >= (m.minFaceHeightPct ?? FACE_MASKING_DEFAULT_MIN_FACE_HEIGHT_PCT)
 const faceHeightsMessage = { path: ["maxFaceHeightPct"], message: "The largest face height must be at least the smallest (or 0 for no limit)." }
 
+/** The issue code of a face mesh asked for with keep people (`sourceModeRules`), in the issue's `params.code`. */
+export const FACE_MESH_NOT_WITH_KEEP_PEOPLE = "face_mesh_not_with_keep_people"
+
 /**
  * What a source mode allows: a depth mode needs `mode: "always"` (its clip is
  * made once, approved and stored; "auto" and "off" have no meaning there), the
- * whole-person target is never full depth's (it masks no one), and a `"main"`
- * mark is keep-people's alone.
+ * whole-person target is never full depth's (it masks no one), a `"main"`
+ * mark is keep-people's alone, and the face mesh is never keep people's (the
+ * faces stay as filmed there: there is no masked head to draw on). Only
+ * `faceMesh: true` is refused: `false` is the same as left out.
  */
 function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
   const source = faceMaskingSourceOf(m)
@@ -194,6 +214,14 @@ function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
   }
   if (m.target === "body" && source === "full-depth") {
     ctx.addIssue({ code: "custom", path: ["target"], message: 'Full depth masks no one: the whole-person target ("body") is for Faces hidden and Keep people.' })
+  }
+  if (m.faceMesh === true && source === "keep-people") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["faceMesh"],
+      params: { code: FACE_MESH_NOT_WITH_KEEP_PEOPLE },
+      message: "The face mesh is drawn on masked heads or on a depth clip: Keep people keeps the faces as filmed, so it takes no face mesh.",
+    })
   }
   ;(m.marks ?? []).forEach((mark, i) => {
     if (isMainFaceMaskMark(mark) && source !== "keep-people") {
@@ -342,6 +370,51 @@ export function engineMasksTarget(
   return (source === "faces" ? faceMaskHideTargetsOf(cs) : faceMaskTargetsOf(cs)).includes(target)
 }
 
+/**
+ * Whether the setting draws the face mesh: `faceMesh: true` with faces hidden
+ * or full depth (keep people never draws it). Absent and `false` are the same
+ * (off), so neither is ever sent nor hashed.
+ */
+export function faceMeshOn(m: Pick<FaceMasking, "faceMesh" | "source"> | undefined): boolean {
+  return m?.faceMesh === true && faceMaskingSourceOf(m) !== "keep-people"
+}
+
+/**
+ * The setting with `faceMesh` only when it is on (`faceMeshOn`): absent, or
+ * `true`; never `false`, and never with keep people. A new object.
+ */
+export function withFaceMeshNormalised<T extends FaceMasking>(m: T): T {
+  const { faceMesh: _faceMesh, ...rest } = m
+  return (faceMeshOn(m) ? { ...rest, faceMesh: true } : rest) as T
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine draws the face mesh
+ * (`castSwap.faceMesh`). Absent ⇒ an engine from before it, whose strict
+ * schema refuses a `faceMesh` key: it is never sent one.
+ */
+export function engineDrawsFaceMesh(cs: { readonly faceMesh?: boolean } | undefined): boolean {
+  return cs?.faceMesh === true
+}
+
+/** Whether this process's Cast Swap engine draws the face mesh (`engineDrawsFaceMesh` its declaration). */
+export function loadedEngineDrawsFaceMesh(): boolean {
+  return engineDrawsFaceMesh(getPluginSupports().castSwap)
+}
+
+/**
+ * The setting as an engine that may not draw the face mesh is sent it: with
+ * `faceMesh: true` only when the setting draws it AND `drawsFaceMesh`; else
+ * no `faceMesh` key at all, exactly the setting before the mesh existed. A
+ * new object.
+ */
+export function withFaceMeshFor<T extends FaceMasking>(m: T, drawsFaceMesh: boolean): T {
+  const normalised = withFaceMeshNormalised(m)
+  if (drawsFaceMesh || normalised.faceMesh === undefined) return normalised
+  const { faceMesh: _faceMesh, ...rest } = normalised
+  return rest as T
+}
+
 /** Whether this process's Cast Swap engine masks `target` under `source` (`engineMasksTarget` its declaration). */
 export function loadedEngineMasksTarget(target: FaceMaskingTarget, source: FaceMaskingSource): boolean {
   return engineMasksTarget(getPluginSupports().castSwap, target, source)
@@ -356,13 +429,16 @@ export function defaultFaceMaskingZone(): Required<FaceMaskingZone> {
  * The setting with its zone resolved, as a run sends it: a zone left out
  * becomes the default margins; `null` becomes all four margins 0 (no margins,
  * spelt so an engine that predates `null` reads it the same); any zone given
- * stays as it is. So "no margins" is never read as "the default". A new
- * object; the input is not changed.
+ * stays as it is. So "no margins" is never read as "the default". The face
+ * mesh is kept only when on (`withFaceMeshNormalised`: a `faceMesh: false`
+ * is dropped, so it is sent and hashed exactly as a setting without it). A
+ * new object; the input is not changed.
  */
 export function withResolvedZone(m: FaceMasking): FaceMasking {
-  if (m.zone === undefined) return { ...m, zone: defaultFaceMaskingZone() }
-  if (m.zone === null) return { ...m, zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }
-  return { ...m, zone: { ...m.zone } }
+  const n = withFaceMeshNormalised(m)
+  if (n.zone === undefined) return { ...n, zone: defaultFaceMaskingZone() }
+  if (n.zone === null) return { ...n, zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }
+  return { ...n, zone: { ...n.zone } }
 }
 
 /**
@@ -370,18 +446,23 @@ export function withResolvedZone(m: FaceMasking): FaceMasking {
  *
  * - faces: `withResolvedZone`, with no `source` key — exactly what a run and
  *   a make sent before source modes existed;
- * - full depth: `{ mode, source }` only (nothing else applies);
- * - keep people: `withResolvedZone` without `fill`, with `source` and the
- *   target resolved (`"body"` when left out), named so an engine never
- *   applies a default of its own.
+ * - full depth: `{ mode, source }` only (nothing else applies), plus
+ *   `faceMesh: true` when it draws the face mesh;
+ * - keep people: `withResolvedZone` without `fill` (and never a face mesh),
+ *   with `source` and the target resolved (`"body"` when left out), named so
+ *   an engine never applies a default of its own.
+ *
+ * `faceMesh` only ever as `true` (`withFaceMeshNormalised`), so a setting
+ * without the mesh is sent exactly as before it existed. Whether the engine
+ * draws it is the caller's to check (`withFaceMeshFor`).
  */
 export function faceMaskingSent(m: FaceMasking): FaceMasking {
   const source = faceMaskingSourceOf(m)
   // The scene is a run's, never a make's or the key's (`faceMaskingRunSent`).
   const { source: _source, scene: _scene, ...rest } = m
   if (source === "faces") return withResolvedZone(rest)
-  if (source === "full-depth") return { mode: m.mode, source }
-  const { fill: _fill, ...kept } = withResolvedZone(rest)
+  if (source === "full-depth") return { mode: m.mode, source, ...(faceMeshOn(m) ? { faceMesh: true } : {}) }
+  const { fill: _fill, faceMesh: _faceMesh, ...kept } = withResolvedZone(rest)
   return { ...kept, source, target: faceMaskTargetOf(m)! }
 }
 

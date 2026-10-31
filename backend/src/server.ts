@@ -1,4 +1,4 @@
-import { config, hasCredits, isMultiUser } from "./lib/config.js"
+import { config, hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
@@ -38,6 +38,8 @@ import { archiveThisBuild } from "./lib/site-asset-archive.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
 import { startEnforcementMirror } from "./lib/concurrency-lanes/enforcement.js"
+import { startLaneParking } from "./lib/concurrency-lanes/park.js"
+import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -154,7 +156,29 @@ async function main() {
   // Concurrency lanes: copy this environment's `lanes_enforced` setting (or
   // LANES_ENFORCED) and the provider ceilings into the gate's Redis every 30 s
   // — ALL editions. Never throws; an error is retried on the next pass.
+  // Registered first: the off-transition (seen here by the mirror or the admin
+  // switch) wakes every parked job by its stored id. Nothing to subscribe to:
+  // no lane queue runs in this process yet.
+  await startLaneParking([])
   const stopEnforcementMirror = startEnforcementMirror()
+  // This process's share of the pools it sizes, published every 5 s for the
+  // Live usage page (none yet: the orchestrator and director pools size theirs
+  // when they are gated). Stopped on shutdown.
+  const stopServerOccupancy = startServerOccupancyPublisher()
+  // The lanes' daily history for Admin → Live usage (admin editions): this
+  // environment's gate sampled every minute, its rows written every 5 minutes
+  // and kept 90 days; it also counts queue timeouts and live-wait expiries and
+  // answers the switch's "days of measure-only data". Never throws; stopped on
+  // shutdown.
+  let stopLaneHistory: (() => void) | null = null
+  if (hasAdmin()) {
+    try {
+      const { startLaneHistory } = await import("./ee/concurrency-lanes/history.js")
+      stopLaneHistory = await startLaneHistory()
+    } catch (err) {
+      console.error("[concurrency-lanes] the daily lane history did not start:", err)
+    }
+  }
 
   // Start schedule cron for workflow triggers
   startScheduleCron()
@@ -277,6 +301,8 @@ async function main() {
     try {
       stopScheduleCron()
       stopEnforcementMirror()
+      stopServerOccupancy()
+      stopLaneHistory?.()
       stopScheduledPostsCron()
       stopRecastDriverCron()
       stopCompetitorScanCron()

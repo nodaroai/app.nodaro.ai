@@ -1,5 +1,5 @@
 import { Queue, type ConnectionOptions } from "bullmq"
-import { redis } from "./queue.js"
+import { redis } from "./queue-connection.js"
 
 /**
  * BullMQ queue for the video-director chain

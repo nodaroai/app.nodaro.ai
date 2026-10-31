@@ -15,6 +15,7 @@ import { IMAGE_MASK_MODE, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, type 
 import { describeMaskRegion } from "@nodaro/shared/media"
 import { resolveTopazUpscale } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf } from "./default-models.js"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
 /** The text-to-image model each image-to-image sibling belongs to
@@ -57,16 +58,15 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     strength?: number
     guidanceScale?: number
   }
-  const resolvedModel = model ?? provider ?? defaultImageModel("general", aspectRatio)
-  const inpaintBase = baseImageUrl ?? referenceImageUrls?.[0]
-  // A mask present + a base → masked inpaint (composite + region hint).
-  const isInpaint = Boolean(maskUrl && inpaintBase)
-  // An EXPLICIT baseImageUrl (the "refine from this result" / full-image i2i case)
-  // OR an inpaint → run image-to-image conditioned on the base. The route only
-  // swaps T2I→I2I when referenceImageUrls is non-empty, which it isn't for a
-  // baseImageUrl-driven edit — so swap here, and ensure the base is a reference.
-  const isI2I = isInpaint || Boolean(baseImageUrl)
-  const effectiveModel = isI2I ? (T2I_TO_I2I_VARIANT[resolvedModel] ?? resolvedModel) : resolvedModel
+  // The model, and whether this is an edit of a base (an inpaint, or an
+  // EXPLICIT baseImageUrl — the "refine from this result" / full-image i2i
+  // case) run as image-to-image conditioned on the base. The route only swaps
+  // T2I→I2I when referenceImageUrls is non-empty, which it isn't for a
+  // baseImageUrl-driven edit — so the swap happens here, and the base is made
+  // a reference below. Shared with the concurrency lanes' provider attribution.
+  const { resolvedModel, effectiveModel, inpaintBase, isInpaint, isI2I } = generateImageModelOf({
+    model, provider, aspectRatio, baseImageUrl, referenceImageUrls, maskUrl,
+  })
   const providerRefs = isI2I
     ? [inpaintBase!, ...(referenceImageUrls ?? []).filter((u) => u !== inpaintBase)]
     : referenceImageUrls
@@ -176,7 +176,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     maskUrl?: string
     maskIndexes?: number[]
   }
-  const resolvedProvider = provider ?? "recraft-upscale"
+  const resolvedProvider = provider ?? EDIT_IMAGE_DEFAULT_PROVIDER
   // The task-chained Grok providers (grok-2-edit / grok-2-segment) take a
   // prior Grok task_id instead of an image URL; the
   // KIE provider's editImage uses `imageParam` to route the input value to

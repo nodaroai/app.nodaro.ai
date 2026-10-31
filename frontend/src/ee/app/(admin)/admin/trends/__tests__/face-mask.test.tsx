@@ -115,6 +115,36 @@ describe("the stored face mask", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument()
   })
 
+  it("a make whose face mesh step failed fails as a whole, and says why", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/face-mask`] = () => ({ status: 202, body: { data: { jobId: JOB, version: 1, revision: "rev-2", recorded: true, draftMoved: false } } })
+    routes[`GET /v1/jobs/${JOB}`] = () => job({ status: "failed", error_message: "cast-swap: the face mesh step failed (the clip could not be read)" }, { maskedUrl: undefined })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /make face mask/i }))
+    expect(await screen.findByText(/the face mesh step failed/i)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /make again/i })).toBeInTheDocument()
+  })
+
+  it("says when the face mesh drew no face on a new mask, before it is approved", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/face-mask`] = () => ({ status: 202, body: { data: { jobId: JOB, version: 1, revision: "rev-2", recorded: true, draftMoved: false } } })
+    routes[`GET /v1/jobs/${JOB}`] = () => job({}, { faceMesh: { frames: 360, framesWithFaces: 0, facesDrawn: 0, recipe: "2026-10-31" } })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /make face mask/i }))
+    expect(await screen.findByTestId("face-mesh-none-drawn")).toHaveTextContent(/no faces were drawn/i)
+  })
+
+  it("says nothing of the face mesh when it drew faces, or was not asked for", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${BASE}/face-mask`] = () => ({ status: 202, body: { data: { jobId: JOB, version: 1, revision: "rev-2", recorded: true, draftMoved: false } } })
+    routes[`GET /v1/jobs/${JOB}`] = () => job({}, { faceMesh: { frames: 360, framesWithFaces: 300, facesDrawn: 410 } })
+    renderEditor()
+    await user.click(await screen.findByRole("button", { name: /make face mask/i }))
+    await screen.findByTestId("face-mask-stats")
+    expect(screen.queryByTestId("face-mesh-none-drawn")).not.toBeInTheDocument()
+  })
+
   it("once the server names the job it started, the server's reading wins: a settings save hides Approve", async () => {
     const user = userEvent.setup()
     let pending: { jobId: string; startedAt: string; current: boolean } | null = null

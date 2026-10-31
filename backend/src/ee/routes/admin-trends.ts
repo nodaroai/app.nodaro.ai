@@ -34,6 +34,7 @@
  *   POST   /v1/admin/trends/:id/frame-crop           crop one frame of the original into a stored picture (admin-trends-frame-crop.ts) → { url }
  *   GET    /v1/admin/trends/:id/prompt-parts         the engine's prompt parts for the draft (admin-trends-prompt-parts.ts)
  *   PUT    /v1/admin/trends/:id/prompt-parts         save the draft's overrides, checked by the engine first
+ *   POST   /v1/admin/trends/catalog/refresh          drop every kept copy of the guest catalog (admin-trends-catalog.ts)
  *
  * Replies use the platform's `{ data }` envelope; errors `{ error: { code, message, … } }`.
  *
@@ -116,6 +117,7 @@ import {
 } from "../lib/trends/run-helpers.js"
 import type { TrendExample, TrendRow, TrendSourceDisplay, TrendVersionData } from "../lib/trends/types.js"
 import { registerTrendLifecycleRoutes } from "./admin-trends-lifecycle.js"
+import { registerTrendCatalogRoutes } from "./admin-trends-catalog.js"
 import { draftFaceMaskState, loadedEngineMakesMarks, registerTrendFaceMaskRoutes, withMarksForSource } from "./admin-trends-face-mask.js"
 import { SUPERSEDED, closeAbandonedVariantJobs } from "./admin-trends-face-mask-variants.js"
 import { pendingFaceMaskJob } from "../lib/trends/face-mask.js"
@@ -931,6 +933,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   })
 
   registerTrendLifecycleRoutes(app, { findTrendRun })
+  registerTrendCatalogRoutes(app)
   registerTrendPromptRoutes(app, { findTrendRun, badRequest })
   registerTrendFaceMaskRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })
   registerTrendUpscaleRoutes(app, { loadDraft, saveValidDraft, draftConflict, badRequest })

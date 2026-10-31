@@ -51,6 +51,8 @@ export const JOB_LANE_CLASSES: Readonly<Record<string, LaneClass>> = Object.free
     "still-to-video", "slideshow", "resize-video", "adjust-volume", "audio-fx", "pitch-tempo", "add-captions",
     "mix-audio", "combine-audio", "transcode-video", "social-media-format", "split-media", "extract-audio",
     "silence-detect", "audio-sync", "mask-composite", "mask-erase", "reference-sheet",
+    // Video Face Mesh: YuNet + the landmark model (onnxruntime, one thread) and sharp, local.
+    "video-face-mesh",
   ]),
   // LLM-only jobs.
   ...rows("video-generation", LLM, ["generate-script", "llm-structured", "motion-graphics-lottie", "generate-3d-scene", "edit-3d-scene"]),
@@ -131,11 +133,30 @@ let pluginJobTypesRecorded = false
  * The plugin job types the loader merged handlers for (each plugin's
  * `handlers()` keys). The loader calls it once its load is done, with no types
  * at all when there is no plugin, so "every plugin job type declares its lane"
- * is never reported as met before anyone looked.
+ * is never reported as met before anyone looked. A failed
+ * load records nothing (notePluginLoadFailed instead).
  */
 export function notePluginJobTypes(types: Iterable<string>): void {
   pluginJobTypesRecorded = true
   for (const t of types) pluginJobTypes.add(t)
+}
+
+/** Whether a plugin load failed in this process (set by the loader; never cleared). */
+let pluginLoadFailedFlag = false
+
+/**
+ * Records that this process's plugin load failed (a module that would not
+ * import or initialise, also under PRIVATE_MODULES=optional). Its plugin job
+ * types are then never recorded, so the precondition stays unmet: what this
+ * process runs was never checked.
+ */
+export function notePluginLoadFailed(): void {
+  pluginLoadFailedFlag = true
+}
+
+/** Whether a plugin load failed in this process. */
+export function pluginLoadFailed(): boolean {
+  return pluginLoadFailedFlag
 }
 
 /** Whether this process has recorded its plugin job types; until it has, undeclaredPluginJobTypes() proves nothing. */

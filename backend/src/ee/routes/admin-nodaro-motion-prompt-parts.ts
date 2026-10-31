@@ -49,6 +49,8 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { placeholderImageUrl, promptPartEditsSchema, type PromptPartTexts } from "../../lib/cast-swap-prompt-parts-contract.js"
 import type { NodaroMotionEnginePromptParts, NodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-parts.js"
 import { readNodaroMotionPromptParts, saveNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-parts-store.js"
+import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
+import type { NodaroMotionMasking } from "../../lib/nodaro-motion-masking.js"
 import type { NodaroMotionMotion } from "../../lib/nodaro-motion-motion.js"
 import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { askPromptParts, nonEmptyTexts } from "../lib/cast-swap-prompt-parts.js"
@@ -96,12 +98,13 @@ function preview(
   s: CastSwapStyle,
   overrides: PromptPartTexts | undefined,
   motion: NodaroMotionMotion | null,
+  masking: NodaroMotionMasking | null,
 ) {
   return askPromptParts(
     app,
     req,
     reply,
-    directRunRequest(engine, s, motion?.[engine], { hasAudio: true, roles: structuredClone(SAMPLE_ROLES), ...(overrides ? { overrides } : {}) }),
+    directRunRequest(engine, s, motion?.[engine], { hasAudio: true, roles: structuredClone(SAMPLE_ROLES), ...(overrides ? { overrides } : {}) }, masking?.[engine]),
   )
 }
 
@@ -146,7 +149,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const overrides = parsed.data.overrides
         ? nonEmptyTexts(parsed.data.overrides)
         : (await readNodaroMotionPromptParts()).promptParts?.[engine]?.[s]
-      const answer = await preview(app, req, reply, engine, s, overrides, (await readNodaroMotionMotion()).motion)
+      const answer = await preview(app, req, reply, engine, s, overrides, (await readNodaroMotionMotion()).motion, (await readNodaroMotionMasking()).masking)
       if (!answer) return reply
       return { data: answer }
     } catch (e) {
@@ -161,11 +164,12 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const next = savedFrom(parsed.data.promptParts)
       const problems: DirectRunPromptProblem[] = []
       const motion = (await readNodaroMotionMotion()).motion
+      const masking = (await readNodaroMotionMasking()).masking
       for (const engine of NODARO_MOTION_ENGINES) {
         for (const s of CAST_SWAP_STYLES) {
           const texts = next[engine]?.[s]
           if (!texts) continue
-          const found = await directRunPromptProblems(app, req, reply, engine, s, texts, motion?.[engine])
+          const found = await directRunPromptProblems(app, req, reply, engine, s, texts, motion?.[engine], masking?.[engine])
           if (!found) return reply
           problems.push(...found)
         }

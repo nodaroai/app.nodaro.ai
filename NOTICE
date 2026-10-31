@@ -89,6 +89,17 @@ authored with Nodaro's own Lottie engine (see the README in that directory).
 They carry no third-party license obligations.
 
 --------------------------------------------------------------------------------
+MediaPipe face landmark model
+--------------------------------------------------------------------------------
+`backend/src/services/face-mesh/model/face_landmark.onnx` is Google MediaPipe's
+face landmark model (`face_landmark.tflite`, Copyright The MediaPipe Authors),
+converted to ONNX, and `backend/src/services/face-mesh/face-mesh-topology.ts`
+transcribes the face mesh's edge lists from MediaPipe's
+`face_mesh_connections.py`. Both are licensed under the Apache License 2.0
+(https://github.com/google-ai-edge/mediapipe); the licence text ships beside the
+model as `LICENSE.mediapipe.txt`, and its provenance is in the README there.
+
+--------------------------------------------------------------------------------
 Everything else
 --------------------------------------------------------------------------------
 The remaining dependencies are predominantly MIT, ISC, BSD-2/3-Clause, and

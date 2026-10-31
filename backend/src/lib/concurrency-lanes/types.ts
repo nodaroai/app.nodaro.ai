@@ -73,11 +73,48 @@ export interface LaneSnapshot {
     userId: string
     payer: PayerKey
     lanes: Record<ConcurrencyLane, { running: number; overLimit: number; queued: number }>
+    /** The size the gate last stored for each lane of this line; 0 = the line has no such lane yet. */
+    limits: Record<ConcurrencyLane, number>
     oldestWaitMs: number
     sources: Record<string, number>
+    /** The line's MCP entries by client name, as the caller named itself: shown live only, never stored in the history. */
+    mcpClients: Record<string, number>
   }>
-  providers: Array<{ provider: string; running: number; byUser: Record<string, number>; completed15m: number; failed15m: number }>
+  providers: Array<{
+    provider: string
+    running: number
+    byUser: Record<string, number>
+    completed15m: number
+    failed15m: number
+    /** The provider's platform ceiling; null = none. */
+    ceiling: number | null
+    /** Outcomes per minute (epoch minute) of the same 15-minute window, oldest first. */
+    outcomesByMinute: Array<{ minute: number; completed: number; failed: number }>
+  }>
   ungated: Record<string, number>
   notLimited: Record<string, number>
   enforced: boolean
+}
+
+/** One entry of a user's lines, as the Live usage drill-down shows it (ConcurrencyGate.userEntries). */
+export interface LaneUserEntry {
+  jobId: string
+  payer: PayerKey
+  lane: ConcurrencyLane
+  /** `running`: holds a lease (over its limit when `overLimit`); `queued`: waits in its line. */
+  state: "running" | "queued"
+  provider: string | null
+  source: string | null
+  sourceDetail: string | null
+  jobType: string | null
+  model: string | null
+  overLimit: boolean
+  /** How long a running entry has held its lease; null for a queued one, or a lease older than the stamp. */
+  runningMs: number | null
+  /** How long a queued entry has waited; null for a running one. */
+  waitedMs: number | null
+  /** A queued entry's 1-based place in its line; null for a running one. */
+  position: number | null
+  /** Why a queued entry waits; null for a running one. */
+  reason: WaitReason | null
 }

@@ -28,7 +28,7 @@ import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import { engineMasksTarget, faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
+import { engineMasksTarget, faceMaskingZoneSchema, loadedEngineDrawsFaceMesh, withFaceMeshFor, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
 import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
@@ -435,8 +435,16 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
  * run alike, after `followPreviewMasking`. Mutates `composed.body`.
  */
 export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
-  if (composed.body.storedFaceMask && getPluginSupports().castSwap?.storedFaceMask !== true) {
+  const cs = getPluginSupports().castSwap
+  if (composed.body.storedFaceMask && cs?.storedFaceMask !== true) {
     delete composed.body.storedFaceMask
+  }
+  // The faces the stored clip's face mesh was drawn on: only to an engine that draws the mesh
+  // (`castSwap.faceMesh`), whose strict schema takes the key.
+  const stored = composed.body.storedFaceMask
+  if (stored && stored.facesDrawn !== undefined && cs?.faceMesh !== true) {
+    const { facesDrawn: _drawn, ...rest } = stored
+    composed.body.storedFaceMask = rest
   }
 }
 
@@ -469,6 +477,23 @@ export function withoutUnsupportedPromptStyle(composed: ComposedTrendRun): void 
   const { body } = composed
   if (body.promptStyle && !engineTakesPromptStyle(cs, body.promptStyle)) delete body.promptStyle
   if (body.faceMasking?.scene && !engineTakesScene(cs, body.faceMasking.scene)) delete body.faceMasking.scene
+}
+
+/**
+ * The body's `faceMasking` without `faceMesh` unless it is on AND the loaded
+ * engine declares it draws it (`castSwap.faceMesh`, `withFaceMeshFor`): an
+ * engine from before the face mesh refuses a key its strict schema does not
+ * know, so it gets exactly the body it got before the mesh existed (a
+ * `faceMesh: false` is never sent either). Publishing holds a trend that
+ * draws it back from such an environment (`FACE_MESH_NEED`), so only a
+ * draft's test run (or a published one, mid-deploy) gets here. Mutates
+ * `composed.body` (its `faceMasking` is its own copy, from `composeTrendRun`,
+ * or `followPreviewMasking`'s).
+ */
+export function withoutUnsupportedFaceMesh(composed: ComposedTrendRun): void {
+  const masking = composed.body.faceMasking
+  if (!masking || !Object.hasOwn(masking, "faceMesh")) return
+  composed.body.faceMasking = withFaceMeshFor(masking, loadedEngineDrawsFaceMesh())
 }
 
 /**
@@ -582,8 +607,9 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
- * prompt parts, the prompt style and scene, the stored scene description, the
- * Pulse audio, the Prism reference audio, the run's `sourceAsset`), and the
+ * prompt parts, the prompt style and scene, the face mesh, the stored scene
+ * description, the Pulse audio, the Prism reference audio, the run's
+ * `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
  * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
  */
@@ -591,6 +617,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedStoredMask(composed)
   withoutUnsupportedPromptParts(composed)
   withoutUnsupportedPromptStyle(composed)
+  withoutUnsupportedFaceMesh(composed)
   withoutUnsupportedSceneDescription(composed)
   withoutUnsupportedPulseAudio(composed)
   withoutUnsupportedPrismReferenceAudio(composed)

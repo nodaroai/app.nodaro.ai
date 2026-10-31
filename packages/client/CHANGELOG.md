@@ -1,5 +1,16 @@
 # @nodaro/sdk
 
+## 2.60.0
+
+### Minor Changes
+
+- e92a7b8: Jobs: `error_hint` may carry a new arm, `QueueTimeoutHint` (`{ kind: "queue-timeout", reason: "timeout" | "lost" | "live-wait", waitedMinutes }`), on a job that never got a concurrency slot and did not run (its credits are refunded). The type is exported from `@nodaro/sdk` and `@nodaro/sdk/jobs`. Treat an unknown `kind` as an unclassified failure, as before.
+
+### Patch Changes
+
+- Updated dependencies [cfa0e74]
+  - @nodaro/shared@3.50.0
+
 ## 2.59.0
 
 ### Minor Changes

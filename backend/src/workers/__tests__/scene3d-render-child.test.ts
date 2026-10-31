@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({
   read: vi.fn(), parent: vi.fn(), cancel: vi.fn(), claim: vi.fn(), complete: vi.fn(), fail: vi.fn(),
   browserClose: vi.fn(), assetsClose: vi.fn(), cleanup: vi.fn(), open: vi.fn(), select: vi.fn(), media: vi.fn(), still: vi.fn(),
-  upload: vi.fn(), watermark: vi.fn(), writePng: vi.fn(), existingPng: vi.fn(), cancellation: vi.fn(),
+  upload: vi.fn(), watermark: vi.fn(), writePng: vi.fn(), existingPng: vi.fn(), cancellation: vi.fn(), claimIn: vi.fn(),
 }))
 vi.mock("../shared.js", () => ({ markJobCompletedDetailed: mocks.complete, isFinalJobAttempt: (job: Job) => job.attemptsMade + 1 >= (job.opts.attempts ?? 1) }))
 vi.mock("../../lib/job-failure.js", () => ({ markJobFailed: mocks.fail }))
 vi.mock("../../lib/private-plugins/scene3d-render-store.js", () => ({ createSceneRenderPorts: () => ({ read: mocks.read, parent: mocks.parent, cancel: mocks.cancel }) }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: () => {
-  const q = { update: () => q, eq: () => q, in: () => q, select: mocks.claim }; return q
+  const q = { update: () => q, eq: () => q, in: (c: string, v: unknown) => { mocks.claimIn(c, v); return q }, select: mocks.claim }; return q
 } } }))
 vi.mock("../../lib/config.js", () => ({ config: { REMOTION_CONCURRENCY: undefined } }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ createWorkDir: async () => "/tmp/render-test", cleanupWorkDir: mocks.cleanup }))
@@ -57,6 +57,12 @@ describe("scene render worker lifecycle", () => {
     expect(mocks.complete).toHaveBeenCalledWith(child.id, expect.objectContaining({ is_public: false,
       output_data: { sceneRenderResult: expect.objectContaining({ kind: "video", sceneRevisionId: input.plan.revisionId }) } }))
     expect(mocks.browserClose).toHaveBeenCalled(); expect(mocks.assetsClose).toHaveBeenCalled(); expect(mocks.cleanup).toHaveBeenCalled()
+  })
+  it("a child parked for its lane and woken (row queued) is claimed and rendered", async () => {
+    child.status = "queued"
+    await processSceneRenderChild(job, async () => "bundle", { gl: "angle" })
+    expect(mocks.claimIn).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(mocks.complete).toHaveBeenCalled()
   })
   it("stores the delivered video in the child job's family, under an unguessable key (decided 2026-10-08)", async () => {
     await processSceneRenderChild(job, async () => "bundle", { gl: "angle" })

@@ -144,6 +144,18 @@ describe("saveTagLabels", () => {
     db.respond = () => ({ data: null, error: MISSING })
     await expect(saveTagLabels("dance", { en: "Dance" })).rejects.toBeInstanceOf(TrendsUnavailableError)
   })
+
+  it("a saved or cleared label moves the catalog stamp (the guest tag list shows labels); a failed write does not", async () => {
+    const stampWrites = () => db.log.filter((q) => q.table === "app_settings" && q.ops.some((op) => op.m === "upsert")).length
+    db.respond = () => ({ data: null, error: null })
+    await saveTagLabels("dance", { en: "Dance" })
+    expect(stampWrites()).toBe(1)
+    await saveTagLabels("dance", {})
+    expect(stampWrites()).toBe(2)
+    db.respond = (q) => (q.table === "trend_tags" ? { data: null, error: { message: "down" } } : { data: null, error: null })
+    await expect(saveTagLabels("dance", { en: "Dance" })).rejects.toThrow()
+    expect(stampWrites()).toBe(2)
+  })
 })
 
 describe("tagLabel", () => {

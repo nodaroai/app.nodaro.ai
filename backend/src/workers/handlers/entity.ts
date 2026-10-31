@@ -1,4 +1,7 @@
 import type { Job } from "bullmq"
+import {
+  CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, OBJECT_MOTION_DEFAULT_PROVIDER,
+} from "./default-models.js"
 import { localLlmKeySet } from "../../lib/llm/anthropic-availability.js"
 import { generateImage, imageToVideo, videoToVideo } from "../../providers/index.js"
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
@@ -333,7 +336,7 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
     realLifeRefs?: string[]
     aspectRatio?: string
   }
-  const resolvedProvider = provider ?? "kling"
+  const resolvedProvider = provider ?? CHARACTER_MOTION_DEFAULT_PROVIDER
   console.log(`[worker] generate-character-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
 
   // Pass the resolved aspect ratio (default 9:16 for motions, overridden by
@@ -422,7 +425,7 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     attachToColumn?: string
     attachName?: string
   }
-  const resolvedProvider = provider ?? "kling"
+  const resolvedProvider = provider ?? LOCATION_MOTION_DEFAULT_PROVIDER
   const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
   console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
 
@@ -522,7 +525,7 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
     attachToColumn?: string
     attachName?: string
   }
-  const resolvedProvider = provider ?? "kling-turbo"
+  const resolvedProvider = provider ?? OBJECT_MOTION_DEFAULT_PROVIDER
   const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
   console.log(`[worker] generate-object-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
 
@@ -627,7 +630,7 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
     attachToColumn?: string
     attachName?: string
   }
-  const resolvedProvider = provider ?? "kling-turbo"
+  const resolvedProvider = provider ?? CREATURE_MOTION_DEFAULT_PROVIDER
   const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
   console.log(`[worker] generate-creature-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
 

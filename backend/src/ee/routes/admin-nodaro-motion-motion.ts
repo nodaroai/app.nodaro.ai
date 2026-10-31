@@ -30,7 +30,9 @@
  *
  * A save whose masking hides whole people (faces hidden, target "body") is
  * 409 `engine_unsupported` while any environment's engine cannot do it
- * (`nodaro-motion-hide-body.ts`: the row is shared by every environment).
+ * (`nodaro-motion-hide-body.ts`: the row is shared by every environment);
+ * so is one whose masking draws the face mesh (`faceMesh: true`) while any
+ * environment's engine cannot draw it (`nodaro-motion-face-mesh.ts`).
  *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_motion`)
  * with the setting before and after.
@@ -44,12 +46,14 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { NODARO_MOTION_MOTION_KEY, nodaroMotionMotionSchema } from "../../lib/nodaro-motion-motion.js"
 import { readNodaroMotionMotion, saveNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-parts-store.js"
+import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
 import { directRunPromptPartsInvalid, directRunPromptProblems, loadedEngineHasPromptStyles, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
+import { cannotDrawFaceMeshMessage, drawsFaceMesh, environmentsThatCannotDrawFaceMesh } from "../lib/nodaro-motion-face-mesh.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /**
@@ -96,22 +100,32 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
     const parsed = putBody.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      // A whole-person masking is saved only once every environment's engine can hide whole people.
-      if (NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.motion[engine]?.masking))) {
-        const blocked = environmentsThatCannotHideBodies(await listEngineEnvironments())
-        if (blocked.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotHideBodiesMessage(blocked), envs: blocked } })
+      // A whole-person masking, or one that draws the face mesh, is saved only once every environment's
+      // engine can do it (the row is shared by every environment).
+      const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.motion[engine]?.masking))
+      const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(parsed.data.motion[engine]?.masking))
+      if (hides || meshes) {
+        const environments = await listEngineEnvironments()
+        const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
+        if (bodies.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotHideBodiesMessage(bodies), envs: bodies } })
+        }
+        const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
+        if (mesh.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } })
         }
       }
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style
       // change can leave a part unused, or the prompt too long): any problem refuses the save.
       if (loadedEngineHasPromptParts() && loadedEngineHasPromptStyles()) {
         const saved = (await readNodaroMotionPromptParts()).promptParts
+        // A Motion setting with no masking of its own falls back to the engine's masking setting (its face mesh too).
+        const preciseMasking = (await readNodaroMotionMasking()).masking
         const problems: DirectRunPromptProblem[] = []
         for (const engine of NODARO_MOTION_ENGINES) {
           const texts = saved?.[engine]?.motion
           if (!texts) continue
-          const found = await directRunPromptProblems(app, req, reply, engine, "motion", texts, parsed.data.motion[engine])
+          const found = await directRunPromptProblems(app, req, reply, engine, "motion", texts, parsed.data.motion[engine], preciseMasking?.[engine])
           if (!found) return reply
           problems.push(...found)
         }

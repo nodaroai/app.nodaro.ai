@@ -224,6 +224,19 @@ describe("the engine's prompt parts", () => {
     setPluginSupports({ castSwap: STYLES as never })
     expect(forLoadedEngine(body)).toMatchObject({ promptStyle: "flexible", scene: "none" })
   })
+
+  it("say the face mesh is drawn (its line counted in the length) only when the setting draws it, and only to an engine that draws it", () => {
+    expect(promptPartsRequestFor(data({ faceMasking: { mode: "always", faceMesh: true } }))).toMatchObject({ faceMesh: true })
+    expect(promptPartsRequestFor(data({ faceMasking: { ...FULL, faceMesh: true } }))).toMatchObject({ faceMesh: true })
+    expect(promptPartsRequestFor(data({ faceMasking: { mode: "always", faceMesh: false } }))).not.toHaveProperty("faceMesh")
+    expect(promptPartsRequestFor(data({ faceMasking: { mode: "off", faceMesh: true } }))).not.toHaveProperty("faceMesh")
+    expect(promptPartsRequestFor(data())).not.toHaveProperty("faceMesh")
+    const body = promptPartsRequestFor(data({ faceMasking: { mode: "always", faceMesh: true } }))
+    setPluginSupports({ castSwap: STYLES as never })
+    expect(forLoadedEngine(body)).not.toHaveProperty("faceMesh")
+    setPluginSupports({ castSwap: { ...(STYLES as object), faceMesh: true } as never })
+    expect(forLoadedEngine(body)).toMatchObject({ faceMesh: true })
+  })
 })
 
 describe("publishing", () => {

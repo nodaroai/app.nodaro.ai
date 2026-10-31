@@ -48,6 +48,12 @@ const keepsOnly = (env: string): TrendEngineEnvironment => ({
   env,
   supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, faceMaskTargets: ["face", "head", "body"] } },
 })
+/** An engine that draws the face mesh (`castSwap.faceMesh`). */
+const meshes = (env: string): TrendEngineEnvironment => ({
+  ...ENVIRONMENTS[0]!,
+  env,
+  supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, faceMesh: true } },
+})
 /** Every environment the setting is shared by can hide whole people. */
 const HIDE_ENVS: TrendEngineEnvironment[] = [hides("production"), hides("staging")]
 
@@ -115,6 +121,50 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(screen.getByRole("option", { name: "Always" }))
     await user.click(within(prism).getByRole("combobox", { name: "Covers" }))
     await waitFor(() => expect(screen.getByRole("option", { name: "Body (not supported yet: production)" })).toHaveAttribute("aria-disabled", "true"))
+  })
+
+  it("shows the face mesh only while masking, greyed out and naming the environments whose engine cannot draw it", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production"), hides("staging")] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    expect(within(prism).queryByRole("checkbox", { name: "Face mesh" })).not.toBeInTheDocument()
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    expect(await within(prism).findByRole("checkbox", { name: "Face mesh" })).toBeDisabled()
+    expect(within(prism).getByText(/The Cast Swap engine of staging cannot draw the face mesh yet/)).toBeInTheDocument()
+  })
+
+  it("saves the face mesh as true once every environment's engine draws it, and turning it off removes the key", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production"), meshes("staging")] } })
+    routes[`PUT ${URL}`] = (init) => ({
+      body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    const mesh = await within(prism).findByRole("checkbox", { name: "Face mesh" })
+    expect(mesh).toBeEnabled()
+    await user.click(mesh)
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", faceMesh: true } } }]))
+    await user.click(within(prism).getByRole("checkbox", { name: "Face mesh" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toHaveLength(2))
+    expect(sentTo(`PUT ${URL}`)[1]).toEqual({ masking: { "motion-prism": { mode: "always" } } })
+  })
+
+  it("a face mesh saved on stays shown and can be turned off while an environment lacks it", async () => {
+    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", faceMesh: true } }, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } } })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production")] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    const mesh = await within(prism).findByRole("checkbox", { name: "Face mesh" })
+    expect(mesh).toBeChecked()
+    expect(mesh).toBeEnabled()
+    expect(within(prism).getByText(/staging cannot draw the face mesh yet.*turn it off to save/)).toBeInTheDocument()
   })
 
   it("saves Body (the whole person hidden) once an environment's engine can", async () => {

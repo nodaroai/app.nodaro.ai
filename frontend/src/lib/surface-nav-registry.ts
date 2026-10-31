@@ -119,6 +119,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "blocks",
   "jobs",
   "usage",
+  "live-usage",
   "alerts",
   "models",
   "reports",

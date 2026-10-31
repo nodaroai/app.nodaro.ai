@@ -44,7 +44,6 @@ import {
   REPLICATE_LIP_SYNC_PROVIDERS,
   SEEDANCE_LIP_SYNC_PROVIDERS,
   DEFAULT_TRANSCRIBE_PROVIDER,
-  T2I_TO_I2I_VARIANT,
 } from "@nodaro/shared/models"
 import { baseProviderChain } from "../../providers/base-chain.js"
 import type { ProviderCapability } from "../../providers/provider.interface.js"
@@ -53,6 +52,12 @@ import { resolveModel } from "../llm/params.js"
 import { laneForCallNow } from "../llm/router.js"
 import type { LlmRequest } from "../llm/types.js"
 import { seedanceExtendGenerationModel } from "../seedance-extend-model.js"
+import {
+  CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf,
+  IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER,
+  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER,
+  VOICED_VIDEO_DEFAULT_PROVIDER, type GenerateImageModelInput,
+} from "../../workers/handlers/default-models.js"
 import { laneClassOf } from "./registry.js"
 
 /**
@@ -111,17 +116,14 @@ function routedProvider(capability: ProviderCapability, model: string): string |
 const route = (capability: ProviderCapability, model: string | undefined): string | null =>
   model ? routedProvider(capability, model) : null
 
-/** generate-image / reference-board: the handler's model, swapped to its image-to-image sibling for an edit of a base. */
+/** generate-image / reference-board: the model the handler resolves, swapped to its image-to-image sibling for an edit of a base. */
 function generateImageProvider(d: Data): string | null {
-  const model = str(d.model) ?? str(d.provider) ?? defaultImageModel("general", str(d.aspectRatio))
-  const refs = Array.isArray(d.referenceImageUrls) ? d.referenceImageUrls : []
-  const base = str(d.baseImageUrl) ?? str(refs[0])
-  const isI2I = Boolean(str(d.maskUrl) && base) || Boolean(str(d.baseImageUrl))
-  return route("image-generation", isI2I ? (T2I_TO_I2I_VARIANT[model] ?? model) : model)
+  const { effectiveModel } = generateImageModelOf(d as GenerateImageModelInput)
+  return route("image-generation", typeof effectiveModel === "string" ? effectiveModel : undefined)
 }
 
 function lipSyncProvider(d: Data): string | null {
-  const model = str(d.provider) ?? "kling-avatar"
+  const model = str(d.provider) ?? LIP_SYNC_DEFAULT_PROVIDER
   if (REPLICATE_LIP_SYNC_PROVIDERS.has(model as never)) return "replicate"
   if (FAL_LIP_SYNC_PROVIDERS.has(model as never)) return "fal"
   if (SEEDANCE_LIP_SYNC_PROVIDERS.has(model as never)) return route("image-to-video", model)
@@ -129,11 +131,11 @@ function lipSyncProvider(d: Data): string | null {
 }
 
 function videoUpscaleProvider(d: Data): string | null {
-  const model = str(d.provider) ?? "topaz"
+  const model = str(d.provider) ?? VIDEO_UPSCALE_DEFAULT_PROVIDER
   // Task re-renders of a prior KIE generation, outside the router.
   if (model === SEEDANCE_DRAFT_FINALIZE_PROVIDER) return "kie"
   if ((model === "veo-1080p" || model === "veo-4k") && str(d.kieTaskId)) return "kie"
-  return route("video-upscale", "topaz")
+  return route("video-upscale", VIDEO_UPSCALE_DEFAULT_PROVIDER)
 }
 
 /** An entity motion: image-to-video from its still, or video-to-video when it refines a clip. */
@@ -162,11 +164,11 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "generate-image": generateImageProvider,
   "reference-board": generateImageProvider,
   "image-to-image": (d) => route("image-generation", str(d.provider) ?? defaultImageModel("edit", str(d.aspectRatio))),
-  "edit-image": (d) => route("image-editing", str(d.provider) ?? "recraft-upscale"),
-  "image-to-video": (d) => route("image-to-video", str(d.provider) ?? "minimax"),
-  "text-to-video": (d) => route("text-to-video", str(d.provider) ?? "minimax"),
-  "video-to-video": (d) => route("video-to-video", str(d.provider) ?? "wan"),
-  "motion-transfer": (d) => route("motion-transfer", str(d.provider) ?? "kling"),
+  "edit-image": (d) => route("image-editing", str(d.provider) ?? EDIT_IMAGE_DEFAULT_PROVIDER),
+  "image-to-video": (d) => route("image-to-video", str(d.provider) ?? IMAGE_TO_VIDEO_DEFAULT_PROVIDER),
+  "text-to-video": (d) => route("text-to-video", str(d.provider) ?? TEXT_TO_VIDEO_DEFAULT_PROVIDER),
+  "video-to-video": (d) => route("video-to-video", str(d.provider) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER),
+  "motion-transfer": (d) => route("motion-transfer", str(d.provider) ?? MOTION_TRANSFER_DEFAULT_PROVIDER),
   "speech-to-video": () => route("speech-to-video", "speech-to-video"),
   "lip-sync": lipSyncProvider,
   "video-upscale": videoUpscaleProvider,
@@ -179,12 +181,12 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "generate-creature-asset": entityImage,
   "generate-location": entityImage,
   "generate-location-asset": entityImage,
-  "generate-character-motion": entityMotion("kling", false),
-  "generate-location-motion": entityMotion("kling", true),
-  "generate-object-motion": entityMotion("kling-turbo", true),
-  "generate-creature-motion": entityMotion("kling-turbo", true),
+  "generate-character-motion": entityMotion(CHARACTER_MOTION_DEFAULT_PROVIDER, false),
+  "generate-location-motion": entityMotion(LOCATION_MOTION_DEFAULT_PROVIDER, true),
+  "generate-object-motion": entityMotion(OBJECT_MOTION_DEFAULT_PROVIDER, true),
+  "generate-creature-motion": entityMotion(CREATURE_MOTION_DEFAULT_PROVIDER, true),
   // The clip is image-to-video; its dialogue track (ElevenLabs) is a side call.
-  "voiced-video": (d) => route("image-to-video", str(d.provider) ?? "minimax"),
+  "voiced-video": (d) => route("image-to-video", str(d.provider) ?? VOICED_VIDEO_DEFAULT_PROVIDER),
   "extend-video": extendVideoProvider,
   "video-depth": videoDepthProvider,
   // tangoflux (Replicate) is reachable only from a stale payload; elevenlabs-sfx is the default.

@@ -23,6 +23,7 @@ import { filterCloneNodes } from "@nodaro/shared/workflow"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
+import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { refuseIfConsentPending } from "../lib/consent-gate.js"
 import { createSSEStream } from "../lib/sse.js"
@@ -1440,6 +1441,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         .select("id")
 
       if (cancelledRows && cancelledRows.length > 0) {
+        // Out of its concurrency lane (a waiting job must not stay at the head
+        // of its line). Bounded, never throws.
+        await withdrawFromLane(parsed.data.id)
         // Refund the reserved credit hold so cancelling doesn't silently
         // forfeit the user's balance (mirrors cancel-jobs.ts after #1508).
         await refundReservedCreditsForJobs([parsed.data.id])
@@ -1541,11 +1545,21 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             // this guard the UPDATE would flip that completed+committed row to
             // "cancelled" (user charged, output detached from its terminal status).
             .in("status", ["pending", "queued", "processing"])
+          // Its queued children leave their lanes again, now that they are
+          // cancelled (a pickup between the removal and the flip could have
+          // parked one once more). A processing child's lease is its worker's.
+          await Promise.all(jobIds.map((jid) => withdrawFromLane(jid)))
           await refundReservedCreditsForJobs(jobIds)
           invalidateBalanceCache(userId)
         }
       })().catch(() => {})
     }
+
+    // A run still waiting to start (its run-lane or server-share wait, keyed by
+    // the execution id) leaves its line now, whatever the mode: a never-claimed
+    // `pending` row stopped or discarded never starts either. Harmless for a
+    // run that is executing (only wait entries are dropped). Bounded, never throws.
+    await withdrawFromLane(parsed.data.id)
 
     return { success: true }
   })

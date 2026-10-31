@@ -354,6 +354,48 @@ export async function cloudPlanSizes(): Promise<Record<string, LaneSizes>> {
   return out
 }
 
+/** Every account's override (account id → the lanes it sets), cached as the sizes read it. */
+export async function cloudLaneOverrides(): Promise<ReadonlyMap<string, Readonly<Partial<LaneSizes>>>> {
+  return overrideCache.get("overrides", readOverrides, () => new Map())
+}
+
+/** One account's override as stored, for the admin's editor: the lanes it sets and its note. */
+export interface StoredLaneOverride {
+  /** false: the overrides table is not in this database yet. */
+  available: boolean
+  /** The lanes it sets; null when the account has no override. */
+  override: Partial<LaneSizes> | null
+  note: string | null
+  updatedAt: string | null
+}
+
+/**
+ * One account's override row, read now (never from the sizes' cache, so the
+ * editor sees a save at once). A missing table answers `available: false`;
+ * any other failure throws.
+ */
+export async function readStoredLaneOverride(userId: string): Promise<StoredLaneOverride> {
+  const { data, error } = await supabase
+    .from("lane_user_overrides")
+    .select("user_id, provider, llm, local, run, note, updated_at")
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (error) {
+    if (error.code && MISSING_SCHEMA_CODES.has(error.code)) return { available: false, override: null, note: null, updatedAt: null }
+    throw readError("lane_user_overrides", error)
+  }
+  const row = data as Record<string, unknown> | null
+  if (!row) return { available: true, override: null, note: null, updatedAt: null }
+  const o: Partial<LaneSizes> = {}
+  for (const lane of LANES) if (isLaneSize(row[lane])) o[lane] = row[lane] as number
+  return {
+    available: true,
+    override: Object.keys(o).length > 0 ? o : null,
+    note: typeof row.note === "string" && row.note !== "" ? row.note : null,
+    updatedAt: typeof row.updated_at === "string" ? row.updated_at : null,
+  }
+}
+
 /** The admin-set platform ceilings (provider id → running at most); a provider absent has none. */
 export async function cloudProviderCeilings(): Promise<Record<string, number>> {
   return { ...(await ceilingCache.get("ceilings", readCeilings, () => ({}))) }

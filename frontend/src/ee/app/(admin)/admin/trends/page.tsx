@@ -3,13 +3,15 @@
 // the catalog fields that live on the trend row (sort order, badges) written
 // in place through PATCH. "New trend" creates a draft and opens its editor
 // (`./detail/page.tsx`); "Tag labels" edits what users see for each tag.
+// "Refresh catalog" drops every kept copy of what guests see: every change
+// already does, this is for a copy that still looks out of date.
 //
 // Dragging to set the sort order is a later nicety: the order is a
 // number, as on the other admin lists.
 
 import { useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Loader2, Plus, Tags, TrendingUp, Film } from "lucide-react"
+import { Loader2, Plus, RefreshCw, Tags, TrendingUp, Film } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +28,7 @@ import {
 } from "@/components/ui/dialog"
 import { hasAdmin } from "@/lib/edition"
 import { cn } from "@/lib/utils"
-import type { AdminTrendListItem, TrendBadge, TrendStatus } from "@/lib/api"
+import { refreshAdminTrendCatalog, type AdminTrendListItem, type TrendBadge, type TrendStatus } from "@/lib/api"
 import { useAdminTrends, useCreateTrend, usePatchTrend } from "@/ee/hooks/queries/use-admin-queries"
 import { StatusBadge } from "./components/StatusBadge"
 import { TagLabelsDialog } from "./components/TagLabelsDialog"
@@ -51,6 +53,19 @@ export default function AdminTrendsPage() {
   const [tag, setTag] = useState("")
   const [creating, setCreating] = useState(false)
   const [labelling, setLabelling] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const refreshCatalog = async () => {
+    setRefreshing(true)
+    try {
+      await refreshAdminTrendCatalog()
+      toast.success("Catalog refreshed: guests now see it as saved.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not refresh the catalog")
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const trends = useMemo(() => {
     const t = tag.trim().toLowerCase()
@@ -72,6 +87,16 @@ export default function AdminTrendsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="min-h-9"
+            onClick={refreshCatalog}
+            disabled={refreshing}
+            title="Guests see a saved copy of the catalog; every change refreshes it. Use this if it still looks out of date."
+          >
+            {refreshing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />} Refresh catalog
+          </Button>
           <Button size="sm" variant="outline" className="min-h-9" onClick={() => setLabelling(true)}>
             <Tags className="mr-1 h-4 w-4" /> Tag labels
           </Button>

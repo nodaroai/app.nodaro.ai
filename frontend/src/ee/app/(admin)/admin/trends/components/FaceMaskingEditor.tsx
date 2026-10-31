@@ -19,6 +19,12 @@
 //
 // Full depth shows where the run's scene comes from (FullDepthSceneSelect):
 // a description (the default), the original clip, or none.
+//
+// The face mesh (Faces hidden and Full depth, never Keep people): thin face
+// lines drawn on the masked heads, so the video model keeps the mouth and the
+// blinks. Offered once the engine draws it: a trend's, some environment's
+// engine; Admin → Nodaro Motion's (a setting every environment shares), shown
+// but greyed out, naming the environments that lack it. Off is no key.
 
 import { useId } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -40,7 +46,7 @@ import type {
   AdminTrendFaceMaskingZone,
 } from "@/lib/api"
 import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
-import { defaultTargetFor, isDepthPreparation } from "../clip-preparation"
+import { defaultTargetFor, isDepthPreparation, someEngineDrawsFaceMesh } from "../clip-preparation"
 import { FullDepthSceneSelect } from "./FullDepthSceneSelect"
 
 const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hint: string }> = [
@@ -103,13 +109,21 @@ interface Props {
    * of `supportedTargets`: greyed out, naming them, while any is listed.
    */
   readonly bodyMissingIn?: readonly string[]
+  /**
+   * Admin → Nodaro Motion (a setting every environment shares): the
+   * environments whose engine cannot draw the face mesh
+   * (`environmentsThatCannotDrawFaceMesh`). When given, the switch is shown,
+   * greyed out and naming them while any is listed; left out, it is offered
+   * once some environment's engine in `envs` draws it.
+   */
+  readonly faceMeshMissingIn?: readonly string[]
   /** The source clip's length, when known: Full depth's original scene takes up to 27.5 s. */
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
   readonly envs?: readonly TrendEngineEnvironment[]
 }
 
-export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces", supportedTargets, bodyMissingIn, clipSec, envs }: Props) {
+export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces", supportedTargets, bodyMissingIn, faceMeshMissingIn, clipSec, envs }: Props) {
   const depth = isDepthPreparation(source)
   const keepPeople = source === "keep-people"
   const mode = depth ? "always" : (value?.mode ?? "off")
@@ -147,6 +161,11 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
   const bodyUnsupported = bodyMissingIn ? bodyMissingIn.length > 0 : !!supportedTargets && !supportedTargets.includes("body")
   const missingIn = bodyMissingIn && bodyMissingIn.length > 0 ? `: ${bodyMissingIn.join(", ")}` : ""
   const word = keepPeople ? "person" : "face"
+  // The face mesh: never Keep people's. A switch already on stays shown (and can be turned off) whatever
+  // the engines say; one off is offered once the engine draws it.
+  const meshOn = value?.faceMesh === true
+  const meshUnsupported = faceMeshMissingIn ? faceMeshMissingIn.length > 0 : !someEngineDrawsFaceMesh(envs)
+  const meshShown = mode !== "off" && !keepPeople && (meshOn || faceMeshMissingIn !== undefined || !meshUnsupported)
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
@@ -154,6 +173,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
   const targetId = `${id}-target`
   const targetHintId = `${id}-target-hint`
   const noMarginsId = `${id}-no-margins`
+  const faceMeshId = `${id}-face-mesh`
 
   return (
     <div className="flex flex-col gap-3">
@@ -205,6 +225,35 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
 
       {source === "full-depth" && (
         <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} onChange={(scene) => set({ scene })} />
+      )}
+
+      {meshShown && (
+        <div className="flex flex-col gap-1 text-sm">
+          <div className="flex min-h-11 items-center gap-2">
+            <Checkbox
+              id={faceMeshId}
+              checked={meshOn}
+              disabled={meshUnsupported && !meshOn}
+              aria-describedby={`${faceMeshId}-hint`}
+              // Off removes the key: a setting without the mesh is saved exactly as before it existed.
+              onCheckedChange={(checked) => set({ faceMesh: checked === true ? true : undefined })}
+            />
+            <label htmlFor={faceMeshId} className="font-medium">
+              Face mesh
+            </label>
+          </div>
+          <span id={`${faceMeshId}-hint`} className="text-xs text-muted-foreground">
+            Draws thin face lines (mesh, lips, eyes) on the {source === "full-depth" ? "faces in the depth clip" : "masked heads"} so the video model keeps the mouth
+            movements and the blinks (it costs a little more).
+          </span>
+          {meshUnsupported && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {faceMeshMissingIn
+                ? `The Cast Swap engine of ${faceMeshMissingIn.join(", ")} cannot draw the face mesh yet, and this setting is shared by every environment${meshOn ? ": turn it off to save" : ""}.`
+                : "No environment's Cast Swap engine draws the face mesh yet: the engine is out of date."}
+            </span>
+          )}
+        </div>
       )}
 
       {mode !== "off" && source !== "full-depth" && (

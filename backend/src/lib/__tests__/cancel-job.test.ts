@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock("../supabase.js", () => ({ supabase: { from: mocks.from } }))
 vi.mock("../queue.js", () => ({ tryRemoveFromQueue: mocks.tryRemoveFromQueue }))
+// Concurrency lanes: the withdraw after the flip (its own behaviour: concurrency-lanes/__tests__/withdraw.test.ts).
+const lanes = vi.hoisted(() => ({ withdrawFromLane: vi.fn(async (_jobId: string) => {}) }))
+vi.mock("../concurrency-lanes/withdraw.js", () => lanes)
 vi.mock("../../ee/billing/credits.js", () => ({ CreditsService: { refundCredits: mocks.refundCredits } }))
 // The held-job resolver. Reached through a DYNAMIC import so this module's
 // static graph (supabase + queue) is unchanged — job-policy-gate pulls storage
@@ -211,6 +214,33 @@ describe("cancelOwnedJob", () => {
     tables(jobsTable(live({ status: "processing", provider: "use-case", input_data: { _executionId: "exec-in" } }), []))
     expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "lost_race" })
     expect(inner.cancel).not.toHaveBeenCalled()
+  })
+  // Concurrency lanes: a parked job (`queued`) is cancelled through the shared
+  // removal funnel (which withdraws it and removes its parked entry by its
+  // stored BullMQ id — queue.test.ts), the CAS takes `queued`, the reservation
+  // is refunded, and the job is withdrawn again AFTER the flip: a pickup that
+  // re-parked it between the removal and the flip must not leave a ghost.
+  it("cancelling a queued job withdraws it, removes it by its stored BullMQ id and refunds", async () => {
+    const order: string[] = []
+    mocks.tryRemoveFromQueue.mockImplementationOnce(async () => { order.push("remove") })
+    lanes.withdrawFromLane.mockImplementationOnce(async () => { order.push("withdraw") })
+    const jobs = jobsTable(live({ status: "queued" }))
+    const update = jobs._update
+    update.mockImplementation((...a: unknown[]) => {
+      order.push("flip")
+      return (jobsTable(live())._update as (...x: unknown[]) => unknown)(...a)
+    })
+    tables(jobs, usageLogsTable([{ id: "log-q" }]))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: null })
+    expect(mocks.tryRemoveFromQueue).toHaveBeenCalledWith(JOB)
+    expect(lanes.withdrawFromLane).toHaveBeenCalledWith(JOB)
+    expect(order).toEqual(["remove", "flip", "withdraw"])
+    expect(mocks.refundCredits).toHaveBeenCalledWith("log-q")
+  })
+  it("a cancel that lost the race withdraws nothing after it", async () => {
+    tables(jobsTable(live({ status: "queued" }), []))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "lost_race" })
+    expect(lanes.withdrawFromLane).not.toHaveBeenCalled()
   })
   it("lost_race when the CAS flips no row — no refund (the terminal writer owns the credits)", async () => {
     tables(jobsTable(live(), []), usageLogsTable([{ id: "log-1" }]))

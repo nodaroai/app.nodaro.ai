@@ -75,6 +75,8 @@ vi.mock("../../supabase.js", () => {
   }
   return { supabase: { from: () => builder() } }
 })
+// Concurrency lanes: a child cancelled outside a resume leaves its line (withdraw.test.ts) — never a real Redis here.
+vi.mock("../../concurrency-lanes/withdraw.js", () => ({ withdrawFromLane: vi.fn(async (_jobId: string) => {}) }))
 vi.mock("../../credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: vi.fn(async (id: string) => { db.refunds.push(id); return 1 }),
 }))

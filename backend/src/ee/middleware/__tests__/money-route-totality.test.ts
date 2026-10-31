@@ -60,6 +60,8 @@ const MONEY_MARKERS: ReadonlyArray<{ re: RegExp; what: string }> = [
   { re: /from\("lane_(plan_sizes|user_overrides|provider_ceilings)"\)/, what: "writes lane sizes or provider ceilings (how much a payer runs at once)" },
   // The lanes switch lifts or applies every lane limit and provider ceiling.
   { re: /setLanesEnforced\(/, what: "switches lane enforcement (every lane limit and provider ceiling)" },
+  // Cancelling another account's job refunds its reserved credits to that account.
+  { re: /cancelOwnedJob\(/, what: "cancels and refunds a job on its owner's behalf" },
 ]
 
 /**
@@ -173,6 +175,7 @@ describe("money-route totality", () => {
       "PUT /v1/admin/lanes/providers/:provider",
       "PUT /v1/admin/lanes/users/:id",
       "PUT /v1/admin/lanes/settings",
+      "POST /v1/admin/lanes/jobs/:jobId/cancel",
     ]) {
       expect(gatedPaths, `${expected} must carry requirePlatformOperator`).toContain(expected)
     }

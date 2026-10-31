@@ -95,6 +95,21 @@ export type InputRefusedHint = {
 }
 
 /**
+ * The job never got a slot to run in, so it did not run, and its credits were
+ * refunded. `reason`: `timeout` — it waited longer than the platform's queue
+ * timeout for one of the account's concurrency slots; `lost` — its place in
+ * line was lost and could not be restored; `live-wait` — a synchronous call
+ * could not get a slot within its wait limit. `waitedMinutes` is the whole
+ * minutes it waited, rounded down. Run it again; treat an unknown `reason`
+ * like `timeout`.
+ */
+export type QueueTimeoutHint = {
+  kind: "queue-timeout"
+  reason: "timeout" | "lost" | "live-wait"
+  waitedMinutes: number
+}
+
+/**
  * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
  * failure verdict, so a caller can act on it without parsing `error_message`
  * prose. One column, several verdict sources; `kind` is the discriminant.
@@ -105,7 +120,7 @@ export type InputRefusedHint = {
  * pasted here verbatim in the same change, with a changeset.
  * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`

@@ -24,6 +24,9 @@ const { selectMock, inMock, eqMock, updateMock, fromMock } = vi.hoisted(() => {
 })
 
 vi.mock("../supabase.js", () => ({ supabase: { from: fromMock } }))
+// Concurrency lanes: a failed job leaves its line (its own behaviour: concurrency-lanes/__tests__/withdraw.test.ts).
+const lanes = vi.hoisted(() => ({ withdrawFromLane: vi.fn(async (_jobId: string) => {}) }))
+vi.mock("../concurrency-lanes/withdraw.js", () => lanes)
 
 import { markJobFailed, markJobFailedDetailed, FAILABLE_STATUSES } from "../job-failure.js"
 
@@ -117,5 +120,28 @@ describe("markJobFailed", () => {
     expect(arg.provider_cost).toBe(0.4)
     expect(arg.reconcile_attempts).toBe(3)
     expect(arg.reconcile_last_error).toBe("reconcile_no_recovery")
+  })
+
+  // Concurrency lanes: a job that fails while it waits (the queue timeout, a
+  // sweep, a refused admission) must leave its line, or it blocks the head.
+  it("a failed write withdraws the waiter — only when this write flipped the row", async () => {
+    selectMock.mockResolvedValueOnce({ data: [{ id: "j-wait" }], error: null })
+    expect(await markJobFailed("j-wait", { error_message: "Waited too long" })).toBe(true)
+    await vi.waitFor(() => expect(lanes.withdrawFromLane).toHaveBeenCalledWith("j-wait"))
+
+    lanes.withdrawFromLane.mockClear()
+    selectMock.mockResolvedValueOnce({ data: [], error: null })
+    await markJobFailed("j-lost", { error_message: "x" })
+    selectMock.mockResolvedValueOnce({ data: null, error: { message: "nope" } })
+    await markJobFailed("j-error", { error_message: "x" })
+    await new Promise((r) => setTimeout(r, 10))
+    expect(lanes.withdrawFromLane).not.toHaveBeenCalled()
+  })
+
+  it("a withdraw that rejects never fails the failure write", async () => {
+    lanes.withdrawFromLane.mockRejectedValueOnce(new Error("redis down"))
+    selectMock.mockResolvedValueOnce({ data: [{ id: "j-x" }], error: null })
+    await expect(markJobFailedDetailed("j-x", { error_message: "x" })).resolves.toBe("flipped")
+    await new Promise((r) => setTimeout(r, 10))
   })
 })

@@ -179,6 +179,10 @@ vi.mock("../../lib/supabase.js", () => {
   }
 })
 
+// Concurrency lanes: the real withdraw on the gate's JS twin (a fresh store per test).
+const lanes = vi.hoisted(() => ({ gate: null as unknown }))
+vi.mock("../../lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -187,6 +191,9 @@ import { pipelinesRoutes } from "../pipelines.js"
 import { refundPipelineCredits } from "../../ee/pipelines/credits.js"
 import { pipelineEvents } from "../../ee/pipelines/events.js"
 import * as supabaseMod from "../../lib/supabase.js"
+import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"
+import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
+import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 
 // Constants used by test bodies — duplicated from the inline mock-factory
 // version above (the factory can't reference these top-level constants
@@ -216,6 +223,8 @@ async function makeApp(userId = TEST_USER_ID) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  const laneStore = makeFakeLaneStore()
+  lanes.gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(laneStore) })
   // Reset pipeline statuses so each test gets a clean baseline.
   testPipelines.get(PIPELINE_ID)!.status = "running"
   testPipelines.get(PIPELINE_ID)!.current_progress_message =
@@ -226,6 +235,29 @@ beforeEach(() => {
 })
 
 describe("POST /v1/pipelines/:id/cancel", () => {
+  it("cancelling a waiting pipeline withdraws its run-lane waiter", async () => {
+    const gate = lanes.gate as ConcurrencyGate
+    await gate.setEnforced(true)
+    const run = (jobId: string): LaneEntryMeta => ({
+      jobId, userId: TEST_USER_ID, payer: `user:${TEST_USER_ID}`, lane: "run", provider: null, source: null, sourceDetail: null,
+      jobType: "pipeline-run", model: null, queue: "pipeline-orchestration", bullJobId: `bull-${jobId}`,
+    })
+    const enter = (jobId: string) => gate.acquire({ meta: run(jobId), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+    await enter("earlier-run") // the user's only run slot
+    await enter(PIPELINE_ID)
+    await enter("later-run")
+    testPipelines.get(PIPELINE_ID)!.status = "queued" // a waiting pipeline stays `queued`
+    const app = await makeApp()
+
+    const res = await app.inject({ method: "POST", url: `/v1/pipelines/${PIPELINE_ID}/cancel` })
+
+    expect(res.statusCode).toBe(200)
+    expect(testPipelines.get(PIPELINE_ID)!.status).toBe("cancelled")
+    expect(await gate.describeWait(PIPELINE_ID)).toBeNull()
+    expect(await gate.describeWait("later-run")).toMatchObject({ position: 1 })
+    await app.close()
+  })
+
   it("cancels the pipeline and flips in-flight stages to cancelled", async () => {
     const app = await makeApp()
     const res = await app.inject({

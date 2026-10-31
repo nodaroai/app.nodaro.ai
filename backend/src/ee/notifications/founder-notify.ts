@@ -84,10 +84,27 @@ export async function notifyPaidConversion(userId: string, priorTier: string | n
     if ((priorTier ?? "free").toLowerCase() !== "free") return // already paid — not a conversion
     if (newTier.toLowerCase() === "free") return
     const email = (await userEmail(userId)) ?? userId
-    await post({ text: `:tada: Paid conversion — ${email} → ${newTier}` })
+    const text = `:tada: Paid conversion — ${email} → ${newTier}`
+    await post({ text, blocks: paidConversionBlocks(text) })
   } catch {
     /* a notification must never break billing */
   }
+}
+
+/** The celebration banner served from the app's own public files, so a paid
+ *  conversion stands out in a busy channel. `text` stays the phone preview. */
+export const PAID_CONVERSION_IMAGE_PATH = "/notifications/paid-conversion.jpg"
+
+export function paidConversionBlocks(text: string): unknown[] {
+  const origin = (config.PUBLIC_URL ?? "").trim().replace(/\/$/, "")
+  return [
+    { type: "section", text: { type: "mrkdwn", text } },
+    {
+      type: "image",
+      image_url: `${origin || "https://app.nodaro.ai"}${PAID_CONVERSION_IMAGE_PATH}`,
+      alt_text: "New paying customer",
+    },
+  ]
 }
 
 export async function notifyCancellation(

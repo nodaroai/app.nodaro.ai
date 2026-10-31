@@ -1,6 +1,6 @@
 // @reads packages/remotion/**
 import { remotionConcurrencyFor } from "./render-concurrency.js"
-import { Worker, DelayedError, type ConnectionOptions } from "bullmq"
+import { Worker, DelayedError, type ConnectionOptions, type Job } from "bullmq"
 import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { SCENE3D_PLAN_TYPE } from "@nodaro/shared/scene3d"
@@ -16,6 +16,12 @@ import { markJobFailed } from "../lib/job-failure.js"
 import { JobCancelledError } from "../lib/job-cancellation.js"
 import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { withRenderCancellation } from "./render-cancellation.js"
+import { admitOrPark, pickupStatusesFor, WORKER_ROW_COLUMNS, workerRowOf } from "../lib/concurrency-lanes/worker-admit.js"
+import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
+import { serverShare } from "../lib/concurrency-lanes/server-share.js"
+import { claimWithBullEntry, dropRequeuePayload } from "../lib/concurrency-lanes/columns.js"
+import { runHolding } from "../lib/concurrency-lanes/hold.js"
+import type { ReleaseOutcome } from "../lib/concurrency-lanes/gate.js"
 
 /**
  * Which non-completed completion outcome releases the reservation.
@@ -821,7 +827,77 @@ async function cleanupStaleWorkDirs(): Promise<void> {
   }
 }
 
+/** The pickup read: what the render needs, and what its concurrency admission reads. */
+const RENDER_JOB_COLUMNS =
+  "usage_log_id, user_id, force_private, mcp_client, workflow_execution_id, should_watermark, status, started_at, parent_job_id, pipeline_id, workspace_id, org_id, source, source_detail, profiles!user_id(tier, subscription_tier, lifetime_topup_credits, public_outputs)"
+
+type RenderJobRecord = Record<string, unknown> | null
+
+/** How a render's exit releases its concurrency slot; unset → decided from how the processor ended. */
+interface RenderLaneExit { outcome?: ReleaseOutcome }
+
+type RenderProcessor = (bullJob: Job, token: string | undefined, jobRecord: RenderJobRecord, lane: RenderLaneExit) => Promise<unknown>
+
+/**
+ * The render queue's pickup: read the row, the quiet stop (not for a
+ * `scene-render-child`, which never had one), then the job's concurrency slot
+ * (lib/concurrency-lanes/worker-admit.ts) — ABOVE every branch, the early
+ * `scene-render-child` one included. The processor runs under the hold it
+ * got, and every exit releases the slot exactly once: the outcome the
+ * processor set, else `completed` when it returned, `requeued` when the job
+ * goes back to BullMQ (a drain, a non-final attempt), `failed` otherwise.
+ *
+ * This process never runs initProviders(): every render-queue job is a `local`
+ * leaf, attributed to "local" without the provider registry.
+ */
+function withRenderAdmission(processRender: RenderProcessor) {
+  return async (bullJob: Job, token?: string): Promise<unknown> => {
+    const { jobId } = bullJob.data as { jobId: string }
+    // A scene-render-child reads its own row in processSceneRenderChild: here
+    // only what its admission reads, with no profile join.
+    const pickupColumns: string = bullJob.name === "scene-render-child" ? WORKER_ROW_COLUMNS : RENDER_JOB_COLUMNS
+    const { data } = await supabase
+      .from("jobs")
+      .select(pickupColumns)
+      .eq("id", jobId)
+      .single()
+    const jobRecord = (data ?? null) as RenderJobRecord
+
+    // Quiet stop — mirrors video-worker.ts: before the pickup CAS and outside
+    // its try, the row stays `pending` with its reservation and the job goes
+    // back to the queue at zero cost, to be looked at again later.
+    if (bullJob.name !== "scene-render-child" && await isUserQuietStopped((jobRecord?.user_id as string) ?? undefined)) {
+      await bullJob.moveToDelayed(Date.now() + QUIET_STOP_RECHECK_MS, token)
+      throw new DelayedError()
+    }
+
+    const admission = await admitOrPark({
+      job: bullJob, token, queue: "video-render", row: workerRowOf(jobId, jobRecord, (bullJob.data as { userId?: unknown }).userId),
+    })
+    if (!admission) throw new DelayedError()
+    const lane: RenderLaneExit = {}
+    let outcome: ReleaseOutcome = "failed"
+    try {
+      const result = await runHolding(admission.hold, () => processRender(bullJob, token, jobRecord, lane))
+      outcome = lane.outcome ?? "completed"
+      return result
+    } catch (err) {
+      outcome = lane.outcome
+        ?? (err instanceof DrainAbortError || err instanceof DelayedError || !isFinalJobAttempt(bullJob) ? "requeued" : "failed")
+      throw err
+    } finally {
+      await admission.release(outcome)
+    }
+  }
+}
+
 export function createRenderWorker() {
+  // A job its concurrency lane refuses at pickup is parked and woken by its
+  // reserved slot (lib/concurrency-lanes/park.ts). With enforcement off nothing is refused.
+  registerLaneParking()
+  // No user holds more than a quarter of this pool (server-share.ts): 1 of the default 2.
+  serverShare("render", config.RENDER_WORKER_CONCURRENCY)
+
   // Clean up orphaned work directories from previous crashes
   cleanupStaleWorkDirs().catch(() => {})
 
@@ -839,7 +915,7 @@ export function createRenderWorker() {
 
   return new Worker(
     "video-render",
-    async (bullJob, token) => {
+    withRenderAdmission(async (bullJob, token, jobRecord, lane) => {
       if (bullJob.name === "scene-render-child") {
         const { processSceneRenderChild } = await import("./scene3d-render-child.js")
         return processSceneRenderChild(bullJob, () => getBundlePath(SCENE3D_PLAN_TYPE), chromiumOptionsFor(SCENE3D_PLAN_TYPE))
@@ -847,23 +923,9 @@ export function createRenderWorker() {
       const data = bullJob.data as RenderJobData
       const { jobId, usageLogId } = data
 
-      // Fetch job + user profile
-      const { data: jobRecord } = await supabase
-        .from("jobs")
-        .select("usage_log_id, user_id, force_private, mcp_client, workflow_execution_id, should_watermark, profiles!user_id(tier, subscription_tier, lifetime_topup_credits, public_outputs)")
-        .eq("id", jobId)
-        .single()
-
+      // The job + user profile, read at pickup (withRenderAdmission).
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
       const effectiveUsageLogId = usageLogId ?? jobRecord?.usage_log_id as string | undefined
-
-      // Quiet stop — mirrors video-worker.ts: before the pickup CAS and outside
-      // its try, the row stays `pending` with its reservation and the job goes
-      // back to the queue at zero cost, to be looked at again later.
-      if (await isUserQuietStopped(jobUserId)) {
-        await bullJob.moveToDelayed(Date.now() + QUIET_STOP_RECHECK_MS, token)
-        throw new DelayedError()
-      }
 
       const profileData = (jobRecord as Record<string, unknown>)?.profiles as Record<string, unknown> | null
       // Effective tier — the legacy watermark fallback must not stamp payg output.
@@ -918,19 +980,26 @@ export function createRenderWorker() {
         // A1/R1 (audit): CAS on live statuses + abort on 0 rows — a render
         // job cancelled while queued must be discarded at pickup, not
         // resurrected to 'processing' and rendered (the user would keep the
-        // refund AND get the output). Mirrors video-worker.ts.
-        const { data: pickedRows } = await supabase
+        // refund AND get the output). Mirrors video-worker.ts. The same UPDATE
+        // records the job's BullMQ entry for a cancel or a reconcile, retried
+        // without those columns while they are missing (claimWithBullEntry).
+        const startedAt = new Date().toISOString()
+        const { data: pickedRows } = await claimWithBullEntry("video-render", bullJob.id, (laneFields) => supabase
           .from("jobs")
-          .update({ status: "processing", started_at: new Date().toISOString() })
+          .update({ ...laneFields, status: "processing", started_at: startedAt })
           .eq("id", jobId)
-          .in("status", ["pending", "processing"])
-          .select("id")
+          // A parked job is `queued`; one re-added after Redis lost it runs only from there.
+          .in("status", pickupStatusesFor(bullJob.id))
+          .select("id"))
         if (!pickedRows || pickedRows.length === 0) {
           console.log(
             `[render-worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
           )
+          lane.outcome = "cancelled"
           return
         }
+        // A job that waited (parked as `queued`) runs now: the payload it was parked with is not needed any more. Best effort, not awaited.
+        if ((jobRecord as { status?: unknown } | null)?.status === "queued") void dropRequeuePayload(jobId)
 
         await bullJob.updateProgress(20)
 
@@ -1109,6 +1178,7 @@ export function createRenderWorker() {
         // Check if job was cancelled during render
         if (!await shouldSaveJobResult(jobId)) {
           await refundJobCredits(effectiveUsageLogId, jobId, "cancelled")
+          lane.outcome = "cancelled"
           return
         }
 
@@ -1160,6 +1230,7 @@ export function createRenderWorker() {
           if (releasesReservationOnIncompleteRender(outcome)) {
             await refundJobCredits(effectiveUsageLogId, jobId, "cancelled")
           }
+          lane.outcome = "cancelled"
           return
         }
 
@@ -1173,7 +1244,10 @@ export function createRenderWorker() {
         // A deployment interruption retries without terminalizing or refunding.
         if (error instanceof DrainAbortError) throw error
         // The cancellation endpoint owns the status and credit transition.
-        if (error instanceof JobCancelledError) return
+        if (error instanceof JobCancelledError) {
+          lane.outcome = "cancelled"
+          return
+        }
         const errMsg = error instanceof Error ? error.message : String(error)
         console.error(`[render-worker] Job ${jobId} failed:`, errMsg)
 
@@ -1203,13 +1277,14 @@ export function createRenderWorker() {
 
         if (isTerminal) {
           console.error(`[render-worker] Terminal error for job ${jobId}, skipping retry: ${errMsg}`)
+          lane.outcome = "failed"
           return
         }
         throw error
       } finally {
         await cleanupWorkDir(workDir)
       }
-    },
+    }),
     {
       connection: connection as unknown as ConnectionOptions,
       concurrency: config.RENDER_WORKER_CONCURRENCY,

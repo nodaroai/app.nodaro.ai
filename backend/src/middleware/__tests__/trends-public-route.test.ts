@@ -60,6 +60,7 @@ vi.mock("@/ee/lib/trends/tags.js", async (importOriginal) => ({
 import { __isPublicRouteForTest as isPublicRoute, isAnonymousRoute, registerAuthHook } from "../auth.js"
 import { trendRoutes } from "../../ee/routes/trends.js"
 import { favoriteIds, listPublished, setFavorite } from "../../ee/lib/trends/store.js"
+import { _resetTrendCatalogCacheForTests } from "../../ee/lib/trends/catalog-stamp.js"
 
 describe("the public-route matcher", () => {
   it("the catalog, its tags and a trend's page take no credential, with or without a query", () => {
@@ -118,6 +119,8 @@ describe("the auth hook and the rate limiter in front of the routes", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    // A guest's kept answers live in the module: none carries over from another test.
+    _resetTrendCatalogCacheForTests()
     app = Fastify({ logger: false })
     // As app.ts's `rateLimitKeyGenerator` keys a request (by its raw bearer when it sends one), so a
     // route that kept that key would give each made-up bearer its own bucket and fail below.
@@ -150,7 +153,8 @@ describe("the auth hook and the rate limiter in front of the routes", () => {
   it("an invalid bearer reads as a guest; a valid one as its account", async () => {
     const stale = await app.inject({ method: "GET", url: "/v1/trends", headers: { authorization: "Bearer expired" } })
     expect(stale.statusCode).toBe(200)
-    expect(stale.headers["cache-control"]).toBe("public, max-age=60")
+    // The guest's answer (its language from the request's header: the browser's alone).
+    expect(stale.headers["cache-control"]).toBe("private, max-age=60")
     const own = await app.inject({ method: "GET", url: "/v1/trends", headers: { authorization: `Bearer ${GOOD_TOKEN}` } })
     expect(own.statusCode).toBe(200)
     expect(own.headers["cache-control"]).toBe("private, no-store")
