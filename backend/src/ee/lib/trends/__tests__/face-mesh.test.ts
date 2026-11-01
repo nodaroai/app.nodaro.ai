@@ -43,7 +43,7 @@ const FACES = { mode: "always" as const, threshold: 0.4 }
 const FULL = { mode: "always" as const, source: "full-depth" as const }
 const KEEP = { mode: "always" as const, source: "keep-people" as const }
 
-function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "slots">): TrendPreviewClip {
   const mask = storedFaceMaskFor(d)
   return {
     videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
@@ -186,20 +186,20 @@ describe("what is sent", () => {
 describe("the settings key", () => {
   it("is unchanged for a setting without the mesh, absent or false (every approved mask stays up to date)", () => {
     for (const m of [FACES, { ...FACES, target: "face" as const, fill: "depth" as const }, FULL]) {
-      expect(faceMaskSettingsKeyOf(SRC, { ...m, faceMesh: false }), JSON.stringify(m)).toBe(faceMaskSettingsKeyOf(SRC, m))
+      expect(faceMaskSettingsKeyOf(SRC, { ...m, faceMesh: false }, []), JSON.stringify(m)).toBe(faceMaskSettingsKeyOf(SRC, m, []))
     }
     // Pinned: the very hash every faces / full-depth setting had before the face mesh existed (the
     // clip and the setting as sent, its zone resolved, its mode left out: `v2:` + sha256 of sorted JSON).
     const v2 = (faceMasking: unknown) =>
       `v2:${createHash("sha256").update(JSON.stringify({ faceMasking, videoUrl: SRC })).digest("hex")}`
-    expect(faceMaskSettingsKeyOf(SRC, FACES)).toBe(v2({ threshold: 0.4, zone: { bottomPct: 0, leftPct: 10, rightPct: 10, topPct: 0 } }))
-    expect(faceMaskSettingsKeyOf(SRC, { ...FACES, faceMesh: false })).toBe(v2({ threshold: 0.4, zone: { bottomPct: 0, leftPct: 10, rightPct: 10, topPct: 0 } }))
-    expect(faceMaskSettingsKeyOf(SRC, { ...FULL, faceMesh: false })).toBe(v2({ source: "full-depth" }))
+    expect(faceMaskSettingsKeyOf(SRC, FACES, [])).toBe(v2({ threshold: 0.4, zone: { bottomPct: 0, leftPct: 10, rightPct: 10, topPct: 0 } }))
+    expect(faceMaskSettingsKeyOf(SRC, { ...FACES, faceMesh: false }, [])).toBe(v2({ threshold: 0.4, zone: { bottomPct: 0, leftPct: 10, rightPct: 10, topPct: 0 } }))
+    expect(faceMaskSettingsKeyOf(SRC, { ...FULL, faceMesh: false }, [])).toBe(v2({ source: "full-depth" }))
   })
 
   it("changes when it is turned on, for faces and for full depth", () => {
-    expect(faceMaskSettingsKeyOf(SRC, { ...FACES, faceMesh: true })).not.toBe(faceMaskSettingsKeyOf(SRC, FACES))
-    expect(faceMaskSettingsKeyOf(SRC, { ...FULL, faceMesh: true })).not.toBe(faceMaskSettingsKeyOf(SRC, FULL))
+    expect(faceMaskSettingsKeyOf(SRC, { ...FACES, faceMesh: true }, [])).not.toBe(faceMaskSettingsKeyOf(SRC, FACES, []))
+    expect(faceMaskSettingsKeyOf(SRC, { ...FULL, faceMesh: true }, [])).not.toBe(faceMaskSettingsKeyOf(SRC, FULL, []))
   })
 
   it("makes a mask approved without the mesh out of date (never sent) for a setting with it, and the other way round", () => {

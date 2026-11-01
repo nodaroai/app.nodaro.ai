@@ -153,6 +153,19 @@ export function environmentsThatTakeClipBody(envs: readonly TrendEngineEnvironme
   return missing && SHARED_SETTING_ENVIRONMENTS.filter((name) => !missing.includes(name))
 }
 
+/**
+ * Whether the setting draws role outlines: masking on (not "off"), Faces
+ * hidden, and `roleOutlines: true` (the server's `roleOutlinesOn`).
+ */
+export function roleOutlinesOn(m: AdminTrendFaceMasking | undefined): boolean {
+  return !!m && m.mode !== "off" && m.roleOutlines === true && clipPreparationOf(m) === "faces"
+}
+
+/** A trend's editor: whether some environment's engine draws role outlines (unknown while the environments are: false). */
+export function someEngineDrawsRoleOutlines(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
+  return (envs ?? []).some((e) => e.supports.castSwap?.roleOutlines === true)
+}
+
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
 export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)
@@ -176,8 +189,9 @@ export function withClipPreparation(
   const next: AdminTrendFaceMasking = isDepthPreparation(source) ? { ...rest, mode: "always", source } : { ...rest }
   // The scene source is Full depth's alone.
   if (source !== "full-depth") delete next.scene
-  // The face mesh is never Keep people's.
+  // The face mesh is never Keep people's; role outlines are Faces hidden's alone.
   if (source === "keep-people") delete next.faceMesh
+  if (source !== "faces") delete next.roleOutlines
   let removedMain = 0
   if (next.target === "body" && (source === "full-depth" || (source === "faces" && clipPreparationOf(m) === "keep-people"))) delete next.target
   if (source !== "keep-people") {
@@ -198,6 +212,7 @@ export function clipPreparationIssues(m: AdminTrendFaceMasking): string[] {
   if (isDepthPreparation(source) && m.mode !== "always") out.push(`Clip preparation: ${clipPreparationName(source)} runs every time (mode Always).`)
   if (source === "full-depth" && m.target === "body") out.push("Clip preparation: Full depth masks no one, so it has no whole-person target.")
   if (source === "keep-people" && m.faceMesh === true) out.push("Clip preparation: Keep people keeps the faces as filmed, so it takes no face mesh.")
+  if (source !== "faces" && m.roleOutlines === true) out.push("Clip preparation: role outlines are drawn around hidden people, so they need Faces hidden.")
   const main = (m.marks ?? []).filter((mark) => mark.label === "main").length
   if (source !== "keep-people" && main > 0) {
     out.push(`Face masking: ${main} box${main === 1 ? " marks" : "es mark"} the main character, which only Keep people takes. Remove ${main === 1 ? "it" : "them"} first (6. Face masking).`)

@@ -271,7 +271,7 @@ function data(over: Partial<TrendVersionData> = {}): TrendVersionData {
   }
 }
 
-function mask(d: Pick<TrendVersionData, "source" | "faceMasking">): TrendFaceMask {
+function mask(d: Pick<TrendVersionData, "source" | "faceMasking" | "slots">): TrendFaceMask {
   return {
     url: MASK, frames: 360, recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" }, settingsKey: faceMaskSettingsKey(d)!,
     jobId: "j1", stats: { shots: 1, heldFrames: 0, coverage: 0.02, droppedRegions: 0 }, approvedAt: "2026-10-26T00:00:00Z", approvedBy: "admin",

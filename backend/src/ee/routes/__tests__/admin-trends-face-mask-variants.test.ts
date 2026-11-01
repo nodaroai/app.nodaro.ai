@@ -364,6 +364,49 @@ describe("POST /face-mask/variants/advance", () => {
     expect(done.json().data.faceMaskState.variants.variants[0].status).toBe("approved")
   })
 
+  it("with role outlines, a fill is ringed for the people it still covers, and the variant records what it ringed", async () => {
+    setPluginSupports({ castSwap: { ...structuredClone(SUPPORTS), roleOutlines: true } as never })
+    // The required lead's boxes too (role outlines on); amy is the one left empty.
+    mem.data = draft([slotMark("lead", 70), slotMark("amy", 10)], { faceMasking: { ...MASKING, roleOutlines: true, marks: [slotMark("lead", 70), slotMark("amy", 10)] } })
+    // The approved base was made for these settings (its key hashes the outlines).
+    mem.data = { ...mem.data, faceMask: { ...mem.data.faceMask!, settingsKey: faceMaskSettingsKey(mem.data)! } }
+    await post("variants")
+    const job = mem.data.faceMask!.variantJobs![0]!
+    expect(job.emptySlots).toEqual(["amy"])
+    setJob(job.eraseJobId!, { status: "completed", output_data: { videoUrl: "https://out.test/erased.mp4", frames: 360, coverage: 0.03, droppedRegions: 4, kept: true, keptRegions: 0 } })
+    await post("variants/advance")
+    const { label: _l, ...leadBox } = slotMark("lead", 70)
+    expect(calls.make[0]!.body).toMatchObject({
+      faceMasking: { ...MASKING, zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }, roleOutlines: true },
+      outlines: [{ slot: "lead", colour: "#FF00FF", boxes: [leadBox] }],
+    })
+    const makeJobId = mem.data.faceMask!.variantJobs![0]!.makeJobId!
+    // A fill that answers no outlines (an engine that stripped them) is failed, never approved.
+    setJob(makeJobId, { status: "completed", output_data: { maskedUrl: "https://out.test/variant.mp4", frames: 360 } })
+    await post("variants/advance")
+    expect(mem.data.faceMask!.variants).toBeUndefined()
+    expect(mem.data.faceMask!.variantJobs![0]!.error?.message).toMatch(/role outlines/)
+  })
+
+  it("with role outlines, a fill that answers them is approved with them", async () => {
+    setPluginSupports({ castSwap: { ...structuredClone(SUPPORTS), roleOutlines: true } as never })
+    mem.data = draft([slotMark("lead", 70), slotMark("amy", 10)], { faceMasking: { ...MASKING, roleOutlines: true, marks: [slotMark("lead", 70), slotMark("amy", 10)] } })
+    mem.data = { ...mem.data, faceMask: { ...mem.data.faceMask!, settingsKey: faceMaskSettingsKey(mem.data)! } }
+    await post("variants")
+    const job = mem.data.faceMask!.variantJobs![0]!
+    setJob(job.eraseJobId!, { status: "completed", output_data: { videoUrl: "https://out.test/erased.mp4", frames: 360, coverage: 0.03, droppedRegions: 4, kept: true, keptRegions: 0 } })
+    await post("variants/advance")
+    const makeJobId = mem.data.faceMask!.variantJobs![0]!.makeJobId!
+    setJob(makeJobId, {
+      status: "completed",
+      output_data: { maskedUrl: "https://out.test/variant.mp4", frames: 360, outlines: [{ slot: "lead", colour: "#FF00FF", framesDrawn: 300, regionsDrawn: 300 }], outlinesAmbiguous: 0 },
+    })
+    await post("variants/advance")
+    expect(mem.data.faceMask!.variants).toEqual([
+      expect.objectContaining({ emptySlots: ["amy"], outlines: [{ slot: "lead", colour: "#FF00FF", regionsDrawn: 300 }] }),
+    ])
+  })
+
   it("records a variant that left nothing to cover without a fill, and a failed step as failed", async () => {
     await post("variants")
     const [amy, ben] = mem.data.faceMask!.variantJobs!

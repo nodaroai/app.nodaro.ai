@@ -9,8 +9,14 @@
 // every run (an erased mark); an optional person makes it that person's box (a
 // slot mark): the face is left unmasked only in the person masks made for runs
 // that leave that person empty. New boxes take the last choice, so one person
-// is quick to mark across shots; each person has a colour, and the list counts
-// each one's boxes.
+// is quick to mark across shots; each person has a colour (their role outline
+// colour, fixed per role: the shared palette by the slot's place among the
+// trend's person slots), and the list counts each one's boxes.
+//
+// Role outlines (decided 2026-11-01): while the trend's `roleOutlines` is on,
+// every person is listed, required ones too, and a person's boxes also say
+// whose coloured ring a masked region gets (a region is theirs when its
+// bounding box's centre lies in one of their boxes on that frame).
 //
 // Keep people (decided 2026-10-27): the clip keeps its people as filmed and
 // turns the rest to depth. A box is then either "Left out" (an erased mark: that
@@ -67,10 +73,20 @@ export function pictureRect(elW: number, elH: number, vidW: number, vidH: number
 
 const clampPct = (v: number) => Math.round(Math.min(100, Math.max(0, v)) * 10) / 10
 
-/** An optional person a box can be for: its slot key and its label. */
+/**
+ * A person a box can be for: its slot key and its label; `colour`, the
+ * person's role outline colour (`#RRGGBB`, by the slot's place among the
+ * trend's person slots, `roleOutlineColour`), the box's colour too, so a
+ * person keeps theirs whatever the list shows; `required`, a required person
+ * (listed only while role outlines are on: their boxes say whose ring a
+ * region gets, never who is left unmasked); `outlined`, role outlines are on.
+ */
 export interface MarkPerson {
   readonly key: string
   readonly label: string
+  readonly colour?: string
+  readonly required?: boolean
+  readonly outlined?: boolean
 }
 
 /** The slot a label names, or null for "erased" and "main". */
@@ -91,16 +107,25 @@ const copyLabel = (label: AdminTrendFaceMaskMarkLabel): AdminTrendFaceMaskMarkLa
   return slot === null ? label : { slot }
 }
 
-/** Each person's box colour, in the order the people are listed; "Everyone" is amber. */
-const PERSON_COLOURS = ["border-fuchsia-500", "border-emerald-500", "border-violet-500", "border-rose-500", "border-teal-500", "border-indigo-500"]
+/** A person's box colour when it is not known (a slot no longer listed). */
+const UNKNOWN_PERSON_COLOUR = "#A1A1AA"
 
-/** The box colour of a mark: amber for everyone (left out), lime for the main character, else its person's (by their place in `people`). */
-export function markColour(label: AdminTrendFaceMaskMarkLabel, people: readonly MarkPerson[]): string {
+/** The box colour class of a mark: amber for everyone (left out), lime for the main character; a person's is `markStyle`'s. */
+export function markColour(label: AdminTrendFaceMaskMarkLabel): string {
   if (label === "erased") return "border-amber-400"
   if (label === "main") return "border-lime-400"
+  return ""
+}
+
+/**
+ * The box colour of a person's mark: their role outline colour (`MarkPerson.colour`,
+ * fixed per role, never by their place in the list), gray for a person no longer listed.
+ * Undefined for "everyone" and the main character (`markColour`).
+ */
+export function markStyle(label: AdminTrendFaceMaskMarkLabel, people: readonly MarkPerson[]): { borderColor: string } | undefined {
   const slot = slotOf(label)
-  const i = people.findIndex((p) => p.key === slot)
-  return PERSON_COLOURS[(i < 0 ? 0 : i) % PERSON_COLOURS.length]!
+  if (slot === null) return undefined
+  return { borderColor: people.find((p) => p.key === slot)?.colour ?? UNKNOWN_PERSON_COLOUR }
 }
 
 /** What a mark's label is called: an erased mark is "Everyone" on a face mask, "Left out" when the clip keeps its people. */
@@ -136,7 +161,11 @@ export function markChoices(people: readonly MarkPerson[], keepPeople: boolean):
   if (people.length === 0) return []
   return [
     { value: "erased", label: "Everyone (unmasked on every run)", short: "Everyone" },
-    ...people.map((p) => ({ value: `slot:${p.key}`, label: `${p.label} (unmasked when left empty)`, short: p.label })),
+    ...people.map((p) => ({
+      value: `slot:${p.key}`,
+      label: p.required ? `${p.label} (their role outline)` : p.outlined ? `${p.label} (role outline; unmasked when left empty)` : `${p.label} (unmasked when left empty)`,
+      short: p.label,
+    })),
   ]
 }
 
@@ -296,10 +325,16 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
                 data-testid="face-mask-mark-box"
                 className={cn(
                   "pointer-events-none absolute border-2",
-                  i === selected ? "border-sky-400 ring-2 ring-sky-400/60" : markColour(m.label, people),
+                  i === selected ? "border-sky-400 ring-2 ring-sky-400/60" : markColour(m.label),
                   on ? "bg-white/10" : "border-dashed opacity-40",
                 )}
-                style={{ left: `${m.leftPct}%`, top: `${m.topPct}%`, width: `${m.rightPct - m.leftPct}%`, height: `${m.bottomPct - m.topPct}%` }}
+                style={{
+                  left: `${m.leftPct}%`,
+                  top: `${m.topPct}%`,
+                  width: `${m.rightPct - m.leftPct}%`,
+                  height: `${m.bottomPct - m.topPct}%`,
+                  ...(i === selected ? {} : markStyle(m.label, people)),
+                }}
               />
             )
           })}
@@ -371,7 +406,7 @@ export function FaceMaskMarksEditor({ url, label, frames, fps, marks, onChange, 
               className={cn("flex flex-wrap items-center gap-2 rounded border px-2 py-1 text-xs", i === selected && "border-sky-400")}
             >
               <button type="button" className="flex-1 text-start tabular-nums" onClick={() => setSelected(i)}>
-                <span className={cn("me-1 inline-block h-2.5 w-2.5 rounded-sm border-2 align-middle", markColour(m.label, people))} />
+                <span className={cn("me-1 inline-block h-2.5 w-2.5 rounded-sm border-2 align-middle", markColour(m.label))} style={markStyle(m.label, people)} />
                 Box {i + 1}: frames {m.fromFrame + 1}–{m.toFrame + 1}
                 {choices.length > 0 || m.label !== "erased" ? ` · ${markWho(m.label, people, keepPeople)}` : ""}
               </button>

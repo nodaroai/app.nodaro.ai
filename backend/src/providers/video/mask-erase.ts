@@ -100,8 +100,12 @@ export interface MaskEraseLists {
   readonly eraseAlways?: readonly MaskEraseBoxInput[]
 }
 
-/** Whether the region's bounding-box centre lies inside one of `rects` whose range holds `frame` (edges included). */
-function centredIn(box: MaskRegionBox, frame: number, rects: readonly MaskEraseRect[]): boolean {
+/**
+ * Whether the region's bounding-box centre lies inside one of `rects` whose
+ * range holds `frame` (edges included): the one test every box over a mask
+ * applies (the erase here, the mask outline's rings).
+ */
+export function centredIn(box: MaskRegionBox, frame: number, rects: readonly MaskEraseRect[]): boolean {
   const cx = (box.left + box.right) / 2
   const cy = (box.top + box.bottom + 1) / 2
   for (const r of rects) {

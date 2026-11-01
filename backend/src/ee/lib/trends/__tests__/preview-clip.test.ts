@@ -66,7 +66,7 @@ function clip(over: Partial<TrendPreviewClip> = {}): TrendPreviewClip {
 
 const MASK_CUT = { url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: MASK_URL }
 
-function mask(d: Pick<TrendVersionData, "source" | "faceMasking">): TrendFaceMask {
+function mask(d: Pick<TrendVersionData, "source" | "faceMasking" | "slots">): TrendFaceMask {
   return {
     url: MASK_URL,
     frames: 360,

@@ -27,13 +27,14 @@ import {
   faceMaskMarkSlot,
   previewMayUseStoredRoleNames,
   promptRunsOf,
+  slotMarkAllowed,
   TREND_DETAILS_MAX,
   trendPromptBudget,
   withPromptsFor,
   type TrendPromptBudget,
   type TrendPromptSource,
 } from "@nodaro/render-rules"
-import { clipPreparationIssues, clipPreparationName, clipPreparationOf } from "./clip-preparation"
+import { clipPreparationIssues, clipPreparationName, clipPreparationOf, roleOutlinesOn } from "./clip-preparation"
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import type {
   AdminTrendData,
@@ -276,6 +277,8 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     ...(num(m.threshold) ? { threshold: m.threshold } : {}),
     // The face mesh: only when on (off is no key, as before it existed), and never with Keep people.
     ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" ? { faceMesh: true } : {}),
+    // Role outlines: only when on (off is no key, as before they existed), Faces hidden only.
+    ...(m.roleOutlines === true && clipPreparationOf(m) === "faces" ? { roleOutlines: true } : {}),
     // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
     ...(m.marks && m.marks.length > 0 ? { marks: m.marks.map((mark) => ({ ...mark })) } : {}),
   }
@@ -549,10 +552,16 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
     if (key === null || counted.has(key)) continue
     counted.add(key)
     const slot = form.slots.find((s) => s.key === key)
-    if (slot && slot.kind === "person" && !slot.required) continue
+    // Any person while role outlines are on (a required person's boxes say whose ring a region gets).
+    if (slotMarkAllowed(slot, roleOutlinesOn(form.faceMasking))) continue
     const name = slot?.label.en || key
-    const why = !slot ? "is no longer a slot" : slot.kind !== "person" ? "is no longer a person" : "is now required"
-    out.push(`Face masking: "${name}" ${why}, but has face marks. Remove that person's face marks first (6. Face masking).`)
+    const why = !slot ? "is no longer a slot" : slot.kind !== "person" ? "is no longer a person" : "is required"
+    // Role outlines are Faces hidden's alone: offered as the way out only there.
+    const fix =
+      slot?.kind === "person" && clipPreparationOf(form.faceMasking) === "faces"
+        ? "Remove that person's face marks, or turn Role outlines on (6. Face masking)."
+        : "Remove that person's face marks first (6. Face masking)."
+    out.push(`Face masking: "${name}" ${why}, but has face marks. ${fix}`)
   }
   return out
 }
@@ -594,6 +603,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   "faceMaskTarget:body": "whole-person masks (Keep people)",
   "faceMaskHideTarget:body": "whole-person hiding (Faces hidden)",
   faceMesh: "the face mesh",
+  roleOutlines: "role outlines",
   steps: "the preparation steps",
   clipBodySheet: "the Body from the clip step",
   promptParts: "engine prompt changes",

@@ -2461,6 +2461,34 @@ describe("the stored face mask", () => {
       expect(key).not.toBe(KEY())
     })
 
+    it("draws role outlines only on an engine that declares them (refused before anything is paid), sending the flag and the outlines", async () => {
+      const lead = { label: { slot: "lead" }, fromFrame: 0, toFrame: 359, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 100 }
+      const OUTLINED = { ...MASKING, roleOutlines: true, marks: [lead] }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, faceMaskErase: true, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      // A required person's boxes: allowed while role outlines are on.
+      seed({}, draftData({ faceMasking: OUTLINED }))
+      supports({})
+      const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(held.statusCode).toBe(503)
+      expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/cannot draw role outlines/) })
+      expect(engine.calls).toEqual([])
+
+      supports({ roleOutlines: true })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      const { label: _label, ...leadBox } = lead
+      expect(engine.calls[0]!.body).toEqual({
+        videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+        // Slot marks never reach a make; the outlines carry those boxes instead, with the role's colour.
+        faceMasking: { ...withResolvedZone(MASKING), roleOutlines: true },
+        outlines: [{ slot: "lead", colour: "#FF00FF", boxes: [leadBox] }],
+      })
+      const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+      expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: OUTLINED })))
+      expect(key).not.toBe(KEY())
+    })
+
     it("a face mesh left off (false) is made exactly as before it existed, on any engine", async () => {
       seed({}, draftData({ faceMasking: { ...MASKING, faceMesh: false } }))
       const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
@@ -2589,6 +2617,21 @@ describe("the stored face mask", () => {
       world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { faceMesh: { facesDrawn: 12 } }))
       expect((await approve()).statusCode).toBe(200)
       expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("facesDrawn")
+    })
+
+    it("with role outlines, takes only a mask that answers every outline sent, and records what each one ringed", async () => {
+      const lead = { label: { slot: "lead" }, fromFrame: 0, toFrame: 359, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 100 }
+      const OUTLINED = { ...MASKING, roleOutlines: true, marks: [lead] }
+      const outlinedKey = faceMaskSettingsKey(draftData({ faceMasking: OUTLINED }))!
+      seed({}, draftData({ faceMasking: OUTLINED, faceMaskJob: pendingJob({ settingsKey: outlinedKey }) }))
+      // An engine that stripped them answers none: refused.
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const refused = await approve()
+      expect(refused.statusCode).toBe(409)
+      expect(refused.json().error.code).toBe("face_mask_not_outlined")
+      world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { outlines: [{ slot: "lead", colour: "#FF00FF", framesDrawn: 300, regionsDrawn: 310 }], outlinesAmbiguous: 4 }))
+      expect((await approve()).statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ settingsKey: outlinedKey, outlines: [{ slot: "lead", colour: "#FF00FF", regionsDrawn: 310 }] })
     })
 
     it("takes the draft's pending job (whatever defaults the engine filled into its copy), stores the clip and clears the pending job", async () => {

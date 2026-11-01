@@ -38,7 +38,7 @@ import { CAST_SWAP_FACE_MASK_MARK_LIMITS } from "@nodaro/render-rules"
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
 import { boxOf, erasedBoxesOf, faceMaskingOn, faceMaskingSourceOf, slotMarksOf, type MaskEraseBox } from "../../../lib/cast-swap-face-masking.js"
 import { faceMaskSettingsKey, stableJson } from "./face-mask.js"
-import type { TrendFaceMaskVariant, TrendFaceMaskVariantJob, TrendVersionData } from "./types.js"
+import type { TrendFaceMaskOutline, TrendFaceMaskVariant, TrendFaceMaskVariantJob, TrendVersionData } from "./types.js"
 
 /** The most optional people with slot marks a published trend may have. */
 export const MAX_MARKED_PEOPLE = CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarkedPeople
@@ -259,16 +259,20 @@ export function faceMaskVariantsState(data: VariantData): FaceMaskVariantsState 
 
 /**
  * What a run that leaves the marked people `emptySlots` empty is sent: the
- * up-to-date variant for exactly that set (`{ url, frames }`), `"unmasked"`
- * when that variant left nothing to cover, or null when there is none (the
- * run is refused, as with no stored mask).
+ * up-to-date variant for exactly that set (`{ url, frames }`, with the role
+ * outlines its fill recorded, when it has some), `"unmasked"` when that
+ * variant left nothing to cover, or null when there is none (the run is
+ * refused, as with no stored mask).
  */
-export function faceMaskVariantFor(data: VariantData, emptySlots: readonly string[]): { url: string; frames: number } | "unmasked" | null {
+export function faceMaskVariantFor(
+  data: VariantData,
+  emptySlots: readonly string[],
+): { url: string; frames: number; outlines?: TrendFaceMaskOutline[] } | "unmasked" | null {
   const set = canonicalSlots(emptySlots)
   const key = faceMaskVariantKey(data, set)
   const variant = data.faceMask?.variants?.find((v) => sameSlots(v.emptySlots, set))
   if (!variant || key === null || variant.key !== key) return null
-  return variant.url ? { url: variant.url, frames: variant.frames } : "unmasked"
+  return variant.url ? { url: variant.url, frames: variant.frames, ...(variant.outlines ? { outlines: variant.outlines } : {}) } : "unmasked"
 }
 
 /**

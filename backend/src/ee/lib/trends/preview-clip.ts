@@ -51,7 +51,7 @@ export type PreviewClipState =
  * run can send it; a clip made before the mask was approved, or from an
  * earlier mask, is out of date even though its picture is right).
  */
-export function previewClipState(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking">): PreviewClipState {
+export function previewClipState(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking" | "slots">): PreviewClipState {
   if (data.previewStart === null || !data.source) return { kind: "not_offered" }
   const clip = data.previewClip
   if (!clip) return { kind: "missing" }
@@ -65,7 +65,7 @@ export function previewClipState(data: Pick<TrendVersionData, "source" | "previe
 }
 
 /** The stored clip when it is current, else undefined. */
-export function currentPreviewClip(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking">): TrendPreviewClip | undefined {
+export function currentPreviewClip(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking" | "slots">): TrendPreviewClip | undefined {
   const state = previewClipState(data)
   return state.kind === "current" ? state.clip : undefined
 }

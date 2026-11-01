@@ -1932,6 +1932,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // Mask Erase (an internal step of a trend face mask's marks): local ffmpeg,
   // ONE pricing unit = 5 s of the mask (`maskEraseUnits`), the video-utility unit.
   "mask-erase": 10,
+  // Mask Outline (an internal step of a trend face mask's role outlines): local
+  // drawing, ONE pricing unit = 5 s of the clip (`maskOutlineUnits`), the video-utility unit.
+  "mask-outline": 10,
   // Video Face Mesh (an internal step of Nodaro Motion's face masking): local
   // drawing, ONE base credit per second of the clip's bucket at the 30 fps
   // basis (`videoFaceMeshCreditId` in @nodaro/shared; a run past 300 s, Video

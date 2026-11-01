@@ -559,6 +559,7 @@ describe("census: every caller of the memory model states its input count", () =
       "services/face-detect/face-detect-budget.ts",
       "services/face-mesh/face-mesh-budget.ts",
       "services/face-mesh/face-mesh-budget.ts",
+      "services/mask-outline/mask-outline-budget.ts",
       "services/video-proxy-encode.ts",
     ])
     for (const { file, call } of sites) {

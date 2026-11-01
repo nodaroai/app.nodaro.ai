@@ -96,7 +96,9 @@ describe("the people's marks: helpers", () => {
     const form = { slots: SLOTS.map((s) => ({ ...s, uid: s.key, isNew: false })), faceMasking: { ...MASKING, marks: [AMY_MARK] } }
     expect(personMarkIssues(form)).toEqual([])
     const required = { ...form, slots: form.slots.map((s) => (s.key === "amy" ? { ...s, required: true } : s)) }
-    expect(personMarkIssues(required)).toEqual([`Face masking: "Amy" is now required, but has face marks. Remove that person's face marks first (6. Face masking).`])
+    expect(personMarkIssues(required)).toEqual([`Face masking: "Amy" is required, but has face marks. Remove that person's face marks, or turn Role outlines on (6. Face masking).`])
+    // With role outlines on, a required person's boxes are theirs (whose ring a region gets).
+    expect(personMarkIssues({ ...required, faceMasking: { ...required.faceMasking, roleOutlines: true } })).toEqual([])
     expect(personMarkIssues({ ...form, slots: form.slots.filter((s) => s.key !== "amy") })[0]).toMatch(/"amy" is no longer a slot/)
   })
 

@@ -28,7 +28,15 @@ import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
-import { engineMasksTarget, faceMaskingZoneSchema, loadedEngineDrawsFaceMesh, withFaceMeshFor, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
+import {
+  engineDrawsRoleOutlines,
+  engineMasksTarget,
+  faceMaskingZoneSchema,
+  loadedEngineDrawsFaceMesh,
+  withFaceMeshFor,
+  withResolvedZone,
+  type FaceMaskingZone,
+} from "../../../lib/cast-swap-face-masking.js"
 import { withStepsFor } from "../../../lib/cast-swap-steps.js"
 import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
 import { publicExampleOf } from "./public-examples.js"
@@ -447,6 +455,14 @@ export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
     const { facesDrawn: _drawn, ...rest } = stored
     composed.body.storedFaceMask = rest
   }
+  // Which colour is which role on the stored clip: only to an engine that declares role outlines
+  // (`castSwap.roleOutlines`), whose strict schema takes the key. Publishing holds back a trend that
+  // draws them from any environment without it.
+  const outlined = composed.body.storedFaceMask
+  if (outlined && outlined.outlines !== undefined && !engineDrawsRoleOutlines(cs)) {
+    const { outlines: _outlines, ...rest } = outlined
+    composed.body.storedFaceMask = rest
+  }
 }
 
 /**
@@ -609,11 +625,10 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
   body.previewStart = 0
   body.preparedPreview = true
   if (body.storedFaceMask && clip.faceMask) {
-    body.storedFaceMask = {
-      url: clip.faceMask.url,
-      frames: clip.faceMask.frames,
-      ...(body.storedFaceMask.required ? { required: true as const } : {}),
-    }
+    // The clip's cut in place of the whole mask; everything else the mask says (`required`, the face
+    // mesh's `facesDrawn`, the role `outlines`) is the cut's too, as already held to the engine above.
+    const { url: _url, frames: _frames, ...rest } = body.storedFaceMask
+    body.storedFaceMask = { ...rest, url: clip.faceMask.url, frames: clip.faceMask.frames }
   }
   body.sourceAsset = {
     kind: "preview",

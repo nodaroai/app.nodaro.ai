@@ -59,6 +59,7 @@ import {
   previewPromptBudget,
   type TrendForm,
 } from "../model"
+import { roleOutlineColour, slotMarkAllowed } from "@nodaro/render-rules"
 import { SourceClipEditor } from "../components/SourceClipEditor"
 import { HideOriginalToggle } from "../components/HideOriginalToggle"
 import { SlotsEditor } from "../components/SlotsEditor"
@@ -68,7 +69,7 @@ import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
 import { ClipPreparationSelect } from "../components/ClipPreparationSelect"
 import { EnginePromptParts } from "../components/EnginePromptParts"
 import { PromptStyleSelect } from "../components/PromptStyleSelect"
-import { clipPreparationOf, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
+import { clipPreparationOf, roleOutlinesOn, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { StepsEditor } from "../components/StepsEditor"
 import { sceneOf } from "../prompt-style"
@@ -278,6 +279,8 @@ export default function AdminTrendEditorPage() {
   // How the clip is prepared (the form's), the saved draft's, and the targets some environment's engine masks under it.
   const preparation = clipPreparationOf(form.faceMasking)
   const savedPreparation = clipPreparationOf(server.draft.faceMasking)
+  // The saved draft draws role outlines (Faces hidden): every person may get boxes then.
+  const savedOutlines = roleOutlinesOn(server.draft.faceMasking)
   const supportedTargets = supportedTargetsFor(envs.data, preparation)
   const onClipPreparation = (next: typeof preparation) => {
     const { masking, removedMain } = withClipPreparation(form.faceMasking, next)
@@ -521,6 +524,7 @@ export default function AdminTrendEditorPage() {
               supportedTargets={supportedTargets}
               clipSec={form.source?.durationSec}
               envs={envs.data}
+              offerRoleOutlines
               onChange={(faceMasking) => set({ faceMasking })}
             />
             {marksCleared && (
@@ -544,14 +548,23 @@ export default function AdminTrendEditorPage() {
                 // Full depth finds no one: nothing to mark.
                 onSaveMarks={savedPreparation === "full-depth" ? undefined : onSaveMarks}
                 marksSupported={server.faceMaskMarksSupported === true}
-                // Person masks are a face mask's alone: in a depth mode a box is never one person's.
+                // Person masks are a face mask's alone: in a depth mode a box is never one person's. Optional
+                // people only, unless role outlines are on: then every person (their boxes say whose ring a
+                // region gets). Each in their role outline colour, fixed per role.
                 people={
                   savedPreparation === "faces"
                     ? server.draft.slots
-                        .filter((slot) => slot.kind === "person" && !slot.required)
-                        .map((slot) => ({ key: slot.key, label: slot.label.en || slot.key }))
+                        .filter((slot) => slotMarkAllowed(slot, savedOutlines))
+                        .map((slot) => ({
+                          key: slot.key,
+                          label: slot.label.en || slot.key,
+                          ...(roleOutlineColour(server.draft.slots, slot.key) ? { colour: roleOutlineColour(server.draft.slots, slot.key)! } : {}),
+                          ...(slot.required ? { required: true } : {}),
+                          ...(savedOutlines ? { outlined: true } : {}),
+                        }))
                     : []
                 }
+                roleOutlines={savedOutlines ? { target: server.draft.faceMasking?.target ?? "head" } : undefined}
                 keepPeople={savedPreparation === "keep-people"}
                 // With examples, a run leaves empty only the optional people some example has no pictures for.
                 emptiablePeople={

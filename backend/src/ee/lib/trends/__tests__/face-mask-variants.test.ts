@@ -35,7 +35,7 @@ const SRC = "https://cdn.example.com/trends/t-1/source.mp4"
  * the matching cut of the data's current stored face mask when it has one:
  * publishing needs one (preview-clip.test.ts holds its rules).
  */
-function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "slots">): TrendPreviewClip {
   const mask = storedFaceMaskFor(d)
   return {
     videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),

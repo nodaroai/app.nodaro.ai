@@ -35,10 +35,11 @@ export function loadedEngineHasPromptParts(): boolean {
 /** The request without the keys the loaded engine does not declare (a new object). */
 export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const cs = getPluginSupports().castSwap
-  const { promptStyle, scene, faceMesh, ...rest } = body
+  const { promptStyle, scene, faceMesh, roleOutlines, ...rest } = body
   return {
     ...rest,
     ...(faceMesh === true && cs?.faceMesh === true ? { faceMesh } : {}),
+    ...(roleOutlines === true && cs?.roleOutlines === true ? { roleOutlines } : {}),
     ...(promptStyle && (cs?.promptStyles ?? []).includes(promptStyle) ? { promptStyle } : {}),
     ...(scene && (cs?.fullDepthScenes ?? []).includes(scene) ? { scene } : {}),
   }

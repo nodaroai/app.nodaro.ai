@@ -74,6 +74,13 @@ export interface PromptPartsRequest {
    * (`askPromptParts`).
    */
   faceMesh?: true
+  /**
+   * The trend draws role outlines on its stored clip (`faceMasking.roleOutlines`,
+   * on): the engine counts the `roleOutlines` part's line in the prompt's
+   * length, with every person role outlined. Only ever `true`, and sent only
+   * to an engine that declares `castSwap.roleOutlines` (`askPromptParts`).
+   */
+  roleOutlines?: true
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

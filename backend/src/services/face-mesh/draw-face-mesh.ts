@@ -157,7 +157,8 @@ export function clipColourOf(tags: { color_space?: string; color_range?: string;
   }
 }
 
-async function probeColour(path: string): Promise<ClipColour> {
+/** The colour tags of `path`'s first video stream (`clipColourOf`; untagged when ffprobe cannot say). */
+export async function probeColour(path: string): Promise<ClipColour> {
   try {
     const out = await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_space,color_range,color_primaries,color_transfer", "-of", "json", path])
     const s = (JSON.parse(out) as { streams?: Array<Record<string, string>> }).streams?.[0] ?? {}
@@ -197,11 +198,13 @@ const fpsOf = (rate: string): number => {
  * Decode `path` as raw frames of `width × height` (`pixFmt`: 3 bytes a pixel
  * for bgr24 / rgb24, 1 for gray), one REUSED buffer at a time, in display
  * orientation, never a frame duplicated or dropped. Spawned only inside the
- * caller's hold.
+ * caller's hold (this file's `drawFaceMeshVideo`, and the mask outline's
+ * `drawMaskOutlineVideo`, which hold theirs around it). `what` names the step
+ * in a timeout's message.
  */
-async function* streamFrames(
+export async function* streamFrames(
   path: string,
-  opts: { pixFmt: "bgr24" | "rgb24" | "gray"; width: number; height: number; timeoutMs: number; colour?: ClipColour },
+  opts: { pixFmt: "bgr24" | "rgb24" | "gray"; width: number; height: number; timeoutMs: number; colour?: ClipColour; what?: string },
 ): AsyncGenerator<Buffer> {
   const read = opts.colour ? `:in_color_matrix=${opts.colour.matrix}:in_range=${opts.colour.range}` : ""
   const args = [
@@ -241,7 +244,7 @@ async function* streamFrames(
       }
     }
     const { code, signal } = await closed
-    if (timedOut) throw new Error(`face mesh: a decode passed its ${Math.round(opts.timeoutMs / 1000)} s budget`)
+    if (timedOut) throw new Error(`${opts.what ?? "face mesh"}: a decode passed its ${Math.round(opts.timeoutMs / 1000)} s budget`)
     if (code !== 0) throw new Error(ffmpegFailureMessage(stderr, signal ? `killed (${signal})` : `exit ${code}`))
   } finally {
     clearTimeout(watchdog)

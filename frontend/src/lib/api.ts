@@ -11319,6 +11319,16 @@ export interface AdminTrendFaceMasking {
    */
   faceMesh?: boolean
   /**
+   * Role outlines (Faces hidden only): the stored face mask rings each person
+   * role's masked region in that role's colour (by its place among the
+   * person slots), the region told by that role's slot marks, so a run can
+   * say who is who in every shot. While on, a slot mark may name any person
+   * slot (a required one too), and a depth fill is drawn gray. Saved only as
+   * `true` (off = no key), offered only where the engine declares
+   * `castSwap.roleOutlines`.
+   */
+  roleOutlines?: boolean
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11359,6 +11369,8 @@ export interface AdminTrendFaceMask {
   approvedBy: string
   /** The faces its make drew the face mesh on (0 = none: its runs carry no lines); absent without the mesh. */
   facesDrawn?: number
+  /** Role outlines: what each role's ring went round (the regions, summed over the frames); absent without outlines. */
+  outlines?: AdminTrendFaceMaskOutline[]
   /** The mask before any mark (the base the next edit of the marks is made from), when kept. Absent: the first edit makes the mask whole. */
   rawMaskUrl?: string
   depthUrl?: string
@@ -11384,6 +11396,14 @@ export interface AdminTrendFaceMask {
   sceneStepKey?: string
 }
 
+/** One role's outline as a stored face mask recorded it. */
+export interface AdminTrendFaceMaskOutline {
+  slot: string
+  /** `#RRGGBB`. */
+  colour: string
+  regionsDrawn: number
+}
+
 /** One person mask: the face mask for runs that leave exactly the people `emptySlots` empty. */
 export interface AdminTrendFaceMaskVariant {
   emptySlots: string[]
@@ -11394,6 +11414,8 @@ export interface AdminTrendFaceMaskVariant {
   jobId: string
   stats: { coverage: number; erasedRegions: number }
   approvedAt: string
+  /** Role outlines: what its fill ringed (the people it still covers). */
+  outlines?: AdminTrendFaceMaskOutline[]
 }
 
 export interface AdminTrendFaceMaskVariantJob {
@@ -11792,6 +11814,8 @@ export interface TrendEngineEnvironment {
       fullDepthScenes?: AdminTrendFullDepthScene[]
       /** The engine draws the face mesh (`faceMasking.faceMesh`); absent = it cannot. */
       faceMesh?: boolean
+      /** The engine draws role outlines on a stored face mask (`faceMasking.roleOutlines`); absent = it cannot. */
+      roleOutlines?: boolean
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
@@ -12386,6 +12410,10 @@ export interface AdminTrendFaceMaskJob {
      * says why), never storing a clip without the lines its setting promises.
      */
     faceMesh?: { frames?: number; framesWithFaces?: number; facesDrawn?: number; recipe?: string }
+    /** Role outlines (a setting with `faceMasking.roleOutlines`): per outline sent, what its ring went round. */
+    outlines?: Array<{ slot?: string; colour?: string; framesDrawn?: number; regionsDrawn?: number }>
+    /** The regions two outlines claimed (left without a ring). */
+    outlinesAmbiguous?: number
     [key: string]: unknown
   } | null
 }

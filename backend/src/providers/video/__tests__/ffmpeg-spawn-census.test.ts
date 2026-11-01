@@ -138,6 +138,11 @@ describe("ffmpeg admission census", () => {
       // streamFrames only spawns a decode; its one caller holds the slot around it.
       heldBy: { streamFrames: "drawFaceMeshVideo" },
     },
+    "services/mask-outline/draw-mask-outline.ts": {
+      how:
+        "drawMaskOutlineVideo: ONE withFfmpegSlot hold around the run's two decodes (face mesh's streamFrames, " +
+        "the clip and the mask), its drawing and its encoder, reserving maskOutlinePeakMemoryMiB",
+    },
     "services/face-detect/detect-faces.ts": {
       how:
         "detectFacesInMedia: ONE withFfmpegSlot hold around a window's decode child AND its onnxruntime " +

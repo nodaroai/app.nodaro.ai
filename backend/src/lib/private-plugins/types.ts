@@ -3514,6 +3514,7 @@ export type PluginPromptPartId =
   | "face"
   | "depthGuard"
   | "faceMesh"
+  | "roleOutlines"
   | "person"
   | "pet"
   | "product"
@@ -3820,6 +3821,24 @@ export interface PluginSupports {
    *   settings without it, and refuses to save a shared Nodaro Motion setting
    *   with it while any environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMesh`).
+   * - `roleOutlines`: a trend's stored face mask make
+   *   (`POST /v1/cast-swap/face-mask`, faces hidden) takes
+   *   `faceMasking.roleOutlines: true` with a top-level
+   *   `outlines: [{ slot, colour, boxes }]` (the colour `#RRGGBB`, the boxes
+   *   `MaskEraseBox`es): after the fill and the face mesh it rings each listed
+   *   person's masked region in its colour (the core `mask-outline` job, on
+   *   the mask the clip was filled from), draws a depth fill in grayscale
+   *   (the `depthUrl` it answers is that gray render), and answers
+   *   `outlines: [{ slot, colour, framesDrawn, regionsDrawn }]` (one per
+   *   outline sent) and `outlinesAmbiguous` (the regions two outlines
+   *   claimed, left undrawn); `maskUrl` and `depthUrl` stay free of the
+   *   rings. A trend run then takes `storedFaceMask.outlines: [{ role, colour }]`
+   *   (role N = the run's Nth role) and writes the `roleOutlines` prompt part.
+   *   Additive-optional: absent ⇒ `false` — the platform never sends
+   *   `roleOutlines` or `outlines` (it refuses such a make, strips
+   *   `storedFaceMask.outlines` from a run and holds a trend that draws them
+   *   back from publishing there), so the wire is byte-identical
+   *   (lib/cast-swap-face-masking.ts `engineDrawsRoleOutlines`).
    * - `artStyle`: a DIRECT Flex run (`style: "motion"`) and its estimate take
    *   `direction?: { style: string }`, an id of the platform's `style` picker
    *   catalog. Absent ⇒ `false` — the host must not send `direction`.
@@ -3880,6 +3899,7 @@ export interface PluginSupports {
     readonly prismReferenceAudioPerResolution?: boolean
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
+    readonly roleOutlines?: boolean
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
   }

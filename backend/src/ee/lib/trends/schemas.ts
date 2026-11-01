@@ -16,8 +16,16 @@ import {
   TREND_PROMPT_LIMITS,
   type CastSwapEngine,
 } from "@nodaro/shared/models"
-import { CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_PROMPT_PART_IDS, CAST_SWAP_PROMPT_STYLES, TREND_UPSCALE_RESOLUTIONS, faceMaskMarkSlot } from "@nodaro/render-rules"
-import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.js"
+import {
+  CAST_SWAP_FACE_MASK_MARK_LIMITS,
+  CAST_SWAP_PROMPT_PART_IDS,
+  CAST_SWAP_PROMPT_STYLES,
+  ROLE_OUTLINE_COLOUR_RE,
+  TREND_UPSCALE_RESOLUTIONS,
+  faceMaskMarkSlot,
+  slotMarkAllowed,
+} from "@nodaro/render-rules"
+import { faceMaskingWithMarksSchema, roleOutlinesOn } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapPulseAudioSchema } from "../../../lib/cast-swap-pulse-audio.js"
 import { castSwapPrismReferenceAudioSchema } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
@@ -187,6 +195,14 @@ const nonNegative = z.number().min(0)
 const MAX_VARIANTS = 2 ** CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarkedPeople - 1
 const emptySlotsSchema = z.array(slotKeySchema).min(1).max(SLOT_CAPS.person)
 
+/** A recorded role outline (`TrendFaceMaskOutline`): written by the face mask routes only. */
+const trendFaceMaskOutlineSchema = z.strictObject({
+  slot: slotKeySchema,
+  colour: z.string().regex(ROLE_OUTLINE_COLOUR_RE, "A colour is #RRGGBB."),
+  regionsDrawn: z.int().min(0),
+})
+const outlinesSchema = z.array(trendFaceMaskOutlineSchema).max(SLOT_CAPS.person)
+
 /** A per-person variant of the face mask (`TrendFaceMaskVariant`): written by the face mask routes only. */
 const trendFaceMaskVariantSchema = z.strictObject({
   emptySlots: emptySlotsSchema,
@@ -196,6 +212,7 @@ const trendFaceMaskVariantSchema = z.strictObject({
   jobId: z.string().min(1),
   stats: z.strictObject({ coverage: nonNegative, erasedRegions: nonNegative }),
   approvedAt: z.string().min(1),
+  outlines: outlinesSchema.optional(),
 })
 
 /** A per-person variant in the making (`TrendFaceMaskVariantJob`): written by the face mask routes only. */
@@ -220,6 +237,7 @@ const trendFaceMaskSchema = z.strictObject({
   approvedAt: z.string().min(1),
   approvedBy: z.string().min(1),
   facesDrawn: z.int().min(0).optional(),
+  outlines: outlinesSchema.optional(),
   rawMaskUrl: httpUrl.optional(),
   depthUrl: httpUrl.optional(),
   baseKey: z.string().min(1).max(200).optional(),
@@ -413,18 +431,24 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
       }
     })
 
-    // A slot mark (decided 2026-10-27) names an OPTIONAL PERSON slot of this very version: a slot made
-    // required, deleted, made another kind or renamed is refused while it still has marks (never dropped).
+    // A slot mark (decided 2026-10-27) names an OPTIONAL PERSON slot of this very version — ANY person
+    // slot while role outlines are on (decided 2026-11-01: a required person's boxes say whose outline a
+    // region gets). A slot made required (outlines off), deleted, made another kind or renamed is refused
+    // while it still has marks (never dropped).
+    const outlinesOn = roleOutlinesOn(d.faceMasking)
     ;(d.faceMasking?.marks ?? []).forEach((mark, i) => {
       const key = faceMaskMarkSlot(mark)
       if (key === null) return
       const slot = d.slots.find((s) => s.key === key)
-      if (slot && slot.kind === "person" && !slot.required) return
+      if (slotMarkAllowed(slot, outlinesOn)) return
       const why = !slot ? "names no slot of this trend" : slot.kind !== "person" ? "names a slot that is not a person" : "names a required person"
       ctx.addIssue({
         code: "custom",
         path: ["faceMasking", "marks", i, "label"],
-        message: `Face mask box ${i + 1} ${why} ("${key}"): face marks belong to optional people only. Remove that person's face marks first.`,
+        message:
+          slot && slot.kind === "person"
+            ? `Face mask box ${i + 1} ${why} ("${key}"): without role outlines, face marks belong to optional people only. Remove that person's face marks first, or turn role outlines on.`
+            : `Face mask box ${i + 1} ${why} ("${key}"): face marks belong to people only. Remove that person's face marks first.`,
       })
     })
 

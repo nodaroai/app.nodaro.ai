@@ -258,6 +258,9 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENE
   // Mask Erase — local ffmpeg on a mask (an internal child step), finished by
   // completeFfmpegVideoJob like the ffmpeg nodes above.
   "mask-erase",
+  // Mask Outline — local drawing on a clip (an internal child step), its own
+  // markJobCompleted with output_data.{frames, perOutline, ambiguous, …}.
+  "mask-outline",
   // Video Face Mesh — local drawing (an internal child step), its own
   // markJobCompleted with output_data.{frames, facesDrawn, …}.
   "video-face-mesh",

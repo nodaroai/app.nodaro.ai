@@ -787,6 +787,16 @@ export {
 export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_SOURCE_MODES, faceMaskMarkSlot, isErasedFaceMaskMark, isMainFaceMaskMark } from "./face-mask-marks"
 export type { CastSwapFaceMaskMarkLabel, CastSwapSourceMode, FaceMaskMark, FaceMaskMarkLabel, FaceMaskSlotLabel, MaskEraseBox } from "./face-mask-marks"
 export {
+  ROLE_OUTLINE_COLOUR_RE,
+  ROLE_OUTLINE_PALETTE,
+  personSlotOrder,
+  roleOutlineColour,
+  roleOutlineColourName,
+  roleOutlinesOf,
+  slotMarkAllowed,
+} from "./face-mask-outlines"
+export type { RoleOutline, RoleOutlineBox, RoleOutlineColourName, RoleOutlineSlot } from "./face-mask-outlines"
+export {
   CAST_SWAP_FULL_DEPTH_ORIGINAL_MAX_SEC,
   CAST_SWAP_FULL_DEPTH_ORIGINAL_SLACK_SEC,
   CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC,

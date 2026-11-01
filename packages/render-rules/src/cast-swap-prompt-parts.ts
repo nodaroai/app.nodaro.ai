@@ -20,6 +20,7 @@ export const CAST_SWAP_PROMPT_PART_IDS = [
   "face",
   "depthGuard",
   "faceMesh",
+  "roleOutlines",
   "person",
   "pet",
   "product",
@@ -49,6 +50,9 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   depthGuard: ["{video}"],
   // Runs whose clip has the face mesh drawn on it only (`faceMasking.faceMesh`, faces drawn > 0): what the lines mean.
   faceMesh: ["{video}"],
+  // Trends whose stored clip has role outlines drawn on it only (`faceMasking.roleOutlines`, a run sent
+  // `storedFaceMask.outlines`): which colour is which role. `{outlines}` is the engine's list of them.
+  roleOutlines: ["{video}", "{outlines}"],
   person: ["{name}", "{image}", "{face}", "{outfit}", "{body}", "{hair}"],
   pet: ["{name}", "{image}", "{body}", "{coat}"],
   product: ["{name}", "{image}", "{shape}", "{finish}"],
