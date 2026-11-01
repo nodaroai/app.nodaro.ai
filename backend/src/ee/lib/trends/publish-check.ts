@@ -61,6 +61,11 @@
  * declares that map (`castSwap.depthColormaps`, need `depthColormap:<map>`):
  * one from before the choice is sent no colormap and draws (and words) the
  * source's default.
+ * A Prism trend whose reference audio names a mode only some engines take
+ * ("one-tone", "octave": `DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`) needs
+ * an engine that lists it (`castSwap.prismReferenceAudioModes`, need
+ * `prismReferenceAudio:<mode>`): one from before it is sent the full audio
+ * (the song) for that resolution.
  * A trend that sets its preparation steps (`steps`, anything but `{}`:
  * `stepsSet`) likewise needs an engine that declares them (`castSwap.steps`,
  * need `STEPS_NEED`): an older engine's body schema strips the key silently,
@@ -103,6 +108,13 @@
  * trend, like one with erased marks, needs `storedFaceMaskRequired`.
  */
 import type { EngineEnvironment } from "../engine-environments.js"
+import {
+  declaredOnlyPrismReferenceAudioModesOf,
+  engineTakesPrismReferenceAudioMode,
+  isDeclaredOnlyPrismReferenceAudioMode,
+  prismReferenceAudioByResolutionOf,
+  type CastSwapPrismReferenceAudioDeclaredOnlyMode,
+} from "../../../lib/cast-swap-prism-reference-audio.js"
 import {
   depthColormapSent,
   engineDrawsDepthColormap,
@@ -175,7 +187,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "steps", "clipBodySheet", "shotList", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "steps", "clipBodySheet", "shotList", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -243,6 +255,19 @@ function depthColormapOfNeed(need: string): FaceMaskingDepthColormap | null {
   return (FACE_MASKING_DEPTH_COLORMAPS as readonly string[]).includes(colormap) ? (colormap as FaceMaskingDepthColormap) : null
 }
 
+/** The need of a Prism trend whose reference audio names `mode` (`prismReferenceAudio`, `castSwap.prismReferenceAudioModes`). */
+export function prismReferenceAudioModeNeed(mode: CastSwapPrismReferenceAudioDeclaredOnlyMode): string {
+  return `${PRISM_REFERENCE_AUDIO_NEED_PREFIX}${mode}`
+}
+const PRISM_REFERENCE_AUDIO_NEED_PREFIX = "prismReferenceAudio:"
+
+/** The mode a `prismReferenceAudio:<mode>` need names, or null for any other need. */
+function prismReferenceAudioModeOfNeed(need: string): CastSwapPrismReferenceAudioDeclaredOnlyMode | null {
+  if (!need.startsWith(PRISM_REFERENCE_AUDIO_NEED_PREFIX)) return null
+  const mode = need.slice(PRISM_REFERENCE_AUDIO_NEED_PREFIX.length)
+  return isDeclaredOnlyPrismReferenceAudioMode(mode) ? mode : null
+}
+
 /** The need of a trend that sets its preparation steps (`steps`, `castSwap.steps`). */
 export const STEPS_NEED = "steps"
 
@@ -284,6 +309,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...(roleOutlinesOn(data.faceMasking) ? [ROLE_OUTLINES_NEED] : []),
     // A depth colormap: an engine from before it is sent none, and draws the source's default.
     ...depthColormapNeeds(data),
+    // Prism's newer reference audio modes: an engine from before them is sent the full audio.
+    ...prismReferenceAudioModeNeeds(data),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
     // ("Body from the clip" Off, or On with no prompt, is safe everywhere: not a need.)
     ...(stepsSet(stepsThatNeedTheEngine(data.steps)) ? [STEPS_NEED] : []),
@@ -306,6 +333,12 @@ function depthColormapNeeds(data: TrendVersionData): string[] {
   return colormap === undefined ? [] : [depthColormapNeed(colormap)]
 }
 
+/** A Prism draft's reference audio needs: each declared-only mode it names at some resolution. */
+function prismReferenceAudioModeNeeds(data: TrendVersionData): string[] {
+  if (engineOf(data) !== "seedance-2-5") return []
+  return declaredOnlyPrismReferenceAudioModesOf(prismReferenceAudioByResolutionOf(data.prismReferenceAudio)).map(prismReferenceAudioModeNeed)
+}
+
 function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
   const cs = env.supports.castSwap
   if (!cs) return ["castSwap"]
@@ -323,6 +356,8 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === ROLE_OUTLINES_NEED) return !engineDrawsRoleOutlines(cs)
     const colormap = depthColormapOfNeed(need)
     if (colormap !== null) return !engineDrawsDepthColormap(cs, colormap)
+    const audioMode = prismReferenceAudioModeOfNeed(need)
+    if (audioMode !== null) return !engineTakesPrismReferenceAudioMode(cs, audioMode)
     if (need === STEPS_NEED) return !engineTakesSteps(cs)
     if (need === CLIP_BODY_NEED) return !engineTakesClipBodySheet(cs)
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)

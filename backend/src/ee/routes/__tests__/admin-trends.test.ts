@@ -57,6 +57,8 @@ const mem = vi.hoisted(() => ({
   ffmpegRuns: [] as string[][],
   /** When set, the next ffmpeg run fails with it. */
   ffmpegFails: null as null | Error,
+  /** When set, a download of a url it answers true for fails (the object is gone). */
+  downloadFails: null as null | ((url: string) => boolean),
   /** The frame count a cut reads, by its output path (the preview clip's `clip.mp4`, its mask's `mask-clip.mp4`): one number for both when a number. */
   frames: 150 as number | ((path: string) => number),
   /** When set, the next ffprobe of a video fails with it. */
@@ -253,6 +255,7 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
   return {
     ...actual,
     downloadFile: async (url: string, dest: string) => {
+      if (mem.downloadFails?.(url)) throw new Error("404 Not Found")
       mem.downloads.set(dest, url)
       if (url.endsWith(".mp4")) await writeFile(dest, MP4)
       else if (url.endsWith(".png")) await writeFile(dest, PNG)
@@ -518,6 +521,7 @@ beforeEach(async () => {
   mem.durations = new Map()
   mem.ffmpegRuns = []
   mem.ffmpegFails = null
+  mem.downloadFails = null
   mem.frames = 150
   mem.probeFails = null
   mem.warns = []
@@ -2651,6 +2655,17 @@ describe("the stored face mask", () => {
   })
 
   describe("approving one", () => {
+    it("refuses a make whose clip is gone from storage (its depth map swept) with the copy's own error, saving nothing", async () => {
+      seed({}, making())
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+      mem.downloadFails = (url) => url === MASKED
+      const res = await approve()
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("download_failed")
+      expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+    })
+
     it("keeps the faces its make drew the face mesh on (0 included), only for a setting that draws the mesh", async () => {
       const MESHED = { ...MASKING, faceMesh: true }
       const meshKey = faceMaskSettingsKey(draftData({ faceMasking: MESHED }))!

@@ -3851,6 +3851,16 @@ export interface PluginSupports {
    *   at all when every resolution is the full audio. Wins over
    *   `prismReferenceAudio` when both are declared. Additive-optional: absent
    *   ⇒ `false` — the string of `prismReferenceAudio` above (or nothing).
+   * - `prismReferenceAudioModes` (cast-swap 0.426.0): the modes
+   *   `prismReferenceAudio` may name for this engine, in either shape above:
+   *   `"full" | "voice" | "none"` and the newer `"one-tone"` (the clip's
+   *   audio flattened to one steady tone, unpitched) and `"octave"` (the
+   *   clip's audio one octave up, +12 semitones). The newer ones are sent
+   *   only to an engine that lists them; any other engine is sent the full
+   *   audio for them (no key). Absent ⇒ none of the newer ones; "voice" and
+   *   "none" keep the flags' rule, so the wire is byte-identical for every
+   *   choice made before them (lib/cast-swap-prism-reference-audio.ts
+   *   `engineTakesPrismReferenceAudioMode`).
    * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
    *   the Nodaro Motion settings read through `tk.settings`) takes
    *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
@@ -3972,6 +3982,7 @@ export interface PluginSupports {
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
     readonly prismReferenceAudioPerResolution?: boolean
+    readonly prismReferenceAudioModes?: readonly ("full" | "voice" | "none" | "one-tone" | "octave")[]
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
     readonly roleOutlines?: boolean

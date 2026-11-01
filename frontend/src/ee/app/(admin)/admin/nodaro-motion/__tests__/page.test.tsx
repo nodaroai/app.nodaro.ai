@@ -300,7 +300,14 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     renderWith(<AdminNodaroMotionPage />)
     const group = await audioGroup(await section(/Prism/))
     await user.click(within(group).getByRole("combobox", { name: "720p" }))
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Full audio", "Voice only", "No audio"])
+    // One-tone and Octave are listed too, greyed out until every environment's engine takes them.
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Full audio",
+      "Voice only",
+      "No audio",
+      "One-tone (flattened, no melody) (not supported yet)",
+      "Octave (+12, one octave up) (not supported yet)",
+    ])
     await user.click(screen.getByRole("option", { name: "No audio" }))
     await user.click(within(group).getByRole("combobox", { name: "1080p" }))
     await user.click(screen.getByRole("option", { name: "Voice only" }))
@@ -325,6 +332,32 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     expect(within(group).getByRole("combobox", { name: "1080p" })).toHaveTextContent("Full audio")
     expect(within(prism).getByText(/does not take it yet: its runs send the full audio/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  /** An engine that takes Prism's newer reference audio modes (`castSwap.prismReferenceAudioModes`), or some. */
+  const tones = (env: string, prismReferenceAudioModes: string[] = ["full", "voice", "none", "one-tone", "octave"]): TrendEngineEnvironment => ({
+    ...ENVIRONMENTS[0]!,
+    env,
+    supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, prismReferenceAudioModes } as never },
+  })
+
+  it("offers One-tone and Octave on this shared setting only once every environment's engine takes them, and saves them", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production"), tones("staging", ["full", "voice", "none", "one-tone"])] } })
+    routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
+      body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-11-01T12:00:00.000Z", supported: true } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    const group = await audioGroup(prism)
+    expect(within(prism).getByText(/not on every environment's engine yet: this setting is shared/)).toBeInTheDocument()
+    await user.click(within(group).getByRole("combobox", { name: "480p" }))
+    expect(await screen.findByRole("option", { name: "Octave (+12, one octave up) (not supported yet)" })).toHaveAttribute("aria-disabled", "true")
+    await user.click(await screen.findByRole("option", { name: "One-tone (flattened, no melody)" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: { "480p": "one-tone", "720p": "full", "1080p": "full" } }]),
+    )
   })
 
   it("reads a setting saved as one plain mode as that mode at every resolution, with no change to save", async () => {

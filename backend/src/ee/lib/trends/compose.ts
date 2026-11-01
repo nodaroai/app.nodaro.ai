@@ -138,8 +138,10 @@ import {
   faceMaskingOn,
   faceMaskingRunSent,
   faceMaskingSourceOf,
+  storedDepthColormapOf,
   withoutMarks,
   type FaceMasking,
+  type FaceMaskingDepthColormap,
   type FaceMaskingSource,
   type FaceMaskingTarget,
 } from "../../../lib/cast-swap-face-masking.js"
@@ -258,6 +260,16 @@ export interface TrendRunBody {
     facesDrawn?: number
     meshRecipe?: string
     outlines?: Array<{ role: number; colour: string }>
+    /**
+     * The colormap the stored clip's depth was ACTUALLY drawn with, when it is
+     * not its source's default (`storedDepthColormapOf`): grayscale for a
+     * Faces hidden depth fill made with role outlines (whether or not any
+     * `outlines` are sent: nobody ringed, or the ringed roles left empty),
+     * else the trend's chosen map. Absent for the defaults. A variant carries
+     * its base's. Only to an engine that declares `castSwap.depthColormaps`
+     * listing it (`withoutUnsupportedStoredMask`).
+     */
+    depthColormap?: FaceMaskingDepthColormap
   }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
@@ -583,7 +595,11 @@ export function composeTrendRun(
     const outlines = runOutlinesFor(recorded, slots)
     return outlines.length > 0 ? { outlines } : {}
   }
-  const storedFaceMask =
+  // The colormap the stored clip was drawn with, when not its source's default (a variant: its base's).
+  const drawnColormap = masking ? storedDepthColormapOf(data.faceMasking!) : undefined
+  const withDrawnColormap = <T extends object>(mask: T | undefined): T | undefined =>
+    mask && drawnColormap ? { ...mask, depthColormap: drawnColormap } : mask
+  const storedFaceMask = withDrawnColormap(
     variant && variant !== "unmasked"
       // A person variant is the base mask less some people: a base that drew no face mesh leaves it none.
       ? (() => {
@@ -599,7 +615,8 @@ export function composeTrendRun(
         })()
       : variant === undefined && stored
         ? faceMaskStoredRequired(data) ? { ...stored, required: true as const, ...outlinesOf(data.faceMask?.outlines) } : stored
-        : undefined
+        : undefined,
+  )
   // A preview's prepared input clip (preview-clip.ts), as a candidate for `withPreparedPreview`:
   // only with a current clip, and never beside a per-person variant (the clip carries a cut of
   // the BASE mask alone); a run that sends the base mask needs the clip's cut of it.

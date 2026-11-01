@@ -621,6 +621,11 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   castSwap: "Cast Swap",
 }
 
+/** A `prismReferenceAudio:<mode>` need's label ("the Prism reference audio one-tone"), else undefined. */
+function prismReferenceAudioNeedLabel(need: string): string | undefined {
+  return need.startsWith("prismReferenceAudio:") ? `the Prism reference audio ${need.slice("prismReferenceAudio:".length)}` : undefined
+}
+
 /** A `depthColormap:<map>` need's label ("the depth colormap inferno"), else undefined. */
 function depthColormapNeedLabel(need: string): string | undefined {
   return need.startsWith("depthColormap:") ? `the depth colormap ${need.slice("depthColormap:".length)}` : undefined
@@ -675,7 +680,7 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {
       const need = r.need ?? "?"
-      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? need} not supported yet`
+      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? prismReferenceAudioNeedLabel(need) ?? need} not supported yet`
     }
     default:
       return r.message ?? r.code

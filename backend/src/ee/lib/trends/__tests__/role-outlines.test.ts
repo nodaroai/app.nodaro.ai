@@ -419,3 +419,89 @@ describe("publishing", () => {
     expect(publishBlockers(approved(FACES), [env("staging", ENGINE), env("production", ENGINE)], REQUIRED).filter((b) => b.need === ROLE_OUTLINES_NEED)).toEqual([])
   })
 })
+
+/**
+ * The gray fill signal (cast-swap 0.426.0, `storedFaceMask.depthColormap`): a
+ * stored clip made with role outlines on a Faces hidden depth fill is GRAY,
+ * whether or not the run names any outline (nobody ringed, or the ringed
+ * roles left empty). So the run says the map its stored clip was drawn with
+ * whenever it is not the source's default — only to an engine that lists it
+ * in `castSwap.depthColormaps`.
+ */
+describe("the stored clip's colormap", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+  const COLORMAPS = { ...OUTLINES, depthColormaps: ["grayscale", "turbo", "inferno", "magma", "viridis"] }
+  const DEPTH_ON = { ...ON, fill: "depth" as const }
+  const run = (d: TrendVersionData, req: Record<string, unknown> = {}) => {
+    const r = composeTrendRun(
+      { id: "t-1", slug: "dance", version: 1, data: d },
+      { slots: { lead: { images: ["https://cdn.example/me.png"] }, guest: { images: ["https://cdn.example/you.png"] } }, ...req },
+    )
+    withoutUnsupportedFields(r)
+    return r
+  }
+
+  it("outlines on, no outline sent (nobody ringed): grayscale is sent", () => {
+    setPluginSupports({ castSwap: COLORMAPS } as never)
+    const nobody = approved({ ...DEPTH_ON, marks: MARKS }, { outlines: [{ slot: "lead", colour: "#FF00FF", regionsDrawn: 0 }, { slot: "guest", colour: "#FFE600", regionsDrawn: 0 }] })
+    const r = run(nobody)
+    expect(r.body.storedFaceMask).toEqual({ url: "https://cdn.example/trends/t1/clip.mp4", frames: 360, required: true, depthColormap: "grayscale" })
+    // The run's own setting stays as before: the colormap is the stored clip's word.
+    expect(Object.hasOwn(r.body.faceMasking!, "depthColormap")).toBe(false)
+    // No outlines recorded at all (a mask made before they were recorded): the same.
+    expect(run(approved({ ...DEPTH_ON, marks: MARKS })).body.storedFaceMask).toMatchObject({ depthColormap: "grayscale" })
+  })
+
+  it("outlines on and named: grayscale beside them", () => {
+    setPluginSupports({ castSwap: COLORMAPS } as never)
+    expect(run(approved({ ...DEPTH_ON, marks: MARKS }, { outlines: OUTLINED })).body.storedFaceMask).toEqual({
+      url: "https://cdn.example/trends/t1/clip.mp4",
+      frames: 360,
+      required: true,
+      outlines: [{ role: 1, colour: "#FF00FF" }, { role: 3, colour: "#FFE600" }],
+      depthColormap: "grayscale",
+    })
+  })
+
+  it("is kept through a preview's prepared clip, and a person variant carries its base's", () => {
+    setPluginSupports({ castSwap: COLORMAPS } as never)
+    const preview = run(approved({ ...DEPTH_ON, marks: MARKS }, { outlines: OUTLINED }), { preview: true })
+    expect(preview.body.preparedPreview).toBe(true)
+    expect(preview.body.storedFaceMask).toMatchObject({ url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, depthColormap: "grayscale" })
+
+    const base = approved({ ...DEPTH_ON, marks: MARKS }, { outlines: OUTLINED, rawMaskUrl: "https://cdn.example/raw.mp4", depthUrl: "https://cdn.example/depth.mp4" })
+    const variant = {
+      emptySlots: ["guest"],
+      key: faceMaskVariantKey(base, ["guest"])!,
+      url: "https://cdn.example/trends/t1/no-guest.mp4",
+      frames: 360,
+      jobId: "job-v",
+      stats: { coverage: 0.5, erasedRegions: 120 },
+      approvedAt: "2026-11-01T10:00:00.000Z",
+    }
+    const d = { ...base, faceMask: { ...base.faceMask!, variants: [variant] } }
+    const r = run(d, { slots: { lead: { images: ["https://cdn.example/me.png"] } } })
+    expect(r.body.storedFaceMask).toEqual({ url: variant.url, frames: 360, required: true, depthColormap: "grayscale" })
+  })
+
+  it("names the trend's chosen map; nothing for the defaults or a blur fill", () => {
+    setPluginSupports({ castSwap: COLORMAPS } as never)
+    const keep = (depthColormap?: "grayscale" | "inferno") => {
+      const d0 = data({ mode: "always", source: "keep-people", marks: [{ label: "main", ...box(0, 50) }], ...(depthColormap ? { depthColormap } : {}) })
+      return { ...d0, faceMask: mask(d0) }
+    }
+    expect(run(keep("inferno")).body.storedFaceMask).toMatchObject({ depthColormap: "inferno" })
+    expect(run(keep("inferno")).body.faceMasking).toMatchObject({ depthColormap: "inferno" })
+    for (const d of [keep(), keep("grayscale"), approved({ ...ON, marks: MARKS }, { outlines: OUTLINED })]) {
+      expect(Object.hasOwn(run(d).body.storedFaceMask!, "depthColormap")).toBe(false)
+    }
+  })
+
+  it("is never sent to an engine that does not list it: exactly the mask of before", () => {
+    const d = approved({ ...DEPTH_ON, marks: MARKS })
+    for (const castSwap of [OUTLINES, { ...OUTLINES, depthColormaps: ["turbo", "inferno"] }]) {
+      setPluginSupports({ castSwap } as never)
+      expect(run(d).body.storedFaceMask).toEqual({ url: "https://cdn.example/trends/t1/clip.mp4", frames: 360, required: true })
+    }
+  })
+})

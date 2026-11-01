@@ -508,6 +508,7 @@ export default function AdminTrendEditorPage() {
               onKlingLengthChange={(klingLength) => set({ klingLength })}
               onPulseAudioChange={(pulseAudio) => set({ pulseAudio })}
               onPrismReferenceAudioChange={(prismReferenceAudio) => set({ prismReferenceAudio })}
+              envs={envs.data}
             />
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">

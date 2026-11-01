@@ -14,7 +14,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * A trend run (`trendRun` on an internal request) keeps the body its trend
  * composed.
  */
-type ByRes = { "480p"?: "full" | "voice" | "none"; "720p"?: "full" | "voice" | "none"; "1080p"?: "full" | "voice" | "none" }
+type Mode = "full" | "voice" | "none" | "one-tone" | "octave"
+type ByRes = { "480p"?: Mode; "720p"?: Mode; "1080p"?: Mode }
 const h = vi.hoisted(() => ({ choice: null as ByRes | null, failed: false, reads: 0 }))
 
 vi.mock("../../lib/app-settings.js", () => {
@@ -36,7 +37,7 @@ const { parseNodaroMotionPrismReferenceAudio } = await import("../../lib/cast-sw
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true }
 const SECRET = { "x-internal-orchestrator-secret": "s".repeat(40) }
 const URLS = ["/v1/cast-swap", "/v1/cast-swap/estimate"]
-const every = (mode: "full" | "voice" | "none"): ByRes => ({ "480p": mode, "720p": mode, "1080p": mode })
+const every = (mode: Mode): ByRes => ({ "480p": mode, "720p": mode, "1080p": mode })
 
 async function seen(body: unknown, url = "/v1/cast-swap", headers: Record<string, string> = {}) {
   const app = Fastify()
@@ -102,6 +103,53 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes a
   it("drops a caller-sent object too", async () => {
     h.choice = null
     expect(await seen({ videoUrl: "x", prismReferenceAudio: { "720p": "none" } })).toEqual({ videoUrl: "x" })
+  })
+})
+
+describe("registerNodaroMotionPrismReferenceAudioHook — one-tone and octave (cast-swap 0.426.0)", () => {
+  const MODES = ["full", "voice", "none", "one-tone", "octave"] as const
+
+  it("sends them only to an engine that lists them in castSwap.prismReferenceAudioModes, a run and its quote alike", async () => {
+    h.choice = { "480p": "one-tone", "720p": "octave", "1080p": "none" }
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudioPerResolution: true, prismReferenceAudioModes: MODES } })
+    for (const url of URLS) {
+      expect(await seen({ videoUrl: "x", resolution: "720p" }, url)).toEqual({
+        videoUrl: "x",
+        resolution: "720p",
+        prismReferenceAudio: { "480p": "one-tone", "720p": "octave", "1080p": "none" },
+      })
+    }
+    // An engine listing only one of them: the other is the full audio there.
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudioPerResolution: true, prismReferenceAudioModes: ["full", "voice", "none", "one-tone"] as const } })
+    expect(await seen({ videoUrl: "x" })).toEqual({ videoUrl: "x", prismReferenceAudio: { "480p": "one-tone", "1080p": "none" } })
+  })
+
+  it("an engine that does not list them is sent the full audio for them: no key where nothing else is chosen", async () => {
+    for (const cs of [
+      { prismReferenceAudioPerResolution: true },
+      { prismReferenceAudio: true },
+      { prismReferenceAudioPerResolution: true, prismReferenceAudioModes: ["full", "voice", "none"] },
+    ] as Array<{ prismReferenceAudioPerResolution?: boolean; prismReferenceAudio?: boolean; prismReferenceAudioModes?: Array<"full" | "voice" | "none"> }>) {
+      setPluginSupports({ castSwap: { ...CS, ...cs } })
+      h.choice = every("one-tone")
+      for (const url of URLS) expect(await seen({ videoUrl: "x", resolution: "720p" }, url), JSON.stringify(cs)).toEqual({ videoUrl: "x", resolution: "720p" })
+      h.choice = { "480p": "octave", "720p": "voice" }
+      const sent = await seen({ videoUrl: "x", resolution: "720p" })
+      expect(sent.prismReferenceAudio, JSON.stringify(cs)).toEqual(cs.prismReferenceAudioPerResolution ? { "720p": "voice" } : "voice")
+    }
+  })
+
+  it("an engine that takes one mode is sent the run's own resolution's, when it lists it", async () => {
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudio: true, prismReferenceAudioModes: MODES } })
+    h.choice = { "480p": "octave", "720p": "one-tone" }
+    expect(await seen({ videoUrl: "x", draft: true })).toEqual({ videoUrl: "x", draft: true, prismReferenceAudio: "octave" })
+    expect(await seen({ videoUrl: "x", resolution: "720p" })).toEqual({ videoUrl: "x", resolution: "720p", prismReferenceAudio: "one-tone" })
+  })
+
+  it("is never sent on a Pulse run", async () => {
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudioPerResolution: true, prismReferenceAudioModes: MODES } })
+    h.choice = every("one-tone")
+    expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
   })
 })
 

@@ -56,6 +56,7 @@ export type DeleteSource =
   | "character-training"
   | "job-scratch"
   | "template-kept"
+  | "cast-swap-depth-clip"
   | "preset-preview"
 
 export interface FailedDelete {

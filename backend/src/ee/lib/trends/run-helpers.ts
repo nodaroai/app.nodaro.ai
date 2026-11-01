@@ -31,6 +31,7 @@ import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import {
   engineDrawsRoleOutlines,
+  engineDrawsDepthColormap,
   engineMasksTarget,
   faceMaskingZoneSchema,
   loadedEngineDrawsFaceMesh,
@@ -40,6 +41,7 @@ import {
   type FaceMaskingZone,
 } from "../../../lib/cast-swap-face-masking.js"
 import { withStepsFor } from "../../../lib/cast-swap-steps.js"
+import { CAST_SWAP_FULL_QUALITY_WINDOW_MS } from "../../../lib/cast-swap-depth-clips-sweep.js"
 import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
 import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
@@ -121,8 +123,8 @@ type Chips = Partial<Record<"body" | "outfit" | "hair" | "coat" | "shape" | "fin
 
 export const SLOT_KINDS: readonly TrendSlotKind[] = ["person", "location", "product", "pet"]
 const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
-/** A completed draft run (or Kling 4 run at 720p) can be redone in Full Quality for this long. */
-const FULL_QUALITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+/** A completed draft run (or Kling 4 run at 720p) can be redone in Full Quality for this long (its depth map kept past it: cast-swap-depth-clips-sweep.ts). */
+const FULL_QUALITY_WINDOW_MS = CAST_SWAP_FULL_QUALITY_WINDOW_MS
 
 /**
  * A run's engine (internal id), from its stored input in any vocabulary (an
@@ -464,6 +466,13 @@ export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
   const outlined = composed.body.storedFaceMask
   if (outlined && outlined.outlines !== undefined && !engineDrawsRoleOutlines(cs)) {
     const { outlines: _outlines, ...rest } = outlined
+    composed.body.storedFaceMask = rest
+  }
+  // The colormap the stored clip was drawn with (a gray fill under role outlines, or the chosen map): only
+  // to an engine that lists it in `castSwap.depthColormaps`; any other is sent exactly the mask of before.
+  const coloured = composed.body.storedFaceMask
+  if (coloured && coloured.depthColormap !== undefined && !engineDrawsDepthColormap(cs, coloured.depthColormap)) {
+    const { depthColormap: _colormap, ...rest } = coloured
     composed.body.storedFaceMask = rest
   }
 }

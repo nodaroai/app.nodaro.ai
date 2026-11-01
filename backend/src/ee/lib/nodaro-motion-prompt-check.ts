@@ -17,7 +17,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { CAST_SWAP_ENGINE_OF_NODARO_MOTION, type CastSwapStyle, type NodaroMotionEngine } from "@nodaro/shared/models"
 import { largeDirectRun, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
-import { directRunDrawsFaceMesh, directRunPromptShape, type NodaroMotionMotionEntry } from "../../lib/nodaro-motion-motion.js"
+import { directRunDepthLook, directRunDrawsFaceMesh, directRunPromptShape, type NodaroMotionMotionEntry } from "../../lib/nodaro-motion-motion.js"
 import type { FaceMasking } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { loadedEngineTakesShotList, type CastSwapSteps } from "../../lib/cast-swap-steps.js"
@@ -57,6 +57,8 @@ export function directRunRequest(
     style,
     ...(loadedEngineHasPromptStyles() ? directRunPromptShape(style, entry, { shotList }) : {}),
     ...(directRunDrawsFaceMesh(style, entry, preciseMasking, { shotList }) ? { faceMesh: true as const } : {}),
+    // A depth drawn in another map than its source's default: the defaults naming the depth look worded by it.
+    ...directRunDepthLook(style, entry, preciseMasking, { shotList }),
     // The engine's Precise shot list on (its steps setting): the marker in its place.
     ...(style === "precise" && steps?.shotList?.precise?.mode === "on" ? { shotList: true as const } : {}),
     ...body,

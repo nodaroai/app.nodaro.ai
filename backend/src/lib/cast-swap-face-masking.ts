@@ -421,6 +421,21 @@ export function depthColormapOf(m: Pick<FaceMaskingWithMarks, "source" | "fill" 
 }
 
 /**
+ * The colormap a stored clip made from this setting was drawn with, when it
+ * is not its source's default (`depthColormapOf` against
+ * `depthColormapDefaultOf`): grayscale for a Faces hidden depth fill under
+ * role outlines, else the chosen map (`depthColormapSent`); undefined for the
+ * defaults and where no depth is drawn. What a trend run tells the engine of
+ * its stored clip (`storedFaceMask.depthColormap`), so a gray fill is worded
+ * gray even when no outline is named.
+ */
+export function storedDepthColormapOf(m: FaceMaskingWithMarks): FaceMaskingDepthColormap | undefined {
+  if (m.mode === "off") return undefined
+  const drawn = depthColormapOf(m)
+  return drawn === null || drawn === depthColormapDefaultOf(faceMaskingSourceOf(m)) ? undefined : drawn
+}
+
+/**
  * THE normaliser of `depthColormap`: the colormap the setting names, only
  * where it changes what is drawn — the setting draws depth
  * (`depthColormapApplies`), it is not the source's default

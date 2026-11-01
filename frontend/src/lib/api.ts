@@ -11598,10 +11598,12 @@ export type CastSwapPulseAudioId = "original" | "generated"
 /**
  * What audio the reference video a Nodaro Motion Prism run sends to the video
  * model carries (admin only): the clip's full audio (the default), only the
- * voice split from the music, or none. The original audio always goes back on
- * the result.
+ * voice split from the music, none, the audio flattened to one steady tone
+ * (`"one-tone"`) or raised one octave (`"octave"`). The last two are offered
+ * only where the engine lists them (`castSwap.prismReferenceAudioModes`). The
+ * original audio always goes back on the result.
  */
-export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none"
+export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none" | "one-tone" | "octave"
 
 /** The Prism reference audio per output resolution (admin only); a resolution left out is `"full"`. */
 export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolution, CastSwapPrismReferenceAudioId>>
@@ -11826,6 +11828,8 @@ export interface TrendEngineEnvironment {
       roleOutlines?: boolean
       /** The colormaps the engine draws depth with on request (`faceMasking.depthColormap`); absent = none (the defaults only). */
       depthColormaps?: VideoDepthColormap[]
+      /** The Prism reference audio modes the engine takes (`prismReferenceAudio`); absent = "full", "voice" and "none" only. */
+      prismReferenceAudioModes?: CastSwapPrismReferenceAudioId[]
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
@@ -12813,6 +12817,8 @@ export interface NodaroMotionPrismReferenceAudioView {
   supported: boolean
   /** Whether it takes a mode per resolution (`castSwap.prismReferenceAudioPerResolution`); else it is sent the run's own resolution's mode. */
   perResolution?: boolean
+  /** The modes this environment's engine takes ("full" always); "one-tone" and "octave" only where it lists them. */
+  modes?: CastSwapPrismReferenceAudioId[]
 }
 
 const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"
