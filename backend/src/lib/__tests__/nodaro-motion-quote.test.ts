@@ -29,6 +29,13 @@ describe("neutralBreakdown", () => {
 })
 
 /** The base fee: `castSwap` until Cast Swap 0.396.0, both on 0.396.0, `base` only from 0.397.0. */
+describe("neutralBreakdown — the engine prompt's LLM part", () => {
+  it("passes breakdown.prompt through unchanged, beside the others", () => {
+    expect(neutralBreakdown({ base: 5, motion: 32, references: 3, prompt: 2 })).toEqual({ base: 5, motion: 32, references: 3, prompt: 2 })
+    expect(neutralBreakdown({ castSwap: 5, seedance: 32, prompt: 0 })).toEqual({ prompt: 0, base: 5, motion: 32 })
+  })
+})
+
 describe("neutralBreakdown — the base fee", () => {
   it("reads an older engine's castSwap as base (old key only)", () => {
     expect(neutralBreakdown({ castSwap: 5, motion: 7 })).toEqual({ motion: 7, base: 5 })

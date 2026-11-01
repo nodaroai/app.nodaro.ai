@@ -21,6 +21,7 @@ import { faceMaskingWithMarksSchema } from "../../../lib/cast-swap-face-masking.
 import { castSwapPulseAudioSchema } from "../../../lib/cast-swap-pulse-audio.js"
 import { castSwapPrismReferenceAudioSchema } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
+import { castSwapStepsSaveSchema, castSwapStepsSchema, normaliseSteps, stepsProblems, type CastSwapStepsProblem } from "../../../lib/cast-swap-steps.js"
 import type {
   Choice,
   LocalizedText,
@@ -229,6 +230,7 @@ const trendFaceMaskSchema = z.strictObject({
   sceneDescription: z.string().min(1).max(SCENE_DESCRIPTION_MAX).optional(),
   previewSceneDescription: z.string().min(1).max(SCENE_DESCRIPTION_MAX).optional(),
   previewSceneDescriptionStart: z.number().min(0).max(3600).optional(),
+  sceneStepKey: z.string().min(1).max(200).optional(),
 })
 
 /** The face mask being made (`TrendFaceMaskJob`): written by the face mask routes only. */
@@ -236,6 +238,7 @@ const trendFaceMaskJobSchema = z.strictObject({
   jobId: z.string().min(1),
   settingsKey: z.string().min(1).max(200),
   startedAt: z.string().min(1),
+  sceneStepKey: z.string().min(1).max(200).optional(),
 })
 
 /** The most upscales a draft keeps in the making at once (the source and its examples together). */
@@ -363,6 +366,10 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     // reference). A plain mode, saved before the per-resolution setting, parses to that mode at every
     // resolution. Read only on a Prism trend.
     prismReferenceAudio: castSwapPrismReferenceAudioSchema.optional(),
+    // The STORED reading (any model name): this schema is re-run on every face mask, upscale and crop save,
+    // and a model later removed from the list must never break those. A draft save checks it as an admin
+    // saves it (`castSwapStepsSaveSchema`) first, and never stores `{}` (admin-trends.ts).
+    steps: castSwapStepsSchema.optional(),
     previewClip: trendPreviewClipSchema.optional(),
     // Absent = the original is shown. Stored as given, so re-saving a draft that names none is no change.
     hideOriginal: z.boolean().optional(),
@@ -503,4 +510,22 @@ export function hiddenChip(
     }
   }
   return null
+}
+
+/**
+ * A draft body's `steps` as an admin saves them: checked with
+ * `castSwapStepsSaveSchema` (a known model that can see what it is shown; a
+ * stored setting whose model has since left the list is refused here until
+ * another is picked) and normalised (`normaliseSteps`: `{}` is never stored,
+ * the key is left out). `problems`: each refusal with its path under `steps`
+ * and its code. A body without the key (or with it undefined) is returned
+ * without it. Never mutates `edited`.
+ */
+export function withSavedSteps(edited: Record<string, unknown>): { data: Record<string, unknown> } | { problems: CastSwapStepsProblem[] } {
+  const { steps, ...rest } = edited
+  if (steps === undefined) return { data: rest }
+  const parsed = castSwapStepsSaveSchema.safeParse(steps)
+  if (!parsed.success) return { problems: stepsProblems(parsed.error, "steps") }
+  const normalised = normaliseSteps(parsed.data)
+  return { data: normalised ? { ...rest, steps: normalised } : rest }
 }

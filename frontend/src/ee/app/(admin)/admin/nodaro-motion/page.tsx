@@ -17,6 +17,10 @@
 // resolution (the full audio, the default; the voice only; or none), the
 // original audio always back on the result
 // (PUT /v1/admin/nodaro-motion/prism-reference-audio).
+// Each engine also has its preparation steps (StepsColumn.tsx: the reference
+// sheets, the engine prompt and the scene description), for every direct run
+// of either style (PUT /v1/admin/nodaro-motion/steps), greyed out until every
+// environment's engine takes them.
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -28,10 +32,18 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
-import type { AdminTrendEngine, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId, NodaroMotionMasking, NodaroMotionMotion } from "@/lib/api"
+import type {
+  AdminTrendEngine,
+  CastSwapPrismReferenceAudioByResolution,
+  CastSwapPulseAudioId,
+  NodaroMotionMasking,
+  NodaroMotionMotion,
+  NodaroMotionSteps,
+} from "@/lib/api"
 import { useEngineEnvironments, useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
+import { useNodaroMotionSteps, useSaveNodaroMotionSteps } from "@/ee/hooks/queries/use-nodaro-motion-steps"
 import {
   useNodaroMotionPrismReferenceAudio,
   useSaveNodaroMotionPrismReferenceAudio,
@@ -45,6 +57,7 @@ import { environmentsThatCannotDrawFaceMesh, environmentsThatCannotHideBodies } 
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
 import { MotionColumn } from "./components/MotionColumn"
+import { StepsColumn, stepsToSaved } from "./components/StepsColumn"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -76,10 +89,13 @@ export default function AdminNodaroMotionPage() {
   const savePulse = useSaveNodaroMotionPulseAudio()
   const prismAudioQuery = useNodaroMotionPrismReferenceAudio()
   const savePrismAudio = useSaveNodaroMotionPrismReferenceAudio()
+  const stepsQuery = useNodaroMotionSteps()
+  const saveSteps = useSaveNodaroMotionSteps()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
   const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioByResolution>(() => prismReferenceAudioTriple(null))
+  const [stepsDraft, setStepsDraft] = useState<NodaroMotionSteps>({})
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -94,6 +110,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (prismAudioQuery.data) setPrismAudioDraft(prismReferenceAudioTriple(prismAudioQuery.data.prismReferenceAudio))
   }, [prismAudioQuery.data])
+  useEffect(() => {
+    if (stepsQuery.data) setStepsDraft(structuredClone(stepsQuery.data.steps ?? {}))
+  }, [stepsQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -112,7 +131,10 @@ export default function AdminNodaroMotionPage() {
     const m = draft[e.id]
     return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
   })
-  const pending = save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending
+  // Never saved reads as no steps: a draft with none set is then no change.
+  const nextSteps = stepsToSaved(stepsDraft)
+  const stepsChanged = !!stepsQuery.data && JSON.stringify(nextSteps) !== JSON.stringify(stepsToSaved(stepsQuery.data.steps))
+  const pending = save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending || saveSteps.isPending
 
   if (!hasAdmin()) return null
 
@@ -123,6 +145,7 @@ export default function AdminNodaroMotionPage() {
       if (motionChanged) await saveMotion.mutateAsync(nextMotion)
       if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
       if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioTriple(prismAudioDraft))
+      if (stepsChanged) await saveSteps.mutateAsync(nextSteps)
       toast.success("Saved. Runs pick it up within a minute.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -139,7 +162,7 @@ export default function AdminNodaroMotionPage() {
             Precise and the Motion style. People never see or set it. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
@@ -201,6 +224,28 @@ export default function AdminNodaroMotionPage() {
                       <p className="text-xs text-muted-foreground">Loading…</p>
                     )}
                   </div>
+                </div>
+                <div role="group" aria-label={`${engine.name} preparation steps`} className="mt-4 min-w-0">
+                  {stepsQuery.data ? (
+                    <StepsColumn
+                      engine={engine.id}
+                      value={stepsDraft[engine.id]}
+                      envs={envs.data}
+                      motion={motionDraft[engine.id]}
+                      onChange={(steps) =>
+                        setStepsDraft((d) => {
+                          const out = { ...d }
+                          if (steps) out[engine.id] = steps
+                          else delete out[engine.id]
+                          return out
+                        })
+                      }
+                    />
+                  ) : stepsQuery.error ? (
+                    <p className="text-xs text-destructive">{stepsQuery.error.message}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Loading…</p>
+                  )}
                 </div>
                 {engine.id === "motion-pulse" && (
                   <div role="group" aria-label={`${engine.name} audio`} className="mt-4 max-w-sm">

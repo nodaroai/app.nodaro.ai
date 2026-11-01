@@ -45,6 +45,7 @@ import type { SurroundDirection } from "@nodaro/shared/entities"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
+import type { CastSwapSteps } from "../cast-swap-steps.js"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,
@@ -1049,6 +1050,19 @@ export interface PluginDetectedFace {
   readonly descriptor?: PluginFaceDescriptor
 }
 
+/** `detectFacesInImage`'s input: one still picture (https), and the lowest score kept, in (0, 1]. */
+export interface PluginDetectFacesInImageInput {
+  readonly imageUrl: string
+  readonly minScore: number
+}
+
+/** `detectFacesInImage`'s answer: the boxes are fractions of the upright picture (`frame`). */
+export interface PluginDetectFacesInImageResult {
+  readonly detector: { readonly id: string; readonly version: string }
+  readonly frame: { readonly w: number; readonly h: number }
+  readonly boxes: readonly PluginDetectedFace[]
+}
+
 /** Mirrors `DetectFacesResult` (`services/face-detect/detect-faces.ts`). */
 export interface PluginDetectFacesResult {
   /** What a track set records as its detector, e.g. `yunet:2023mar-dyn@57acd732`. */
@@ -1097,6 +1111,16 @@ export interface PluginMediaToolkit {
    * window would pass the speaker-track caps.
    */
   detectFaces?(input: PluginDetectFacesInput): Promise<PluginDetectFacesResult>
+  /**
+   * YuNet (the same pinned model and session as `detectFaces`) over ONE
+   * still picture: an https address, downloaded through the guarded fetch,
+   * decoded and turned upright by its EXIF orientation before detection,
+   * under the same admission hold. `frame` is the upright picture's size and
+   * the boxes are fractions of it, as `PluginDetectedFace`. Additive-optional
+   * (no capability flag): feature-detect the member. Rejects for a non-https
+   * address, a file that is not a picture, or a host that cannot detect.
+   */
+  detectFacesInImage?(input: PluginDetectFacesInImageInput): Promise<PluginDetectFacesInImageResult>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /**
@@ -3365,6 +3389,12 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionMotion?: boolean
   /**
+   * `tk.settings.nodaroMotionSteps()` exists: the preparation steps an admin
+   * set per Nodaro Motion engine, for every DIRECT Cast Swap run. An older
+   * host has no such member: a plugin reads that as never saved (today's run).
+   */
+  readonly nodaroMotionSteps?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -3516,6 +3546,26 @@ export interface PluginSettingsToolkit {
    * be read. Advertised as `capabilities.nodaroMotionMotion`.
    */
   nodaroMotionMotion?(): Promise<NodaroMotionMotion | null>
+  /**
+   * The admin's preparation steps per Nodaro Motion engine, for direct runs
+   * (a trend run carries its own trend's `steps`): each engine's entry
+   * validated by the host (an invalid or empty one is dropped and logged),
+   * answered under its current AND its earlier key, or null when it was never
+   * saved or when this host's engine does not declare `castSwap.steps` (then
+   * every run is today's). Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read. Advertised as
+   * `capabilities.nodaroMotionSteps`.
+   */
+  nodaroMotionSteps?(): Promise<PluginNodaroMotionSteps | null>
+}
+
+/**
+ * Nodaro Motion's preparation steps per engine, keyed by the PUBLIC engine
+ * ids (current and earlier), each entry the engine's own `steps` shape
+ * (lib/cast-swap-steps.ts `CastSwapSteps`, which mirrors it).
+ */
+export type PluginNodaroMotionSteps = {
+  readonly [publicEngineId: string]: CastSwapSteps
 }
 
 /**
@@ -3725,6 +3775,22 @@ export interface PluginSupports {
    *   settings without it, and refuses to save a shared Nodaro Motion setting
    *   with it while any environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMesh`).
+   * - `artStyle`: a DIRECT Flex run (`style: "motion"`) and its estimate take
+   *   `direction?: { style: string }`, an id of the platform's `style` picker
+   *   catalog. Absent ⇒ `false` — the host must not send `direction`.
+   * - `steps`: the preparation steps (lib/cast-swap-steps.ts). A trend run's
+   *   body takes `steps` (the trend's `TrendVersionData.steps`), the face-mask
+   *   make takes `steps.sceneDescription`, the engine answers the admin route
+   *   `POST /v1/cast-swap/steps` (its vocabulary, defaults and a check), a
+   *   completion may name the new `skippedSteps` ids (with a `role`), and the
+   *   step outputs are recorded server-only (`__castSwapStepOutputs`). A
+   *   direct run reads the admin's per-engine setting itself
+   *   (`tk.settings.nodaroMotionSteps`). Additive-optional: absent ⇒ `false`
+   *   — the platform never sends `steps` (it strips the key from a run and a
+   *   make, holds a trend that sets it back from publishing there, answers
+   *   the setting as null, and refuses to save a shared steps setting while
+   *   any environment lacks it), so the wire is byte-identical
+   *   (lib/cast-swap-steps.ts `engineTakesSteps`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3757,7 +3823,9 @@ export interface PluginSupports {
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
     readonly prismReferenceAudioPerResolution?: boolean
+    readonly artStyle?: boolean
     readonly faceMesh?: boolean
+    readonly steps?: boolean
   }
 }
 

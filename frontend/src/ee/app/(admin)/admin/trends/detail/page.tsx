@@ -70,6 +70,8 @@ import { EnginePromptParts } from "../components/EnginePromptParts"
 import { PromptStyleSelect } from "../components/PromptStyleSelect"
 import { clipPreparationOf, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
+import { StepsEditor } from "../components/StepsEditor"
+import { sceneOf } from "../prompt-style"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
@@ -567,6 +569,22 @@ export default function AdminTrendEditorPage() {
                 }
               />
             )}
+            <StepsEditor
+              value={form.steps}
+              envs={envs.data}
+              engine={form.engine ?? "seedance-2-5"}
+              source={preparation}
+              scene={sceneOf(form.faceMasking)}
+              // Nothing set removes the key: the draft is saved exactly as before the steps existed.
+              onChange={(steps) =>
+                setForm((f) => {
+                  if (!f) return f
+                  const next = { ...f, steps }
+                  if (!steps) delete next.steps
+                  return next
+                })
+              }
+            />
           </Section>
           <Section title="7. Name, description, tags">
             <TextsEditor trend={server.trend} name={form.name} description={form.description} onChange={(p) => set(p)} />

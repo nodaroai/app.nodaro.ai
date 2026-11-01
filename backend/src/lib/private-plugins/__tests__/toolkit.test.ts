@@ -47,6 +47,7 @@ import { applyImageWatermark } from "../../../utils/watermark.js"
 import { ensureMediaProxy } from "../../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../../services/media-proxy-span-map.js"
 import { detectFaces } from "../../../services/face-detect/detect-faces.js"
+import { detectFacesInImage } from "../../../services/face-detect/detect-faces-image.js"
 import { PitchTempoInputError } from "../../../providers/video/pitch-tempo.js"
 
 describe("buildToolkit", () => {
@@ -120,6 +121,12 @@ describe("buildToolkit", () => {
     // Core owns the decode, the session, the admission and the clock; the
     // plugin passes only the window and its score floor.
     expect(tk.media.detectFaces).toBe(detectFaces)
+  })
+
+  it("media: the still-picture face detector is the real core function (optional in the contract, no capability flag: answered here)", () => {
+    // A plugin feature-detects the member; a dropped wiring line would send
+    // every plugin to its no-detector path.
+    expect(tk.media.detectFacesInImage).toBe(detectFacesInImage)
   })
 
   it("storage: every member is a function", () => {

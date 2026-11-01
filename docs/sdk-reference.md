@@ -2131,11 +2131,12 @@ interface CastSwapEstimate {
   engine?: CastSwapEngine // the engine quoted
   totalCredits: number    // held when the run starts
   expectedCredits?: number // what it is expected to be charged; never above totalCredits
-  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number } & Record<string, number>
+  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number } & Record<string, number>
                           // the parts, for display only: base (the run itself), references (preparing
                           // the reference pictures; 0 when off), motion (what the video holds), motionExpected
-                          // (what it is expected to be charged; Prism), privacy (preparing the clip) — motion and
-                          // motionExpected are alternatives, so read the totals, never the sum
+                          // (what it is expected to be charged; Prism), privacy (preparing the clip), prompt
+                          // (a prompt written by a language model, when the engine's setting asks for one) —
+                          // motion and motionExpected are alternatives, so read the totals, never the sum
   privacyCredits?: number // charged only if the clip is refused and the run is retried; not in the totals
   settlesLower: boolean   // Auto length (Prism): the final charge is expected to be lower
 }

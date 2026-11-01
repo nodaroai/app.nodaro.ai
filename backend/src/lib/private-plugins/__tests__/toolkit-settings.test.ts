@@ -18,7 +18,7 @@ import type { NodaroMotionPromptPartsForPlugin } from "../../nodaro-motion-promp
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -27,7 +27,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -214,5 +214,57 @@ describe("the plugin-side types mirror the host's", () => {
 
   it("PluginNodaroMotionMasking is what the host answers (both key sets)", () => {
     expectTypeOf<NodaroMotionMaskingForPlugin>().toEqualTypeOf<PluginNodaroMotionMasking>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionSteps()` — the admin's preparation steps per Nodaro
+ * Motion engine, for every DIRECT run: only to an engine that takes steps
+ * (`castSwap.steps`), null otherwise and when never saved.
+ */
+describe("tk.settings.nodaroMotionSteps", () => {
+  beforeEach(() => {
+    h.steps = null
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const stepsEngine = (steps: boolean | undefined) =>
+    setPluginSupports({ castSwap: { ...CS, ...(steps === undefined ? {} : { steps }) } } as never)
+  const saved = { "motion-prism": { enginePrompt: { mode: "template" } }, "motion-pulse": { sceneDescription: { mode: "template" } } }
+
+  it("is advertised", () => {
+    expect(buildToolkit().capabilities?.nodaroMotionSteps).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionSteps).toBe("function")
+  })
+
+  it("rejects when the settings could not be read, never answering null (today's run)", async () => {
+    stepsEngine(true)
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionSteps!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or nothing is set", async () => {
+    stepsEngine(true)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
+    h.steps = { "motion-prism": {} }
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
+  })
+
+  it("reads the saved row under the current and the earlier keys, each a copy the plugin may change", async () => {
+    stepsEngine(true)
+    h.steps = saved
+    const got = await buildToolkit().settings!.nodaroMotionSteps!()
+    expect(got).toEqual({ ...saved, "motion-pro": saved["motion-prism"], "motion-lite": saved["motion-pulse"] })
+    ;(got!["motion-prism"] as { enginePrompt?: unknown }).enginePrompt = undefined
+    expect(saved["motion-prism"]).toEqual({ enginePrompt: { mode: "template" } })
+  })
+
+  it("answers null to an engine without castSwap.steps", async () => {
+    h.steps = saved
+    stepsEngine(undefined)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
+    stepsEngine(false)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
   })
 })

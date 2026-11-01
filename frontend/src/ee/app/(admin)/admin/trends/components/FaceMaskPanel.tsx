@@ -28,7 +28,10 @@
 // approved face mask as it is.
 //
 // Full depth with its scene from a description: the approved clip's stored
-// scene descriptions, editable (SceneDescriptionEditor.tsx).
+// scene descriptions, editable (SceneDescriptionEditor.tsx). When they were
+// made with another scene description step than the draft's
+// (`sceneStepChanged`), they are still sent, and the panel says to make the
+// mask again beside Make again.
 
 import { useEffect, useState } from "react"
 import { Check, Eraser, Loader2, RefreshCw, ScanFace, Trash2 } from "lucide-react"
@@ -364,6 +367,12 @@ export function FaceMaskPanel({
           )}
           {jobId || faceMask ? "Make again" : "Make face mask"}
         </Button>
+        {/* The stored scene texts are still sent; only a remake writes them with the draft's scene step. */}
+        {faceMask && state?.sceneStepChanged === true && (
+          <span role="status" className="text-xs text-amber-700 dark:text-amber-400" data-testid="face-mask-scene-step-changed">
+            Made with another scene setting: make it again.
+          </span>
+        )}
         {faceMask && (!jobId || !current) && (
           <Button
             type="button"

@@ -1,5 +1,11 @@
 # @nodaro/sdk
 
+## 2.60.1
+
+### Patch Changes
+
+- 436726d: `CastSwapEstimate.breakdown.prompt`: the part of a Nodaro Motion quote for the prompt a language model writes for the run, when the engine's setting asks for one.
+
 ## 2.60.0
 
 ### Minor Changes

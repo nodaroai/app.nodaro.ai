@@ -8,6 +8,7 @@ import { readPublicVideoFrame } from "../public-video-frame.js"
 import { ensureMediaProxy } from "../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../services/media-proxy-span-map.js"
 import { detectFaces } from "../../services/face-detect/detect-faces.js"
+import { detectFacesInImage } from "../../services/face-detect/detect-faces-image.js"
 import { isStorageConfigured } from "../storage.js"
 import { deleteKeyRecordingFailure } from "../storage-delete.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
@@ -128,6 +129,8 @@ import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
 import { loadedEngineDrawsFaceMesh, withFaceMeshFor } from "../cast-swap-face-masking.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
+import { anyStepsSet, withEarlierStepsKeys, withoutEmptySteps } from "../nodaro-motion-steps.js"
+import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
 import { assertExact2xAligned, fetchImageBuffer } from "./plate-gate.js"
@@ -1583,6 +1586,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   seedanceRefVideoQuote: true,
   nodaroMotionPromptParts: true,
   nodaroMotionMotion: true,
+  nodaroMotionSteps: true,
   jobLanes: true,
   // Turns true with the change that makes tk.jobs.waitForJob discount a
   // job's queued time; until then a plugin must not rely on it.
@@ -1738,6 +1742,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       ensureMediaProxy,
       proxyFrameToSourceMs,
       detectFaces,
+      // One still picture (https, guarded download), the same session and hold.
+      detectFacesInImage,
       extractAudio,
       removeAudio: ({ videoUrl }) => removeAudio({ videoUrl, workDirPrefix: "cast-swap" }),
       // A pitch shift only; a PitchTempoInputError reaches the plugin unchanged.
@@ -2167,6 +2173,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
             entry?.masking ? { ...entry, masking: withFaceMeshFor(entry.masking, draws) } : entry,
           ]),
         ) as ReturnType<typeof withEarlierMotionKeys>
+      },
+      // Same rules: a failed read throws. Null when never saved, AND to an engine that does not
+      // take steps (`castSwap.steps`): it never asks, and must never be given admin doctrine it would drop.
+      nodaroMotionSteps: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_steps: the app settings could not be read")
+        const steps = settings.nodaro_motion_steps
+        if (!steps || !anyStepsSet(steps) || !loadedEngineTakesSteps()) return null
+        // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
+        return withEarlierStepsKeys(withoutEmptySteps(steps))
       },
     },
     deployment: { publicUrl: appBaseUrl() },

@@ -199,7 +199,8 @@ describe("marking people and making their masks", { timeout: 20_000 }, () => {
       body: { data: detail({ faceMaskState: { status: "approved", reasons: [], variants: approved } }, { slots: SLOTS, faceMasking: { ...MASKING, marks: [AMY_MARK] }, faceMask: STORED }) },
     })
     renderEditor()
-    expect(await screen.findAllByLabelText("The mask for runs without Amy")).not.toHaveLength(0)
+    // The editor loads its steps settings too: under CI load the first paint can take past findAll's 1 s default.
+    expect(await screen.findAllByLabelText("The mask for runs without Amy", {}, { timeout: 5000 })).not.toHaveLength(0)
   }, 20_000)
 
   it("says the marks have no run effect on a trend with examples, and that more than 3 people can't be published", async () => {

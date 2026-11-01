@@ -4529,7 +4529,9 @@ preparation, 0 when it is off or there is nothing to prepare), `motion` (what
 the video holds; on Pulse what it costs), `motionExpected` (what the video is
 expected to be charged, never above `motion`; Prism only) and `privacy`
 (preparing the clip, when the engine's setting does: in both totals when it
-always runs, in neither when it is the retry below). `motion` and
+always runs, in neither when it is the retry below), and `prompt` (the prompt
+a language model writes for the run, when the engine's setting asks for
+one). `motion` and
 `motionExpected` are alternatives, so read the totals, never the sum. When
 the engine's setting retries a refused clip, `privacyCredits` is the extra
 charged only if that retry runs: it is in neither total, and starting the
