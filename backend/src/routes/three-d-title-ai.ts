@@ -27,6 +27,8 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -48,10 +50,15 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/3d-title/generate",
     {
-      preHandler: [aiRateLimit, creditGuard((req) => resolveLlmCreditId("3d-title", req.body), {
-        // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
-        computeCredits: (body) => llmGuardPrecheck("3d-title", body),
-      })],
+      preHandler: [
+        aiRateLimit,
+        creditGuard((req) => resolveLlmCreditId("3d-title", req.body), {
+          // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
+          computeCredits: (body) => llmGuardPrecheck("3d-title", body),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/3d-title/generate")),
+      ],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -106,7 +113,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "3d-title"), width, height, backgroundColor },
+          input_data: { ...buildJobInputData(parsed.data, "3d-title"), width, height, backgroundColor, resolvedModel: llmModel },
         })
 
       if (jobError) {

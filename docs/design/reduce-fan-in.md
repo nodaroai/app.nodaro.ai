@@ -239,7 +239,7 @@ app.post("/v1/collect", {
 
 `{ dedup: false }` is the established escape hatch (historical precedent: the since-retired voice-clone create handlers used it). The optional `workflowExecutionId` in the body is a belt-and-suspenders measure but is NOT sufficient on its own — pass `dedup: false`.
 
-- **Inline execution** (no BullMQ queue) — strategies are either pure functions (0-credit ones) or a single `llmComplete` call (pick-best-llm). The worker pattern is overkill; the LLM call is bounded by `llm-client.ts:16` (`LLM_TIMEOUT_MS = 120s`) which is well inside the 30-min `NODE_TIMEOUT_MS`. If pick-best-llm latency becomes an issue at scale, promote to the queue then.
+- **Inline execution** (no BullMQ queue) — strategies are either pure functions (0-credit ones) or a single `llmComplete` call (pick-best-llm). The worker pattern is overkill; the LLM call is bounded by the client's per-lane timeouts (`llm/params.ts`: `LLM_TIMEOUT_MS` = 120 s on the direct lanes, `KIE_LLM_TIMEOUT_MS` = 300 s on KIE) which are well inside the 30-min `NODE_TIMEOUT_MS`. If pick-best-llm latency becomes an issue at scale, promote to the queue then.
 - **Returns** `{ jobId, output, meta }` — `output` is `string` (for url/text strategies) or stringified `number` (for `count`); `meta` is the `ResultMeta` shape from §2. Matches existing `NodeOutput` conventions so frontend `executeNode` integration is symmetric.
 
 **Strategy implementations** in `backend/src/services/collect-strategies/`:

@@ -25,14 +25,15 @@ import { cappedQueuedMs } from "./queued-clock.js"
  * True when the current code runs as a JOB under a live hold scope (a worker's
  * admission, or a pipeline drive) — not a live request (a hold with a
  * `transport`), not detached work whose scope has ended, not code under no
- * hold at all. Only then is the time an awaited job waits `queued` this
- * code's own wait, to leave off its timeout: a request that waits inline
+ * hold at all, not the pass-through hold of an ungated call (slot.ts). Only
+ * then is the time an awaited job waits `queued` this code's own wait, to
+ * leave off its timeout: a request that waits inline
  * keeps its plain limit (an open connection must not be held for the queue
  * timeout). Every queue-aware poll asks this first.
  */
 export function waitsAsJob(): boolean {
   const scope = currentHoldScope()
-  return !!scope && !scope.closed && !scope.hold.transport
+  return !!scope && !scope.closed && !scope.hold.transport && !scope.hold.passThrough
 }
 
 /** The row's total is written at most this often while a wait goes on. */
@@ -62,7 +63,7 @@ const states = new WeakMap<HeldWait, PersistState>()
  */
 export function creditCoordinatorWait(fromMs: number, toMs: number): void {
   const scope = currentHoldScope()
-  if (!scope || scope.closed || !Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return
+  if (!scope || scope.closed || scope.hold.passThrough || !Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return
   addHeldWait(fromMs, toMs)
   schedulePersist(scope)
 }

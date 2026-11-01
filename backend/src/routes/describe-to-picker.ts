@@ -31,6 +31,13 @@ import { markJobFailed } from "../lib/job-failure.js"
 import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { chargedFailureMessage, llmPrecheckBody, llmTextChars, plannedStructuredCall } from "../lib/llm-metered-route.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { acquireStreamLane, llmProviderOf, restampProviderCallStart } from "../lib/concurrency-lanes/live-routes.js"
+import { pickerAnalyzerProvider, wantsEventStream, withDescribeToPickerDefaults } from "../lib/describe-to-picker-request.js"
+
+// Shared with text-to-picker, which imports them from here.
+export { pickerAnalyzerProvider, withDescribeToPickerDefaults }
 
 /** Models the analyzer accepts: vision-capable AND able to return guaranteed
  *  structured output (Anthropic forced-tool or Gemini `response_format`) — all
@@ -200,11 +207,6 @@ interface Analysis {
    *  fallback included — is recorded in. Absent under the rollback, where the
    *  tier reservation is committed / refunded as before. */
   metered?: { reserve: Extract<LlmReserveResult, { metered: true }>; spend: LlmSpend }
-}
-
-/** Stream only when the caller asks for it: an `Accept` naming `text/event-stream`. */
-function wantsEventStream(req: FastifyRequest): boolean {
-  return (req.headers.accept ?? "").toLowerCase().includes("text/event-stream")
 }
 
 /** Which model an analyzer run asks, at what effort, and whether the body's
@@ -483,7 +485,7 @@ export class PickerFallbackFailedError extends Error {
  */
 export const DESCRIBE_TO_PICKER_MAX_RUNTIME_MS = 38 * 60_000
 
-/** The client's default per-lane timeout (`LLM_TIMEOUT_MS`): what a Gemini fallback gets when time allows. */
+/** The client's direct-lane default timeout (`LLM_TIMEOUT_MS`, 120 s): what a Gemini fallback gets when time allows. Sent explicitly, so it bounds the KIE lane too. */
 const FALLBACK_LANE_TIMEOUT_MAX_MS = 120_000
 /** A floor so a fallback is never asked with no time at all; the budget test shows it is never reached. */
 const FALLBACK_LANE_TIMEOUT_MIN_MS = 10_000
@@ -638,6 +640,9 @@ async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
  * opens only after everything a plain HTTP error reports (validation, auth,
  * credits) has passed.
  *
+ * - `metadata`: `{ jobId, queue: { lane, position, waitedMs } }`, while the
+ *   analysis waits for its slot (only ever when concurrency limits are on);
+ *   one that never gets it ends in `error` with code `lane_busy`.
  * - `field`: `{ field: "<picker>.<dimension>", value }`, one per detail the
  *   moment the model has finished writing it, in the analyzer's own
  *   coordinates (`pickerJson[picker][dimension]`). Provisional, and never a
@@ -663,6 +668,20 @@ async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<
     return
   }
   try {
+    // The llm slot, taken inside the stream so the client is told it waits.
+    // No slot: nothing was sent — the job fails and its hold is refunded.
+    const laneRefusal = await acquireStreamLane(analysis.req, sse, {
+      lane: "llm",
+      provider: llmProviderOf(analysis.model.id, analysis.reasoningEffort, analysis.body.advancedMode === true),
+      metadata: { jobId: analysis.jobId },
+      // Stamped before the wait: the reconcile sweep's clock starts at the call.
+      afterWait: restampProviderCallStart(analysis.jobId),
+    })
+    if (laneRefusal) {
+      const message = await failAnalysis(analysis, laneRefusal.error)
+      sse.sendEvent({ type: "error", data: { code: laneRefusal.code, message } })
+      return
+    }
     let body: Awaited<ReturnType<typeof completeAnalysis>>
     try {
       const fields = createPickerFieldStream({
@@ -682,45 +701,23 @@ async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<
   }
 }
 
-/**
- * The raw body with the defaults the handler applies before it reserves: an
- * omitted model is the analyzer's default, and an omitted effort is that
- * model's recipe effort when it has one. The credit guard prices the raw body
- * before validation, so without these it pre-checked a default read at the
- * bare id (the standard rung) while the job reserved the rung the resolved
- * model and effort bill, and a balance in between passed the check, then
- * failed the reservation with a 500 instead of a 402.
- *
- * Shared by the two routes that bill this feature, this one and its text twin
- * text-to-picker. It lives with them, not in the shared `resolveLlmCreditId`
- * every LLM route's guard uses: a default model applied there would move every
- * other feature's pre-check too. A model or effort that is not a string is
- * treated as absent here; the handler's validation refuses it.
- */
-export function withDescribeToPickerDefaults(body: unknown): Record<string, unknown> {
-  const raw = (body ?? {}) as Record<string, unknown>
-  const named = typeof raw.llmModel === "string" ? raw.llmModel : undefined
-  const sent = typeof raw.reasoningEffort === "string" ? raw.reasoningEffort : undefined
-  return {
-    ...raw,
-    llmModel: named ?? LLM_FEATURE_DEFAULTS["describe-to-picker"],
-    reasoningEffort: sent ?? defaultReasoningEffort("describe-to-picker", named),
-  }
-}
-
 export async function describeToPickerRoutes(app: FastifyInstance) {
   app.post(
     "/v1/describe-to-picker",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body)), {
-        // Metered (D1): pre-checked at one attempt over the body's TEXT (the
-        // image and the legend are counted at the reserve). Undefined under
-        // the rollback: the tier row prices it as before.
-        computeCredits: (body) => {
-          const precheck = llmPrecheckBody(body)
-          return precheck && llmPrecheckBaseCredits("describe-to-picker", precheck, llmTextChars(((body ?? {}) as Record<string, unknown>).instructions))
-        },
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body)), {
+          // Metered (D1): pre-checked at one attempt over the body's TEXT (the
+          // image and the legend are counted at the reserve). Undefined under
+          // the rollback: the tier row prices it as before.
+          computeCredits: (body) => {
+            const precheck = llmPrecheckBody(body)
+            return precheck && llmPrecheckBaseCredits("describe-to-picker", precheck, llmTextChars(((body ?? {}) as Record<string, unknown>).instructions))
+          },
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/describe-to-picker")),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -771,7 +768,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "describe-to-picker"),
+          input_data: { ...buildJobInputData(parsed.data, "describe-to-picker"), resolvedModel: model.id },
         })
       if (jobError) {
         return sendInternalError(reply, req, jobError, "Failed to create job")

@@ -11,6 +11,7 @@ import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "..
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts/doctrine"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
@@ -148,7 +149,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       // never carry the attach id; we re-add it ONLY for the single-job
       // (count=1) backward-compat path below.
       const { attachToLocationId: _attachToLocationId, ...bodyWithoutAttach } = parsed.data
-      const baseInputData = buildJobInputData(bodyWithoutAttach, "generate-location")
+      const baseInputData = withResolvedModel(buildJobInputData(bodyWithoutAttach, "generate-location"), "generate-location")
 
       // ──────────────────────────────────────────────────────────────────────
       // Phase 1: Insert N pending jobs (always at least 1).

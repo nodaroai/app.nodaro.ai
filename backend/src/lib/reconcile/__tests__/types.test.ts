@@ -15,7 +15,7 @@ import {
 } from "../types.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud + copilot-turn + seedance draft finalize)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud + copilot-turn + seedance draft finalize + apify-run for background scrapes)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
       "kie-suno-voice-create", "kie-suno-voice-validate",
@@ -29,6 +29,7 @@ describe("ProviderKind registry", () => {
       "nodaro-cloud",
       "copilot-turn",
       "pre-task",
+      "apify-run",
     ])
   })
 

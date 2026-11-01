@@ -153,6 +153,20 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
   let generateImage: Handler
   let insertInternalJob: typeof import("../../insert-job.js").insertInternalJob
   let mcpSession: { userId: string; scopes: string[]; clientName: string }
+  let processor: import("bullmq").Processor
+  /** How many times each job reached the processor, and how many times it ran (claimed and started). */
+  const runs = new Map<string, number>()
+  const started = new Map<string, number>()
+
+  /** A video worker process: a BullMQ worker on its own connection, running `processor`. */
+  async function startWorker(): Promise<import("bullmq").Worker> {
+    const { Worker } = await import("bullmq")
+    workerConnection = new IORedis(refs.url, { db: refs.dbIndex, maxRetriesPerRequest: null })
+    workerConnection.on("error", () => undefined)
+    const w = new Worker("video-generation", processor, { connection: workerConnection, concurrency: 16 })
+    w.on("error", () => undefined)
+    return w
+  }
 
   /** The stubbed provider call: each job waits here until a case lets it finish. */
   const provider = {
@@ -179,13 +193,14 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
     const { concurrencyGate } = await import("../instance.js")
     const queueModule = await import("../../queue.js")
     expect((queueModule.redis as unknown as { options: { db?: number } }).options.db).toBe(refs.dbIndex)
-    const { DelayedError, Worker } = await import("bullmq")
+    const { DelayedError } = await import("bullmq")
     const hold = await import("../hold.js")
     const park = await import("../park.js")
     const admit = await import("../worker-admit.js")
     const insertJob = await import("../../insert-job.js")
     const { default: Fastify } = await import("fastify")
     const { generateImageRoutes } = await import("../../../routes/generate-image.js")
+    const { webScrapeRoutes } = await import("../../../routes/web-scrape.js")
     const { registerImageVerbs } = await import("../../mcp/tools/verbs-image.js")
     videoQueue = queueModule.videoQueue as unknown as import("bullmq").Queue
     insertInternalJob = insertJob.insertInternalJob
@@ -218,6 +233,7 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
         : { payer: "user", userId }
     })
     await app.register(async (instance) => { await generateImageRoutes(instance) })
+    await app.register(async (instance) => { await webScrapeRoutes(instance) })
     await app.ready()
 
     // The MCP tool, registered on a capturing server, reaching the app through its inject.
@@ -229,10 +245,9 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
     expect(generateImage).toBeDefined()
 
     // The video worker's admission sequence, the provider stubbed.
-    workerConnection = new IORedis(refs.url, { db: refs.dbIndex, maxRetriesPerRequest: null })
-    workerConnection.on("error", () => undefined)
-    worker = new Worker("video-generation", async (job, token) => {
+    processor = async (job, token) => {
       const { jobId } = job.data as { jobId: string; userId?: string }
+      runs.set(jobId, (runs.get(jobId) ?? 0) + 1)
       const { data } = await (db.client.from("jobs") as RowRead).select(admit.WORKER_ROW_COLUMNS).eq("id", jobId).maybeSingle()
       const admission = await admit.admitOrPark({ job, token, queue: "video-generation", row: admit.workerRowOf(jobId, data, (job.data as { userId?: string }).userId) })
       if (!admission) throw new DelayedError()
@@ -243,7 +258,9 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
           outcome = "cancelled"
           return
         }
-        for (const r of claimed) Object.assign(r, { status: "processing", started_at: new Date().toISOString() })
+        // The pickup claim writes the BullMQ name into job_type, as the video worker's does.
+        for (const r of claimed) Object.assign(r, { status: "processing", started_at: new Date().toISOString(), job_type: job.name })
+        started.set(jobId, (started.get(jobId) ?? 0) + 1)
         await hold.runHolding(admission.hold, async () => {
           provider.holds.set(jobId, hold.currentConcurrencyHold()!)
           if (!provider.finishAll) await new Promise<void>((resolve) => provider.running.set(jobId, resolve))
@@ -254,8 +271,8 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
       } finally {
         await admission.release(outcome)
       }
-    }, { connection: workerConnection, concurrency: 16 })
-    worker.on("error", () => undefined)
+    }
+    worker = await startWorker()
   }, 30_000)
 
   /** Let every held provider call finish, and every later one finish at once; wait for all of `jobIds`. */
@@ -428,4 +445,80 @@ describe.skipIf(!redisUp)("concurrency lanes, enforced, on Redis and BullMQ", ()
     )
     await finishAll(jobsOf(user))
   }, 60_000)
+
+  /** A Web Scrape answered with a job id, through the real route: its worker job is `web-scrape`. */
+  async function restScrape(userId: string): Promise<string> {
+    const res = await app.inject({
+      method: "POST", url: "/v1/web-scrape", headers: { "x-test-user": userId },
+      payload: { actor: "google-search", query: "running shoes", respondAsync: true },
+    })
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json()).toMatchObject({ status: "pending" })
+    return res.json().jobId as string
+  }
+
+  /** Fill the user's personal provider line with leases of other work; returns them. */
+  async function fillProviderLine(userId: string): Promise<string[]> {
+    const leases: string[] = []
+    for (let i = 0; i < BASIC_PROVIDER; i++) {
+      const r = await gate.acquire({
+        meta: {
+          jobId: `filler-${userId}-${i}`, userId, payer: `user:${userId}`, lane: "provider", provider: "kie", source: null,
+          sourceDetail: null, jobType: "generate-image", model: null, queue: "video-generation", bullJobId: null,
+        },
+        size: BASIC_PROVIDER, mode: "fresh", leaseTtlMs: 3_600_000,
+      })
+      if (!r.granted) throw new Error("expected a grant")
+      leases.push(r.leaseId)
+    }
+    return leases
+  }
+
+  it("a background scrape over its line waits as queued and holds its slot for the whole scrape", async () => {
+    const user = newUser()
+    for (let i = 0; i < BASIC_PROVIDER; i++) await restGenerate(user)
+    await settle(user, BASIC_PROVIDER, 0)
+    const scrape = await restScrape(user)
+    await settle(user, BASIC_PROVIDER, 1)
+    expect(statusOf(scrape)).toBe("queued")
+    expect(await gate.describeWait(scrape)).toMatchObject({ lane: "provider", position: 1, reason: "user_lane" })
+
+    // One generation finishes: the scrape starts, under a provider slot of its user's line.
+    const first = jobsOf(user).find((id) => provider.running.has(id))!
+    provider.running.get(first)!()
+    await vi.waitFor(() => expect(provider.running.has(scrape)).toBe(true), { timeout: 30_000, interval: 25 })
+    expect(db.row("jobs", scrape)?.job_type).toBe("web-scrape")
+    expect(provider.holds.get(scrape)).toMatchObject({ role: "leaf", lane: "provider", payer: `user:${user}`, jobId: scrape })
+    expect(provider.holds.get(scrape)!.leaseId).toBeTruthy()
+    // Its slot stays taken while the scrape runs, even once every other job is done.
+    for (const id of jobsOf(user).filter((x) => x !== scrape && provider.running.has(x))) provider.running.get(id)!()
+    await vi.waitFor(() => expect(jobsOf(user).filter((id) => id !== scrape && statusOf(id) !== "completed")).toEqual([]), { timeout: 30_000, interval: 25 })
+    expect((await linesOf(user))[0]!.lanes.provider).toMatchObject({ running: 1, queued: 0 })
+
+    await finishAll(jobsOf(user))
+    expect(await linesOf(user)).toEqual([])
+  }, 60_000)
+
+  it("a background scrape survives a worker restart while queued: it runs once, on the new worker", async () => {
+    const user = newUser()
+    const leases = await fillProviderLine(user)
+    const scrape = await restScrape(user)
+    await vi.waitFor(() => expect(statusOf(scrape)).toBe("queued"), { timeout: 30_000, interval: 25 })
+    expect(started.get(scrape)).toBeUndefined()
+
+    // The worker goes away (a deploy) and a new one starts.
+    await worker.close()
+    workerConnection.disconnect()
+    worker = await startWorker()
+
+    // A slot frees: the waiter it was reserved for is promoted, and the new worker runs it.
+    const park = await import("../park.js")
+    await park.wakeTargets(await gate.release(leases[0]!, "completed"))
+    await vi.waitFor(() => expect(provider.running.has(scrape)).toBe(true), { timeout: 30_000, interval: 25 })
+    await finishAll([scrape])
+    expect(started.get(scrape)).toBe(1)
+    expect(db.row("jobs", scrape)?.job_type).toBe("web-scrape")
+    for (const l of leases.slice(1)) await gate.release(l, "completed")
+  }, 60_000)
 })
+

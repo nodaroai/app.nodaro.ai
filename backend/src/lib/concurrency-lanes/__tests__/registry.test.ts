@@ -20,6 +20,7 @@ import { referenceSheetHandlers } from "../../../workers/handlers/reference-shee
 import { motionGraphicsLottieHandlers } from "../../../workers/handlers/motion-graphics-lottie.js"
 import { llmStructuredHandlers } from "../../../workers/handlers/llm-structured.js"
 import { scene3dHandlers } from "../../../workers/handlers/scene3d.js"
+import { backgroundScrapeHandlers } from "../../../workers/handlers/background-scrape.js"
 import { nodaroExclusiveRelayHandlers } from "../../../workers/handlers/nodaro-exclusive-relay.js"
 import { createSurroundHandlers } from "../../../workers/handlers/surround.js"
 import { UNIT_NODE_DESCRIPTORS, laneOf } from "../../unit-descriptors.js"
@@ -49,6 +50,7 @@ const VIDEO_WORKER_NAMES: readonly string[] = Object.keys({
   ...motionGraphicsLottieHandlers,
   ...llmStructuredHandlers,
   ...scene3dHandlers,
+  ...backgroundScrapeHandlers,
   ...nodaroExclusiveRelayHandlers,
   ...createSurroundHandlers(undefined),
 })

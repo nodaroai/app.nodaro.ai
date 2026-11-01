@@ -388,6 +388,30 @@ describe("POST /face-mask/variants/advance", () => {
     expect(mem.data.faceMask!.variantJobs![0]!.error?.message).toMatch(/role outlines/)
   })
 
+  it("with a depth colormap, person masks start only on an engine that lists it, and each fill is sent it", async () => {
+    const MAPPED = { ...MASKING, fill: "depth" as const, depthColormap: "magma" as const }
+    const mapped = () => {
+      const d = draft([slotMark("amy", 10)], { faceMasking: { ...MAPPED, marks: [slotMark("amy", 10)] } })
+      return { ...d, faceMask: { ...d.faceMask!, depthUrl: "https://cdn.test/depth-gray.mp4" } }
+    }
+    mem.data = mapped()
+    const held = await post("variants")
+    expect(held.statusCode).toBe(503)
+    expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/cannot draw the depth in magma/) })
+    expect(calls.erase).toEqual([])
+
+    setPluginSupports({ castSwap: { ...structuredClone(SUPPORTS), depthColormaps: ["grayscale", "magma"] } as never })
+    mem.data = mapped()
+    await post("variants")
+    const job = mem.data.faceMask!.variantJobs![0]!
+    setJob(job.eraseJobId!, { status: "completed", output_data: { videoUrl: "https://out.test/erased.mp4", frames: 360, coverage: 0.03, droppedRegions: 4, kept: true } })
+    await post("variants/advance")
+    expect(calls.make[0]!.body).toMatchObject({
+      faceMasking: { ...MAPPED, zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } },
+      fromMask: { maskUrl: "https://out.test/erased.mp4", depthUrl: "https://cdn.test/depth-gray.mp4" },
+    })
+  })
+
   it("with role outlines, a fill that answers them is approved with them", async () => {
     setPluginSupports({ castSwap: { ...structuredClone(SUPPORTS), roleOutlines: true } as never })
     mem.data = draft([slotMark("lead", 70), slotMark("amy", 10)], { faceMasking: { ...MASKING, roleOutlines: true, marks: [slotMark("lead", 70), slotMark("amy", 10)] } })

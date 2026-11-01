@@ -397,6 +397,8 @@ export const envSchema = z.object({
   COLLECTIONS_MAX_RECORDS_PER_COLLECTION: z.coerce.number().int().min(1).optional(),
   /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */
   VIDEO_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(50),
+  /** Background scrapes one video-worker process runs at once (default 10; decided 2026-11-01). Over it a scrape waits on the queue, holding no worker slot. */
+  VIDEO_WORKER_SCRAPE_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(10),
   /** BullMQ concurrency for the orchestrator worker (default 20). I/O-bound — just DB polling and job dispatching. */
   ORCHESTRATOR_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(20),
   /** BullMQ concurrency for the render worker (default 2). CPU-bound — each render spawns headless Chrome. */

@@ -141,8 +141,15 @@ export default function DashboardLayout() {
       {!embedded && <FreeGrantBannerSlot />}
       {/* The editor paints its own canvas ground; every other page gets the
           ambient wash (globals.css .page-ambient) under its content. */}
-      {/* The target of the skip link: focusable from script, never a Tab stop. */}
-      <main id="main" tabIndex={-1} className={isEditor ? "flex-1 overflow-auto focus:outline-none" : "flex-1 overflow-auto page-ambient focus:outline-none"}>
+      {/* The target of the skip link: focusable from script, never a Tab stop.
+          Off the editor (whose phone header is the compact row, with no bar),
+          its end clears the shared header's fixed phone bottom bar: the header
+          publishes its height, 0 on a wide screen and without the header. */}
+      <main
+        id="main"
+        tabIndex={-1}
+        className={isEditor ? "flex-1 overflow-auto focus:outline-none" : "flex-1 overflow-auto page-ambient pb-[var(--ns-bottom-bar-h,0px)] focus:outline-none"}
+      >
         <Outlet />
       </main>
     </div>

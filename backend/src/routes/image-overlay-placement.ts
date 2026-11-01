@@ -21,6 +21,8 @@ import { rateLimiter } from "../middleware/rate-limit.js"
 import { OVERLAY_ANCHORS } from "../providers/image/overlay.js"
 import { laneUserMessage, userFacingMessage } from "../lib/user-facing-error.js"
 import { billedContentRefusal, describeErrorChain } from "../lib/llm-errors.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOfBody } from "../lib/concurrency-lanes/live-routes.js"
 
 /**
  * "Put it where it doesn't get in the way": a vision LLM looks at the base
@@ -68,10 +70,15 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-overlay/suggest-placement",
     {
-      preHandler: [suggestRateLimit, creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
-        // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
-        computeCredits: (body) => llmGuardPrecheck("image-to-text", body, { maxTokens: PLACEMENT_MAX_TOKENS }),
-      })],
+      preHandler: [
+        suggestRateLimit,
+        creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
+          // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
+          computeCredits: (body) => llmGuardPrecheck("image-to-text", body, { maxTokens: PLACEMENT_MAX_TOKENS }),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", { provider: llmProviderOfBody(LLM_FEATURE_DEFAULTS["image-to-text"]) }),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -100,7 +107,7 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData({ imageUrl, layerAspect, intent, safeArea }, "image-overlay-suggest"),
+        input_data: { ...buildJobInputData({ imageUrl, layerAspect, intent, safeArea }, "image-overlay-suggest"), resolvedModel: llmModel },
       })
       if (jobError) return sendInternalError(reply, req, jobError, "Failed to create job")
 

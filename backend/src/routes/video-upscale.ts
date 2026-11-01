@@ -32,6 +32,7 @@ import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middlew
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import { TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS } from "@nodaro/shared/models"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
@@ -222,7 +223,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(
+        input_data: withResolvedModel(buildJobInputData(
           {
             ...parsed.data,
             ...(topaz
@@ -240,7 +241,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
               : {}),
           },
           "video-upscale",
-        ),
+        ), "video-upscale"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

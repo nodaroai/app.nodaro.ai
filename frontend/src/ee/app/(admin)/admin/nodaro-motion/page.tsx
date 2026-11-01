@@ -51,9 +51,9 @@ import {
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
 import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
-import { prismReferenceAudioTriple } from "../trends/prism-reference-audio"
+import { prismReferenceAudioModesEveryEngineTakes, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
-import { environmentsThatCannotDrawFaceMesh, environmentsThatCannotHideBodies } from "../trends/clip-preparation"
+import { environmentsThatCannotDrawColormaps, environmentsThatCannotDrawFaceMesh, environmentsThatCannotHideBodies } from "../trends/clip-preparation"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
 import { MotionColumn } from "./components/MotionColumn"
@@ -71,6 +71,9 @@ const PULSE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet:
 /** Said under the Prism reference audio select when this environment's engine does not take it yet. */
 const PRISM_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs send the full audio."
 
+/** Why One-tone or Octave is greyed out on this shared setting. */
+const PRISM_REFERENCE_AUDIO_MODE_SHARED_UNOFFERED = "A mode greyed out is not on every environment's engine yet: this setting is shared by every environment."
+
 const AUTO_HINT =
   "Only when the video model refuses the clip: one retry with the faces covered, charged only then (the quote names it apart)."
 
@@ -84,6 +87,8 @@ export default function AdminNodaroMotionPage() {
   const bodyMissingIn = environmentsThatCannotHideBodies(envs.data)
   // The face mesh likewise: shown, greyed out and naming the environments whose engine cannot draw it.
   const faceMeshMissingIn = environmentsThatCannotDrawFaceMesh(envs.data)
+  // The depth colormaps likewise: each offered only once every environment's engine draws it.
+  const depthColormapsMissingIn = environmentsThatCannotDrawColormaps(envs.data)
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
@@ -198,6 +203,7 @@ export default function AdminNodaroMotionPage() {
                       autoHint={AUTO_HINT}
                       bodyMissingIn={bodyMissingIn}
                       faceMeshMissingIn={faceMeshMissingIn}
+                      depthColormapsMissingIn={depthColormapsMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
                           const out = { ...d }
@@ -217,6 +223,7 @@ export default function AdminNodaroMotionPage() {
                         envs={envs.data}
                         bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
+                        depthColormapsMissingIn={depthColormapsMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
                       />
                     ) : motionQuery.error ? (
@@ -270,6 +277,9 @@ export default function AdminNodaroMotionPage() {
                         value={prismAudioDraft}
                         onChange={setPrismAudioDraft}
                         note={prismAudioQuery.data.supported ? undefined : PRISM_REFERENCE_AUDIO_UNSUPPORTED}
+                        // A setting every environment shares: a mode only some engines take, once every one does.
+                        offered={prismReferenceAudioModesEveryEngineTakes(envs.data)}
+                        unofferedNote={PRISM_REFERENCE_AUDIO_MODE_SHARED_UNOFFERED}
                       />
                     ) : prismAudioQuery.error ? (
                       <p className="text-xs text-destructive">{prismAudioQuery.error.message}</p>

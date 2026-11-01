@@ -73,6 +73,24 @@ export function creditStatusOf(
   return usageLogId ? map.get(usageLogId)?.status ?? null : null
 }
 
+/**
+ * A job's OWN credit figure, the one the admin Jobs list shows and filters by:
+ * once its own usage log has settled (committed or refunded), the settled
+ * charge plus its settled side holds; otherwise its hold (`jobs.credits`), or
+ * 0 with none. Its steps are not counted. Pure; `runCreditsFor`'s
+ * `ownCharged ?? ownHeld ?? 0` gives the same figure. The SQL mirror is
+ * `public.admin_job_own_credits` (migration 575), and all three are pinned to
+ * one case table, `supabase/tests/fixtures/admin-job-own-credits-cases.json`.
+ */
+export function ownCreditFigure(
+  log: { status: string | null; credits_used: number | null; credits_charged: number | null } | null,
+  sideCharged: number,
+  held: number | null,
+): number {
+  const charged = log ? settledCharge(log) : null
+  return charged !== null ? charged + sideCharged : held ?? 0
+}
+
 // ── a run's figures ─────────────────────────────────────────────────────────
 
 /** What `runCreditsFor` reads off a job row the caller already has. */

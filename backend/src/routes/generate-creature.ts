@@ -10,6 +10,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { resolveEntityAspect } from "@nodaro/shared/entities"
 import { buildCreaturePrompt } from "@nodaro/prompts/doctrine"
 import { renderEntitySubjectHints } from "../lib/entity-subject.js"
@@ -199,7 +200,7 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
         expectedUpdatedAt: _expectedUpdatedAt,
         ...bodyWithoutAttach
       } = parsed.data
-      const baseInputData = buildJobInputData(bodyWithoutAttach, "generate-creature")
+      const baseInputData = withResolvedModel(buildJobInputData(bodyWithoutAttach, "generate-creature"), "generate-creature")
 
       // ──────────────────────────────────────────────────────────────────────
       // Phase 1: Insert N pending jobs (always at least 1).

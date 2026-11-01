@@ -52,13 +52,18 @@ vi.mock("../actors.js", () => ({
 }))
 
 import { runScraper } from "../scraper.js"
+import { callBackedRuns } from "./fake-actor-run.js"
+
+let runs: ReturnType<typeof callBackedRuns>
 
 beforeEach(() => {
   vi.clearAllMocks()
 
-  // Wire up the chained API: client.actor(id).call(input, opts)
+  // Wire up the chained API: client.actor(id).start(input, opts), then
+  // client.run(id).waitForFinish — the two steps of `.call`, driven by actorCall.
   mocks.actorCall.mockResolvedValue({ defaultDatasetId: "ds-1" })
-  mocks.actorFn.mockReturnValue({ call: mocks.actorCall })
+  runs = callBackedRuns((input, opts) => mocks.actorCall(input, opts))
+  mocks.actorFn.mockReturnValue({ call: mocks.actorCall, start: runs.start })
 
   // client.dataset(id).listItems()
   mocks.datasetListItems.mockResolvedValue({
@@ -69,6 +74,7 @@ beforeEach(() => {
   mocks.getApifyClient.mockReturnValue({
     actor: mocks.actorFn,
     dataset: mocks.datasetFn,
+    run: (id: string) => runs.runOf(id),
   })
 
   mocks.buildActorInput.mockReturnValue({ input: "built" })

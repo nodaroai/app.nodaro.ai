@@ -183,6 +183,17 @@ vi.mock("../handlers/suno.js", () => ({
 vi.mock("../handlers/entity.js", () => ({
   entityHandlers: {},
 }))
+// The background scrapes: one controllable handler under each of their job
+// types, flagged as the real map flags them (data, not media).
+const scrape = vi.hoisted(() => ({ handler: vi.fn().mockResolvedValue(undefined) }))
+vi.mock("../handlers/background-scrape.js", () => {
+  const handler = Object.assign((job: unknown, ctx: unknown) => scrape.handler(job, ctx), {
+    outputIsData: true as const, resumesProviderTask: true as const, ignoresQuietStop: true as const, capacityGroup: "scrape" as const,
+  })
+  return {
+    backgroundScrapeHandlers: { "web-scrape": handler, "site-capture": handler, "meta-ads-scrape": handler, "instagram-scrape": handler },
+  }
+})
 
 // Private-plugins loader (Stage 1 VCP extraction) — mocked to a no-op so this
 // suite never attempts a real `@nodaroai/cloud-plugins` import or builds the
@@ -255,6 +266,7 @@ import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lan
 import { registerWakeTargetsHandler, resetWorkerAdmitHooksForTests } from "../../lib/concurrency-lanes/worker-admit.js"
 import { resetServerShareForTests, serverShareOf } from "../../lib/concurrency-lanes/server-share.js"
 import { resetLaneColumnsForTests } from "../../lib/concurrency-lanes/columns.js"
+import { resetCapacityForTests, capacitySnapshot } from "../worker-capacity.js"
 
 /** A gate on a fresh in-memory twin of Redis. */
 function newLaneGate(): ConcurrencyGate {
@@ -285,6 +297,7 @@ function makeBullJob(name: string, data: Record<string, unknown> = {}) {
     // BullMQ's in-processor requeue primitive (drain path): the job moves back
     // to the queue WITHOUT spending an attempt.
     moveToDelayed: vi.fn().mockResolvedValue(undefined),
+    promote: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -298,6 +311,7 @@ beforeEach(() => {
   resetWorkerAdmitHooksForTests()
   resetLaneColumnsForTests()
   resetServerShareForTests()
+  resetCapacityForTests()
   mocks.mockHasCreditsRef.value = true
   mocks.mockSingle.mockResolvedValue({ data: mockJobRecord(), error: null })
   mocks.mockSignScene3DDeliveryUrls.mockImplementation(async (payload: Record<string, unknown>) => payload)
@@ -1548,5 +1562,179 @@ describe("video worker — concurrency slot", () => {
     // BullMQ's started-attempts limit would fail it for waiting.
     expect(mocks.getCapturedOptions()).toBeDefined()
     expect(mocks.getCapturedOptions()).not.toHaveProperty("maxStartedAttempts")
+  })
+})
+
+describe("video worker — background scrapes (web-scrape, site-capture, meta-ads-scrape, instagram-scrape)", () => {
+  const SCRAPES = ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape"] as const
+  let processor: (job: unknown, token?: string) => Promise<void>
+  let gate: ConcurrencyGate
+
+  const otherMeta = {
+    jobId: "other", userId: "user-1", payer: "user:user-1" as const, lane: "provider" as const, provider: "kie", source: null,
+    sourceDetail: null, jobType: "generate-image", model: null, queue: "video-generation" as const, bullJobId: "bull-other",
+  }
+  const claimOf = () => mocks.mockUpdate.mock.calls.map(([f]) => f as Record<string, unknown>).find((f) => f.status === "processing")
+
+  beforeEach(() => {
+    createVideoWorker()
+    processor = mocks.getCapturedProcessor()!
+    gate = lanes.gate as ConcurrencyGate
+  })
+
+  afterEach(() => {
+    scrape.handler.mockReset()
+    scrape.handler.mockResolvedValue(undefined)
+  })
+
+  it("each moved job keeps its job_type at pickup; its row stays private and files no Library asset", async () => {
+    for (const name of SCRAPES) {
+      mocks.mockUpdate.mockClear()
+      mocks.mockCreateAssetFromJob.mockClear()
+      scrape.handler.mockClear()
+      // The row was inserted under its type; the user's outputs are public.
+      mocks.mockSingle.mockResolvedValue({ data: mockJobRecord({ job_type: name }), error: null })
+      await processor(makeBullJob(name, { userId: "user-1" }))
+      expect(scrape.handler, name).toHaveBeenCalledTimes(1)
+      expect(claimOf(), name).toMatchObject({ status: "processing", job_type: name, is_public: false })
+      expect(mocks.mockCreateAssetFromJob, name).not.toHaveBeenCalled()
+    }
+    // A media job of the same user is still public and filed.
+    mocks.mockUpdate.mockClear()
+    await processor(makeBullJob("generate-image"))
+    expect(claimOf()).toMatchObject({ job_type: "generate-image", is_public: true })
+    expect(mocks.mockCreateAssetFromJob).toHaveBeenCalledWith("job-1", "user-1")
+  })
+
+  it("with enforcement off changes nothing: a scrape over its line still runs at once", async () => {
+    await gate.setEnforced(false)
+    await gate.acquire({ meta: otherMeta, size: 1, mode: "fresh", leaseTtlMs: 60_000 })
+    for (const name of SCRAPES) {
+      scrape.handler.mockClear()
+      const job = makeBullJob(name, { userId: "user-1" })
+      await processor(job)
+      expect(scrape.handler, name).toHaveBeenCalledTimes(1)
+      expect(job.moveToDelayed, name).not.toHaveBeenCalled()
+    }
+  })
+
+  it("a background scrape over its line waits as queued, then holds its slot for the whole scrape — its LLM analysis takes none", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    await gate.setEnforced(true)
+    // Another job of the user holds the provider line's one slot.
+    const other = await gate.acquire({ meta: otherMeta, size: 1, mode: "fresh", leaseTtlMs: 60_000 })
+    if (!other.granted) throw new Error("expected a grant")
+    const job = makeBullJob("meta-ads-scrape", { userId: "user-1" })
+    await expect(processor(job, "lock-token")).rejects.toBeInstanceOf(DelayedError)
+    expect(scrape.handler).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ status: "queued" })
+    expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+    expect(await gate.describeWait("job-1")).toMatchObject({ position: 1 })
+
+    // The slot frees: the parked job is picked up again and runs.
+    await gate.release(other.leaseId, "completed")
+    const { currentConcurrencyHold } = await import("../../lib/concurrency-lanes/hold.js")
+    const { withConcurrencySlot } = await import("../../lib/concurrency-lanes/slot.js")
+    const seen: Array<{ hold: unknown; provider: unknown }> = []
+    scrape.handler.mockImplementationOnce(async () => {
+      const acquire = vi.spyOn(gate, "acquire")
+      seen.push({ hold: currentConcurrencyHold(), provider: (await gate.snapshot()).lines[0]?.lanes.provider })
+      // The ad analysis's LLM call, through the funnel every LLM call takes.
+      await withConcurrencySlot({ lane: "llm", provider: "kie", jobType: "meta-ads-scrape" }, async () => {
+        seen.push({ hold: currentConcurrencyHold(), provider: (await gate.snapshot()).lines[0]?.lanes.provider })
+      })
+      expect(acquire).not.toHaveBeenCalled()
+      acquire.mockRestore()
+    })
+    const release = vi.spyOn(gate, "release")
+    await processor(makeBullJob("meta-ads-scrape", { userId: "user-1" }), "lock-token")
+    expect(scrape.handler).toHaveBeenCalledTimes(1)
+    for (const s of seen) {
+      expect(s.hold).toMatchObject({ role: "leaf", lane: "provider", jobId: "job-1", leaseId: expect.any(String) })
+      expect(s.provider).toMatchObject({ running: 1, queued: 0 })
+    }
+    expect(seen).toHaveLength(2)
+    // Released once, when the scrape is over.
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(release.mock.calls[0]![1]).toBe("completed")
+  })
+
+  it("a re-picked scrape whose row saved its run runs its handler with that run — never the inline reconcile — and the claim keeps the run's kind and stamp", async () => {
+    mocks.mockSingle.mockResolvedValue({
+      data: mockJobRecord({ job_type: "web-scrape", status: "processing", provider_task_id: "cloud-9", provider_kind: "nodaro-cloud" }),
+      error: null,
+    })
+    await processor(makeBullJob("web-scrape", { userId: "user-1" }))
+    expect(mocks.mockTryInlineReconcile).not.toHaveBeenCalled()
+    expect(scrape.handler).toHaveBeenCalledTimes(1)
+    expect((scrape.handler.mock.calls[0]![1] as { providerTask?: unknown }).providerTask).toEqual({ kind: "nodaro-cloud", id: "cloud-9" })
+    const claim = claimOf()!
+    expect(claim).toMatchObject({ status: "processing", job_type: "web-scrape" })
+    expect(claim).not.toHaveProperty("provider_kind")
+    expect(claim).not.toHaveProperty("provider_call_started_at")
+  })
+
+  it("a re-picked job of any other type with a provider task still goes to the inline reconcile", async () => {
+    mocks.mockSingle.mockResolvedValue({ data: mockJobRecord({ provider_task_id: "task-1", provider_kind: "kie-standard" }), error: null })
+    await processor(makeBullJob("generate-image"))
+    expect(mocks.mockTryInlineReconcile).toHaveBeenCalledTimes(1)
+    expect(mocks.mockHandler).not.toHaveBeenCalled()
+  })
+
+  it("a first pickup of a scrape hands its handler no saved run and stamps pre-task as for any job", async () => {
+    await processor(makeBullJob("site-capture", { userId: "user-1" }))
+    expect((scrape.handler.mock.calls[0]![1] as { providerTask?: unknown }).providerTask).toBeUndefined()
+    expect(claimOf()).toMatchObject({ provider_kind: "pre-task", provider_call_started_at: expect.any(String) })
+  })
+
+  it("background scrapes ignore quiet stop, as they did in their routes; other jobs still wait", async () => {
+    mocks.mockIsUserQuietStopped.mockResolvedValue(true)
+    try {
+      for (const name of SCRAPES) {
+        scrape.handler.mockClear()
+        const job = makeBullJob(name, { userId: "user-1" })
+        await processor(job)
+        expect(scrape.handler, name).toHaveBeenCalledTimes(1)
+        expect(job.moveToDelayed, name).not.toHaveBeenCalled()
+      }
+      const media = makeBullJob("generate-image")
+      await expect(processor(media, "tok")).rejects.toBeInstanceOf(DelayedError)
+      expect(mocks.mockHandler).not.toHaveBeenCalled()
+    } finally {
+      mocks.mockIsUserQuietStopped.mockResolvedValue(false)
+    }
+  })
+
+  it("the 11th concurrent scrape does not run and frees its slot; it runs once one finishes; media jobs run beside 10 busy scrapes", async () => {
+    const releases: Array<() => void> = []
+    scrape.handler.mockImplementation(() => new Promise<void>((resolve) => { releases.push(resolve) }))
+    const running = Array.from({ length: 10 }, (_, i) => processor({ ...makeBullJob("instagram-scrape", { userId: "user-1" }), id: `bull-${i}` }))
+    await vi.waitFor(() => expect(releases).toHaveLength(10))
+    expect(capacitySnapshot("scrape")).toMatchObject({ running: 10, cap: 10 })
+
+    // The 11th: handed back to the delayed set at once — no row read, no lane slot, no claim, no handler.
+    const reads = mocks.mockSingle.mock.calls.length
+    const acquire = vi.spyOn(gate, "acquire")
+    const eleventh = { ...makeBullJob("meta-ads-scrape", { userId: "user-1" }), id: "bull-11" }
+    await expect(processor(eleventh, "tok")).rejects.toBeInstanceOf(DelayedError)
+    expect(eleventh.moveToDelayed).toHaveBeenCalledTimes(1)
+    expect(mocks.mockSingle.mock.calls.length).toBe(reads)
+    expect(acquire).not.toHaveBeenCalled()
+    expect(scrape.handler).toHaveBeenCalledTimes(10)
+
+    // A media job runs beside the 10 busy scrapes.
+    await processor(makeBullJob("generate-image"))
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+
+    // One scrape ends: the 11th is promoted, and when picked up again it runs.
+    releases[0]!()
+    await running[0]
+    expect(eleventh.promote).toHaveBeenCalledTimes(1)
+    scrape.handler.mockImplementation(async () => undefined)
+    await processor(eleventh, "tok")
+    expect(scrape.handler).toHaveBeenCalledTimes(11)
+    for (const r of releases.slice(1)) r()
+    await Promise.all(running)
+    expect(capacitySnapshot("scrape")).toMatchObject({ running: 0, waiting: 0 })
   })
 })

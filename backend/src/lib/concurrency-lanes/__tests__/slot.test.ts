@@ -14,11 +14,16 @@ const refs = vi.hoisted(() => ({
   onWake: null as null | ((targets: WakeTarget[]) => Promise<void>),
   subscribed: [] as string[][],
   stopped: 0,
+  /** Whether limits may be turned on (this release: no). These tests wait, so they default to the test-only "yes". */
+  available: true,
+  /** When set, the lane settings and sizes do not answer until it settles: a Redis that hangs. */
+  hang: null as Promise<void> | null,
 }))
+vi.mock("../enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return refs.available } }))
 vi.mock("../instance.js", () => ({ concurrencyGate: () => refs.gate }))
 vi.mock("../sizes.js", () => ({
-  laneSizesFor: async () => refs.sizes,
-  laneSettings: async () => refs.settings,
+  laneSizesFor: async () => { if (refs.hang) await refs.hang; return refs.sizes },
+  laneSettings: async () => { if (refs.hang) await refs.hang; return refs.settings },
 }))
 vi.mock("../wake-subscriber.js", () => ({
   startLaneWakeSubscriber: (queues: string[], onWake: (targets: WakeTarget[]) => Promise<void>) => {
@@ -29,7 +34,7 @@ vi.mock("../wake-subscriber.js", () => ({
 }))
 
 const { runHolding, runNotLimited, laneCounters, resetLaneCountersForTests, heldWaitMs, currentConcurrencyHold } = await import("../hold.js")
-const { withConcurrencySlot, ensureConcurrencySlot, resetConcurrencySlotsForTests } = await import("../slot.js")
+const { withConcurrencySlot, ensureConcurrencySlot, takeSlotAhead, withSlotTakenAheadOr, resetConcurrencySlotsForTests } = await import("../slot.js")
 const { EnsureUnderCoordinatorError, LaneWaitAbortedError, LaneWaitTimeoutError } = await import("../errors.js")
 type ConcurrencyHold = import("../hold.js").ConcurrencyHold
 type SlotRequest = import("../slot.js").SlotRequest
@@ -63,6 +68,8 @@ beforeEach(async () => {
   refs.onWake = null
   refs.subscribed = []
   refs.stopped = 0
+  refs.available = true
+  refs.hang = null
   resetLaneCountersForTests()
   resetConcurrencySlotsForTests()
   await gate.setEnforced(true)
@@ -154,7 +161,7 @@ describe("withConcurrencySlot", () => {
       const p = withConcurrencySlot({ ...req, onWaiting: (w) => waits.push(w.position) }, fn).then((r) => { result = r })
       await vi.advanceTimersByTimeAsync(1_000)
       expect(fn).not.toHaveBeenCalled()
-      expect(refs.subscribed).toEqual([["inline"]])
+      expect(refs.subscribed).toEqual([["inline", "live"]])
       const wakes = await gate.release(other, "completed")
       expect(wakes.map((w) => w.queue)).toEqual(["inline"])
       await refs.onWake!(wakes)
@@ -346,6 +353,34 @@ describe("withConcurrencySlot", () => {
   })
 })
 
+describe("a wait-only signal", () => {
+  it("never refuses a call the gate grants at once", async () => {
+    const ac = new AbortController()
+    ac.abort()
+    const r = await runHolding(coordinator, () => withConcurrencySlot({ ...req, waitSignal: ac.signal }, async () => "ran"))
+    expect(r).toBe("ran")
+    await gate.setEnforced(false)
+    await fillLane()
+    expect(await runHolding(coordinator, () => withConcurrencySlot({ ...req, waitSignal: ac.signal }, async () => "measured"))).toBe("measured")
+  })
+
+  it("ends a wait in progress", async () => {
+    vi.useFakeTimers()
+    await fillLane()
+    const ac = new AbortController()
+    let err: unknown
+    await runHolding(coordinator, async () => {
+      const p = withConcurrencySlot({ ...req, waitSignal: ac.signal }, async () => "never").catch((e: unknown) => { err = e })
+      await vi.advanceTimersByTimeAsync(2_000)
+      ac.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      await p
+    })
+    expect(err).toBeInstanceOf(LaneWaitAbortedError)
+    expect((await providerLane())?.queued).toBe(0)
+  })
+})
+
 describe("ensureConcurrencySlot", () => {
   it("ensure under a coordinator hold is refused", async () => {
     const acquire = vi.spyOn(gate, "acquire")
@@ -375,5 +410,153 @@ describe("ensureConcurrencySlot", () => {
     expect(laneCounters().ungated).toEqual({ "image-to-video": 2 })
     expect((await gate.snapshot()).lines).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe("limits locked (this release): a call never waits for the gate", () => {
+  function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
+    let resolve!: (v: T) => void
+    const promise = new Promise<T>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+  async function until(check: () => Promise<boolean> | boolean): Promise<void> {
+    const end = Date.now() + 3_000
+    while (!(await check())) {
+      if (Date.now() > end) throw new Error("condition not met in time")
+      await new Promise((r) => setTimeout(r, 5))
+    }
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 20))
+
+  beforeEach(() => {
+    refs.available = false
+  })
+
+  it("a coordinator call runs at once while the gate hangs, under the lease its take asks for, and that lease is freed once, when the take lands", async () => {
+    const hung = deferred()
+    refs.hang = hung.promise
+    const acquire = vi.spyOn(gate, "acquire")
+    const release = vi.spyOn(gate, "release")
+    let inner: ConcurrencyHold | undefined
+    const result = await runHolding(coordinator, () => withConcurrencySlot(req, async () => {
+      inner = currentConcurrencyHold()
+      return "ran"
+    }))
+    expect(result).toBe("ran")
+    expect(inner).toMatchObject({ role: "leaf", lane: "provider", jobId: "job-1", leaseId: expect.any(String) })
+    // The call finished before the gate was even asked: nothing was released either.
+    expect(acquire).not.toHaveBeenCalled()
+    expect(release).not.toHaveBeenCalled()
+    hung.resolve()
+    await until(() => release.mock.calls.length === 1)
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ mode: "front", leaseId: inner!.leaseId })
+    expect(release).toHaveBeenCalledWith(inner!.leaseId, "completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await providerLane())?.running ?? 0).toBe(0)
+  })
+
+  it("an acquire that hangs: the call runs; when the acquire lands its lease is released exactly once — never leaked, never released twice", async () => {
+    const landed = deferred()
+    const original = gate.acquire.bind(gate)
+    const acquire = vi.spyOn(gate, "acquire").mockImplementation(async (r) => {
+      await landed.promise
+      return original(r)
+    })
+    const release = vi.spyOn(gate, "release")
+    const fn = vi.fn(async () => "ran")
+    await expect(runHolding(coordinator, () => withConcurrencySlot(req, fn))).resolves.toBe("ran")
+    expect(fn).toHaveBeenCalledTimes(1)
+    await until(() => acquire.mock.calls.length === 1)
+    expect(release).not.toHaveBeenCalled()
+    landed.resolve()
+    await until(() => release.mock.calls.length === 1)
+    const leaseId = acquire.mock.calls[0]![0].leaseId!
+    expect(release).toHaveBeenCalledWith(leaseId, "completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await providerLane())?.running ?? 0).toBe(0)
+    expect(await gate.leaseLine(leaseId)).toBeNull()
+  })
+
+  it("a take that lands while the call still runs is released when the call ends, once", async () => {
+    const release = vi.spyOn(gate, "release")
+    const acquire = vi.spyOn(gate, "acquire")
+    const running = deferred()
+    const p = runHolding(coordinator, () => withConcurrencySlot(req, () => running.promise.then(() => "done")))
+    await until(async () => ((await providerLane())?.running ?? 0) === 1)
+    expect(release).not.toHaveBeenCalled()
+    running.resolve()
+    expect(await p).toBe("done")
+    await until(() => release.mock.calls.length === 1)
+    expect(release).toHaveBeenCalledWith(acquire.mock.calls[0]![0].leaseId, "completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await providerLane())?.running ?? 0).toBe(0)
+  })
+
+  it("a call that throws releases its lease as failed, once", async () => {
+    const release = vi.spyOn(gate, "release")
+    const boom = new Error("provider failed")
+    await expect(runHolding(coordinator, () => withConcurrencySlot(req, async () => { throw boom }))).rejects.toBe(boom)
+    await until(() => release.mock.calls.length === 1)
+    expect(release.mock.calls[0]![1]).toBe("failed")
+  })
+
+  it("a take that fails releases nothing, and the call runs and is counted as ungated", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined)
+    vi.spyOn(gate, "acquire").mockRejectedValue(new Error("redis down"))
+    const release = vi.spyOn(gate, "release")
+    await expect(runHolding(coordinator, () => withConcurrencySlot(req, async () => "ran"))).resolves.toBe("ran")
+    await until(() => (laneCounters().ungated["image-to-video"] ?? 0) === 1)
+    await settle()
+    expect(release).not.toHaveBeenCalled()
+  })
+
+  it("a full lane on an enforced gate (it is never enforced while locked) still runs the call at once: counted ungated, never refused, nothing left waiting", async () => {
+    refs.settings = { queueTimeoutMs: 1, liveWaitLimitMs: 1 }
+    await fillLane()
+    const withdraw = vi.spyOn(gate, "withdraw")
+    const release = vi.spyOn(gate, "release")
+    await expect(runHolding(coordinator, () => withConcurrencySlot(req, async () => "ran"))).resolves.toBe("ran")
+    await until(() => (laneCounters().ungated["image-to-video"] ?? 0) === 1)
+    expect(withdraw).toHaveBeenCalledTimes(1)
+    expect(refs.subscribed).toEqual([]) // nothing ever waited
+    await settle()
+    expect(release).not.toHaveBeenCalled()
+    expect((await providerLane())?.running).toBe(1) // only the filler
+  })
+
+  it("a caller that already gave up is still refused before any take (its own signal, not the gate)", async () => {
+    const acquire = vi.spyOn(gate, "acquire")
+    const ac = new AbortController()
+    ac.abort()
+    const fn = vi.fn(async () => "never")
+    await expect(runHolding(coordinator, () => withConcurrencySlot({ ...req, signal: ac.signal }, fn))).rejects.toBeInstanceOf(LaneWaitAbortedError)
+    expect(fn).not.toHaveBeenCalled()
+    await settle()
+    expect(acquire).not.toHaveBeenCalled()
+  })
+
+  it("a slot taken ahead answers at once while the gate hangs; the call claims it, and its release chains on the take", async () => {
+    const hung = deferred()
+    refs.hang = hung.promise
+    const acquire = vi.spyOn(gate, "acquire")
+    const release = vi.spyOn(gate, "release")
+    let inner: ConcurrencyHold | undefined
+    await runHolding(coordinator, async () => {
+      const ahead = await takeSlotAhead({ ...req, lane: "llm" })
+      await withSlotTakenAheadOr({ ...req, lane: "llm" }, async () => { inner = currentConcurrencyHold() })
+      await ahead.release("completed")
+    })
+    expect(inner).toMatchObject({ role: "leaf", lane: "llm", leaseId: expect.any(String) })
+    expect(acquire).not.toHaveBeenCalled()
+    hung.resolve()
+    await until(() => release.mock.calls.length === 1)
+    expect(acquire).toHaveBeenCalledTimes(1) // one take: the call ran in the slot taken ahead
+    expect(release).toHaveBeenCalledWith(inner!.leaseId, "completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
   })
 })

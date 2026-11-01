@@ -25,6 +25,7 @@ import { inlineImagesForClaudeKie } from "../../../lib/llm/claude-kie-images.js"
 import { kieCostUsd, kieFailureCostUsd, kieInputTokens, requestChars } from "../../../lib/llm/kie-cost.js"
 import type { LlmContentBlock, LlmRequest } from "../../../lib/llm/types.js"
 import { kieRetryable } from "../../copilot/lane.js"
+import { withConcurrencySlot } from "../../../lib/concurrency-lanes/slot.js"
 
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
@@ -360,79 +361,98 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     // Undefined outside a pipeline.
     const signal = getPipelineSignal()
     lane = registryModel ? pickClaudeLane() : "direct"
-    let laneReason = lane === "kie" ? (anthropicKeySet() ? "the Anthropic direct lane is latched" : "no Anthropic key") : ""
-    let outcome: AttemptOutcome | undefined
+    // One llm slot per attempt (lib/concurrency-lanes/slot.ts): the direct
+    // try, a KIE fallback and the burst's pauses all run in it. Under the
+    // pipeline's run hold it is taken at the front of the user's line; the
+    // pipeline's cancel ends only a wait for it, never a call. It counts
+    // against the lane the attempt starts on: a direct try that falls back
+    // to KIE inside it stays counted against Anthropic (a slot's provider is
+    // fixed when it is granted; the fallback is not worth a second slot).
+    const result = await withConcurrencySlot(
+      {
+        lane: "llm",
+        provider: lane === "kie" ? "kie" : "anthropic",
+        jobType: `pipeline-llm:${role}`,
+        model: modelId,
+        coversNested: true,
+        ...(signal ? { waitSignal: signal } : {}),
+      },
+      async (): Promise<AttemptOutcome> => {
+        let laneReason = lane === "kie" ? (anthropicKeySet() ? "the Anthropic direct lane is latched" : "no Anthropic key") : ""
+        let outcome: AttemptOutcome | undefined
 
-    if (lane === "direct") {
-      try {
-        outcome = await runDirectAttempt({
-          stageRequest,
-          userContent: withRetryFeedback(userPrompt, feedback),
-          onProgress,
-          progressMinIntervalMs,
-          signal,
-          autoTool,
-          modelId,
-        })
-      } catch (err) {
-        laneReason = directFailureToKie(err, { modelId, task, kieAvailable: Boolean(registryModel) && kieKeySet() })
-        lane = "kie"
-      }
-    }
+        if (lane === "direct") {
+          try {
+            outcome = await runDirectAttempt({
+              stageRequest,
+              userContent: withRetryFeedback(userPrompt, feedback),
+              onProgress,
+              progressMinIntervalMs,
+              signal,
+              autoTool,
+              modelId,
+            })
+          } catch (err) {
+            laneReason = directFailureToKie(err, { modelId, task, kieAvailable: Boolean(registryModel) && kieKeySet() })
+            lane = "kie"
+          }
+        }
 
-    if (lane === "kie") {
-      const model = registryModel!
-      // No key is said once per process (`pickClaudeLane`'s K2 line); a latch or a refusal is said per attempt.
-      if (laneReason !== "no Anthropic key") {
-        // eslint-disable-next-line no-console -- the lane is the operator's only signal until llm_calls.lane exists everywhere
-        console.warn(`[callLLM] ${task}: ${modelId} served from KIE — ${laneReason}`)
-      }
-      // Under the pipeline's cancel: a Cancel while the images are fetched ends the call at once.
-      kieBaseBlocks ??= typeof userPrompt === "string" ? [] : await inlineImagesForClaudeKie(userPrompt, signal)
-      const blocks = kieUserBlocks(userPrompt, kieBaseBlocks, feedback)
-      // One deadline for this attempt's KIE tries, however many a burst takes.
-      const deadline = AbortSignal.timeout(PIPELINE_KIE_TIMEOUT_MS)
-      const firstCallAt = PIPELINE_KIE_BURST.now()
-      const deadlineAt = firstCallAt + PIPELINE_KIE_TIMEOUT_MS
-      let burstTry = false
-      while (outcome === undefined) {
-        try {
-          outcome = await runKieAttempt({
-            model,
-            systemPrompt,
-            blocks,
-            jsonSchema,
-            maxTokens: stageRequest.max_tokens,
-            temperature,
-            onProgress,
-            signal,
-            deadline,
-            singleShot: burstTry,
-          })
-        } catch (err) {
-          if (signal?.aborted) throw err
-          if (kieBurstRetryable(err, deadline)) {
-            const nextTryAt = PIPELINE_KIE_BURST.now() + PIPELINE_KIE_BURST.pauseMs
-            if (nextTryAt < firstCallAt + PIPELINE_KIE_BURST.windowMs && nextTryAt < deadlineAt) {
-              // eslint-disable-next-line no-console -- the operator's view of a burst being ridden out
-              console.warn(
-                `[callLLM] ${task}: KIE ${model.id} failed before any charge — trying again in ${PIPELINE_KIE_BURST.pauseMs} ms: ` +
-                  String(err).slice(0, 160),
-              )
-              // A cancel during the pause ends the call at once, as a cancel.
-              await pauseUnlessCancelled(PIPELINE_KIE_BURST.pauseMs, signal)
-              burstTry = true
-              continue
+        if (lane === "kie") {
+          const model = registryModel!
+          // No key is said once per process (`pickClaudeLane`'s K2 line); a latch or a refusal is said per attempt.
+          if (laneReason !== "no Anthropic key") {
+            // eslint-disable-next-line no-console -- the lane is the operator's only signal until llm_calls.lane exists everywhere
+            console.warn(`[callLLM] ${task}: ${modelId} served from KIE — ${laneReason}`)
+          }
+          // Under the pipeline's cancel: a Cancel while the images are fetched ends the call at once.
+          kieBaseBlocks ??= typeof userPrompt === "string" ? [] : await inlineImagesForClaudeKie(userPrompt, signal)
+          const blocks = kieUserBlocks(userPrompt, kieBaseBlocks, feedback)
+          // One deadline for this attempt's KIE tries, however many a burst takes.
+          const deadline = AbortSignal.timeout(PIPELINE_KIE_TIMEOUT_MS)
+          const firstCallAt = PIPELINE_KIE_BURST.now()
+          const deadlineAt = firstCallAt + PIPELINE_KIE_TIMEOUT_MS
+          let burstTry = false
+          while (outcome === undefined) {
+            try {
+              outcome = await runKieAttempt({
+                model,
+                systemPrompt,
+                blocks,
+                jsonSchema,
+                maxTokens: stageRequest.max_tokens,
+                temperature,
+                onProgress,
+                signal,
+                deadline,
+                singleShot: burstTry,
+              })
+            } catch (err) {
+              if (signal?.aborted) throw err
+              if (kieBurstRetryable(err, deadline)) {
+                const nextTryAt = PIPELINE_KIE_BURST.now() + PIPELINE_KIE_BURST.pauseMs
+                if (nextTryAt < firstCallAt + PIPELINE_KIE_BURST.windowMs && nextTryAt < deadlineAt) {
+                  // eslint-disable-next-line no-console -- the operator's view of a burst being ridden out
+                  console.warn(
+                    `[callLLM] ${task}: KIE ${model.id} failed before any charge — trying again in ${PIPELINE_KIE_BURST.pauseMs} ms: ` +
+                      String(err).slice(0, 160),
+                  )
+                  // A cancel during the pause ends the call at once, as a cancel.
+                  await pauseUnlessCancelled(PIPELINE_KIE_BURST.pauseMs, signal)
+                  burstTry = true
+                  continue
+                }
+              }
+              const failure = pipelineKieFailure(err, modelId, model)
+              await recordFailure(`kie: ${failure.internalDetails}`)
+              throw failure
             }
           }
-          const failure = pipelineKieFailure(err, modelId, model)
-          await recordFailure(`kie: ${failure.internalDetails}`)
-          throw failure
         }
-      }
-    }
 
-    const result = outcome!
+        return outcome!
+      },
+    )
     totalIn += result.inputTokens
     totalOut += result.outputTokens
     cacheCreate += result.cacheCreate

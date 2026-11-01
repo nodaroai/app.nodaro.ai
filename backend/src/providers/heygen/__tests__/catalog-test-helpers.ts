@@ -38,10 +38,20 @@ export function routeLooks(
   })
 }
 
-/** Drain a chain of already-resolved awaits (the store check + refresh lock
- *  are a handful of microtask hops; fake timers do not run those). */
+/** The real `setImmediate`, captured when this module loads — before any test
+ *  calls `vi.useFakeTimers()`, which fakes the global one. */
+const realSetImmediate = globalThis.setImmediate
+
+/** Let every chain of already-resolved awaits run to its end (the store check,
+ *  the refresh lock, a page and its failure are all microtasks; fake timers do
+ *  not run those). A real macrotask runs only once the microtask queue is
+ *  empty, so this drains it completely, however deep the chain. A fixed count
+ *  of `await Promise.resolve()` cannot: how many turns one `await` of an async
+ *  call costs is a V8 detail that differs between Node versions (the same
+ *  chain took 22 turns on Node 26 and 24 on Node 22). Work that waits on a
+ *  timer or on a promise a test still holds stays pending, as before. */
 export async function settle(): Promise<void> {
-  for (let i = 0; i < 25; i++) await Promise.resolve()
+  await new Promise<void>((resolve) => realSetImmediate(resolve))
 }
 
 /** One /v3/avatars/looks page holding a single photo-avatar look. */

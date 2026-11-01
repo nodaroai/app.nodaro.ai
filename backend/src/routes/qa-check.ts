@@ -19,6 +19,8 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain, LLM_ANSWER_UNREADABLE_MESSAGE } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const qaCheckBody = z.object({
   content: z.string().min(1).max(50000),
@@ -48,10 +50,14 @@ export async function qaCheckRoutes(app: FastifyInstance) {
   app.post(
     "/v1/qa-check",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("qa-check", req.body), {
-        // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
-        computeCredits: (body) => llmGuardPrecheck("qa-check", body),
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("qa-check", req.body), {
+          // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
+          computeCredits: (body) => llmGuardPrecheck("qa-check", body),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/qa-check")),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -95,7 +101,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "qa-check"),
+          input_data: { ...buildJobInputData(parsed.data, "qa-check"), resolvedModel: llmModel },
         })
 
       if (jobError) {

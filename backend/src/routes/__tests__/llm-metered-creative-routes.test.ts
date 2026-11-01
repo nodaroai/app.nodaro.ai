@@ -31,7 +31,12 @@ const h = vi.hoisted(() => {
     const response = tableResponses.get(table) ?? { data: null, error: null }
     let current: (typeof ops)[number] | null = null
     const chain: Record<string, unknown> = {}
-    for (const m of ["select", "neq", "order", "limit", "gte", "range", "is"]) chain[m] = vi.fn(() => chain)
+    let selected: string | undefined
+    for (const m of ["neq", "order", "limit", "gte", "range", "is"]) chain[m] = vi.fn(() => chain)
+    chain.select = vi.fn((columns?: string) => {
+      selected = columns
+      return chain
+    })
     chain.in = vi.fn((col: string, val: unknown) => {
       current?.filters.push([`in:${col}`, val])
       return chain
@@ -41,7 +46,8 @@ const h = vi.hoisted(() => {
       return chain
     })
     chain.single = vi.fn(async () => response)
-    chain.maybeSingle = vi.fn(async () => response)
+    // A lost write's status read (llm-fixed-plus-calls.ts): the row as `jobStatus` says.
+    chain.maybeSingle = vi.fn(async () => (table === "jobs" && selected === "status" ? { data: { status: jobStatus.value }, error: null } : response))
     for (const op of ["update", "delete", "insert"] as const) {
       chain[op] = vi.fn((values?: unknown) => {
         current = { table, op, values, filters: [] }
@@ -67,8 +73,11 @@ const h = vi.hoisted(() => {
     return chain
   }
   const jobLive = { value: true }
+  /** The row's status as a write that lost its CAS reads it: "cancelled" for a cancel, "completed" for another attempt's win. */
+  const jobStatus = { value: "processing" }
   return {
     jobLive,
+    jobStatus,
     /** The cancel's after-flip rule the scrape runs once its calls end (lib/cancel-job.ts). */
     afterFlip: vi.fn(async (_jobId: string) => "settled" as "kept" | "settled" | "refund"),
     tableResponses,
@@ -95,6 +104,9 @@ const h = vi.hoisted(() => {
   }
 })
 
+// The video queue: the route enqueues the scrape's worker job, and this
+// stand-in runs the real handler at once, as the worker does with lanes off.
+vi.mock("../../lib/queue.js", async () => ({ videoQueue: (await import("./helpers/inline-scrape-worker.js")).inlineScrapeQueue }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: h.from, rpc: vi.fn(), auth: { getUser: vi.fn() } } }))
 vi.mock("../../lib/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/config.js")>()
@@ -304,6 +316,7 @@ beforeEach(() => {
   h.order.length = 0
   h.ops.length = 0
   h.jobLive.value = true
+  h.jobStatus.value = "processing"
   h.guardChecks.length = 0
   h.tableResponses.clear()
   h.guardStamp = false
@@ -804,6 +817,7 @@ describe("scrape analysis bills metered", () => {
     })
     // The user cancels mid-run: the completion write then misses its CAS.
     h.markJobCompleted.mockResolvedValueOnce(false)
+    h.jobStatus.value = "cancelled"
     app = await build(async (a) => (await import("../meta-ads-scrape.js")).metaAdsScrapeRoutes(a))
     const pending = app.inject({ method: "POST", url: "/v1/meta-ads-scrape", payload: { mode: "search", query: "running shoes", count: 5, analyze: true } })
 
@@ -842,6 +856,7 @@ describe("scrape analysis bills metered", () => {
       return analysisAnswer(0.048)
     })
     h.markJobCompleted.mockResolvedValueOnce(false)
+    h.jobStatus.value = "cancelled"
     app = await build(async (a) => (await import("../meta-ads-scrape.js")).metaAdsScrapeRoutes(a))
     const res = await app.inject({ method: "POST", url: "/v1/meta-ads-scrape", payload: { mode: "search", query: "running shoes", count: 8, analyze: true } })
     expect(res.statusCode).toBe(409)
@@ -857,6 +872,7 @@ describe("scrape analysis bills metered", () => {
     vi.mocked(runMetaAdsScrape).mockResolvedValue({ json: [AD("1")] } as never)
     h.llmCompleteStructured.mockResolvedValue(analysisAnswer(0.048))
     h.markJobCompleted.mockResolvedValueOnce(false)
+    h.jobStatus.value = "cancelled"
     app = await build(async (a) => (await import("../meta-ads-scrape.js")).metaAdsScrapeRoutes(a))
     const res = await app.inject({ method: "POST", url: "/v1/meta-ads-scrape", payload: { mode: "search", query: "running shoes", count: 2, analyze: true } })
     expect(res.statusCode).toBe(409)
@@ -937,10 +953,27 @@ describe("scrape analysis bills metered", () => {
     vi.mocked(runInstagramScrape).mockResolvedValue({ json: [{ postId: "p1", shortCode: "AbC", caption: "just do it", images: ["https://cdn/i.jpg"], videos: [], videoPreviews: [] }] } as never)
     h.llmCompleteStructured.mockResolvedValue(analysisAnswer(0.048))
     h.markJobCompleted.mockResolvedValueOnce(false)
+    h.jobStatus.value = "cancelled"
     app = await build(async (a) => (await import("../instagram-scrape.js")).instagramScrapeRoutes(a))
     await app.inject({ method: "POST", url: "/v1/instagram-scrape", payload: { mode: "profile", targets: ["nike"], count: 20, analyze: true } })
     await vi.waitFor(() => expect(h.afterFlip).toHaveBeenCalledWith(JOB))
     expect(h.commitCredits).not.toHaveBeenCalled()
+  })
+
+  it("a completion lost to another attempt of the same job (the row completed, not cancelled) settles nothing as a cancel", async () => {
+    const { runMetaAdsScrape } = await import("../../providers/apify/meta-ads.js")
+    vi.mocked(runMetaAdsScrape).mockResolvedValue({ json: [AD("1")] } as never)
+    h.llmCompleteStructured.mockResolvedValue(analysisAnswer(0.048))
+    h.markJobCompleted.mockResolvedValueOnce(false)
+    h.jobStatus.value = "completed"
+    vi.spyOn(console, "info").mockImplementation(() => undefined)
+    app = await build(async (a) => (await import("../meta-ads-scrape.js")).metaAdsScrapeRoutes(a))
+    await app.inject({ method: "POST", url: "/v1/meta-ads-scrape", payload: { mode: "search", query: "running shoes", count: 2, analyze: true } })
+    // The winner's hold is the winner's: never committed, released or refunded here.
+    expect(h.afterFlip).not.toHaveBeenCalled()
+    expect(h.commitCredits).not.toHaveBeenCalled()
+    expect(h.refundCredits).not.toHaveBeenCalled()
+    expect(h.refundReserved).not.toHaveBeenCalled()
   })
 
   it("cancelled with nothing billed: the after-flip rule answers refund and the hold is refunded", async () => {
@@ -948,6 +981,7 @@ describe("scrape analysis bills metered", () => {
     vi.mocked(runMetaAdsScrape).mockResolvedValue({ json: [AD("1")] } as never)
     h.llmCompleteStructured.mockRejectedValue(new Error("socket hang up"))
     h.markJobCompleted.mockResolvedValueOnce(false)
+    h.jobStatus.value = "cancelled"
     h.afterFlip.mockResolvedValueOnce("refund")
     app = await build(async (a) => (await import("../meta-ads-scrape.js")).metaAdsScrapeRoutes(a))
     await app.inject({ method: "POST", url: "/v1/meta-ads-scrape", payload: { mode: "search", query: "running shoes", count: 1, analyze: true } })

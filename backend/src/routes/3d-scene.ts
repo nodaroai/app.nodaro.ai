@@ -435,6 +435,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
         ...buildJobInputData(parsed.data, SCENE3D_GENERATE_JOB_TYPE),
         ...frame,
         references,
+        resolvedModel: model.id,
       }
       const { data: job, error: jobError } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
@@ -655,6 +656,8 @@ export async function scene3DRoutes(app: FastifyInstance) {
         // the request disagree about what this edit actually asked for.
         references,
         ...(operations ? { operations } : {}),
+        // The planner model the instruction lane runs; the operations lane calls none.
+        ...(!deterministic && model.ok ? { resolvedModel: model.id } : {}),
       }
       const { data: job, error: jobError } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),

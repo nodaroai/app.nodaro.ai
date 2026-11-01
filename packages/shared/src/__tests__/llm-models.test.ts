@@ -157,6 +157,24 @@ describe("LLM_MODELS data integrity", () => {
       expect(model.maxOutputTokens).toBeGreaterThan(0)
     }
   })
+
+  // `series` is the product line a person filters by ("Claude", "GPT") — one
+  // name per line, so a line never spans two vendors.
+  it("every LLM model has a non-empty series", () => {
+    const missing = LLM_MODELS.filter((m) => typeof m.series !== "string" || !m.series.trim()).map((m) => m.id)
+    expect(missing).toEqual([])
+  })
+
+  it("every model of one LLM vendor+series pair is consistent (no series spans two vendors)", () => {
+    const vendorsBySeries = new Map<string, Set<string>>()
+    for (const m of LLM_MODELS) {
+      const vendors = vendorsBySeries.get(m.series) ?? new Set<string>()
+      vendors.add(m.vendor)
+      vendorsBySeries.set(m.series, vendors)
+    }
+    const spanning = [...vendorsBySeries].filter(([, v]) => v.size > 1).map(([s, v]) => `${s}: ${[...v].join(", ")}`)
+    expect(spanning).toEqual([])
+  })
 })
 
 // ---------------------------------------------------------------------------

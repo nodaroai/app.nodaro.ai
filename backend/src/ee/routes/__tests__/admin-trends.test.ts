@@ -57,6 +57,8 @@ const mem = vi.hoisted(() => ({
   ffmpegRuns: [] as string[][],
   /** When set, the next ffmpeg run fails with it. */
   ffmpegFails: null as null | Error,
+  /** When set, a download of a url it answers true for fails (the object is gone). */
+  downloadFails: null as null | ((url: string) => boolean),
   /** The frame count a cut reads, by its output path (the preview clip's `clip.mp4`, its mask's `mask-clip.mp4`): one number for both when a number. */
   frames: 150 as number | ((path: string) => number),
   /** When set, the next ffprobe of a video fails with it. */
@@ -253,6 +255,7 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
   return {
     ...actual,
     downloadFile: async (url: string, dest: string) => {
+      if (mem.downloadFails?.(url)) throw new Error("404 Not Found")
       mem.downloads.set(dest, url)
       if (url.endsWith(".mp4")) await writeFile(dest, MP4)
       else if (url.endsWith(".png")) await writeFile(dest, PNG)
@@ -518,6 +521,7 @@ beforeEach(async () => {
   mem.durations = new Map()
   mem.ffmpegRuns = []
   mem.ffmpegFails = null
+  mem.downloadFails = null
   mem.frames = 150
   mem.probeFails = null
   mem.warns = []
@@ -2475,6 +2479,40 @@ describe("the stored face mask", () => {
       expect(key).not.toBe(KEY())
     })
 
+    it("draws the depth in a chosen colormap only on an engine that lists it (refused before anything is paid), sending it", async () => {
+      const MAPPED = { ...MASKING, fill: "depth" as const, depthColormap: "inferno" as const }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      seed({}, draftData({ faceMasking: MAPPED }))
+      for (const extra of [{}, { depthColormaps: ["grayscale", "turbo"] }]) {
+        supports(extra)
+        const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+        expect(held.statusCode, JSON.stringify(extra)).toBe(503)
+        expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/cannot draw the depth in inferno/) })
+      }
+      expect(engine.calls).toEqual([])
+
+      supports({ depthColormaps: ["grayscale", "inferno"] })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({
+        videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+        faceMasking: { ...withResolvedZone({ ...MASKING, fill: "depth" }), depthColormap: "inferno" },
+      })
+      const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+      expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: MAPPED })))
+      expect(key).not.toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
+    })
+
+    it("a colormap that changes nothing drawn (the default) needs no engine support and is sent as no key", async () => {
+      setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } as never })
+      seed({}, draftData({ faceMasking: { ...MASKING, fill: "depth", depthColormap: "turbo" } }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone({ ...MASKING, fill: "depth" }) })
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
+    })
+
     it("draws role outlines only on an engine that declares them (refused before anything is paid), sending the flag and the outlines", async () => {
       const lead = { label: { slot: "lead" }, fromFrame: 0, toFrame: 359, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 100 }
       const OUTLINED = { ...MASKING, roleOutlines: true, marks: [lead] }
@@ -2573,7 +2611,7 @@ describe("the stored face mask", () => {
         expect(engine.calls).toEqual([])
       })
 
-      it("full depth on an engine that stores a scene description also sends the roles and the preview's start", async () => {
+      it("full depth on an engine that stores a scene description also sends the roles, never the preview's start (no preview text asked for)", async () => {
         seed({}, draftData({ faceMasking: FULL }))
         supports({ ...DEPTH, storedSceneDescription: true })
         const res = await start()
@@ -2585,13 +2623,12 @@ describe("the stored face mask", () => {
             { name: "the woman on the left", kind: "person" },
             { name: "the dog", kind: "pet" },
           ],
-          previewStart: 2,
         })
         // The roles never reach the settings key: the clip is the same clip.
         expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: FULL })))
       })
 
-      it("a trend with no preview sends no previewStart; keep people and faces get no roles even on such an engine", async () => {
+      it("a trend with no preview sends no previewStart either; keep people and faces get no roles even on such an engine", async () => {
         seed({}, draftData({ faceMasking: FULL, previewStart: null }))
         supports({ ...DEPTH, storedSceneDescription: true })
         await start()
@@ -2618,6 +2655,17 @@ describe("the stored face mask", () => {
   })
 
   describe("approving one", () => {
+    it("refuses a make whose clip is gone from storage (its depth map swept) with the copy's own error, saving nothing", async () => {
+      seed({}, making())
+      world.jobs.set(FACE_MASK_JOB, fmJob())
+      const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+      mem.downloadFails = (url) => url === MASKED
+      const res = await approve()
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("download_failed")
+      expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+    })
+
     it("keeps the faces its make drew the face mesh on (0 included), only for a setting that draws the mesh", async () => {
       const MESHED = { ...MASKING, faceMesh: true }
       const meshKey = faceMaskSettingsKey(draftData({ faceMasking: MESHED }))!
@@ -2761,7 +2809,7 @@ describe("the stored face mask", () => {
         expect(mem.trends[0]!.versions[1]!.data.faceMask).toBeUndefined()
       })
 
-      it("stores the make's two scene descriptions, trimmed and capped, beside the clip", async () => {
+      it("stores the make's scene description, trimmed and capped, beside the clip; an older make's preview text is not stored", async () => {
         seed({}, draftData({ faceMasking: FULL, faceMaskJob: pendingJob({ settingsKey: FKEY() }) }))
         const job = fullDepthJob()
         world.jobs.set(FACE_MASK_JOB, {
@@ -2774,10 +2822,10 @@ describe("the stored face mask", () => {
         const stored = mem.trends[0]!.versions[1]!.data.faceMask!
         expect(stored.sceneDescription).toHaveLength(4000)
         expect(stored.sceneDescription!.startsWith("A neon kitchen.")).toBe(true)
-        expect(stored.previewSceneDescription).toBe("0-4 s: the woman on the left spins.")
-        // The preview start the make recorded: a preview run uses the text only while it is still the trend's.
-        expect(stored.previewSceneDescriptionStart).toBe(2)
-        expect(res.json().data.faceMask.previewSceneDescription).toBe("0-4 s: the woman on the left spins.")
+        // No run sends a preview text: a preview run cuts the whole clip's.
+        expect(stored).not.toHaveProperty("previewSceneDescription")
+        expect(stored).not.toHaveProperty("previewSceneDescriptionStart")
+        expect(res.json().data.faceMask).not.toHaveProperty("previewSceneDescription")
       })
 
       it("a make with no (or an empty, or a non-text) description stores none", async () => {
@@ -2832,23 +2880,29 @@ describe("the stored face mask", () => {
       world.envs = [envRow("production", DEPTH), envRow("staging", DEPTH)]
     })
 
-    it("writes either text on the draft, audits it, and leaves the clip up to date", async () => {
-      seed({}, withMask())
+    it("writes the full run's text on the draft, audits it, and leaves the clip up to date", async () => {
+      // An older make's preview text: kept in storage as it is, never written.
+      seed({}, { ...withMask(), faceMask: { ...fullMask(withMask()), previewSceneDescription: "0-4 s: the woman spins." } })
       const before = mem.trends[0]!.versions[1]!.data.faceMask!
       const full = await edit({ which: "full", text: "  A rainy rooftop.  " })
       expect(full.statusCode).toBe(200)
-      const preview = await edit({ which: "preview", text: "0-4 s: the woman spins." })
-      expect(preview.statusCode).toBe(200)
       const stored = mem.trends[0]!.versions[1]!.data.faceMask!
-      expect(stored).toEqual({ ...before, sceneDescription: "A rainy rooftop.", previewSceneDescription: "0-4 s: the woman spins." })
-      expect(preview.json().data).toMatchObject({ revision: mem.trends[0]!.versions[1]!.revision, faceMaskState: { status: "approved", reasons: [] } })
-      expect(preview.json().data.faceMask.previewSceneDescription).toBe("0-4 s: the woman spins.")
+      expect(stored).toEqual({ ...before, sceneDescription: "A rainy rooftop." })
+      expect(full.json().data).toMatchObject({ revision: mem.trends[0]!.versions[1]!.revision, faceMaskState: { status: "approved", reasons: [] } })
+      expect(full.json().data.faceMask.sceneDescription).toBe("A rainy rooftop.")
       expect(audits()).toEqual([
         expect.objectContaining({ admin_user_id: ADMIN, action: "edit_trend_scene_description", target_id: T1, payload: { slug: "neon-dance", jobId: FACE_MASK_JOB, which: "full", chars: 16 } }),
-        expect.objectContaining({ action: "edit_trend_scene_description", payload: expect.objectContaining({ which: "preview" }) }),
       ])
       const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
       expect(detail.faceMaskState).toEqual({ status: "approved", reasons: [] })
+    })
+
+    it("has no preview text to write: `which: \"preview\"` is refused and nothing changes", async () => {
+      seed({}, withMask())
+      const res = await edit({ which: "preview", text: "0-4 s: the woman spins." })
+      expect(res.statusCode).toBe(400)
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("previewSceneDescription")
+      expect(audits()).toEqual([])
     })
 
     it("a stale revision is a draft conflict, and nothing is written", async () => {
@@ -2866,10 +2920,10 @@ describe("the stored face mask", () => {
       mem.trends = []
       const faces = draftData({ faceMasking: MASKING })
       seed({}, { ...faces, faceMask: { ...fullMask(faces), recipe: { core: VIDEO_MASK_RECIPE, plugin: "1" } } })
-      const res = await edit({ which: "preview", text: "A rooftop." })
+      const res = await edit({ which: "full", text: "A rooftop." })
       expect(res.statusCode).toBe(409)
       expect(res.json().error.code).toBe("no_full_depth_mask")
-      expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("previewSceneDescription")
+      expect(mem.trends[0]!.versions[1]!.data.faceMask!.sceneDescription).toBe("A neon kitchen.")
       expect(audits()).toEqual([])
     })
 
@@ -3326,7 +3380,7 @@ describe("the stored face mask", () => {
         seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE, enginePrompt: PROMPT } }))
         const res = await start()
         expect(res.statusCode).toBe(202)
-        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: FULL, roles: ROLES, previewStart: 2, steps: { sceneDescription: SCENE } })
+        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: FULL, roles: ROLES, steps: { sceneDescription: SCENE } })
         // Recorded as made with it, never in the settings key.
         expect(draftNow().faceMaskJob).toEqual({ jobId: FACE_MASK_JOB, settingsKey: FKEY(), startedAt: expect.any(String), sceneStepKey: SCENE_KEY() })
         expect(startAudits()[0]!.payload).toEqual({ slug: "neon-dance", jobId: FACE_MASK_JOB, settingsKey: FKEY(), sceneStepKey: SCENE_KEY() })
@@ -3336,7 +3390,7 @@ describe("the stored face mask", () => {
         seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE } }))
         supports()
         expect((await start()).statusCode).toBe(202)
-        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: FULL, roles: ROLES, previewStart: 2 })
+        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: FULL, roles: ROLES })
         expect(draftNow().faceMaskJob).toEqual({ jobId: FACE_MASK_JOB, settingsKey: FKEY(), startedAt: expect.any(String) })
         expect(startAudits()[0]!.payload).toEqual({ slug: "neon-dance", jobId: FACE_MASK_JOB, settingsKey: FKEY() })
       })

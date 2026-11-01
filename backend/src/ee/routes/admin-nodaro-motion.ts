@@ -24,7 +24,9 @@
  * `engine_unsupported` while any environment's engine cannot do it
  * (`nodaro-motion-hide-body.ts`: the row is shared by every environment);
  * so is one whose entry draws the face mesh (`faceMesh: true`) while any
- * environment's engine cannot draw it (`nodaro-motion-face-mesh.ts`).
+ * environment's engine cannot draw it (`nodaro-motion-face-mesh.ts`), and
+ * one whose entry names a depth colormap (`depthColormap`) while any
+ * environment's engine cannot draw that map (`nodaro-motion-depth-colormap.ts`).
  *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_masking`)
  * with the setting before and after.
@@ -52,6 +54,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
 import { cannotDrawFaceMeshMessage, drawsFaceMesh, environmentsThatCannotDrawFaceMesh } from "../lib/nodaro-motion-face-mesh.js"
+import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
 import { registerNodaroMotionMotionRoutes } from "./admin-nodaro-motion-motion.js"
@@ -119,7 +122,9 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
       // engine can do it (the row is shared by every environment).
       const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.masking[engine]))
       const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(parsed.data.masking[engine]))
-      if (hides || meshes) {
+      // A depth colormap likewise (each map named, once).
+      const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.masking[engine]) ?? []))]
+      if (hides || meshes || colormaps.length > 0) {
         const environments = await listEngineEnvironments()
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -128,6 +133,10 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
         const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
         if (mesh.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } })
+        }
+        const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
+        if (maps.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } })
         }
       }
       const before = (await readNodaroMotionMasking()).masking

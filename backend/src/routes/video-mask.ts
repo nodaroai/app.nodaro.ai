@@ -21,6 +21,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoMaskLength } from "../lib/video-mask-length.js"
@@ -117,7 +118,7 @@ export async function videoMaskRoutes(app: FastifyInstance) {
       force_private: extractForcePrivate(req.body) || undefined,
       user_id: userId,
       status: "pending",
-      input_data: { ...buildJobInputData(parsed.data, "video-mask"), billedSec, bucketKey },
+      input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "video-mask"), "video-mask"), billedSec, bucketKey },
       ...(mcpClient ? { mcp_client: mcpClient } : {}),
     })
     if (error) {

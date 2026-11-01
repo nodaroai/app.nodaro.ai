@@ -26,6 +26,7 @@ import type { LlmRequest, LlmResponse } from "./types.js"
 import { claudeMustServeDirect } from "./claude-direct.js"
 import { directLaneVendor } from "./direct-vendor.js"
 import { directLaneLatch } from "../llm-platform-exhaustion.js"
+import { withConcurrencySlot, type SlotRequest } from "../concurrency-lanes/slot.js"
 
 // The KIE Claude-proxy passthrough facts (`KIE_CLAUDE_EFFORT_VERIFIED`,
 // `KIE_CLAUDE_TOOLS_VERIFIED`) and the rule built on them live in
@@ -42,16 +43,33 @@ export { claudeMustServeDirect }
  *
  * `llmComplete` never tries more than a primary and a single fallback
  * (`withFallback`, and the Claude `preferKie` catch below that does the same by
- * hand) — and each lane is bounded by the SAME `effectiveTimeout(req)`, read
+ * hand) — and each lane is bounded by the request's own `timeoutMs` when it
+ * sets one, else that lane's default (`effectiveTimeout`, 120 s on the direct
+ * lanes; `kieEffectiveTimeout`, 300 s on KIE), read
  * fresh when that lane starts. So the wall-clock budget of one call is this
  * many timeouts, not one, and anything sizing a deadline around a call (the
  * reconciliation staleness threshold does) has to multiply by it.
  */
 export const LLM_MAX_LANES_PER_CALL = 2
 
+/**
+ * The `llm`-lane slot one call takes (lib/concurrency-lanes/slot.ts): none
+ * under a job's leaf slot, a front slot under a coordinator, the request's
+ * slot inside a request. Counted against the provider that serves it now
+ * (laneForCallNow — the same reading as provider-of.ts's primaryProviderOfLlm,
+ * which cannot be imported here: it imports this module).
+ */
+export function llmSlot(req: LlmRequest, model: LlmModelDef): SlotRequest {
+  return { lane: "llm", provider: laneForCallNow(model, req), jobType: req.feature ?? "llm", model: model.id }
+}
+
 export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   const model = resolveModel(req)
   assertInlineVideoLane(req, model)
+  return withConcurrencySlot(llmSlot(req, model), () => completeOnLanes(req, model))
+}
+
+async function completeOnLanes(req: LlmRequest, model: LlmModelDef): Promise<LlmResponse> {
 
   // A pinned lane wins over every registry preference below. It falls back only to KIE serving the same model, and only when the account behind it cannot serve: no Anthropic key (keylessClaudePin), or a platform-account refusal (exhaustionKieFallback). Never for Advanced mode, which is refused instead (assertAdvancedModeServable, advancedModeRefusalOf).
   if (req.requireLane) {
@@ -286,6 +304,18 @@ export async function llmStream(
 ): Promise<LlmResponse> {
   const model = resolveModel(req)
   assertInlineVideoLane(req, model)
+  // The stream's own signal ends only a wait for the slot: an already-aborted
+  // stream still reaches its lane and fails there as it always has
+  // (LlmStreamAbortedError).
+  return withConcurrencySlot({ ...llmSlot(req, model), ...(signal ? { waitSignal: signal } : {}) }, () => streamOnLanes(req, model, onToken, signal))
+}
+
+async function streamOnLanes(
+  req: LlmRequest,
+  model: LlmModelDef,
+  onToken: (chunk: string) => void,
+  signal?: AbortSignal,
+): Promise<LlmResponse> {
 
   // A pinned lane wins over every registry preference below. It falls back only to KIE serving the same model, and only when the account behind it cannot serve: no Anthropic key (keylessClaudePin), or a platform-account refusal (exhaustionKieFallback). Never for Advanced mode, which is refused instead (assertAdvancedModeServable, advancedModeRefusalOf).
   if (req.requireLane) {

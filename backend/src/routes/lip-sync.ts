@@ -9,6 +9,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
+import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
 import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
@@ -69,7 +71,7 @@ const lipSyncBody = z.object({
  * resolveExtendVideoIdentifier().
  */
 export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): string {
-  const provider = (body?.provider as string) ?? "kling-avatar"
+  const provider = (body?.provider as string) ?? LIP_SYNC_DEFAULT_PROVIDER
   if (provider === "infinitalk") {
     return `infinitalk:${(body?.resolution as string) ?? "720p"}`
   }
@@ -169,7 +171,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "lip-sync"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "lip-sync"), "lip-sync"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -177,7 +179,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const baseProvider = provider ?? "kling-avatar"
+    const baseProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
     const modelIdentifier = resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined)
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return

@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId } from "@/lib/api"
+import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId, TrendEngineEnvironment } from "@/lib/api"
+import { prismReferenceAudioModesSomeEngineTakes } from "../prism-reference-audio"
 import { engineOfForm } from "../model"
 import { PulseAudioSelect } from "./PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
@@ -59,7 +60,12 @@ interface Props {
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
   readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
   readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioByResolution) => void
+  /** Each environment's engine, as reported: One-tone and Octave are offered once some environment's engine takes them. */
+  readonly envs?: readonly TrendEngineEnvironment[]
 }
+
+/** Why a Prism reference audio mode is greyed out in a trend's editor. */
+export const PRISM_REFERENCE_AUDIO_MODE_UNOFFERED = "A mode greyed out is not on any environment's engine yet; publishing needs it on every environment's."
 
 export function EngineEditor({
   value,
@@ -70,6 +76,7 @@ export function EngineEditor({
   onKlingLengthChange,
   onPulseAudioChange,
   onPrismReferenceAudioChange,
+  envs,
 }: Props) {
   const engine = engineOfForm({ engine: value })
   const hint = ENGINES.find((e) => e.value === engine)?.hint
@@ -118,7 +125,14 @@ export function EngineEditor({
           </div>
         )}
         {engine === "kling-4" && <PulseAudioSelect value={pulseAudio} onChange={onPulseAudioChange} />}
-        {engine === "seedance-2-5" && <PrismReferenceAudioSelect value={prismReferenceAudio} onChange={onPrismReferenceAudioChange} />}
+        {engine === "seedance-2-5" && (
+          <PrismReferenceAudioSelect
+            value={prismReferenceAudio}
+            onChange={onPrismReferenceAudioChange}
+            offered={prismReferenceAudioModesSomeEngineTakes(envs)}
+            unofferedNote={PRISM_REFERENCE_AUDIO_MODE_UNOFFERED}
+          />
+        )}
       </div>
       <p id={hintId} className="text-xs text-muted-foreground">
         {hint}

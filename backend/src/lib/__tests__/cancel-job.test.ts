@@ -172,6 +172,14 @@ describe("cancelOwnedJob", () => {
     expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "in_flight" })
     expect(mocks.refundCredits).not.toHaveBeenCalled()
   })
+  it("cancels a running background scrape despite its saved provider run (it was cancellable in its route)", async () => {
+    for (const type of ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape"]) {
+      vi.clearAllMocks()
+      tables(jobsTable(live({ status: "processing", provider_task_id: "run-1", input_data: { type } })), usageLogsTable([{ id: "log-1" }]))
+      expect(await cancelOwnedJob(JOB, USER), type).toEqual({ kind: "cancelled", analysisJobId: null })
+      expect(mocks.refundCredits, type).toHaveBeenCalledWith("log-1")
+    }
+  })
   it("cancels an in-recovery row despite provider_task_id (audit D2)", async () => {
     tables(jobsTable(live({ status: "processing", provider_task_id: "task-1", reconcile_attempts: 2 })), usageLogsTable([{ id: "log-1" }]))
     expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: null })
@@ -236,6 +244,16 @@ describe("cancelOwnedJob", () => {
     expect(lanes.withdrawFromLane).toHaveBeenCalledWith(JOB)
     expect(order).toEqual(["remove", "flip", "withdraw"])
     expect(mocks.refundCredits).toHaveBeenCalledWith("log-q")
+  })
+  it("cancelling a queued background scrape withdraws it and refunds", async () => {
+    for (const type of ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape"]) {
+      vi.clearAllMocks()
+      tables(jobsTable(live({ status: "queued", job_type: type, input_data: { type } })), usageLogsTable([{ id: "scrape-log", job_id: JOB, action: `${type}:20` }]))
+      expect(await cancelOwnedJob(JOB, USER), type).toEqual({ kind: "cancelled", analysisJobId: null })
+      expect(mocks.tryRemoveFromQueue, type).toHaveBeenCalledWith(JOB)
+      expect(lanes.withdrawFromLane, type).toHaveBeenCalledWith(JOB)
+      expect(mocks.refundCredits, type).toHaveBeenCalledWith("scrape-log")
+    }
   })
   it("a cancel that lost the race withdraws nothing after it", async () => {
     tables(jobsTable(live({ status: "queued" }), []))

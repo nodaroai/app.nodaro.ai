@@ -52,8 +52,8 @@ export const JSON_SCHEMA_MAX_DEPTH = 20
  *
  * A forced-schema call carries a rendered catalog legend in and up to
  * `maxTokens` out — several minutes of generation on a premium model. The
- * client's 120 s default (`llm-client.ts` `LLM_TIMEOUT_MS`, applied at
- * `effectiveTimeout`) aborts the very workload this route exists for: studio's
+ * client's 120 s default (`llm/params.ts` `LLM_TIMEOUT_MS`, applied at
+ * `effectiveTimeout`; KIE's is 300 s, `KIE_LLM_TIMEOUT_MS`) aborts the very workload this route exists for: studio's
  * planner sends a ≈12-18k-token system prompt with `maxTokens: 16384`, and a
  * 20-scene plan is ≈12k output tokens. The Lottie worker raised its own for the
  * same reason (`workers/handlers/motion-graphics-lottie.ts`). The route answers
@@ -367,10 +367,17 @@ export function llmStructuredVideoBound(
  * store per row — a 100k-char system prompt and a 64 KB schema. The digest
  * identifies the prompt, the head makes it recognisable in the admin job
  * view; the schema's name and size answer "what config produced this".
+ * `resolvedModel` is the model the call runs — the prepared request's, the
+ * chat default included when the body names none.
  */
-export function structuredJobInputData(body: LlmStructuredBody, type: string = "llm-structured"): Record<string, unknown> & { type: string } {
+export function structuredJobInputData(
+  body: LlmStructuredBody,
+  prepared: { readonly model: { readonly id: string } },
+  type: string = "llm-structured",
+): Record<string, unknown> & { type: string } {
   return {
     ...buildJobInputData(body, type),
+    resolvedModel: prepared.model.id,
     system: digestText(body.system),
     jsonSchema: {
       name: body.schemaName ?? null,

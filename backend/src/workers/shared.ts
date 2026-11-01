@@ -39,6 +39,12 @@ export interface JobContext {
   jobUserId: string | undefined
   usageLogId: string | null | undefined
   shouldWatermark: boolean
+  /**
+   * The provider task the row already carries (`provider_task_id` and its
+   * `provider_kind`), for a handler that re-attaches to it itself
+   * (`HandlerFn.resumesProviderTask`); absent otherwise.
+   */
+  providerTask?: { readonly kind: string | null; readonly id: string }
 }
 
 /**
@@ -57,6 +63,30 @@ export interface JobContext {
  */
 export type HandlerFn = ((job: Job, ctx: JobContext) => Promise<void>) & {
   livenessBudgetMs?: (job: Job) => number | undefined
+  /**
+   * The job's output is data, not media (a scrape's posts, a page capture's
+   * section map): the worker keeps its row private at pickup (`is_public`
+   * false — the gallery is for media) and files no Library asset from its
+   * output, whose `imageUrl` / `videoUrl` name a scraped creative, not
+   * something this job made. Core-only, like `livenessBudgetMs`.
+   */
+  outputIsData?: true
+  /**
+   * The handler re-attaches to the provider task its row carries (handed in
+   * as `ctx.providerTask`) instead of the worker's stall-retry inline
+   * reconcile: a re-picked job runs the handler, whose payload holds what the
+   * re-attach needs, and the pickup leaves the saved task's kind and stamp as
+   * they are. The handler must never start a second task when one is saved.
+   */
+  resumesProviderTask?: true
+  /** A quietly stopped account's job of this type still runs (lib/access-blocks.ts). */
+  ignoresQuietStop?: true
+  /**
+   * The per-process concurrency group the job counts in (workers/
+   * worker-capacity.ts): over its cap the job waits on the queue, holding no
+   * worker slot, and starts when one of the group's jobs here ends.
+   */
+  capacityGroup?: "scrape"
 }
 
 /**

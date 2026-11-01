@@ -29,7 +29,14 @@ import { CHIPS_BY_KIND, MAX_IMAGES_PER_SLOT, engineOf } from "./schemas.js"
 import { withPromptsFor, type TrendPromptMode } from "./prompt-parts.js"
 import { promptStyleOf, trendSceneOf, trendSourceOf } from "./prompt-style.js"
 import type { TrendPromptPartOverrides, TrendSlot, TrendVersionData } from "./types.js"
-import { faceMaskingOn, faceMeshOn, roleOutlinesOn } from "../../../lib/cast-swap-face-masking.js"
+import {
+  faceMaskingOn,
+  faceMaskingSourceOf,
+  faceMeshOn,
+  roleOutlinesOn,
+  storedDepthColormapOf,
+  type FaceMaskingWithMarks,
+} from "../../../lib/cast-swap-face-masking.js"
 
 /** The texts a run sends (`{ [id]: text }`, in part order), or undefined when the trend overrides none. */
 export function promptPartTexts(stored: TrendPromptPartOverrides | undefined): PromptPartTexts | undefined {
@@ -73,6 +80,18 @@ function defaultChips(slot: TrendSlot): Record<string, string> {
  * trend's and checks its length with room for a run's user details
  * (`TREND_DETAILS_MAX` more post prompt).
  */
+/**
+ * What a prompt-parts request says of a setting's depth look
+ * (`PromptPartsRequest.depthColormap`): the map its stored clip is drawn
+ * with when not its source's default (`storedDepthColormapOf`), with
+ * `maskFill: "depth"` on a Faces hidden depth fill; nothing otherwise.
+ */
+export function depthLookOf(m: FaceMaskingWithMarks | undefined): Pick<PromptPartsRequest, "depthColormap" | "maskFill"> {
+  const depthColormap = m && faceMaskingOn(m) ? storedDepthColormapOf(m) : undefined
+  if (!depthColormap) return {}
+  return { depthColormap, ...(faceMaskingSourceOf(m!) === "faces" ? { maskFill: "depth" as const } : {}) }
+}
+
 export function promptPartsRequestFor(
   data: TrendVersionData,
   overrides: PromptPartTexts | undefined = promptPartTexts(data.promptParts),
@@ -91,6 +110,9 @@ export function promptPartsRequestFor(
     ...(roleOutlinesOn(data.faceMasking) ? { roleOutlines: true as const } : {}),
     // A trend whose Precise shot list is on: the engine shows its marker where the list goes (a Precise prompt only).
     ...(data.steps?.shotList?.precise?.mode === "on" ? { shotList: true as const } : {}),
+    // A depth drawn in another map than its source's default (a depth fill gray under role outlines, or the
+    // trend's chosen map): the defaults naming the depth look worded by it, a depth fill's guard with it.
+    ...depthLookOf(data.faceMasking),
     // The longest prompt: a clip with sound keeps its audio line.
     hasAudio: true,
     roles: texts.slots.map((slot, i) => ({

@@ -16,6 +16,16 @@ describe("model makers", () => {
     expect(unknown).toEqual([])
   })
 
+  // `series` is the product line ("Kling", "Flux") — required on every entry,
+  // including the ones the Models tab does not list, so every model can be
+  // filtered by its line.
+  it("every catalog entry has a non-empty series", () => {
+    const missing = Object.values(MODEL_CATALOG)
+      .filter((m) => typeof m.series !== "string" || !m.series.trim())
+      .map((m) => m.id)
+    expect(missing).toEqual([])
+  })
+
   it("every registered maker makes at least one catalog model", () => {
     const used = new Set<string>(Object.values(MODEL_CATALOG).map((m) => m.maker))
     expect(Object.keys(MODEL_MAKERS).filter((id) => !used.has(id))).toEqual([])

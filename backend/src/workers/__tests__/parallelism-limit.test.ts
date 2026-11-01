@@ -19,6 +19,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+// These tests wait for slots, so they run on the path where limits can be
+// turned on (test-only: this release locks them, and a locked take never waits).
+vi.mock("../../lib/concurrency-lanes/enforcement-available.js", () => ({ LANES_ENFORCEMENT_AVAILABLE: true }))
 import type { Job } from "bullmq"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 import type { WakeTarget } from "../../lib/concurrency-lanes/gate.js"

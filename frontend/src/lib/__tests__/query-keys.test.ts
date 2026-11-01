@@ -233,31 +233,31 @@ describe("queryKeys", () => {
         .toEqual(["admin", "users", 0, 50, "email", "asc", "dana"])
     })
 
-    it("builds jobs key with pagination and status", () => {
-      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error", "", ""])
+    it("builds jobs key with pagination and the serialized filters", () => {
+      expect(queryKeys.admin.jobs(0, 50, "status=failed")).toEqual(["admin", "jobs", 0, 50, "status=failed", ""])
     })
 
-    it("builds jobs key without status (defaults to empty string)", () => {
-      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, "", "", ""])
-    })
-
-    it("builds jobs key with userId", () => {
-      expect(queryKeys.admin.jobs(0, 50, "completed", "u1")).toEqual(["admin", "jobs", 0, 50, "completed", "u1", ""])
+    it("builds jobs key with no filters", () => {
+      expect(queryKeys.admin.jobs(0, 50, "")).toEqual(["admin", "jobs", 0, 50, "", ""])
     })
 
     it("builds jobs key with excludeUserIds (sorted)", () => {
-      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, ["u3", "u1", "u2"]))
-        .toEqual(["admin", "jobs", 0, 50, "", "", "u1,u2,u3"])
+      expect(queryKeys.admin.jobs(0, 50, "", ["u3", "u1", "u2"]))
+        .toEqual(["admin", "jobs", 0, 50, "", "u1,u2,u3"])
     })
 
     it("normalizes empty excludeUserIds to empty string", () => {
-      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, []))
-        .toEqual(["admin", "jobs", 0, 50, "", "", ""])
+      expect(queryKeys.admin.jobs(0, 50, "", [])).toEqual(["admin", "jobs", 0, 50, "", ""])
     })
 
     it("returns same key for excludeUserIds in different orders", () => {
-      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, ["a", "b"]))
-        .toEqual(queryKeys.admin.jobs(0, 50, undefined, undefined, ["b", "a"]))
+      expect(queryKeys.admin.jobs(0, 50, "", ["a", "b"])).toEqual(queryKeys.admin.jobs(0, 50, "", ["b", "a"]))
+    })
+
+    it("builds jobsInfinite and jobSources keys", () => {
+      expect(queryKeys.admin.jobsInfinite(50, "kind=video", ["b", "a"]))
+        .toEqual(["admin", "jobs-infinite", 50, "kind=video", "a,b"])
+      expect(queryKeys.admin.jobSources()).toEqual(["admin", "job-sources"])
     })
 
     it("builds usersLite key", () => {

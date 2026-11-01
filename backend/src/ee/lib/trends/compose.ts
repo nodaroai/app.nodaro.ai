@@ -76,8 +76,8 @@
  * A full-depth run whose scene is a description, on a trend whose stored clip
  * carries the make's description (scene-description.ts), sends it as
  * `sceneDescription` with the source window it covers
- * (`sceneDescriptionWindow`): a preview run the preview's text, a full run the
- * whole clip's. Without one the keys are left out (the engine describes the
+ * (`sceneDescriptionWindow`): the whole clip's text and the whole clip, a
+ * preview run too (the engine cuts it to its 4 s). Without one the keys are left out (the engine describes the
  * clip per run, as before). A run that sends one names each role as the
  * stored text does, by its full `roleName`, a preview included: one name per
  * run (`sceneRoleNames`, applied by `withoutUnsupportedSceneDescription`,
@@ -138,8 +138,10 @@ import {
   faceMaskingOn,
   faceMaskingRunSent,
   faceMaskingSourceOf,
+  storedDepthColormapOf,
   withoutMarks,
   type FaceMasking,
+  type FaceMaskingDepthColormap,
   type FaceMaskingSource,
   type FaceMaskingTarget,
 } from "../../../lib/cast-swap-face-masking.js"
@@ -258,6 +260,16 @@ export interface TrendRunBody {
     facesDrawn?: number
     meshRecipe?: string
     outlines?: Array<{ role: number; colour: string }>
+    /**
+     * The colormap the stored clip's depth was ACTUALLY drawn with, when it is
+     * not its source's default (`storedDepthColormapOf`): grayscale for a
+     * Faces hidden depth fill made with role outlines (whether or not any
+     * `outlines` are sent: nobody ringed, or the ringed roles left empty),
+     * else the trend's chosen map. Absent for the defaults. A variant carries
+     * its base's. Only to an engine that declares `castSwap.depthColormaps`
+     * listing it (`withoutUnsupportedStoredMask`).
+     */
+    depthColormap?: FaceMaskingDepthColormap
   }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
@@ -290,9 +302,9 @@ export interface TrendRunBody {
   promptStyle?: CastSwapPromptStyle
   /**
    * Full depth with its scene from a description: the trend's stored
-   * description (scene-description.ts) — a preview run's of the 4 s window,
-   * a full run's of the whole clip — which the engine rewrites for the new
-   * cast and window. Only with `sceneDescriptionWindow`; dropped, both, for
+   * description (scene-description.ts): the whole clip's, for a preview run
+   * too, which the engine rewrites for the new cast and cuts to the run's
+   * window. Only with `sceneDescriptionWindow`; dropped, both, for
    * an engine that does not declare `castSwap.storedSceneDescription`
    * (`withoutUnsupportedSceneDescription`, run-helpers.ts).
    */
@@ -583,7 +595,11 @@ export function composeTrendRun(
     const outlines = runOutlinesFor(recorded, slots)
     return outlines.length > 0 ? { outlines } : {}
   }
-  const storedFaceMask =
+  // The colormap the stored clip was drawn with, when not its source's default (a variant: its base's).
+  const drawnColormap = masking ? storedDepthColormapOf(data.faceMasking!) : undefined
+  const withDrawnColormap = <T extends object>(mask: T | undefined): T | undefined =>
+    mask && drawnColormap ? { ...mask, depthColormap: drawnColormap } : mask
+  const storedFaceMask = withDrawnColormap(
     variant && variant !== "unmasked"
       // A person variant is the base mask less some people: a base that drew no face mesh leaves it none.
       ? (() => {
@@ -599,7 +615,8 @@ export function composeTrendRun(
         })()
       : variant === undefined && stored
         ? faceMaskStoredRequired(data) ? { ...stored, required: true as const, ...outlinesOf(data.faceMask?.outlines) } : stored
-        : undefined
+        : undefined,
+  )
   // A preview's prepared input clip (preview-clip.ts), as a candidate for `withPreparedPreview`:
   // only with a current clip, and never beside a per-person variant (the clip carries a cut of
   // the BASE mask alone); a run that sends the base mask needs the clip's cut of it.

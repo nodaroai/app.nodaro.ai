@@ -157,6 +157,9 @@ function setupTableMocks(handlers: Record<string, TableHandler>) {
 }
 
 /** Build a "jobs" chain that handles both select-by-id and the CAS update. */
+/** The `.or(...)` filters cancel-all listed its jobs with. */
+const cancelAllFilters: string[] = []
+
 function jobsHandler(opts: {
   jobLookup?: { data: unknown; error: unknown }
   jobsList?: { data: unknown; error: unknown }
@@ -169,7 +172,10 @@ function jobsHandler(opts: {
   return () => {
     const single = vi.fn().mockResolvedValue(opts.jobLookup ?? { data: null, error: { message: "not found" } })
     // cancel-all list chain: select().eq().in(status).or(pre-call | in-recovery)
-    const orForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
+    const orForList = vi.fn(async (filter: string) => {
+      cancelAllFilters.push(filter)
+      return opts.jobsList ?? { data: [], error: null }
+    })
     const inForList = vi.fn().mockReturnValue({ or: orForList })
     // single-cancel children sweep: select("id").eq(user).eq(parent).in(status) — none here
     const noChildren = { in: vi.fn().mockResolvedValue({ data: [], error: null }) }
@@ -437,6 +443,15 @@ describe("POST /v1/jobs/cancel-all", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ success: true, cancelled: 0 })
     expect(mockRefundCredits).not.toHaveBeenCalled()
+  })
+
+  it("lists a running background scrape as cancellable, though it carries its provider run (it was in its route)", async () => {
+    cancelAllFilters.length = 0
+    setupTableMocks({ jobs: jobsHandler({ jobsList: { data: [], error: null } }) })
+    await app.inject({ method: "POST", url: "/v1/jobs/cancel-all", payload: { userId: TEST_USER_ID } })
+    expect(cancelAllFilters).toEqual([
+      "provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review,job_type.in.(web-scrape,site-capture,meta-ads-scrape,instagram-scrape)",
+    ])
   })
 
   it("cancels all pending jobs and refunds each one's reserved credits", async () => {

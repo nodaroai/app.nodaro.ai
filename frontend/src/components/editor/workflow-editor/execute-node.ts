@@ -471,7 +471,7 @@ import { resolveUpstreamKieTaskId as resolveUpstreamKieTaskIdFrom } from "./upst
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
-import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, pollScrapeJobOutput, RUN_START_RESET } from "./poll-job";
+import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, pollScrapeJobOutput, RUN_START_RESET, SCRAPE_POLL_BUDGET_MS } from "./poll-job";
 import type { OutputKeySpec } from "./poll-job";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -5931,7 +5931,7 @@ function executeNodeCore(
       // job id and finishes server-side; poll it to completion here.
       .then(({ jobId }) => {
         instagramJobId = jobId;
-        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: SCRAPE_POLL_BUDGET_MS });
       })
       .then((output) => {
         const json = output.json;
@@ -6029,7 +6029,7 @@ function executeNodeCore(
       // poll it here (same contract as web-scrape and instagram-scrape).
       .then(({ jobId }) => {
         metaAdsJobId = jobId;
-        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: SCRAPE_POLL_BUDGET_MS });
       })
       .then((output) => {
         const json = output.json;
@@ -6073,7 +6073,7 @@ function executeNodeCore(
       // route answers with a job id and finishes server-side; poll it here.
       .then(({ jobId }) => {
         scrapeJobId = jobId;
-        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal });
+        return pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: SCRAPE_POLL_BUDGET_MS });
       })
       .then((output) => {
         const json = output.json;

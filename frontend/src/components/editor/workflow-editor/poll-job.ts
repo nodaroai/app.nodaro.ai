@@ -2,6 +2,17 @@ import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared/workflow"
+import { BACKGROUND_SCRAPE_POLL_BUDGET_MS } from "@nodaro/render-rules"
+
+/** How long a job polled here is waited for when its caller names no budget. */
+export const JOB_POLL_DEFAULT_BUDGET_MS = 12 * 60_000;
+
+/**
+ * How long a background scrape (Web Scrape, Meta Ads Library scrape, Instagram
+ * scrape, Site Capture) is waited for: as long as the server may take to finish
+ * it through one deploy (@nodaro/render-rules).
+ */
+export const SCRAPE_POLL_BUDGET_MS = BACKGROUND_SCRAPE_POLL_BUDGET_MS;
 import type { GeneratedResult } from "@/types/nodes";
 import type { RunResultIdentity } from "@/lib/run-result-identity";
 import type { UnitJsonLanding } from "@/lib/unit-compose";
@@ -84,7 +95,7 @@ export async function pollJobOutputWithEnd(
   nodeId: string,
   opts: { signal?: AbortSignal; budgetMs?: number } = {},
 ): Promise<{ output: Record<string, unknown>; completedAt?: string }> {
-  const budgetMs = opts.budgetMs ?? 12 * 60_000;
+  const budgetMs = opts.budgetMs ?? JOB_POLL_DEFAULT_BUDGET_MS;
   const startedAt = Date.now();
   let attempt = 0;
   let transientFailures = 0;

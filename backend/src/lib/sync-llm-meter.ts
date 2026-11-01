@@ -53,11 +53,13 @@ export async function meterSyncLlm(
   reply: FastifyReply,
   jobType: string,
   creditIdentifier: string,
+  /** The model the helper's call runs, recorded on the row (`input_data.resolvedModel`). */
+  resolvedModel?: string,
 ): Promise<SyncLlmMeter | null> {
   const { data: job, error: jobError } = await insertSyncJob(req, {
     user_id: req.userId,
     status: "pending",
-    input_data: { type: jobType },
+    input_data: { type: jobType, ...(resolvedModel ? { resolvedModel } : {}) },
     job_type: jobType,
   })
   if (jobError || !job) {

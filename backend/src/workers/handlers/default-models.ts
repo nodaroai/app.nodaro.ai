@@ -21,6 +21,8 @@ export const LIP_SYNC_DEFAULT_PROVIDER = "kling-avatar"
 export const MOTION_TRANSFER_DEFAULT_PROVIDER = "kling"
 /** video-upscale (handlers/video-ai.ts). */
 export const VIDEO_UPSCALE_DEFAULT_PROVIDER = "topaz"
+/** video-depth (handlers/video-depth.ts). */
+export const VIDEO_DEPTH_DEFAULT_PROVIDER = "video-depth-anything"
 /** edit-image (handlers/image-ai.ts). */
 export const EDIT_IMAGE_DEFAULT_PROVIDER = "recraft-upscale"
 /** generate-character-motion (handlers/entity.ts). */

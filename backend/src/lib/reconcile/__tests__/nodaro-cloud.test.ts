@@ -180,4 +180,34 @@ describe("reconcileNodaroCloudJob", () => {
     expect(mocks.bump).toHaveBeenCalledTimes(2)
     expect(mocks.bump).toHaveBeenCalledWith("j-1", "nodaro.ai job still queued")
   })
+
+  describe("a background scrape's relay (its plan lives in its worker payload, never on the row)", () => {
+    const SCRAPES = ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape"]
+
+    it("is never finalized here, even when its cloud job completed: only its worker settles it", async () => {
+      for (const job_type of SCRAPES) {
+        vi.clearAllMocks()
+        mocks.cloudFetch.mockResolvedValue(okPoll({ id: "cloud-9", status: "completed", output_data: { json: [] } }))
+        await reconcileNodaroCloudJob(row({ job_type }))
+        expect(mocks.finalize, job_type).not.toHaveBeenCalled()
+        expect(mocks.bump, job_type).toHaveBeenCalledTimes(1)
+        expect(mocks.cloudFetch, job_type).toHaveBeenCalledWith("/v1/jobs/cloud-9")
+      }
+    })
+
+    it("a failed cloud job fails the row and refunds it", async () => {
+      mocks.cloudFetch.mockResolvedValue(okPoll({ id: "cloud-9", status: "failed", error_message: "actor failed" }))
+      await reconcileNodaroCloudJob(row({ job_type: "meta-ads-scrape" }))
+      expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", error_message: "actor failed" }))
+      expect(mocks.refund).toHaveBeenCalledWith("j-1")
+      expect(mocks.finalize).not.toHaveBeenCalled()
+    })
+
+    it("one waiting in line on the connected account is spared within its bound", async () => {
+      mocks.cloudFetch.mockResolvedValue(okPoll({ id: "cloud-9", status: "queued" }))
+      await reconcileNodaroCloudJob(row({ job_type: "site-capture", provider_call_started_at: new Date().toISOString() }))
+      expect(mocks.bump).not.toHaveBeenCalled()
+      expect(mocks.update).not.toHaveBeenCalled()
+    })
+  })
 })

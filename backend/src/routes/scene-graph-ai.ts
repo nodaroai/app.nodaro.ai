@@ -23,6 +23,8 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -47,10 +49,14 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/scene-graph/generate",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("scene-graph-ai", req.body), {
-        // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
-        computeCredits: (body) => llmGuardPrecheck("scene-graph-ai", body),
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("scene-graph-ai", req.body), {
+          // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
+          computeCredits: (body) => llmGuardPrecheck("scene-graph-ai", body),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/scene-graph/generate")),
+      ],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -96,7 +102,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "scene-graph-ai"), assetCount: assets.length },
+          input_data: { ...buildJobInputData(parsed.data, "scene-graph-ai"), assetCount: assets.length, resolvedModel: llmModel },
         })
 
       if (jobError) {

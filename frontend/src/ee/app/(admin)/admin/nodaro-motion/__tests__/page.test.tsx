@@ -54,6 +54,12 @@ const meshes = (env: string): TrendEngineEnvironment => ({
   env,
   supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, faceMesh: true } },
 })
+/** An engine that draws the depth in every colormap (`castSwap.depthColormaps`), or in some. */
+const maps = (env: string, depthColormaps: string[] = ["grayscale", "turbo", "inferno", "magma", "viridis"]): TrendEngineEnvironment => ({
+  ...ENVIRONMENTS[0]!,
+  env,
+  supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, depthColormaps } as never },
+})
 /** Every environment the setting is shared by can hide whole people. */
 const HIDE_ENVS: TrendEngineEnvironment[] = [hides("production"), hides("staging")]
 
@@ -169,6 +175,36 @@ describe("Admin → Nodaro Motion", () => {
     expect(within(prism).getByText(/staging cannot draw the face mesh yet.*turn it off to save/)).toBeInTheDocument()
   })
 
+  it("saves a depth fill's colormap once every environment's engine draws it; the default is no key", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [maps("production"), maps("staging")] } })
+    routes[`PUT ${URL}`] = (init) => ({
+      body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    expect(within(prism).queryByRole("combobox", { name: "Depth colormap" })).not.toBeInTheDocument()
+    await user.click(within(prism).getByRole("combobox", { name: "Fill" }))
+    await user.click(screen.getByRole("option", { name: "Depth colors" }))
+    await user.click(within(prism).getByRole("combobox", { name: "Depth colormap" }))
+    await user.click(await screen.findByRole("option", { name: "Inferno" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", fill: "depth", depthColormap: "inferno" } } }]))
+  })
+
+  it("greys out a colormap an environment's engine cannot draw, naming it", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } } })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [maps("production"), maps("staging", ["inferno"])] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(await within(prism).findByRole("combobox", { name: "Depth colormap" }))
+    await waitFor(() => expect(screen.getByRole("option", { name: "Magma (not supported yet)" })).toHaveAttribute("aria-disabled", "true"))
+    expect(screen.getByRole("option", { name: "Inferno" })).not.toHaveAttribute("aria-disabled")
+  })
+
   it("saves Body (the whole person hidden) once an environment's engine can", async () => {
     const user = userEvent.setup()
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: HIDE_ENVS } })
@@ -264,7 +300,14 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     renderWith(<AdminNodaroMotionPage />)
     const group = await audioGroup(await section(/Prism/))
     await user.click(within(group).getByRole("combobox", { name: "720p" }))
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Full audio", "Voice only", "No audio"])
+    // One-tone and Octave are listed too, greyed out until every environment's engine takes them.
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Full audio",
+      "Voice only",
+      "No audio",
+      "One-tone (flattened, no melody) (not supported yet)",
+      "Octave (+12, one octave up) (not supported yet)",
+    ])
     await user.click(screen.getByRole("option", { name: "No audio" }))
     await user.click(within(group).getByRole("combobox", { name: "1080p" }))
     await user.click(screen.getByRole("option", { name: "Voice only" }))
@@ -289,6 +332,32 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     expect(within(group).getByRole("combobox", { name: "1080p" })).toHaveTextContent("Full audio")
     expect(within(prism).getByText(/does not take it yet: its runs send the full audio/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  /** An engine that takes Prism's newer reference audio modes (`castSwap.prismReferenceAudioModes`), or some. */
+  const tones = (env: string, prismReferenceAudioModes: string[] = ["full", "voice", "none", "one-tone", "octave"]): TrendEngineEnvironment => ({
+    ...ENVIRONMENTS[0]!,
+    env,
+    supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, prismReferenceAudioModes } as never },
+  })
+
+  it("offers One-tone and Octave on this shared setting only once every environment's engine takes them, and saves them", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production"), tones("staging", ["full", "voice", "none", "one-tone"])] } })
+    routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
+      body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-11-01T12:00:00.000Z", supported: true } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    const group = await audioGroup(prism)
+    expect(within(prism).getByText(/not on every environment's engine yet: this setting is shared/)).toBeInTheDocument()
+    await user.click(within(group).getByRole("combobox", { name: "480p" }))
+    expect(await screen.findByRole("option", { name: "Octave (+12, one octave up) (not supported yet)" })).toHaveAttribute("aria-disabled", "true")
+    await user.click(await screen.findByRole("option", { name: "One-tone (flattened, no melody)" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: { "480p": "one-tone", "720p": "full", "1080p": "full" } }]),
+    )
   })
 
   it("reads a setting saved as one plain mode as that mode at every resolution, with no change to save", async () => {

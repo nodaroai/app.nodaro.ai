@@ -23,6 +23,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { CAST_SWAP_PROMPT_PART_IDS } from "@nodaro/render-rules"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
+import { engineDrawsDepthColormap } from "../../lib/cast-swap-face-masking.js"
 import { engineRequest, isRec, parseJson, relay } from "./trends/run-helpers.js"
 import { promptPartsAnswerSchema, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 
@@ -36,9 +37,12 @@ export function loadedEngineHasPromptParts(): boolean {
 /** The request without the keys the loaded engine does not declare (a new object). */
 export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const cs = getPluginSupports().castSwap
-  const { promptStyle, scene, faceMesh, roleOutlines, shotList, ...rest } = body
+  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, ...rest } = body
+  // The depth look by its map (and the fill it rides with) only to an engine that draws that map.
+  const colormap = depthColormap !== undefined && engineDrawsDepthColormap(cs, depthColormap) ? depthColormap : undefined
   return {
     ...rest,
+    ...(colormap ? { depthColormap: colormap, ...(maskFill ? { maskFill } : {}) } : {}),
     ...(shotList === true && cs?.steps === true && cs.shotList === true ? { shotList } : {}),
     ...(faceMesh === true && cs?.faceMesh === true ? { faceMesh } : {}),
     ...(roleOutlines === true && cs?.roleOutlines === true ? { roleOutlines } : {}),

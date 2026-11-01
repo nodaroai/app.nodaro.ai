@@ -9,6 +9,7 @@
  */
 import type { FastifyBaseLogger } from "fastify"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { resolvedModelOfJob } from "../lib/job-resolved-model.js"
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-aspect.js"
@@ -363,6 +364,48 @@ export async function planImageJob(args: {
     resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : (provider ?? normalized.modelId),
   )
 
+  const queueData: Record<string, unknown> = {
+    prompt,
+    // LoRA path: trained model + trigger word carry identity — emit zero refs.
+    // Otherwise the ASSEMBLED refs in structured mode, or the RAW flat refs
+    // (preserved verbatim, incl. undefined) in the non-structured path.
+    referenceImageUrls: resolvedLora ? [] : queueReferenceImageUrls,
+    // LoRA runs the synthetic flux-lora-character model (Replicate, trained
+    // version), bypassing auto-routing. Otherwise the model the levers were
+    // snapped and priced against: with references attached, a text-to-image
+    // model's image-to-image sibling, since the T2I endpoints take no image
+    // input. The trigger is the ASSEMBLED list — a plain prompt plus a
+    // reference still edits, no `{image:N}` mention needed, while a wired
+    // character with no @-mention contributes no ref and does not swap.
+    // Models that consume refs in their T2I call (nano-banana, the Replicate
+    // "Open" models) have no sibling and pass through unchanged.
+    provider: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.modelId,
+    // Hand the synthetic flux-lora-character model id to the Replicate provider.
+    model: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
+    // Read through `data`, NOT the `raw*` locals above: those still hold the
+    // caller's pre-snap values.
+    aspectRatio: data.aspectRatio,
+    resolution: data.resolution,
+    quality: data.quality,
+    // Structured mode: only the NATIVE negative prompt rides this channel
+    // (the non-native one is folded into `prompt`). Flat mode: the raw
+    // negative prompt, unchanged.
+    negativePrompt: effectiveNegativePrompt,
+    seed,
+    renderingSpeed,
+    styleType,
+    expandPrompt,
+    // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
+    // Values resolved server-side from the character row (see the handler).
+    extraParams: resolvedLora
+      ? { lora_version: resolvedLora.version, lora_trigger: resolvedLora.trigger }
+      : undefined,
+    baseImageUrl,
+    maskUrl,
+    strength,
+    guidanceScale,
+  }
+
   return {
     model: provider ?? defaultImageModel("general", data.aspectRatio),
     creditIdentifier,
@@ -373,55 +416,20 @@ export async function planImageJob(args: {
     inputData: {
       ...buildJobInputData(data, "generate-image"),
       prompt,
-      // The model the worker runs (`queueData.provider` / `.model` below): the
-      // image-to-image sibling with references, the trained-character model on
-      // the LoRA path. `provider` stays the caller's choice (the gallery label,
-      // a batch replay's group model and the run stats read it); a reconcile
-      // that fails the job reads this one (`jobModelIdOf`), so its safety class
-      // and fallback match the worker's.
-      resolvedModel: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.modelId,
+      // The model the worker runs, decided from the payload it is sent by the
+      // worker's own choice (`generateImageModelOf`, through the resolver the
+      // workflow engine's rows use): the image-to-image sibling with
+      // references or for an edit of a base ("refine this result", an
+      // inpaint — the worker swaps those itself), the trained-character model
+      // on the LoRA path. Recording only: it never feeds back into what runs
+      // or bills. `provider` stays the caller's choice (the gallery label, a
+      // batch replay's group model and the run stats read it); a reconcile
+      // that fails the job reads this one (`jobModelIdOf`) — a model and its
+      // image-to-image sibling share one safety policy (pinned in
+      // @nodaro/shared's safety-retry-policy test).
+      resolvedModel: resolvedModelOfJob("generate-image", queueData),
       ...(warnings.length > 0 ? { warnings } : {}),
     },
-    queueData: {
-      prompt,
-      // LoRA path: trained model + trigger word carry identity — emit zero refs.
-      // Otherwise the ASSEMBLED refs in structured mode, or the RAW flat refs
-      // (preserved verbatim, incl. undefined) in the non-structured path.
-      referenceImageUrls: resolvedLora ? [] : queueReferenceImageUrls,
-      // LoRA runs the synthetic flux-lora-character model (Replicate, trained
-      // version), bypassing auto-routing. Otherwise the model the levers were
-      // snapped and priced against: with references attached, a text-to-image
-      // model's image-to-image sibling, since the T2I endpoints take no image
-      // input. The trigger is the ASSEMBLED list — a plain prompt plus a
-      // reference still edits, no `{image:N}` mention needed, while a wired
-      // character with no @-mention contributes no ref and does not swap.
-      // Models that consume refs in their T2I call (nano-banana, the Replicate
-      // "Open" models) have no sibling and pass through unchanged.
-      provider: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.modelId,
-      // Hand the synthetic flux-lora-character model id to the Replicate provider.
-      model: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
-      // Read through `data`, NOT the `raw*` locals above: those still hold the
-      // caller's pre-snap values.
-      aspectRatio: data.aspectRatio,
-      resolution: data.resolution,
-      quality: data.quality,
-      // Structured mode: only the NATIVE negative prompt rides this channel
-      // (the non-native one is folded into `prompt`). Flat mode: the raw
-      // negative prompt, unchanged.
-      negativePrompt: effectiveNegativePrompt,
-      seed,
-      renderingSpeed,
-      styleType,
-      expandPrompt,
-      // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
-      // Values resolved server-side from the character row (see the handler).
-      extraParams: resolvedLora
-        ? { lora_version: resolvedLora.version, lora_trigger: resolvedLora.trigger }
-        : undefined,
-      baseImageUrl,
-      maskUrl,
-      strength,
-      guidanceScale,
-    },
+    queueData,
   }
 }

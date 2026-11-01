@@ -16,6 +16,9 @@
  * the two routes can't drift out of sync.
  */
 
+/** The model that drafts an asset description (the ✨ helper and the inline drafts). */
+export const ASSET_DESCRIPTION_MODEL = "claude-sonnet-4.6"
+
 /**
  * System prompt for the asset-description LLM call.
  *

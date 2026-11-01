@@ -16,6 +16,7 @@ import {
   videoDepthNeedsGrayscalePass,
 } from "@nodaro/shared/media"
 import { falVideoDepth } from "../../providers/fal/video-depth.js"
+import { VIDEO_DEPTH_DEFAULT_PROVIDER } from "./default-models.js"
 import { replicateVideoDepth } from "../../providers/replicate/video-depth.js"
 import type { VideoDepthParams } from "../../providers/video-depth-params.js"
 import { grayscaleVideo } from "../../providers/video/grayscale-video.js"
@@ -36,7 +37,7 @@ type DepthResult = { videoUrl: string; cost: number | null }
 
 const handleVideoDepth: HandlerFn = async function handleVideoDepth(job, ctx) {
   const d = job.data as Record<string, unknown>
-  const provider = String(d.provider ?? "video-depth-anything")
+  const provider = String(d.provider ?? VIDEO_DEPTH_DEFAULT_PROVIDER)
   const videoUrl = typeof d.videoUrl === "string" ? d.videoUrl : ""
   const colormap = d.colormap as VideoDepthParams["colormap"]
   const params: VideoDepthParams = {

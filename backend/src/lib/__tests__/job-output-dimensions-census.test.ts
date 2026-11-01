@@ -77,7 +77,7 @@ const LEDGER: ReadonlyMap<string, Entry> = new Map<string, Entry>([
 /** Lanes that produce images but get no stamped `width` / `height`, and why. */
 const EXEMPT: ReadonlyMap<string, { file: string; why: string }> = new Map([
   ["site-capture", {
-    file: "routes/site-capture.ts",
+    file: "lib/background-scrape/site-capture.ts",
     why: "publishes a page capture, not an image: no top-level imageUrl by design, and the full page and every still already carry their own width and height (lib/site-capture-store.ts)",
   }],
   ["save-to-storage", {

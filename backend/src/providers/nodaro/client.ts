@@ -32,7 +32,7 @@ const POLL_FAST_MS = 2_000
 const POLL_SLOW_MS = 4_000
 const POLL_FAST_ATTEMPTS = 5
 /** Wall-clock budget (~15 min) before giving up on a cloud job. */
-const POLL_BUDGET_MS = 15 * 60 * 1_000
+export const POLL_BUDGET_MS = 15 * 60 * 1_000
 /** Consecutive transient poll failures (network / 5xx / 429) tolerated. */
 const MAX_TRANSIENT_POLL_FAILURES = 5
 
@@ -188,10 +188,17 @@ export async function callCloudRoute(
 export async function createCloudJob(
   path: string,
   body: Record<string, unknown>,
+  /**
+   * `idempotencyKey`: sent as `Idempotency-Key` — the cloud answers a repeat
+   * create under the same key with the job the first one made (`{ jobId,
+   * deduped: true }`, its credit guard and the unique (user, key) on its jobs).
+   */
+  opts: { idempotencyKey?: string } = {},
 ): Promise<string> {
   const res = await nodaroCloudFetch(path, {
     method: "POST",
     body: JSON.stringify(body),
+    ...(opts.idempotencyKey ? { headers: { "Idempotency-Key": opts.idempotencyKey } } : {}),
   })
   if (!res.ok) {
     throw cloudError(res.status, await readCloudErrorBody(res), `POST ${path}`)

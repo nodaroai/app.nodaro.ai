@@ -10,6 +10,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { resolveImageToImageCreditIdentifier } from "./image-to-image-credit-id.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
@@ -20,10 +21,13 @@ import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
 import {
+  ASSET_DESCRIPTION_MODEL,
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
   ASSET_DESCRIPTION_LLM_OPTIONS,
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 
 export const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
@@ -84,7 +88,17 @@ const IDENTITY_PRESERVE_SUFFIX =
 export { resolveImageToImageCreditIdentifier }
 
 export async function imageToImageRoutes(app: FastifyInstance) {
-  app.post("/v1/image-to-image", { preHandler: creditGuard(resolveImageToImageCreditIdentifier) }, async (req, reply) => {
+  app.post("/v1/image-to-image", {
+    preHandler: [
+      creditGuard(resolveImageToImageCreditIdentifier),
+      // The lane last, and only for a request that will make the LLM call.
+      laneGuard("llm", {
+        // The studio refine drafts a missing description with an LLM before it reserves.
+        when: (req) => { const b = rawBodyOf(req); return b.attachToCharacterId != null && b.injectCharacterContext !== true && !isFilledText(b.description) },
+        provider: () => llmProviderOf(ASSET_DESCRIPTION_MODEL),
+      }),
+    ],
+  }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -191,7 +205,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       if (!parsed.data.description) {
         try {
           const llm = await llmComplete({
-            modelId: "claude-sonnet-4.6",
+            modelId: ASSET_DESCRIPTION_MODEL,
             system: ASSET_DESCRIPTION_SYSTEM_PROMPT,
             messages: [
               {
@@ -270,7 +284,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
         force_private: forcePrivate,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "image-to-image"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "image-to-image"), "image-to-image"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

@@ -6,7 +6,8 @@
  *
  *  - only the detector computes it, and the detector stores nothing (its one
  *    storage import is the URL check);
- *  - the toolkit lends the member as is: no cache or log wraps it;
+ *  - the toolkit lends the member as is: no cache or log wraps it, only its
+ *    concurrency slot, which hands back the member's own result;
  *  - the artifact gate drops it: a box that carries one through
  *    `normalizeSpeakerTracks` comes out without it.
  *
@@ -50,8 +51,17 @@ describe("the face descriptor never outlives the job", () => {
   it("the toolkit lends the member unwrapped", () => {
     const src = strip(readFileSync(join(SRC, "lib/private-plugins/toolkit.ts"), "utf8"))
     expect(src).toMatch(/import \{ detectFaces \} from "\.\.\/\.\.\/services\/face-detect\/detect-faces\.js"/)
-    const media = src.slice(src.indexOf("media: {"), src.indexOf("}", src.indexOf("media: {")))
+    const open = 'media: withMemberSlots<PluginMediaToolkit>("media", {'
+    expect(src).toContain(open)
+    const media = src.slice(src.indexOf(open), src.indexOf("}", src.indexOf(open)))
     expect(media).toMatch(/^\s*detectFaces,$/m)
+    // The only thing around it is its concurrency slot (toolkit-lanes.ts),
+    // which hands back the member's own result and keeps nothing of it.
+    const lanes = strip(readFileSync(join(SRC, "lib/private-plugins/toolkit-lanes.ts"), "utf8"))
+    const wrap = lanes.slice(lanes.indexOf("export function withMemberSlots"), lanes.indexOf("type SideReserve"))
+    expect(wrap).toMatch(/const run = \(\) => \(fn as [\s\S]*?\)\.apply\(this, args\)/)
+    expect(wrap).toMatch(/return spec\.takesSlotAhead \? withSlotTakenAheadOr\(req, run\) : withConcurrencySlot\(req, run\)/)
+    expect(wrap).not.toMatch(/\b(upload|putObject|writeFile|createWriteStream|cache|logger|console)\w*\(/i)
   })
 
   it("the artifact gate drops it: normalizeSpeakerTracks keeps no descriptor on any box", () => {

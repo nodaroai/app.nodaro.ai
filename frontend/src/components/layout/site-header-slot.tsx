@@ -52,10 +52,17 @@ class HeaderFailureBoundary extends Component<{ readonly children: ReactNode }, 
 export function SiteHeaderSlot(props: SiteHeaderSlotProps) {
   const active = useSharedHeaderActive()
   if (!AppHeader || !active) return null
-  // While the chunk loads, hold the header's measured height so the page does
-  // not jump (desktop 116 px; phone 119 px, or 61 px compact).
+  // While the chunk loads, hold the header's height so the page does not jump
+  // (desktop: one 60 px row; phone: its 56 px top row, or the 57 px compact
+  // row, under the safe area). The phone's bottom bar is fixed: no height here.
   const placeholder = (
-    <div aria-hidden="true" className={cn("shrink-0 h-[116px]", props.compact ? "max-md:h-[61px]" : "max-md:h-[119px]")} />
+    <div
+      aria-hidden="true"
+      className={cn(
+        "shrink-0 h-[60px]",
+        props.compact ? "max-md:h-[calc(57px+env(safe-area-inset-top))]" : "max-md:h-[calc(56px+env(safe-area-inset-top))]",
+      )}
+    />
   )
   return (
     <HeaderFailureBoundary>

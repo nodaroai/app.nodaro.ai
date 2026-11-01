@@ -34,7 +34,7 @@ import {
   type TrendPromptBudget,
   type TrendPromptSource,
 } from "@nodaro/render-rules"
-import { clipPreparationIssues, clipPreparationName, clipPreparationOf, roleOutlinesOn } from "./clip-preparation"
+import { clipPreparationIssues, clipPreparationName, clipPreparationOf, depthColormapSaved, roleOutlinesOn } from "./clip-preparation"
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import { normaliseShotList } from "./shot-list"
 import type {
@@ -280,6 +280,9 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" ? { faceMesh: true } : {}),
     // Role outlines: only when on (off is no key, as before they existed), Faces hidden only.
     ...(m.roleOutlines === true && clipPreparationOf(m) === "faces" ? { roleOutlines: true } : {}),
+    // The depth colormap: only where it changes what is drawn (`depthColormapSaved`: depth drawn, not the
+    // source's default, not under role outlines); else no key, as before the choice existed.
+    ...(depthColormapSaved(m) ? { depthColormap: depthColormapSaved(m) } : {}),
     // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
     ...(m.marks && m.marks.length > 0 ? { marks: m.marks.map((mark) => ({ ...mark })) } : {}),
   }
@@ -618,6 +621,16 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   castSwap: "Cast Swap",
 }
 
+/** A `prismReferenceAudio:<mode>` need's label ("the Prism reference audio one-tone"), else undefined. */
+function prismReferenceAudioNeedLabel(need: string): string | undefined {
+  return need.startsWith("prismReferenceAudio:") ? `the Prism reference audio ${need.slice("prismReferenceAudio:".length)}` : undefined
+}
+
+/** A `depthColormap:<map>` need's label ("the depth colormap inferno"), else undefined. */
+function depthColormapNeedLabel(need: string): string | undefined {
+  return need.startsWith("depthColormap:") ? `the depth colormap ${need.slice("depthColormap:".length)}` : undefined
+}
+
 /** One publish blocker as a sentence ("production: pet slots not supported yet"). */
 export function describeBlocker(r: TrendPublishBlocker): string {
   switch (r.code) {
@@ -667,7 +680,7 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {
       const need = r.need ?? "?"
-      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? need} not supported yet`
+      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? prismReferenceAudioNeedLabel(need) ?? need} not supported yet`
     }
     default:
       return r.message ?? r.code

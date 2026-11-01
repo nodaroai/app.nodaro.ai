@@ -6,6 +6,7 @@ import { oneScanAtATime, tryRemoveFromQueue } from "../lib/queue.js"
 import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { cancelOwnedJob, cancelRunningChildJobs, refundReservedHolds } from "../lib/cancel-job.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
+import { BACKGROUND_SCRAPE_JOB_TYPES } from "../lib/background-scrape/job-types.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 
 /** How many queue removals cancel-all runs at once. */
@@ -100,7 +101,9 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         .select("id, status, provider")
         .eq("user_id", userId)
         .in("status", [...IN_FLIGHT_JOB_STATUSES])
-        .or("provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review")
+        // A background scrape saves its provider run only to re-attach after an
+        // interruption: it stays cancellable while it runs, as it was in its route.
+        .or(`provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review,job_type.in.(${[...BACKGROUND_SCRAPE_JOB_TYPES].join(",")})`)
 
       if (fetchError) {
         return sendInternalError(reply, req, fetchError, "Failed to fetch jobs")

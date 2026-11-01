@@ -41,6 +41,9 @@ vi.mock("../../providers/nodaro/client.js", () => ({
 }))
 // Every row the route inserts, so a test can read what reached `jobs`.
 const insertedRows = vi.hoisted(() => [] as Array<Record<string, unknown>>)
+// The video queue: the route enqueues the scrape's worker job, and this
+// stand-in runs the real handler at once, as the worker does with lanes off.
+vi.mock("../../lib/queue.js", async () => ({ videoQueue: (await import("./helpers/inline-scrape-worker.js")).inlineScrapeQueue }))
 vi.mock("../../lib/supabase.js", () => ({
   supabase: {
     from: () => ({
@@ -48,7 +51,11 @@ vi.mock("../../lib/supabase.js", () => ({
         insertedRows.push(row)
         return { select: () => ({ single: () => ({ data: { id: "job-1" }, error: null }) }) }
       },
-      update: () => ({ eq: () => ({ error: null }) }),
+      update: () => {
+        // The relay saves its cloud job (a CAS: .eq().is().in().select()); any other write awaits .eq().
+        const c: Record<string, unknown> = { eq: () => c, is: () => c, in: () => c, select: async () => ({ data: [{ id: "job-1" }], error: null }), then: (ok: (v: unknown) => unknown) => ok({ error: null }) }
+        return c
+      },
     }),
   },
 }))
@@ -90,8 +97,7 @@ describe("POST /v1/web-scrape", () => {
     // sits behind the same ~100 s edge timeout a browser does.
     expect(cloudMocks.createCloudJob).toHaveBeenCalledWith(
       "/v1/web-scrape",
-      expect.objectContaining({ actor: "google-search", query: "ai", respondAsync: true }),
-    )
+      expect.objectContaining({ actor: "google-search", query: "ai", respondAsync: true }), { idempotencyKey: "scrape-relay:job-1" })
     expect(cloudMocks.waitForCloudJob).toHaveBeenCalledWith("cloud-job-9")
     expect(runScraper).not.toHaveBeenCalled()
     const body = res.json()
@@ -447,7 +453,7 @@ describe("POST /v1/web-scrape — address spelling", () => {
       payload: { actor: "content-crawler", url: typed, mode: "page" },
     })
     expect(res.statusCode).toBe(200)
-    expect(vi.mocked(runScraper)).toHaveBeenCalledWith(expect.objectContaining({ url: expected }))
+    expect(vi.mocked(runScraper)).toHaveBeenCalledWith(expect.objectContaining({ url: expected }), expect.anything())
   })
 
   it("runs an Instagram target typed without a scheme", async () => {
@@ -460,7 +466,7 @@ describe("POST /v1/web-scrape — address spelling", () => {
       payload: { actor: "instagram", target: "instagram.com/nike" },
     })
     expect(res.statusCode).toBe(200)
-    expect(vi.mocked(runScraper)).toHaveBeenCalledWith(expect.objectContaining({ target: "https://instagram.com/nike" }))
+    expect(vi.mocked(runScraper)).toHaveBeenCalledWith(expect.objectContaining({ target: "https://instagram.com/nike" }), expect.anything())
   })
 
   it("still refuses a value that is not an address at all", async () => {

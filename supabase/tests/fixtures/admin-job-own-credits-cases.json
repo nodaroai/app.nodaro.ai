@@ -1,0 +1,11 @@
+[
+  { "label": "no log", "logStatus": null, "creditsUsed": null, "creditsCharged": null, "sideCharges": [], "openSideCharges": [], "held": 120, "expected": 120 },
+  { "label": "reserved", "logStatus": "reserved", "creditsUsed": 500, "creditsCharged": null, "sideCharges": [], "openSideCharges": [], "held": 500, "expected": 500 },
+  { "label": "committed below hold", "logStatus": "committed", "creditsUsed": 500, "creditsCharged": 320, "sideCharges": [], "openSideCharges": [], "held": 500, "expected": 320 },
+  { "label": "committed + side 40", "logStatus": "committed", "creditsUsed": 500, "creditsCharged": 320, "sideCharges": [40], "openSideCharges": [], "held": 500, "expected": 360 },
+  { "label": "committed + reserved side 25", "logStatus": "committed", "creditsUsed": 500, "creditsCharged": 320, "sideCharges": [], "openSideCharges": [25], "held": 500, "expected": 320 },
+  { "label": "refunded", "logStatus": "refunded", "creditsUsed": 500, "creditsCharged": null, "sideCharges": [], "openSideCharges": [], "held": 500, "expected": 0 },
+  { "label": "refunded + side 40", "logStatus": "refunded", "creditsUsed": 500, "creditsCharged": null, "sideCharges": [40], "openSideCharges": [], "held": 500, "expected": 40 },
+  { "label": "committed null charged", "logStatus": "committed", "creditsUsed": 200, "creditsCharged": null, "sideCharges": [], "openSideCharges": [], "held": 200, "expected": 200 },
+  { "label": "no log no hold", "logStatus": null, "creditsUsed": null, "creditsCharged": null, "sideCharges": [], "openSideCharges": [], "held": null, "expected": 0 }
+]

@@ -3025,7 +3025,12 @@ export interface PluginLlmSideHoldToolkit {
   /**
    * Reserve a side hold for job `jobId` (live, owned by `userId`), paid by the
    * job's payer. `key` (unique per job, e.g. `take:3`) makes it idempotent.
-   * A refusal is an answer, never a throw.
+   * A refusal is an answer, never a throw. Before reserving, the host takes
+   * the reading's concurrency slot (its `llm` lane), which a coordinator job
+   * may wait for; a wait that ends throws the lane's error exactly as any
+   * toolkit call would (a queue timeout, the job's cancel), and no hold is
+   * reserved. The reading's `llm.completeStructuredMetered` then runs in that
+   * slot, which the hold's settle frees. Never thrown while the lanes are off.
    */
   reserve(args: {
     jobId: string
@@ -3509,6 +3514,16 @@ export interface PluginFaceMasking {
    * engine that declares `supports.castSwap.faceMesh`.
    */
   faceMesh?: boolean
+  /**
+   * The depth map's colormap wherever the setting draws depth: full depth,
+   * keep people, or a faces-hidden depth fill. Absent = the source's default,
+   * exactly as before the choice existed (grayscale for full depth and keep
+   * people, turbo for a depth fill). Sent (and answered by `tk.settings`) only
+   * when it differs from that default, never under role outlines (which draw
+   * a depth fill gray), and only to an engine that lists the map in
+   * `supports.castSwap.depthColormaps`.
+   */
+  depthColormap?: "grayscale" | "turbo" | "inferno" | "magma" | "viridis"
 }
 
 /**
@@ -3798,9 +3813,10 @@ export interface PluginSupports {
    *   (`withPreparedPreview`, ee/lib/trends/run-helpers.ts).
    * - `storedSceneDescription`: a full-depth make (`POST /v1/cast-swap/face-mask`)
    *   takes `roles` (`[{ name, kind }]`, the trend's role names) and
-   *   `previewStart`, and its completion carries `sceneDescription` (the whole
-   *   original clip, people named by role) and `previewSceneDescription` (the
-   *   4 s preview window); a trend run takes `sceneDescription` (the stored
+   *   `previewStart` (never sent since 2026-11-01: it asks for a preview text
+   *   too, and a preview run cuts the whole clip's), and its completion carries
+   *   `sceneDescription` (the whole original clip, people named by role) and,
+   *   only when sent `previewStart`, `previewSceneDescription`; a trend run takes `sceneDescription` (the stored
    *   text, platform-only) with `sceneDescriptionWindow` (`{ fromSec, toSec }`
    *   of the source it covers) and rewrites it for the new cast and the run's
    *   window instead of describing the clip again. Additive-optional: absent ⇒
@@ -3835,6 +3851,16 @@ export interface PluginSupports {
    *   at all when every resolution is the full audio. Wins over
    *   `prismReferenceAudio` when both are declared. Additive-optional: absent
    *   ⇒ `false` — the string of `prismReferenceAudio` above (or nothing).
+   * - `prismReferenceAudioModes` (cast-swap 0.426.0): the modes
+   *   `prismReferenceAudio` may name for this engine, in either shape above:
+   *   `"full" | "voice" | "none"` and the newer `"one-tone"` (the clip's
+   *   audio flattened to one steady tone, unpitched) and `"octave"` (the
+   *   clip's audio one octave up, +12 semitones). The newer ones are sent
+   *   only to an engine that lists them; any other engine is sent the full
+   *   audio for them (no key). Absent ⇒ none of the newer ones; "voice" and
+   *   "none" keep the flags' rule, so the wire is byte-identical for every
+   *   choice made before them (lib/cast-swap-prism-reference-audio.ts
+   *   `engineTakesPrismReferenceAudioMode`).
    * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
    *   the Nodaro Motion settings read through `tk.settings`) takes
    *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
@@ -3865,6 +3891,26 @@ export interface PluginSupports {
    *   `storedFaceMask.outlines` from a run and holds a trend that draws them
    *   back from publishing there), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsRoleOutlines`).
+   * - `depthColormaps`: the colormaps a `faceMasking.depthColormap` may name
+   *   for this engine (of Video Depth Anything's: grayscale, turbo, inferno,
+   *   magma, viridis) — on a run, a stored clip's make (and its person
+   *   variants) and the Nodaro Motion settings read through `tk.settings`.
+   *   Absent, the key means the source's default (grayscale for full depth
+   *   and keep people, turbo for a faces-hidden depth fill) and the engine
+   *   behaves exactly as before. Present: the engine renders the depth GRAY
+   *   once (Video Depth, `colormap: "grayscale"`), colours it with the map for
+   *   the clip it sends or stores, answers that gray render as a make's
+   *   `depthUrl` (and takes a gray `fromMask.depthUrl` back: the platform
+   *   hands it one exactly when the setting carries a colormap or role
+   *   outlines), draws the face mesh through `/v1/video-face-mesh` with
+   *   `colormap` and that gray `depthUrl` so its lines are tones of the map,
+   *   and words every prompt line that names the depth look by the map.
+   *   Additive-optional: absent ⇒ none — the platform never sends
+   *   `depthColormap` (it strips it from a run and the settings, refuses a
+   *   make, holds a trend that names one back from publishing there, and
+   *   refuses to save a shared Nodaro Motion setting with one while any
+   *   environment lacks it), so the wire is byte-identical
+   *   (lib/cast-swap-face-masking.ts `engineDrawsDepthColormap`).
    * - `artStyle`: a DIRECT Flex run (`style: "motion"`) and its estimate take
    *   `direction?: { style: string }`, an id of the platform's `style` picker
    *   catalog. Absent ⇒ `false` — the host must not send `direction`.
@@ -3936,9 +3982,11 @@ export interface PluginSupports {
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
     readonly prismReferenceAudioPerResolution?: boolean
+    readonly prismReferenceAudioModes?: readonly ("full" | "voice" | "none" | "one-tone" | "octave")[]
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
     readonly roleOutlines?: boolean
+    readonly depthColormaps?: readonly ("grayscale" | "turbo" | "inferno" | "magma" | "viridis")[]
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
     readonly shotList?: boolean

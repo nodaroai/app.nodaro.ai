@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
   TRANSCRIBE_PROVIDERS,
   TRANSCRIBE_PROVIDER_CAPABILITIES,
@@ -94,7 +95,7 @@ export async function transcribeRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "transcribe"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "transcribe"), "transcribe"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

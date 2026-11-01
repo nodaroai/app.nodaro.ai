@@ -1,4 +1,4 @@
-import { Worker, DelayedError, UnrecoverableError, type ConnectionOptions } from "bullmq"
+import { Worker, DelayedError, UnrecoverableError, type ConnectionOptions, type Job } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -50,6 +50,7 @@ import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.js"
 import { llmStructuredHandlers } from "./handlers/llm-structured.js"
 import { scene3dHandlers } from "./handlers/scene3d.js"
+import { backgroundScrapeHandlers } from "./handlers/background-scrape.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
@@ -65,6 +66,9 @@ import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
 import { serverShare } from "../lib/concurrency-lanes/server-share.js"
 import { claimWithBullEntry, dropRequeuePayload } from "../lib/concurrency-lanes/columns.js"
 import { runHolding } from "../lib/concurrency-lanes/hold.js"
+import { VIDEO_WORKER_LOCK_DURATION_MS, VIDEO_WORKER_MAX_STALLED_COUNT, VIDEO_WORKER_STALLED_INTERVAL_MS } from "@nodaro/render-rules"
+import { runWithinCapacity } from "./worker-capacity.js"
+import { savedProviderTaskOf, videoHandlerFlags } from "./video-handler-flags.js"
 import type { ReleaseOutcome } from "../lib/concurrency-lanes/gate.js"
 
 /** How far back into the queue a drain-interrupted job is moved (ms) — a
@@ -90,6 +94,9 @@ const allHandlers: Record<string, HandlerFn> = {
   ...motionGraphicsLottieHandlers,
   ...llmStructuredHandlers,
   ...scene3dHandlers,
+  // web-scrape, site-capture, meta-ads-scrape, instagram-scrape — the scrapes
+  // their routes answer with a job id (handlers/background-scrape.ts).
+  ...backgroundScrapeHandlers,
   // video-analysis handler moved to @nodaroai/cloud-plugins — it arrives via
   // `privatePluginHandlers` (loadPrivatePlugins below), keyed "video-analysis".
 }
@@ -162,6 +169,9 @@ if (engines.smartCut) {
     engines.smartCut!.findBoundary(prevPath, nextPath, framesFromPrev, framesFromNext, mode))
 }
 
+// The flags the handlers declare, by job type (video-handler-flags.ts).
+const HANDLER_FLAGS = videoHandlerFlags(allHandlers)
+
 export function createVideoWorker() {
   initProviders()
   // Operator-supplied keys (pasted on /setup, stored encrypted): load them
@@ -179,577 +189,592 @@ export function createVideoWorker() {
     maxRetriesPerRequest: null,
   })
 
-  return new Worker(
-    "video-generation",
-    async (job, token) => {
-      const { jobId } = job.data as { jobId: string }
+  /** One job of the queue: admission, the pickup claim, the handler, and every exit. */
+  const processVideoJob = async (job: Job, token?: string): Promise<void> => {
+    const { jobId } = job.data as { jobId: string }
 
-      // Fetch job record (with should_watermark from reservation) + user profile for public_outputs.
-      // `provider_task_id` + `provider_kind` + `reconcile_attempts` + `job_type`
-      // are fetched to (a) detect a BullMQ stall-retry, and (b) immediately
-      // recover the row via the same handler the reconcile cron uses.
-      const { data: jobRecord } = await supabase
+    // Fetch job record (with should_watermark from reservation) + user profile for public_outputs.
+    // `provider_task_id` + `provider_kind` + `reconcile_attempts` + `job_type`
+    // are fetched to (a) detect a BullMQ stall-retry, and (b) immediately
+    // recover the row via the same handler the reconcile cron uses.
+    const { data: jobRecord } = await supabase
+      .from("jobs")
+      .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, input_data, status, started_at, parent_job_id, pipeline_id, workspace_id, org_id, source, source_detail, profiles!user_id(public_outputs)")
+      .eq("id", jobId)
+      .single()
+
+    // Stall-retry guard + inline recovery. If `provider_task_id` is set, the
+    // upstream call already ran on a prior worker that died (Railway redeploy,
+    // OOM, etc.) and BullMQ retried this job. We MUST NOT call createTask
+    // again (that would duplicate-bill the provider).
+    //
+    // The old behavior here was `return` ("wait for the reconcile cron"),
+    // which meant the row sat in `processing` for up to <threshold> + <cron
+    // cadence> minutes — 30 min for kie-suno, longer for VEO/lip-sync. For
+    // operations that complete in 1-5 min upstream that's a terrible UX.
+    //
+    // The new behavior: dispatch the exact same per-provider reconcile
+    // handler the cron uses, inline, right now. Recovery happens within
+    // ~5 min of worker death (BullMQ's stall-detect cadence) instead of
+    // 30+ min. All reconcile handlers are idempotent (finalize is CAS-guarded;
+    // bumpAttempts is safe to repeat), so the cron remains the safety net if
+    // this inline pass throws or KIE is still processing.
+    //
+    // It runs BEFORE admission and holds no concurrency slot: it only polls
+    // the provider for a task that already ran, and a stalled job's old
+    // lease simply expires. Accepted on purpose.
+    // A handler that re-attaches to its saved task itself (the background
+    // scrapes: the plan to settle with is in its payload, which the inline
+    // reconcile never sees) is run instead, below — never a second task.
+    const resumesTask = HANDLER_FLAGS.resuming.has(job.name)
+    if (jobRecord?.provider_task_id && !resumesTask) {
+      await tryInlineReconcile({
+        id: jobId,
+        provider_kind: (jobRecord.provider_kind as string | null) ?? null,
+        provider_task_id: jobRecord.provider_task_id as string,
+        reconcile_attempts: (jobRecord.reconcile_attempts as number | null) ?? 0,
+        job_type: (jobRecord.job_type as string | null) ?? null,
+        input_data: (jobRecord.input_data as Record<string, unknown> | null) ?? null,
+      })
+      // The attempt that died may have left scratch files; this recovery
+      // may have just ended the job (see the dispatch's `finally` below).
+      await discardJobScratch(jobId)
+      return
+    }
+
+    const usageLogId = jobRecord?.usage_log_id
+    const jobUserId = (jobRecord?.user_id as string) ?? undefined
+
+    // Quiet stop (admin → Users; lib/access-blocks.ts): the account's jobs
+    // are accepted and charged like anyone's and never run. BEFORE the pickup
+    // CAS and OUTSIDE the try below, so the row stays `pending` — no
+    // `pre-task` stamp (nothing for the reconcile sweeps to fail), the
+    // reservation intact — and the job goes back to the queue at zero cost
+    // with the payload it was queued with (the drain primitive below). A
+    // release is seen at the next look.
+    if (!HANDLER_FLAGS.quietStopExempt.has(job.name) && await isUserQuietStopped(jobUserId)) {
+      await job.moveToDelayed(Date.now() + QUIET_STOP_RECHECK_MS, token)
+      throw new DelayedError()
+    }
+
+    // Use watermark decision from reservation time (C4 fix: prevents bypass via tier upgrade)
+    const shouldWatermark = hasCredits() ? (jobRecord?.should_watermark ?? false) : false
+
+    // Output visibility (is_public) — the shared decision lives in
+    // output-visibility.ts so this worker and render-worker can't drift, with
+    // the deployment surface switch (B1) as the OUTERMOST gate. Worker-local
+    // signals (blocked prompt) fold into forcePrivate; the parent
+    // workflow_execution's mcp flag needs an async lookup, so it stays inline
+    // and is ANDed after (and short-circuits when the output is already private).
+    let publicPref = true
+    if (jobUserId && jobRecord?.profiles) {
+      const profile = jobRecord.profiles as unknown as { public_outputs?: boolean }
+      publicPref = profile?.public_outputs ?? true
+    }
+    const jobData = job.data as Record<string, unknown>
+    const promptText = (jobData.prompt as string) ?? (jobData.text as string) ?? null
+    let isPublicOutput = resolveIsPublicOutput({
+      publicOutputs: publicPref,
+      // uploaded/private input content, or a blocked prompt
+      forcePrivate: jobRecord?.force_private === true || isPromptBlocked(promptText),
+      // direct MCP generation (Claude.ai / Cursor) — a private surface.
+      // jobs.mcp_client is a TEXT client name, never a boolean — `=== true`
+      // was always false and leaked direct-MCP output to the public gallery.
+      mcpClient: mcpClientForcesPrivate(jobRecord?.mcp_client),
+      workflowExecutionId: null,
+      // An Apply EDL preview (proxy) is private on every lane (F1) — also
+      // inserted force_private by the route and the workflow run.
+      previewRender: isPreviewRender(job.name, jobData.quality),
+    })
+    // Workflow / app run: the parent workflow_execution carries `mcp_client`;
+    // per-node child jobs don't (the orchestrator's internal per-node calls
+    // never see the MCP header). Look up the parent only if still public.
+    if (isPublicOutput && jobRecord?.workflow_execution_id) {
+      const { data: parent } = await supabase
+        .from("workflow_executions")
+        .select("mcp_client")
+        .eq("id", jobRecord.workflow_execution_id as string)
+        .maybeSingle()
+      if (parent?.mcp_client) {
+        isPublicOutput = false
+      }
+    }
+
+    const savedTask = savedProviderTaskOf(resumesTask, jobRecord)
+    const ctx: JobContext = { jobId, jobUserId, usageLogId, shouldWatermark, ...(savedTask ? { providerTask: savedTask } : {}) }
+    // A job whose output is data, not media (a scrape): its row stays
+    // private and it files no Library asset (HandlerFn.outputIsData).
+    const outputIsData = HANDLER_FLAGS.dataOutput.has(job.name)
+    // The model this job runs under (the i2i variant id for referenced image
+    // requests). Read once: both the inline safety retry and the final failure
+    // path key their policy off it.
+    const modelId = jobModelIdOf(job.data)
+    let safetyRetried = false
+
+    // The job's concurrency slot (lib/concurrency-lanes/worker-admit.ts),
+    // taken BEFORE the pickup claim: a job that has to wait for one is put
+    // back without claiming its row. With enforcement off every job is
+    // admitted. The slot is released exactly once, in the `finally` below,
+    // with the outcome of whichever exit the job took.
+    const admission = await admitOrPark({
+      job, token, queue: "video-generation", row: workerRowOf(jobId, jobRecord, jobData.userId),
+    })
+    if (!admission) throw new DelayedError()
+    let laneOutcome: ReleaseOutcome = "failed"
+
+    try {
+      // `provider_kind="pre-task"` + `provider_call_started_at=now` make
+      // this row visible to the reconcile cron BEFORE the handler fires
+      // its first `onTaskCreated`. If the handler crashes between this
+      // UPDATE and createKieTask (R2 download OOM, unhandled rejection in
+      // preprocessing, segfault, etc.), the sync-sweep marks failed +
+      // refunds reserved credits at the 30-min threshold. An ASYNC-provider
+      // handler overwrites both fields via `makeOnTaskCreated` /
+      // `markProviderCallStart` once it has a task id, so for it the
+      // sentinel survives only on crash. A SYNC handler (every ffmpeg job,
+      // apply-edl, TTS, the plugin renders) keeps the sentinel for its WHOLE
+      // run — the dispatch-site heartbeat below keeps it fresh up to its cap,
+      // so the 30-min sweep is the backstop for a dead or hung worker; the
+      // residuals no cap bounds are stated in `pre-task-heartbeat.ts`.
+      const nowIso = new Date().toISOString()
+      // A1 (audit 2026-06-10): CAS on live statuses + abort on 0 rows.
+      // Queue removal on cancel is best-effort (BullMQ ids are auto-
+      // generated, see lib/queue.ts), so a job cancelled while queued is
+      // still dequeued here. The old unguarded overwrite resurrected the
+      // cancelled+refunded row to 'processing' and ran the full provider
+      // generation — the user kept the refund AND got the output.
+      // The row's `slot_wait_ms` (an earlier attempt's ffmpeg-slot wait, Track
+      // 0.13) rides on the pickup — retried without it while migration 451 has
+      // not reached this (shared) database: a statement naming a missing column
+      // is not applied at all, and every job would be discarded below.
+      // The same UPDATE records the job's BullMQ entry (`lane_bull_queue`,
+      // `lane_bull_job_id`, migration 568) for a cancel or a reconcile to find
+      // it by id — retried without those columns while they are missing
+      // (claimWithBullEntry), so a pickup is still one statement.
+      const pickUp = (columns: string, laneFields: Record<string, string>) => supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, input_data, status, started_at, parent_job_id, pipeline_id, workspace_id, org_id, source, source_detail, profiles!user_id(public_outputs)")
-        .eq("id", jobId)
-        .single()
-
-      // Stall-retry guard + inline recovery. If `provider_task_id` is set, the
-      // upstream call already ran on a prior worker that died (Railway redeploy,
-      // OOM, etc.) and BullMQ retried this job. We MUST NOT call createTask
-      // again (that would duplicate-bill the provider).
-      //
-      // The old behavior here was `return` ("wait for the reconcile cron"),
-      // which meant the row sat in `processing` for up to <threshold> + <cron
-      // cadence> minutes — 30 min for kie-suno, longer for VEO/lip-sync. For
-      // operations that complete in 1-5 min upstream that's a terrible UX.
-      //
-      // The new behavior: dispatch the exact same per-provider reconcile
-      // handler the cron uses, inline, right now. Recovery happens within
-      // ~5 min of worker death (BullMQ's stall-detect cadence) instead of
-      // 30+ min. All reconcile handlers are idempotent (finalize is CAS-guarded;
-      // bumpAttempts is safe to repeat), so the cron remains the safety net if
-      // this inline pass throws or KIE is still processing.
-      //
-      // It runs BEFORE admission and holds no concurrency slot: it only polls
-      // the provider for a task that already ran, and a stalled job's old
-      // lease simply expires. Accepted on purpose.
-      if (jobRecord?.provider_task_id) {
-        await tryInlineReconcile({
-          id: jobId,
-          provider_kind: (jobRecord.provider_kind as string | null) ?? null,
-          provider_task_id: jobRecord.provider_task_id as string,
-          reconcile_attempts: (jobRecord.reconcile_attempts as number | null) ?? 0,
-          job_type: (jobRecord.job_type as string | null) ?? null,
-          input_data: (jobRecord.input_data as Record<string, unknown> | null) ?? null,
+        .update({
+          ...laneFields,
+          status: "processing",
+          started_at: nowIso,
+          // A saved task keeps its kind and stamp: the claim must never erase
+          // what a re-attach needs (its handler restamps it as it resumes).
+          ...(savedTask ? {} : { provider_call_started_at: nowIso, provider_kind: "pre-task" }),
+          is_public: isPublicOutput && !outputIsData,
+          // INVARIANT — `job_type` is UNCONDITIONALLY OVERWRITTEN with the
+          // BullMQ queue name at pickup. Not `?? job.name`, not a backfill of
+          // a null column: whatever the inserter wrote is REPLACED. Scoped to
+          // this (video) queue — `render-worker.ts`'s pickup UPDATE writes
+          // status/started_at only and leaves `job_type` alone.
+          //
+          // WHY IT IS LOAD-BEARING — the gallery. `routes/gallery.ts` and its
+          // MCP twin `lib/mcp/tools/gallery.ts` allowlist rows with
+          // `.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])`,
+          // and those sets are spelled in QUEUE-NAME vocabulary. Orchestrated
+          // DAG rows are inserted with `job_type = node.type` (the
+          // `insertInternalJob("orchestrator", …)` call in
+          // `services/workflow-engine/node-executor.ts`) — NODE-TYPE
+          // vocabulary, and `modify-image` / `upscale-image` /
+          // `generate-video` are in no allowlist. Those rows reach the
+          // gallery ONLY because this line rewrites them to the name
+          // payload-builder dispatched under: modify-image → image-to-image
+          // (or edit-image on the gpt-image lane), upscale-image →
+          // edit-image, generate-video → image-to-video / text-to-video. A
+          // production sample had 225 of 400 completed DAG rows depending on
+          // it. Delete this line and that history silently disappears from
+          // every gallery surface. Guarded by `video-worker.test.ts`
+          // ("pickup OVERWRITES …") + `routes/__tests__/gallery.test.ts`.
+          //
+          // PLUGIN CONTRACT — a `@nodaroai/cloud-plugins` route or handler
+          // that reads the row back (`tk.jobs.readJob(…).job_type`) sees the
+          // QUEUE NAME, never the type its own route admitted. A
+          // `row.job_type !== "<admitted>"` guard is correct only when the
+          // lane inserts and enqueues under the SAME string (what
+          // generate-video-pro does deliberately). A lane that admits X and
+          // enqueues Y must accept BOTH spellings — trusting the "backfill"
+          // framing this rewrite used to be documented under is what left the
+          // Scene3D advanced preview lane dark for a day (plugins PR #467).
+          job_type: job.name,
         })
-        // The attempt that died may have left scratch files; this recovery
-        // may have just ended the job (see the dispatch's `finally` below).
-        await discardJobScratch(jobId)
+        .eq("id", jobId)
+        // A parked job is `queued`; one re-added after Redis lost it runs only from there.
+        .in("status", pickupStatusesFor(job.id))
+        .select(columns)
+      let { data: pickedRows, error: pickupError } = await claimWithBullEntry("video-generation", job.id, (f) => pickUp(withSlotWaitColumn("id"), f))
+      if (pickupError && noteSlotWaitColumnError(pickupError)) {
+        ;({ data: pickedRows, error: pickupError } = await claimWithBullEntry("video-generation", job.id, (f) => pickUp("id", f)))
+      }
+      if (!pickedRows || pickedRows.length === 0) {
+        console.log(
+          `[worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
+        )
+        // R38 (m5): a cancelled metered LLM job requeued for a retry or by a
+        // drain still holds its hold — settled here, not left to the sweep.
+        await settleDiscardedCancelledMeteredHold(usageLogId, jobId)
+        laneOutcome = "cancelled"
+        return
+      }
+      // A job that waited (parked as `queued`) runs now: the payload it was parked with is not needed any more. Best effort, not awaited.
+      if ((jobRecord as { status?: unknown } | null)?.status === "queued") void dropRequeuePayload(jobId)
+
+      // ── Scene3D delivery artifacts, for an EXTERNAL provider ──────────
+      // A 3D Render Pro shot still's URL is the AUTHENTICATED delivery
+      // endpoint (its bytes stay in the private scene bucket by contract), so
+      // a provider fetching `referenceImageUrls` server-to-server gets a 401
+      // — the `stills` handle was wireable in the editor and broken at the
+      // model. Each such URL is swapped for a signed, bounded GET here.
+      //
+      // HERE, and not in the payload builder or the route, because this is
+      // the ONE place every lane converges: the orchestrated DAG, a canvas
+      // Run, a REST call and an MCP verb all arrive at this dispatch. It is
+      // also the last moment before the provider call, which is what lets the
+      // grant be minutes rather than hours, and it is AFTER the `input_data`
+      // stamp — so the durable row keeps the authenticated URL that still
+      // means something tomorrow and only this in-memory run carries the
+      // ephemeral one.
+      //
+      // Total by construction (every string / string-array field is offered
+      // to a strict recogniser), a no-op for the overwhelming majority of
+      // payloads that carry no delivery URL, and silent on refusal: an
+      // artifact this owner cannot read keeps the URL it had rather than
+      // losing the field.
+      job.data = await signScene3DDeliveryUrlsForProvider(
+        job.data as Record<string, unknown>,
+        jobUserId,
+      )
+
+      const found = allHandlers[job.name]
+      if (!found) {
+        throw new Error(`Unknown job type: ${job.name}`)
+      }
+      // Every handler this worker runs beats the `pre-task` sentinel while it
+      // runs (`pre-task-heartbeat.ts`): the pickup above stamps it on every
+      // row, and the reconcile cron fails + refunds a row whose stamp is 30
+      // minutes old — while a run can legitimately take longer (staging Pro
+      // 3D Render job 99ede351 was failed at minute 31 with its worker still
+      // running; an hour-long multicam apply-edl render is a core ffmpeg job
+      // with the same exposure). Wrapping HERE, at the one place a handler is
+      // dispatched — not the plugin map, not the final map, not a list of
+      // types — covers every job type present and future by construction: a
+      // handler merged later still runs wrapped, because THIS is the only
+      // lookup (pinned by __tests__/video-worker-heartbeat-wiring.test.ts).
+      // A short handler never beats (the first tick is a minute out); one that
+      // replaced or cleared the sentinel is a CAS no-op; beats stop at a cap
+      // so a hung handler still ages into the sweep. The cap is the
+      // orchestrator's per-node ceiling unless the job declares its own
+      // budget: the handler's (`livenessBudgetMs` — apply-edl sums the kill
+      // budgets of its bounded steps), else the registry's for this job name
+      // and payload (`declaredJobBudgetMs` — the same number the orchestrator
+      // sizes the node from). The fallback is what reaches a PLUGIN handler,
+      // which cannot carry `livenessBudgetMs` (core-only): a long plugin
+      // render (Speaker View) would otherwise stop beating at the default
+      // and be swept while still rendering. "Hung" means one thing to the
+      // heartbeat and to those steps.
+      const handler = withPreTaskHeartbeat(found, {
+        maxMs: found.livenessBudgetMs?.(job) ?? declaredJobBudgetMs(job.name, job.data),
+        // An earlier attempt's ffmpeg-slot wait (a re-pick): this one adds to it.
+        slotWaitBaseMs: Number((pickedRows[0] as { slot_wait_ms?: unknown }).slot_wait_ms ?? 0) || 0,
+      })
+
+      // Bind a cancellation context so provider poll loops abort the moment
+      // the user cancels — instead of polling the upstream job to completion.
+      try {
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
+      } catch (firstErr) {
+        const firstBlock = safetyBlockOf(firstErr, modelId)
+        if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
+        // ONE inline re-run of the same request: the provider's safety filter
+        // is stochastic on this model (catalog `safetyFilter`). Inline, never
+        // via a BullMQ retry — a re-pick of a job that already carries a
+        // provider_task_id is routed to the stall-recovery reconcile above,
+        // which re-reads the SAME failed task and never calls the provider
+        // again (that is how the first live replay produced no retry).
+        safetyRetried = true
+        console.warn(
+          `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
+        )
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
+      }
+
+      // Record execution duration for progress bar estimation
+      // (started_at was set on the job record at the start of processing above)
+      try {
+        const statsKey = buildStatsKey(job.name, job.data as Record<string, unknown>)
+        if (statsKey) {
+          const { data: completedJob } = await supabase
+            .from("jobs")
+            .select("started_at")
+            .eq("id", jobId)
+            .single()
+          if (completedJob?.started_at) {
+            const durationMs = Date.now() - new Date(completedJob.started_at).getTime()
+            upsertExecutionStats(statsKey, durationMs).catch(() => {})
+          }
+        }
+      } catch { /* non-critical — don't block job completion */ }
+
+      // Create asset records so generated media appears in /library — not
+      // for a job whose output is data (a scrape's featured creative is
+      // someone else's, already filed by the scrape as it sees fit).
+      if (!outputIsData) await createAssetFromJob(jobId, jobUserId)
+      laneOutcome = "completed"
+    } catch (err) {
+      // User cancelled mid-flight (queue-pickup race or poll abort). The row
+      // is already at status='cancelled' (+ refunded) by the cancel route, so
+      // discard quietly — do NOT mark "failed" or re-refund, and don't rethrow
+      // (a throw would make BullMQ retry the cancelled job).
+      if (err instanceof JobCancelledError) {
+        // R38: a metered LLM job still settles its hold — the cancel kept it
+        // when the job's call had started (billed-unknown, R36): charged what
+        // it billed, refunded when nothing was. A no-op (no read) for every
+        // other job, whose refund the cancel route owns.
+        await settleCancelledMeteredJob(usageLogId, jobId, err)
+        laneOutcome = "cancelled"
+        console.log(`[worker] Job ${jobId} cancelled by user — discarding result, leaving status='cancelled'`)
         return
       }
 
-      const usageLogId = jobRecord?.usage_log_id
-      const jobUserId = (jobRecord?.user_id as string) ?? undefined
-
-      // Quiet stop (admin → Users; lib/access-blocks.ts): the account's jobs
-      // are accepted and charged like anyone's and never run. BEFORE the pickup
-      // CAS and OUTSIDE the try below, so the row stays `pending` — no
-      // `pre-task` stamp (nothing for the reconcile sweeps to fail), the
-      // reservation intact — and the job goes back to the queue at zero cost
-      // with the payload it was queued with (the drain primitive below). A
-      // release is seen at the next look.
-      if (await isUserQuietStopped(jobUserId)) {
-        await job.moveToDelayed(Date.now() + QUIET_STOP_RECHECK_MS, token)
+      // Drain abort (deploy SIGTERM — lib/worker-drain.ts): the WORKER is
+      // dying, not the job. Leave the row exactly as-is (reservation intact,
+      // status untouched — the provider task may still be running or already
+      // delivered upstream) and hand the job BACK TO THE QUEUE AT ZERO COST:
+      // `moveToDelayed` + `DelayedError` (BullMQ's in-processor requeue,
+      // the primitive social-publish-worker already uses) requeues it with
+      // its lock released and its attempt count UNTOUCHED, so the
+      // replacement process re-picks it seconds after boot and the stall
+      // guard's inline reconcile resumes/recovers it. Marking failed+
+      // refunding would charge nothing for a result we can still collect
+      // (incident 2026-07-15: 15–20 min stalls when locks died with the
+      // process).
+      //
+      // WHY NOT A PLAIN RETHROW (2026-08-18, recast run f4f503b6): a rethrow
+      // SPENDS an attempt. Two rollouts inside two minutes (staging deploys
+      // on every dev merge) exhausted `attempts: 3` on one paid cycle — the
+      // job went failed-permanent in BullMQ while its row sat `processing`
+      // for 30 minutes until the reconcile sweep failed it. A short delay,
+      // not a park: Railway brings the new container up BEFORE draining the
+      // old one, so a worker is already listening.
+      //
+      // ANYWHERE IN THE CAUSE CHAIN (2026-09-15): a private plugin hands a
+      // job back at a stage boundary by letting the journal's claim-time
+      // DrainAbortError leave its handler (`handOffOnDrain`,
+      // lib/private-plugins/stage-journal.ts), and may wrap it in its own run
+      // error on the way out. That is still the worker dying, not the job
+      // failing — Pro jobs 351f0270 / 35bd1f1f were refunded because nothing
+      // handed them back and the successor found a paid call it could not
+      // resolve.
+      if (isDrainAbortError(err)) {
+        laneOutcome = "requeued"
+        try {
+          await job.moveToDelayed(Date.now() + DRAIN_REQUEUE_DELAY_MS, token)
+        } catch (moveErr) {
+          // The lock is gone or the connection is closing under us — the
+          // plain rethrow (BullMQ's own requeue rules) is the fallback.
+          console.warn(
+            `[worker] Job ${jobId} interrupted by worker drain — moveToDelayed failed (${moveErr instanceof Error ? moveErr.message : String(moveErr)}); rethrowing for BullMQ requeue (row left for stall-retry recovery)`,
+          )
+          throw err
+        }
+        console.warn(
+          `[worker] Job ${jobId} interrupted by worker drain — moved back to the queue (attempt not spent; row left for stall-retry recovery)`,
+        )
         throw new DelayedError()
       }
 
-      // Use watermark decision from reservation time (C4 fix: prevents bypass via tier upgrade)
-      const shouldWatermark = hasCredits() ? (jobRecord?.should_watermark ?? false) : false
-
-      // Output visibility (is_public) — the shared decision lives in
-      // output-visibility.ts so this worker and render-worker can't drift, with
-      // the deployment surface switch (B1) as the OUTERMOST gate. Worker-local
-      // signals (blocked prompt) fold into forcePrivate; the parent
-      // workflow_execution's mcp flag needs an async lookup, so it stays inline
-      // and is ANDed after (and short-circuits when the output is already private).
-      let publicPref = true
-      if (jobUserId && jobRecord?.profiles) {
-        const profile = jobRecord.profiles as unknown as { public_outputs?: boolean }
-        publicPref = profile?.public_outputs ?? true
-      }
-      const jobData = job.data as Record<string, unknown>
-      const promptText = (jobData.prompt as string) ?? (jobData.text as string) ?? null
-      let isPublicOutput = resolveIsPublicOutput({
-        publicOutputs: publicPref,
-        // uploaded/private input content, or a blocked prompt
-        forcePrivate: jobRecord?.force_private === true || isPromptBlocked(promptText),
-        // direct MCP generation (Claude.ai / Cursor) — a private surface.
-        // jobs.mcp_client is a TEXT client name, never a boolean — `=== true`
-        // was always false and leaked direct-MCP output to the public gallery.
-        mcpClient: mcpClientForcesPrivate(jobRecord?.mcp_client),
-        workflowExecutionId: null,
-        // An Apply EDL preview (proxy) is private on every lane (F1) — also
-        // inserted force_private by the route and the workflow run.
-        previewRender: isPreviewRender(job.name, jobData.quality),
-      })
-      // Workflow / app run: the parent workflow_execution carries `mcp_client`;
-      // per-node child jobs don't (the orchestrator's internal per-node calls
-      // never see the MCP header). Look up the parent only if still public.
-      if (isPublicOutput && jobRecord?.workflow_execution_id) {
-        const { data: parent } = await supabase
-          .from("workflow_executions")
-          .select("mcp_client")
-          .eq("id", jobRecord.workflow_execution_id as string)
-          .maybeSingle()
-        if (parent?.mcp_client) {
-          isPublicOutput = false
-        }
+      // R38: a metered LLM job that failed on a row the user cancelled
+      // meanwhile — markJobFailed's CAS would lose to `cancelled` and skip the
+      // failure net, and a non-final attempt's retry would be discarded at
+      // pickup, both leaving the hold reserved. Settled here instead (what it
+      // billed charged, the rest refunded); the row stays cancelled and is not
+      // retried. A no-op (no read) for every job that is not metered.
+      if (await settleCancelledMeteredJob(usageLogId, jobId, err)) {
+        laneOutcome = "cancelled"
+        console.log(`[worker] Job ${jobId} failed after it was cancelled — its metered hold settled, leaving status='cancelled'`)
+        return
       }
 
-      const ctx: JobContext = { jobId, jobUserId, usageLogId, shouldWatermark }
-      // The model this job runs under (the i2i variant id for referenced image
-      // requests). Read once: both the inline safety retry and the final failure
-      // path key their policy off it.
-      const modelId = jobModelIdOf(job.data)
-      let safetyRetried = false
+      const message = err instanceof Error ? err.message : "Unknown error"
 
-      // The job's concurrency slot (lib/concurrency-lanes/worker-admit.ts),
-      // taken BEFORE the pickup claim: a job that has to wait for one is put
-      // back without claiming its row. With enforcement off every job is
-      // admitted. The slot is released exactly once, in the `finally` below,
-      // with the outcome of whichever exit the job took.
-      const admission = await admitOrPark({
-        job, token, queue: "video-generation", row: workerRowOf(jobId, jobRecord, jobData.userId),
-      })
-      if (!admission) throw new DelayedError()
-      let laneOutcome: ReleaseOutcome = "failed"
+      // For KieError, log the internal details for debugging. Everything on
+      // ONE line: Railway log filters match single lines, so an id-filtered
+      // search must surface the actual error, not a bare "failed:" prefix
+      // with the details stranded on unmatched follow-up lines.
+      let internalDetails: string | undefined
+      if (err instanceof KieError) {
+        internalDetails = err.internalDetails
+        // The provider account ran out (createTask 402 "Credits
+        // insufficient"): staging and production print the same line, so it
+        // names the environment whose account needs topping up.
+        const envNote = message === PLATFORM_CAPACITY_MESSAGE ? ` | env: ${getRuntimeEnv()}` : ""
+        console.error(
+          `[worker] Job ${jobId} failed (KIE.ai): ${internalDetails ?? message} | context: ${err.context}${envNote} | user message: ${message}`,
+        )
+      } else {
+        console.error(`[worker] Job ${jobId} failed:`, message)
+      }
 
-      try {
-        // `provider_kind="pre-task"` + `provider_call_started_at=now` make
-        // this row visible to the reconcile cron BEFORE the handler fires
-        // its first `onTaskCreated`. If the handler crashes between this
-        // UPDATE and createKieTask (R2 download OOM, unhandled rejection in
-        // preprocessing, segfault, etc.), the sync-sweep marks failed +
-        // refunds reserved credits at the 30-min threshold. An ASYNC-provider
-        // handler overwrites both fields via `makeOnTaskCreated` /
-        // `markProviderCallStart` once it has a task id, so for it the
-        // sentinel survives only on crash. A SYNC handler (every ffmpeg job,
-        // apply-edl, TTS, the plugin renders) keeps the sentinel for its WHOLE
-        // run — the dispatch-site heartbeat below keeps it fresh up to its cap,
-        // so the 30-min sweep is the backstop for a dead or hung worker; the
-        // residuals no cap bounds are stated in `pre-task-heartbeat.ts`.
-        const nowIso = new Date().toISOString()
-        // A1 (audit 2026-06-10): CAS on live statuses + abort on 0 rows.
-        // Queue removal on cancel is best-effort (BullMQ ids are auto-
-        // generated, see lib/queue.ts), so a job cancelled while queued is
-        // still dequeued here. The old unguarded overwrite resurrected the
-        // cancelled+refunded row to 'processing' and ran the full provider
-        // generation — the user kept the refund AND got the output.
-        // The row's `slot_wait_ms` (an earlier attempt's ffmpeg-slot wait, Track
-        // 0.13) rides on the pickup — retried without it while migration 451 has
-        // not reached this (shared) database: a statement naming a missing column
-        // is not applied at all, and every job would be discarded below.
-        // The same UPDATE records the job's BullMQ entry (`lane_bull_queue`,
-        // `lane_bull_job_id`, migration 568) for a cancel or a reconcile to find
-        // it by id — retried without those columns while they are missing
-        // (claimWithBullEntry), so a pickup is still one statement.
-        const pickUp = (columns: string, laneFields: Record<string, string>) => supabase
+      // A provider content-policy block gets its OWN bounded retry policy
+      // (backend/src/lib/safety-block.ts), decoupled from the queue's global
+      // `attempts: 3` — a stochastic `safety` block on a flagged model
+      // retries once (maxAttempts 2), everything else (copyright/likeness,
+      // or an unflagged model's safety block) gets exactly one attempt. The
+      // model id rides in `job.data` as `provider` (route enqueue shape);
+      // `model` wins when set (the LoRA path only).
+      // A content-policy block reaching this catch is always final: the one
+      // permitted retry (if the policy allows one) already ran inline above.
+      const block = safetyBlockOf(err, modelId)
+      // A refusal that is a pure function of the job's own inputs (e.g.
+      // apply-edl's window check) fails identically on every retry — so it
+      // is final now, like a content-policy block (lib/deterministic-job-error.ts).
+      const deterministic = isDeterministicJobError(err)
+      // The provider refused the INPUT VIDEO of a job that sent one: the
+      // same clip is refused again, so it is final now too.
+      const inputVideoRefused = inputVideoRefusedOf(err) && sentVideoInput(job.data)
+      const finalAttempt = block || deterministic || inputVideoRefused ? true : isFinalJobAttempt(job)
+
+      // Post-provider self-heal (audit spec, worker branch). On the FINAL
+      // attempt, a PostProcessingError means the provider already delivered
+      // and billed us — only a post-delivery step (R2 upload, watermark,
+      // transcode) failed. If the row is reconcile-recoverable (persisted
+      // provider_task_id + a kind the reconcile system owns), marking it
+      // failed+charged throws away a result the cron can re-fetch — leave
+      // it `processing` instead: the cron completes it (or, for heygen /
+      // exhaustion, fail+refunds with an anomaly row). Plain Errors (e.g.
+      // the inpaint composite, REFUND-CRITICAL in handlers/image-ai.ts)
+      // deliberately do NOT qualify — they must keep refunding.
+      if (finalAttempt && isPostProcessingError(err)) {
+        const { data: row } = await supabase
           .from("jobs")
-          .update({
-            ...laneFields,
-            status: "processing",
-            started_at: nowIso,
-            provider_call_started_at: nowIso,
-            provider_kind: "pre-task",
-            is_public: isPublicOutput,
-            // INVARIANT — `job_type` is UNCONDITIONALLY OVERWRITTEN with the
-            // BullMQ queue name at pickup. Not `?? job.name`, not a backfill of
-            // a null column: whatever the inserter wrote is REPLACED. Scoped to
-            // this (video) queue — `render-worker.ts`'s pickup UPDATE writes
-            // status/started_at only and leaves `job_type` alone.
-            //
-            // WHY IT IS LOAD-BEARING — the gallery. `routes/gallery.ts` and its
-            // MCP twin `lib/mcp/tools/gallery.ts` allowlist rows with
-            // `.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])`,
-            // and those sets are spelled in QUEUE-NAME vocabulary. Orchestrated
-            // DAG rows are inserted with `job_type = node.type` (the
-            // `insertInternalJob("orchestrator", …)` call in
-            // `services/workflow-engine/node-executor.ts`) — NODE-TYPE
-            // vocabulary, and `modify-image` / `upscale-image` /
-            // `generate-video` are in no allowlist. Those rows reach the
-            // gallery ONLY because this line rewrites them to the name
-            // payload-builder dispatched under: modify-image → image-to-image
-            // (or edit-image on the gpt-image lane), upscale-image →
-            // edit-image, generate-video → image-to-video / text-to-video. A
-            // production sample had 225 of 400 completed DAG rows depending on
-            // it. Delete this line and that history silently disappears from
-            // every gallery surface. Guarded by `video-worker.test.ts`
-            // ("pickup OVERWRITES …") + `routes/__tests__/gallery.test.ts`.
-            //
-            // PLUGIN CONTRACT — a `@nodaroai/cloud-plugins` route or handler
-            // that reads the row back (`tk.jobs.readJob(…).job_type`) sees the
-            // QUEUE NAME, never the type its own route admitted. A
-            // `row.job_type !== "<admitted>"` guard is correct only when the
-            // lane inserts and enqueues under the SAME string (what
-            // generate-video-pro does deliberately). A lane that admits X and
-            // enqueues Y must accept BOTH spellings — trusting the "backfill"
-            // framing this rewrite used to be documented under is what left the
-            // Scene3D advanced preview lane dark for a day (plugins PR #467).
-            job_type: job.name,
-          })
+          .select("provider_kind, provider_task_id, status")
           .eq("id", jobId)
-          // A parked job is `queued`; one re-added after Redis lost it runs only from there.
-          .in("status", pickupStatusesFor(job.id))
-          .select(columns)
-        let { data: pickedRows, error: pickupError } = await claimWithBullEntry("video-generation", job.id, (f) => pickUp(withSlotWaitColumn("id"), f))
-        if (pickupError && noteSlotWaitColumnError(pickupError)) {
-          ;({ data: pickedRows, error: pickupError } = await claimWithBullEntry("video-generation", job.id, (f) => pickUp("id", f)))
-        }
-        if (!pickedRows || pickedRows.length === 0) {
-          console.log(
-            `[worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
+          .single()
+        const recoverableRow = row as {
+          provider_kind: string | null
+          provider_task_id: string | null
+          status: string
+        } | null
+        if (
+          recoverableRow &&
+          recoverableRow.status === "processing" &&
+          isReconcileRecoverable(recoverableRow)
+        ) {
+          console.warn(
+            `[worker] Job ${jobId} post-provider failure left for reconcile ` +
+            `(kind=${recoverableRow.provider_kind}, task=${recoverableRow.provider_task_id}): ${message}`,
           )
-          // R38 (m5): a cancelled metered LLM job requeued for a retry or by a
-          // drain still holds its hold — settled here, not left to the sweep.
-          await settleDiscardedCancelledMeteredHold(usageLogId, jobId)
-          laneOutcome = "cancelled"
+          // No rethrow: the BullMQ job ends here; the jobs row stays
+          // `processing` and the reconcile cron owns the terminal outcome.
+          // The provider delivered: its slot is released as completed.
+          laneOutcome = "completed"
           return
         }
-        // A job that waited (parked as `queued`) runs now: the payload it was parked with is not needed any more. Best effort, not awaited.
-        if ((jobRecord as { status?: unknown } | null)?.status === "queued") void dropRequeuePayload(jobId)
+      }
 
-        // ── Scene3D delivery artifacts, for an EXTERNAL provider ──────────
-        // A 3D Render Pro shot still's URL is the AUTHENTICATED delivery
-        // endpoint (its bytes stay in the private scene bucket by contract), so
-        // a provider fetching `referenceImageUrls` server-to-server gets a 401
-        // — the `stills` handle was wireable in the editor and broken at the
-        // model. Each such URL is swapped for a signed, bounded GET here.
-        //
-        // HERE, and not in the payload builder or the route, because this is
-        // the ONE place every lane converges: the orchestrated DAG, a canvas
-        // Run, a REST call and an MCP verb all arrive at this dispatch. It is
-        // also the last moment before the provider call, which is what lets the
-        // grant be minutes rather than hours, and it is AFTER the `input_data`
-        // stamp — so the durable row keeps the authenticated URL that still
-        // means something tomorrow and only this in-memory run carries the
-        // ephemeral one.
-        //
-        // Total by construction (every string / string-array field is offered
-        // to a strict recogniser), a no-op for the overwhelming majority of
-        // payloads that carry no delivery URL, and silent on refusal: an
-        // artifact this owner cannot read keeps the URL it had rather than
-        // losing the field.
-        job.data = await signScene3DDeliveryUrlsForProvider(
-          job.data as Record<string, unknown>,
-          jobUserId,
-        )
-
-        const found = allHandlers[job.name]
-        if (!found) {
-          throw new Error(`Unknown job type: ${job.name}`)
-        }
-        // Every handler this worker runs beats the `pre-task` sentinel while it
-        // runs (`pre-task-heartbeat.ts`): the pickup above stamps it on every
-        // row, and the reconcile cron fails + refunds a row whose stamp is 30
-        // minutes old — while a run can legitimately take longer (staging Pro
-        // 3D Render job 99ede351 was failed at minute 31 with its worker still
-        // running; an hour-long multicam apply-edl render is a core ffmpeg job
-        // with the same exposure). Wrapping HERE, at the one place a handler is
-        // dispatched — not the plugin map, not the final map, not a list of
-        // types — covers every job type present and future by construction: a
-        // handler merged later still runs wrapped, because THIS is the only
-        // lookup (pinned by __tests__/video-worker-heartbeat-wiring.test.ts).
-        // A short handler never beats (the first tick is a minute out); one that
-        // replaced or cleared the sentinel is a CAS no-op; beats stop at a cap
-        // so a hung handler still ages into the sweep. The cap is the
-        // orchestrator's per-node ceiling unless the job declares its own
-        // budget: the handler's (`livenessBudgetMs` — apply-edl sums the kill
-        // budgets of its bounded steps), else the registry's for this job name
-        // and payload (`declaredJobBudgetMs` — the same number the orchestrator
-        // sizes the node from). The fallback is what reaches a PLUGIN handler,
-        // which cannot carry `livenessBudgetMs` (core-only): a long plugin
-        // render (Speaker View) would otherwise stop beating at the default
-        // and be swept while still rendering. "Hung" means one thing to the
-        // heartbeat and to those steps.
-        const handler = withPreTaskHeartbeat(found, {
-          maxMs: found.livenessBudgetMs?.(job) ?? declaredJobBudgetMs(job.name, job.data),
-          // An earlier attempt's ffmpeg-slot wait (a re-pick): this one adds to it.
-          slotWaitBaseMs: Number((pickedRows[0] as { slot_wait_ms?: unknown }).slot_wait_ms ?? 0) || 0,
+      // Only finalize (mark failed) + refund on the FINAL attempt (and only
+      // when the self-heal branch above did not take the row). On a
+      // non-final attempt BullMQ will retry, and marking the row failed +
+      // refunding the reservation now would let a successful retry deliver
+      // the media for free (commit_credits no-ops against an already-refunded
+      // usage_log). On non-final attempts we just rethrow so BullMQ retries
+      // with the reservation intact.
+      if (finalAttempt) {
+        // Save the sanitized message (user-facing) plus the redacted provider detail (operator-facing).
+        // A `safety`-class block gets its own honest final message (names the
+        // fallback model when the catalog offers one) — copyright/likeness
+        // blocks are deterministic on the same input and keep KIE's existing
+        // CONTENT_POLICY_MESSAGES text unchanged.
+        // A model-lane failure carries a user-safe sentence (no lane, vendor
+        // or internal model id); its full diagnostic is the error_detail below.
+        // A PLUGIN handler may vouch for its own sentence (`userSafeMessage:
+        // true` on the thrown error itself — lib/safety-block.ts): a safety
+        // block from it keeps that sentence (through the same
+        // `userFacingMessage` path as any other failure) while the hint
+        // below is still the safety block's. The generic message's "adjust
+        // the prompt" advice is wrong for a run whose prompt the user never
+        // wrote. Built-in handlers never get this: only a job type the
+        // plugins serve (the key, not the handler identity — the map's
+        // entries are wrapped by the edit-plan gate and the heartbeat).
+        const keepPluginMessage =
+          Object.hasOwn(privatePluginHandlers, job.name) && hasUserSafeMessage(err)
+        const errorMessage =
+          block && block.class === "safety" && !keepPluginMessage
+            ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
+            : userFacingMessage(err, message)
+        // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job
+        // a concurrent writer already moved to a terminal state (inflight-
+        // reconcile cron completing it, or a stall re-pick) from being trampled
+        // "completed"/"cancelled" → "failed" — which would orphan its committed
+        // credits + delivered asset and fail the workflow despite delivery — and
+        // what keeps this worker off a `pending_review` row (spec D11).
+        // The provider refused the INPUT VIDEO: said on the hint (beside the
+        // class when there is one), so a caller can send a different clip.
+        // Likewise an input image refused as possibly copyrighted
+        // (`subject: "input_image"`), so a caller can send a different picture.
+        // Shared with the reconcile path (lib/reconcile/kie.ts).
+        const errorHint =
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
+        const flipped = await markJobFailed(jobId, {
+          error_message: errorMessage,
+          // W0: the provider's own error, redacted — the sanitized message
+          // above is what the user sees; this is what the operator needs.
+          error_detail: providerDetailOf(err),
+          // Migration 376: a user-safe, machine-readable hint the editor/MCP
+          // can act on (offer the fallback model, say "top up") without
+          // parsing prose. A classified content-policy block, else a
+          // refused input video, else a handler's credits refusal (`failureHint` on the error or its
+          // cause chain — a plugin's child job refused for credits), else a
+          // wait for a concurrency slot that ran out; NULL for anything
+          // else. The refund below is unchanged either way.
+          ...(errorHint ? { error_hint: errorHint } : {}),
         })
 
-        // Bind a cancellation context so provider poll loops abort the moment
-        // the user cancels — instead of polling the upstream job to completion.
-        try {
-          await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
-        } catch (firstErr) {
-          const firstBlock = safetyBlockOf(firstErr, modelId)
-          if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
-          // ONE inline re-run of the same request: the provider's safety filter
-          // is stochastic on this model (catalog `safetyFilter`). Inline, never
-          // via a BullMQ retry — a re-pick of a job that already carries a
-          // provider_task_id is routed to the stall-recovery reconcile above,
-          // which re-reads the SAME failed task and never calls the provider
-          // again (that is how the first live replay produced no retry).
-          safetyRetried = true
-          console.warn(
-            `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
-          )
-          await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
+        // Only refund if WE flipped the row. If a concurrent writer already
+        // completed it, skip (the asset was delivered + credits committed); if
+        // it was cancelled, the cancel route already refunded. refundJobCredits
+        // is idempotent regardless, but this avoids a needless roundtrip.
+        if (flipped) {
+          // Pass the ERROR OBJECT (not just the string) so refundJobCredits
+          // can read the PostProcessingError type signal. A post-provider
+          // failure (R2 upload, watermark, transcode, merge) skips the refund
+          // because the provider already billed us; everything else refunds.
+          // A billed content refusal is charged only for a job whose
+          // product is the LLM call (LLM_PRODUCT_JOB_TYPES); every other
+          // job refunds, a Claude planning step's refusal included.
+          await refundJobCredits(usageLogId, jobId, err, { chargeBilledRefusal: LLM_PRODUCT_JOB_TYPES.has(job.name) })
         }
 
-        // Record execution duration for progress bar estimation
-        // (started_at was set on the job record at the start of processing above)
-        try {
-          const statsKey = buildStatsKey(job.name, job.data as Record<string, unknown>)
-          if (statsKey) {
-            const { data: completedJob } = await supabase
-              .from("jobs")
-              .select("started_at")
-              .eq("id", jobId)
-              .single()
-            if (completedJob?.started_at) {
-              const durationMs = Date.now() - new Date(completedJob.started_at).getTime()
-              upsertExecutionStats(statsKey, durationMs).catch(() => {})
-            }
-          }
-        } catch { /* non-critical — don't block job completion */ }
-
-        // Create asset records so generated media appears in /library
-        await createAssetFromJob(jobId, jobUserId)
-        laneOutcome = "completed"
-      } catch (err) {
-        // User cancelled mid-flight (queue-pickup race or poll abort). The row
-        // is already at status='cancelled' (+ refunded) by the cancel route, so
-        // discard quietly — do NOT mark "failed" or re-refund, and don't rethrow
-        // (a throw would make BullMQ retry the cancelled job).
-        if (err instanceof JobCancelledError) {
-          // R38: a metered LLM job still settles its hold — the cancel kept it
-          // when the job's call had started (billed-unknown, R36): charged what
-          // it billed, refunded when nothing was. A no-op (no read) for every
-          // other job, whose refund the cancel route owns.
-          await settleCancelledMeteredJob(usageLogId, jobId, err)
-          laneOutcome = "cancelled"
-          console.log(`[worker] Job ${jobId} cancelled by user — discarding result, leaving status='cancelled'`)
-          return
+        // A content-policy block has already exhausted ITS OWN bounded
+        // policy (not the queue's global `attempts: 3`) — BullMQ must not
+        // spend another attempt re-running a request that will fail
+        // identically. UnrecoverableError short-circuits its retry
+        // machinery (precedent: social-publish-worker.ts's `definitive`
+        // branch). A deterministic refusal is the same case: the row is
+        // already failed + refunded above, and a retry would re-download
+        // every input to fail the same way. A refused input video, likewise.
+        if (block || deterministic || inputVideoRefused) {
+          throw new UnrecoverableError(errorMessage)
         }
-
-        // Drain abort (deploy SIGTERM — lib/worker-drain.ts): the WORKER is
-        // dying, not the job. Leave the row exactly as-is (reservation intact,
-        // status untouched — the provider task may still be running or already
-        // delivered upstream) and hand the job BACK TO THE QUEUE AT ZERO COST:
-        // `moveToDelayed` + `DelayedError` (BullMQ's in-processor requeue,
-        // the primitive social-publish-worker already uses) requeues it with
-        // its lock released and its attempt count UNTOUCHED, so the
-        // replacement process re-picks it seconds after boot and the stall
-        // guard's inline reconcile resumes/recovers it. Marking failed+
-        // refunding would charge nothing for a result we can still collect
-        // (incident 2026-07-15: 15–20 min stalls when locks died with the
-        // process).
-        //
-        // WHY NOT A PLAIN RETHROW (2026-08-18, recast run f4f503b6): a rethrow
-        // SPENDS an attempt. Two rollouts inside two minutes (staging deploys
-        // on every dev merge) exhausted `attempts: 3` on one paid cycle — the
-        // job went failed-permanent in BullMQ while its row sat `processing`
-        // for 30 minutes until the reconcile sweep failed it. A short delay,
-        // not a park: Railway brings the new container up BEFORE draining the
-        // old one, so a worker is already listening.
-        //
-        // ANYWHERE IN THE CAUSE CHAIN (2026-09-15): a private plugin hands a
-        // job back at a stage boundary by letting the journal's claim-time
-        // DrainAbortError leave its handler (`handOffOnDrain`,
-        // lib/private-plugins/stage-journal.ts), and may wrap it in its own run
-        // error on the way out. That is still the worker dying, not the job
-        // failing — Pro jobs 351f0270 / 35bd1f1f were refunded because nothing
-        // handed them back and the successor found a paid call it could not
-        // resolve.
-        if (isDrainAbortError(err)) {
-          laneOutcome = "requeued"
-          try {
-            await job.moveToDelayed(Date.now() + DRAIN_REQUEUE_DELAY_MS, token)
-          } catch (moveErr) {
-            // The lock is gone or the connection is closing under us — the
-            // plain rethrow (BullMQ's own requeue rules) is the fallback.
-            console.warn(
-              `[worker] Job ${jobId} interrupted by worker drain — moveToDelayed failed (${moveErr instanceof Error ? moveErr.message : String(moveErr)}); rethrowing for BullMQ requeue (row left for stall-retry recovery)`,
-            )
-            throw err
-          }
-          console.warn(
-            `[worker] Job ${jobId} interrupted by worker drain — moved back to the queue (attempt not spent; row left for stall-retry recovery)`,
-          )
-          throw new DelayedError()
-        }
-
-        // R38: a metered LLM job that failed on a row the user cancelled
-        // meanwhile — markJobFailed's CAS would lose to `cancelled` and skip the
-        // failure net, and a non-final attempt's retry would be discarded at
-        // pickup, both leaving the hold reserved. Settled here instead (what it
-        // billed charged, the rest refunded); the row stays cancelled and is not
-        // retried. A no-op (no read) for every job that is not metered.
-        if (await settleCancelledMeteredJob(usageLogId, jobId, err)) {
-          laneOutcome = "cancelled"
-          console.log(`[worker] Job ${jobId} failed after it was cancelled — its metered hold settled, leaving status='cancelled'`)
-          return
-        }
-
-        const message = err instanceof Error ? err.message : "Unknown error"
-
-        // For KieError, log the internal details for debugging. Everything on
-        // ONE line: Railway log filters match single lines, so an id-filtered
-        // search must surface the actual error, not a bare "failed:" prefix
-        // with the details stranded on unmatched follow-up lines.
-        let internalDetails: string | undefined
-        if (err instanceof KieError) {
-          internalDetails = err.internalDetails
-          // The provider account ran out (createTask 402 "Credits
-          // insufficient"): staging and production print the same line, so it
-          // names the environment whose account needs topping up.
-          const envNote = message === PLATFORM_CAPACITY_MESSAGE ? ` | env: ${getRuntimeEnv()}` : ""
-          console.error(
-            `[worker] Job ${jobId} failed (KIE.ai): ${internalDetails ?? message} | context: ${err.context}${envNote} | user message: ${message}`,
-          )
-        } else {
-          console.error(`[worker] Job ${jobId} failed:`, message)
-        }
-
-        // A provider content-policy block gets its OWN bounded retry policy
-        // (backend/src/lib/safety-block.ts), decoupled from the queue's global
-        // `attempts: 3` — a stochastic `safety` block on a flagged model
-        // retries once (maxAttempts 2), everything else (copyright/likeness,
-        // or an unflagged model's safety block) gets exactly one attempt. The
-        // model id rides in `job.data` as `provider` (route enqueue shape);
-        // `model` wins when set (the LoRA path only).
-        // A content-policy block reaching this catch is always final: the one
-        // permitted retry (if the policy allows one) already ran inline above.
-        const block = safetyBlockOf(err, modelId)
-        // A refusal that is a pure function of the job's own inputs (e.g.
-        // apply-edl's window check) fails identically on every retry — so it
-        // is final now, like a content-policy block (lib/deterministic-job-error.ts).
-        const deterministic = isDeterministicJobError(err)
-        // The provider refused the INPUT VIDEO of a job that sent one: the
-        // same clip is refused again, so it is final now too.
-        const inputVideoRefused = inputVideoRefusedOf(err) && sentVideoInput(job.data)
-        const finalAttempt = block || deterministic || inputVideoRefused ? true : isFinalJobAttempt(job)
-
-        // Post-provider self-heal (audit spec, worker branch). On the FINAL
-        // attempt, a PostProcessingError means the provider already delivered
-        // and billed us — only a post-delivery step (R2 upload, watermark,
-        // transcode) failed. If the row is reconcile-recoverable (persisted
-        // provider_task_id + a kind the reconcile system owns), marking it
-        // failed+charged throws away a result the cron can re-fetch — leave
-        // it `processing` instead: the cron completes it (or, for heygen /
-        // exhaustion, fail+refunds with an anomaly row). Plain Errors (e.g.
-        // the inpaint composite, REFUND-CRITICAL in handlers/image-ai.ts)
-        // deliberately do NOT qualify — they must keep refunding.
-        if (finalAttempt && isPostProcessingError(err)) {
-          const { data: row } = await supabase
-            .from("jobs")
-            .select("provider_kind, provider_task_id, status")
-            .eq("id", jobId)
-            .single()
-          const recoverableRow = row as {
-            provider_kind: string | null
-            provider_task_id: string | null
-            status: string
-          } | null
-          if (
-            recoverableRow &&
-            recoverableRow.status === "processing" &&
-            isReconcileRecoverable(recoverableRow)
-          ) {
-            console.warn(
-              `[worker] Job ${jobId} post-provider failure left for reconcile ` +
-              `(kind=${recoverableRow.provider_kind}, task=${recoverableRow.provider_task_id}): ${message}`,
-            )
-            // No rethrow: the BullMQ job ends here; the jobs row stays
-            // `processing` and the reconcile cron owns the terminal outcome.
-            // The provider delivered: its slot is released as completed.
-            laneOutcome = "completed"
-            return
-          }
-        }
-
-        // Only finalize (mark failed) + refund on the FINAL attempt (and only
-        // when the self-heal branch above did not take the row). On a
-        // non-final attempt BullMQ will retry, and marking the row failed +
-        // refunding the reservation now would let a successful retry deliver
-        // the media for free (commit_credits no-ops against an already-refunded
-        // usage_log). On non-final attempts we just rethrow so BullMQ retries
-        // with the reservation intact.
-        if (finalAttempt) {
-          // Save the sanitized message (user-facing) plus the redacted provider detail (operator-facing).
-          // A `safety`-class block gets its own honest final message (names the
-          // fallback model when the catalog offers one) — copyright/likeness
-          // blocks are deterministic on the same input and keep KIE's existing
-          // CONTENT_POLICY_MESSAGES text unchanged.
-          // A model-lane failure carries a user-safe sentence (no lane, vendor
-          // or internal model id); its full diagnostic is the error_detail below.
-          // A PLUGIN handler may vouch for its own sentence (`userSafeMessage:
-          // true` on the thrown error itself — lib/safety-block.ts): a safety
-          // block from it keeps that sentence (through the same
-          // `userFacingMessage` path as any other failure) while the hint
-          // below is still the safety block's. The generic message's "adjust
-          // the prompt" advice is wrong for a run whose prompt the user never
-          // wrote. Built-in handlers never get this: only a job type the
-          // plugins serve (the key, not the handler identity — the map's
-          // entries are wrapped by the edit-plan gate and the heartbeat).
-          const keepPluginMessage =
-            Object.hasOwn(privatePluginHandlers, job.name) && hasUserSafeMessage(err)
-          const errorMessage =
-            block && block.class === "safety" && !keepPluginMessage
-              ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
-              : userFacingMessage(err, message)
-          // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job
-          // a concurrent writer already moved to a terminal state (inflight-
-          // reconcile cron completing it, or a stall re-pick) from being trampled
-          // "completed"/"cancelled" → "failed" — which would orphan its committed
-          // credits + delivered asset and fail the workflow despite delivery — and
-          // what keeps this worker off a `pending_review` row (spec D11).
-          // The provider refused the INPUT VIDEO: said on the hint (beside the
-          // class when there is one), so a caller can send a different clip.
-          // Likewise an input image refused as possibly copyrighted
-          // (`subject: "input_image"`), so a caller can send a different picture.
-          // Shared with the reconcile path (lib/reconcile/kie.ts).
-          const errorHint =
-            refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
-          const flipped = await markJobFailed(jobId, {
-            error_message: errorMessage,
-            // W0: the provider's own error, redacted — the sanitized message
-            // above is what the user sees; this is what the operator needs.
-            error_detail: providerDetailOf(err),
-            // Migration 376: a user-safe, machine-readable hint the editor/MCP
-            // can act on (offer the fallback model, say "top up") without
-            // parsing prose. A classified content-policy block, else a
-            // refused input video, else a handler's credits refusal (`failureHint` on the error or its
-            // cause chain — a plugin's child job refused for credits), else a
-            // wait for a concurrency slot that ran out; NULL for anything
-            // else. The refund below is unchanged either way.
-            ...(errorHint ? { error_hint: errorHint } : {}),
-          })
-
-          // Only refund if WE flipped the row. If a concurrent writer already
-          // completed it, skip (the asset was delivered + credits committed); if
-          // it was cancelled, the cancel route already refunded. refundJobCredits
-          // is idempotent regardless, but this avoids a needless roundtrip.
-          if (flipped) {
-            // Pass the ERROR OBJECT (not just the string) so refundJobCredits
-            // can read the PostProcessingError type signal. A post-provider
-            // failure (R2 upload, watermark, transcode, merge) skips the refund
-            // because the provider already billed us; everything else refunds.
-            // A billed content refusal is charged only for a job whose
-            // product is the LLM call (LLM_PRODUCT_JOB_TYPES); every other
-            // job refunds, a Claude planning step's refusal included.
-            await refundJobCredits(usageLogId, jobId, err, { chargeBilledRefusal: LLM_PRODUCT_JOB_TYPES.has(job.name) })
-          }
-
-          // A content-policy block has already exhausted ITS OWN bounded
-          // policy (not the queue's global `attempts: 3`) — BullMQ must not
-          // spend another attempt re-running a request that will fail
-          // identically. UnrecoverableError short-circuits its retry
-          // machinery (precedent: social-publish-worker.ts's `definitive`
-          // branch). A deterministic refusal is the same case: the row is
-          // already failed + refunded above, and a retry would re-download
-          // every input to fail the same way. A refused input video, likewise.
-          if (block || deterministic || inputVideoRefused) {
-            throw new UnrecoverableError(errorMessage)
-          }
-        }
-        // A non-final attempt goes back to BullMQ for a retry.
-        if (!finalAttempt) laneOutcome = "requeued"
-        throw err
-      } finally {
-        // Temporary provider uploads (decided 2026-10-09): the job's scratch
-        // folder (`lib/job-scratch.ts`) is emptied when the job ends — success,
-        // failure or cancel. Every exit passes here, after the failure path has
-        // marked the row; the discard reads the row and keeps the folder while
-        // the job is still in flight (a retry, a drain hand-back, a provider
-        // task left for the reconcile cron). Never throws.
-        await discardJobScratch(jobId)
-        // Every exit frees the job's concurrency slot, once (never throws).
-        await admission.release(laneOutcome)
       }
-    },
+      // A non-final attempt goes back to BullMQ for a retry.
+      if (!finalAttempt) laneOutcome = "requeued"
+      throw err
+    } finally {
+      // Temporary provider uploads (decided 2026-10-09): the job's scratch
+      // folder (`lib/job-scratch.ts`) is emptied when the job ends — success,
+      // failure or cancel. Every exit passes here, after the failure path has
+      // marked the row; the discard reads the row and keeps the folder while
+      // the job is still in flight (a retry, a drain hand-back, a provider
+      // task left for the reconcile cron). Never throws.
+      await discardJobScratch(jobId)
+      // Every exit frees the job's concurrency slot, once (never throws).
+      await admission.release(laneOutcome)
+    }
+  }
+
+  return new Worker(
+    "video-generation",
+    // A background scrape over its per-process cap waits on the queue holding no worker slot.
+    (job, token) => runWithinCapacity(HANDLER_FLAGS.capacityGroups.get(job.name), job, token, processVideoJob),
     {
       connection: connection as unknown as ConnectionOptions,
       concurrency: config.VIDEO_WORKER_CONCURRENCY,
@@ -762,14 +787,14 @@ export function createVideoWorker() {
       // 900s+300s ≈ 15–20 min. Safe to re-pick early: the stall guard never
       // re-runs a handler once provider_task_id is persisted (inline
       // reconcile instead), and finalize is CAS-claimed.
-      lockDuration: 300_000,
-      stalledInterval: 60_000,
+      lockDuration: VIDEO_WORKER_LOCK_DURATION_MS,
+      stalledInterval: VIDEO_WORKER_STALLED_INTERVAL_MS,
       // Deploy storms can stall the same job more than once before a healthy
       // process gets to it (2026-07-15 batch B stalled under two consecutive
       // deploys). Default maxStalledCount=1 would move it to failed-permanent
       // on the second stall; each extra re-pick is a cheap idempotent inline
       // reconcile, so allow a few.
-      maxStalledCount: 3,
+      maxStalledCount: VIDEO_WORKER_MAX_STALLED_COUNT,
     },
   )
 }

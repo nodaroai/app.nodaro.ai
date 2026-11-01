@@ -11,7 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared/models"
 import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
-import { resolveOmittedTtsProvider } from "../lib/omitted-tts-provider.js"
+import { resolveOmittedTtsProvider, ttsModelOf } from "../lib/omitted-tts-provider.js"
 import { speechLengthPricingEnabled } from "../lib/config.js"
 import { speechBaseCredits } from "../lib/speech-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -39,9 +39,7 @@ const voiceSetting = (key: TtsVoiceSettingKey) =>
  * to the default speech model. The schema's neighbour-text check and the handler both read this one function, so
  * they cannot disagree about which model's sheet applies.
  */
-function resolveRequestProvider(provider: string | undefined, text: string): string {
-  return provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? resolveOmittedTtsProvider(text))
-}
+const resolveRequestProvider = ttsModelOf
 
 export const textToSpeechBody = z.object({
   /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
@@ -182,7 +180,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "text-to-speech"),
+        input_data: { ...buildJobInputData(parsed.data, "text-to-speech"), resolvedModel: resolvedProvider },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

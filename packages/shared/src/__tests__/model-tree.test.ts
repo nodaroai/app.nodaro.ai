@@ -50,14 +50,15 @@ describe("modelToNodeTarget", () => {
 
 describe("buildModelTree", () => {
   const tree = buildModelTree()
-  const withSeries = (Object.values(MODEL_CATALOG) as Array<{ series?: string }>).filter((m) => m.series)
-  it("covers nearly every series-annotated model and renders no empty folder", () => {
+  // Every entry carries a series; the tree lists the node-creatable ones.
+  const creatable = Object.values(MODEL_CATALOG).filter((m) => modelToNodeTarget(m.id))
+  it("covers nearly every node-creatable model and renders no empty folder", () => {
     const variants = tree.reduce((n, l) => n + l.models.length, 0)
-    expect(variants).toBeGreaterThanOrEqual(withSeries.length - 1)
+    expect(variants).toBeGreaterThanOrEqual(creatable.length - 1)
     for (const line of tree) expect(line.models.length).toBeGreaterThan(0)
   })
   it("series completeness: every node-creatable model declares a series", () => {
-    const missing = (Object.values(MODEL_CATALOG) as Array<{ id: string; series?: string }>)
+    const missing = Object.values(MODEL_CATALOG)
       .filter((m) => modelToNodeTarget(m.id) && (!m.series || !m.series.trim()))
       .map((m) => m.id)
     expect(missing).toEqual([])

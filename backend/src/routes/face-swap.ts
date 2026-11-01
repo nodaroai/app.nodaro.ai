@@ -52,7 +52,7 @@ export async function faceSwapRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "face-swap"),
+        input_data: { ...buildJobInputData(parsed.data, "face-swap"), resolvedModel: parsed.data.provider },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

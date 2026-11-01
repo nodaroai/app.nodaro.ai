@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
+import { createServer } from "node:http"
+import type { AddressInfo } from "node:net"
 import {
   loopbackFetch,
+  loopbackDispatcher,
   describeFetchError,
   isNeverDeliveredTransportError,
+  LOOPBACK_RESPONSE_TIMEOUT_MS,
 } from "../loopback-fetch.js"
+import { LLM_ROUTE_REQUEST_TIMEOUT_MS } from "../../../lib/llm-route-timeout.js"
+import { KIE_LLM_TIMEOUT_MS } from "../../../lib/llm/params.js"
 import { DrainAbortError, beginWorkerDrain, _resetWorkerDrainForTests } from "../../../lib/worker-drain.js"
 
 /** What Node actually throws: an opaque outer TypeError over the real cause. */
@@ -122,6 +128,66 @@ describe("loopbackFetch", () => {
       }),
     ).rejects.toThrow("Sync HTTP call to /v1/x: Invalid header value")
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * A sync route sends no headers until its work is done; undici's default
+ * headersTimeout (300 s) would cut an llm-chat node whose KIE attempt runs its
+ * full 300 s before the route could fall back and answer.
+ */
+describe("the loopback waits for the route, not undici's 300 s default", () => {
+  it("waits past the sync LLM routes' socket timeout, which outlasts a full KIE attempt", () => {
+    expect(LOOPBACK_RESPONSE_TIMEOUT_MS).toBeGreaterThan(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+    expect(LLM_ROUTE_REQUEST_TIMEOUT_MS).toBeGreaterThan(KIE_LLM_TIMEOUT_MS)
+  })
+
+  it("sends its dispatcher on every call, and a caller's own dispatcher wins", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const dispatcher = loopbackDispatcher()
+    const fetchImpl = vi.fn().mockResolvedValue(ok())
+    await loopbackFetch("http://localhost:9000/v1/llm-chat/generate", { method: "POST" }, {
+      label: "Sync HTTP call to /v1/llm-chat/generate",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    const sent = fetchImpl.mock.calls[0][1] as RequestInit & { dispatcher?: unknown }
+    expect(sent.method).toBe("POST")
+    if (dispatcher) expect(sent.dispatcher).toBe(dispatcher)
+    else expect("dispatcher" in sent).toBe(false)
+
+    const own = { mine: true }
+    await loopbackFetch("http://localhost:9000/v1/x", { method: "POST", ...({ dispatcher: own } as RequestInit) }, {
+      label: "Sync HTTP call to /v1/x",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    expect((fetchImpl.mock.calls[1][1] as { dispatcher?: unknown }).dispatcher).toBe(own)
+  })
+
+  // The dispatcher is an Agent from the `undici` package handed to Node's own
+  // fetch: it must be one this runtime's fetch accepts (CI and production run
+  // Node 22), else every loopback call would fail before it is sent.
+  it("Node's own fetch accepts the dispatcher (when this runtime gets one)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const server = createServer((req, res) => {
+      req.resume()
+      req.on("end", () => res.end("answered"))
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    try {
+      const { port } = server.address() as AddressInfo
+      const res = await loopbackFetch(`http://127.0.0.1:${port}/v1/x`, { method: "POST", body: "{}" }, {
+        label: "Sync HTTP call to /v1/x",
+        sleep: async () => {},
+      })
+      expect(await res.text()).toBe("answered")
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it("gets one on Node 22, which bundles the same undici major as the package", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    if (process.versions.undici?.split(".")[0] === "6") expect(loopbackDispatcher()).not.toBeNull()
   })
 })
 

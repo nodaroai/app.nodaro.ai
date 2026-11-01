@@ -36,14 +36,33 @@ const DEFAULT_POLL_INTERVAL_MS = 3000
 /** Safety cap on poll iterations (~600 × 3s = 30min, matching NODE_TIMEOUT_MS). */
 const MAX_POLLS = 600
 
+/** The hosts a fal run is submitted to (the queue, and the synchronous run endpoint). */
+const FAL_RUN_HOSTS: ReadonlySet<string> = new Set(["queue.fal.run", "fal.run"])
+
+/**
+ * Whether a call of fal's transport submits a run (a POST to a model on the
+ * queue or the run endpoint): those take a concurrency slot at the egress.
+ * Status and result reads, cancels and storage uploads do not.
+ */
+export function createsFalRun(method: string, url: string): boolean {
+  if (method !== "POST") return false
+  try {
+    const u = new URL(url)
+    return FAL_RUN_HOSTS.has(u.hostname) && !u.pathname.includes("/requests/")
+  } catch {
+    return false
+  }
+}
+
 /** Lazy one-shot credential config (fal.config rebuilds the singleton each call). */
 let configured = false
 function ensureConfigured(coverage?: ProviderKeyCoverage): void {
   if (configured) return
   requireProviderKey(config.FAL_KEY, "FAL_KEY", undefined, coverage)
   // Inject the egress-decorated fetch so fal's queue transport (submit/status/
-  // result) flows through the seam like every other provider call.
-  fal.config({ credentials: config.FAL_KEY, fetch: egressSdkFetch("fal") })
+  // result) flows through the seam like every other provider call, and each
+  // submit takes its concurrency slot there (createsWork).
+  fal.config({ credentials: config.FAL_KEY, fetch: egressSdkFetch("fal", { createsWork: createsFalRun }) })
   configured = true
 }
 

@@ -8,6 +8,7 @@
 import { z } from "zod"
 import { CAST_SWAP_PROMPT_PART_IDS, type CastSwapFullDepthScene, type CastSwapPromptPartId, type CastSwapPromptStyle } from "@nodaro/render-rules"
 import { CAST_SWAP_KLING_MAX_IMAGES, type CastSwapEngine } from "@nodaro/shared/models"
+import type { FaceMaskingDepthColormap } from "./cast-swap-face-masking.js"
 
 /** The longest text one part may hold (the engine refuses a longer one as `part_too_long`). */
 export const PROMPT_PART_TEXT_MAX = 2000
@@ -88,6 +89,22 @@ export interface PromptPartsRequest {
    * `castSwap.shotList` (`askPromptParts`).
    */
   shotList?: true
+  /**
+   * The colormap the setting's depth is drawn with, when it is not its
+   * source's default (a trend's `storedDepthColormapOf`: grayscale for a
+   * depth fill under role outlines, else its chosen map; a direct run's
+   * setting's `depthColormapSent`): the engine words the defaults that name
+   * the depth look by it. Sent only to an engine that lists the map in
+   * `castSwap.depthColormaps` (`askPromptParts`). Absent: the answer as before.
+   */
+  depthColormap?: FaceMaskingDepthColormap
+  /**
+   * The Faces hidden fill the setting masks with, sent ONLY beside
+   * `depthColormap` on a depth fill (`"depth"`), so the engine words the
+   * fill's guard by the map (it reads a depth fill's look from the fill).
+   * Never sent otherwise, so every other request is as before.
+   */
+  maskFill?: "depth"
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

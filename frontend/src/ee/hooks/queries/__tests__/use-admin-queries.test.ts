@@ -1,7 +1,7 @@
-// @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockUseQuery = vi.fn()
+const mockUseInfiniteQuery = vi.fn()
 const mockUseMutation = vi.fn()
 const mockInvalidateQueries = vi.fn()
 const mockHasAdmin = vi.fn()
@@ -12,6 +12,7 @@ const mockCreateClient = vi.fn()
 vi.mock("@tanstack/react-query", () => ({
   keepPreviousData: "keepPreviousData",
   useQuery: (opts: unknown) => mockUseQuery(opts),
+  useInfiniteQuery: (opts: unknown) => mockUseInfiniteQuery(opts),
   useMutation: (opts: unknown) => mockUseMutation(opts),
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }))
@@ -35,22 +36,11 @@ vi.mock("@/lib/query-keys", () => ({
       users: (page: number, pageSize: number, _sortBy?: string, _sortDir?: string, search?: string) =>
         search ? ["admin", "users", page, pageSize, search] : ["admin", "users", page, pageSize],
       user: (id: string) => ["admin", "users", "one", id],
-      jobs: (
-        page: number,
-        pageSize: number,
-        status?: string,
-        userId?: string,
-        excludeUserIds?: ReadonlyArray<string>,
-      ) =>
-        [
-          "admin",
-          "jobs",
-          page,
-          pageSize,
-          status ?? "",
-          userId ?? "",
-          [...(excludeUserIds ?? [])].sort().join(","),
-        ],
+      jobs: (page: number, pageSize: number, filters: string, excludeUserIds?: ReadonlyArray<string>) =>
+        ["admin", "jobs", page, pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")],
+      jobsInfinite: (pageSize: number, filters: string, excludeUserIds?: ReadonlyArray<string>) =>
+        ["admin", "jobs-infinite", pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")],
+      jobSources: () => ["admin", "job-sources"],
       usersLite: () => ["admin", "users-lite"],
       usageLogs: (page: number, pageSize: number) => ["admin", "usage-logs", page, pageSize],
       models: () => ["admin", "models"],
@@ -75,6 +65,9 @@ import {
   useAdminUsers,
   sanitizeUserSearch,
   useAdminJobs,
+  useAdminJobsInfinite,
+  useAdminJobSources,
+  jobSourceLabel,
   useAllAdminUsersLite,
   useAdminUsageLogs,
   useAdminModels,
@@ -92,6 +85,9 @@ import {
   useAdminChangeStorageMutation,
   useAdminChangeRoleMutation,
 } from "../use-admin-queries"
+import { DEFAULT_JOB_FILTERS, type AdminJobFilters } from "@/ee/app/(admin)/admin/jobs/jobs-filters"
+
+const jobFilters = (over: Partial<AdminJobFilters> = {}): AdminJobFilters => ({ ...DEFAULT_JOB_FILTERS, ...over })
 
 // ------------------------------------------------------------------
 // Query hooks
@@ -132,8 +128,8 @@ describe("admin query hooks — shared hasAdmin() gating", () => {
     },
     {
       name: "useAdminJobs",
-      call: () => useAdminJobs(1, 50),
-      expectedKey: ["admin", "jobs", 1, 50, "", "", ""],
+      call: () => useAdminJobs(1, 50, jobFilters()),
+      expectedKey: ["admin", "jobs", 1, 50, "", ""],
       expectedStaleTime: 15_000,
     },
     {
@@ -267,72 +263,129 @@ describe("useAdminUsers search", () => {
   })
 })
 
-describe("useAdminJobs with statusFilter", () => {
+describe("useAdminJobs filters", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasAdmin.mockReturnValue(true)
     mockUseQuery.mockReturnValue({ data: null })
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
   })
 
-  it("includes status filter in queryKey", () => {
-    useAdminJobs(0, 50, "completed")
-    expect(mockUseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "completed", "", ""],
-      })
-    )
+  it("keys on the serialized filters, without the view", () => {
+    useAdminJobs(0, 50, jobFilters({ status: "completed", view: "gallery", userEmail: "dana@x.test" }))
+    expect(mockUseQuery.mock.calls[0][0].queryKey).toEqual(["admin", "jobs", 0, 50, "status=completed&user=dana%40x.test", ""])
+  })
+
+  it("same filters → same query key", () => {
+    useAdminJobs(0, 50, jobFilters({ types: ["b", "a"], sources: ["web:x"] }))
+    useAdminJobs(0, 50, jobFilters({ sources: ["web:x"], types: ["a", "b"] }))
+    expect(mockUseQuery.mock.calls[0][0].queryKey).toEqual(mockUseQuery.mock.calls[1][0].queryKey)
+  })
+
+  it("sends and keys the admins' ids only while the admins are hidden", () => {
+    useAdminJobs(0, 50, jobFilters({ excludeAdmins: true }), ["u3", "u1", "u2"])
+    useAdminJobs(0, 50, jobFilters(), ["u3", "u1"])
+    useAdminJobs(0, 50, jobFilters({ excludeAdmins: true, userEmail: "a@b.co" }), ["u3"])
+    expect(mockUseQuery.mock.calls.map((c) => c[0].queryKey[5])).toEqual(["u1,u2,u3", "", ""])
+  })
+
+  it("requests the server params and reports an unknown address", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [], userNotFound: true }) })
+    useAdminJobs(2, 50, jobFilters({ status: "failed", userEmail: "nobody@x.test", excludeAdmins: false }), ["u1"])
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: true, filtersUnavailable: false })
+    const url = new URL(String(mockFetch.mock.calls[0]![0]), "http://x")
+    expect(url.pathname).toBe("/v1/admin/jobs")
+    expect(Object.fromEntries(url.searchParams)).toEqual({ page: "2", pageSize: "50", status: "failed", userEmail: "nobody@x.test" })
+  })
+
+  it("sends the admins' ids when they are hidden", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) })
+    useAdminJobs(0, 50, jobFilters({ excludeAdmins: true }), ["u2", "u1"])
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: false, filtersUnavailable: false })
+    const url = new URL(String(mockFetch.mock.calls[0]![0]), "http://x")
+    expect(url.searchParams.get("excludeUserIds")?.split(",").sort()).toEqual(["u1", "u2"])
+  })
+
+  it("passes on that the server could not apply the newer filters", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [], filtersUnavailable: true }) })
+    useAdminJobs(0, 50, jobFilters({ kind: "video" }))
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: false, filtersUnavailable: true })
+  })
+
+  it("a caller can hold the request (the admins' ids not loaded yet)", () => {
+    useAdminJobs(0, 50, jobFilters({ excludeAdmins: true }), [], { enabled: false })
+    useAdminJobs(0, 50, jobFilters())
+    useAdminJobsInfinite(50, jobFilters({ excludeAdmins: true }), [], { enabled: false })
+    useAdminJobsInfinite(50, jobFilters())
+    expect(mockUseQuery.mock.calls.map((c) => c[0].enabled)).toEqual([false, true])
+    expect(mockUseInfiniteQuery.mock.calls.map((c) => c[0].enabled)).toEqual([false, true])
+  })
+
+  it("the gallery pages by the filtered page's length", () => {
+    useAdminJobsInfinite(50, jobFilters({ kind: "video" }))
+    const opts = mockUseInfiniteQuery.mock.calls[0][0]
+    expect(opts.queryKey).toEqual(["admin", "jobs-infinite", 50, "kind=video", ""])
+    expect(opts.getNextPageParam({ jobs: new Array(50), userNotFound: false, filtersUnavailable: false }, [{}, {}])).toBe(2)
+    expect(opts.getNextPageParam({ jobs: new Array(3), userNotFound: false, filtersUnavailable: false }, [{}])).toBeUndefined()
   })
 })
 
-describe("useAdminJobs with userIdFilter", () => {
+describe("useAdminJobSources", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasAdmin.mockReturnValue(true)
     mockUseQuery.mockReturnValue({ data: null })
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
   })
 
-  it("includes userId filter in queryKey", () => {
-    useAdminJobs(0, 50, undefined, "u1")
-    expect(mockUseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "", "u1", ""],
-      })
-    )
+  it("is cached for minutes and not refetched on focus", () => {
+    useAdminJobSources()
+    const opts = mockUseQuery.mock.calls[0][0]
+    expect(opts.queryKey).toEqual(["admin", "job-sources"])
+    expect(opts.staleTime).toBeGreaterThanOrEqual(5 * 60_000)
+    expect(opts.refetchOnWindowFocus).toBe(false)
+    expect(opts.enabled).toBe(true)
   })
 
-  it("combines status and userId in queryKey", () => {
-    useAdminJobs(2, 50, "failed", "u1")
-    expect(mockUseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: ["admin", "jobs", 2, 50, "failed", "u1", ""],
-      })
-    )
-  })
-})
-
-describe("useAdminJobs with excludeUserIds", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockHasAdmin.mockReturnValue(true)
-    mockUseQuery.mockReturnValue({ data: null })
-  })
-
-  it("includes sorted excludeUserIds in queryKey", () => {
-    useAdminJobs(0, 50, undefined, undefined, ["u3", "u1", "u2"])
-    expect(mockUseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "", "", "u1,u2,u3"],
+  it("labels apps by name (else id) and web apps by product", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { key: "web:studio", source: "web", sourceDetail: "studio.nodaro.ai", count: 9 },
+          { key: "app:A1", source: "app", sourceDetail: "A1", count: 4 },
+          { key: "app:gone", source: "app", sourceDetail: "gone", count: 2 },
+          { key: "api", source: "api", sourceDetail: null, count: 1 },
+        ],
       }),
-    )
+    })
+    const inFn = vi.fn(async () => ({ data: [{ id: "A1", name: "Reel Maker" }] }))
+    const from = vi.fn(() => ({ select: vi.fn(() => ({ in: inFn })) }))
+    mockCreateClient.mockReturnValue({ from })
+    useAdminJobSources()
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual([
+      { key: "web:studio", label: "studio", count: 9 },
+      { key: "app:A1", label: "Reel Maker", count: 4 },
+      { key: "app:gone", label: "gone", count: 2 },
+      { key: "api", label: "api", count: 1 },
+    ])
+    expect(String(mockFetch.mock.calls[0]![0])).toBe("/v1/admin/jobs/sources")
+    expect(from).toHaveBeenCalledWith("developer_apps")
+    expect(inFn).toHaveBeenCalledWith("id", ["A1", "gone"])
   })
 
-  it("treats empty excludeUserIds as no filter", () => {
-    useAdminJobs(0, 50, undefined, undefined, [])
-    expect(mockUseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "", "", ""],
-      }),
-    )
+  it("reads no apps when no source is one", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [{ key: "web:studio", count: 1 }] }) })
+    useAdminJobSources()
+    await mockUseQuery.mock.calls[0][0].queryFn()
+    expect(mockCreateClient).not.toHaveBeenCalled()
+  })
+
+  it("jobSourceLabel keeps any other key as written", () => {
+    expect(jobSourceLabel("unknown", new Map())).toBe("unknown")
+    expect(jobSourceLabel("web:localhost:3000", new Map())).toBe("localhost:3000")
   })
 })
 

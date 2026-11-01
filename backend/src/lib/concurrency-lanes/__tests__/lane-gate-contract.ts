@@ -292,6 +292,21 @@ export function runLaneGateContract(makeFixture: () => LaneGateFixture): void {
     expect(await gate.borrow("run-1")).toBeNull()
   })
 
+  it("leaseLine names a live lease's line and never re-creates one", async () => {
+    const lease = leaseOf(await acquire("held", { size: 1, ttl: LANE_LEASE_TTL_MS, meta: { userId: "U2", payer: "workspace:W", lane: "llm" } }))
+    expect(await gate.leaseLine(lease)).toEqual({ userId: "U2", payer: "workspace:W", lane: "llm" })
+    expect(await gate.leaseLine("no-such-lease")).toBeNull()
+    // Released: gone, and the read leaves nothing behind.
+    await gate.release(lease, "completed")
+    expect(await gate.leaseLine(lease)).toBeNull()
+    expect((await gate.snapshot()).lines).toEqual([])
+    // Expired (never renewed past its TTL): gone too.
+    const late = leaseOf(await acquire("late", { size: 1, ttl: LANE_LEASE_TTL_MS }))
+    clock += LANE_LEASE_TTL_MS + 1
+    expect(await gate.leaseLine(late)).toBeNull()
+    expect((await gate.snapshot()).lines).toEqual([])
+  })
+
   it("withdraw removes a waiter and shifts positions", async () => {
     await acquire("a", { size: 1 })
     await acquire("b", { size: 1 })

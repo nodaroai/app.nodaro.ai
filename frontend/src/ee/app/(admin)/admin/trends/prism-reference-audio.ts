@@ -5,12 +5,41 @@
 // backend/src/lib/cast-swap-prism-reference-audio.ts).
 
 import { CAST_SWAP_RESOLUTIONS_BY_ENGINE } from "@nodaro/shared/models"
-import type { CastSwapPrismReferenceAudioByResolution, CastSwapPrismReferenceAudioId, TrendResolution } from "@/lib/api"
+import type { CastSwapPrismReferenceAudioByResolution, CastSwapPrismReferenceAudioId, TrendEngineEnvironment, TrendResolution } from "@/lib/api"
+import { SHARED_SETTING_ENVIRONMENTS } from "./clip-preparation"
 
 /** The resolutions a Prism run renders, in the order the screens show them (its 480p draft first). */
 export const PRISM_RESOLUTIONS: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE["seedance-2-5"]
 
-export const PRISM_REFERENCE_AUDIO_MODES: readonly CastSwapPrismReferenceAudioId[] = ["full", "voice", "none"]
+export const PRISM_REFERENCE_AUDIO_MODES: readonly CastSwapPrismReferenceAudioId[] = ["full", "voice", "none", "one-tone", "octave"]
+
+/**
+ * The modes an engine takes only when it lists them in
+ * `castSwap.prismReferenceAudioModes` (the server's
+ * `DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`): offered only where it does.
+ */
+export const DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES: readonly CastSwapPrismReferenceAudioId[] = ["one-tone", "octave"]
+
+/** Whether an environment's engine lists `mode` (the declared-only modes; every other mode is every engine's). */
+function envTakes(env: TrendEngineEnvironment | undefined, mode: CastSwapPrismReferenceAudioId): boolean {
+  return (env?.supports.castSwap?.prismReferenceAudioModes ?? []).includes(mode)
+}
+
+/** A trend's editor: the declared-only modes some environment's engine lists (unknown while the environments are: none). */
+export function prismReferenceAudioModesSomeEngineTakes(envs: readonly TrendEngineEnvironment[] | undefined): CastSwapPrismReferenceAudioId[] {
+  return DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES.filter((m) => (envs ?? []).some((e) => envTakes(e, m)))
+}
+
+/**
+ * Admin → Nodaro Motion: the declared-only modes every environment's engine
+ * lists (of `SHARED_SETTING_ENVIRONMENTS`; the setting is shared, and the
+ * server refuses the save otherwise: 409 `engine_unsupported`). Unknown
+ * while the environments are: none.
+ */
+export function prismReferenceAudioModesEveryEngineTakes(envs: readonly TrendEngineEnvironment[] | undefined): CastSwapPrismReferenceAudioId[] {
+  if (!envs) return []
+  return DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES.filter((m) => SHARED_SETTING_ENVIRONMENTS.every((name) => envTakes(envs.find((e) => e.env === name), m)))
+}
 
 export const DEFAULT_PRISM_REFERENCE_AUDIO: CastSwapPrismReferenceAudioId = "full"
 

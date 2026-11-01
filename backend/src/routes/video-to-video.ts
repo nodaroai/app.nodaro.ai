@@ -9,6 +9,8 @@ import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middlew
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
+import { VIDEO_TO_VIDEO_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
 import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
 import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
 import { handleTextToVideoRequest, textToVideoBody, textToVideoPricing } from "./text-to-video.js"
@@ -136,7 +138,7 @@ export const videoToVideoPricing: RoutePricing = {
   prechecks: [rewriteSeedanceEdit, ...textToVideoPricing.prechecks.map(onlyForSeedanceEdit)],
   modelResolver: (req) => isSeedanceEdit(req)
     ? textToVideoPricing.modelResolver(req)
-    : ((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? "wan",
+    : ((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER,
   opts: {
     computeCredits: (body, req) => isSeedanceEdit(req) ? textToVideoPricing.opts?.computeCredits?.(body, req) : undefined,
   },
@@ -182,7 +184,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "video-to-video"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "video-to-video"), "video-to-video"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -190,7 +192,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const modelIdentifier = provider ?? "wan"
+    const modelIdentifier = provider ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId

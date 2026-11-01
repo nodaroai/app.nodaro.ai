@@ -22,6 +22,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const imageToTextBody = z.object({
   imageUrl: safeUrlSchema,
@@ -41,10 +43,14 @@ export async function imageToTextRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-to-text/describe",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
-        // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
-        computeCredits: (body) => llmGuardPrecheck("image-to-text", body),
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
+          // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
+          computeCredits: (body) => llmGuardPrecheck("image-to-text", body),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/image-to-text/describe")),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -89,7 +95,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "image-to-text"),
+          input_data: { ...buildJobInputData(parsed.data, "image-to-text"), resolvedModel: llmModel },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 

@@ -11329,6 +11329,14 @@ export interface AdminTrendFaceMasking {
    */
   roleOutlines?: boolean
   /**
+   * The depth map's colormap wherever the setting draws depth (Full depth,
+   * Keep people, a Faces hidden depth fill). Left out = the source's default
+   * (grayscale; turbo for a depth fill), saved only when it differs from it,
+   * never under role outlines (they draw a depth fill gray), and offered only
+   * where the engine lists the map in `castSwap.depthColormaps`.
+   */
+  depthColormap?: VideoDepthColormap
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11384,9 +11392,9 @@ export interface AdminTrendFaceMask {
   variantJobs?: AdminTrendFaceMaskVariantJob[]
   /** Full depth: the make's description of the whole original clip (each run rewrites it for its cast). Absent: made before descriptions. */
   sceneDescription?: string
-  /** Full depth: the same for the 4 s preview window. */
+  /** Unused since 2026-11-01: an older make's text for the 4 s preview window (a preview run cuts `sceneDescription`); never shown. */
   previewSceneDescription?: string
-  /** The `previewStart` the preview's text was made for (a preview run uses it only while it is the trend's). */
+  /** Unused since 2026-11-01: the `previewStart` that older preview text was made for. */
   previewSceneDescriptionStart?: number
   /**
    * A hash of the scene description step (`steps.sceneDescription`) the
@@ -11590,10 +11598,12 @@ export type CastSwapPulseAudioId = "original" | "generated"
 /**
  * What audio the reference video a Nodaro Motion Prism run sends to the video
  * model carries (admin only): the clip's full audio (the default), only the
- * voice split from the music, or none. The original audio always goes back on
- * the result.
+ * voice split from the music, none, the audio flattened to one steady tone
+ * (`"one-tone"`) or raised one octave (`"octave"`). The last two are offered
+ * only where the engine lists them (`castSwap.prismReferenceAudioModes`). The
+ * original audio always goes back on the result.
  */
-export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none"
+export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none" | "one-tone" | "octave"
 
 /** The Prism reference audio per output resolution (admin only); a resolution left out is `"full"`. */
 export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolution, CastSwapPrismReferenceAudioId>>
@@ -11816,6 +11826,10 @@ export interface TrendEngineEnvironment {
       faceMesh?: boolean
       /** The engine draws role outlines on a stored face mask (`faceMasking.roleOutlines`); absent = it cannot. */
       roleOutlines?: boolean
+      /** The colormaps the engine draws depth with on request (`faceMasking.depthColormap`); absent = none (the defaults only). */
+      depthColormaps?: VideoDepthColormap[]
+      /** The Prism reference audio modes the engine takes (`prismReferenceAudio`); absent = "full", "voice" and "none" only. */
+      prismReferenceAudioModes?: CastSwapPrismReferenceAudioId[]
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
@@ -12364,8 +12378,8 @@ export async function clearAdminTrendFaceMask(id: string, revision: string): Pro
   ).data
 }
 
-/** Which stored scene description: the full run's (whole clip) or the preview's (4 s window). */
-export type AdminTrendSceneDescriptionWhich = "full" | "preview"
+/** Which stored scene description: the whole clip's, the one every run sends (a preview run cut to its 4 s window). */
+export type AdminTrendSceneDescriptionWhich = "full"
 
 /** Save a full-depth clip's stored scene description `which` on the draft at `revision` (never puts the clip out of date). */
 export async function saveAdminTrendSceneDescription(
@@ -12803,6 +12817,8 @@ export interface NodaroMotionPrismReferenceAudioView {
   supported: boolean
   /** Whether it takes a mode per resolution (`castSwap.prismReferenceAudioPerResolution`); else it is sent the run's own resolution's mode. */
   perResolution?: boolean
+  /** The modes this environment's engine takes ("full" always); "one-tone" and "octave" only where it lists them. */
+  modes?: CastSwapPrismReferenceAudioId[]
 }
 
 const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"

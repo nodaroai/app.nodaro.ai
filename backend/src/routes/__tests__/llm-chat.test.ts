@@ -5,9 +5,11 @@ import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { LlmContentRefusalError, LlmOutputTruncatedError } from "../../lib/llm-errors.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 
-const { jobUpdates, credits } = vi.hoisted(() => ({
+const { jobUpdates, jobInserts, credits } = vi.hoisted(() => ({
   jobUpdates: [] as Array<Record<string, unknown>>,
+  jobInserts: [] as Array<Record<string, unknown>>,
   credits: { commitCredits: vi.fn(async () => undefined), refundCredits: vi.fn(async () => undefined) },
 }))
 
@@ -19,11 +21,14 @@ vi.mock("../../middleware/credit-guard.js", () => ({
 vi.mock("../../lib/supabase.js", () => ({
   supabase: {
     from: () => ({
-      insert: () => ({
+      insert: (row: Record<string, unknown>) => {
+        jobInserts.push(row)
+        return {
         select: () => ({
           single: async () => ({ data: { id: "job-1" }, error: null }),
         }),
-      }),
+        }
+      },
       update: (payload: Record<string, unknown>) => {
         jobUpdates.push(payload)
         // self-chaining thenable: supports `.eq(...).eq(...)` (id + user_id scope) and `await`
@@ -82,6 +87,17 @@ async function buildApp() {
 
 describe("POST /v1/llm-chat/generate — capability filter", () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it("records the model it runs on the row — the feature default when the body names none", async () => {
+    jobInserts.length = 0
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: { systemPrompt: "", userInput: "hello" } })
+    expect(res.statusCode).toBe(200)
+    const row = jobInserts[0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.llmModel).toBeUndefined()
+    expect(row.input_data.resolvedModel).toBe(LLM_FEATURE_DEFAULTS["llm-chat"])
+    expect(llmComplete).toHaveBeenCalledWith(expect.objectContaining({ modelId: LLM_FEATURE_DEFAULTS["llm-chat"] }))
+  })
 
   it("rejects video ref + claude with 400 modality_not_supported", async () => {
     const app = await buildApp()

@@ -26,6 +26,13 @@ const EFFORT_RANK: Record<LlmReasoningEffort, number> = { none: 0, low: 1, mediu
 export interface LlmModelDef {
   id: string
   displayName: string
+  /**
+   * The product line a person thinks in and filters by ("Claude", "GPT",
+   * "Gemini") — the LLM twin of a catalog entry's `series`. REQUIRED, so a new
+   * model cannot ship without one; one line never spans two vendors (registry
+   * test).
+   */
+  series: string
   desc: string
   tier: LlmTier
   kieFormat: KieApiFormat
@@ -225,6 +232,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3-flash",
     displayName: "Gemini 3 Flash",
+    series: "Gemini",
     desc: "Fast and cheap, good for simple tasks",
     tier: "economy",
     kieFormat: "chat-completions",
@@ -249,6 +257,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.6-flash",
     displayName: "Gemini 3.6 Flash",
+    series: "Gemini",
     // Demoted 2026-09-06 alongside 3.7: superlatives belong to the CURRENT top
     // model of a family only, and 3.8 now holds that slot.
     desc: "Fast Gemini, sharper reasoning",
@@ -290,6 +299,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.7-flash",
     displayName: "Gemini 3.7 Flash",
+    series: "Gemini",
     // Demoted 2026-09-06 when 3.8 registered below: superlatives belong to the
     // CURRENT top model of a family only (same rule the Opus entries follow) —
     // `desc` renders in every picker, so leaving "Newest" on the older flash
@@ -326,6 +336,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.8-flash",
     displayName: "Gemini 3.8 Flash",
+    series: "Gemini",
     // Inherits "Newest" from 3.7 (demoted above). Deliberately does NOT name
     // agentic video: that capability exists only on the direct Google lane
     // (Interactions API, not wired here) and the modality caps below withhold
@@ -371,6 +382,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-haiku-4.5",
     displayName: "Claude Haiku 4.5",
+    series: "Claude",
     // Demoted 2026-10-10 when claude-haiku-5.5 registered.
     desc: "Previous Haiku, fast economy",
     tier: "economy",
@@ -388,6 +400,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-haiku-5.5",
     displayName: "Claude Haiku 5.5",
+    series: "Claude",
     desc: "Latest Haiku, fast and low-cost with reasoning",
     tier: "economy",
     kieFormat: "messages",
@@ -431,6 +444,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-sonnet-4.6",
     displayName: "Claude Sonnet 4.6",
+    series: "Claude",
     desc: "Balanced quality and speed",
     tier: "standard",
     kieFormat: "messages",
@@ -450,6 +464,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.2",
     displayName: "GPT-5.2",
+    series: "GPT",
     desc: "Strong general purpose",
     tier: "standard",
     kieFormat: "chat-completions",
@@ -461,6 +476,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.1-pro",
     displayName: "Gemini 3.1 Pro",
+    series: "Gemini",
     desc: "Advanced reasoning, large context",
     tier: "premium",
     kieFormat: "chat-completions",
@@ -501,6 +517,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-4-argon",
     displayName: "Gemini 4 Argon",
+    series: "Gemini",
     desc: "Newest premium Gemini, 1M context",
     tier: "premium",
     kieFormat: "chat-completions",
@@ -550,6 +567,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-opus-4.7",
     displayName: "Claude Opus 4.7",
+    series: "Claude",
     // Superlatives belong to the CURRENT top model only — `desc` renders in every
     // model picker, so leaving "highest quality" on an older Opus steers
     // quality-critical work backwards (all three Opus entries bill premium, so
@@ -572,6 +590,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.4",
     displayName: "GPT-5.4",
+    series: "GPT",
     // Demoted 2026-09-06: two GPT generations have shipped above it, so
     // "Latest" steered the picker at the oldest premium GPT in the registry.
     desc: "Older GPT, premium quality",
@@ -587,6 +606,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.5",
     displayName: "GPT-5.5",
+    series: "GPT",
     desc: "Previous flagship GPT, deep reasoning",
     tier: "premium",
     kieFormat: "responses",
@@ -601,6 +621,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.6-luna",
     displayName: "GPT-5.6 Luna",
+    series: "GPT",
     desc: "Fastest GPT-5.6, high-volume workloads",
     tier: "economy",
     kieFormat: "responses",
@@ -615,6 +636,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.6-terra",
     displayName: "GPT-5.6 Terra",
+    series: "GPT",
     desc: "Balanced GPT-5.6 for production work",
     tier: "standard",
     kieFormat: "responses",
@@ -629,6 +651,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.6-sol",
     displayName: "GPT-5.6 Sol",
+    series: "GPT",
     // Demoted 2026-09-06 when gpt-6-astra registered below — "Flagship /
     // deepest" is the current top GPT's copy only. Worded to stay distinct
     // from gpt-5.5's "Previous flagship GPT, deep reasoning": all three read
@@ -663,6 +686,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-6-astra",
     displayName: "GPT-6 Astra",
+    series: "GPT",
     desc: "Flagship GPT-6, deepest reasoning",
     tier: "premium",
     kieFormat: "responses",
@@ -730,6 +754,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-6-luna",
     displayName: "GPT-6 Luna",
+    series: "GPT",
     desc: "Fastest GPT-6, high-volume workloads",
     tier: "economy",
     kieFormat: "responses",
@@ -745,6 +770,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-6-sol",
     displayName: "GPT-6 Sol",
+    series: "GPT",
     desc: "Strong GPT-6, deep reasoning at lower cost",
     // Premium by decision (2026-10-08), not by unit cost — "Sol" is the
     // deep-reasoning rung of the family, and gpt-5.6-sol bills premium too.
@@ -762,6 +788,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-6.1-sol",
     displayName: "GPT-6.1 Sol",
+    series: "GPT",
     // Measured slow: 30–76 s for 500–1,100 output tokens (2026-10-08), roughly
     // twice gpt-6-sol on the same request — say so where the picker shows it.
     desc: "Newest GPT-6 Sol, thorough but slower",
@@ -783,6 +810,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "grok-4.6",
     displayName: "Grok 4.6",
+    series: "Grok",
     // Demoted 2026-10-08 when grok-4.7 registered — the flagship copy moved up.
     desc: "Previous Grok, strong reasoning",
     tier: "standard",
@@ -813,6 +841,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "grok-4.7",
     displayName: "Grok 4.7",
+    series: "Grok",
     desc: "xAI flagship, strong reasoning",
     tier: "standard",
     kieFormat: "responses",
@@ -837,6 +866,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-sonnet-5",
     displayName: "Claude Sonnet 5",
+    series: "Claude",
     // Demoted 2026-10-08 when claude-sonnet-5.5 registered.
     desc: "Previous Sonnet, near-Opus quality",
     tier: "standard",
@@ -856,6 +886,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-sonnet-5.5",
     displayName: "Claude Sonnet 5.5",
+    series: "Claude",
     desc: "Latest Sonnet, near-Opus quality at Sonnet cost",
     tier: "standard",
     kieFormat: "messages",
@@ -888,6 +919,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-opus-4.8",
     displayName: "Claude Opus 4.8",
+    series: "Claude",
     desc: "Previous-gen Opus, long-horizon work",
     tier: "premium",
     kieFormat: "messages",
@@ -906,6 +938,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-opus-5",
     displayName: "Claude Opus 5",
+    series: "Claude",
     // Demoted 2026-10-08 when claude-opus-5.5 registered.
     desc: "Previous Opus, deep agentic reasoning",
     tier: "premium",
@@ -931,6 +964,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-opus-5.5",
     displayName: "Claude Opus 5.5",
+    series: "Claude",
     // Positioned as Fable-class (decided 2026-10-08: offered wherever Fable is).
     desc: "Latest Opus, frontier-class reasoning",
     tier: "premium",
@@ -961,6 +995,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-fable-5",
     displayName: "Claude Fable 5",
+    series: "Claude",
     desc: "Frontier Claude above Opus, hardest problems",
     tier: "premium",
     kieFormat: "messages",
@@ -987,6 +1022,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "kimi-k3",
     displayName: "Kimi K3",
+    series: "Kimi",
     desc: "Moonshot flagship, 1M context, careful reasoning",
     tier: "premium",
     kieFormat: "responses",
@@ -1009,6 +1045,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "deepseek-v4.1-flash",
     displayName: "DeepSeek V4.1 Flash",
+    series: "DeepSeek",
     desc: "Very cheap and fast, solid reasoning",
     tier: "economy",
     kieFormat: "responses",

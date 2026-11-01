@@ -19,3 +19,12 @@ import { DEFAULT_TTS_PROVIDER, getMaxTtsChars, type TtsProvider } from "@nodaro/
 export function resolveOmittedTtsProvider(text: string): TtsProvider {
   return text.length <= getMaxTtsChars(DEFAULT_TTS_PROVIDER) ? DEFAULT_TTS_PROVIDER : "elevenlabs-turbo"
 }
+
+/**
+ * The speech model a text-to-speech request runs: the one it names (the legacy
+ * "elevenlabs" is turbo), else the omitted-provider rule above. The route's
+ * credit guard, its handler and the job's recorded model all read this.
+ */
+export function ttsModelOf(provider: string | undefined, text: string): string {
+  return provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? resolveOmittedTtsProvider(text))
+}

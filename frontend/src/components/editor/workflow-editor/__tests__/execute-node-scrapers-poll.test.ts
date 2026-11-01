@@ -158,6 +158,8 @@ vi.mock("../poll-job", () => ({
   pollJobWithNodeUpdate: vi.fn(),
   setSuppressToasts: () => {},
   pollScrapeJobOutput: (...args: unknown[]) => mockPollScrapeJobOutput(...args),
+  // The budget a background scrape is polled for (its own value: ./poll-job, @nodaro/render-rules).
+  SCRAPE_POLL_BUDGET_MS: 46 * 60_000,
   guardedToast: {
     info: (...args: unknown[]) => mockToastInfo(...args),
     success: (...args: unknown[]) => mockToastSuccess(...args),
@@ -257,7 +259,7 @@ describe("executeNode: meta-ads-scrape", () => {
     const out = await executeNode(adsNode, makeCtx({ signal }))
 
     expect(mockMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ mode: "search", query: "nike" }))
-    expect(mockPollScrapeJobOutput).toHaveBeenCalledWith("job-ads", "node_7", { signal })
+    expect(mockPollScrapeJobOutput).toHaveBeenCalledWith("job-ads", "node_7", { signal, budgetMs: 46 * 60_000 })
     expect(patches().at(-1)).toMatchObject({
       executionStatus: "completed",
       lastRunOutcome: "success",

@@ -10,6 +10,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { resolveEntityAspect } from "@nodaro/shared/entities"
 import { buildObjectPrompt } from "@nodaro/prompts/doctrine"
 import { formatZodError } from "../lib/zod-error.js"
@@ -167,7 +168,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
         expectedUpdatedAt: _expectedUpdatedAt,
         ...bodyWithoutAttach
       } = parsed.data
-      const baseInputData = buildJobInputData(bodyWithoutAttach, "generate-object")
+      const baseInputData = withResolvedModel(buildJobInputData(bodyWithoutAttach, "generate-object"), "generate-object")
 
       // ──────────────────────────────────────────────────────────────────────
       // Phase 1: Insert N pending jobs (always at least 1).

@@ -1,5 +1,6 @@
 import Fastify, { type FastifyRequest } from "fastify"
 import { requestLogSerializer } from "./lib/log-redaction.js"
+import { installLaneRequestScope } from "./lib/concurrency-lanes/request-scope.js"
 import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
@@ -495,6 +496,12 @@ export async function buildApp() {
     // and any future signed-token URLs.
     maxParamLength: 4096,
   })
+
+  // Concurrency lanes: every route handler runs in a request scope, so the
+  // provider and LLM funnels inside it know whose request it is, how long it
+  // may wait for a slot and when its client left (lib/concurrency-lanes/
+  // request-scope.ts). An onRoute hook: before any plugin or route registers.
+  installLaneRequestScope(app)
 
   // application/x-www-form-urlencoded body parser — required by OAuth-spec
   // clients (Claude.ai etc.) that POST to /v1/oauth/token with form-encoded

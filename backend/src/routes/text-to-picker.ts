@@ -16,7 +16,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
-import { withDescribeToPickerDefaults } from "./describe-to-picker.js"
+import { pickerAnalyzerProvider, withDescribeToPickerDefaults } from "./describe-to-picker.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { billedContentRefusal, billedProviderCost } from "../lib/llm-errors.js"
@@ -26,6 +26,7 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, type LlmPlannedCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { chargedFailureMessage, llmPrecheckBody, llmTextChars, plannedStructuredCall } from "../lib/llm-metered-route.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 
 /**
  * POST /v1/text-to-picker — free text in, pickerJson out.
@@ -163,16 +164,20 @@ export async function textToPickerRoutes(app: FastifyInstance) {
     // Same LLM call shape as describe-to-picker, so its defaults are applied
     // before the pre-check prices it — on this route's OWN credit rows.
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId(TEXT_TO_PICKER_CREDIT_FEATURE, withDescribeToPickerDefaults(req.body)), {
-        // Metered (D1): pre-checked at one attempt over the body's text (the
-        // legends are added at the reserve, which holds every batch). Undefined
-        // under the rollback: the tier row prices it as before.
-        computeCredits: (body) => {
-          const precheck = llmPrecheckBody(body)
-          const raw = (body ?? {}) as Record<string, unknown>
-          return precheck && llmPrecheckBaseCredits("text-to-picker", precheck, llmTextChars(raw.text, raw.instructions))
-        },
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId(TEXT_TO_PICKER_CREDIT_FEATURE, withDescribeToPickerDefaults(req.body)), {
+          // Metered (D1): pre-checked at one attempt over the body's text (the
+          // legends are added at the reserve, which holds every batch). Undefined
+          // under the rollback: the tier row prices it as before.
+          computeCredits: (body) => {
+            const precheck = llmPrecheckBody(body)
+            const raw = (body ?? {}) as Record<string, unknown>
+            return precheck && llmPrecheckBaseCredits("text-to-picker", precheck, llmTextChars(raw.text, raw.instructions))
+          },
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", { provider: pickerAnalyzerProvider }),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -219,7 +224,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "text-to-picker"),
+        input_data: { ...buildJobInputData(parsed.data, "text-to-picker"), resolvedModel: model.id },
       })
       if (jobError) {
         return sendInternalError(reply, req, jobError, "Failed to create job")

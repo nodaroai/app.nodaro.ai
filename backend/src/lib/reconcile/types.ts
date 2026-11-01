@@ -47,6 +47,10 @@ export const PROVIDER_KIND_VALUES = [
   // persisted cost instead and refunds only when nothing was spent.
   "copilot-turn",
   "pre-task",
+  // A background scrape's own Apify actor run (lib/background-scrape/
+  // scrape-run.ts persists the run id here): its handler re-attaches to it on
+  // a re-pick; the cron, with no plan to settle with, only sweeps it.
+  "apify-run",
 ] as const
 
 export type ProviderKind = (typeof PROVIDER_KIND_VALUES)[number]
@@ -153,6 +157,10 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // is a one-shot idempotent re-read of the cloud job, never a re-create,
   // so an early takeover costs one HTTP GET, not a double generation.
   "nodaro-cloud":             75 * MIN,
+  // At least one background-scrape attempt's worst case
+  // (BACKGROUND_SCRAPE_ATTEMPT_MAX_MS in @nodaro/render-rules — pinned in
+  // __tests__/types.test.ts); a re-attached attempt restamps the row.
+  "apify-run":                30 * MIN,
 }
 
 /** Smallest entry in `STALE_THRESHOLD_MS`. Drives the SQL pre-filter cutoff
@@ -203,6 +211,11 @@ const SYNC_KINDS: ReadonlySet<ProviderKind> = new Set([
   "heygen",
   // Beeble SwitchX: same — persisted job id, no recover handler → fail + refund.
   "beeble",
+  // A background scrape's Apify run: the id is persisted so a re-pick never
+  // starts a second run (the scrape's handler re-attaches to it, with the plan
+  // in its payload); the cron has no plan to settle with → a stale row is
+  // failed + refunded, never re-run.
+  "apify-run",
 ])
 
 export function isSyncKind(kind: ProviderKind): boolean {

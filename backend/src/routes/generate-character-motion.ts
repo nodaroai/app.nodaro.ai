@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
@@ -16,6 +17,10 @@ import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared/models"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio } from "@nodaro/shared/entities"
 import { buildMotionPrompt } from "@nodaro/prompts/doctrine"
 import { sendInternalError } from "../lib/http-errors.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
+import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
+
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),
   // Optional in v2: when the studio path runs (attachToCharacterId set), the
@@ -124,7 +129,17 @@ export function resolveFrontBodyAngleUrl(raw: unknown): string | null {
 export async function generateCharacterMotionRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-character-motion",
-    { preHandler: creditGuard((req) => extractProvider(req.body, "kling")) },
+    {
+      preHandler: [
+        creditGuard((req) => extractProvider(req.body, "kling")),
+        // The lane last, and only for a request that will make the LLM call.
+        laneGuard("llm", {
+          // The studio path drafts a missing description / motion with an LLM before it reserves.
+          when: (req) => { const b = rawBodyOf(req); return b.attachToCharacterId != null && (!isFilledText(b.description) || !isFilledText(b.motionDescription)) },
+          provider: () => llmProviderOf(ASSET_DESCRIPTION_MODEL),
+        }),
+      ],
+    },
     async (req, reply) => {
       // ───────────────────────────────────────────────────────────────────
       // 1. Authentication
@@ -203,7 +218,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         if (needsLlm) {
           try {
             const llm = await llmComplete({
-              modelId: "claude-sonnet-4.6",
+              modelId: ASSET_DESCRIPTION_MODEL,
               system: MOTION_DUAL_SYSTEM_PROMPT,
               messages: [
                 {
@@ -300,7 +315,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
           force_private: true,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "generate-character-motion"), prompt },
+          input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-character-motion"), "generate-character-motion"), prompt },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 

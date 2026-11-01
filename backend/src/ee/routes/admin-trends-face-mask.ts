@@ -34,6 +34,10 @@
  * (each person slot with slot marks: its colour and boxes), and approving
  * takes only a mask whose answer accounts for every outline sent
  * (`face_mask_not_outlined` otherwise), recording what each one ringed.
+ * A depth colormap (`depthColormap`, decided 2026-11-01; only when it changes
+ * what is drawn, `depthColormapSent`) is held back unless the loaded engine
+ * declares that map (`castSwap.depthColormaps`): an older one's make strips
+ * the key and would store the default render under the map's settings key.
  *
  * The scene description step (`steps.sceneDescription`): a make that
  * describes the clip (full depth, on an engine that stores a scene
@@ -75,12 +79,14 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { deriveJobSource } from "../../lib/job-source.js"
 import {
+  depthColormapSent,
   faceMaskMarksOf,
   faceMaskTargetOf,
   faceMaskingOn,
   faceMaskingSent,
   faceMaskingSourceOf,
   faceMeshOn,
+  loadedEngineDrawsDepthColormap,
   loadedEngineDrawsFaceMesh,
   loadedEngineDrawsRoleOutlines,
   loadedEngineMasksTarget,
@@ -301,9 +307,16 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       if (outlinesOn && !loadedEngineDrawsRoleOutlines()) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw role outlines yet: turn role outlines off, or wait for the engine.")
       }
+      // A depth colormap an engine does not declare: its make strips the key (the default render) under the
+      // colormap's settings key, so it is refused before anything is paid.
+      const colormap = depthColormapSent(draft.faceMasking)
+      if (colormap !== undefined && !loadedEngineDrawsDepthColormap(colormap)) {
+        return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth in ${colormap} yet: choose the default colormap, or wait for the engine.`)
+      }
       const settingsKey = faceMaskSettingsKey(draft)!
       // Full depth on an engine that describes the original clip as it makes it: the roles to name
-      // its people by, and the preview's start (scene-description.ts). Any other make is sent as before.
+      // its people by (scene-description.ts; never the preview's start: no preview text is made, a
+      // preview run cuts the whole clip's). Any other make is sent as before.
       const describe = source === "full-depth" && castSwap.storedSceneDescription === true ? sceneMakeFields(draft) : undefined
       // The scene description step, only on a make that describes the clip and to an engine that takes
       // steps; recorded as made with it (never part of the settings key: the stored text is still sent).
@@ -473,7 +486,7 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         ...(outlines && outlines.length > 0 ? { outlines } : {}),
         // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts),
         // and the scene description step its make was sent (absent: none).
-        ...(source === "full-depth" ? sceneDescriptionsOf(output, input) : {}),
+        ...(source === "full-depth" ? sceneDescriptionsOf(output) : {}),
         ...(source === "full-depth" && started.sceneStepKey ? { sceneStepKey: started.sceneStepKey } : {}),
       }
       // Stale on arrival helps no one: the recipes are checked before anything is stored.

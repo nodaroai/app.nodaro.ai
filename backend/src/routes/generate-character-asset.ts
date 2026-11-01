@@ -10,6 +10,7 @@ import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "..
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import type { WardrobeValue } from "@nodaro/prompts/pickers"
@@ -27,11 +28,14 @@ import { entityImageRefCap } from "../lib/entity-ref-cap.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import {
+  ASSET_DESCRIPTION_MODEL,
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
   ASSET_DESCRIPTION_LLM_OPTIONS,
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 
 // `headAngles` is an alias for `angles` (the legacy single-surface column,
 // now treated as head-angles in the UI). `bodyAngles` writes to the new
@@ -292,7 +296,17 @@ function buildVariantPrompt(
 export async function generateCharacterAssetRoutes(app: FastifyInstance) {
   // Quality/resolution-aware identifier via the shared resolver — the SAME
   // function the handler's DEBIT uses, so CHECK===DEBIT can't drift.
-  app.post("/v1/generate-character-asset", { preHandler: creditGuard((req) => resolveEntityImageCreditIdentifier(req.body)) }, async (req, reply) => {
+  app.post("/v1/generate-character-asset", {
+    preHandler: [
+      creditGuard((req) => resolveEntityImageCreditIdentifier(req.body)),
+      // The lane last, and only for a request that will make the LLM call.
+      laneGuard("llm", {
+        // The studio path drafts a missing description with an LLM before it reserves.
+        when: (req) => { const b = rawBodyOf(req); return b.attachToCharacterId != null && !isFilledText(b.description) },
+        provider: () => llmProviderOf(ASSET_DESCRIPTION_MODEL),
+      }),
+    ],
+  }, async (req, reply) => {
     // ─────────────────────────────────────────────────────────────────────
     // 1. Authentication
     // ─────────────────────────────────────────────────────────────────────
@@ -386,7 +400,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       if (!parsed.data.description) {
         try {
           const llm = await llmComplete({
-            modelId: "claude-sonnet-4.6",
+            modelId: ASSET_DESCRIPTION_MODEL,
             system: ASSET_DESCRIPTION_SYSTEM_PROMPT,
             messages: [
               {
@@ -512,7 +526,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
         status: "pending",
         // `subjectMinor` is persisted, not just enqueued — a floored job has to
         // be auditable after the fact from the jobs row alone.
-        input_data: { ...buildJobInputData(parsed.data, "generate-character-asset"), prompt, subjectMinor },
+        input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-character-asset"), "generate-character-asset"), prompt, subjectMinor },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

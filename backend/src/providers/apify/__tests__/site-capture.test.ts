@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MissingProviderKeyError } from "../../provider-keys.js"
 import { knownCaptureCode, SITE_CAPTURE_MESSAGES } from "../../../lib/site-capture-codes.js"
+import { callBackedRuns } from "./fake-actor-run.js"
 
 const h = vi.hoisted(() => ({
   noKey: false,
@@ -14,6 +15,7 @@ const h = vi.hoisted(() => ({
   dsDelete: vi.fn(async () => undefined),
   rqDelete: vi.fn(async () => undefined),
   deleteAfter: true,
+  runs: null as unknown as import("./fake-actor-run.js").CallBackedRuns,
 }))
 
 vi.mock("../client.js", async (importOriginal) => {
@@ -23,8 +25,8 @@ vi.mock("../client.js", async (importOriginal) => {
     getApifyClient: () => {
       if (h.noKey) throw new MissingProviderKeyError("APIFY_API_TOKEN")
       return {
-        actor: () => ({ call: h.call }),
-        run: () => ({ abort: h.abort }),
+        actor: () => ({ call: h.call, start: h.runs.start }),
+        run: (id: string) => h.runs.runOf(id, { abort: h.abort }),
         dataset: () => ({ listItems: h.listItems, delete: h.dsDelete }),
         keyValueStore: () => ({ getRecord: h.getRecord, delete: h.kvDelete }),
         requestQueue: () => ({ listRequests: h.listRequests, delete: h.rqDelete }),
@@ -82,6 +84,7 @@ const record = (key: string, bytes = Buffer.from(key)) => ({ key, value: bytes, 
 const URL_ = "https://example.com/"
 
 beforeEach(() => {
+  h.runs = callBackedRuns((input, opts) => h.call(input, opts))
   vi.clearAllMocks()
   h.noKey = false
   h.option = "B-prime"
@@ -118,9 +121,9 @@ describe("buildSiteCaptureInput", () => {
 })
 
 describe("runSiteCapture", () => {
-  it("calls the actor with the pinned build, memory, timeout, wait and no log streaming", async () => {
+  it("starts the actor with the pinned build, memory and timeout, then waits on that run", async () => {
     await runSiteCapture({ url: URL_, maxStills: 8 })
-    expect(h.call).toHaveBeenCalledWith(expect.objectContaining({ url: URL_, maxStills: 8 }), { build: "1.2.3", memory: 4096, timeout: 150, waitSecs: 170, log: null })
+    expect(h.call).toHaveBeenCalledWith(expect.objectContaining({ url: URL_, maxStills: 8 }), { build: "1.2.3", memory: 4096, timeout: 150, waitSecs: 170 })
   })
 
   it("reads the full page and every still by key", async () => {
@@ -211,10 +214,12 @@ describe("runSiteCapture", () => {
     expect(run.warnings).toContain("full_page_missing")
   })
 
-  it("deletes the run's storages after a completed capture, never after a failed one; a failed delete is only logged", async () => {
+  it("deletes the run's storages only when its caller asks — never inside the capture (a re-attach re-reads them); a failed delete is only logged", async () => {
     const warn = vi.fn()
     h.kvDelete.mockRejectedValueOnce(new Error("gone"))
-    await runSiteCapture({ url: URL_, maxStills: 8 }, { warn })
+    const run = await runSiteCapture({ url: URL_, maxStills: 8 }, { warn })
+    expect([h.kvDelete, h.dsDelete, h.rqDelete].every((f) => f.mock.calls.length === 0)).toBe(true)
+    await run.deleteStorages()
     expect([h.kvDelete, h.dsDelete, h.rqDelete].every((f) => f.mock.calls.length === 1)).toBe(true)
     expect(warn).toHaveBeenCalledWith(expect.objectContaining({ runId: "run-1" }), expect.any(String))
     vi.clearAllMocks()
@@ -230,6 +235,7 @@ describe("runSiteCapture", () => {
     })
     const run = await runSiteCapture({ url: URL_, maxStills: 8 }, { warn })
     expect(run.providerRunId).toBe("run-1")
+    await expect(run.deleteStorages()).resolves.toBeUndefined()
     expect(h.kvDelete).toHaveBeenCalledTimes(1)
     expect(h.dsDelete).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledTimes(1)
@@ -237,7 +243,8 @@ describe("runSiteCapture", () => {
 
   it("keeps the storages when deletion is switched off", async () => {
     h.deleteAfter = false
-    await runSiteCapture({ url: URL_, maxStills: 8 })
+    const run = await runSiteCapture({ url: URL_, maxStills: 8 })
+    await run.deleteStorages()
     expect(h.kvDelete).not.toHaveBeenCalled()
   })
 

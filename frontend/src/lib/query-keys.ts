@@ -325,38 +325,16 @@ export const queryKeys = {
       ["admin", "users", page, pageSize, sortBy ?? "created_at", sortDir ?? "desc", search ?? ""] as const,
     /** One account, for the users page's direct link — under "users", so what refreshes the list refreshes it. */
     user: (id: string) => ["admin", "users", "one", id] as const,
-    jobs: (
-      page: number,
-      pageSize: number,
-      status?: string,
-      userId?: string,
-      excludeUserIds?: ReadonlyArray<string>,
-    ) =>
-      [
-        "admin",
-        "jobs",
-        page,
-        pageSize,
-        status ?? "",
-        userId ?? "",
-        [...(excludeUserIds ?? [])].sort().join(","),
-      ] as const,
+    // `filters` is the serialized filter set (the admin Jobs page's
+    // `jobFiltersKey`); `excludeUserIds` the ids the request leaves out.
+    jobs: (page: number, pageSize: number, filters: string, excludeUserIds?: ReadonlyArray<string>) =>
+      ["admin", "jobs", page, pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")] as const,
     // Infinite (Gallery view) counterpart of `jobs` — page is managed inside
     // useInfiniteQuery, so it is not part of the key.
-    jobsInfinite: (
-      pageSize: number,
-      status?: string,
-      userId?: string,
-      excludeUserIds?: ReadonlyArray<string>,
-    ) =>
-      [
-        "admin",
-        "jobs-infinite",
-        pageSize,
-        status ?? "",
-        userId ?? "",
-        [...(excludeUserIds ?? [])].sort().join(","),
-      ] as const,
+    jobsInfinite: (pageSize: number, filters: string, excludeUserIds?: ReadonlyArray<string>) =>
+      ["admin", "jobs-infinite", pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")] as const,
+    /** The platform filter's choices. */
+    jobSources: () => ["admin", "job-sources"] as const,
     usersLite: () => ["admin", "users-lite"] as const,
     usageLogs: (
       page: number,

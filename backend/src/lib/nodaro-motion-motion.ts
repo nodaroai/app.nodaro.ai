@@ -28,7 +28,17 @@
 import { z } from "zod"
 import { CAST_SWAP_PROMPT_STYLES, type CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { CastSwapStyle } from "@nodaro/shared/models"
-import { faceMaskingMotionSchema, faceMaskingOn, faceMaskingSourceOf, faceMeshOn, fullDepthSceneOf, type FaceMasking, type FaceMaskingScene } from "./cast-swap-face-masking.js"
+import {
+  depthColormapSent,
+  faceMaskingMotionSchema,
+  faceMaskingOn,
+  faceMaskingSourceOf,
+  faceMeshOn,
+  fullDepthSceneOf,
+  type FaceMasking,
+  type FaceMaskingDepthColormap,
+  type FaceMaskingScene,
+} from "./cast-swap-face-masking.js"
 import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_MOTION_KEY = "nodaro_motion_motion"
@@ -142,7 +152,40 @@ export function directRunDrawsFaceMesh(
   preciseMasking: FaceMasking | undefined,
   opts: { readonly shotList?: boolean } = {},
 ): boolean {
-  const masking =
-    style === "motion" && opts.shotList ? shotListFlexMasking(entry?.masking) : style === "motion" && entry?.masking ? entry.masking : preciseMasking
+  const masking = directRunMasking(style, entry, preciseMasking, opts)
   return !!masking && faceMaskingOn(masking) && faceMeshOn(masking)
+}
+
+/**
+ * The masking a direct run of this engine and style is drawn with: Precise —
+ * the engine's masking setting (`preciseMasking`); Motion — the Motion
+ * setting's own masking, else the Precise one; on an engine with the shot
+ * list, Motion's Full depth (`shotListFlexMasking`).
+ */
+function directRunMasking(
+  style: CastSwapStyle,
+  entry: NodaroMotionMotionEntry | undefined,
+  preciseMasking: FaceMasking | undefined,
+  opts: { readonly shotList?: boolean },
+): FaceMasking | undefined {
+  return style === "motion" && opts.shotList ? shotListFlexMasking(entry?.masking) : style === "motion" && entry?.masking ? entry.masking : preciseMasking
+}
+
+/**
+ * What a direct run's prompt-parts request says of its depth look
+ * (`PromptPartsRequest.depthColormap`): the colormap its masking draws its
+ * depth with when it is not the source's default (`depthColormapSent`, the
+ * masking on), with `maskFill: "depth"` on a Faces hidden depth fill;
+ * nothing otherwise (the request as before).
+ */
+export function directRunDepthLook(
+  style: CastSwapStyle,
+  entry: NodaroMotionMotionEntry | undefined,
+  preciseMasking: FaceMasking | undefined,
+  opts: { readonly shotList?: boolean } = {},
+): { depthColormap?: FaceMaskingDepthColormap; maskFill?: "depth" } {
+  const masking = directRunMasking(style, entry, preciseMasking, opts)
+  const depthColormap = masking && faceMaskingOn(masking) ? depthColormapSent(masking) : undefined
+  if (!depthColormap) return {}
+  return { depthColormap, ...(faceMaskingSourceOf(masking!) === "faces" ? { maskFill: "depth" as const } : {}) }
 }

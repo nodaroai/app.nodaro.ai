@@ -29,7 +29,7 @@ const facetSchema = z.object({ facetText: z.string() })
 
 /** Fast, reliable structured-output model for the extraction (Anthropic
  *  forced-tool path → no JSON drift). Overridable for tests. */
-const FACET_MODEL = "claude-haiku-5.5"
+export const FACET_MODEL = "claude-haiku-5.5"
 /** Short timeout so a hung extractor can't stall the generate-character POST;
  *  on timeout we fall back to the full source text. */
 const FACET_TIMEOUT_MS = 20_000
@@ -43,14 +43,32 @@ function facetSystemPrompt(instruction: string): string {
   ].join(" ")
 }
 
+/** The facet an injection is extracted with by the LLM; null when it needs no
+ *  call — no source text, `full`, or an unrecognised facet (injected verbatim). */
+function extractedFacet(inj: Partial<FacetInjection>): ReturnType<typeof getCharacterFacet> | null {
+  if (typeof inj.sourceText !== "string" || !inj.sourceText.trim() || typeof inj.facet !== "string") return null
+  if (inj.facet === DEFAULT_CHARACTER_FACET) return null
+  return getCharacterFacet(inj.facet) ?? null
+}
+
+/**
+ * Whether resolving `facetInjections` — the raw, unvalidated request value —
+ * makes any LLM call (what the route's lane guard asks before validation).
+ * Never throws.
+ */
+export function facetInjectionsNeedLlm(facetInjections: unknown): boolean {
+  if (!Array.isArray(facetInjections)) return false
+  return facetInjections.some((inj) => inj !== null && typeof inj === "object" && extractedFacet(inj as Partial<FacetInjection>) !== null)
+}
+
 /** Extract one facet's prompt fragment, falling back to the full text on any
  *  failure or empty result. `full`/unknown facets skip the LLM entirely. */
 async function resolveOne(inj: FacetInjection): Promise<string> {
   const text = inj.sourceText?.trim()
   if (!text) return ""
-  const facet = getCharacterFacet(inj.facet)
+  const facet = extractedFacet(inj)
   // "full" and unrecognised facets inject the whole description verbatim.
-  if (!facet || inj.facet === DEFAULT_CHARACTER_FACET) return text
+  if (!facet) return text
   try {
     const { output } = await llmCompleteStructured(
       {

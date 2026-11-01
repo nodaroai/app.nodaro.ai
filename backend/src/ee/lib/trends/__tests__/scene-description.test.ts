@@ -4,11 +4,12 @@
  *
  *  - the face mask keeps both texts (≤ 4000 each), and they are not part of
  *    the settings key, so a clip with a description is the same clip;
- *  - a full-depth run whose scene is a description sends the stored text with
- *    the source window it covers: a preview run the preview's text and its
- *    4 s window (the preview's text while it was made for this start, else
- *    the whole clip's text, cut by the engine), a full run the whole clip's
- *    text and the whole clip;
+ *  - a full-depth run whose scene is a description sends the whole clip's
+ *    stored text with the whole clip as its window, a preview run too (the
+ *    engine cuts the text to the 4 s it runs; a preview text an older make
+ *    stored is never sent, decided 2026-11-01);
+ *  - the make is never asked for a preview text (no `previewStart`), and an
+ *    older make's preview text is not stored at approval;
  *  - nothing is sent for another scene, another clip preparation, or a clip
  *    made before descriptions existed;
  *  - both keys are stripped for an engine that does not declare
@@ -105,21 +106,18 @@ describe("storage", () => {
     expect(sceneDescriptionText(7)).toBeUndefined()
     expect(sceneDescriptionsOf({ sceneDescription: " A. ", previewSceneDescription: null })).toEqual({ sceneDescription: "A." })
     expect(sceneDescriptionsOf({})).toEqual({})
-    // The preview's start the make recorded, kept beside a preview text only.
-    expect(sceneDescriptionsOf({ previewSceneDescription: "P." }, { previewStart: 2 })).toEqual({ previewSceneDescription: "P.", previewSceneDescriptionStart: 2 })
-    expect(sceneDescriptionsOf({ sceneDescription: "A." }, { previewStart: 2 })).toEqual({ sceneDescription: "A." })
-    expect(sceneDescriptionsOf({ previewSceneDescription: "P." }, { previewStart: "2" })).toEqual({ previewSceneDescription: "P." })
+    // An older make's preview text is not stored: no run sends one.
+    expect(sceneDescriptionsOf({ sceneDescription: "A.", previewSceneDescription: "P." })).toEqual({ sceneDescription: "A." })
+    expect(sceneDescriptionsOf({ previewSceneDescription: "P." })).toEqual({})
   })
 
-  it("the make names each role by its role name and kind, with the preview's start", () => {
-    expect(sceneMakeFields(data())).toEqual({
-      roles: [
-        { name: "the woman on the left", kind: "person" },
-        { name: "the dog", kind: "pet" },
-      ],
-      previewStart: 3,
-    })
-    expect(sceneMakeFields(data({ previewStart: null }))).not.toHaveProperty("previewStart")
+  it("the make names each role by its role name and kind, and never asks for a preview text (no preview start)", () => {
+    const roles = [
+      { name: "the woman on the left", kind: "person" },
+      { name: "the dog", kind: "pet" },
+    ]
+    expect(sceneMakeFields(data())).toEqual({ roles })
+    expect(sceneMakeFields(data({ previewStart: null }))).toEqual({ roles })
   })
 })
 
@@ -130,25 +128,20 @@ describe("compose", () => {
     expect(body.sceneDescriptionWindow).toEqual({ fromSec: 0, toSec: 12 })
   })
 
-  it("a preview run sends the preview's text and its 4 s window while the text was made for this start", () => {
+  it("a preview run sends the whole clip's text with the whole clip's window, even beside a preview text made for this start", () => {
+    // The text's own stretch, never the preview's: the engine cuts it to the 4 s it runs (its `previewStart` + 4 s).
     const { body } = run(data(), true)
-    expect(body.sceneDescription).toBe(PREVIEW_TEXT)
-    expect(body.sceneDescriptionWindow).toEqual({ fromSec: 3, toSec: 7 })
+    expect(body.sceneDescription).toBe(FULL_TEXT)
+    expect(body.sceneDescriptionWindow).toEqual({ fromSec: 0, toSec: 12 })
+    expect(body.previewStart).toBe(3)
   })
 
-  it("a preview start moved since the make sends the whole clip's text, cut to the new window", () => {
-    const { body } = run(data({ previewStart: 5 }), true)
-    expect(body.sceneDescription).toBe(FULL_TEXT)
-    expect(body.sceneDescriptionWindow).toEqual({ fromSec: 5, toSec: 9 })
-    // A start never recorded reads as another start.
-    const unrecorded = run(data({}, { previewSceneDescriptionStart: undefined }), true).body
-    expect(unrecorded.sceneDescription).toBe(FULL_TEXT)
-  })
-
-  it("no preview text sends the whole clip's text, cut to the preview's window", () => {
-    const { body } = run(data({}, { previewSceneDescription: undefined, previewSceneDescriptionStart: undefined }), true)
-    expect(body.sceneDescription).toBe(FULL_TEXT)
-    expect(body.sceneDescriptionWindow).toEqual({ fromSec: 3, toSec: 7 })
+  it("whatever the preview's start or stored text, a preview sends the same text and window", () => {
+    for (const d of [data({ previewStart: 5 }), data({}, { previewSceneDescriptionStart: undefined }), data({}, { previewSceneDescription: undefined, previewSceneDescriptionStart: undefined })]) {
+      const { body } = run(d, true)
+      expect(body.sceneDescription).toBe(FULL_TEXT)
+      expect(body.sceneDescriptionWindow).toEqual({ fromSec: 0, toSec: 12 })
+    }
   })
 
   it("a full run is the same whatever the preview's text and start", () => {
@@ -156,8 +149,11 @@ describe("compose", () => {
     expect(run(data({ previewStart: 5 })).body.sceneDescriptionWindow).toEqual({ fromSec: 0, toSec: 12 })
   })
 
-  it("the window is held to the clip", () => {
-    expect(storedSceneDescriptionFor({ ...data(), previewStart: 10 }, FULL, true)!.sceneDescriptionWindow).toEqual({ fromSec: 10, toSec: 12 })
+  it("a ~5 s clip's preview sends the whole clip's window, so the engine cuts it (given the preview's, it would take the text as cut already)", () => {
+    // A 5 s clip, preview from 1 s: the text's shots end at 5, within 1.5 s past 4 s.
+    const short = data({ source: { videoUrl: SRC, durationSec: 5 }, previewStart: 1 }, { sceneDescription: "A kitchen.\n0-2s: a.\n2-5s: b." })
+    expect(storedSceneDescriptionFor(short, FULL, true)!.sceneDescriptionWindow).toEqual({ fromSec: 0, toSec: 5 })
+    // No preview: a preview run sends none.
     expect(storedSceneDescriptionFor({ ...data(), previewStart: null }, FULL, true)).toBeUndefined()
   })
 
@@ -175,6 +171,10 @@ describe("compose", () => {
     const preview = run(data({}, { sceneDescription: undefined, previewSceneDescription: undefined }), true).body
     expect(preview).not.toHaveProperty("sceneDescription")
     expect(preview).not.toHaveProperty("sceneDescriptionWindow")
+    // A preview text alone is never sent: the run describes the clip itself, as with none.
+    const previewOnly = run(data({}, { sceneDescription: undefined }), true).body
+    expect(previewOnly).not.toHaveProperty("sceneDescription")
+    expect(previewOnly).not.toHaveProperty("sceneDescriptionWindow")
   })
 
   it("another clip preparation never sends one, whatever the face mask holds", () => {
@@ -190,8 +190,8 @@ describe("the engine's declaration", () => {
     setPluginSupports({ castSwap: { ...SUPPORTS, storedSceneDescription: true } as never })
     const composed = run(data(), true)
     withoutUnsupportedFields(composed)
-    expect(composed.body.sceneDescription).toBe(PREVIEW_TEXT)
-    expect(composed.body.sceneDescriptionWindow).toEqual({ fromSec: 3, toSec: 7 })
+    expect(composed.body.sceneDescription).toBe(FULL_TEXT)
+    expect(composed.body.sceneDescriptionWindow).toEqual({ fromSec: 0, toSec: 12 })
   })
 
   it("any other engine gets exactly the body it got before (both stripped)", () => {
@@ -248,10 +248,10 @@ describe("one name per run: a run that sends the stored description names each r
   it("a Full depth preview with a stored description sends each role's roleName, never its previewRoleName", () => {
     setPluginSupports(DECLARED)
     const body = sent(renamed(), true)
-    expect(body.sceneDescription).toBe(PREVIEW_TEXT)
+    expect(body.sceneDescription).toBe(FULL_TEXT)
     expect(names(body)).toEqual(FULL_NAMES)
     expect(JSON.stringify(body)).not.toContain("PREVIEW")
-    // The whole clip's text, cut to a moved preview window, is the stored text too.
+    // A moved preview window: the same whole clip's text.
     const moved = sent(renamed({ previewStart: 5 }), true)
     expect(moved.sceneDescription).toBe(FULL_TEXT)
     expect(names(moved)).toEqual(FULL_NAMES)

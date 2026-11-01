@@ -35,9 +35,9 @@
 // their box must cover that, not only the face (`roleOutlines.target`).
 //
 // Full depth with its scene from a description: the approved clip's stored
-// scene descriptions, editable (SceneDescriptionEditor.tsx). When they were
+// scene description, editable (SceneDescriptionEditor.tsx). When it was
 // made with another scene description step than the draft's
-// (`sceneStepChanged`), they are still sent, and the panel says to make the
+// (`sceneStepChanged`), it is still sent, and the panel says to make the
 // mask again beside Make again.
 
 import { useEffect, useState } from "react"
@@ -103,10 +103,11 @@ interface Props {
   readonly keepPeople?: boolean
   /**
    * Full depth with its scene from a description: the approved clip's stored
-   * descriptions are shown for editing (SceneDescriptionEditor.tsx);
-   * `previewStart`, the saved draft's (null: no preview). Absent: not shown.
+   * description is shown for editing (SceneDescriptionEditor.tsx);
+   * `previewStart`, the saved draft's (null: no preview), and the source's
+   * length, which hold the preview's window. Absent: not shown.
    */
-  readonly sceneDescription?: { readonly previewStart: number | null }
+  readonly sceneDescription?: { readonly previewStart: number | null; readonly durationSec?: number }
   /** The saved setting draws role outlines (Faces hidden): what it covers, for the boxes' hint. Absent: off. */
   readonly roleOutlines?: { readonly target: string }
 }
@@ -273,6 +274,7 @@ export function FaceMaskPanel({
           trendId={trendId}
           faceMask={faceMask}
           previewStart={sceneDescription.previewStart}
+          durationSec={sceneDescription.durationSec}
           dirty={dirty}
           revision={revision}
           onRevision={onRevision}

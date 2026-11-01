@@ -38,10 +38,11 @@ import { entityHandlers } from "../../../workers/handlers/entity.js"
 import { referenceSheetHandlers } from "../../../workers/handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "../../../workers/handlers/motion-graphics-lottie.js"
 import { videoFaceMeshHandlers } from "../../../workers/handlers/video-face-mesh.js"
+import { backgroundScrapeHandlers } from "../../../workers/handlers/background-scrape.js"
 import { FINALIZE_JOB_TYPES, NOT_GENERIC_RECOVERABLE } from "../../job-finalize.js"
 import { ENTITY_MEDIA_JOB_SPECS } from "../../entity-finalize.js"
 
-/** The maps video-worker.ts spreads statically into `allHandlers` (the ten first, then Video Face Mesh's). */
+/** The maps video-worker.ts spreads statically into `allHandlers` (the ten first, then Video Face Mesh's and the background scrapes'). */
 const STATIC_HANDLER_JOB_NAMES: readonly string[] = Object.keys({
   ...imageAIHandlers,
   ...videoAIHandlers,
@@ -54,6 +55,7 @@ const STATIC_HANDLER_JOB_NAMES: readonly string[] = Object.keys({
   ...referenceSheetHandlers,
   ...motionGraphicsLottieHandlers,
   ...videoFaceMeshHandlers,
+  ...backgroundScrapeHandlers,
 })
 
 /** DAG node types that reach a jobs row with an async provider_kind. Pinned —

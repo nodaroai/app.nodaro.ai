@@ -141,12 +141,21 @@ describe("runStructuredCompletion", () => {
 
 describe("structuredJobInputData", () => {
   it("stores a digest of the system prompt and the schema's name+bytes, never the texts", () => {
-    const stored = structuredJobInputData(body({ schemaName: "studio_production", origin: "studio" }))
+    const stored = structuredJobInputData(body({ schemaName: "studio_production", origin: "studio" }), { model: { id: "gemini-3.8-flash" } })
     expect(stored.type).toBe("llm-structured")
     expect(stored.origin).toBe("studio")
     expect(stored.input).toBe("A rainy chase through Rome.")
     expect(stored.system).toMatchObject({ chars: "You plan productions.".length })
     expect((stored.system as { sha256: string }).sha256).toHaveLength(64)
     expect(stored.jsonSchema).toEqual({ name: "studio_production", bytes: Buffer.byteLength(JSON.stringify(SCHEMA), "utf8") })
+  })
+
+  it("records the model the call runs — the chat default when the body names none", () => {
+    const b = body({})
+    expect(b.llmModel).toBeUndefined()
+    const prepared = prepareStructuredRequest(b)
+    if (!prepared.ok) throw new Error("expected the body to prepare")
+    expect(prepared.model.id).toBe(LLM_FEATURE_DEFAULTS["llm-chat"])
+    expect(structuredJobInputData(b, prepared).resolvedModel).toBe(LLM_FEATURE_DEFAULTS["llm-chat"])
   })
 })

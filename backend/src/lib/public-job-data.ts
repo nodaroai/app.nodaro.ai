@@ -31,6 +31,29 @@ export function redactPrivateJobOutput<T>(output: T): T {
   return redactPrivateJobData(withoutServerOnlyKeys(output))
 }
 
+/**
+ * The `input_data` keys a NON-ADMIN never reads on a job: the orchestrator's
+ * bookkeeping (`userId`, `jobId`, `usageLogId`, `force_private` — it stores the
+ * full worker payload) and the model fields — `provider` (the model id on
+ * character/entity jobs) and `resolvedModel` (the model the job ran). Admins
+ * read them for forensics, so they keep them.
+ */
+const NON_ADMIN_HIDDEN_INPUT_KEYS = ["userId", "jobId", "usageLogId", "force_private", "provider", "resolvedModel"] as const
+
+/**
+ * A job's `input_data` as a non-admin reads it: a copy without
+ * `NON_ADMIN_HIDDEN_INPUT_KEYS`. The one list for every owner-facing read of a
+ * job's input (`sanitizeJobForPublic`, a standalone job's `triggerData` on the
+ * execution reads). Anything that is not a plain object passes through
+ * unchanged; the input is never mutated.
+ */
+export function nonAdminJobInputData<T>(inputData: T): T {
+  if (inputData === null || typeof inputData !== "object" || Array.isArray(inputData)) return inputData
+  const cleaned: Record<string, unknown> = { ...(inputData as Record<string, unknown>) }
+  for (const key of NON_ADMIN_HIDDEN_INPUT_KEYS) delete cleaned[key]
+  return cleaned as T
+}
+
 // ── child jobs and trend runs: what a NON-ADMIN job read leaves out ─────────
 
 /**

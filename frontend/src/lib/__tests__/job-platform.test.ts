@@ -1,6 +1,40 @@
 // @vitest-environment node
+// @test-watches supabase/tests/fixtures/job-platform-cases.json
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { describe, it, expect } from "vitest"
 import { jobPlatform } from "../job-platform"
+
+/**
+ * The case table is shared with the SQL mirror (`public.job_platform_key`,
+ * migration 575, proved against the same fixture), so the admin Jobs list's
+ * server-side platform filter groups a job exactly as this label does. App
+ * cases are skipped here: the server keys a developer app by its id, this
+ * function by the app's resolved name.
+ */
+interface PlatformCase {
+  label: string
+  source: string | null
+  sourceDetail: string | null
+  expected: string
+}
+const CASES = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL("../../../../supabase/tests/fixtures/job-platform-cases.json", import.meta.url)),
+    "utf8",
+  ),
+) as PlatformCase[]
+const SHARED_CASES = CASES.filter((c) => c.source !== "app")
+
+describe("jobPlatform — one key rule for SQL and TypeScript", () => {
+  it("has cases to check", () => expect(SHARED_CASES.length).toBeGreaterThan(4))
+
+  for (const c of SHARED_CASES) {
+    it(c.label, () => {
+      expect(jobPlatform({ source: c.source, source_detail: c.sourceDetail }).key).toBe(c.expected)
+    })
+  }
+})
 
 describe("jobPlatform", () => {
   it("maps a Nodaro web subdomain to its product", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { redactPrivateJobData } from "../public-job-data.js"
+import { nonAdminJobInputData, redactPrivateJobData } from "../public-job-data.js"
 
 describe("redactPrivateJobData", () => {
   it("removes unscoredUrl recursively while preserving siblings and arrays", () => {
@@ -94,5 +94,21 @@ describe("redactPrivateJobData — server-only input_data keys", () => {
     const sourceAsset = { kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" }
     const row = { input_data: { type: "cast-swap", preparedPreview: true, sourceAsset, __videoUrl: "https://x/clip.mp4" }, output_data: { videoUrl: "v", sourceAsset } }
     expect(redactPrivateJobData(row)).toEqual({ input_data: { type: "cast-swap", preparedPreview: true, sourceAsset }, output_data: { videoUrl: "v", sourceAsset } })
+  })
+})
+
+describe("nonAdminJobInputData", () => {
+  it("drops the bookkeeping and the model fields, keeps the rest, and leaves the input untouched", () => {
+    const input = { type: "generate-image", prompt: "a cat", userId: "u", jobId: "j", usageLogId: "l", force_private: true, provider: "gpt-image-2", resolvedModel: "gpt-image-2-i2i" }
+    expect(nonAdminJobInputData(input)).toEqual({ type: "generate-image", prompt: "a cat" })
+    expect(input.provider).toBe("gpt-image-2")
+    expect(input.resolvedModel).toBe("gpt-image-2-i2i")
+  })
+
+  it("passes anything that is not a plain object through", () => {
+    expect(nonAdminJobInputData(null)).toBeNull()
+    expect(nonAdminJobInputData(undefined)).toBeUndefined()
+    expect(nonAdminJobInputData(["provider"])).toEqual(["provider"])
+    expect(nonAdminJobInputData("x")).toBe("x")
   })
 })

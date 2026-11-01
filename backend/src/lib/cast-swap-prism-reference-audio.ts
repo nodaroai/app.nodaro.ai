@@ -11,7 +11,15 @@
  * - `"voice"`: only the singing or speaking voice, split from the music,
  *   pitched.
  * - `"none"`: a silent reference.
- * A resolution the setting leaves out is `"full"`. In every mode the original
+ * - `"one-tone"`: the clip's audio flattened to one steady tone (keeps the
+ *   words' rhythm for lip sync without the melody), unpitched.
+ * - `"octave"`: the clip's audio raised one octave (+12 semitones): keeps the
+ *   melody and the words for lip sync.
+ * The last two are offered only by an engine that lists them in
+ * `castSwap.prismReferenceAudioModes` (`DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`):
+ * any other engine is sent the full audio for them (no key), and a shared
+ * setting or a published trend naming one needs every environment's engine
+ * to list it. A resolution the setting leaves out is `"full"`. In every mode the original
  * audio goes back on the final video.
  *
  * Set by an admin, never by the person running it: per trend
@@ -41,13 +49,56 @@ import { z } from "zod"
 import { CAST_SWAP_ENGINE_WHEN_OMITTED, CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom } from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
-export const CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES = ["full", "voice", "none"] as const
+export const CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES = ["full", "voice", "none", "one-tone", "octave"] as const
 
 /** One resolution's reference audio. */
 export type CastSwapPrismReferenceAudioMode = (typeof CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES)[number]
 
 /** What a run sends of a mode: every mode but the default. */
 export type CastSwapPrismReferenceAudioModeSent = Exclude<CastSwapPrismReferenceAudioMode, "full">
+
+/**
+ * The modes an engine takes only when it lists them in
+ * `castSwap.prismReferenceAudioModes` (0.426.0): an engine from before them
+ * would refuse the run (its schema knows only "full", "voice" and "none").
+ * "voice" and "none" keep their rule (`prismReferenceAudio` /
+ * `prismReferenceAudioPerResolution`), so nothing chosen before them moves.
+ */
+export const DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES = ["one-tone", "octave"] as const satisfies readonly CastSwapPrismReferenceAudioModeSent[]
+
+export type CastSwapPrismReferenceAudioDeclaredOnlyMode = (typeof DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES)[number]
+
+/** Whether `mode` is offered only by an engine that lists it (`DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`). */
+export function isDeclaredOnlyPrismReferenceAudioMode(mode: unknown): mode is CastSwapPrismReferenceAudioDeclaredOnlyMode {
+  return (DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES as readonly unknown[]).includes(mode)
+}
+
+/** The part of an engine's `castSwap` declaration the reference audio reads. */
+export interface PrismReferenceAudioSupports {
+  readonly prismReferenceAudio?: boolean
+  readonly prismReferenceAudioPerResolution?: boolean
+  readonly prismReferenceAudioModes?: readonly string[]
+}
+
+/**
+ * Whether a (loaded or recorded) engine takes `mode` on a Prism run: "full"
+ * always (it sends no key); "voice" and "none" on an engine that takes the
+ * setting at all; a declared-only mode only when the engine lists it in
+ * `castSwap.prismReferenceAudioModes`.
+ */
+export function engineTakesPrismReferenceAudioMode(cs: PrismReferenceAudioSupports | undefined, mode: CastSwapPrismReferenceAudioMode): boolean {
+  if (mode === "full") return true
+  if (cs?.prismReferenceAudio !== true && cs?.prismReferenceAudioPerResolution !== true) return false
+  return isDeclaredOnlyPrismReferenceAudioMode(mode) ? (cs.prismReferenceAudioModes ?? []).includes(mode) : true
+}
+
+/** The declared-only modes `choice` names at some resolution (each once, in `DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES` order). */
+export function declaredOnlyPrismReferenceAudioModesOf(
+  choice: CastSwapPrismReferenceAudio | null | undefined,
+): CastSwapPrismReferenceAudioDeclaredOnlyMode[] {
+  if (!choice) return []
+  return DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES.filter((mode) => CAST_SWAP_PRISM_RESOLUTIONS.some((r) => choice[r] === mode))
+}
 
 /** The resolutions a Prism run renders, the default (its 480p draft) first. */
 export const CAST_SWAP_PRISM_RESOLUTIONS = CAST_SWAP_RESOLUTIONS_BY_ENGINE["seedance-2-5"]
@@ -115,7 +166,7 @@ export function prismReferenceAudioNotFull(
   const sent: CastSwapPrismReferenceAudioByResolutionSent = {}
   for (const r of CAST_SWAP_PRISM_RESOLUTIONS) {
     const mode = choice[r]
-    if (mode === "voice" || mode === "none") sent[r] = mode
+    if (mode !== undefined && mode !== "full") sent[r] = mode
   }
   return Object.keys(sent).length > 0 ? sent : undefined
 }
@@ -161,10 +212,20 @@ export function prismReferenceAudioWire(
   choice: CastSwapPrismReferenceAudio | null | undefined,
   resolution: CastSwapPrismResolution,
 ): CastSwapPrismReferenceAudioSent | undefined {
-  if (engineTakesPrismReferenceAudioPerResolution()) return prismReferenceAudioNotFull(choice)
-  if (getPluginSupports().castSwap?.prismReferenceAudio !== true) return undefined
+  const cs = getPluginSupports().castSwap
+  // A mode the engine does not take (a declared-only one it does not list) is the full audio for it.
+  const taken = (mode: CastSwapPrismReferenceAudioMode | undefined): mode is CastSwapPrismReferenceAudioModeSent =>
+    mode !== undefined && mode !== "full" && engineTakesPrismReferenceAudioMode(cs, mode)
+  if (engineTakesPrismReferenceAudioPerResolution()) {
+    const notFull = prismReferenceAudioNotFull(choice)
+    if (!notFull) return undefined
+    const sent: CastSwapPrismReferenceAudioByResolutionSent = {}
+    for (const r of CAST_SWAP_PRISM_RESOLUTIONS) if (taken(notFull[r])) sent[r] = notFull[r]
+    return Object.keys(sent).length > 0 ? sent : undefined
+  }
+  if (cs?.prismReferenceAudio !== true) return undefined
   const mode = choice?.[resolution]
-  return mode === "voice" || mode === "none" ? mode : undefined
+  return taken(mode) ? mode : undefined
 }
 
 /**

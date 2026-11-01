@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { callBackedRuns } from "./fake-actor-run.js"
 
 const mocks = vi.hoisted(() => ({
   datasetListItems: vi.fn(),
@@ -82,14 +83,17 @@ function rawAd(overrides: Record<string, unknown> = {}): Record<string, unknown>
   }
 }
 
+let runs: ReturnType<typeof callBackedRuns>
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.actorCall.mockResolvedValue({ id: "run-1", status: "SUCCEEDED", defaultDatasetId: "ds-1" })
-  mocks.actorFn.mockReturnValue({ call: mocks.actorCall })
+  runs = callBackedRuns((input, opts) => mocks.actorCall(input, opts))
+  mocks.actorFn.mockReturnValue({ call: mocks.actorCall, start: runs.start })
   mocks.datasetListItems.mockResolvedValue({ items: [rawAd()] })
   mocks.datasetFn.mockReturnValue({ listItems: mocks.datasetListItems })
   mocks.runAbort.mockResolvedValue(undefined)
-  mocks.runFn.mockReturnValue({ abort: mocks.runAbort })
+  mocks.runFn.mockImplementation((id: string) => runs.runOf(id, { abort: mocks.runAbort }))
   mocks.getApifyClient.mockReturnValue({ actor: mocks.actorFn, dataset: mocks.datasetFn, run: mocks.runFn })
   mocks.sanitizeApifyError.mockImplementation((err: unknown, ctx: string) =>
     new Error(`[apify:${ctx}] ${err instanceof Error ? err.message : String(err)}`),

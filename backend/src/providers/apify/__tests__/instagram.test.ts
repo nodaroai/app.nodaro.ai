@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { callBackedRuns } from "./fake-actor-run.js"
 
 const mocks = vi.hoisted(() => ({
   datasetListItems: vi.fn(),
@@ -140,11 +141,14 @@ describe("selectInstagramPosts", () => {
 })
 
 describe("runInstagramScrape", () => {
-  beforeEach(() => {
+  let runs: ReturnType<typeof callBackedRuns>
+
+beforeEach(() => {
     vi.clearAllMocks()
     mocks.datasetFn.mockReturnValue({ listItems: mocks.datasetListItems })
-    mocks.actorFn.mockReturnValue({ call: mocks.actorCall })
-    mocks.runFn.mockReturnValue({ abort: mocks.runAbort })
+    runs = callBackedRuns((input, opts) => mocks.actorCall(input, opts))
+  mocks.actorFn.mockReturnValue({ call: mocks.actorCall, start: runs.start })
+    mocks.runFn.mockImplementation((id: string) => runs.runOf(id, { abort: mocks.runAbort }))
     mocks.getApifyClient.mockReturnValue({ actor: mocks.actorFn, dataset: mocks.datasetFn, run: mocks.runFn })
     mocks.actorCall.mockResolvedValue({ id: "r1", status: "SUCCEEDED", defaultDatasetId: "ds-1" })
     mocks.runAbort.mockResolvedValue(undefined)

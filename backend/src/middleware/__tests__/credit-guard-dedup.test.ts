@@ -445,6 +445,41 @@ describe("reserveCreditsForJob — dedup-race detection", () => {
     expect(deleteEqMock).toHaveBeenCalledWith("id", "loser-job-456")
   })
 
+  it("a repeat create under the same key LONG after the first (past the fast path's window) still answers the first job — what a scrape relay's re-pick relies on", async () => {
+    // The relay sends its local job id as the Idempotency-Key. Minutes later
+    // (a worker died and the job was re-picked) the guard's fast path finds
+    // nothing — it only looks back DEDUP_TTL_MS — so the route inserts a new
+    // row; the key's backfill then hits the permanent unique (user, key) of the
+    // first job (no expiry: migration 163) and the answer is that job.
+    mocks.mockFindRecentMatchingJob.mockResolvedValue(null)
+    const { deleteEqMock } = configureFromMock({
+      updateOutcome: { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } },
+      winnerLookup: { id: "first-cloud-job" },
+    })
+    const app = Fastify()
+    app.addHook("preHandler", async (req) => { req.userId = "user-1" })
+    const enqueued: string[] = []
+    app.post("/v1/web-scrape", { preHandler: creditGuard(() => "web-scrape") }, async (req, reply) => {
+      const reservation = await reserveCreditsForJob(req, reply, "second-row", "web-scrape")
+      if (reply.sent) return
+      enqueued.push("second-row")
+      return reply.send({ jobId: "second-row", status: "pending", reservation })
+    })
+    await app.ready()
+    const res = await app.inject({
+      method: "POST", url: "/v1/web-scrape", headers: { "idempotency-key": "6f1c2a1e-1111-4222-8333-944455556666" },
+      payload: { actor: "google-search", query: "ai", respondAsync: true },
+    })
+    await app.close()
+    expect(mocks.mockFindRecentMatchingJob).toHaveBeenCalledWith("user-1", "6f1c2a1e-1111-4222-8333-944455556666")
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "first-cloud-job", deduped: true })
+    expect(enqueued).toEqual([]) // nothing runs a second time
+    expect(mocks.mockReserveCreditsImpl).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(deleteEqMock).toHaveBeenCalledWith("id", "second-row")
+  })
+
   it("unique-violation but winner lookup empty → sends 503 with Retry-After + dedup_race_winner_unresolvable code; deletes orphan loser; credits NOT reserved", async () => {
     // Critical-path safety: when we detect a dedup-race lost but cannot
     // find the winner (rare — winner row hard-deleted in the brief

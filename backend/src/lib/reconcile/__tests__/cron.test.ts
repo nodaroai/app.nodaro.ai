@@ -325,6 +325,23 @@ describe("reconcileInflightJobs", () => {
     expect(result.swept).toBe(1)
   })
 
+  it("spares a stale background scrape waiting on the queue for a worker's scrape capacity; a running, failed or lost one is swept", async () => {
+    const stale = new Date(Date.now() - 40 * 60 * 1000).toISOString()
+    const entry = (state: string) => ({ data: {}, getState: async () => state })
+    const scrape = (id: string, provider_kind: string) => ({
+      id, status: "processing", job_type: "meta-ads-scrape", provider_kind, provider_task_id: provider_kind === "pre-task" ? null : "run-1",
+      provider_call_started_at: stale, reconcile_attempts: 0,
+    })
+    mocks.rows.push(scrape("j-waiting-pretask", "pre-task"), scrape("j-waiting-apify", "apify-run"), scrape("j-active", "apify-run"), scrape("j-failed", "pre-task"), scrape("j-lost", "apify-run"))
+    mocks.bullById.set("j-waiting-pretask", entry("delayed"))
+    mocks.bullById.set("j-waiting-apify", entry("prioritized"))
+    mocks.bullById.set("j-active", entry("active"))
+    mocks.bullById.set("j-failed", entry("failed"))
+    await reconcileInflightJobs()
+    const swept = (sweepStaleSyncJob as ReturnType<typeof vi.fn>).mock.calls.map(([a]) => (a as { id: string }).id)
+    expect(swept.sort()).toEqual(["j-active", "j-failed", "j-lost"])
+  })
+
   it("unknown provider_kind falls through to sweepStaleSyncJob (spec §5.5 catch-all)", async () => {
     const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString()
     // Cast through to bypass the ProviderKind literal type guard — this is
@@ -510,6 +527,23 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-3" }))
     expect(result.swept).toBe(1)
     mocks.quietUsers.clear()
+  })
+
+  it("never-started sweep spares a background scrape still on the queue (waiting for a worker's scrape capacity), and sweeps one whose entry is gone", async () => {
+    const entry = (state: string) => ({ data: {}, getState: async () => state })
+    mocks.bullById.set("j-scrape-waiting", entry("delayed"))
+    mocks.bullById.set("j-scrape-failed", entry("failed"))
+    mocks.neverStartedRows.push(
+      { id: "j-scrape-waiting", user_id: "u", job_type: "instagram-scrape", provider_kind: null, reconcile_attempts: 0 },
+      { id: "j-scrape-failed", user_id: "u", job_type: "web-scrape", provider_kind: null, reconcile_attempts: 0 },
+      { id: "j-scrape-lost", user_id: "u", job_type: "site-capture", provider_kind: null, reconcile_attempts: 0 },
+      // Any other job type is swept as before, whatever the queue holds.
+      { id: "j-other", user_id: "u", job_type: "generate-image", provider_kind: null, reconcile_attempts: 0 },
+    )
+    mocks.bullById.set("j-other", entry("delayed"))
+    await reconcileInflightJobs()
+    const swept = (sweepStaleSyncJob as ReturnType<typeof vi.fn>).mock.calls.map(([a]) => (a as { id: string }).id)
+    expect(swept.sort()).toEqual(["j-other", "j-scrape-failed", "j-scrape-lost"])
   })
 
   it("never-started sweep does not run for the main candidate set (no double-processing)", async () => {

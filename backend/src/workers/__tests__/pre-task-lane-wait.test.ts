@@ -9,6 +9,9 @@
  * waits keeps today's cap: a hung handler still stops beating at 90 minutes.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+// These tests wait for slots, so they run on the path where limits can be
+// turned on (test-only: this release locks them, and a locked take never waits).
+vi.mock("../../lib/concurrency-lanes/enforcement-available.js", () => ({ LANES_ENFORCEMENT_AVAILABLE: true }))
 import { makeSweepDb, type SweepDb } from "../../lib/concurrency-lanes/__tests__/fake-sweep-db.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"

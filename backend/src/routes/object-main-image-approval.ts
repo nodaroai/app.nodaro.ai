@@ -10,6 +10,8 @@ import { llmMeteredPricing } from "../lib/config.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { takeLiveLaneIfFree } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
 /**
  * Object main-image approval + canonical-description LLM caption.
@@ -220,8 +222,15 @@ export async function objectMainImageApprovalRoutes(app: FastifyInstance) {
       // balance below it, a block) the image is still approved, the caption is
       // skipped (canonical_description null) and /llm-caption retries it later.
       const captionRequest = objectCaptionRequest(imageUrl)
+      // Nor by a busy lane (decided 2026-11-01): the caption runs only if an llm
+      // slot is free now; at the limit it is skipped like a refused hold, and
+      // nothing is reserved for it.
+      const captionSlotFree = await takeLiveLaneIfFree(req, { lane: "llm", provider: llmProviderOf(OBJECT_CAPTION_MODEL) })
       let meter: MeteredSyncLlmMeter | null | undefined
-      if (llmMeteredPricing()) {
+      if (!captionSlotFree) {
+        meter = null
+        req.log.info({ objectId }, "[object-main-image-approval] caption skipped: no llm slot free")
+      } else if (llmMeteredPricing()) {
         // The caption guard runs inline (spend surface, instance cap, payer
         // balance); a refusal or a billing error skips the caption, never the approval.
         const optional = await meterOptionalSyncLlm(req, captionGuard, "object-main-image-approval", {

@@ -81,6 +81,7 @@ import { motionTransferRoutes } from "../motion-transfer.js"
 import { transcribeRoutes } from "../transcribe.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { DEFAULT_TRANSCRIBE_PROVIDER } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,6 +104,8 @@ interface AIRouteConfig {
   invalidPayload: Record<string, unknown>
   validPayload: Record<string, unknown>
   queueJobType: string
+  /** The model the job runs when the body names none — recorded as input_data.resolvedModel. */
+  resolvedModel?: string
 }
 
 const AI_ROUTES: AIRouteConfig[] = [
@@ -127,6 +130,7 @@ const AI_ROUTES: AIRouteConfig[] = [
       audioUrl: EXAMPLE_AUDIO_URL,
     },
     queueJobType: "lip-sync",
+    resolvedModel: "kling-avatar",
   },
   {
     name: "video-to-video",
@@ -136,6 +140,7 @@ const AI_ROUTES: AIRouteConfig[] = [
     invalidPayload: { userId: VALID_UUID },
     validPayload: { userId: VALID_UUID, videoUrl: EXAMPLE_VIDEO_URL },
     queueJobType: "video-to-video",
+    resolvedModel: "wan",
   },
   {
     name: "video-upscale",
@@ -145,6 +150,7 @@ const AI_ROUTES: AIRouteConfig[] = [
     invalidPayload: { userId: VALID_UUID },
     validPayload: { userId: VALID_UUID, videoUrl: EXAMPLE_VIDEO_URL },
     queueJobType: "video-upscale",
+    resolvedModel: "topaz-video",
   },
   {
     name: "motion-transfer",
@@ -158,6 +164,7 @@ const AI_ROUTES: AIRouteConfig[] = [
       videoUrl: EXAMPLE_VIDEO_URL,
     },
     queueJobType: "motion-transfer",
+    resolvedModel: "motion-transfer",
   },
   {
     name: "transcribe",
@@ -167,6 +174,7 @@ const AI_ROUTES: AIRouteConfig[] = [
     invalidPayload: { userId: VALID_UUID },
     validPayload: { userId: VALID_UUID, audioUrl: EXAMPLE_AUDIO_URL },
     queueJobType: "transcribe",
+    resolvedModel: DEFAULT_TRANSCRIBE_PROVIDER,
   },
 ]
 
@@ -230,7 +238,7 @@ afterEach(async () => {
 
 describe.each(AI_ROUTES)(
   "POST $path ($name)",
-  ({ path, requiredField, invalidPayload, validPayload, queueJobType }) => {
+  ({ path, requiredField, invalidPayload, validPayload, queueJobType, resolvedModel }) => {
     it(`returns 400 when ${requiredField} is missing`, async () => {
       const res = await app.inject({
         method: "POST",
@@ -280,6 +288,8 @@ describe.each(AI_ROUTES)(
           status: "pending",
           input_data: expect.objectContaining({
             type: queueJobType,
+            // The model the handler runs on an unnamed default (the vendor/UI name mapped to its catalog id).
+            ...(resolvedModel ? { resolvedModel } : {}),
           }),
         }),
       )

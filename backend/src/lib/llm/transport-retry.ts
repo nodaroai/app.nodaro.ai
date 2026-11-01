@@ -4,7 +4,7 @@
 
 import { LlmPlatformExhaustedError, LlmStreamResponseError } from "../llm-errors.js"
 import { classifyPlatformExhaustion, exhaustionSignalOf } from "../llm-platform-exhaustion.js"
-import { effectiveTimeout } from "./params.js"
+import { kieEffectiveTimeout } from "./params.js"
 import type { LlmRequest } from "./types.js"
 
 /**
@@ -107,7 +107,7 @@ export async function withTransportRetry<T>(
 ): Promise<T> {
   // Read once, at entry: the ladder is bounded by the budget the CALL was given, not by a
   // fresh budget per attempt.
-  const deadline = Date.now() + effectiveTimeout(req)
+  const deadline = Date.now() + kieEffectiveTimeout(req)
   const total = LLM_TRANSPORT_RETRY_DELAYS_MS.length + 1
   for (let attempt = 1; ; attempt++) {
     try {

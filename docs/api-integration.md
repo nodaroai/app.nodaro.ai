@@ -1574,6 +1574,7 @@ All errors share the same shape:
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
 | 503 | `job_start_failed` | — | A synchronous metered LLM request could not record that its call is starting. The call was not sent and nothing was charged (the hold is refunded). Retry it. |
 | 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
+| 503 | `lane_busy` | `Retry-After` header (seconds) | A request answered while you wait (not with a job id) could not get a free slot of your account's concurrency limit within its wait — see [Busy answers](#busy-answers-503-lane_busy). Retry after the header's delay. Occurs only once an administrator turns concurrency limits on, which cannot be done yet in this release. |
 
 Treat anything in the 5xx range as transient — retry with exponential
 backoff. Treat 4xx as terminal — don't retry without fixing the request.
@@ -1774,6 +1775,62 @@ running, not from when it was created. Both `queued` and the `queue-timeout`
 hint occur only once an administrator turns concurrency limits on (an admin
 setting, off by default, that cannot be turned on yet in this release); until
 then every job starts at once and never reports `queued`.
+
+#### Background scrapes
+
+A Web Scrape or Meta Ads Library scrape that asks for a job id
+(`respondAsync: true`), and every Site Capture and Instagram scrape, answer
+`{ "jobId": "…", "status": "pending" }` at once and run as a background job:
+poll `GET /v1/jobs/:id` until it ends. Such a job is picked up again after a
+server restart; one that was already running re-attaches to the scrape it
+had started and recorded, rather than starting another. Your credits are
+never charged twice for one scrape.
+Each server runs a limited number of scrapes at once, so under heavy load a
+scrape may start a little later; it waits without failing and stays
+cancellable.
+
+#### Busy answers (`503 lane_busy`)
+
+What is true today: approving a character's portrait or an entity's main
+image is never held up — the approval completes at once — and model training
+(character training) and the Workflow Copilot run outside any concurrency
+limit.
+
+> **Not active yet.** Everything below applies only once an administrator
+> turns concurrency limits on, which cannot be done in this release. Until
+> then no request or job waits for a slot and none is answered `lane_busy`:
+> every call runs at once, exactly as before.
+
+Once limits are on, the same per-account limit covers work a request does
+while you wait for its answer. Such a request waits for a free slot before it
+reserves any credits, and if none frees in time it is answered
+`503 lane_busy` with a `Retry-After` header (`60`, in seconds) — nothing was
+created or charged; retry after the delay:
+
+```json
+{ "error": { "code": "lane_busy", "message": "Busy right now — try again in a few minutes." } }
+```
+
+**How long a request waits** depends on how it is answered: the platform's
+live-wait limit, but never longer than its connection can stay open — about
+a minute for a plain JSON request, about 45 seconds for a tool call through
+the MCP server, and up to 10 minutes for a streamed answer
+(`Accept: text/event-stream`). These per-transport figures are provisional
+and may change before limits become available.
+
+**Which requests wait.** Only requests that call an AI provider or a text
+model *before* they answer: the text-model routes that answer in the request
+(Generate Text, AI Agent, Image to Text, Describe to Picker and the other
+creative helpers), a Web Scrape or Meta Ads Library scrape held open for its
+result, the Suno voice and style-boost calls, and the image and asset routes
+that write a missing description with a text model before they start. A
+request answered with a job id never waits in the request: the job itself
+waits in line as `queued` ([above](#job-failure-hints-error_hint-and-credit-status)).
+The background scrapes ([above](#background-scrapes)) wait in line like any
+other job and keep a single slot for the whole scrape, its per-ad or per-post
+AI analysis included. A workflow node never answers `lane_busy`: inside a run
+it waits for its slot like the run's other jobs. An approval's AI caption is
+skipped when no slot is free, as it is when the account is out of credits.
 
 ## 8b. Pay-as-you-go accounts
 

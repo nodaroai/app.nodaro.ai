@@ -9,7 +9,7 @@ import { LlmLaneError, LlmStreamResponseError, guardLaneAccount } from "../llm-e
 import { KIE_API_BASE } from "../../providers/kie/client.js"
 import { inlineImagesForKie } from "../kie-inline-image.js"
 import { extractKieToolCallInput } from "../json-utils.js"
-import { deriveParams, effectiveTimeout } from "./params.js"
+import { deriveParams, kieEffectiveTimeout } from "./params.js"
 import {
   buildChatCompletionsMessages,
   buildMessagesBody,
@@ -201,7 +201,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(effectiveTimeout(req)),
+    signal: AbortSignal.timeout(kieEffectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -255,7 +255,7 @@ async function streamKieChatCompletions(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
+    signal: signal ?? AbortSignal.timeout(kieEffectiveTimeout(req)),
   }, model, abort)
 
   if (!response.ok) {
@@ -279,7 +279,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(effectiveTimeout(req)),
+    signal: AbortSignal.timeout(kieEffectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -341,7 +341,7 @@ async function streamKieMessagesUnguarded(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
+    signal: signal ?? AbortSignal.timeout(kieEffectiveTimeout(req)),
   }, model, abort)
 
   if (!response.ok) {
@@ -403,11 +403,20 @@ async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest, sig
   // not retried; `withTransportRetry` makes that call, not this lane.
   // A caller's signal reaches each attempt, and once it has fired no further attempt starts:
   // a cancel during a back-off pause ends the pause at once (the signal's reason is thrown).
+  //
+  // ONE deadline for every attempt, as in `callKieResponsesCollapsed`: the ladder only stops
+  // STARTING attempts at the call's budget, so an attempt armed with its own full timeout could
+  // run past it — a failure at 290 s plus a 400 ms pause bought a second 300 s attempt, ~590 s
+  // on this lane before the direct one was even asked, past the sync routes' 10 min socket.
+  // (The callers that pass a signal set `timeoutMs` to their own deadline, so this one is
+  // never the shorter.)
+  const deadline = AbortSignal.timeout(kieEffectiveTimeout(req))
+  const attemptSignal = signal ? AbortSignal.any([signal, deadline]) : deadline
   return withTransportRetry(
     model.id,
     req,
-    () => streamKieMessages(model, req, () => {}, signal),
-    () => signal?.aborted === true,
+    () => streamKieMessages(model, req, () => {}, attemptSignal),
+    () => attemptSignal.aborted,
     signal,
   )
 }
@@ -460,7 +469,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(effectiveTimeout(req)),
+    signal: AbortSignal.timeout(kieEffectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -514,7 +523,7 @@ async function streamKieResponses(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
+    signal: signal ?? AbortSignal.timeout(kieEffectiveTimeout(req)),
   }, model, abort)
 
   if (!response.ok) {
@@ -559,7 +568,7 @@ async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): P
   // budget and a timed-out first attempt buys the second another 120 s (240 s
   // on the structured route) — the retry exists to clear a FAST silent close,
   // not to double every slow failure.
-  const signal = AbortSignal.timeout(effectiveTimeout(req))
+  const signal = AbortSignal.timeout(kieEffectiveTimeout(req))
   const once = async () => {
     const res = await streamKieResponses(model, req, () => {}, signal)
     // A stream that ENDS without ever emitting text is a failure, and must be

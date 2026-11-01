@@ -257,6 +257,23 @@ return reply({ leaseId = out })
 `
 
 /**
+ * REQ: { leaseId } → { lease } — who a live lease belongs to (its line's
+ * user, payer and lane), or null for one that expired, was released or never
+ * existed. Reads only: unlike renew, never re-creates a lease.
+ */
+const LEASE_LINE = `${PRELUDE}
+purge()
+settle()
+local lid = REQ.leaseId
+local out = NULL
+local k = lsk(lid)
+if redis.call('ZSCORE', P .. 'leases', lid) and redis.call('EXISTS', k) == 1 then
+  out = { userId = hget(k, 'user') or '', payer = hget(k, 'payer') or '', lane = hget(k, 'lane') or '' }
+end
+return reply({ lease = out })
+`
+
+/**
  * REQ: { meta, pool } → { wait }. A job that also waits in a lane line keeps
  * its place there, marked `held`: a slot reserved for it is passed on, and its
  * line reserves nothing at or behind it until its next acquire.
@@ -413,6 +430,7 @@ export const LANE_GATE_SCRIPTS = {
   renew: RENEW,
   release: RELEASE,
   borrow: BORROW,
+  leaseLine: LEASE_LINE,
   serverWait: SERVER_WAIT,
   withdraw: WITHDRAW,
   describe: DESCRIBE,

@@ -9,6 +9,8 @@ import { creditGuard } from "../middleware/credit-guard.js"
 import { billedFailureMessage, llmGuardPrecheck } from "../lib/meter-sync-llm.js"
 import { meterSyncLlmMetered } from "../lib/llm-billing.js"
 import { llmMeteredPricing } from "../lib/config.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
 /**
  * Object canonical-description LLM retry route.
@@ -58,11 +60,16 @@ export async function objectLlmCaptionRoutes(app: FastifyInstance) {
       // dedup:false — this route returns { canonicalDescription }, not the
       // { jobId, deduped:true } shape the idempotency short-circuit would send.
       // Scope first: an app without assets:write is refused before any credit check.
-      preHandler: [requireAppScope("assets:write"), creditGuard(() => CREDIT_IDENTIFIER, {
-        dedup: false,
-        // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
-        computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: OBJECT_CAPTION_MODEL, maxTokens: 500 }),
-      })],
+      preHandler: [
+        requireAppScope("assets:write"),
+        creditGuard(() => CREDIT_IDENTIFIER, {
+          dedup: false,
+          // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
+          computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: OBJECT_CAPTION_MODEL, maxTokens: 500 }),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", { provider: () => llmProviderOf(OBJECT_CAPTION_MODEL) }),
+      ],
       config: {
         // 10 req/min/IP — `@fastify/rate-limit` must be registered globally.
         rateLimit: { max: 10, timeWindow: "1 minute" },
