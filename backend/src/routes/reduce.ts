@@ -158,10 +158,13 @@ export async function reduceRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(
-            { strategyId, strategyConfig, inputs_count: inputs.length },
-            "reduce",
-          ),
+          input_data: {
+            ...buildJobInputData({ strategyId, strategyConfig, inputs_count: inputs.length }, "reduce"),
+            // The AI judge's model (the judge call below runs it); the other strategies call no model.
+            ...(strategyId === "pick-best-llm"
+              ? { resolvedModel: pickBestLlmModel({ llmModel: typeof strategyConfig.llmModel === "string" ? strategyConfig.llmModel : undefined }) }
+              : {}),
+          },
         })
 
       if (jobError || !job) {

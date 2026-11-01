@@ -181,7 +181,9 @@ beforeEach(async () => {
     const header = req.headers["x-user-id"]
     if (header && typeof header === "string") {
       req.userId = header
-      req.userRole = undefined
+      // `x-user-role` stands in for the caller's profile role (admin reads).
+      const role = req.headers["x-user-role"]
+      req.userRole = typeof role === "string" ? (role as typeof req.userRole) : undefined
     }
     const kind = req.headers["x-auth-kind"]
     if (typeof kind === "string") (req as { authKind?: string }).authKind = kind
@@ -1191,6 +1193,66 @@ describe("GET /v1/workflow-executions/:id", () => {
     expect(res.json().data.triggerData).toEqual({ type: "cast-swap", trend: { id: "t" } })
     expect(res.body).not.toContain("private.example")
     expect(res.body).not.toContain("__roles")
+  })
+
+  // The model fields follow the job reads' policy (`sanitizeJobForPublic`):
+  // a job's owner never sees the provider or the model it ran; an admin does.
+  describe("the standalone-job fallback's triggerData: the model fields are admin-only", () => {
+    const mockJobRow = (inputData: Record<string, unknown>) => {
+      vi.mocked(supabase.from).mockImplementation((table) => {
+        if (table === "workflow_executions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116", message: "not found" } }),
+                }),
+              }),
+            }),
+          } as never
+        }
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnValue({
+                  is: vi.fn().mockReturnThis(),
+                  single: vi.fn().mockResolvedValue({
+                    data: {
+                      id: TEST_JOB_ID, workflow_id: null, user_id: TEST_USER_ID, workflow_execution_id: null,
+                      status: "completed", provider: null, input_data: inputData, credits: 4, error_message: null,
+                      started_at: "2026-01-01T00:01:00Z", completed_at: "2026-01-01T00:02:00Z", created_at: "2026-01-01T00:00:00Z",
+                    },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          }),
+        } as never
+      })
+    }
+    const inputData = { type: "generate-image", prompt: "a cat", provider: "gpt-image-2", resolvedModel: "gpt-image-2-i2i" }
+    const getAs = (role?: string) =>
+      app.inject({
+        method: "GET",
+        url: `/v1/workflow-executions/${TEST_JOB_ID}`,
+        headers: { "x-user-id": TEST_USER_ID, ...(role ? { "x-user-role": role } : {}) },
+      })
+
+    it("a non-admin owner: neither provider nor resolvedModel", async () => {
+      mockJobRow(inputData)
+      const res = await getAs()
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.triggerData).toEqual({ type: "generate-image", prompt: "a cat" })
+    })
+
+    it("an admin: both", async () => {
+      mockJobRow(inputData)
+      const res = await getAs("admin")
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.triggerData).toEqual(inputData)
+    })
   })
 })
 

@@ -219,7 +219,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "text-to-picker"),
+        input_data: { ...buildJobInputData(parsed.data, "text-to-picker"), resolvedModel: model.id },
       })
       if (jobError) {
         return sendInternalError(reply, req, jobError, "Failed to create job")

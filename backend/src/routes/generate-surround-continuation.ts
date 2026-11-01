@@ -172,7 +172,7 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "generate-surround-continuation"), prompt },
+          input_data: { ...buildJobInputData(parsed.data, "generate-surround-continuation"), prompt, resolvedModel: parsed.data.provider },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 

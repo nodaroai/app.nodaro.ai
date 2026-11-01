@@ -5,6 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -95,7 +96,7 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
           status: "pending",
           workflow_id: workflowId ?? null,
           force_private: forcePrivate || undefined,
-          input_data: { ...buildJobInputData(body as unknown as Record<string, unknown>, "reference-board"), prompt },
+          input_data: { ...withResolvedModel(buildJobInputData(body as unknown as Record<string, unknown>, "reference-board"), "reference-board"), prompt },
         },
         req.idempotencyKey,           // set by creditGuard; NOT the raw header
       )

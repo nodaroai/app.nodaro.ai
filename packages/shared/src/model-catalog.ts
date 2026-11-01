@@ -235,10 +235,11 @@ export interface ModelCatalogEntry {
    * Model LINE for the add-node Models tab — the brand-agnostic product line a
    * user thinks in ("Nano Banana", "Flux", "VEO", "Kling", "ElevenLabs").
    * Distinct from `family` (the lab: Google covers Nano Banana + Imagen + VEO).
-   * REQUIRED for every node-creatable model; a completeness guard in
-   * `@nodaro/shared` (model-tree.test.ts) fails if one is missing.
+   * REQUIRED on every entry, so every model can be filtered by its line. The
+   * Models tab lists only node-creatable models (`buildModelTree`), so a
+   * series on an entry with no node (AI Audit) never shows up there.
    */
-  series?: string
+  series: string
   /**
    * The value written into the creating node's data field when this model is
    * picked from the Models tab, for models whose catalog id differs from the
@@ -2964,10 +2965,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   // wired), applies video-verified corrections under guards, and returns a
   // disclosed report of what was checked, fixed, and left open. These two
   // rows exist for pricing/MCP-discovery visibility only — the node has no
-  // model picker in V1, so (unlike every other row in this section) they
-  // deliberately carry no `series` and their `modes` has no Models-tab
-  // mapping (see model-tree.ts's MODE_TO_NODE) — they must never appear as
-  // selectable "video-analysis" models. Two credit families, chosen by
+  // model picker in V1, so their `modes` has no Models-tab mapping (see
+  // model-tree.ts's MODE_TO_NODE) — they must never appear as selectable
+  // "video-analysis" models. Their `series` ("AI Audit", their own line) only
+  // names the line for filtering; the Models tab lists node-creatable models
+  // alone, so it never surfaces them. Two credit families, chosen by
   // whether an analysis is wired into the node; the structural formula lives
   // in video-analysis-pricing.ts.
   "video-audit": {
@@ -2977,6 +2979,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Nodaro",
     maker: "nodaro",
     label: "AI Audit",
+    series: "AI Audit",
     description: "Re-watches a clip against a wired analysis, applies video-verified corrections under guards, and returns a disclosed report of what changed. Billed per duration bucket.",
     useCases: ["video-audit", "qa", "shot-list", "verification"],
     pricing: [
@@ -2994,6 +2997,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Nodaro",
     maker: "nodaro",
     label: "AI Audit (with analysis run)",
+    series: "AI Audit",
     description: "Same video-verified audit as AI Audit, but auto-runs a fast analysis first when none is wired in, then applies corrections under guards and returns a disclosed report. Billed per duration bucket.",
     useCases: ["video-audit", "qa", "shot-list", "verification", "auto-analysis"],
     pricing: [

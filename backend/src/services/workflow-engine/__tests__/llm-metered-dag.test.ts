@@ -168,6 +168,24 @@ beforeEach(() => {
   h.meteredCancelVerdict.mockResolvedValue("not-metered")
 })
 
+describe("the orchestrator row records the model the worker runs (input_data.resolvedModel)", () => {
+  const inputDataWritten = () =>
+    (h.updates.find((u) => u.table === "jobs" && u.row.input_data !== undefined)?.row.input_data ?? {}) as Record<string, unknown>
+
+  it("a named model is recorded as named", async () => {
+    await executeNode(scriptNode(), { prompt: "a bank heist" }, [], [scriptNode()], {}, ctx())
+    expect(inputDataWritten().resolvedModel).toBe(SCRIPT_MODEL)
+  })
+
+  it("no model named: the default the worker resolves (the legacy vendor provider mapped to its model)", async () => {
+    const node = { id: "script", type: "generate-script", data: { provider: "claude", sceneCount: 4 } } as SimpleNode
+    await executeNode(node, { prompt: "a bank heist" }, [], [node], {}, ctx())
+    const request = buildScriptRequest({ prompt: "a bank heist", sceneCount: 4, provider: "claude", advanced: {}, brief: {}, lanes: { cheapLanesOnly: false } })
+    expect(request.modelId).not.toBe("claude")
+    expect(inputDataWritten().resolvedModel).toBe(request.modelId)
+  })
+})
+
 describe("DAG reservation of a worker-queued metered LLM node", () => {
   it("generate-script DAG node reserves under generate-script:<model> at the metered hold, never a tier row", async () => {
     await executeNode(scriptNode(), { prompt: "a bank heist" }, [], [scriptNode()], {}, ctx())

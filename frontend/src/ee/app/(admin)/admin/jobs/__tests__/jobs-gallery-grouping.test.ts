@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { ago, buildGroups, dayLabel, jobThumb, typeLabel, type GItem } from "../jobs-gallery-grouping"
+import { ago, buildGroups, dayLabel, tileMedia, type GItem } from "../jobs-gallery-grouping"
 import type { AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 
 function job(partial: Partial<AdminJob>): AdminJob {
@@ -20,21 +20,67 @@ function gi(created_at: string, credits: number, platKey: string, platLabel = pl
   return { job: job({ created_at, credits }), plat: { key: platKey, label: platLabel } }
 }
 
-describe("jobThumb", () => {
-  it("prefers the thumbnail, then the image, else null", () => {
-    expect(jobThumb(job({ output_data: { imageUrl: "https://x/a.png" } }))).toBe("https://x/a.png")
-    expect(jobThumb(job({ output_data: { thumbnailUrl: "t", imageUrl: "i" } }))).toBe("t")
-    expect(jobThumb(job({ output_data: null }))).toBeNull()
-    expect(jobThumb(job({ output_data: {} }))).toBeNull()
-    expect(jobThumb(job({ output_data: { videoUrl: "v" } }))).toBeNull()
+describe("tileMedia", () => {
+  it("video output → video with thumbnail as poster", () => {
+    expect(
+      tileMedia(job({ output_data: { videoUrl: "https://x/v.mp4", thumbnailUrl: "https://x/t.jpg" } })),
+    ).toEqual({ kind: "video", url: "https://x/v.mp4", poster: "https://x/t.jpg" })
+    expect(tileMedia(job({ output_data: { videoUrl: "https://x/v.mp4" } }))).toEqual({
+      kind: "video",
+      url: "https://x/v.mp4",
+      poster: null,
+    })
   })
-})
 
-describe("typeLabel", () => {
-  it("uses job_type, falls back to input_data.type, else empty", () => {
-    expect(typeLabel(job({ job_type: "generate-image" }))).toBe("generate-image")
-    expect(typeLabel(job({ job_type: null, input_data: { type: "image-to-text" } }))).toBe("image-to-text")
-    expect(typeLabel(job({ job_type: null, input_data: null }))).toBe("")
+  it("suno output (audioUrl + imageUrl) → audio with cover", () => {
+    // The image on an audio job is its cover art: the tile follows what was produced.
+    expect(
+      tileMedia(job({ output_data: { imageUrl: "https://x/cover.jpeg", audioUrl: "https://x/song.mp3" } })),
+    ).toEqual({ kind: "audio", url: "https://x/song.mp3", cover: "https://x/cover.jpeg" })
+    expect(tileMedia(job({ output_data: { audioUrl: "https://x/s.wav" } }))).toEqual({
+      kind: "audio",
+      url: "https://x/s.wav",
+      cover: null,
+    })
+  })
+
+  it("image only → image", () => {
+    expect(tileMedia(job({ output_data: { imageUrl: "https://x/a.png" } }))).toEqual({
+      kind: "image",
+      url: "https://x/a.png",
+    })
+    expect(tileMedia(job({ output_data: { images: ["https://x/b.webp"] } }))).toEqual({
+      kind: "image",
+      url: "https://x/b.webp",
+    })
+    // The explicit thumbnail wins, and an extensionless imageUrl still shows.
+    expect(tileMedia(job({ output_data: { thumbnailUrl: "https://x/t", imageUrl: "https://x/i.png" } }))).toEqual({
+      kind: "image",
+      url: "https://x/t",
+    })
+    expect(tileMedia(job({ output_data: { imageUrl: "https://x/no-ext" } }))).toEqual({
+      kind: "image",
+      url: "https://x/no-ext",
+    })
+  })
+
+  it("llm generatedText → text", () => {
+    expect(tileMedia(job({ output_data: { generatedText: "Hello there" } }))).toEqual({
+      kind: "text",
+      text: "Hello there",
+    })
+    expect(tileMedia(job({ output_data: { generatedText: "  ", result: "fallback" } }))).toEqual({
+      kind: "text",
+      text: "fallback",
+    })
+    const long = "x".repeat(500)
+    expect(tileMedia(job({ output_data: { text: long } }))).toEqual({ kind: "text", text: "x".repeat(280) })
+  })
+
+  it("empty → none", () => {
+    expect(tileMedia(job({ output_data: null }))).toEqual({ kind: "none" })
+    expect(tileMedia(job({ output_data: {} }))).toEqual({ kind: "none" })
+    expect(tileMedia(job({ output_data: { url: "https://x/file.zip", count: 3 } }))).toEqual({ kind: "none" })
   })
 })
 

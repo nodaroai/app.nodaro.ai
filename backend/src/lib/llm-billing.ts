@@ -292,8 +292,10 @@ export async function meterSyncLlmMetered(
   args: { feature: MeteredLlmFeature; calls: readonly [LlmPlannedCall, ...LlmPlannedCall[]] },
 ): Promise<{ spend: LlmSpend; settle: (status: "completed" | "failed", errorMessage?: string) => Promise<void> } | null> {
   const spend = new LlmSpend()
+  // The model the helper's (first) call runs, recorded on the row either way.
+  const resolvedModel = args.calls[0].modelId
   if (!llmMeteredPricing()) {
-    const meter = await meterSyncLlm(req, reply, jobType, "prompt-helper")
+    const meter = await meterSyncLlm(req, reply, jobType, "prompt-helper", resolvedModel)
     if (!meter) return null
     return { spend, settle: (status) => (status === "completed" ? meter.commit() : meter.refund()) }
   }
@@ -305,7 +307,7 @@ export async function meterSyncLlmMetered(
   const { data: job, error: jobError } = await insertSyncJob(req, {
     user_id: req.userId,
     status: "pending",
-    input_data: { type: jobType },
+    input_data: { type: jobType, resolvedModel },
     job_type: jobType,
   })
   if (jobError || !job) {

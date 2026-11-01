@@ -327,7 +327,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, `prompt-wizard:${body.action}`),
+          input_data: { ...buildJobInputData(parsed.data, `prompt-wizard:${body.action}`), resolvedModel: llmModel },
         })
 
       if (jobError) {

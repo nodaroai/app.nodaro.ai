@@ -1,0 +1,11 @@
+[
+  { "label": "a product subdomain is the product", "source": "web", "sourceDetail": "studio.nodaro.ai", "expected": "web:studio" },
+  { "label": "an environment prefix collapses to the product", "source": "web", "sourceDetail": "next.studio.nodaro.ai", "expected": "web:studio" },
+  { "label": "the bare domain is not a product subdomain: kept whole", "source": "web", "sourceDetail": "nodaro.ai", "expected": "web:nodaro.ai" },
+  { "label": "a non-Nodaro host is kept whole, port included", "source": "web", "sourceDetail": "localhost:3000", "expected": "web:localhost:3000" },
+  { "label": "the host is case-insensitive", "source": "web", "sourceDetail": "Recast.Nodaro.AI", "expected": "web:recast" },
+  { "label": "a coarse source kind groups as itself", "source": "mcp", "sourceDetail": null, "expected": "mcp" },
+  { "label": "web without a host", "source": "web", "sourceDetail": null, "expected": "web" },
+  { "label": "no source recorded", "source": null, "sourceDetail": null, "expected": "unknown" },
+  { "label": "a developer app groups by its id", "source": "app", "sourceDetail": "8b0c6c2e-1d3a-4f5e-9a7b-2c4d6e8f0a1b", "expected": "app:8b0c6c2e-1d3a-4f5e-9a7b-2c4d6e8f0a1b" }
+]

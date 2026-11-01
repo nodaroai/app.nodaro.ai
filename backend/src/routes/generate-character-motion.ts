@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
@@ -300,7 +301,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
           force_private: true,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "generate-character-motion"), prompt },
+          input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-character-motion"), "generate-character-motion"), prompt },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 

@@ -1,6 +1,6 @@
 import { JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "./job-generation-details"
-import { useState, useMemo } from "react"
-import { Link } from "react-router-dom"
+import { useCallback, useMemo, useState } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 import { Loader2, Info, Copy, Check, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,11 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
-import { useAdminJobs, useAllAdminUsersLite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
+import { useAdminJobs, useAdminJobSources, useAllAdminUsersLite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import { JobsGallery } from "./jobs-gallery"
+import { JobsFilterBar } from "./jobs-filter-bar"
+import { ADMIN_JOB_STATUSES, jobFiltersKey, parseJobFilters, serializeJobFilters, type AdminJobFilters } from "./jobs-filters"
+import { rowJobType } from "./job-kinds"
 import { creditCell, creditDetailLines } from "./admin-job-credits"
 
-const STATUS_OPTIONS = ["all", "pending", "queued", "processing", "completed", "failed", "cancelled"] as const
+const STATUS_OPTIONS = ["all", ...ADMIN_JOB_STATUSES] as const
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   switch (status) {
@@ -53,14 +56,6 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "-"
   return new Date(dateStr).toLocaleString()
-}
-
-/** Older insert paths never set the job_type column; the type still lives in
- *  input_data.type — show that rather than a dash. */
-function jobTypeLabel(job: AdminJob): string | null {
-  if (job.job_type) return job.job_type
-  const t = job.input_data?.type
-  return typeof t === "string" ? t : null
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -120,8 +115,8 @@ function JobDetailDialog({
             <CopyButton text={job.id} />
             <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
           </DialogTitle>
-          {jobTypeLabel(job) && (
-            <p className="text-sm text-muted-foreground">{jobTypeLabel(job)}</p>
+          {rowJobType(job) && (
+            <p className="text-sm text-muted-foreground">{rowJobType(job)}</p>
           )}
         </DialogHeader>
 
@@ -257,35 +252,66 @@ function JobDetailDialog({
   )
 }
 
+const PAGE_SIZE = 50
+
+/** The user filter's value for the filters' user (an address, or "admins hidden"). */
+function userFilterValue(filters: AdminJobFilters, users: ReadonlyArray<{ id: string; email: string }>): UserFilterValue {
+  if (filters.userEmail) {
+    const email = filters.userEmail
+    const user = users.find((u) => u.email.toLowerCase() === email)
+    // An address no loaded account has still filters (the server answers); the trigger reads "unknown user".
+    return { kind: "user", id: user?.id ?? "" }
+  }
+  return filters.excludeAdmins ? { kind: "exclude_admins" } : { kind: "all" }
+}
+
 export default function AdminJobsPage() {
-  const [page, setPage] = useState(0)
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [userFilter, setUserFilter] = useState<UserFilterValue>({ kind: "all" })
-  const { data: users = [] } = useAllAdminUsersLite()
+  // Every filter, the view included, lives in the URL: a refresh, a bookmark
+  // or a shared link reopens the same filtered view.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = useMemo(() => parseJobFilters(searchParams), [searchParams])
+  // A pick is a history step (Back undoes it); a search being typed replaces the current entry.
+  const setFilters = useCallback(
+    (next: AdminJobFilters, how?: { replace: true }) =>
+      setSearchParams(serializeJobFilters(next), { replace: how?.replace === true }),
+    [setSearchParams],
+  )
+  const filtersKey = jobFiltersKey(filters)
+  // The table's page belongs to one set of filters: any change, back/forward included, starts at page 0.
+  const [pageAt, setPageAt] = useState({ key: filtersKey, page: 0 })
+  const page = pageAt.key === filtersKey ? pageAt.page : 0
+  const setPage = (next: number) => setPageAt({ key: filtersKey, page: next })
+
+  const { data: users = [], isSuccess: usersLoaded, isError: usersFailed } = useAllAdminUsersLite()
+  const { data: sources = [] } = useAdminJobSources()
 
   const adminIds = useMemo(
     () => users.filter((u) => u.role !== "user").map((u) => u.id),
     [users],
   )
 
-  const userIdFilter =
-    userFilter.kind === "user" ? userFilter.id : undefined
-  const excludeUserIds =
-    userFilter.kind === "exclude_admins" ? adminIds : undefined
+  const onUserFilter = (next: UserFilterValue) => {
+    if (next.kind === "user") {
+      const email = users.find((u) => u.id === next.id)?.email
+      if (email) setFilters({ ...filters, userEmail: email.toLowerCase(), excludeAdmins: false })
+    } else {
+      setFilters({ ...filters, userEmail: undefined, excludeAdmins: next.kind === "exclude_admins" })
+    }
+  }
+  const statusFilter = filters.status ?? "all"
+  const view = filters.view
 
   const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null)
-  // Table | Gallery view, and the detail dialog's active tab (controlled so a
-  // gallery tile can open straight to Output; the table opens Input as before).
-  const [view, setView] = useState<"table" | "gallery">("table")
+  // The detail dialog's active tab (controlled so a gallery tile can open
+  // straight to Output; the table opens Input as before).
   const [detailTab, setDetailTab] = useState<string>("input")
-  const filter = statusFilter === "all" ? undefined : statusFilter
-  const { data: jobs = [], isLoading: loading } = useAdminJobs(
-    page,
-    50,
-    filter,
-    userIdFilter,
-    excludeUserIds,
-  )
+  // Hiding the admins needs their ids: hold the request until the list is in,
+  // so a refreshed or shared link never flashes the admins' jobs first.
+  const hidesAdmins = filters.excludeAdmins && !filters.userEmail
+  const jobsReady = !hidesAdmins || usersLoaded
+  const { data, isLoading, isError } = useAdminJobs(page, PAGE_SIZE, filters, adminIds, { enabled: jobsReady })
+  const loading = isLoading || !jobsReady
+  const jobs = data?.jobs ?? []
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -295,14 +321,14 @@ export default function AdminJobsPage() {
           <div className="flex gap-1 rounded-lg border bg-background p-1">
             <button
               type="button"
-              onClick={() => setView("table")}
+              onClick={() => setFilters({ ...filters, view: "table" })}
               className={`rounded-md px-3 py-1 text-sm transition-colors ${view === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
               Table
             </button>
             <button
               type="button"
-              onClick={() => setView("gallery")}
+              onClick={() => setFilters({ ...filters, view: "gallery" })}
               className={`rounded-md px-3 py-1 text-sm transition-colors ${view === "gallery" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
               Gallery
@@ -313,11 +339,8 @@ export default function AdminJobsPage() {
           {users.length > 0 && (
             <UserFilter
               users={users}
-              value={userFilter}
-              onChange={(next) => {
-                setPage(0)
-                setUserFilter(next)
-              }}
+              value={userFilterValue(filters, users)}
+              onChange={onUserFilter}
             />
           )}
           <div className="flex gap-1">
@@ -326,7 +349,7 @@ export default function AdminJobsPage() {
                 key={s}
                 variant={statusFilter === s ? "default" : "outline"}
                 size="sm"
-                onClick={() => { setPage(0); setStatusFilter(s) }}
+                onClick={() => setFilters({ ...filters, status: s === "all" ? undefined : s })}
               >
                 {s === "all" ? "All" : s}
               </Button>
@@ -335,13 +358,26 @@ export default function AdminJobsPage() {
         </div>
       </div>
 
+      <JobsFilterBar filters={filters} onChange={setFilters} sources={sources} />
+
+      {hidesAdmins && usersFailed && (
+        <p className="mb-3 text-sm text-destructive">Couldn&apos;t load the admin accounts to hide. Reload to try again.</p>
+      )}
+
       {view === "table" ? (
-        loading && jobs.length === 0 ? (
+        isError && jobs.length === 0 ? (
+        <div className="py-16 text-center font-mono text-sm text-destructive">
+          Couldn&apos;t load jobs. Try again.
+        </div>
+      ) : loading && jobs.length === 0 ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
       <>
+      {data?.userNotFound && (
+        <p className="mb-3 text-sm text-destructive">No user with that email</p>
+      )}
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
@@ -376,7 +412,7 @@ export default function AdminJobsPage() {
                 <td className="px-3 py-2">
                   <Badge variant={statusVariant(job.status)} className="text-xs">{job.status}</Badge>
                 </td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{jobTypeLabel(job) ?? "-"}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{rowJobType(job) ?? "-"}</td>
                 <td className="px-3 py-2 text-xs max-w-[140px] truncate" title={job.user_email}>{job.user_email}</td>
                 <td className="px-3 py-2 text-xs max-w-[120px] truncate">
                   {job.workflow_id ? (
@@ -437,10 +473,10 @@ export default function AdminJobsPage() {
       </div>
 
       <div className="flex gap-2 mt-4">
-        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
           Previous
         </Button>
-        <Button variant="outline" size="sm" disabled={jobs.length < 50} onClick={() => setPage((p) => p + 1)}>
+        <Button variant="outline" size="sm" disabled={jobs.length < PAGE_SIZE} onClick={() => setPage(page + 1)}>
           Next
         </Button>
       </div>
@@ -448,9 +484,9 @@ export default function AdminJobsPage() {
       )
       ) : (
         <JobsGallery
-          statusFilter={filter}
-          userIdFilter={userIdFilter}
-          excludeUserIds={excludeUserIds}
+          filters={filters}
+          excludeUserIds={adminIds}
+          enabled={jobsReady}
           onOpenJob={(job) => {
             setSelectedJob(job)
             setDetailTab("output")

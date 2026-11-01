@@ -141,6 +141,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
               height,
               backgroundColor,
               engine: "lottie",
+              resolvedModel: lottieLlmModel,
             },
           })
 
@@ -197,7 +198,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "motion-graphics"), width, height, backgroundColor },
+          input_data: { ...buildJobInputData(parsed.data, "motion-graphics"), width, height, backgroundColor, resolvedModel: llmModel },
         })
 
       if (jobError) {

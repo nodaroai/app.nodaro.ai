@@ -11,6 +11,7 @@ import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "..
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { buildPortraitPrompt } from "../lib/character-prompts.js"
 import { renderEntitySubjectHints } from "../lib/entity-subject.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -352,7 +353,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       // and the source material is recoverable from the workflow. Storing it
       // would bloat the jobs row with redundant text.
       const { facetInjections: _facetInjections, ...inputDataSource } = parsed.data
-      const inputData = buildJobInputData(inputDataSource, "generate-character")
+      const inputData = withResolvedModel(buildJobInputData(inputDataSource, "generate-character"), "generate-character")
       const workflowId = extractWorkflowId(req.body)
 
       // Resolve the final aspect ratio: explicit > node override > portrait default.

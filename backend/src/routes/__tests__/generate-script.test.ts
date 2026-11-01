@@ -252,6 +252,22 @@ describe("POST /v1/generate-script", () => {
     expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), TEST_JOB_ID, chargeId, { holdCredits })
   })
 
+  it("records the model the worker runs — the legacy vendor provider resolved to its model", async () => {
+    const { mockInsert } = mockJobInsertSuccess()
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-script",
+      payload: { prompt: "Write a story", userId: TEST_USER_ID, provider: "claude" },
+    })
+
+    const request = buildScriptRequest({ prompt: "Write a story", provider: "claude", advanced: {}, brief: {}, lanes: {} })
+    expect(request.modelId).not.toBe("claude")
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ input_data: expect.objectContaining({ provider: "claude", resolvedModel: request.modelId }) }),
+    )
+  })
+
   it("rollback: reserves the tier id exactly as before", async () => {
     pricing.rollback = true
     mockJobInsertSuccess()

@@ -1366,6 +1366,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               // and a provider-less request runs on the platform default — a
               // Seedance model, so exactly the runs that need the settlement.
               provider,
+              resolvedModel: provider,
               aspectRatio: normAspectRatio,
               resolution: normResolution,
               duration: normDuration,

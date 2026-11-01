@@ -98,7 +98,7 @@ export async function afterEffectsAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "after-effects"), width, height },
+          input_data: { ...buildJobInputData(parsed.data, "after-effects"), width, height, resolvedModel: llmModel },
         })
 
       if (jobError) {

@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData } from "../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, nonAdminJobInputData, redactPrivateJobData } from "../lib/public-job-data.js"
 import { registerJobTrashRoutes } from "./job-trash.js"
 // OpenAPI entries (module side effect, like every route file's registerPath).
 import "./jobs-docs.js"
@@ -116,18 +116,11 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
   if (!isAdmin && redacted.status === "processing" && attempts > 0) picked.recovering = true
 
   // Strip internal fields from input_data (the orchestrator stores the full
-  // payload). NON-ADMIN ONLY — parity with the pre-allowlist sanitizer, whose
-  // admin branch returned before this block: `input_data.provider` is the model
-  // id on character/entity jobs and admins read it for forensics.
-  if (!isAdmin && picked.input_data && typeof picked.input_data === "object") {
-    const cleaned = { ...(picked.input_data as Record<string, unknown>) }
-    delete cleaned.userId
-    delete cleaned.jobId
-    delete cleaned.usageLogId
-    delete cleaned.force_private
-    delete cleaned.provider
-    picked.input_data = cleaned
-  }
+  // payload) and the model fields. NON-ADMIN ONLY — parity with the
+  // pre-allowlist sanitizer, whose admin branch returned before this block:
+  // admins read `provider` / `resolvedModel` for forensics. The key list is
+  // shared with every other owner-facing read of a job's input.
+  if (!isAdmin && picked.input_data && typeof picked.input_data === "object") picked.input_data = nonAdminJobInputData(picked.input_data)
 
   return picked as unknown as JobRecord | PublicJob
 }

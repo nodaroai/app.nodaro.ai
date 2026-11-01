@@ -317,13 +317,16 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
       : 1
     const modelIdentifier = buildMetaAdsScrapeCreditId({ count: body.count, sources, analysis: analysisTier })
 
+    // The model the per-item analysis runs, when one is asked for (resolved before
+    // the row so the row records it).
+    const analysisModel = body.analysisModel ?? LLM_FEATURE_DEFAULTS["meta-ads-analysis"]
     const { data: job, error: jobError } = await insertSyncJob(req, {
       workflow_id: extractWorkflowId(req.body),
       node_id: extractNodeId(req.body),
       force_private: extractForcePrivate(req.body) || undefined,
       user_id: userId,
       status: "pending",
-      input_data: buildJobInputData(body, META_ADS_SCRAPE_NODE_TYPE),
+      input_data: { ...buildJobInputData(body, META_ADS_SCRAPE_NODE_TYPE), ...(analysisTier !== null ? { resolvedModel: analysisModel } : {}) },
     })
 
     if (jobError || !job) {
@@ -336,7 +339,6 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
     // scrape plus what the analyses cost. Under the rollback — and for a cloud
     // relay, whose connected account runs and bills the analysis — the run
     // reserves its tier id exactly as before.
-    const analysisModel = body.analysisModel ?? LLM_FEATURE_DEFAULTS["meta-ads-analysis"]
     const meteredAnalysis = analysisTier !== null && !viaCloud && llmMeteredPricing()
     const analysisSpend = new LlmSpend()
     let analysisHold: FixedPlusLlmHold | undefined

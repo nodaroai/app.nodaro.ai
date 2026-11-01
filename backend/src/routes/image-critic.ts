@@ -158,7 +158,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "image-critic"),
+          input_data: { ...buildJobInputData(parsed.data, "image-critic"), resolvedModel: llmModel },
         })
 
       if (jobError || !job) {

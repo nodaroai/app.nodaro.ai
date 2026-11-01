@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import {
@@ -211,7 +212,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: {
-            ...buildJobInputData(parsed.data, "generate-creature-motion"),
+            ...withResolvedModel(buildJobInputData(parsed.data, "generate-creature-motion"), "generate-creature-motion"),
             prompt,
             aspectRatio,
           },

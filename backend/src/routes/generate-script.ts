@@ -77,7 +77,10 @@ export async function generateScriptRoutes(app: FastifyInstance) {
 
     // Same resolution the worker uses — validating against a different model than
 // the one that runs is how an accepted request turns into a lane-pin failure.
-    const advancedError = advancedModeError(parsed.data, resolveScriptModelId(provider, llmModel))
+    // The model the worker runs (buildScriptRequest resolves it the same way):
+    // the legacy vendor `provider` maps onto a model, a named llmModel wins.
+    const scriptModelId = resolveScriptModelId(provider, llmModel)
+    const advancedError = advancedModeError(parsed.data, scriptModelId)
     if (advancedError) return reply.status(400).send({ error: advancedError })
     const modelIdentifier = buildLlmCreditIdentifier("generate-script", llmModel, reasoningEffort, parsed.data.advancedMode)
     const mcpClient = extractMcpClient(req.body)
@@ -88,7 +91,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "generate-script"),
+        input_data: { ...buildJobInputData(parsed.data, "generate-script"), resolvedModel: scriptModelId },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

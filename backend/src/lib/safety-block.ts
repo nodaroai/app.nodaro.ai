@@ -320,9 +320,12 @@ export function refusalHintFor(
  *  synthetic LoRA model, or, on a workflow run, the image-to-image sibling a
  *  reference swapped to (the workflow engine's payload-builder sends it there
  *  and keeps `provider` as the model the user picked) — then `resolvedModel`,
- *  the same fact as the single-node route records it (on `input_data` only:
- *  the sibling or the LoRA model its queue payload sends), else `provider`
- *  (the route enqueue shape). */
+ *  the model the worker runs as the single-node route records it (on
+ *  `input_data` only: the sibling or the LoRA model its queue payload sends,
+ *  or, for an edit of a base, the sibling the worker swaps the payload's
+ *  text-to-image model to — so the two reads can name the two members of a
+ *  pair, which share one safety policy, pinned in @nodaro/shared's
+ *  safety-retry-policy test), else `provider` (the route enqueue shape). */
 export function jobModelIdOf(data: unknown): string | null {
   if (typeof data !== "object" || data === null) return null
   const { model, resolvedModel, provider } = data as { model?: unknown; resolvedModel?: unknown; provider?: unknown }

@@ -14,6 +14,9 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
 
+/** The catalog model every run of this route runs — and the credit id it bills under. */
+const VOICE_DESIGN_MODEL_ID = "elevenlabs-voice-design"
+
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),
   userPrompt: z.string().max(8000).optional(),
@@ -29,7 +32,7 @@ const voiceDesignBody = z.object({
 
 export async function voiceDesignRoutes(app: FastifyInstance) {
   app.post("/v1/voice-design", {
-    preHandler: creditGuard(() => "elevenlabs-voice-design"),
+    preHandler: creditGuard(() => VOICE_DESIGN_MODEL_ID),
   }, async (req, reply) => {
     const parsed = voiceDesignBody.safeParse(req.body)
     if (!parsed.success) {
@@ -42,7 +45,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
     // eleven_ttv_v3 is ElevenLabs' newest text-to-voice model (all languages);
     // default it in-handler when the caller omits it, mirroring how
     // text-to-speech resolves its provider default (schema stays optional).
-    const resolvedModel = model ?? DEFAULT_VOICE_DESIGN_MODEL
+    const wireModel = model ?? DEFAULT_VOICE_DESIGN_MODEL
     const userId = req.userId
 
     if (!userId) {
@@ -73,7 +76,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "voice-design"),
+        input_data: { ...buildJobInputData(parsed.data, "voice-design"), resolvedModel: VOICE_DESIGN_MODEL_ID },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -81,7 +84,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "elevenlabs-voice-design")
+    const reservation = await reserveCreditsForJob(req, reply, job.id, VOICE_DESIGN_MODEL_ID)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
@@ -89,7 +92,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       jobId: job.id,
       text,
       voiceDescription: finalVoiceDescription,
-      model: resolvedModel,
+      model: wireModel,
       loudness,
       guidanceScale,
       seed,

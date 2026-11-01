@@ -12,6 +12,9 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 
+/** The catalog model every run of this route runs — and the credit id it bills under. */
+const VOICE_CHANGER_MODEL_ID = "elevenlabs-voice-changer"
+
 const voiceChangerBody = z
   .object({
     // Audio mode (audio in → audio out) OR video mode (video in → video out +
@@ -39,7 +42,7 @@ const voiceChangerBody = z
 
 export async function voiceChangerRoutes(app: FastifyInstance) {
   app.post("/v1/voice-changer", {
-    preHandler: creditGuard(() => "elevenlabs-voice-changer"),
+    preHandler: creditGuard(() => VOICE_CHANGER_MODEL_ID),
   }, async (req, reply) => {
     const parsed = voiceChangerBody.safeParse(req.body)
     if (!parsed.success) {
@@ -65,7 +68,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "voice-changer"),
+        input_data: { ...buildJobInputData(parsed.data, "voice-changer"), resolvedModel: VOICE_CHANGER_MODEL_ID },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -73,7 +76,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to change voice")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "elevenlabs-voice-changer")
+    const reservation = await reserveCreditsForJob(req, reply, job.id, VOICE_CHANGER_MODEL_ID)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

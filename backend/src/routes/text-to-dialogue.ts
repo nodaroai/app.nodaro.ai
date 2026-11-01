@@ -124,7 +124,7 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
         // The row names the model the run renders on (resolved, never the raw
         // body's optional field): the orchestrator path stores the same shape,
         // so job stats and egress read one id for both doors.
-        input_data: buildJobInputData({ ...parsed.data, provider }, "text-to-dialogue"),
+        input_data: { ...buildJobInputData({ ...parsed.data, provider }, "text-to-dialogue"), resolvedModel: provider },
       })
 
     if (error) {

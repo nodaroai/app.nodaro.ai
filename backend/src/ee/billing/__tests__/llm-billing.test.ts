@@ -755,7 +755,8 @@ describe("meterSyncLlmMetered (D3 helpers)", () => {
     const req = fakeReq()
     const reply = fakeReply() as unknown as FastifyReply
     const m = await meterSyncLlmMetered(req, reply, "object-llm-caption", { feature: "prompt-helper", calls: [{ modelId: "claude-fable-5", request: H1 }] })
-    expect(h.meterSyncLlm).toHaveBeenCalledWith(req, reply, "object-llm-caption", "prompt-helper")
+    // Billed at prompt-helper as before; the model only lands on the row.
+    expect(h.meterSyncLlm).toHaveBeenCalledWith(req, reply, "object-llm-caption", "prompt-helper", "claude-fable-5")
     await m!.settle("failed", "a message the rollback path never writes")
     expect(meter.refund).toHaveBeenCalledTimes(1)
     expect(meter.commit).not.toHaveBeenCalled()

@@ -89,7 +89,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "image-to-text"),
+          input_data: { ...buildJobInputData(parsed.data, "image-to-text"), resolvedModel: llmModel },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 

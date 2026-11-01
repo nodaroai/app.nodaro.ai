@@ -1,5 +1,6 @@
 import type { AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import { type JobPlatform } from "@/lib/job-platform"
+import { extractAssets } from "@/components/admin/job-asset-view-extractors"
 import { ownCreditsForTotal } from "./admin-job-credits"
 
 // Pure grouping + formatting for the admin Jobs Gallery. Kept out of the React
@@ -57,20 +58,44 @@ export function ago(dateStr: string): string {
   return `${Math.round(mins / 1440)}d ago`
 }
 
-export function typeLabel(job: AdminJob): string {
-  if (job.job_type) return job.job_type
-  const t = job.input_data?.type
-  return typeof t === "string" ? t : ""
+/** What a gallery tile shows for a job's output. */
+export type TileMedia =
+  | { kind: "video"; url: string; poster: string | null }
+  | { kind: "image"; url: string }
+  | { kind: "audio"; url: string; cover: string | null }
+  | { kind: "text"; text: string }
+  | { kind: "none" }
+
+const TILE_TEXT_FIELDS = ["generatedText", "text", "result"] as const
+const TILE_TEXT_MAX = 280
+
+function nonEmptyString(v: unknown): string | null {
+  return typeof v === "string" && v.trim().length > 0 ? v : null
 }
 
-/** The output thumbnail for a tile, or null → placeholder. Prefers the explicit
- *  thumbnail, then the image; other outputs (text, audio, un-thumbnailed video)
- *  fall through to the placeholder — the user's chosen "all jobs" scope. */
-export function jobThumb(job: AdminJob): string | null {
+/** The tile shows what the job PRODUCED, read from its output the way the
+ *  job's Output tab reads it (`extractAssets`): a video wins, then audio (an
+ *  image beside it is its cover art), then an image, then the output's text. */
+export function tileMedia(job: AdminJob): TileMedia {
   const o = job.output_data
-  if (!o) return null
-  const t = o.thumbnailUrl ?? o.imageUrl
-  return typeof t === "string" && t.length > 0 ? t : null
+  if (!o) return { kind: "none" }
+  const assets = extractAssets(o)
+  const first = (kind: "video" | "image" | "audio") => assets.find((a) => a.kind === kind)?.url ?? null
+  const thumb = nonEmptyString(o.thumbnailUrl)
+
+  const video = first("video")
+  if (video) return { kind: "video", url: video, poster: thumb }
+  const audio = first("audio")
+  if (audio) return { kind: "audio", url: audio, cover: first("image") }
+  // `imageUrl` last: an extensionless image URL is still the job's image.
+  const image = thumb ?? first("image") ?? nonEmptyString(o.imageUrl)
+  if (image) return { kind: "image", url: image }
+
+  for (const field of TILE_TEXT_FIELDS) {
+    const text = nonEmptyString(o[field])
+    if (text) return { kind: "text", text: text.trim().slice(0, TILE_TEXT_MAX) }
+  }
+  return { kind: "none" }
 }
 
 // Items arrive created_at-desc (API order, deduped), so first-seen day/platform

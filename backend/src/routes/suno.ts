@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
   SUNO_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars,
   SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, sunoSeparateCreditId,
@@ -370,7 +371,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-generate"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-generate"), "suno-generate"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -444,7 +445,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-cover"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-cover"), "suno-cover"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -521,7 +522,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-extend"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-extend"), "suno-extend"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -770,7 +771,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-mashup"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-mashup"), "suno-mashup"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -980,7 +981,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-add-instrumental"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-add-instrumental"), "suno-add-instrumental"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -1035,7 +1036,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-add-vocals"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-add-vocals"), "suno-add-vocals"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -1149,7 +1150,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-upload-extend"),
+          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-upload-extend"), "suno-upload-extend"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 

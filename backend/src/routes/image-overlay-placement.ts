@@ -100,7 +100,7 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData({ imageUrl, layerAspect, intent, safeArea }, "image-overlay-suggest"),
+        input_data: { ...buildJobInputData({ imageUrl, layerAspect, intent, safeArea }, "image-overlay-suggest"), resolvedModel: llmModel },
       })
       if (jobError) return sendInternalError(reply, req, jobError, "Failed to create job")
 

@@ -21,6 +21,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt } from "@nodaro/shared/models"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
@@ -286,7 +287,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
         user_id: userId,
         job_type: "extend-video",
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "extend-video"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "extend-video"), "extend-video"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

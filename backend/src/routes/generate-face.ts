@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { buildFaceTemplateInputs } from "@nodaro/prompts/doctrine"
 import { containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
 import { formatZodError } from "../lib/zod-error.js"
@@ -104,7 +105,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
         status: "pending",
         // `subjectMinor` is persisted, not just enqueued: a floored job has to
         // be auditable from the row alone.
-        input_data: { ...buildJobInputData(parsed.data, "generate-face"), prompt, subjectMinor },
+        input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-face"), "generate-face"), prompt, subjectMinor },
       })
 
     if (error) {

@@ -163,7 +163,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "ai-writer"),
+          input_data: { ...buildJobInputData(parsed.data, "ai-writer"), resolvedModel: llmModel },
         })
 
       if (jobError) {
@@ -324,7 +324,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "ai-writer-stream"),
+          input_data: { ...buildJobInputData(parsed.data, "ai-writer-stream"), resolvedModel: llmModel },
         })
 
       if (jobError) {

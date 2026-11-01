@@ -40,7 +40,7 @@ import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
-import { CHILD_JOB_COLUMN, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, nonAdminJobInputData, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "../lib/job-credit-status.js"
 
 /** No run figures loaded: the hold, as before. */
@@ -2094,14 +2094,18 @@ export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = fa
 
 function jobToExecutionResponse(row: Record<string, unknown>, isAdmin: boolean, credits: RunCredits) {
   const summary = jobToExecutionSummary(row, isAdmin, credits)
+  // A standalone job's input, through the redaction every job read applies:
+  // its server-only top-level `__` keys (a trend run's hidden inputs) and
+  // `unscoredUrl` never reach the caller; a non-admin also never reads the
+  // orchestrator's bookkeeping or the model fields (`provider`,
+  // `resolvedModel`) — the same keys `sanitizeJobForPublic` drops. Shared by
+  // the JSON and SSE paths.
+  const inputData = redactPrivateJobData({ input_data: row.input_data }).input_data
   return {
     ...summary,
     workflowId: row.workflow_id,
     userId: row.user_id,
-    // A standalone job's input, through the redaction every job read applies:
-    // its server-only top-level `__` keys (a trend run's hidden inputs) and
-    // `unscoredUrl` never reach the caller. Shared by the JSON and SSE paths.
-    triggerData: redactPrivateJobData({ input_data: row.input_data }).input_data,
+    triggerData: isAdmin ? inputData : nonAdminJobInputData(inputData),
     // `jobs` has no updated_at: its last transition is the closest stamp.
     updatedAt: row.completed_at ?? row.started_at ?? row.created_at,
   }

@@ -67,6 +67,23 @@ describe("sanitizeJobForPublic — recovering flag (audit UX)", () => {
   })
 })
 
+describe("sanitizeJobForPublic — the model in input_data", () => {
+  const job = {
+    ...(baseJob as Record<string, unknown>),
+    input_data: { prompt: "x", provider: "gpt-image-2", resolvedModel: "gpt-image-2-i2i" },
+  }
+
+  it("non-admin: resolvedModel is stripped with provider", () => {
+    const out = sanitizeJobForPublic(job as never, false) as unknown as { input_data: Record<string, unknown> }
+    expect(out.input_data).toEqual({ prompt: "x" })
+  })
+
+  it("admin: both are present", () => {
+    const out = sanitizeJobForPublic(job as never, true) as unknown as { input_data: Record<string, unknown> }
+    expect(out.input_data).toEqual({ prompt: "x", provider: "gpt-image-2", resolvedModel: "gpt-image-2-i2i" })
+  })
+})
+
 /**
  * THE LEAK PROOF (spec D6), as a test.
  *

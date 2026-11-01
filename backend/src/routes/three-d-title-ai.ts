@@ -106,7 +106,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "3d-title"), width, height, backgroundColor },
+          input_data: { ...buildJobInputData(parsed.data, "3d-title"), width, height, backgroundColor, resolvedModel: llmModel },
         })
 
       if (jobError) {

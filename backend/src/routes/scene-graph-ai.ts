@@ -96,7 +96,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "scene-graph-ai"), assetCount: assets.length },
+          input_data: { ...buildJobInputData(parsed.data, "scene-graph-ai"), assetCount: assets.length, resolvedModel: llmModel },
         })
 
       if (jobError) {

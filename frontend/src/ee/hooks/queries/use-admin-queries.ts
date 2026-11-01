@@ -9,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
+import { jobFiltersKey, serverParams, type AdminJobFilters } from "@/ee/app/(admin)/admin/jobs/jobs-filters"
 import {
   getAuthHeaders,
   fetchAdminNodeDefaults,
@@ -436,6 +437,13 @@ export function sanitizeUserSearch(search: string): string {
   return search.replace(/[^\p{L}\p{N}\p{M}\s@.\-_+]/gu, "").trim()
 }
 
+/** One page of the admin jobs list. */
+export interface AdminJobsPage {
+  readonly jobs: AdminJob[]
+  /** The filter named an address no account has: the page is empty because of it. */
+  readonly userNotFound: boolean
+}
+
 // workflow_execution_id column exists in DB but not in generated Supabase types
 interface JobRow {
   id: string
@@ -467,13 +475,12 @@ interface JobRow {
 // Fetch + client-side enrich ONE page of admin jobs. Extracted verbatim from
 // useAdminJobs so the table (useAdminJobs) and the Gallery
 // (useAdminJobsInfinite) share exactly one fetch/enrichment implementation.
-async function fetchAdminJobsPage(
+export async function fetchAdminJobsPage(
   page: number,
   pageSize: number,
-  statusFilter?: string,
-  userIdFilter?: string,
+  filters: AdminJobFilters,
   excludeUserIds?: ReadonlyArray<string>,
-): Promise<AdminJob[]> {
+): Promise<AdminJobsPage> {
   const supabase = createClient()
   // `jobs` is no longer column-readable from the browser: migration 347
   // revoked table-level SELECT from `authenticated` down to the four columns
@@ -482,17 +489,15 @@ async function fetchAdminJobsPage(
   // from GET /v1/admin/jobs (requireAdmin). The enrichment reads below are
   // unaffected — those tables keep their admin RLS policies.
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
-  if (statusFilter) params.set("status", statusFilter)
-  if (userIdFilter) params.set("userId", userIdFilter)
-  if (excludeUserIds && excludeUserIds.length > 0) {
-    params.set("excludeUserIds", excludeUserIds.join(","))
-  }
+  for (const [key, value] of serverParams(filters, new Date())) params.set(key, value)
+  const excluded = excludedUserIds(filters, excludeUserIds)
+  if (excluded.length > 0) params.set("excludeUserIds", excluded.join(","))
   const res = await fetch(`/v1/admin/jobs?${params.toString()}`, {
     headers: await getAuthHeaders(),
   })
   if (!res.ok) throw await adminError(res, "Failed to fetch jobs")
-  const { data: jobs } = (await res.json()) as { data: JobRow[] }
-  if (!jobs || jobs.length === 0) return []
+  const { data: jobs, userNotFound } = (await res.json()) as { data: JobRow[]; userNotFound?: true }
+  if (!jobs || jobs.length === 0) return { jobs: [], userNotFound: userNotFound === true }
   const userIds = [...new Set(jobs.map((j) => j.user_id))]
   // Orchestrator-created rows carry only workflow_execution_id (their
   // workflow_id is null), so the owning workflow is resolved through the
@@ -526,7 +531,7 @@ async function fetchAdminJobsPage(
   const workflowsRes = await supabase.from("workflows").select("id, name, project_id").in("id", workflowIds)
   const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
   const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, { name: w.name, project_id: w.project_id }]))
-  return jobs.map((j) => ({
+  const enriched = jobs.map((j) => ({
     id: j.id,
     status: j.status,
     job_type: j.job_type ?? null,
@@ -556,19 +561,26 @@ async function fetchAdminJobsPage(
     reconcile_last_error: j.reconcile_last_error ?? null,
     provider_call_started_at: j.provider_call_started_at ?? null,
   }))
+  return { jobs: enriched, userNotFound: false }
+}
+
+/** `enabled: false` holds the request, e.g. until the admins' ids it must exclude have loaded. */
+export interface AdminJobsQueryOptions {
+  readonly enabled?: boolean
 }
 
 export function useAdminJobs(
   page: number,
-  pageSize = 50,
-  statusFilter?: string,
-  userIdFilter?: string,
+  pageSize: number,
+  filters: AdminJobFilters,
   excludeUserIds?: ReadonlyArray<string>,
+  options: AdminJobsQueryOptions = {},
 ) {
+  const excluded = excludedUserIds(filters, excludeUserIds)
   return useQuery({
-    queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter, userIdFilter, excludeUserIds),
-    queryFn: () => fetchAdminJobsPage(page, pageSize, statusFilter, userIdFilter, excludeUserIds),
-    enabled: hasAdmin(),
+    queryKey: queryKeys.admin.jobs(page, pageSize, jobFiltersKey(filters), excluded),
+    queryFn: () => fetchAdminJobsPage(page, pageSize, filters, excluded),
+    enabled: hasAdmin() && (options.enabled ?? true),
     staleTime: 15_000,
   })
 }
@@ -582,21 +594,80 @@ export function useAdminJobs(
  * a row across page boundaries when new jobs land mid-scroll.
  */
 export function useAdminJobsInfinite(
-  pageSize = 50,
-  statusFilter?: string,
-  userIdFilter?: string,
+  pageSize: number,
+  filters: AdminJobFilters,
   excludeUserIds?: ReadonlyArray<string>,
+  options: AdminJobsQueryOptions = {},
 ) {
+  const excluded = excludedUserIds(filters, excludeUserIds)
   return useInfiniteQuery({
-    queryKey: queryKeys.admin.jobsInfinite(pageSize, statusFilter, userIdFilter, excludeUserIds),
-    queryFn: ({ pageParam }) =>
-      fetchAdminJobsPage(pageParam, pageSize, statusFilter, userIdFilter, excludeUserIds),
+    queryKey: queryKeys.admin.jobsInfinite(pageSize, jobFiltersKey(filters), excluded),
+    queryFn: ({ pageParam }) => fetchAdminJobsPage(pageParam, pageSize, filters, excluded),
     initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => (lastPage.length === pageSize ? allPages.length : undefined),
-    enabled: hasAdmin(),
+    getNextPageParam: (lastPage, allPages) => (lastPage.jobs.length === pageSize ? allPages.length : undefined),
+    enabled: hasAdmin() && (options.enabled ?? true),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
+}
+
+/** One choice of the platform filter. */
+export interface AdminJobSource {
+  /** The platform key the server filters on (`web:studio`, `app:<id>`, `api`, …). */
+  readonly key: string
+  readonly label: string
+  /** Jobs in the last 90 days. */
+  readonly count: number
+}
+
+const APP_SOURCE = "app:"
+const WEB_SOURCE = "web:"
+
+/**
+ * The platform filter's choices: every platform with jobs in the last 90
+ * days, most jobs first. A developer app (`app:<id>`) is labelled with its
+ * name (the id when the app is gone); a web app (`web:<product>`) with the
+ * product. Cached for minutes: the server counts 90 days of jobs per call.
+ */
+export function useAdminJobSources() {
+  return useQuery({
+    queryKey: queryKeys.admin.jobSources(),
+    queryFn: async (): Promise<AdminJobSource[]> => {
+      const res = await fetch("/v1/admin/jobs/sources", { headers: await getAuthHeaders() })
+      if (!res.ok) throw await adminError(res, "Failed to fetch job sources")
+      const { data } = (await res.json()) as { data: Array<{ key: string; count: number }> | null }
+      const rows = data ?? []
+      const appIds = [...new Set(rows.filter((r) => r.key.startsWith(APP_SOURCE)).map((r) => r.key.slice(APP_SOURCE.length)))]
+      const appNames = new Map<string, string>()
+      if (appIds.length > 0) {
+        // The generated Database type predates developer_apps (see fetchAdminJobsPage).
+        const { data: apps } = await (createClient()
+          .from("developer_apps" as never)
+          .select("id, name")
+          .in("id", appIds) as unknown as PromiseLike<{ data: Array<{ id: string; name: string }> | null }>)
+        for (const a of apps ?? []) appNames.set(a.id, a.name)
+      }
+      return rows.map((r) => ({ key: r.key, label: jobSourceLabel(r.key, appNames), count: r.count }))
+    },
+    enabled: hasAdmin(),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+}
+
+/** A platform key's label: an app's name (or id), a web app's product, else the key. */
+export function jobSourceLabel(key: string, appNames: ReadonlyMap<string, string>): string {
+  if (key.startsWith(APP_SOURCE)) {
+    const id = key.slice(APP_SOURCE.length)
+    return appNames.get(id) || id
+  }
+  if (key.startsWith(WEB_SOURCE)) return key.slice(WEB_SOURCE.length)
+  return key
+}
+
+/** The ids a jobs request leaves out: the admins' when they are hidden, and none while one user is picked. */
+function excludedUserIds(filters: AdminJobFilters, excludeUserIds?: ReadonlyArray<string>): ReadonlyArray<string> {
+  return filters.excludeAdmins && !filters.userEmail ? (excludeUserIds ?? []) : []
 }
 
 const ADMIN_USER_FILTER_LIMIT = 1000

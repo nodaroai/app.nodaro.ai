@@ -213,7 +213,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "llm-chat"),
+        input_data: { ...buildJobInputData(parsed.data, "llm-chat"), resolvedModel: llmModel },
       }
       let job: { id: string }
       const keyed = keyedChatCallOf(req)
@@ -409,7 +409,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "llm-chat-stream"),
+          input_data: { ...buildJobInputData(parsed.data, "llm-chat-stream"), resolvedModel: llmModel },
         })
 
       if (jobError) {

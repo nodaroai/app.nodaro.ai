@@ -103,7 +103,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "lottie-overlay"), width, height },
+          input_data: { ...buildJobInputData(parsed.data, "lottie-overlay"), width, height, resolvedModel: llmModel },
         })
 
       if (jobError) {

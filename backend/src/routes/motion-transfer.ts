@@ -26,6 +26,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { MOTION_TRANSFER_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { buildMotionCreditModelIdentifier } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
@@ -88,7 +89,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "motion-transfer"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "motion-transfer"), "motion-transfer"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

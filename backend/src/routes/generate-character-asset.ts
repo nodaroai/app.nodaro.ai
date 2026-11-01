@@ -10,6 +10,7 @@ import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "..
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import type { WardrobeValue } from "@nodaro/prompts/pickers"
@@ -512,7 +513,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
         status: "pending",
         // `subjectMinor` is persisted, not just enqueued — a floored job has to
         // be auditable after the fact from the jobs row alone.
-        input_data: { ...buildJobInputData(parsed.data, "generate-character-asset"), prompt, subjectMinor },
+        input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-character-asset"), "generate-character-asset"), prompt, subjectMinor },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

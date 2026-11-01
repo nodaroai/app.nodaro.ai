@@ -52,6 +52,7 @@ vi.mock("@/lib/supabase.js", () => ({
 import { qaCheckRoutes } from "../qa-check.js"
 import { ADVANCED_MODE_UNAVAILABLE_MESSAGE, LlmAdvancedModeUnavailableError, LlmLaneError, LLM_ANSWER_UNREADABLE_MESSAGE } from "../../lib/llm-errors.js"
 import { KIE_IMAGE_FETCH_FAILED_MESSAGE } from "../../lib/kie-inline-image.js"
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 
@@ -125,5 +126,14 @@ describe("POST /v1/qa-check — a failure the person can read", () => {
     expect(res.statusCode).toBe(502)
     expect(res.json().error).toEqual({ code: "advanced_mode_unavailable", message: ADVANCED_MODE_UNAVAILABLE_MESSAGE })
     expect(mocks.refundCredits).toHaveBeenCalledWith("usage-1")
+  })
+
+  it("records the model it runs, never the vendor name its provider field carries", async () => {
+    mocks.llmComplete.mockResolvedValue({ text: '{"passed":true,"score":90,"feedback":"ok"}', usage: { inputTokens: 1, outputTokens: 1 } })
+    await app.inject({ method: "POST", url: "/v1/qa-check", payload: { content: "A short paragraph to check.", provider: "claude" } })
+    const row = mocks.insertJob.mock.calls[0]![1] as { input_data: Record<string, unknown> }
+    expect(row.input_data.provider).toBe("claude")
+    expect(row.input_data.resolvedModel).toBe(LLM_FEATURE_DEFAULTS["qa-check"])
+    expect(mocks.llmComplete).toHaveBeenCalledWith(expect.objectContaining({ modelId: LLM_FEATURE_DEFAULTS["qa-check"] }))
   })
 })

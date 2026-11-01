@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { resolveEntityAspect, CREATURE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
@@ -249,7 +250,7 @@ export async function generateCreatureAssetRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...buildJobInputData(parsed.data, "generate-creature-asset"), prompt },
+        input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-creature-asset"), "generate-creature-asset"), prompt },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

@@ -330,6 +330,23 @@ describe("POST /v1/text-to-speech", () => {
       })
     )
     expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", DEFAULT_TTS_PROVIDER)
+    // ...and the row records the model it runs: the default the user never named.
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ input_data: expect.objectContaining({ resolvedModel: DEFAULT_TTS_PROVIDER }) }),
+    )
+  })
+
+  it("records the legacy \"elevenlabs\" provider as the model it runs (turbo)", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-speech",
+      payload: { text: "Legacy provider", provider: "elevenlabs", userId: "00000000-0000-4000-8000-000000000001" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ input_data: expect.objectContaining({ provider: "elevenlabs", resolvedModel: "elevenlabs-turbo" }) }),
+    )
   })
 
   describe("voice.allowedGenders enforcement (B4c)", () => {

@@ -26,6 +26,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoDepthInput } from "../lib/video-depth-input.js"
@@ -131,7 +132,7 @@ export async function videoDepthRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: {
-          ...buildJobInputData({ videoUrl: d.videoUrl, provider: d.provider, modelSize: d.modelSize, ...levers }, "video-depth"),
+          ...withResolvedModel(buildJobInputData({ videoUrl: d.videoUrl, provider: d.provider, modelSize: d.modelSize, ...levers }, "video-depth"), "video-depth"),
           duration_seconds: stash.durationSec,
           bucketKey: stash.creditId,
         },

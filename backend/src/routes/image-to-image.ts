@@ -10,6 +10,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { resolveImageToImageCreditIdentifier } from "./image-to-image-credit-id.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
@@ -270,7 +271,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
         force_private: forcePrivate,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "image-to-image"),
+        input_data: withResolvedModel(buildJobInputData(parsed.data, "image-to-image"), "image-to-image"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 

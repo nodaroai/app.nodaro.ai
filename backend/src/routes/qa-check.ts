@@ -95,7 +95,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "qa-check"),
+          input_data: { ...buildJobInputData(parsed.data, "qa-check"), resolvedModel: llmModel },
         })
 
       if (jobError) {

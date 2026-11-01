@@ -102,7 +102,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: structuredJobInputData(parsed.data),
+        input_data: structuredJobInputData(parsed.data, prepared),
       })
       if (jobError) {
         return sendInternalError(reply, req, jobError, "Failed to create job")

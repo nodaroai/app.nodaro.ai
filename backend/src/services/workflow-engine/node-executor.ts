@@ -39,6 +39,7 @@ import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
 
 import { supabase } from "../../lib/supabase.js"
 import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
+import { resolvedModelOfJob } from "../../lib/job-resolved-model.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config, llmMeteredPricing } from "../../lib/config.js"
@@ -2352,7 +2353,12 @@ async function executeWorkerNode(
   // either key can't silently override them — the reconciler's Path-2 relies
   // on `node_id` matching `node.id` exactly to map orphan-recovered rows
   // back to their owning node.
+  // The model the worker runs, from the built payload, decided as its handler
+  // decides (lib/job-resolved-model.ts) — the same key the routes record. A
+  // payload that already carries one keeps its own.
+  const resolvedModel = resolvedModelOfJob(jobName, payload)
   const inputData: Record<string, unknown> = {
+    ...(resolvedModel ? { resolvedModel } : {}),
     ...payload,
     type: node.type,
     node_id: node.id,

@@ -367,10 +367,17 @@ export function llmStructuredVideoBound(
  * store per row — a 100k-char system prompt and a 64 KB schema. The digest
  * identifies the prompt, the head makes it recognisable in the admin job
  * view; the schema's name and size answer "what config produced this".
+ * `resolvedModel` is the model the call runs — the prepared request's, the
+ * chat default included when the body names none.
  */
-export function structuredJobInputData(body: LlmStructuredBody, type: string = "llm-structured"): Record<string, unknown> & { type: string } {
+export function structuredJobInputData(
+  body: LlmStructuredBody,
+  prepared: { readonly model: { readonly id: string } },
+  type: string = "llm-structured",
+): Record<string, unknown> & { type: string } {
   return {
     ...buildJobInputData(body, type),
+    resolvedModel: prepared.model.id,
     system: digestText(body.system),
     jsonSchema: {
       name: body.schemaName ?? null,

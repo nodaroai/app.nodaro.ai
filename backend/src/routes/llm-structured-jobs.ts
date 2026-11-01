@@ -235,7 +235,7 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
 
       // Derived ONCE: the row's projection and the analysis stamp below are
       // the same object, so the two cannot drift.
-      const inputData = structuredJobInputData(parsed.data, LLM_STRUCTURED_JOB_TYPE)
+      const inputData = structuredJobInputData(parsed.data, prepared, LLM_STRUCTURED_JOB_TYPE)
       const { data: job, error: jobError } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),

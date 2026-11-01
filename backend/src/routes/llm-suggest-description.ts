@@ -142,7 +142,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
           node_id: extractNodeId(req.body),
           user_id: userId,
           status: "pending",
-          input_data: { type: "llm-suggest-description", kind: parsed.data.kind },
+          input_data: { type: "llm-suggest-description", kind: parsed.data.kind, resolvedModel: SUGGEST_MODEL },
         })
       if (jobError || !job) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
