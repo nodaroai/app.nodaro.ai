@@ -315,7 +315,8 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       }
       const settingsKey = faceMaskSettingsKey(draft)!
       // Full depth on an engine that describes the original clip as it makes it: the roles to name
-      // its people by, and the preview's start (scene-description.ts). Any other make is sent as before.
+      // its people by (scene-description.ts; never the preview's start: no preview text is made, a
+      // preview run cuts the whole clip's). Any other make is sent as before.
       const describe = source === "full-depth" && castSwap.storedSceneDescription === true ? sceneMakeFields(draft) : undefined
       // The scene description step, only on a make that describes the clip and to an engine that takes
       // steps; recorded as made with it (never part of the settings key: the stored text is still sent).
@@ -485,7 +486,7 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         ...(outlines && outlines.length > 0 ? { outlines } : {}),
         // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts),
         // and the scene description step its make was sent (absent: none).
-        ...(source === "full-depth" ? sceneDescriptionsOf(output, input) : {}),
+        ...(source === "full-depth" ? sceneDescriptionsOf(output) : {}),
         ...(source === "full-depth" && started.sceneStepKey ? { sceneStepKey: started.sceneStepKey } : {}),
       }
       // Stale on arrival helps no one: the recipes are checked before anything is stored.

@@ -184,20 +184,20 @@ export interface TrendFaceMask {
    * its integer-second range; people named by role), copied from its
    * `output_data.sceneDescription` on approve, trimmed, ≤ 4000. The admin
    * may edit it (`PUT …/face-mask/scene-description`); editing never puts
-   * the mask out of date (it is not part of the settings key). A full run
-   * sends it as `sceneDescription` (scene-description.ts). Absent: a clip
-   * made before descriptions existed (the run then describes the clip itself).
+   * the mask out of date (it is not part of the settings key). Every run
+   * sends it as `sceneDescription`, a preview run with its 4 s window for the
+   * engine to cut it to (scene-description.ts). Absent: a clip made before
+   * descriptions existed (the run then describes the clip itself).
    */
   sceneDescription?: string
-  /** HIDDEN. The same for the 4 s preview window (`previewStart` + 4 s, only the roles in it): a preview run's. */
-  previewSceneDescription?: string
   /**
-   * The `previewStart` the preview's text was made for (the make's recorded
-   * input). A preview run uses that text only while the trend's
-   * `previewStart` still is this; otherwise it sends the whole clip's text
-   * cut to the preview's window. Editing the text keeps it. Absent: not
-   * recorded (the text reads as made for another start).
+   * HIDDEN, UNUSED since 2026-11-01. An older make's text for the 4 s preview
+   * window: kept in storage as it was, never sent, shown or written (a
+   * preview run sends `sceneDescription` cut to its window). New makes are
+   * not asked for one.
    */
+  previewSceneDescription?: string
+  /** UNUSED since 2026-11-01: the `previewStart` an older make's `previewSceneDescription` was made for. */
   previewSceneDescriptionStart?: number
   /**
    * Full depth: the scene description step (`steps.sceneDescription`) the

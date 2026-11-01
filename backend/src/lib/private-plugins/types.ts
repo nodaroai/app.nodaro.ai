@@ -3813,9 +3813,10 @@ export interface PluginSupports {
    *   (`withPreparedPreview`, ee/lib/trends/run-helpers.ts).
    * - `storedSceneDescription`: a full-depth make (`POST /v1/cast-swap/face-mask`)
    *   takes `roles` (`[{ name, kind }]`, the trend's role names) and
-   *   `previewStart`, and its completion carries `sceneDescription` (the whole
-   *   original clip, people named by role) and `previewSceneDescription` (the
-   *   4 s preview window); a trend run takes `sceneDescription` (the stored
+   *   `previewStart` (never sent since 2026-11-01: it asks for a preview text
+   *   too, and a preview run cuts the whole clip's), and its completion carries
+   *   `sceneDescription` (the whole original clip, people named by role) and,
+   *   only when sent `previewStart`, `previewSceneDescription`; a trend run takes `sceneDescription` (the stored
    *   text, platform-only) with `sceneDescriptionWindow` (`{ fromSec, toSec }`
    *   of the source it covers) and rewrites it for the new cast and the run's
    *   window instead of describing the clip again. Additive-optional: absent ⇒

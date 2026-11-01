@@ -3,12 +3,13 @@
  * Registered by `registerTrendFaceMaskRoutes` (admin-trends-face-mask.ts), so
  * it shares the trend admin door; admin-only.
  *
- *   PUT /v1/admin/trends/:id/face-mask/scene-description  { which: "full" | "preview", text, revision }
+ *   PUT /v1/admin/trends/:id/face-mask/scene-description  { which: "full", text, revision }
  *
  * Writes the draft's `faceMask.sceneDescription` (`which: "full"`, the whole
- * clip) or `faceMask.previewSceneDescription` (`"preview"`, the 4 s window):
- * the texts the make job wrote from the original clip, which each run
- * rewrites for its cast (scene-description.ts). Guarded on the draft's
+ * clip): the text the make job wrote from the original clip, which each run
+ * rewrites for its cast, a preview run cut to its 4 s window
+ * (scene-description.ts). There is no preview text to write (decided
+ * 2026-11-01): an older make's stays in storage, unused. Guarded on the draft's
  * revision like every draft write, and audit-logged
  * (`edit_trend_scene_description`). The face mask's settings and settings
  * key are untouched, so editing never puts the mask out of date. 409
@@ -30,7 +31,7 @@ import { withVariantsState } from "./admin-trends-face-mask-variants.js"
 import type { TrendFaceMaskDeps } from "./admin-trends-face-mask.js"
 
 const sceneDescriptionBody = z.strictObject({
-  which: z.enum(["full", "preview"]),
+  which: z.literal("full"),
   text: z.string().trim().min(1, "Write the scene description, or make the depth clip again.").max(SCENE_DESCRIPTION_MAX),
   revision: z.string().min(1).max(100),
 })
@@ -60,8 +61,7 @@ export function registerTrendSceneDescriptionRoutes(app: FastifyInstance, deps: 
         })
       }
       const field = SCENE_DESCRIPTION_FIELD[body.data.which]
-      // The text only: the clip, its settings key, its recipes and the preview start the preview's
-      // text was made for (`previewSceneDescriptionStart`) stay as approved.
+      // The text only: the clip, its settings key and its recipes stay as approved.
       const faceMask: TrendFaceMask = { ...draft.faceMask, [field]: body.data.text }
       const next: TrendVersionData = { ...draft, faceMask }
       const valid = trendVersionDataSchema.safeParse(next)

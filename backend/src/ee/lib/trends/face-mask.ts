@@ -310,15 +310,15 @@ export function faceMaskState(
 }
 
 /**
- * Whether the approved mask's stored scene texts (`sceneDescription`,
- * `previewSceneDescription`) were made with another scene description step
+ * Whether the approved mask's stored scene text (`sceneDescription`, the one
+ * every run sends) was made with another scene description step
  * than the draft's `steps.sceneDescription`: the key its make recorded
  * (`sceneStepKey`, absent = none sent) against the draft's (`sceneStepKeyOf`,
  * absent = unset). Both absent is the same step. False with no stored text.
  */
 export function sceneStepChanged(data: Pick<TrendVersionData, "faceMask" | "steps">): boolean {
   const mask = data.faceMask
-  if (!mask || (mask.sceneDescription === undefined && mask.previewSceneDescription === undefined)) return false
+  if (!mask || mask.sceneDescription === undefined) return false
   return mask.sceneStepKey !== sceneStepKeyOf(data.steps?.sceneDescription)
 }
 

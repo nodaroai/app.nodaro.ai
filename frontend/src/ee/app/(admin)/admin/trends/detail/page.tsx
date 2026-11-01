@@ -575,10 +575,10 @@ export default function AdminTrendEditorPage() {
                     : undefined
                 }
                 // Full depth's scene written in words (a description, the default, alone or beside the original):
-                // the clip's stored descriptions.
+                // the clip's stored description.
                 sceneDescription={
                   savedPreparation === "full-depth" && fullDepthSceneDescribes(server.draft.faceMasking?.scene)
-                    ? { previewStart: server.draft.previewStart }
+                    ? { previewStart: server.draft.previewStart, durationSec: server.draft.source?.durationSec }
                     : undefined
                 }
               />

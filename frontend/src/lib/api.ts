@@ -11392,9 +11392,9 @@ export interface AdminTrendFaceMask {
   variantJobs?: AdminTrendFaceMaskVariantJob[]
   /** Full depth: the make's description of the whole original clip (each run rewrites it for its cast). Absent: made before descriptions. */
   sceneDescription?: string
-  /** Full depth: the same for the 4 s preview window. */
+  /** Unused since 2026-11-01: an older make's text for the 4 s preview window (a preview run cuts `sceneDescription`); never shown. */
   previewSceneDescription?: string
-  /** The `previewStart` the preview's text was made for (a preview run uses it only while it is the trend's). */
+  /** Unused since 2026-11-01: the `previewStart` that older preview text was made for. */
   previewSceneDescriptionStart?: number
   /**
    * A hash of the scene description step (`steps.sceneDescription`) the
@@ -12374,8 +12374,8 @@ export async function clearAdminTrendFaceMask(id: string, revision: string): Pro
   ).data
 }
 
-/** Which stored scene description: the full run's (whole clip) or the preview's (4 s window). */
-export type AdminTrendSceneDescriptionWhich = "full" | "preview"
+/** Which stored scene description: the whole clip's, the one every run sends (a preview run cut to its 4 s window). */
+export type AdminTrendSceneDescriptionWhich = "full"
 
 /** Save a full-depth clip's stored scene description `which` on the draft at `revision` (never puts the clip out of date). */
 export async function saveAdminTrendSceneDescription(

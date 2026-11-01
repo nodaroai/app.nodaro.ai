@@ -286,7 +286,7 @@ describe("the stored scene texts' step (`sceneStepKey`)", () => {
     // Set since the make.
     expect(state(withMask({ sceneDescription: SCENE_LLM }, { sceneDescription: "A kitchen." }))).toEqual({ status: "approved", reasons: [], sceneStepChanged: true })
     // Cleared since the make.
-    expect(state(withMask(undefined, { previewSceneDescription: "0-4 s.", sceneStepKey: KEY }))).toEqual({ status: "approved", reasons: [], sceneStepChanged: true })
+    expect(state(withMask(undefined, { sceneDescription: "A kitchen.", sceneStepKey: KEY }))).toEqual({ status: "approved", reasons: [], sceneStepChanged: true })
     // Changed to another setting.
     expect(state(withMask({ sceneDescription: { mode: "template" } }, { sceneDescription: "A kitchen.", sceneStepKey: KEY }))).toEqual({
       status: "approved",
@@ -295,8 +295,9 @@ describe("the stored scene texts' step (`sceneStepKey`)", () => {
     })
   })
 
-  it("is never said of a mask with no stored scene text", () => {
+  it("is never said of a mask with no stored scene text (an older make's unused preview text alone counts as none)", () => {
     expect(state(withMask({ sceneDescription: SCENE_LLM }, {}))).toEqual({ status: "approved", reasons: [] })
+    expect(state(withMask(undefined, { previewSceneDescription: "0-4 s.", sceneStepKey: KEY }))).toEqual({ status: "approved", reasons: [] })
   })
 
   it("never enters the settings key: a mask made with any step stays up to date", () => {

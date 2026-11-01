@@ -76,8 +76,8 @@
  * A full-depth run whose scene is a description, on a trend whose stored clip
  * carries the make's description (scene-description.ts), sends it as
  * `sceneDescription` with the source window it covers
- * (`sceneDescriptionWindow`): a preview run the preview's text, a full run the
- * whole clip's. Without one the keys are left out (the engine describes the
+ * (`sceneDescriptionWindow`): the whole clip's text and the whole clip, a
+ * preview run too (the engine cuts it to its 4 s). Without one the keys are left out (the engine describes the
  * clip per run, as before). A run that sends one names each role as the
  * stored text does, by its full `roleName`, a preview included: one name per
  * run (`sceneRoleNames`, applied by `withoutUnsupportedSceneDescription`,
@@ -290,9 +290,9 @@ export interface TrendRunBody {
   promptStyle?: CastSwapPromptStyle
   /**
    * Full depth with its scene from a description: the trend's stored
-   * description (scene-description.ts) — a preview run's of the 4 s window,
-   * a full run's of the whole clip — which the engine rewrites for the new
-   * cast and window. Only with `sceneDescriptionWindow`; dropped, both, for
+   * description (scene-description.ts): the whole clip's, for a preview run
+   * too, which the engine rewrites for the new cast and cuts to the run's
+   * window. Only with `sceneDescriptionWindow`; dropped, both, for
    * an engine that does not declare `castSwap.storedSceneDescription`
    * (`withoutUnsupportedSceneDescription`, run-helpers.ts).
    */
