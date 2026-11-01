@@ -52,8 +52,8 @@ export const JSON_SCHEMA_MAX_DEPTH = 20
  *
  * A forced-schema call carries a rendered catalog legend in and up to
  * `maxTokens` out — several minutes of generation on a premium model. The
- * client's 120 s default (`llm-client.ts` `LLM_TIMEOUT_MS`, applied at
- * `effectiveTimeout`) aborts the very workload this route exists for: studio's
+ * client's 120 s default (`llm/params.ts` `LLM_TIMEOUT_MS`, applied at
+ * `effectiveTimeout`; KIE's is 300 s, `KIE_LLM_TIMEOUT_MS`) aborts the very workload this route exists for: studio's
  * planner sends a ≈12-18k-token system prompt with `maxTokens: 16384`, and a
  * 20-scene plan is ≈12k output tokens. The Lottie worker raised its own for the
  * same reason (`workers/handlers/motion-graphics-lottie.ts`). The route answers

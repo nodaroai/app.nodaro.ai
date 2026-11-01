@@ -10,7 +10,9 @@ import type { LlmReasoningEffort } from "@nodaro/shared/llm-models"
  * engine's own call to describe-to-picker: it goes through the default fetch,
  * whose 300 s headers timeout would drop the answer before the LLM returned —
  * so the longest effort stops at 285 s and the route still answers (even with
- * a timeout error) inside the engine's window.
+ * a timeout error) inside the engine's window. (The engine's loopback now
+ * waits past the sync routes' 10 min socket, `loopback-fetch.ts`
+ * `LOOPBACK_RESPONSE_TIMEOUT_MS`; these values are kept as they are.)
  */
 const EFFORT_TIMEOUT_MS: Partial<Record<LlmReasoningEffort, number>> = {
   high: 240_000,

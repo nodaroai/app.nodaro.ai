@@ -99,9 +99,10 @@ export interface LlmRequest {
   /** Feature name — used only for default model resolution */
   feature?: string
   /**
-   * Per-request timeout override in milliseconds. Defaults to LLM_TIMEOUT_MS
-   * (120s) when omitted, so existing callers are unchanged. Large structured
-   * outputs (e.g. the Lottie motion-graphics worker) pass a higher value.
+   * Per-request timeout override in milliseconds, on every lane. When omitted
+   * each lane uses its default: LLM_TIMEOUT_MS (120 s) on the direct lanes,
+   * KIE_LLM_TIMEOUT_MS (300 s) on KIE (`params.ts`). Large structured outputs
+   * (e.g. the Lottie motion-graphics worker) pass a higher value.
    */
   timeoutMs?: number
   /**

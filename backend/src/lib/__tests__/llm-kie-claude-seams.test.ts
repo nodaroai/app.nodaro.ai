@@ -61,7 +61,12 @@ describe("callKie — a caller's signal (Claude wire)", () => {
     fetchMock.mockResolvedValue(kieText("ok"))
     const ctrl = new AbortController()
     await callKie(sonnet55, req(), ctrl.signal)
-    expect((fetchMock.mock.calls[0]![1] as RequestInit).signal).toBe(ctrl.signal)
+    // The request rides the caller's signal joined with the call's own KIE
+    // deadline (one for every attempt), so the caller's cancel aborts it.
+    const sent = (fetchMock.mock.calls[0]![1] as RequestInit).signal!
+    expect(sent.aborted).toBe(false)
+    ctrl.abort()
+    expect(sent.aborted).toBe(true)
   })
 
   it("an aborted signal stops the Claude ladder after one attempt", async () => {

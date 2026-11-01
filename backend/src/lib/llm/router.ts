@@ -42,7 +42,9 @@ export { claudeMustServeDirect }
  *
  * `llmComplete` never tries more than a primary and a single fallback
  * (`withFallback`, and the Claude `preferKie` catch below that does the same by
- * hand) — and each lane is bounded by the SAME `effectiveTimeout(req)`, read
+ * hand) — and each lane is bounded by the request's own `timeoutMs` when it
+ * sets one, else that lane's default (`effectiveTimeout`, 120 s on the direct
+ * lanes; `kieEffectiveTimeout`, 300 s on KIE), read
  * fresh when that lane starts. So the wall-clock budget of one call is this
  * many timeouts, not one, and anything sizing a deadline around a call (the
  * reconciliation staleness threshold does) has to multiply by it.

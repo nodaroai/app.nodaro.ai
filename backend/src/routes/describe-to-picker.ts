@@ -483,7 +483,7 @@ export class PickerFallbackFailedError extends Error {
  */
 export const DESCRIBE_TO_PICKER_MAX_RUNTIME_MS = 38 * 60_000
 
-/** The client's default per-lane timeout (`LLM_TIMEOUT_MS`): what a Gemini fallback gets when time allows. */
+/** The client's direct-lane default timeout (`LLM_TIMEOUT_MS`, 120 s): what a Gemini fallback gets when time allows. Sent explicitly, so it bounds the KIE lane too. */
 const FALLBACK_LANE_TIMEOUT_MAX_MS = 120_000
 /** A floor so a fallback is never asked with no time at all; the budget test shows it is never reached. */
 const FALLBACK_LANE_TIMEOUT_MIN_MS = 10_000

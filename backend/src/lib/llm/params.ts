@@ -15,6 +15,23 @@ import type { LlmRequest } from "./types.js"
 
 const LLM_TIMEOUT_MS = 120_000
 
+/**
+ * The KIE lane's default per-call timeout, when the request sets no `timeoutMs`.
+ *
+ * Longer than the other lanes' {@link LLM_TIMEOUT_MS}: a long-reasoning call on
+ * KIE (Gemini 3.8 Flash through `/v1/llm-chat/generate`) was cut at 120 s with
+ * "The operation was aborted due to timeout" and then paid for again on the
+ * direct lane. A KIE call now waits up to 5 minutes before its fallback is asked.
+ *
+ * What it must fit inside, with the direct fallback after it: the sync LLM
+ * routes' socket timeout (`LLM_ROUTE_REQUEST_TIMEOUT_MS`, 10 min) and the
+ * workflow engine's loopback fetch (`loopback-fetch.ts`, whose dispatcher waits
+ * past that route timeout). The KIE lane spends ONE such budget per call, its
+ * transport retries included (`withTransportRetry`, and the collapsed lanes'
+ * shared deadline), so a retry never multiplies it.
+ */
+export const KIE_LLM_TIMEOUT_MS = 300_000
+
 // ---------------------------------------------------------------------------
 // Model resolution
 // ---------------------------------------------------------------------------
@@ -31,9 +48,14 @@ export function resolveModel(req: LlmRequest): LlmModelDef {
   return model
 }
 
-/** Effective request timeout — per-request override, else the 120s default. */
+/** Effective request timeout on the direct lanes — per-request override, else the 120 s default. */
 export function effectiveTimeout(req: LlmRequest): number {
   return req.timeoutMs ?? LLM_TIMEOUT_MS
+}
+
+/** Effective request timeout on the KIE lane — per-request override, else {@link KIE_LLM_TIMEOUT_MS}. */
+export function kieEffectiveTimeout(req: LlmRequest): number {
+  return req.timeoutMs ?? KIE_LLM_TIMEOUT_MS
 }
 
 /** Per-request derived params: clamped effort, temperature (stripped for
