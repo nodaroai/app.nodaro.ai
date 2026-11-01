@@ -12,7 +12,9 @@
  *   3. the points are smoothed over time per face (`face-mesh-smooth.ts`);
  *   4. the lines are drawn on the clip they go on (`drawOnPath`: the masked or
  *      depth clip) at their place (`face-mesh-draw.ts`), as fractions of the
- *      frame — the clips may differ in size.
+ *      frame — the clips may differ in size — in tones of the picture under
+ *      them: a gray of the pixel's own luminance, or, given the gray depth
+ *      render and the map (`depth`), a colour of the map.
  * The mask is read frame for frame when it has the clip's frame count, else
  * by TIME (`face-mesh-timing.ts`: Video Mask re-encodes a variable-rate clip
  * to a constant rate, so its mask has another count).
@@ -29,6 +31,7 @@
 import { once } from "node:events"
 import { join } from "node:path"
 import type { Writable } from "node:stream"
+import type { VideoDepthColormap } from "@nodaro/shared/media"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { ffmpegFailureMessage, probeVideoOverlayBase, runFfprobe, withFfmpegSlot, type VideoOverlayBaseProbe } from "../../providers/video/ffmpeg-utils.js"
 import { spawnFfmpeg } from "../../providers/video/ffmpeg-process.js"
@@ -42,6 +45,7 @@ import { FACE_MESH_MIN_PRESENCE, fillFaceMeshInput, landmarksToFrame, roiOfFace,
 import { faceGetsMesh, type FaceMeshFilters } from "./face-mesh-filters.js"
 import { FaceMeshTracker, type MeshedFace } from "./face-mesh-smooth.js"
 import { compositeFaceMesh, faceMeshOverlay } from "./face-mesh-draw.js"
+import { depthColormapTable } from "./depth-colormaps.js"
 import { faceMeshPeakMemoryMiB, faceMeshTimeoutMs } from "./face-mesh-budget.js"
 import { frameTimesOf, maskFramesForClip, sameSpan } from "./face-mesh-timing.js"
 
@@ -57,6 +61,14 @@ export interface DrawFaceMeshInput {
   readonly drawOnPath: string
   /** Local path of a mask video (white = covered): only faces centred inside it are drawn. */
   readonly maskPath?: string
+  /**
+   * The depth map the lines go on (`drawOnPath` is, or holds, its `colormap`
+   * render): `path` is the GRAYSCALE depth render of the same clip (same frame
+   * count, any size), and each line is a colour of `colormap` at its tone of
+   * the depth under it (`compositeFaceMesh`). Left out: each line is a gray
+   * tone of the drawn-on pixel itself.
+   */
+  readonly depth?: { readonly path: string; readonly colormap: VideoDepthColormap }
   readonly filters: FaceMeshFilters
   /** Where the output is written. */
   readonly outputPath: string
@@ -301,8 +313,12 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
   const found = await clipInfo(input.videoPath, "video")
   const drawOn = input.drawOnPath === input.videoPath ? found : await clipInfo(input.drawOnPath, "video to draw on")
   const mask = input.maskPath ? await clipInfo(input.maskPath, "mask") : undefined
+  const depthClip = input.depth ? await clipInfo(input.depth.path, "depth video") : undefined
   if (drawOn.frames !== found.frames) {
     throw new FaceMeshInputError(`the video to draw on has ${drawOn.frames} frames, the video ${found.frames}`)
+  }
+  if (depthClip && depthClip.frames !== found.frames) {
+    throw new FaceMeshInputError(`the depth video has ${depthClip.frames} frames, the video ${found.frames}`)
   }
   const frames = found.frames
   // The mask may come from Video Mask's constant-rate copy of a variable-rate clip: matched by time then.
@@ -313,6 +329,9 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
     throw new FaceMeshInputError(`the video to draw on is ${draw.width}×${draw.height}: an H.264 copy needs an even width and height`)
   }
   const maskSize = mask ? { width: mask.probe.width, height: mask.probe.height } : undefined
+  const depthSize = depthClip ? { width: depthClip.probe.width, height: depthClip.probe.height } : undefined
+  const depthTable = input.depth ? depthColormapTable(input.depth.colormap) : undefined
+  const depthColour = input.depth ? await probeColour(input.depth.path) : undefined
   // The detector's own picture: the frame, sampled down when it is very large.
   const k = Math.min(1, FACE_MESH_DETECT_MAX_EDGE / Math.max(det.width, det.height))
   const dw = Math.max(2, Math.round(det.width * k))
@@ -322,7 +341,7 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
   const colour = await probeColour(input.drawOnPath)
   const timeoutMs = faceMeshTimeoutMs(frames)
   const peakMemoryMiB = faceMeshPeakMemoryMiB(
-    { detect: det, draw, ...(maskSize ? { mask: maskSize } : {}) },
+    { detect: det, draw, ...(maskSize ? { mask: maskSize } : {}), ...(depthSize ? { depth: depthSize } : {}) },
     Math.max(detector.intraOpThreads, mesh.intraOpThreads),
     ffmpegEffectiveThreads(),
   )
@@ -347,6 +366,8 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
     const sources = [
       streamFrames(input.videoPath, { pixFmt: "bgr24", ...det, timeoutMs }),
       streamFrames(input.drawOnPath, { pixFmt: "rgb24", ...draw, timeoutMs, colour }),
+      // The depth, read as RGB with its own colour (its luminance the depth) in lockstep.
+      ...(input.depth && depthSize ? [streamFrames(input.depth.path, { pixFmt: "rgb24", ...depthSize, timeoutMs, colour: depthColour })] : []),
     ]
     const maskStream = input.maskPath && maskSize ? streamFrames(input.maskPath, { pixFmt: "gray", ...maskSize, timeoutMs }) : undefined
     let maskAt = -1
@@ -377,6 +398,7 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
         if (ended > 0) throw new FaceMeshInputError(`the clips ran out of frames at different points (frame ${n})`)
         const bgr = next[0]!.value as Buffer
         const rgb = next[1]!.value as Buffer
+        const depthRgb = next[2]?.value as Buffer | undefined
         if (n >= frames) throw new FaceMeshInputError(`the clips hold more than the ${frames} frames counted`)
         const maskGray = await maskFor(n)
 
@@ -401,7 +423,8 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
         if (overlay) {
           framesWithFaces++
           facesDrawn += smoothed.length
-          await writeFrame(enc.stdin, await compositeFaceMesh(rgb, draw.width, draw.height, overlay))
+          const depth = depthRgb && depthSize && depthTable ? { rgb: depthRgb, ...depthSize, table: depthTable } : undefined
+          await writeFrame(enc.stdin, await compositeFaceMesh(rgb, draw.width, draw.height, overlay, depth))
         } else {
           // A copy: the decoder reuses its buffer for the next frame while this one may still be queued.
           await writeFrame(enc.stdin, Buffer.from(rgb))

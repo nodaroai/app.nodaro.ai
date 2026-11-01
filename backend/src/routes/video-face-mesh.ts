@@ -4,9 +4,10 @@
  * A clip (where the faces are FOUND) and, optionally, the clip the lines go on
  * (`drawOnUrl`: the masked or depth clip) and a mask (`maskUrl`: only faces
  * centred inside it are drawn) → the drawn clip, frame for frame
- * (services/face-mesh/draw-face-mesh.ts): a thin blue mesh, a blue lip
- * outline, green eye outlines, so the video model still sees where the mouth
- * and the eyes are under a mask. Nodaro Motion's face masking reaches it as a
+ * (services/face-mesh/draw-face-mesh.ts): a thin wireframe and darker eye and
+ * lip outlines, each a tone of the picture under it — gray, or, on a coloured
+ * depth map (`colormap` + `depthUrl`), a colour of that map — so the video
+ * model still sees where the mouth and the eyes are under a mask. Nodaro Motion's face masking reaches it as a
  * CHILD job of its own (`tk.http.workerRequest` with a parent job); nothing
  * else may — a browser, an API key, an app token, MCP and every other
  * internal hop are refused 403 before the clip is probed or anything is
@@ -18,7 +19,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { VIDEO_FACE_MESH_LIMITS, videoFaceMeshCreditIds } from "@nodaro/shared/media"
+import { VIDEO_DEPTH_COLORMAPS, VIDEO_FACE_MESH_LIMITS, videoFaceMeshCreditIds } from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
@@ -36,7 +37,9 @@ const margin = z.number().min(L.ZONE_MARGIN_PCT_MIN).max(L.ZONE_MARGIN_PCT_MAX).
 /**
  * The request (`VideoFaceMeshRequest` in `@nodaro/shared`). `drawOnUrl` left
  * out = the lines go on `videoUrl` itself. A zone left out, `null` or all 0 =
- * no margins. `forcePrivate` is what every child sends; the job is private
+ * no margins. `colormap` other than grayscale needs `depthUrl` (the colour of
+ * a line is read from the gray depth); a `depthUrl` with no `colormap` is
+ * grayscale. `forcePrivate` is what every child sends; the job is private
  * whatever it says.
  */
 export const videoFaceMeshBody = z
@@ -47,7 +50,13 @@ export const videoFaceMeshBody = z
     minFaceHeightPct: facePct,
     maxFaceHeightPct: facePct,
     zone: z.object({ leftPct: margin, rightPct: margin, topPct: margin, bottomPct: margin }).nullable().optional().default(null),
+    colormap: z.enum(VIDEO_DEPTH_COLORMAPS).optional(),
+    depthUrl: safeUrlSchema.optional(),
     forcePrivate: z.literal(true).optional(),
+  })
+  .refine((b) => b.colormap === undefined || b.colormap === "grayscale" || b.depthUrl !== undefined, {
+    path: ["depthUrl"],
+    message: "a colormap other than grayscale needs depthUrl (the grayscale depth render of the clip): a line's colour is read from it",
   })
   .refine((b) => !(b.minFaceHeightPct > 0 && b.maxFaceHeightPct > 0 && b.minFaceHeightPct > b.maxFaceHeightPct), {
     path: ["maxFaceHeightPct"],

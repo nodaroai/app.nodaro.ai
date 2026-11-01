@@ -10,7 +10,7 @@
  * failure (`facesDrawn: 0`).
  */
 import { join } from "node:path"
-import { VIDEO_FACE_MESH_RECIPE, resolveVideoMaskZone } from "@nodaro/shared/media"
+import { VIDEO_DEPTH_COLORMAPS, VIDEO_FACE_MESH_RECIPE, resolveVideoMaskZone, type VideoDepthColormap } from "@nodaro/shared/media"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -25,6 +25,10 @@ import {
   type HandlerFn,
 } from "../shared.js"
 
+/** The request's colormap: one of Video Depth's, else (left out) grayscale. */
+const colormapOf = (v: unknown): VideoDepthColormap =>
+  typeof v === "string" && (VIDEO_DEPTH_COLORMAPS as readonly string[]).includes(v) ? (v as VideoDepthColormap) : "grayscale"
+
 const pctOf = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.min(100, v) : 0)
 
 const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, ctx) {
@@ -36,12 +40,21 @@ const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, c
     minFaceHeightPct?: number
     maxFaceHeightPct?: number
     zone?: unknown
+    colormap?: unknown
+    depthUrl?: string
   }
   if (typeof d.videoUrl !== "string" || !d.videoUrl) throw new DeterministicJobError("Video Face Mesh needs a video.")
   const filters = { minFaceHeightPct: pctOf(d.minFaceHeightPct), maxFaceHeightPct: pctOf(d.maxFaceHeightPct), zone: resolveVideoMaskZone(d.zone) }
   const drawOn = typeof d.drawOnUrl === "string" && d.drawOnUrl && d.drawOnUrl !== d.videoUrl ? d.drawOnUrl : undefined
   const mask = typeof d.maskUrl === "string" && d.maskUrl ? d.maskUrl : undefined
-  console.log(`[worker] video-face-mesh ${ctx.jobId}: ${drawOn ? "drawn on another clip" : "drawn on the clip"}${mask ? ", inside a mask" : ""}`)
+  const depthUrl = typeof d.depthUrl === "string" && d.depthUrl ? d.depthUrl : undefined
+  const colormap = colormapOf(d.colormap)
+  // A coloured map's lines need the gray depth; the route refuses one without it, so this is a payload from elsewhere.
+  if (!depthUrl && colormap !== "grayscale") throw new DeterministicJobError(`Video Face Mesh needs the gray depth video to draw on a ${colormap} map.`)
+  console.log(
+    `[worker] video-face-mesh ${ctx.jobId}: ${drawOn ? "drawn on another clip" : "drawn on the clip"}${mask ? ", inside a mask" : ""}` +
+      `${depthUrl ? `, coloured from the depth (${colormap})` : ", gray"}`,
+  )
 
   const workDir = await createWorkDir("video-face-mesh")
   try {
@@ -51,9 +64,18 @@ const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, c
     if (drawOn) await downloadFile(drawOn, drawOnPath)
     const maskPath = mask ? join(workDir, "mask.mp4") : undefined
     if (mask && maskPath) await downloadFile(mask, maskPath)
+    const depthPath = depthUrl ? join(workDir, "depth.mp4") : undefined
+    if (depthUrl && depthPath) await downloadFile(depthUrl, depthPath)
     await setJobProgress(job, ctx.jobId, 10)
 
-    const r = await drawFaceMeshVideo({ videoPath, drawOnPath, ...(maskPath ? { maskPath } : {}), filters, outputPath: faceMeshOutputPath(workDir) })
+    const r = await drawFaceMeshVideo({
+      videoPath,
+      drawOnPath,
+      ...(maskPath ? { maskPath } : {}),
+      ...(depthPath ? { depth: { path: depthPath, colormap } } : {}),
+      filters,
+      outputPath: faceMeshOutputPath(workDir),
+    })
     await setJobProgress(job, ctx.jobId, 90)
     console.log(
       `[worker] video-face-mesh ${ctx.jobId}: ${r.facesDrawn} face(s) drawn on ${r.framesWithFaces}/${r.frames} frames, ` +
@@ -73,6 +95,7 @@ const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, c
         frames: r.frames,
         framesWithFaces: r.framesWithFaces,
         facesDrawn: r.facesDrawn,
+        ...(depthPath ? { colormap } : {}),
         recipe: VIDEO_FACE_MESH_RECIPE,
       },
     })

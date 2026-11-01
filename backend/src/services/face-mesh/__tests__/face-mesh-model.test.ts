@@ -74,12 +74,15 @@ describe("the run's budget", () => {
     expect(faceMeshTimeoutMs(720)).toBe(FACE_MESH_FIXED_MS + 720 * FACE_MESH_MS_PER_FRAME)
   })
 
-  it("reserves both sessions, the decoders and the encoder, more for a larger picture and a mask", () => {
+  it("reserves both sessions, the decoders and the encoder, more for a larger picture, a mask and a depth render", () => {
     const threads = { decode: 2, filter: 2, encode: 2 }
     const hd = { width: 720, height: 1280 }
     const base = faceMeshPeakMemoryMiB({ detect: hd, draw: hd }, 1, threads)
     expect(base).toBeGreaterThan(332 + 128)
     expect(faceMeshPeakMemoryMiB({ detect: hd, draw: hd, mask: hd }, 1, threads)).toBeGreaterThanOrEqual(base)
+    // The depth render read beside the drawn clip is one more decoder.
+    const withMask = faceMeshPeakMemoryMiB({ detect: hd, draw: hd, mask: hd }, 1, threads)
+    expect(faceMeshPeakMemoryMiB({ detect: hd, draw: hd, mask: hd, depth: hd }, 1, threads)).toBeGreaterThanOrEqual(withMask)
     expect(faceMeshPeakMemoryMiB({ detect: { width: 1080, height: 1920 }, draw: { width: 1080, height: 1920 } }, 1, threads)).toBeGreaterThan(base)
   })
 })

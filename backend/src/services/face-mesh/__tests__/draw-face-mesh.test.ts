@@ -32,14 +32,31 @@ const maskClip = (name: string, color: "black" | "white", n: number) => {
   ff("-f", "lavfi", "-i", `color=${color}:s=960x540:r=2`, "-frames:v", String(n), "-c:v", "libx264", "-pix_fmt", "yuv420p", out)
   return out
 }
-/** Blue-dominant pixels of a frame (the mesh's colour) at time `t`. */
-function bluePixels(path: string, t: number): number {
+/** A frame of a clip at time `t`, packed RGB. */
+function frameAt(path: string, t: number): { rgb: Buffer; w: number; h: number } {
   const [w, h] = probe(path, "stream=width,height").split(",").map(Number)
   const rgb = execFileSync("ffmpeg", ["-v", "error", "-ss", String(t), "-i", path, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], { maxBuffer: 1e8 })
+  return { rgb, w: w!, h: h! }
+}
+/** Pixels of `drawn` at time `t` more than 25 levels darker than the same pixel of `source` (the lines, above the codec's noise). */
+function darkenedPixels(drawn: string, source: string, t: number): number {
+  const a = frameAt(drawn, t)
+  const b = frameAt(source, t)
   let n = 0
-  for (let i = 0; i < w! * h!; i++) {
+  for (let i = 0; i < a.w * a.h; i++) {
+    const la = 0.2126 * a.rgb[3 * i]! + 0.7152 * a.rgb[3 * i + 1]! + 0.0722 * a.rgb[3 * i + 2]!
+    const lb = 0.2126 * b.rgb[3 * i]! + 0.7152 * b.rgb[3 * i + 1]! + 0.0722 * b.rgb[3 * i + 2]!
+    if (lb - la > 25) n++
+  }
+  return n
+}
+/** Pixels of a frame with a strong blue or green cast (the former line colours) at time `t`. */
+function bluePixels(path: string, t: number): number {
+  const { rgb, w, h } = frameAt(path, t)
+  let n = 0
+  for (let i = 0; i < w * h; i++) {
     const r = rgb[3 * i]!, g = rgb[3 * i + 1]!, b = rgb[3 * i + 2]!
-    if (b > 150 && b > r + 60 && b > g + 30) n++
+    if ((b > 150 && b > r + 60 && b > g + 30) || (g > 150 && g > r + 60 && g > b + 60)) n++
   }
   return n
 }
@@ -63,8 +80,9 @@ describe("drawFaceMeshVideo", () => {
     expect([r.width, r.height]).toEqual([960, 540])
     expect(r.facesDrawn).toBeGreaterThanOrEqual(26) // several faces a frame
     expect(r.framesWithFaces).toBeGreaterThan(20)
-    expect(bluePixels(out, 3)).toBeGreaterThan(50)
-    expect(bluePixels(FACES, 3)).toBeLessThan(10)
+    // Gray lines: the faces darkened where they run, and no blue or green drawn.
+    expect(darkenedPixels(out, FACES, 3)).toBeGreaterThan(200)
+    expect(bluePixels(out, 3)).toBeLessThanOrEqual(bluePixels(FACES, 3))
   }, 120_000)
 
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
@@ -133,6 +151,36 @@ describe("drawFaceMeshVideo", () => {
     await expect(drawFaceMeshVideo({ videoPath: FACES, drawOnPath: short, filters: OFF, outputPath: join(dir, "x.mp4") })).rejects.toBeInstanceOf(FaceMeshInputError)
     // A 10-frame mask at 2 fps spans 4.5 s against the clip's 12.5 s: not this clip's.
     await expect(drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: short, filters: OFF, outputPath: join(dir, "y.mp4") })).rejects.toBeInstanceOf(FaceMeshInputError)
+  }, 60_000)
+
+  it("a coloured depth map: the lines take the map's colours, read from the gray depth render at its own size", async () => {
+    // The gray "depth" render (the faces' clip in gray) at half size, and the clip drawn on: the same in gray, full size.
+    const gray = join(dir, "gray.mp4")
+    ff("-i", FACES, "-vf", "format=gray,format=yuv420p", "-c:v", "libx264", "-pix_fmt", "yuv420p", gray)
+    const depth = join(dir, "depth-half.mp4")
+    ff("-i", FACES, "-vf", "scale=480:270,format=gray,format=yuv420p", "-c:v", "libx264", "-pix_fmt", "yuv420p", depth)
+    /** Pixels of a frame with a clear hue (the gray clip has none). */
+    const hued = (path: string) => {
+      const { rgb, w, h } = frameAt(path, 3)
+      let n = 0
+      for (let i = 0; i < w * h; i++) if (Math.max(rgb[3 * i]!, rgb[3 * i + 1]!, rgb[3 * i + 2]!) - Math.min(rgb[3 * i]!, rgb[3 * i + 1]!, rgb[3 * i + 2]!) > 40) n++
+      return n
+    }
+    const plain = join(dir, "gray-out.mp4")
+    await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: gray, filters: OFF, outputPath: plain })
+    expect(hued(plain)).toBeLessThan(10) // gray tones on a gray clip
+    expect(darkenedPixels(plain, gray, 3)).toBeGreaterThan(200)
+    const coloured = join(dir, "inferno-out.mp4")
+    const r = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: gray, depth: { path: depth, colormap: "inferno" }, filters: OFF, outputPath: coloured })
+    expect(r.frames).toBe(26)
+    expect(r.facesDrawn).toBeGreaterThanOrEqual(26)
+    expect(hued(coloured)).toBeGreaterThan(100) // inferno's own colours where the lines are
+  }, 120_000)
+
+  it("refuses a depth render whose frame count differs, before anything is drawn", async () => {
+    const short = maskClip("short-depth.mp4", "black", 10)
+    await expect(drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, depth: { path: short, colormap: "turbo" }, filters: OFF, outputPath: join(dir, "d.mp4") }))
+      .rejects.toThrow(/depth video has 10 frames/)
   }, 60_000)
 
   it("refuses a clip it cannot read", async () => {
