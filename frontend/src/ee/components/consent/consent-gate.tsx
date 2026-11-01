@@ -71,7 +71,8 @@ export function ConsentGate() {
     <div
       role="dialog"
       aria-label={t("consent.emailUpdatesAria")}
-      className="fixed bottom-5 end-5 z-50 w-[372px] max-w-[calc(100vw-2.5rem)] rounded-2xl border bg-card text-card-foreground shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300"
+      // Above the shared header's phone bottom bar (its published height; 0 elsewhere).
+      className="fixed bottom-[calc(1.25rem+var(--ns-bottom-bar-h,0px))] end-5 z-50 w-[372px] max-w-[calc(100vw-2.5rem)] rounded-2xl border bg-card text-card-foreground shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300"
     >
       {view === "card" ? (
         <div className="p-5">

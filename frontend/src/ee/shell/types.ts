@@ -12,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
  * Grows with the wiring: only props the app actually passes belong here.
  */
 
-export type SiteWorldId = "image" | "video" | "music" | "trends" | "ads" | "app" | "studio"
+export type SiteWorldId = "explore" | "image" | "video" | "music" | "trends" | "motion" | "voice" | "ads" | "app" | "studio"
 
 export interface SiteHeaderTheme {
   readonly value: "light" | "dark"
