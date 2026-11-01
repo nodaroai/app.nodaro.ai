@@ -72,7 +72,7 @@ function masked(): TrendVersionData {
 
 const CLIP: TrendPreviewClip = {
   videoUrl: "https://cdn.example.com/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
-  sourceVideoUrl: SRC_A, startSec: 2, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+  sourceVideoUrl: SRC_A, startSec: 2, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
 }
 const WITH_MASK: TrendPreviewClip = { ...CLIP, faceMask: { url: "https://cdn.example.com/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: MASK } }
 

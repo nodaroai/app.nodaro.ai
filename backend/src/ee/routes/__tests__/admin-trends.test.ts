@@ -273,8 +273,21 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
       if (fail) throw fail
       return probed(path)
     },
-    // The preview clip's (and its mask's) frame count: the stand-in file has none to read.
-    probeVideoFrameCount: async (path: string) => (typeof mem.frames === "number" ? mem.frames : mem.frames(path)),
+    // The preview clip's (and its mask's) frame count: the stand-in file has none to read. A downloaded
+    // file (the source, the mask) has its probed length's frames at its rate (30 unless set); a cut has
+    // the frames its trim asked for, unless a test sets `mem.frames` to a function.
+    probeVideoFrameCount: async (path: string) => {
+      if (typeof mem.frames === "function") return mem.frames(path)
+      if (mem.downloads.has(path)) return Math.round(probed(path).durationSeconds * (mem.fps ?? 30))
+      const run = [...mem.ffmpegRuns].reverse().find((a) => a.at(-1) === path)
+      const trim = run && /trim=start_frame=(\d+):end_frame=(\d+)/.exec(run[run.indexOf("-vf") + 1] ?? "")
+      return trim ? Number(trim[2]) - Number(trim[1]) : mem.frames
+    },
+    // The preview cut's timeline probe (where the picture starts, whether there is sound): a clip with sound from 0.
+    runFfprobe: async (args: readonly string[]) =>
+      args.includes("stream=codec_type,start_time:format=start_time")
+        ? JSON.stringify({ streams: [{ codec_type: "video", start_time: "0.000000" }, { codec_type: "audio", start_time: "0.000000" }], format: { start_time: "0.000000" } })
+        : actual.runFfprobe(args),
   }
 })
 
@@ -1553,7 +1566,7 @@ describe("test runs", () => {
       sha256: "b".repeat(64),
       sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
       startSec: 2,
-      recipe: "1",
+      recipe: "2",
       madeAt: "2026-10-27T10:00:00.000Z",
     }
     seed({}, draftData({ previewClip: CLIP, examples: [EXAMPLE] }))
@@ -1572,7 +1585,7 @@ describe("test runs", () => {
       previewStart: 0,
       preview: true,
       preparedPreview: true,
-      sourceAsset: { kind: "preview", sha256: CLIP.sha256, startSec: 2, durationSec: 5, recipe: "1" },
+      sourceAsset: { kind: "preview", sha256: CLIP.sha256, startSec: 2, durationSec: 5, recipe: "2" },
     })
     // A full test run on that engine edits the source and says so.
     expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
@@ -1931,11 +1944,11 @@ describe("the preview's input clip (prepared on save and publish)", () => {
   const CLIP_RE = new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.mp4$`)
   const draftNow = () => mem.trends[0]!.versions[mem.trends[0]!.draftVersion]!.data
   /** The ffmpeg runs that cut a preview clip (an input seek before the input). */
-  const cuts = () => mem.ffmpegRuns.filter((args) => args.indexOf("-ss") !== -1 && args.indexOf("-ss") < args.indexOf("-i"))
+  const cuts = () => mem.ffmpegRuns.filter((args) => /^trim=start_frame=/.test(args[args.indexOf("-vf") + 1] ?? ""))
   /** A clip current for the fixture draft (source src.mp4, start 2). */
   const CLIP = {
     videoUrl: `https://cdn.test/trends/${T1}/preview.mp4`, durationSec: 5, width: 720, height: 1280, frames: 150, sha256: "b".repeat(64),
-    sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
   }
 
   it("a draft save cuts the clip from the saved source at previewStart (4 s + 1 s tail, frame-accurate args, no scaling), stores it under the trend's key and records it on the draft", async () => {
@@ -1944,9 +1957,10 @@ describe("the preview's input clip (prepared on save and publish)", () => {
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
     expect(cuts()).toHaveLength(1)
     const args = cuts()[0]!.join(" ")
-    expect(args).toContain("-y -ss 2.000 -i ")
-    expect(args).toContain("-t 5.000 -map 0:v:0 -map 0:a:0? -c:v libx264 -preset medium -crf 16 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart")
-    expect(args).not.toMatch(/scale|-vf|-r /)
+    // By frame index (the source's 30 fps): from frame 2 × 30, for (4 + 1) × 30 frames, the sound alongside; no seek.
+    expect(args).toMatch(/^-y -i \S+ -map 0:v:0 -map 0:a:0 -vf trim=start_frame=60:end_frame=210,setpts=PTS-STARTPTS -af atrim=start=2\.000000:duration=5\.000000,asetpts=PTS-STARTPTS /)
+    expect(args).toContain("-fps_mode passthrough -c:v libx264 -preset medium -crf 16 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart")
+    expect(args).not.toMatch(/scale|-ss |-t |-r /)
     // Cut from the hidden source clip, never its display copy.
     expect(mem.downloads.get(cuts()[0]![cuts()[0]!.indexOf("-i") + 1]!)).toBe(`https://cdn.test/trends/${T1}/src.mp4`)
     expect(draftNow().previewClip).toEqual({
@@ -1958,7 +1972,7 @@ describe("the preview's input clip (prepared on save and publish)", () => {
       sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
       sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
       startSec: 2,
-      recipe: "1",
+      recipe: "2",
       madeAt: expect.any(String),
     })
     expect(mem.uploads).toEqual([{ key: expect.stringMatching(/\.mp4$/), contentType: "video/mp4" }])
@@ -1977,7 +1991,7 @@ describe("the preview's input clip (prepared on save and publish)", () => {
     const moved = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), previewStart: 5, previewClip: { ...CLIP, startSec: 5 } }, revision: await revisionOf() })
     expect(moved.statusCode).toBe(200)
     expect(cuts()).toHaveLength(1)
-    expect(cuts()[0]!.join(" ")).toContain("-ss 5.000 -i ")
+    expect(cuts()[0]!.join(" ")).toContain("-vf trim=start_frame=150:end_frame=300,")
     expect(draftNow().previewClip).toMatchObject({ startSec: 5, videoUrl: expect.stringMatching(CLIP_RE) })
     expect(draftNow().previewClip!.videoUrl).not.toBe(CLIP.videoUrl)
 
@@ -3155,12 +3169,12 @@ describe("the stored face mask", () => {
     })
 
     it("approving cuts the preview input clip again WITH the mask's cut (identical arguments, the mask fetched from the stored copy); clearing cuts it again WITHOUT", async () => {
-      const cuts = () => mem.ffmpegRuns.filter((args) => args.indexOf("-ss") !== -1 && args.indexOf("-ss") < args.indexOf("-i"))
+      const cuts = () => mem.ffmpegRuns.filter((args) => /^trim=start_frame=/.test(args[args.indexOf("-vf") + 1] ?? ""))
       const input = (args: string[]) => mem.downloads.get(args[args.indexOf("-i") + 1]!)
       // A clip cut before the mask was approved: current for the source and start, no mask cut.
       const before = {
         videoUrl: `https://cdn.test/trends/${T1}/preview-before.mp4`, durationSec: 5, width: 720, height: 1280, frames: 150, sha256: "b".repeat(64),
-        sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+        sourceVideoUrl: `https://cdn.test/trends/${T1}/src.mp4`, startSec: 2, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
       }
       seed({}, making({ examples: [EXAMPLE], previewClip: before }))
       world.jobs.set(FACE_MASK_JOB, fmJob())
@@ -3172,8 +3186,11 @@ describe("the stored face mask", () => {
       // The mask is cut from the copy in the trend's storage, never the engine's own file.
       expect(input(maskCut!)).toBe(data.faceMask!.url)
       expect(input(maskCut!)).not.toBe(MASKED)
-      const shape = (args: string[]) => args.map((a, i) => (i === args.indexOf("-i") + 1 || i === args.length - 1 ? "<path>" : a))
-      expect(shape(maskCut!)).toEqual(shape(clipCut!))
+      // The same frames by the same numbers; the mask's picture alone.
+      const vf = (args: string[]) => args[args.indexOf("-vf") + 1]
+      expect(vf(maskCut!)).toBe(vf(clipCut!))
+      expect(maskCut).toContain("-an")
+      expect(maskCut!.join(" ")).not.toMatch(/atrim|-c:a/)
       expect(data.previewClip).toMatchObject({
         startSec: 2,
         faceMask: { url: expect.stringMatching(new RegExp(`^https://cdn\\.test/trends/${T1}/[0-9a-f-]{36}\\.mp4$`)), frames: 150, sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sourceMaskUrl: data.faceMask!.url },
@@ -3196,7 +3213,7 @@ describe("the stored face mask", () => {
     it("approving refuses a mask whose cut does not match the clip's frames (a mask made from another clip), storing no clip and no mask", async () => {
       seed({}, making({ examples: [EXAMPLE] }))
       world.jobs.set(FACE_MASK_JOB, fmJob())
-      mem.frames = (path) => (path.endsWith("mask-clip.mp4") ? 149 : 150)
+      mem.frames = (path) => (path.endsWith("mask-clip.mp4") ? 149 : mem.downloads.has(path) ? 360 : 150)
       const res = await approve()
       expect(res.statusCode).toBe(400)
       expect(res.json().error.code).toBe("media_unreadable")

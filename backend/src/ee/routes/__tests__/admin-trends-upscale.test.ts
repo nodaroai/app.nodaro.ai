@@ -605,7 +605,7 @@ describe("using an upscale", () => {
   it("an example's upscale cuts no preview clip (the source did not change), and keeps a current one", async () => {
     const CLIP = {
       videoUrl: `https://cdn.test/trends/${T1}/preview.mp4`, durationSec: 4, width: 720, height: 1280, frames: 120, sha256: "b".repeat(64),
-      sourceVideoUrl: SRC, startSec: 8, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+      sourceVideoUrl: SRC, startSec: 8, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
     }
     seed({}, draftData({ upscaleJobs: [pending()], previewClip: CLIP }))
     world.jobs.set(UP_JOB, upJob(ex(2).videoUrl))
@@ -618,7 +618,7 @@ describe("using an upscale", () => {
   it("a source upscale whose stale preview clip survives in the draft (a save that forgot) is still replaced: a new clip never keeps the old one's cut", async () => {
     const stale = {
       videoUrl: `https://cdn.test/trends/${T1}/preview-old.mp4`, durationSec: 4, width: 720, height: 1280, frames: 120, sha256: "b".repeat(64),
-      sourceVideoUrl: SRC, startSec: 8, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+      sourceVideoUrl: SRC, startSec: 8, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
     }
     seed({}, draftData({ upscaleJobs: [pending({ target: "source", fromUrl: SRC })], previewClip: stale }))
     world.jobs.set(UP_JOB, upJob(SRC))
@@ -690,7 +690,7 @@ describe("using an upscale", () => {
     expect(d.faceMask).toEqual(faceMask)
     // The preview input clip is cut again from the NEW clip at the kept start — without the (now stale) mask's cut.
     expect(mem.clips).toEqual([{ trendId: T1, sourceUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, startSec: d.previewStart, durationSec: 4 }])
-    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, startSec: d.previewStart, recipe: "1" })
+    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/up-src-1.mp4`, startSec: d.previewStart, recipe: "2" })
     expect(d.previewClip).not.toHaveProperty("faceMask")
     const detail = (await call("GET", `/v1/admin/trends/${T1}`)).json().data
     expect(detail.faceMaskState).toEqual({ status: "out_of_date", reasons: [{ why: "settings" }] })

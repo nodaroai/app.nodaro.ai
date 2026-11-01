@@ -4,7 +4,8 @@
  *
  * What must hold:
  *  - the cut is the 4 s window plus up to 1 s of real footage, never past the
- *    source's end;
+ *    source's end, counted in the source's FRAMES (`previewClipFrames`: the
+ *    frame nearest the start, then the window's frames, never past the last);
  *  - a stored clip is current only when cut from THIS source at THIS start
  *    with THIS recipe, carrying the current stored face mask's cut (and no
  *    cut when there is no current mask);
@@ -21,7 +22,7 @@ import { describe, expect, it } from "vitest"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { faceMaskSettingsKey } from "../face-mask.js"
-import { PREVIEW_CLIP_RECIPE, PREVIEW_CLIP_TAIL_SECONDS, currentPreviewClip, previewClipDurationSec, previewClipState, withoutPreviewClip } from "../preview-clip.js"
+import { PREVIEW_CLIP_RECIPE, PREVIEW_CLIP_TAIL_SECONDS, currentPreviewClip, previewClipDurationSec, previewClipFrames, previewClipState, withoutPreviewClip } from "../preview-clip.js"
 import { publishBlockers } from "../publish-check.js"
 import { PREVIEW_SECONDS } from "../schemas.js"
 import { SERVER_OWNED_DRAFT_FIELDS, withServerOwnedFields } from "../server-owned.js"
@@ -110,6 +111,40 @@ describe("previewClipDurationSec", () => {
   })
 })
 
+describe("previewClipFrames", () => {
+  it("starts at the frame NEAREST the start and takes the window's length in frames", () => {
+    // A start right on a frame boundary, whatever its float spelling: 7/24 s is frame 7 (not 0.292 s → frame 8).
+    expect(previewClipFrames(7 / 24, 5, 24, 695)).toEqual({ startFrame: 7, frameCount: 120 })
+    expect(previewClipFrames(0.291667, 5, 24, 695)).toEqual({ startFrame: 7, frameCount: 120 })
+    // Between frames: the nearer one (7.96 × 24 = 191.04 → 191; 7.98 × 24 = 191.52 → 192).
+    expect(previewClipFrames(7.96, 5, 24, 695)).toEqual({ startFrame: 191, frameCount: 120 })
+    expect(previewClipFrames(7.98, 5, 24, 695)).toEqual({ startFrame: 192, frameCount: 120 })
+    expect(previewClipFrames(0, 4, 24, 695)).toEqual({ startFrame: 0, frameCount: 96 })
+  })
+
+  it("counts at a broadcast rate (30000/1001) without drift", () => {
+    const ntsc = 30000 / 1001
+    // 10 s = 299.7 frames → 300; 5 s = 149.85 → 150.
+    expect(previewClipFrames(10, 5, ntsc, 900)).toEqual({ startFrame: 300, frameCount: 150 })
+    expect(previewClipFrames(300 / ntsc, 4, ntsc, 900)).toEqual({ startFrame: 300, frameCount: 120 })
+  })
+
+  it("never runs past the source's last frame: a window that ends the clip, and a container longer than its video", () => {
+    // 28.958333 s at 24 fps = 695 frames; from 24 s (frame 576) "4.958 s" is 119 frames, and 119 are there.
+    expect(previewClipFrames(24, 28.958333 - 24, 24, 695)).toEqual({ startFrame: 576, frameCount: 119 })
+    // The container says 29 s (its sound runs on), the video has 695 frames: 5 s from 25 s keeps the 95 left.
+    expect(previewClipFrames(25, 5, 24, 695)).toEqual({ startFrame: 600, frameCount: 95 })
+  })
+
+  it("is null when the window holds no frame, or a number is unusable", () => {
+    expect(previewClipFrames(29, 5, 24, 695)).toBeNull()
+    expect(previewClipFrames(28.96, 1, 24, 695)).toBeNull()
+    for (const [s, d, fps, n] of [[-1, 5, 24, 695], [2, 0, 24, 695], [2, 5, 0, 695], [2, 5, Number.NaN, 695], [2, 5, 24, 0], [Number.POSITIVE_INFINITY, 5, 24, 695]] as const) {
+      expect(previewClipFrames(s, d, fps, n)).toBeNull()
+    }
+  })
+})
+
 describe("previewClipState", () => {
   it("not_offered without a preview or a source; missing without a clip; current with a matching one", () => {
     expect(previewClipState(data({ previewStart: null }))).toEqual({ kind: "not_offered" })
@@ -125,6 +160,11 @@ describe("previewClipState", () => {
     expect(previewClipState(data({ previewClip: clip({ sourceVideoUrl: "https://cdn.example/trends/t1/other.mp4" }) }))).toEqual({ kind: "out_of_date", why: "source" })
     expect(previewClipState(data({ previewStart: 3, previewClip: clip() }))).toEqual({ kind: "out_of_date", why: "start" })
     expect(previewClipState(data({ previewClip: clip({ recipe: "0" }) }))).toEqual({ kind: "out_of_date", why: "recipe" })
+    // New cuts are by frame index ("2"); a clip cut by time ("1") stays current: it passed the frame check when cut.
+    expect(PREVIEW_CLIP_RECIPE).toBe("2")
+    const byTime = clip({ recipe: "1" })
+    expect(previewClipState(data({ previewClip: byTime }))).toEqual({ kind: "current", clip: byTime })
+    expect(previewClipState(data({ previewClip: clip({ recipe: "3" }) }))).toEqual({ kind: "out_of_date", why: "recipe" })
     // The source wins over the start when both moved: it is the first thing to fix.
     expect(previewClipState(data({ previewStart: 3, previewClip: clip({ sourceVideoUrl: "https://x/other.mp4" }) }))).toEqual({ kind: "out_of_date", why: "source" })
   })

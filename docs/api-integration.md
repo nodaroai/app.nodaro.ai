@@ -4744,7 +4744,8 @@ edited is recorded on its job, visible through `GET /v1/jobs/:id` as
 `input_data.sourceAsset` — `{ kind: "preview" | "full",
 sha256?, startSec?, durationSec?, recipe? }` (`sha256` is the file's hash;
 `startSec`, `durationSec` and `recipe` say where and how a preview clip was
-cut) — with `input_data.preparedPreview: true` on a preview that edited the
+cut; the clip is cut by frame, starting at the trend clip's frame nearest
+`startSec`) — with `input_data.preparedPreview: true` on a preview that edited the
 stored clip, and copied to `output_data.sourceAsset` when the run completes.
 The stamp names no URL; it is provenance only, and it is not part of the
 `TrendRun` shape in `GET /v1/trends/runs`. On a platform version whose engine
