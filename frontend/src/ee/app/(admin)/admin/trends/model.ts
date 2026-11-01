@@ -391,11 +391,12 @@ export function fromForm(form: TrendForm): TrendDraftBody {
 
 /** The preparation steps as saved: only the steps set (a copy), undefined when none is. */
 function stepsOfForm(s: CastSwapSteps | undefined): CastSwapSteps | undefined {
-  if (!s || (s.sheets === undefined && s.enginePrompt === undefined && s.sceneDescription === undefined)) return undefined
+  if (!s || (s.sheets === undefined && s.enginePrompt === undefined && s.sceneDescription === undefined && s.clipBody === undefined)) return undefined
   return structuredClone({
     ...(s.sheets !== undefined ? { sheets: s.sheets } : {}),
     ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
+    ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
   })
 }
 
@@ -594,6 +595,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   "faceMaskHideTarget:body": "whole-person hiding (Faces hidden)",
   faceMesh: "the face mesh",
   steps: "the preparation steps",
+  clipBodySheet: "the Body from the clip step",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",

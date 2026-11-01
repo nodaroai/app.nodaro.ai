@@ -11794,6 +11794,8 @@ export interface TrendEngineEnvironment {
       faceMesh?: boolean
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
+      /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
+      clipBodySheet?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11877,9 +11879,9 @@ export type SheetLayout<K extends SheetKind = SheetKind> = (typeof SHEET_LAYOUTS
 export const LLM_INPUTS = ["clip", "rolePhotos", "references", "extraPrompt"] as const
 export type LlmInput = (typeof LLM_INPUTS)[number]
 /** The steps a run may go on without (`skippedSteps[].step`). */
-export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description"] as const
+export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description", "clip-body"] as const
 export type SkippableStep = (typeof SKIPPABLE_STEPS)[number]
-export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face"] as const
+export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face", "no_frame"] as const
 export type SkipReason = (typeof SKIP_REASONS)[number]
 /** One step a run went on without; `role` is its index in the run's roles. */
 export interface SkippedStep {
@@ -11898,11 +11900,25 @@ export interface LlmStepSetting {
 }
 export type TextStepSetting = { mode: "template" } | { mode: "llm"; llm: LlmStepSetting }
 export type SheetRules = { [K in SheetKind]: Record<SheetCondition, SheetLayout<K>> }
+/** The longest image prompt "Body from the clip" may be given. */
+export const CLIP_BODY_PROMPT_MAX = 4000
+/** The placeholders its image prompt may name (the engine fills them per role); no other `{word}`. */
+export const CLIP_BODY_PLACEHOLDERS = ["subject", "body", "hair"] as const
+/**
+ * "Body from the clip": a person role whose Outfit is new and whose Body or
+ * Hair is from the clip gets its reference redrawn from a frame of the clip.
+ * Left out = ON with the engine's default prompt; `prompt` replaces it.
+ */
+export interface ClipBodySetting {
+  mode: "on" | "off"
+  prompt?: string
+}
 /** A trend's, or one engine's, preparation steps. Absent (or `{}`) = today's run. */
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
   enginePrompt?: TextStepSetting
   sceneDescription?: TextStepSetting
+  clipBody?: ClipBodySetting
 }
 
 export interface PhotoLabel {
@@ -11912,10 +11928,30 @@ export interface PhotoLabel {
   angle: "front" | "three-quarter" | "side" | "back"
   quality: "ok" | "low"
 }
+/** What "Body from the clip" recorded for one role. */
+export interface ClipBodyOutput {
+  /** The frame of the clip picked for the role (a picture). */
+  frameUrl?: string
+  /** Where that frame is in the clip (seconds). */
+  frameSec?: number
+  /** The reference sheet redrawn from the frame and the role's reference. */
+  sheetUrl?: string
+  /** The image prompt it was drawn with. */
+  prompt?: string
+}
 /** What a run with steps recorded of each step (server-only on the job; read by the admin). */
 export interface StepOutputs {
   v: 1
-  roles: Array<{ role: number; kind: SheetKind; labels?: PhotoLabel[]; condition?: SheetCondition; layout?: SheetLayout; sheetUrl?: string; kept?: boolean }>
+  roles: Array<{
+    role: number
+    kind: SheetKind
+    labels?: PhotoLabel[]
+    condition?: SheetCondition
+    layout?: SheetLayout
+    sheetUrl?: string
+    kept?: boolean
+    clipBody?: ClipBodyOutput
+  }>
   enginePrompt?: { mode: "template" | "llm"; text?: string }
   scene?: { mode: "template" | "llm" }
 }
@@ -11937,6 +11973,8 @@ export interface CastSwapStepDefaults {
     labeller: LlmStepSetting & { instructions: string }
     enginePrompt: LlmStepSetting & { instructions: string }
     sceneDescription: LlmStepSetting & { instructions: string }
+    /** "Body from the clip"'s default image prompt; absent from an engine without the step. */
+    clipBody?: { prompt: string }
   }
   /** Each layout's prompt per kind (null: the collage and "none" have none). */
   layoutPrompts: { [K in SheetKind]: Partial<Record<SheetLayout<K>, string | null>> }

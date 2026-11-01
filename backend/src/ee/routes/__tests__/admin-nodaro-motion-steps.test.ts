@@ -211,6 +211,53 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
     expect(h.audits).toEqual([])
   })
 
+  it("saves Body from the clip once every environment's engine declares clipBodySheet", async () => {
+    const CLIP_BODY = { castSwap: { steps: true, clipBodySheet: true } }
+    h.envs = [envRow("production", CLIP_BODY), envRow("staging", CLIP_BODY)]
+    const off = { clipBody: { mode: "off" } }
+    const res = await put({ "motion-pulse": off })
+    expect(res.statusCode).toBe(200)
+    expect(h.upserts[0]).toMatchObject({ value: { "motion-pulse": off, "motion-lite": off } })
+  })
+
+  it("409s a setting with Body from the clip while an environment's engine lacks clipBodySheet, and saves nothing", async () => {
+    const CLIP_BODY = { castSwap: { steps: true, clipBodySheet: true } }
+    h.envs = [envRow("production", STEPS), envRow("staging", CLIP_BODY)]
+    const res = await put({ "motion-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "on", prompt: "A test prompt." } } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/Body from the clip/) })
+    expect(h.upserts).toEqual([])
+    // The other steps alone still save there.
+    expect((await put({ "motion-prism": TEMPLATE })).statusCode).toBe(200)
+  })
+
+  it("saves Off whatever the environments declare (an engine without the step has it stripped)", async () => {
+    for (const envs of [[envRow("production", STEPS), envRow("staging", {})], []]) {
+      h.envs = envs
+      h.upserts = []
+      const res = await put({ "motion-prism": { clipBody: { mode: "off" } }, "motion-pulse": { clipBody: { mode: "on" } } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(200)
+      expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": { clipBody: { mode: "off" } } } })
+    }
+    // Beside another step, the steps' own rule still holds.
+    h.envs = [envRow("production", STEPS)]
+    expect((await put({ "motion-prism": { ...TEMPLATE, clipBody: { mode: "off" } } })).statusCode).toBe(409)
+  })
+
+  it("refuses an image prompt naming a placeholder the engine does not fill, and saves nothing", async () => {
+    const res = await put({ "motion-pulse": { clipBody: { mode: "on", prompt: "Draw {constructor}." } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.issues).toEqual([{ path: "steps.motion-pulse.clipBody.prompt", code: "clip_body_placeholder", message: expect.stringMatching(/\{constructor\}/) }])
+    expect(h.upserts).toEqual([])
+  })
+
+  it("refuses an image prompt over 4000 characters with its path", async () => {
+    const res = await put({ "motion-prism": { clipBody: { mode: "on", prompt: "x".repeat(4001) } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.issues).toEqual([{ path: "steps.motion-prism.clipBody.prompt", code: "too_big", message: expect.any(String) }])
+    expect(h.upserts).toEqual([])
+  })
+
   it("refuses an unknown model with its path, and saves nothing", async () => {
     const res = await put({ "motion-prism": { enginePrompt: llm("no-such-model") } })
     expect(res.statusCode).toBe(400)
@@ -343,6 +390,21 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.problems).toEqual([{ path: "steps.enginePrompt.llm.model", code: "unknown_model", message: expect.any(String) }])
     expect(engine.calls).toEqual([])
+  })
+
+  it("never forwards clipBody to an engine without castSwap.clipBodySheet; the platform still checks it", async () => {
+    engine.reply = { problems: [] }
+    const steps = { enginePrompt: { mode: "template" }, clipBody: { mode: "on", prompt: "x".repeat(4001) } }
+    const res = await check({ engine: "motion-prism", steps })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.problems).toEqual([{ path: "steps.clipBody.prompt", code: "too_big", message: expect.any(String) }])
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { enginePrompt: { mode: "template" } } }])
+
+    engine.calls = []
+    setPluginSupports({ castSwap: { ...CS, steps: true, clipBodySheet: true } })
+    const ok = { clipBody: { mode: "off" } }
+    await check({ engine: "motion-prism", steps: ok })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps: ok }])
   })
 
   it("answers a fixed error when the engine refuses, never the engine's words", async () => {

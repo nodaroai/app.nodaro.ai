@@ -29,7 +29,7 @@ import { getPluginSupports } from "../../../lib/private-plugins/supports-registr
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { engineMasksTarget, faceMaskingZoneSchema, loadedEngineDrawsFaceMesh, withFaceMeshFor, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
-import { loadedEngineTakesSteps, withStepsFor } from "../../../lib/cast-swap-steps.js"
+import { withStepsFor } from "../../../lib/cast-swap-steps.js"
 import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
 import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
@@ -499,7 +499,8 @@ export function withoutUnsupportedFaceMesh(composed: ComposedTrendRun): void {
 
 /**
  * The body's `steps` kept only when the loaded engine declares
- * `castSwap.steps` (`withStepsFor`); otherwise no `steps` key at all. THE
+ * `castSwap.steps`, and its `clipBody` only when it also declares
+ * `castSwap.clipBodySheet` (`withStepsFor`); nothing left = no `steps` key at all. THE
  * guard for an older engine: its body schema strips an unknown key silently,
  * so a run there would quietly ignore the trend's steps rather than fail.
  * Publishing holds a trend that sets them back from such an environment
@@ -509,7 +510,7 @@ export function withoutUnsupportedFaceMesh(composed: ComposedTrendRun): void {
 export function withoutUnsupportedSteps(composed: ComposedTrendRun): void {
   const { body } = composed
   if (!Object.hasOwn(body, "steps")) return
-  const sent = withStepsFor(body, loadedEngineTakesSteps()).steps
+  const sent = withStepsFor(body, getPluginSupports().castSwap).steps
   if (sent) body.steps = sent
   else delete body.steps
 }

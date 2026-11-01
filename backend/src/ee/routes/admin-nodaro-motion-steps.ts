@@ -20,7 +20,12 @@
  * entries are dropped. A setting with anything set is 409 `engine_unsupported`
  * while any environment's engine cannot take steps
  * (`nodaro-motion-steps-gate.ts`: the row is shared by every environment);
- * nothing set is saved whatever the engines. Each save writes an
+ * nothing set is saved whatever the engines. "Body from the clip" Off (or On
+ * with no prompt) counts as nothing for these gates: it is safe on every
+ * engine (one without the step has it stripped). A setting in which any
+ * engine sets it On with an image prompt of its own (`clipBodyNeedsEngine`)
+ * is 409 while any environment's engine does not declare
+ * `castSwap.clipBodySheet`. Each save writes an
  * `admin_actions` row (`update_nodaro_motion_steps`, before and after).
  *
  * Defaults and check ask this environment's engine (`POST
@@ -29,7 +34,9 @@
  * default texts live in the engine and are only relayed here, never kept. An
  * engine that does not declare `castSwap.steps` is never asked: defaults
  * answers null, check the platform's problems alone; the engine's 404 reads
- * the same. Any other refusal, or an answer outside the contract, is 502
+ * the same. The check never forwards `clipBody` to an engine that does not
+ * declare `castSwap.clipBodySheet` (the platform still checks it). Any other
+ * refusal, or an answer outside the contract, is 502
  * `engine_error` with a fixed sentence (never the engine's words).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -44,11 +51,24 @@ import {
 } from "@nodaro/shared/models"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
-import { castSwapStepsSaveSchema, loadedEngineTakesSteps, stepsProblems, type CastSwapStepsProblem } from "../../lib/cast-swap-steps.js"
-import { NODARO_MOTION_STEPS_KEY, anyStepsSet, nodaroMotionStepsSaveSchema, withoutEmptySteps, type NodaroMotionSteps } from "../../lib/nodaro-motion-steps.js"
+import {
+  castSwapStepsSaveSchema,
+  clipBodyNeedsEngine,
+  stepsThatNeedTheEngine,
+  loadedEngineTakesClipBodySheet,
+  loadedEngineTakesSteps,
+  stepsProblems,
+  type CastSwapStepsProblem,
+} from "../../lib/cast-swap-steps.js"
+import { NODARO_MOTION_STEPS_KEY, nodaroMotionStepsSaveSchema, withoutEmptySteps, type NodaroMotionSteps } from "../../lib/nodaro-motion-steps.js"
 import { readNodaroMotionSteps, saveNodaroMotionSteps } from "../../lib/nodaro-motion-steps-store.js"
 import { listEngineEnvironments } from "../lib/engine-environments.js"
-import { cannotTakeStepsMessage, environmentsThatCannotTakeSteps } from "../lib/nodaro-motion-steps-gate.js"
+import {
+  cannotTakeClipBodyMessage,
+  cannotTakeStepsMessage,
+  environmentsThatCannotTakeClipBody,
+  environmentsThatCannotTakeSteps,
+} from "../lib/nodaro-motion-steps-gate.js"
 import { engineRequest, isRec, parseJson } from "../lib/trends/run-helpers.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { audit } from "./admin-trends-lifecycle.js"
@@ -139,6 +159,14 @@ function mergedProblems(platform: CastSwapStepsProblem[], fromEngine: CastSwapSt
   return out
 }
 
+/** The setting as this environment's engine may be shown it: no `clipBody` unless it declares `castSwap.clipBodySheet`. */
+function forLoadedEngine(steps: unknown): unknown {
+  if (!isRec(steps) || !Object.hasOwn(steps, "clipBody") || loadedEngineTakesClipBodySheet()) return steps
+  const rest: Record<string, unknown> = { ...steps }
+  delete rest.clipBody
+  return rest
+}
+
 export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
   app.get("/v1/admin/nodaro-motion/steps", { preHandler: requireAdmin }, async (req, reply) => {
     try {
@@ -156,10 +184,20 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
     try {
       const steps = withoutEmptySteps(parsed.data)
       // Anything set is saved only once every environment's engine takes steps (the row is shared by every environment).
-      if (anyStepsSet(steps)) {
-        const envs = environmentsThatCannotTakeSteps(await listEngineEnvironments())
+      // "Body from the clip" Off is safe everywhere and needs nothing.
+      const needing = Object.values(steps).map((entry) => stepsThatNeedTheEngine(entry))
+      if (needing.some((entry) => entry !== undefined)) {
+        const environments = await listEngineEnvironments()
+        const envs = environmentsThatCannotTakeSteps(environments)
         if (envs.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeStepsMessage(envs), envs } })
+        }
+        // "Body from the clip" On with a prompt of its own likewise, once any engine's entry sets it.
+        if (needing.some((entry) => clipBodyNeedsEngine(entry?.clipBody))) {
+          const lacking = environmentsThatCannotTakeClipBody(environments)
+          if (lacking.length > 0) {
+            return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeClipBodyMessage(lacking), envs: lacking } })
+          }
         }
       }
       const before = (await readNodaroMotionSteps()).steps
@@ -196,7 +234,7 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
       const own = castSwapStepsSaveSchema.safeParse(steps)
       const platform = own.success ? [] : stepsProblems(own.error, STEPS_PATH)
       const engine = nodaroMotionEngineFrom(parsed.data.engine)!
-      const asked = await askEngine(app, req, { engine, steps })
+      const asked = await askEngine(app, req, { engine, steps: forLoadedEngine(steps) })
       if (asked.kind === "failed") return engineError(reply)
       let fromEngine: CastSwapStepsProblem[] = []
       if (asked.kind === "answer") {

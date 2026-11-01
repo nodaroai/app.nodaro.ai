@@ -55,7 +55,13 @@
  * A trend that sets its preparation steps (`steps`, anything but `{}`:
  * `stepsSet`) likewise needs an engine that declares them (`castSwap.steps`,
  * need `STEPS_NEED`): an older engine's body schema strips the key silently,
- * and a run there is sent without it (today's preparation).
+ * and a run there is sent without it (today's preparation). A trend that
+ * sets "Body from the clip" On with an image prompt of its own
+ * (`steps.clipBody`, `clipBodyNeedsEngine`) needs an engine that also
+ * declares `castSwap.clipBodySheet` (need `CLIP_BODY_NEED`): an engine without
+ * it is sent no `clipBody` and would run its default instead. Off (or On with
+ * no prompt) needs nothing, not even steps: an engine without the step strips
+ * it and does not run it.
  *
  * A trend whose prompt style is not its clip preparation's default
  * (`promptStyle`), or a full-depth trend whose scene source an engine does not
@@ -96,7 +102,7 @@ import {
   type FaceMaskingSource,
 } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
-import { engineTakesSteps, stepsSet } from "../../../lib/cast-swap-steps.js"
+import { clipBodyNeedsEngine, engineTakesClipBodySheet, engineTakesSteps, stepsSet, stepsThatNeedTheEngine } from "../../../lib/cast-swap-steps.js"
 import {
   CAST_SWAP_ENGINES,
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -143,7 +149,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "steps", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "steps", "clipBodySheet", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -198,6 +204,9 @@ export const FACE_MESH_NEED = "faceMesh"
 /** The need of a trend that sets its preparation steps (`steps`, `castSwap.steps`). */
 export const STEPS_NEED = "steps"
 
+/** The need of a trend that sets "Body from the clip" On with a prompt of its own (`steps.clipBody`, `castSwap.clipBodySheet`). */
+export const CLIP_BODY_NEED = "clipBodySheet"
+
 const SOURCE_MODE_NAMES: Readonly<Record<FaceMaskingSource, string>> = {
   faces: "Faces hidden",
   "full-depth": "Full depth",
@@ -227,7 +236,10 @@ function needsOf(data: TrendVersionData): string[] {
     // The face mesh: an engine from before it refuses the key (and a run there is sent without it).
     ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? [FACE_MESH_NEED] : []),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
-    ...(stepsSet(data.steps) ? [STEPS_NEED] : []),
+    // ("Body from the clip" Off, or On with no prompt, is safe everywhere: not a need.)
+    ...(stepsSet(stepsThatNeedTheEngine(data.steps)) ? [STEPS_NEED] : []),
+    // "Body from the clip" On with a prompt of its own: an engine without it would run its default instead.
+    ...(clipBodyNeedsEngine(data.steps?.clipBody) ? [CLIP_BODY_NEED] : []),
     // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
     ...(promptModesOf(data).some((mode) => withPromptsFor(data, mode).prePrompt) ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
@@ -252,6 +264,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === HIDE_BODY_NEED) return !engineMasksTarget(cs, "body", "faces")
     if (need === FACE_MESH_NEED) return !engineDrawsFaceMesh(cs)
     if (need === STEPS_NEED) return !engineTakesSteps(cs)
+    if (need === CLIP_BODY_NEED) return !engineTakesClipBodySheet(cs)
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)

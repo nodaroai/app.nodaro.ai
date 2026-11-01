@@ -21,7 +21,7 @@ import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { composeTrendRun, type ComposedTrendRun } from "../compose.js"
 import { faceMaskSettingsKey, faceMaskState } from "../face-mask.js"
-import { STEPS_NEED, publishBlockers } from "../publish-check.js"
+import { CLIP_BODY_NEED, STEPS_NEED, publishBlockers } from "../publish-check.js"
 import { withoutUnsupportedFields } from "../run-helpers.js"
 import { trendVersionDataSchema } from "../schemas.js"
 import type { TrendFaceMask, TrendVersionData } from "../types.js"
@@ -63,6 +63,7 @@ const ENGINE = {
   fullDepthScenes: ["description", "original", "none"],
 }
 const WITH_STEPS = { ...ENGINE, steps: true }
+const WITH_CLIP_BODY = { ...WITH_STEPS, clipBodySheet: true }
 const env = (name: string, castSwap: Record<string, unknown>): EngineEnvironment => ({
   env: name,
   pluginBuildId: "b",
@@ -136,6 +137,65 @@ describe("compose", () => {
       withoutUnsupportedFields(without)
       expect(withSteps.body).toEqual(without.body)
     }
+  })
+})
+
+describe("Body from the clip (`clipBody`)", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  const OFF: CastSwapSteps = { clipBody: { mode: "off" } }
+  const BOTH: CastSwapSteps = { enginePrompt: LLM_PROMPT, clipBody: { mode: "on", prompt: "A test prompt." } }
+
+  it("is stored with the version and put on the body when set", () => {
+    expect(trendVersionDataSchema.parse(data({ steps: OFF })).steps).toEqual(OFF)
+    expect(run(data({ steps: OFF })).body.steps).toEqual(OFF)
+  })
+
+  it("is sent to an engine that declares castSwap.clipBodySheet", () => {
+    setPluginSupports({ castSwap: WITH_CLIP_BODY } as never)
+    const r = run(data({ steps: BOTH }))
+    withoutUnsupportedFields(r)
+    expect(r.body.steps).toEqual(BOTH)
+  })
+
+  it("an engine with steps but without clipBodySheet never receives clipBody; the other steps still go", () => {
+    setPluginSupports({ castSwap: WITH_STEPS } as never)
+    const r = run(data({ steps: BOTH }))
+    withoutUnsupportedFields(r)
+    expect(r.body.steps).toEqual({ enginePrompt: LLM_PROMPT })
+    // Only clipBody set: no steps key at all, exactly today's body there.
+    const only = run(data({ steps: OFF }))
+    withoutUnsupportedFields(only)
+    expect(Object.hasOwn(only.body, "steps")).toBe(false)
+    const without = run(data())
+    withoutUnsupportedFields(without)
+    expect(only.body).toEqual(without.body)
+  })
+
+  it("publish needs clipBodySheet in every environment only for On with an image prompt of its own", () => {
+    const custom = data({ steps: { clipBody: { mode: "on", prompt: "A test prompt." } } })
+    expect(publishBlockers(custom, [env("staging", WITH_CLIP_BODY), env("production", WITH_STEPS)], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: CLIP_BODY_NEED },
+    ])
+    expect(publishBlockers(custom, [env("staging", WITH_CLIP_BODY), env("production", WITH_CLIP_BODY)], REQUIRED)).toEqual([])
+    expect(CLIP_BODY_NEED).toBe("clipBodySheet")
+  })
+
+  it("Off publishes anywhere, even where the engine takes no steps at all (it is stripped there)", () => {
+    for (const steps of [OFF, { clipBody: { mode: "on" as const } }]) {
+      const d = data({ steps })
+      expect(publishBlockers(d, [env("staging", WITH_CLIP_BODY), env("production", ENGINE)], REQUIRED), JSON.stringify(steps)).toEqual([])
+    }
+    // Beside another step, that step's own need still holds.
+    const both = data({ steps: { enginePrompt: LLM_PROMPT, clipBody: { mode: "off" } } })
+    expect(publishBlockers(both, [env("staging", WITH_CLIP_BODY), env("production", ENGINE)], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: STEPS_NEED },
+    ])
+  })
+
+  it("a version that does not set it never needs clipBodySheet (absent is the engine's own default)", () => {
+    const d = data({ steps: STEPS })
+    expect(publishBlockers(d, [env("staging", WITH_STEPS), env("production", WITH_STEPS)], REQUIRED)).toEqual([])
   })
 })
 

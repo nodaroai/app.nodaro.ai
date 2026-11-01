@@ -3794,6 +3794,16 @@ export interface PluginSupports {
    *   the setting as null, and refuses to save a shared steps setting while
    *   any environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-steps.ts `engineTakesSteps`).
+   * - `clipBodySheet`: with `steps`, the setting takes `steps.clipBody`
+   *   ("Body from the clip": `{ mode: "on" | "off"; prompt? }`, absent = on),
+   *   the defaults route answers `defaults.clipBody.prompt`, the step outputs
+   *   may carry a role's `clipBody` (its frame, the redrawn sheet, the
+   *   prompt) and `skippedSteps` may name `"clip-body"` with its role.
+   *   Additive-optional: absent ⇒ `false` — the platform never sends
+   *   `clipBody` (a trend run, the per-engine setting), holds a trend that
+   *   sets it back from publishing there and refuses to save a shared setting
+   *   that sets it while any environment lacks it
+   *   (lib/cast-swap-steps.ts `engineTakesClipBodySheet`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3829,6 +3839,7 @@ export interface PluginSupports {
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
     readonly steps?: boolean
+    readonly clipBodySheet?: boolean
   }
 }
 

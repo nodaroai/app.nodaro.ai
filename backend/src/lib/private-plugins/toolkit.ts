@@ -129,7 +129,7 @@ import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
 import { loadedEngineDrawsFaceMesh, withFaceMeshFor } from "../cast-swap-face-masking.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
-import { anyStepsSet, withEarlierStepsKeys, withoutEmptySteps } from "../nodaro-motion-steps.js"
+import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
@@ -2178,13 +2178,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       // Same rules: a failed read throws. Null when never saved, AND to an engine that does not
       // take steps (`castSwap.steps`): it never asks, and must never be given admin doctrine it would drop.
+      // `clipBody` only to an engine that also declares `castSwap.clipBodySheet`; an entry left empty is dropped.
       nodaroMotionSteps: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_steps: the app settings could not be read")
         const steps = settings.nodaro_motion_steps
-        if (!steps || !anyStepsSet(steps) || !loadedEngineTakesSteps()) return null
+        if (!steps || !loadedEngineTakesSteps()) return null
+        const sent = stepsForLoadedEngine(steps)
+        if (!anyStepsSet(sent)) return null
         // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
-        return withEarlierStepsKeys(withoutEmptySteps(steps))
+        return withEarlierStepsKeys(sent)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

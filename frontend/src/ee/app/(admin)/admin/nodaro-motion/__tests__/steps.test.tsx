@@ -85,6 +85,8 @@ describe("Admin → Nodaro Motion → preparation steps", { timeout: 20_000 }, (
     expect(stepsToSaved({ "motion-prism": {}, "motion-pulse": { enginePrompt: { mode: "template" } } })).toEqual({
       "motion-pulse": { enginePrompt: { mode: "template" } },
     })
+    // Body from the clip alone is a setting of its own.
+    expect(stepsToSaved({ "motion-prism": { clipBody: { mode: "off" } } })).toEqual({ "motion-prism": { clipBody: { mode: "off" } } })
   })
 
   it("saving sends exactly the edited object, keyed by the public engine id", async () => {
