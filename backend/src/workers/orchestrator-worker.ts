@@ -449,11 +449,14 @@ export const ORCHESTRATOR_DRAIN_REQUEUE_DELAY_MS = 5_000
 
 /**
  * The statuses a run's claim (`running`) may move a row from: a run never
- * started (`pending`), and one a re-pick resumes (`running`, `stopping`). Any
- * other status ended the run, and its claim runs nothing. `stopping` is
- * claimed as `running`, as the plain write always did.
+ * started (`pending`), and one a re-pick resumes (`running`). A `stopping` row
+ * (Stop after current, pressed before the claim or before a re-pick) is
+ * claimed too, but keeps its status (`STOPPING_CLAIM_STATUSES`): the run's
+ * first level boundary then settles the Stop before any node runs. Any other
+ * status ended the run, and its claim runs nothing.
  */
-export const RUN_CLAIM_STATUSES = ["pending", "running", "stopping"] as const
+export const RUN_CLAIM_STATUSES = ["pending", "running"] as const
+export const STOPPING_CLAIM_STATUSES = ["stopping"] as const
 
 /**
  * Hand a drain-interrupted job back to the queue AT ZERO COST.
@@ -1558,20 +1561,34 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // claim that matches nothing runs nothing — no node, no charge, no
     // started event; the run's slot is released as it returns. A claim the
     // database could not answer goes on, as the plain write always did.
-    const claim = await updateExecutionWithRetry(
+    const claimColumns = {
+      started_at: new Date().toISOString(),
+      total_nodes: totalExecutions,
+      node_states: nodeStates,
+      // The claim stamps which environment owns this run. Both stale-execution
+      // sweeps filter on it: the orchestration job lives in THIS environment's
+      // Redis, so only this environment can tell whether the row is orphaned.
+      runtime_env: getRuntimeEnv(),
+    }
+    let claim = await updateExecutionWithRetry(
       executionId,
-      {
-        status: "running",
-        started_at: new Date().toISOString(),
-        total_nodes: totalExecutions,
-        node_states: nodeStates,
-        // The claim stamps which environment owns this run. Both stale-execution
-        // sweeps filter on it: the orchestration job lives in THIS environment's
-        // Redis, so only this environment can tell whether the row is orphaned.
-        runtime_env: getRuntimeEnv(),
-      },
+      { status: "running", ...claimColumns },
       { fromStatuses: RUN_CLAIM_STATUSES },
     )
+    // A Stop after current pressed before the claim (or before a re-pick):
+    // claim the row WITHOUT moving it to `running`, so the Stop is kept and the
+    // first level boundary settles it (`markExecutionCancelled`) once the
+    // children a re-pick adopted are finished. Writing `running` over it would
+    // run the whole graph. Only a claim that matched counts: a database error
+    // here never undoes the first write's definite miss.
+    let claimedStopping = false
+    if (claim.cancelledRace) {
+      const kept = await updateExecutionWithRetry(executionId, claimColumns, { fromStatuses: STOPPING_CLAIM_STATUSES })
+      if (kept.ok) {
+        claim = kept
+        claimedStopping = true
+      }
+    }
     if (claim.cancelledRace) {
       console.warn(`[orchestrator] Execution ${executionId} ended before its claim (cancelled, timed out in its queue, or deleted) — not running it`)
       return
@@ -1603,8 +1620,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // like the app runner. Before `startTime` on purpose: the fetch has its own
     // ceiling and must not eat the run's cap. A link it cannot fetch refuses the
     // run here, before any node reserves a credit. Inert when the request set no
-    // link. (`workers/orchestrator-video-links.ts`.)
-    {
+    // link. (`workers/orchestrator-video-links.ts`.) Skipped for a run claimed
+    // `stopping` with nothing to finish: its first level boundary ends it.
+    if (!claimedStopping || (ctx.adoptableJobs?.size ?? 0) > 0) {
       const fetched = await prepareVideoLinksForRun({
         userId,
         nodes,
@@ -1692,6 +1710,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       if (wrapperJobId) void mirrorUseCaseProgress(wrapperJobId, completedCount, totalExecutions).catch(() => {})
     }
 
+    // A Stop after current met at a boundary while a re-pick's adopted children are unfinished.
+    let finishingAdopted = false
     for (const level of levels) {
       // Check workflow timeout. The time any child job spent parked in
       // `pending_review` is subtracted (spec §6.3): a review queue's clock is
@@ -1718,8 +1738,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       const controlStatus = await checkExecutionControl(executionId)
       // "stopping" = "Stop after current" — don't start this level; same effect
       // as an explicit cancel (mark cancelled + emit the same event), so the two
-      // control states are handled together.
-      if (controlStatus === "cancelled" || controlStatus === "stopping") {
+      // control states are handled together. A re-picked run's adopted children
+      // (`ctx.adoptableJobs`) ARE its current level: they are finished first —
+      // polled to their end, recorded and counted like a level's — and nothing
+      // else is dispatched (`finishingAdopted`, the filter below). The executor
+      // takes each entry as it adopts it, so the boundary after them settles.
+      finishingAdopted = controlStatus === "stopping" && (ctx.adoptableJobs?.size ?? 0) > 0
+      if (controlStatus === "cancelled" || (controlStatus === "stopping" && !finishingAdopted)) {
         ctx.cancelled = true
         await settleStepCharges()
         await markExecutionCancelled(executionId, nodeStates, { completedNodes: completedCount, failedNodes: failedCount, totalCreditsUsed: totalCredits })
@@ -1806,6 +1831,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // `skipped`, and only a `completed` state kept such a node out here.
         if (nodeSubset && !nodeSubset.has(node.id)) return false
         if (nodeStates[node.id]?.status === "completed") return false
+        // Stopping: only the adopted children of the current level are finished.
+        if (finishingAdopted && !ctx.adoptableJobs?.has(node.id)) return false
         return true
       })
 
@@ -2201,6 +2228,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         )
         return
       }
+    }
+
+    // A Stop that was finishing adopted children ran out of levels (a child no
+    // node took): it still ends as a Stop, never as a completed run.
+    if (finishingAdopted) {
+      ctx.cancelled = true
+      await settleStepCharges()
+      await markExecutionCancelled(executionId, nodeStates, { completedNodes: completedCount, failedNodes: failedCount, totalCreditsUsed: totalCredits })
+      return
     }
 
     // 8. Mark execution completed

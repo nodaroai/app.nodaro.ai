@@ -44,6 +44,8 @@ const mocks = vi.hoisted(() => {
       if (table === "workflows") return { data: workflowRow, error: null }
       if (table === "profiles") return { data: { prompt_templates: null, tier: "pro" }, error: null }
       if (table === "workflow_executions" && columns === "status, node_states") return { data: { status: "running", node_states: {} }, error: null }
+      // The level boundary's control read: a run stopped before its claim reads `stopping` there.
+      if (table === "workflow_executions" && columns === "status" && execStatus.get(id ?? "") === "stopping") return { data: { status: "stopping" }, error: null }
       if (table === "workflow_executions" && columns?.startsWith("id, user_id, status")) {
         return { data: { id, user_id: "U", status: execStatus.get(id ?? "") ?? "pending", workspace_id: null, org_id: null, trigger_type: "manual", mcp_client: null }, error: null }
       }
@@ -116,6 +118,8 @@ vi.mock("@/lib/execution-writes.js", () => ({
   updateExecutionWithRetry: vi.fn(async (id: string, updates: Record<string, unknown>, opts?: { fromStatuses?: readonly string[] }) => {
     // The claim's compare-and-set misses a row another write ended.
     if (opts?.fromStatuses && mocks.endedBeforeClaim.has(id)) return { ok: false, cancelledRace: true, attempts: 1 }
+    // A compare-and-set matches only a row in one of its statuses.
+    if (opts?.fromStatuses && !opts.fromStatuses.includes(mocks.execStatus.get(id) ?? "pending")) return { ok: false, cancelledRace: true, attempts: 1 }
     mocks.executionWrites.push({ id, updates })
     return { ok: true, cancelledRace: false, attempts: 1 }
   }),
@@ -218,6 +222,18 @@ describe("the run lane at the orchestrator", () => {
     expect(mocks.executeNode).not.toHaveBeenCalled()
     expect(mocks.executionWrites.filter((w) => w.id === "exec-1")).toEqual([])
     // The slot it was admitted on is free again (a line with nothing in it is not listed).
+    expect(await runLane()).toBeUndefined()
+    expect(serverShareOf("orchestrator").occupancy().byUser).toEqual({})
+  })
+
+  it("a run stopped before its claim is admitted, runs nothing, ends cancelled and gives its slot back", async () => {
+    mocks.execStatus.set("exec-1", "stopping")
+    await runOrchestratorJob(job("exec-1"), "t1")
+    expect(refused).toEqual([])
+    expect(mocks.executeNode).not.toHaveBeenCalled()
+    const writes = mocks.executionWrites.filter((w) => w.id === "exec-1").map((w) => w.updates.status)
+    expect(writes).toContain("cancelled")
+    expect(writes).not.toContain("running")
     expect(await runLane()).toBeUndefined()
     expect(serverShareOf("orchestrator").occupancy().byUser).toEqual({})
   })
