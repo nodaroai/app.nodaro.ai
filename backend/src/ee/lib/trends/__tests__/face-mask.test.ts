@@ -30,11 +30,11 @@ const SRC = "https://cdn.example/trends/t1/src.mp4"
  * the matching cut of the data's current stored face mask when it has one:
  * publishing needs one (preview-clip.test.ts holds its rules).
  */
-function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">): TrendPreviewClip {
+function previewClipFor(d: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "slots">): TrendPreviewClip {
   const mask = storedFaceMaskFor(d)
   return {
     videoUrl: "https://cdn.example/trends/t1/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
-    sourceVideoUrl: SRC, startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    sourceVideoUrl: SRC, startSec: 0, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
     ...(mask ? { faceMask: { url: "https://cdn.example/trends/t1/preview-mask.mp4", frames: 150, sha256: "b".repeat(64), sourceMaskUrl: mask.url } } : {}),
   }
 }
@@ -96,24 +96,24 @@ const REQUIRED = ["staging", "production"]
 
 describe("faceMaskSettingsKey", () => {
   it("is the same for the setting as stored and as a run sends it (zone resolved), whatever the key order", () => {
-    const key = faceMaskSettingsKeyOf(SRC, MASKING)
-    expect(faceMaskSettingsKeyOf(SRC, withResolvedZone(MASKING))).toBe(key)
-    expect(faceMaskSettingsKeyOf(SRC, { threshold: 0.4, mode: "always" })).toBe(key)
+    const key = faceMaskSettingsKeyOf(SRC, MASKING, [])
+    expect(faceMaskSettingsKeyOf(SRC, withResolvedZone(MASKING), [])).toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { threshold: 0.4, mode: "always" }, [])).toBe(key)
     expect(faceMaskSettingsKey(data())).toBe(key)
   })
 
   it("changes with the source clip and with any setting that changes the mask", () => {
-    const key = faceMaskSettingsKeyOf(SRC, MASKING)
-    expect(faceMaskSettingsKeyOf("https://cdn.example/other.mp4", MASKING)).not.toBe(key)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, threshold: 0.5 })).not.toBe(key)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, fill: "depth" })).not.toBe(key)
+    const key = faceMaskSettingsKeyOf(SRC, MASKING, [])
+    expect(faceMaskSettingsKeyOf("https://cdn.example/other.mp4", MASKING, [])).not.toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, threshold: 0.5 }, [])).not.toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, fill: "depth" }, [])).not.toBe(key)
     // No margins is not the default margins.
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, zone: null })).not.toBe(key)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, zone: null }, [])).not.toBe(key)
   })
 
   it("leaves the mode out: always and auto mask the same clip", () => {
-    const key = faceMaskSettingsKeyOf(SRC, MASKING)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, mode: "auto" })).toBe(key)
+    const key = faceMaskSettingsKeyOf(SRC, MASKING, [])
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, mode: "auto" }, [])).toBe(key)
     expect(key.startsWith("v2:")).toBe(true)
   })
 
@@ -121,20 +121,20 @@ describe("faceMaskSettingsKey", () => {
     // Pinned literals: the keys of every mask approved before `target` (all heads). A change here
     // makes every approved mask out of date; that is a decision, never a refactor.
     const PINNED = "v2:30fe1719eed0a90b8414b6daa6687eec33939a17d106d8bdd5ec2b1b278f8e07"
-    expect(faceMaskSettingsKeyOf(SRC, MASKING)).toBe(PINNED)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "head" })).toBe(PINNED)
-    expect(faceMaskSettingsKeyOf(SRC, withResolvedZone({ ...MASKING, target: "head" }))).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, MASKING, [])).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "head" }, [])).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, withResolvedZone({ ...MASKING, target: "head" }), [])).toBe(PINNED)
     const NO_MARGINS = "v2:b2684dd62a46298a370db5b03d244da8a6e5c246e98727217377415a3886dfc5"
-    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null })).toBe(NO_MARGINS)
-    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null, target: "head" })).toBe(NO_MARGINS)
+    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null }, [])).toBe(NO_MARGINS)
+    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null, target: "head" }, [])).toBe(NO_MARGINS)
   })
 
   it("changes between face and head: a mask of heads is out of date for a trend that masks faces, and back", () => {
-    const head = faceMaskSettingsKeyOf(SRC, MASKING)
-    const face = faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "face" })
+    const head = faceMaskSettingsKeyOf(SRC, MASKING, [])
+    const face = faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "face" }, [])
     expect(face).not.toBe(head)
     expect(face.startsWith("v2:")).toBe(true)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, mode: "auto", target: "face" })).toBe(face)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, mode: "auto", target: "face" }, [])).toBe(face)
     expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, target: "face" } }), ENVS, REQUIRED).reasons).toEqual([{ why: "settings" }])
     expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, target: "head" } }), ENVS, REQUIRED).status).toBe("approved")
   })
@@ -216,20 +216,20 @@ describe("marks", () => {
   it("hash exactly as before marks existed when there are none (absent or empty): every approved mask stays up to date", () => {
     // The pinned pre-marks keys (see the target test above): a change here outdates every approved mask.
     const PINNED = "v2:30fe1719eed0a90b8414b6daa6687eec33939a17d106d8bdd5ec2b1b278f8e07"
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [] })).toBe(PINNED)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "head", marks: [] })).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [] }, [])).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, target: "head", marks: [] }, [])).toBe(PINNED)
     const NO_MARGINS = "v2:b2684dd62a46298a370db5b03d244da8a6e5c246e98727217377415a3886dfc5"
-    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null, marks: [] })).toBe(NO_MARGINS)
+    expect(faceMaskSettingsKeyOf(SRC, { mode: "auto", fill: "depth", zone: null, marks: [] }, [])).toBe(NO_MARGINS)
     expect(faceMaskState(data({ faceMask: mask(), faceMasking: { ...MASKING, marks: [] } }), ENVS, REQUIRED).status).toBe("approved")
   })
 
   it("change the key when there are some, in any order the same; the base key is the key without them", () => {
-    const plain = faceMaskSettingsKeyOf(SRC, MASKING)
-    const one = faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK] })
+    const plain = faceMaskSettingsKeyOf(SRC, MASKING, [])
+    const one = faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK] }, [])
     expect(one).not.toBe(plain)
     expect(one.startsWith("v2:")).toBe(true)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK, MARK2] })).toBe(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK2, MARK] }))
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [{ ...MARK, toFrame: 358 }] })).not.toBe(one)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK, MARK2] }, [])).toBe(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK2, MARK] }, []))
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [{ ...MARK, toFrame: 358 }] }, [])).not.toBe(one)
     const marked = data({ faceMasking: { ...MASKING, marks: [MARK] } })
     expect(faceMaskSettingsKey(marked)).toBe(one)
     expect(faceMaskBaseKey(marked)).toBe(plain)
@@ -246,8 +246,8 @@ describe("marks", () => {
   it("slot marks never touch the base: a draft with slot marks alone keys, bases and approves exactly as one with none", () => {
     const SLOT_MARK = { ...MARK, label: { slot: "friend" } }
     const PINNED = "v2:30fe1719eed0a90b8414b6daa6687eec33939a17d106d8bdd5ec2b1b278f8e07"
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [SLOT_MARK] })).toBe(PINNED)
-    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [SLOT_MARK, MARK] })).toBe(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK] }))
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [SLOT_MARK] }, [])).toBe(PINNED)
+    expect(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [SLOT_MARK, MARK] }, [])).toBe(faceMaskSettingsKeyOf(SRC, { ...MASKING, marks: [MARK] }, []))
     const slotOnly = data({ faceMasking: { ...MASKING, marks: [SLOT_MARK] } })
     expect(faceMaskHasErasedMarks(slotOnly)).toBe(false)
     expect(faceMaskState({ ...slotOnly, faceMask: mask() }, ENVS, REQUIRED).status).toBe("approved")

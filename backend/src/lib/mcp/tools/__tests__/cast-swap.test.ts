@@ -220,6 +220,24 @@ describe("cast_swap", () => {
     })
   })
 
+  it("sends an unnamed person as it is (named by its first image), and a blank location without its name (its default)", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", {
+      video_url: "https://cdn.example/clip.mp4",
+      roles: [
+        { kind: "person", images: ["https://cdn.example/me.png"] },
+        { kind: "person", name: "", images: ["https://cdn.example/you.png"] },
+        { kind: "location", name: "  ", images: ["https://cdn.example/beach.png"] },
+      ],
+    })
+    expect(res.isError).toBeFalsy()
+    expect((calls[0]!.payload as { roles: unknown[] }).roles).toEqual([
+      { kind: "person", images: ["https://cdn.example/me.png"] },
+      { kind: "person", name: "", images: ["https://cdn.example/you.png"] },
+      { kind: "location", images: ["https://cdn.example/beach.png"] },
+    ])
+  })
+
   it("sends fixed references to the route as given", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     const references = [

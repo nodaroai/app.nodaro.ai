@@ -7,7 +7,8 @@
  * Replies `{ data: { stepOutputs, sceneText, skippedSteps } }`:
  * - `stepOutputs`: what a run with `steps` recorded of each step (the labels,
  *   the condition, the layout and sheet per role; the engine prompt's mode and
- *   the LLM-written body; the scene step's mode; "Body from the clip"'s frame,
+ *   the LLM-written body; the scene step's mode, whether it made the shot
+ *   list and the cut times it was told; "Body from the clip"'s frame,
  *   redrawn sheet and image prompt per role), from the server-only
  *   `output_data.__castSwapStepOutputs`. null when the run recorded none (a
  *   run with no `steps`: today's steps), or the record is of another version.
@@ -107,6 +108,23 @@ function readRole(v: unknown): RoleOutput | null {
   return out
 }
 
+/** The longest list of cut times kept (a clip is at most minutes long; anything past it is not a record). */
+const MAX_CUTS = 1000
+
+/**
+ * The scene step's record: its mode, `shotList: true` when the run made its shot list, and `cuts` (the cut
+ * times it was told, seconds) only as a list of finite, non-negative numbers — anything else is left out.
+ */
+function readScene(v: Rec, mode: (typeof STEP_MODES)[number]): NonNullable<StepOutputs["scene"]> {
+  const out: NonNullable<StepOutputs["scene"]> = { mode }
+  if (v.shotList === true) out.shotList = true
+  const cuts = v.cuts
+  if (Array.isArray(cuts) && cuts.length <= MAX_CUTS && cuts.every((t) => typeof t === "number" && Number.isFinite(t) && t >= 0)) {
+    out.cuts = [...(cuts as number[])]
+  }
+  return out
+}
+
 /** The step outputs record; null unless it is version 1 with a roles list. */
 export function readStepOutputs(v: unknown): StepOutputs | null {
   if (!isRec(v) || v.v !== 1 || !Array.isArray(v.roles)) return null
@@ -115,7 +133,7 @@ export function readStepOutputs(v: unknown): StepOutputs | null {
     out.enginePrompt = { mode: v.enginePrompt.mode }
     if (typeof v.enginePrompt.text === "string") out.enginePrompt.text = v.enginePrompt.text
   }
-  if (isRec(v.scene) && oneOf(STEP_MODES, v.scene.mode)) out.scene = { mode: v.scene.mode }
+  if (isRec(v.scene) && oneOf(STEP_MODES, v.scene.mode)) out.scene = readScene(v.scene, v.scene.mode)
   return out
 }
 

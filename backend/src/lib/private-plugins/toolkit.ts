@@ -1595,6 +1595,12 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // A plugin's keyed chat child call answers its first answer, never runs
   // twice and charges once (`lib/llm-chat-keyed.ts`).
   llmChatIdempotency: true,
+  // POST /v1/video-scene-cuts answers a clip's measured scene cuts to a
+  // child of the platform's own jobs (routes/video-scene-cuts.ts).
+  videoSceneCuts: true,
+  // The workflow estimate prices an llm-chat node at its own `data.expectedUsage` (ee/billing/credits.ts
+  // `expectedLlmUsageOf`).
+  llmChatEstimateUsage: true,
 })
 
 export interface BuildToolkitOptions {
@@ -2184,7 +2190,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       // Same rules: a failed read throws. Null when never saved, AND to an engine that does not
       // take steps (`castSwap.steps`): it never asks, and must never be given admin doctrine it would drop.
-      // `clipBody` only to an engine that also declares `castSwap.clipBodySheet`; an entry left empty is dropped.
+      // `clipBody` only to an engine that also declares `castSwap.clipBodySheet`, `shotList` only to one that declares
+      // `castSwap.shotList`; an entry left empty is dropped.
       nodaroMotionSteps: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_steps: the app settings could not be read")

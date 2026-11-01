@@ -130,6 +130,19 @@ export interface FaceMasking {
  */
 export interface FaceMaskingWithMarks extends FaceMasking {
   marks?: FaceMaskMark[]
+  /**
+   * Role outlines (decided 2026-11-01): the stored face mask draws a coloured
+   * ring just outside each person role's masked region (the colour by the
+   * role's place among the trend's person slots, `roleOutlineColour`), which
+   * region is whose told by that role's slot marks; a run is sent which
+   * colour is which role (`storedFaceMask.outlines`) and the prompt says so.
+   * Faces hidden only. While on, a slot mark may name any person slot, a
+   * required one too (`slotMarkAllowed`), and a depth fill is drawn gray (so
+   * every colour reads). Like `marks`, the STORED mask's alone: never part of
+   * what a run's `faceMasking` carries (`withoutMarks` drops it). Absent and
+   * `false` are the same (off), never hashed (`roleOutlinesOn`).
+   */
+  roleOutlines?: boolean
 }
 
 /** The engine's default `minFaceHeightPct`, for the `min ≤ max` check when min is left out. */
@@ -253,11 +266,32 @@ export const faceMaskingMotionSchema: z.ZodType<FaceMasking> = z
   .superRefine(sourceModeRules)
   .refine((m) => faceMaskingSourceOf(m) !== "keep-people", { path: ["source"], message: "A direct Motion run hides faces or uses full depth: Keep people is a trend setting." })
 
-/** A trend's face masking setting: the setting (any source mode) plus `marks` (at most `CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks`). */
+/** The issue code of role outlines asked for with a depth mode (`faceMaskingWithMarksSchema`), in the issue's `params.code`. */
+export const ROLE_OUTLINES_NEED_FACES = "role_outlines_need_faces"
+
+/**
+ * A trend's face masking setting: the setting (any source mode) plus `marks`
+ * (at most `CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks`) and `roleOutlines`
+ * (Faces hidden only: a depth mode has no masked person to outline).
+ */
 export const faceMaskingWithMarksSchema: z.ZodType<FaceMaskingWithMarks> = z
-  .strictObject({ ...faceMaskingShape, marks: z.array(faceMaskMarkSchema).max(CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks).optional() })
+  .strictObject({
+    ...faceMaskingShape,
+    marks: z.array(faceMaskMarkSchema).max(CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks).optional(),
+    roleOutlines: z.boolean().optional(),
+  })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
+  .superRefine((m, ctx) => {
+    if (m.roleOutlines === true && faceMaskingSourceOf(m) !== "faces") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["roleOutlines"],
+        params: { code: ROLE_OUTLINES_NEED_FACES },
+        message: "Role outlines are drawn around hidden people: they need the clip preparation Faces hidden.",
+      })
+    }
+  })
 
 /** How the setting prepares the clip; left out = `"faces"`. */
 export function faceMaskingSourceOf(m: Pick<FaceMasking, "source"> | undefined): FaceMaskingSource {
@@ -313,10 +347,40 @@ export function erasedBoxesOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined
   return erasedMarksOf(m).map(boxOf)
 }
 
-/** The setting without its marks (a new object): what a run, and the base of a mask, are made from. */
+/**
+ * The setting without its marks and its role outlines (a new object): what a
+ * run, and the base of a mask, are made from. Both belong to the STORED mask
+ * alone (a run's strict `faceMasking` takes neither).
+ */
 export function withoutMarks(m: FaceMaskingWithMarks): FaceMasking {
-  const { marks: _marks, ...rest } = m
+  const { marks: _marks, roleOutlines: _outlines, ...rest } = m
   return rest
+}
+
+/**
+ * Whether the setting draws role outlines on its stored mask: on (not
+ * "off"), Faces hidden, and `roleOutlines: true`. Absent and `false` are the
+ * same (off), so neither is ever sent nor hashed.
+ */
+export function roleOutlinesOn(m: Pick<FaceMaskingWithMarks, "roleOutlines" | "source" | "mode"> | undefined): boolean {
+  return !!m && m.mode !== "off" && m.roleOutlines === true && faceMaskingSourceOf(m) === "faces"
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine draws role outlines
+ * (`castSwap.roleOutlines`): its stored face mask make takes
+ * `faceMasking.roleOutlines` with `outlines`, answers what it drew, and its
+ * run takes `storedFaceMask.outlines`. Absent ⇒ an engine from before them,
+ * whose make strips the key (it would make a mask without the rings): it is
+ * never sent one.
+ */
+export function engineDrawsRoleOutlines(cs: { readonly roleOutlines?: boolean } | undefined): boolean {
+  return cs?.roleOutlines === true
+}
+
+/** Whether this process's Cast Swap engine draws role outlines (`engineDrawsRoleOutlines` its declaration). */
+export function loadedEngineDrawsRoleOutlines(): boolean {
+  return engineDrawsRoleOutlines(getPluginSupports().castSwap)
 }
 
 /** Whether this setting masks anything at all (absent or "off" = today's pipeline). */

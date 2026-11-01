@@ -1,14 +1,16 @@
 /**
  * Video Face Mesh (`POST /v1/video-face-mesh`, job type `video-face-mesh`):
- * thin face lines — a blue mesh, a blue lip outline, green eye outlines —
- * drawn on the faces of a clip, frame for frame. An internal step of Nodaro
- * Motion's face masking: the lines go on the masked (or depth) clip so the
- * video model still sees where the mouth and the eyes are.
+ * thin GRAY face lines — a wireframe, and darker eye and lip outlines, each a
+ * tone of the picture under it — drawn on the faces of a clip, frame for
+ * frame. An internal step of Nodaro Motion's face masking: the lines go on
+ * the masked (or depth) clip so the video model still sees where the mouth
+ * and the eyes are.
  *
  * Priced by the clip's length at the 30 fps basis Video Mask uses
  * (`videoMaskBilledSeconds`), one row per length bucket.
  */
 import { VIDEO_MASK_LIMITS, type VideoMaskZone } from "./video-mask.js"
+import type { VideoDepthColormap } from "./video-depth.js"
 
 /** The route, as the Cast Swap engine calls it. */
 export const VIDEO_FACE_MESH_PATH = "/v1/video-face-mesh"
@@ -35,7 +37,7 @@ export const VIDEO_FACE_MESH_LIMITS = {
  * same input: the model, the crop, the smoothing, the filters, the colours or
  * the widths. Never for pricing, limits or messages.
  */
-export const VIDEO_FACE_MESH_RECIPE = "2026-10-31"
+export const VIDEO_FACE_MESH_RECIPE = "2026-11-01"
 
 const VIDEO_FACE_MESH_BUCKETS_SEC = [5, 10, 15, 30, 60, 120, 300] as const
 
@@ -71,6 +73,21 @@ export interface VideoFaceMeshRequest {
   readonly maxFaceHeightPct?: number
   /** Margins (% of the frame) where no face is drawn. */
   readonly zone?: Partial<VideoMaskZone> | null
+  /**
+   * The depth map's colormap (Video Depth's `VIDEO_DEPTH_COLORMAPS`) when the
+   * lines go on a depth map: each line is then a colour OF that map — the map
+   * at the line's tone of the depth under it. Needs `depthUrl`, except
+   * `grayscale` (a gray depth clip is its own depth). Left out with a
+   * `depthUrl`: `grayscale`.
+   */
+  readonly colormap?: VideoDepthColormap
+  /**
+   * The GRAYSCALE depth render of the clip (Video Depth with `colormap:
+   * "grayscale"`, same frame count as `videoUrl`, any size): the depth each
+   * line's colour is read from. Left out (a blurred mask, a gray depth clip
+   * drawn on directly): each line is a gray tone of the pixel under it.
+   */
+  readonly depthUrl?: string
 }
 
 /** A finished `video-face-mesh` job's `output_data`. */
@@ -84,5 +101,7 @@ export interface VideoFaceMeshOutput {
   readonly framesWithFaces: number
   /** Faces drawn, summed over the frames (0 = nothing drawn; the clip comes back as it was sent). */
   readonly facesDrawn: number
+  /** The map the lines were coloured from (a request with `depthUrl`); absent = gray tones of the pixel under them. */
+  readonly colormap?: VideoDepthColormap
   readonly recipe: string
 }

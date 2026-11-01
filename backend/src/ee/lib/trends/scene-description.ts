@@ -19,6 +19,7 @@
  * exactly the body it got before.
  */
 import { faceMaskingSourceOf, fullDepthSceneOf, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import { fullDepthSceneDescribes } from "@nodaro/render-rules"
 import { pickText } from "./localize.js"
 import { PREVIEW_SECONDS, SCENE_DESCRIPTION_MAX } from "./schemas.js"
 import type { TrendFaceMask, TrendSlotKind, TrendVersionData } from "./types.js"
@@ -105,7 +106,7 @@ export function storedSceneDescriptionFor(
   masking: FaceMasking | undefined,
   preview: boolean,
 ): { sceneDescription: string; sceneDescriptionWindow: SceneDescriptionWindow } | undefined {
-  if (!masking || faceMaskingSourceOf(masking) !== "full-depth" || fullDepthSceneOf(masking) !== "description") return undefined
+  if (!masking || faceMaskingSourceOf(masking) !== "full-depth" || !fullDepthSceneDescribes(fullDepthSceneOf(masking) ?? undefined)) return undefined
   if (!data.source || !data.faceMask) return undefined
   const durationSec = data.source.durationSec
   if (preview) {

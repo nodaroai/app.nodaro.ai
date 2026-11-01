@@ -175,6 +175,28 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     expect(reserve).not.toHaveBeenCalled()
   })
 
+  it("a coloured depth map: colormap and the gray depth render ride to the worker as sent", async () => {
+    const res = await asChild({ ...BODY, colormap: "turbo", depthUrl: "https://example.com/depth-gray.mp4" })
+    expect(res.statusCode).toBe(202)
+    expect(videoQueue.add).toHaveBeenCalledWith("video-face-mesh", expect.objectContaining({
+      colormap: "turbo", depthUrl: "https://example.com/depth-gray.mp4",
+    }))
+  })
+
+  it("grayscale needs no depth render; a depth render alone is taken (grayscale)", async () => {
+    expect((await asChild({ ...BODY, colormap: "grayscale" })).statusCode).toBe(202)
+    expect((await asChild({ ...BODY, depthUrl: "https://example.com/depth-gray.mp4" })).statusCode).toBe(202)
+  })
+
+  it("refuses a coloured map with no depth render (a line's colour is read from it), an unknown map and a bad depth url", async () => {
+    const noDepth = await asChild({ ...BODY, colormap: "inferno" })
+    expect(noDepth.statusCode).toBe(400)
+    expect(JSON.stringify(noDepth.json())).toContain("depthUrl")
+    expect((await asChild({ ...BODY, colormap: "jet", depthUrl: "https://example.com/d.mp4" })).statusCode).toBe(400)
+    expect((await asChild({ ...BODY, colormap: "turbo", depthUrl: "not a url" })).statusCode).toBe(400)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("refuses an empty size band and out-of-range values", async () => {
     expect((await asChild({ ...BODY, minFaceHeightPct: 50, maxFaceHeightPct: 10 })).statusCode).toBe(400)
     expect((await asChild({ ...BODY, minFaceHeightPct: 101 })).statusCode).toBe(400)

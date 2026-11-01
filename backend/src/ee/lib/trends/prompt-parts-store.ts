@@ -29,7 +29,7 @@ import { CHIPS_BY_KIND, MAX_IMAGES_PER_SLOT, engineOf } from "./schemas.js"
 import { withPromptsFor, type TrendPromptMode } from "./prompt-parts.js"
 import { promptStyleOf, trendSceneOf, trendSourceOf } from "./prompt-style.js"
 import type { TrendPromptPartOverrides, TrendSlot, TrendVersionData } from "./types.js"
-import { faceMaskingOn, faceMeshOn } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskingOn, faceMeshOn, roleOutlinesOn } from "../../../lib/cast-swap-face-masking.js"
 
 /** The texts a run sends (`{ [id]: text }`, in part order), or undefined when the trend overrides none. */
 export function promptPartTexts(stored: TrendPromptPartOverrides | undefined): PromptPartTexts | undefined {
@@ -87,6 +87,10 @@ export function promptPartsRequestFor(
     ...(scene ? { scene } : {}),
     // A trend that draws the face mesh: the engine counts the mesh's line (`faceMesh` part) in the length.
     ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? { faceMesh: true as const } : {}),
+    // A trend that draws role outlines: the engine counts their line (`roleOutlines` part) in the length.
+    ...(roleOutlinesOn(data.faceMasking) ? { roleOutlines: true as const } : {}),
+    // A trend whose Precise shot list is on: the engine shows its marker where the list goes (a Precise prompt only).
+    ...(data.steps?.shotList?.precise?.mode === "on" ? { shotList: true as const } : {}),
     // The longest prompt: a clip with sound keeps its audio line.
     hasAudio: true,
     roles: texts.slots.map((slot, i) => ({

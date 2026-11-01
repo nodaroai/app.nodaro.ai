@@ -15,10 +15,22 @@ import { PREVIEW_SECONDS } from "./schemas.js"
 import { storedFaceMaskFor } from "./face-mask.js"
 
 /**
- * Bump when the cut's arguments change (preview-clip-media.ts): every stored
- * clip is then out of date and remade on the next save or publish.
+ * The recipe every new cut is made with (preview-clip-media.ts). Bump it when
+ * the cut's arguments change; a stored clip stays current only while its
+ * recipe is in `CURRENT_PREVIEW_CLIP_RECIPES`.
+ *   "1" — cut by TIME (`-ss` before `-i`, `-t`, both to the millisecond).
+ *   "2" — cut by FRAME INDEX (`previewClipFrames`): the same frames of the
+ *         source and of its face mask whatever their timestamps say.
  */
-export const PREVIEW_CLIP_RECIPE = "1"
+export const PREVIEW_CLIP_RECIPE = "2"
+
+/**
+ * The recipes whose stored clips are still current. "1" stays: a clip cut by
+ * time was stored only after its mask cut passed the equal-frame-count check,
+ * so it is a valid input as it is; only a NEW cut uses "2". Keeping it means a
+ * published version keeps editing the bytes it was published with.
+ */
+export const CURRENT_PREVIEW_CLIP_RECIPES: readonly string[] = ["1", PREVIEW_CLIP_RECIPE]
 
 /**
  * Real footage kept after the 4 s window, when the source has it. An engine
@@ -33,6 +45,33 @@ export const PREVIEW_CLIP_TAIL_SECONDS = 1
 export function previewClipDurationSec(sourceDurationSec: number, startSec: number): number {
   const left = Math.max(0, sourceDurationSec - startSec)
   return Math.min(left, PREVIEW_SECONDS + PREVIEW_CLIP_TAIL_SECONDS)
+}
+
+/** Which frames of the source the preview clip is: `frameCount` frames from frame `startFrame` (0-based). */
+export interface PreviewClipFrames {
+  startFrame: number
+  frameCount: number
+}
+
+/**
+ * The preview clip's frames, by INDEX, for a source of `sourceFrames` frames
+ * at `fps`: the frame nearest `startSec` (`round(startSec × fps)`), then
+ * `round(durationSec × fps)` frames, never past the source's last frame.
+ * Null when that leaves no frame (or a number is unusable).
+ *
+ * Why by index: the source and its face mask align frame for frame (asserted
+ * at approval), but not always timestamp for timestamp — the mask is another
+ * encoder's file, in another time base (a millisecond one rounds 7/24 s to
+ * 0.292 s). A cut by time then lands on different frames of the two at a
+ * window edge (a start at 7/24 s, sent as "0.292", drops frame 7 of the
+ * source and keeps frame 7 of the mask: 119 frames against 120). Cut by index,
+ * both files give the same frames.
+ */
+export function previewClipFrames(startSec: number, durationSec: number, fps: number, sourceFrames: number): PreviewClipFrames | null {
+  if (![startSec, durationSec, fps, sourceFrames].every(Number.isFinite) || startSec < 0 || durationSec <= 0 || fps <= 0 || sourceFrames < 1) return null
+  const startFrame = Math.round(startSec * fps)
+  const frameCount = Math.min(Math.round(durationSec * fps), Math.floor(sourceFrames) - startFrame)
+  return frameCount >= 1 ? { startFrame, frameCount } : null
 }
 
 export type PreviewClipState =
@@ -51,13 +90,13 @@ export type PreviewClipState =
  * run can send it; a clip made before the mask was approved, or from an
  * earlier mask, is out of date even though its picture is right).
  */
-export function previewClipState(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking">): PreviewClipState {
+export function previewClipState(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking" | "slots">): PreviewClipState {
   if (data.previewStart === null || !data.source) return { kind: "not_offered" }
   const clip = data.previewClip
   if (!clip) return { kind: "missing" }
   if (clip.sourceVideoUrl !== data.source.videoUrl) return { kind: "out_of_date", why: "source" }
   if (clip.startSec !== data.previewStart) return { kind: "out_of_date", why: "start" }
-  if (clip.recipe !== PREVIEW_CLIP_RECIPE) return { kind: "out_of_date", why: "recipe" }
+  if (!CURRENT_PREVIEW_CLIP_RECIPES.includes(clip.recipe)) return { kind: "out_of_date", why: "recipe" }
   const mask = storedFaceMaskFor(data)
   if (mask && clip.faceMask?.sourceMaskUrl !== mask.url) return { kind: "out_of_date", why: "face_mask" }
   if (!mask && clip.faceMask) return { kind: "out_of_date", why: "face_mask" }
@@ -65,7 +104,7 @@ export function previewClipState(data: Pick<TrendVersionData, "source" | "previe
 }
 
 /** The stored clip when it is current, else undefined. */
-export function currentPreviewClip(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking">): TrendPreviewClip | undefined {
+export function currentPreviewClip(data: Pick<TrendVersionData, "source" | "previewStart" | "previewClip" | "faceMask" | "faceMasking" | "slots">): TrendPreviewClip | undefined {
   const state = previewClipState(data)
   return state.kind === "current" ? state.clip : undefined
 }

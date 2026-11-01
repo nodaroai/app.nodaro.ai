@@ -165,6 +165,20 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect(h.upserts).toHaveLength(1)
   })
 
+  it("takes Full depth's description + original scene only while every environment's engine lists it", async () => {
+    const BOTH = { ...HIDES, fullDepthScenes: ["description", "original", "none", "description-and-original"] }
+    const motion = { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" } } }
+    h.envs = [envRow("production", HIDES), envRow("staging", BOTH)]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/description-and-original/) })
+    expect(h.upserts).toHaveLength(0)
+    // The scenes from before it save whatever the environments list (as they always did).
+    expect((await put({ "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "original" } } })).statusCode).toBe(200)
+    h.envs = [envRow("production", BOTH), envRow("staging", BOTH)]
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+  })
+
   it("refuses what a Motion run cannot take, writing nothing", async () => {
     for (const bad of [
       // Keep people is a trend's alone.

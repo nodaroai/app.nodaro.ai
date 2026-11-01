@@ -4440,12 +4440,14 @@ served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
-`{ kind: "person", name, images, body?, outfit?, hair? }`, at most 1
+`{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
 `{ kind: "location", name?, images }`, at most 3
-`{ kind: "pet", name, images, body?, coat? }` and at most 3
-`{ kind: "product", name, images, shape?, finish? }`, each with 0–3 images and
+`{ kind: "pet", name?, images, body?, coat? }` and at most 3
+`{ kind: "product", name?, images, shape?, finish? }`, each with 0–3 images and
 at most 30 images in all; a role with no images keeps that subject or place as
-in the video; each trait is `"new"` — the default, from your images — or
+in the video; a person, pet or product role may leave `name` out (or empty):
+it is then named by its first picture, matched to the subject in the video it
+fits best, and needs at least one image; each trait is `"new"` — the default, from your images — or
 `"original"`, kept from the video; any role may also take `previewName`, the
 name used instead of `name` in a preview, and `inPreview: false`, which leaves
 it out of a preview — not sent, prepared or charged; a full run ignores both),
@@ -4560,6 +4562,8 @@ Refusals, all before anything is charged (bodies are
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
+| `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
+| `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
 | `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Motion Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
@@ -4744,7 +4748,8 @@ edited is recorded on its job, visible through `GET /v1/jobs/:id` as
 `input_data.sourceAsset` — `{ kind: "preview" | "full",
 sha256?, startSec?, durationSec?, recipe? }` (`sha256` is the file's hash;
 `startSec`, `durationSec` and `recipe` say where and how a preview clip was
-cut) — with `input_data.preparedPreview: true` on a preview that edited the
+cut; the clip is cut by frame, starting at the trend clip's frame nearest
+`startSec`) — with `input_data.preparedPreview: true` on a preview that edited the
 stored clip, and copied to `output_data.sourceAsset` when the run completes.
 The stamp names no URL; it is provenance only, and it is not part of the
 `TrendRun` shape in `GET /v1/trends/runs`. On a platform version whose engine
@@ -4767,6 +4772,7 @@ anything is charged:
 | `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Pulse). |
 | `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Pulse trend). |
 | `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's — or, in a Full depth trend, the default image — for slots you left empty, and the trend's own): send fewer per slot. |
+| `400` | `role_name_required` | A role of the trend has no name (the trend's own data; a trend's roles are always named). |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend page does not list (any `example` on a trend with none; on a trend that hides its original, more than the length of its `examples`). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |

@@ -94,6 +94,39 @@ describe("handleVideoFaceMesh", () => {
     expect(mocks.drawFaceMeshVideo.mock.calls[0]![0]).not.toHaveProperty("maskPath")
   })
 
+  it("a coloured depth map: the gray depth render downloaded and drawn from with the map; the output names the map", async () => {
+    await handleVideoFaceMesh(job({
+      videoUrl: "https://x/clip.mp4", drawOnUrl: "https://x/turbo.mp4", colormap: "turbo", depthUrl: "https://x/depth-gray.mp4",
+    }), ctx)
+    expect(mocks.downloadFile.mock.calls).toEqual([
+      ["https://x/clip.mp4", "/w/video.mp4"],
+      ["https://x/turbo.mp4", "/w/draw-on.mp4"],
+      ["https://x/depth-gray.mp4", "/w/depth.mp4"],
+    ])
+    expect(mocks.drawFaceMeshVideo).toHaveBeenCalledWith(expect.objectContaining({
+      drawOnPath: "/w/draw-on.mp4", depth: { path: "/w/depth.mp4", colormap: "turbo" },
+    }))
+    expect(mocks.markJobCompleted.mock.calls[0]![1].output_data).toMatchObject({ colormap: "turbo", recipe: VIDEO_FACE_MESH_RECIPE })
+  })
+
+  it("a depth render with no (or an unknown) colormap is grayscale; no depth render: gray tones, no colormap in the output", async () => {
+    await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", depthUrl: "https://x/depth-gray.mp4", colormap: "jet" }), ctx)
+    expect(mocks.drawFaceMeshVideo).toHaveBeenCalledWith(expect.objectContaining({ depth: { path: "/w/depth.mp4", colormap: "grayscale" } }))
+    vi.clearAllMocks()
+    mocks.createWorkDir.mockResolvedValue("/w")
+    mocks.drawFaceMeshVideo.mockResolvedValue({ outputPath: "/w/face-mesh.mp4", width: 720, height: 1280, frames: 505, framesWithFaces: 491, facesDrawn: 841, cpuMs: 20_000 })
+    mocks.shouldSaveJobResult.mockResolvedValue(true)
+    mocks.markJobCompleted.mockResolvedValue(true)
+    await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", colormap: "grayscale" }), ctx)
+    expect(mocks.drawFaceMeshVideo.mock.calls[0]![0]).not.toHaveProperty("depth")
+    expect(mocks.markJobCompleted.mock.calls[0]![1].output_data).not.toHaveProperty("colormap")
+  })
+
+  it("a coloured map with no depth render fails deterministically, before anything is downloaded", async () => {
+    await expect(handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", colormap: "inferno" }), ctx)).rejects.toBeInstanceOf(DeterministicJobError)
+    expect(mocks.downloadFile).not.toHaveBeenCalled()
+  })
+
   it("a cancelled job saves nothing and commits nothing; the work dir is always cleaned", async () => {
     mocks.shouldSaveJobResult.mockResolvedValue(false)
     await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4" }), ctx)

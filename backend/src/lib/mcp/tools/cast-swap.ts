@@ -143,7 +143,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
             z.discriminatedUnion("kind", [
               z.object({
                 kind: z.literal("person"),
-                name: z.string().min(1).describe('Who in the video, e.g. "the woman that attacks".'),
+                name: z.string().max(200).optional().describe('Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one).'),
                 images,
                 body: trait.describe('"new" (default) from the images, or "original" from the video.'),
                 outfit: trait.describe("As body."),
@@ -152,7 +152,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
               z.object({
                 kind: z.literal("pet"),
-                name: z.string().min(1).describe('Which animal, e.g. "the dog".'),
+                name: z.string().max(200).optional().describe('Which animal, e.g. "the dog". Unset: named by its first image (needs one).'),
                 images,
                 body: trait.describe("As a person's body."),
                 coat: trait.describe("Fur, colors and markings; as body."),
@@ -160,7 +160,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
               z.object({
                 kind: z.literal("product"),
-                name: z.string().min(1).describe('Which object, e.g. "the can".'),
+                name: z.string().max(200).optional().describe('Which object, e.g. "the can". Unset: named by its first image (needs one).'),
                 images,
                 shape: trait.describe("Shape and proportions; as a person's body."),
                 finish: trait.describe("Colors, materials and markings; as shape."),
@@ -168,7 +168,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
               z.object({
                 kind: z.literal("location"),
-                name: z.string().min(1).optional().describe('Default "the setting".'),
+                name: z.string().max(200).optional().describe('Default "the setting".'),
                 images,
                 ...castSwapRolePreviewArgs,
               }),
@@ -235,7 +235,9 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
       const payload = {
         videoUrl: args.video_url,
         roles: args.roles.map(({ preview_name, in_preview, ...role }) => ({
-          ...role,
+          // A location left blank takes its default name ("the setting"); an unnamed person, pet or product is
+          // sent as it is (the engine names it by its first image).
+          ...(role.kind === "location" && typeof role.name === "string" && role.name.trim() === "" ? (({ name: _blank, ...rest }) => rest)(role) : role),
           // The original files, never a CDN display rendition (lib/cdn-original-url.ts).
           images: role.images ? originalCdnImageUrls(role.images) : null,
           ...(preview_name !== undefined ? { previewName: preview_name } : {}),

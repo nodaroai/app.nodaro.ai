@@ -96,7 +96,7 @@ describe("job lane registry", () => {
   })
 
   it("ffmpeg and sharp jobs are local", () => {
-    for (const n of ["trim-video", "combine-videos", "apply-edl", "image-collage", "image-overlay", "add-captions", "mask-composite", "mask-erase", "video-face-mesh"]) {
+    for (const n of ["trim-video", "combine-videos", "apply-edl", "image-collage", "image-overlay", "add-captions", "mask-composite", "mask-erase", "mask-outline", "video-face-mesh"]) {
       expect(`${n}:${JSON.stringify(reg.laneClassOf("video-generation", n, {}))}`).toBe(`${n}:${JSON.stringify(leaf("local"))}`)
     }
     for (const n of RENDER_WORKER_NAMES) expect(reg.laneClassOf("video-render", n, {})).toEqual(leaf("local"))

@@ -27,6 +27,13 @@
 // only in the person masks (FaceMaskVariants.tsx) — saving them leaves the
 // approved face mask as it is.
 //
+// Role outlines (decided 2026-11-01): while the saved setting draws them, every
+// person may get boxes (required ones too, `people`), each box in its role's
+// outline colour, and the mask (approved or new) shows how many regions each
+// role's ring went round (`OutlineCounts`): 0 means that role got no ring.
+// With the whole-person target a region's centre is the person's middle, so
+// their box must cover that, not only the face (`roleOutlines.target`).
+//
 // Full depth with its scene from a description: the approved clip's stored
 // scene descriptions, editable (SceneDescriptionEditor.tsx). When they were
 // made with another scene description step than the draft's
@@ -41,6 +48,7 @@ import { cn } from "@/lib/utils"
 import type {
   AdminTrendFaceMask,
   AdminTrendFaceMaskMark,
+  AdminTrendFaceMaskOutline,
   AdminTrendFaceMaskState,
   AdminTrendFaceMaskStats,
   AdminTrendPendingFaceMaskJob,
@@ -99,6 +107,8 @@ interface Props {
    * `previewStart`, the saved draft's (null: no preview). Absent: not shown.
    */
   readonly sceneDescription?: { readonly previewStart: number | null }
+  /** The saved setting draws role outlines (Faces hidden): what it covers, for the boxes' hint. Absent: off. */
+  readonly roleOutlines?: { readonly target: string }
 }
 
 /**
@@ -107,7 +117,8 @@ interface Props {
  * face). Publishing is not held for it.
  */
 export function unmarkedPeople(people: readonly MarkPerson[], marks: readonly AdminTrendFaceMaskMark[]): MarkPerson[] {
-  return people.filter((p) => !marks.some((m) => faceMaskMarkSlot(m) === p.key))
+  // A required person (listed with role outlines) is never left empty: not one of these.
+  return people.filter((p) => !p.required && !marks.some((m) => faceMaskMarkSlot(m) === p.key))
 }
 
 const NO_PEOPLE: readonly MarkPerson[] = []
@@ -140,6 +151,7 @@ export function FaceMaskPanel({
   emptiablePeople,
   keepPeople = false,
   sceneDescription,
+  roleOutlines,
 }: Props) {
   const unmarked = unmarkedPeople(emptiablePeople ? people.filter((p) => emptiablePeople.includes(p.key)) : people, savedMarks)
   const start = useStartTrendFaceMask(trendId)
@@ -248,6 +260,9 @@ export function FaceMaskPanel({
       {faceMask && (!jobId || !current) && (
         <MaskResult url={faceMask.url} stats={faceMask.stats} label="The approved face mask" editor={editable} />
       )}
+      {faceMask && (!jobId || !current) && roleOutlines && faceMask.outlines && (
+        <OutlineCounts outlines={faceMask.outlines} people={people} testId="face-mask-outlines-approved" />
+      )}
       {faceMask && (!jobId || !current) && faceMask.facesDrawn === 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="face-mesh-none-drawn-approved">
           The approved mask has no face lines: its make drew the face mesh on no face.
@@ -285,6 +300,14 @@ export function FaceMaskPanel({
       {jobId && maskedUrl && (
         <MaskResult url={maskedUrl} stats={statsOf(j?.output_data?.stats)} label="The new face mask" editor={editable && current} />
       )}
+      {jobId && maskedUrl && roleOutlines && Array.isArray(j?.output_data?.outlines) && (
+        <OutlineCounts
+          outlines={j.output_data.outlines.map((o) => ({ slot: o.slot ?? "", colour: o.colour ?? "", regionsDrawn: num(o.regionsDrawn) }))}
+          ambiguous={num(j.output_data.outlinesAmbiguous)}
+          people={people}
+          testId="face-mask-outlines-new"
+        />
+      )}
       {jobId && maskedUrl && j?.output_data?.faceMesh?.facesDrawn === 0 && (
         <p className="text-sm text-amber-700 dark:text-amber-400" role="status" data-testid="face-mesh-none-drawn">
           No faces were drawn with the face mesh on this mask: approved as it is, its runs carry no face lines.
@@ -292,7 +315,17 @@ export function FaceMaskPanel({
       )}
       {editable && shown && (
         <div className="flex flex-col gap-2 rounded-md border border-dashed p-2" aria-label="Face mask marks">
-          <span className="text-xs font-medium">{keepPeople ? "Marked people" : "Faces left unmasked"}</span>
+          <span className="text-xs font-medium">{keepPeople ? "Marked people" : roleOutlines ? "Faces left unmasked, and whose outline" : "Faces left unmasked"}</span>
+          {roleOutlines && (
+            <p className="text-xs text-muted-foreground" data-testid="face-mask-outline-hint">
+              Each person&apos;s boxes say whose coloured outline a masked region gets: a region is theirs when its centre is inside one of
+              their boxes on that frame.
+              {roleOutlines.target === "body"
+                ? " The mask covers whole people, so a box must cover the person's middle (their body), not only the face."
+                : " Cover the person's masked head or face."}{" "}
+              A region two people&apos;s boxes both hold gets no outline.
+            </p>
+          )}
           <FaceMaskMarksEditor url={shown.url} label={shown.label} frames={shown.frames} fps={shown.fps} marks={marks} onChange={setMarks} disabled={busy || !marksSupported} people={people} keepPeople={keepPeople} />
           {!marksSupported && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -410,6 +443,38 @@ function MaskResult({ url, stats, label, editor }: { readonly url: string; reado
         {(stats.erasedRegions ?? 0) > 0 ? ` · ${plural(stats.erasedRegions ?? 0, "face")} left unmasked` : ""}
       </p>
     </div>
+  )
+}
+
+/** How many regions each role's outline went round, in its colour (0: no ring for that role), and the regions left undrawn. */
+function OutlineCounts({
+  outlines,
+  ambiguous,
+  people,
+  testId,
+}: {
+  readonly outlines: readonly AdminTrendFaceMaskOutline[]
+  readonly ambiguous?: number
+  readonly people: readonly MarkPerson[]
+  readonly testId: string
+}) {
+  if (outlines.length === 0) {
+    return (
+      <p className="text-xs text-amber-700 dark:text-amber-400" data-testid={testId}>
+        Role outlines are on, but no person has boxes: nobody is outlined. Mark each person&apos;s face as theirs.
+      </p>
+    )
+  }
+  return (
+    <ul aria-label="Role outlines drawn" className="flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums" data-testid={testId}>
+      {outlines.map((o) => (
+        <li key={o.slot} className={cn("flex items-center gap-1", o.regionsDrawn === 0 && "text-amber-700 dark:text-amber-400")}>
+          <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm border border-black" style={{ backgroundColor: o.colour }} />
+          {people.find((p) => p.key === o.slot)?.label ?? o.slot}: {o.regionsDrawn === 0 ? "no region outlined" : plural(o.regionsDrawn, "region")}
+        </li>
+      ))}
+      {(ambiguous ?? 0) > 0 && <li className="text-muted-foreground">{plural(ambiguous ?? 0, "region")} held by two people&apos;s boxes: not outlined</li>}
+    </ul>
   )
 }
 

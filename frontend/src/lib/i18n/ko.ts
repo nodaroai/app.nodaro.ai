@@ -3386,6 +3386,7 @@ export const ko: ChromeDict = {
   "tcat.automations": "자동화",
   "tcat.campaignConcepts": "캠페인 콘셉트",
   "tcat.socialCreatives": "SNS 크리에이티브",
+  "tcat.mcp": "MCP",
   "out.image": "이미지",
   "out.video": "동영상",
   "out.audio": "오디오",

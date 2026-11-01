@@ -124,6 +124,25 @@ export interface TrendFaceMask {
    */
   facesDrawn?: number
   /**
+   * The face mesh's recipe (core's `VIDEO_FACE_MESH_RECIPE`) its make drew the
+   * lines with (`output_data.faceMesh.recipe`): a run is told it
+   * (`storedFaceMask.meshRecipe`) so the engine words the lines as they were
+   * drawn. Absent on a mask made before it was recorded: the engine then
+   * words them as the coloured lines of before.
+   */
+  meshRecipe?: string
+  /**
+   * Role outlines (a setting with `faceMasking.roleOutlines`, decided
+   * 2026-11-01): what its make ringed, one entry per outline it was sent
+   * (`makeOutlinesOf`: each person slot with slot marks, in role order), the
+   * colour as drawn and the regions ringed, summed over the frames. A run is
+   * told of the ones with `regionsDrawn > 0` (`runOutlinesFor`). The colours
+   * are the ones drawn: a later slot reorder makes the mask out of date (the
+   * settings key hashes the colours), never recolours it. Absent on a mask
+   * made without outlines.
+   */
+  outlines?: TrendFaceMaskOutline[]
+  /**
    * The raw mask, made from the base settings (`faceMaskBaseKey`: the
    * settings with the marks left out) BEFORE any mark was applied, copied into
    * the trend's storage like `url`, with `baseKey` the base it was made from
@@ -192,6 +211,14 @@ export interface TrendFaceMask {
   sceneStepKey?: string
 }
 
+/** One role's outline as a stored face mask (or variant) recorded it: the slot, its colour and the regions ringed. */
+export interface TrendFaceMaskOutline {
+  slot: string
+  /** `#RRGGBB`. */
+  colour: string
+  regionsDrawn: number
+}
+
 /**
  * HIDDEN. One per-person variant of a trend's face mask: the source clip
  * masked with the faces of the optional people `emptySlots` (sorted slot
@@ -213,6 +240,8 @@ export interface TrendFaceMaskVariant {
   /** What the delivered mask covers (`coverage`, 0–1) and the regions its erase dropped. */
   stats: { coverage: number; erasedRegions: number }
   approvedAt: string
+  /** Role outlines (`TrendFaceMask.outlines`): what its fill ringed — the people it still covers only. Absent: none drawn. */
+  outlines?: TrendFaceMaskOutline[]
 }
 
 /**

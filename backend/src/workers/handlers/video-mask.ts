@@ -57,6 +57,7 @@ import {
 } from "../../providers/video/video-mask.js"
 import { maskComposite } from "../../providers/video/mask-composite.js"
 import { eraseMaskVideo, type MaskEraseBoxInput } from "../../providers/video/mask-erase.js"
+import { maskOutlineHandlers } from "./mask-outline.js"
 import {
   commitJobCredits,
   completeFfmpegVideoJob,
@@ -396,4 +397,6 @@ export const videoMaskHandlers: Record<string, HandlerFn> = {
   "video-mask": handleVideoMask,
   "mask-composite": handleMaskComposite,
   "mask-erase": handleMaskErase,
+  // Mask Outline (a trend face mask's role outlines): its own file, the mask's family.
+  ...maskOutlineHandlers,
 }

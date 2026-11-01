@@ -10,10 +10,16 @@ import {
 } from "../template-categories.js"
 
 describe("template categories", () => {
-  it("is the eight use cases, each once", () => {
-    expect(TEMPLATE_CATEGORIES).toHaveLength(8)
-    expect(new Set(TEMPLATE_CATEGORIES).size).toBe(8)
+  it("is the nine use cases, each once", () => {
+    expect(TEMPLATE_CATEGORIES).toHaveLength(9)
+    expect(new Set(TEMPLATE_CATEGORIES).size).toBe(9)
     expect(isTemplateCategory(DEFAULT_TEMPLATE_CATEGORY)).toBe(true)
+  })
+
+  it("files MCP-built workflows under their own use case, with no legacy value", () => {
+    expect(isTemplateCategory("mcp")).toBe(true)
+    expect(normalizeTemplateCategory("mcp")).toBe("mcp")
+    expect(templateCategoryStoredValues("mcp")).toEqual(["mcp"])
   })
 
   it("every legacy value lands on a current category", () => {

@@ -197,6 +197,21 @@ export function llmEstimateBaseCredits(
 ): number {
   const typical = LLM_TYPICAL_USAGE[feature]
   if (!typical) throw new Error(`No typical usage declared for metered LLM feature "${feature}" — add it to llm-typical-usage.ts`)
+  return llmUsageBaseCredits(typical, modelId, reasoningEffort, advancedMode)
+}
+
+/**
+ * What a call of `usage` tokens on `modelId` costs, in base credits, on the
+ * model's primary lane (as {@link llmEstimateBaseCredits} prices a feature's
+ * typical call), at least 1. A caller that knows the size of its call (a
+ * workflow estimate's `llm-chat` node with `expectedUsage`) prices it here.
+ */
+export function llmUsageBaseCredits(
+  usage: Readonly<LlmCostUsage>,
+  modelId: string,
+  reasoningEffort?: string,
+  advancedMode?: boolean,
+): number {
   const model = getLlmModel(modelId)
   if (!model) throw new LlmUnpricedModelError(modelId, advancedMode ? "direct" : "kie")
   // Advanced mode pins direct only on a model that has it, as the routes do
@@ -206,5 +221,5 @@ export function llmEstimateBaseCredits(
     reasoningEffort: reasoningEffort as LlmRequest["reasoningEffort"],
     requireLane: advancedMode && supportsAdvancedMode(model.id) ? "direct" : undefined,
   })
-  return Math.max(1, usdToCredits(laneCostUsd(model.id, { ...typical }, primary)))
+  return Math.max(1, usdToCredits(laneCostUsd(model.id, { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }, primary)))
 }

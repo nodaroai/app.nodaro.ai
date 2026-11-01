@@ -915,7 +915,7 @@ describe("attachPreviewClip — the second write a published version may get (pr
   const REV = "11111111-1111-4111-8111-111111111111"
   const CLIP: TrendPreviewClip = {
     videoUrl: "https://cdn.example.com/preview.mp4", durationSec: 5, width: 240, height: 320, frames: 150, sha256: "a".repeat(64),
-    sourceVideoUrl: "https://cdn.example.com/src.mp4", startSec: 0, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+    sourceVideoUrl: "https://cdn.example.com/src.mp4", startSec: 0, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
   }
   const FULL: TrendVersionData = {
     ...DATA,

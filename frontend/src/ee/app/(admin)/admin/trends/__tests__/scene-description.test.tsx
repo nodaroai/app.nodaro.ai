@@ -7,7 +7,8 @@
  *   the screen adopts the revision it gets back.
  * - A clip made before descriptions existed says to make it again; a preview
  *   text made for another preview start says runs use the full one cut.
- * - Another scene source, or Faces hidden, shows no description; a trend with
+ * - "Description + original" shows them too; another scene source, or Faces
+ *   hidden, shows no description; a trend with
  *   no preview shows no preview text.
  * - It writes the saved draft: while the form has unsaved edits, Save waits.
  */
@@ -125,6 +126,13 @@ describe("the stored scene description", { timeout: 20_000 }, () => {
     renderEditor()
     expect(await screen.findByLabelText("Full run")).toBeInTheDocument()
     expect(screen.queryByLabelText("Preview (4 s)")).not.toBeInTheDocument()
+  })
+
+  it("the description beside the original shows and edits the stored description too", async () => {
+    serve({ faceMasking: { ...FULL, scene: "description-and-original" }, faceMask: STORED })
+    renderEditor()
+    expect(await screen.findByLabelText("Full run")).toHaveValue(STORED.sceneDescription)
+    expect(screen.getByLabelText("Preview (4 s)")).toHaveValue(STORED.previewSceneDescription)
   })
 
   it("another scene source, or a face mask, shows no description", async () => {

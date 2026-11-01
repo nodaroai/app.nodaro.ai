@@ -53,6 +53,9 @@ import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.j
 import type { NodaroMotionMasking } from "../../lib/nodaro-motion-masking.js"
 import type { NodaroMotionMotion } from "../../lib/nodaro-motion-motion.js"
 import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
+import { readNodaroMotionSteps } from "../../lib/nodaro-motion-steps-store.js"
+import type { NodaroMotionSteps } from "../../lib/nodaro-motion-steps.js"
+import { loadedEngineTakesShotList } from "../../lib/cast-swap-steps.js"
 import { askPromptParts, nonEmptyTexts } from "../lib/cast-swap-prompt-parts.js"
 import { directRunPromptPartsInvalid, directRunPromptProblems, directRunRequest, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -99,13 +102,26 @@ function preview(
   overrides: PromptPartTexts | undefined,
   motion: NodaroMotionMotion | null,
   masking: NodaroMotionMasking | null,
+  steps: NodaroMotionSteps | null,
 ) {
   return askPromptParts(
     app,
     req,
     reply,
-    directRunRequest(engine, s, motion?.[engine], { hasAudio: true, roles: structuredClone(SAMPLE_ROLES), ...(overrides ? { overrides } : {}) }, masking?.[engine]),
+    directRunRequest(
+      engine,
+      s,
+      motion?.[engine],
+      { hasAudio: true, roles: structuredClone(SAMPLE_ROLES), ...(overrides ? { overrides } : {}) },
+      masking?.[engine],
+      steps?.[engine],
+    ),
   )
+}
+
+/** The steps setting, read only when this environment's engine takes the shot list (the one step a prompt shows). */
+async function stepsForShotList(): Promise<NodaroMotionSteps | null> {
+  return loadedEngineTakesShotList() ? (await readNodaroMotionSteps()).steps : null
 }
 
 /** The edit without empty texts, styles or engines (each left out uses the defaults). */
@@ -149,7 +165,17 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const overrides = parsed.data.overrides
         ? nonEmptyTexts(parsed.data.overrides)
         : (await readNodaroMotionPromptParts()).promptParts?.[engine]?.[s]
-      const answer = await preview(app, req, reply, engine, s, overrides, (await readNodaroMotionMotion()).motion, (await readNodaroMotionMasking()).masking)
+      const answer = await preview(
+        app,
+        req,
+        reply,
+        engine,
+        s,
+        overrides,
+        (await readNodaroMotionMotion()).motion,
+        (await readNodaroMotionMasking()).masking,
+        await stepsForShotList(),
+      )
       if (!answer) return reply
       return { data: answer }
     } catch (e) {
@@ -165,11 +191,12 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const problems: DirectRunPromptProblem[] = []
       const motion = (await readNodaroMotionMotion()).motion
       const masking = (await readNodaroMotionMasking()).masking
+      const steps = await stepsForShotList()
       for (const engine of NODARO_MOTION_ENGINES) {
         for (const s of CAST_SWAP_STYLES) {
           const texts = next[engine]?.[s]
           if (!texts) continue
-          const found = await directRunPromptProblems(app, req, reply, engine, s, texts, motion?.[engine], masking?.[engine])
+          const found = await directRunPromptProblems(app, req, reply, engine, s, texts, motion?.[engine], masking?.[engine], steps?.[engine])
           if (!found) return reply
           problems.push(...found)
         }

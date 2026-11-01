@@ -3,7 +3,7 @@
  * a test pins each (`face-mesh-budget.test.ts`). Pure (no onnxruntime import).
  *
  * The run's decoders (the clip the faces are found in, the clip the lines go
- * on, the mask), its two onnxruntime sessions, sharp's drawing and its encoder
+ * on, the mask, the depth), its two onnxruntime sessions, sharp's drawing and its encoder
  * all run inside ONE ffmpeg admission hold (`withFfmpegSlot`): the box's
  * shared memory budget sees all of them at once.
  */
@@ -32,18 +32,18 @@ type Size = { readonly width: number; readonly height: number }
 
 /**
  * The run's declared peak, MiB: the encoder's canvas prediction at the drawn
- * clip's size (its decoder and the mask's counted as inputs), the detection
+ * clip's size (its decoder, the mask's and the depth's counted as inputs), the detection
  * decode's at the found clip's size (it encodes nothing), both sessions and
  * sharp.
  */
 export function faceMeshPeakMemoryMiB(
-  sizes: { readonly detect: Size; readonly draw: Size; readonly mask?: Size },
+  sizes: { readonly detect: Size; readonly draw: Size; readonly mask?: Size; readonly depth?: Size },
   ortThreads: number,
   ffmpegThreads: FfmpegThreads,
 ): number {
-  const largest = [sizes.draw, sizes.detect, ...(sizes.mask ? [sizes.mask] : [])].reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b))
+  const largest = [sizes.draw, sizes.detect, ...(sizes.mask ? [sizes.mask] : []), ...(sizes.depth ? [sizes.depth] : [])].reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b))
   const encode = canvasPeakMemoryMiB(sizes.draw, 1, ffmpegThreads, {
-    inputs: sizes.mask ? 2 : 1,
+    inputs: 1 + (sizes.mask ? 1 : 0) + (sizes.depth ? 1 : 0),
     cameraMegapixels: cameraMegapixelsOf(largest),
   })
   const detect = canvasPeakMemoryMiB(sizes.detect, 1, { ...ffmpegThreads, encode: 0 }, { inputs: 1, cameraMegapixels: cameraMegapixelsOf(sizes.detect) })

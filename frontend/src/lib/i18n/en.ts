@@ -3507,6 +3507,7 @@ export const en = {
   "tcat.automations": "Automations",
   "tcat.campaignConcepts": "Campaign concepts",
   "tcat.socialCreatives": "Social creatives",
+  "tcat.mcp": "MCP",
   "out.image": "Image",
   "out.video": "Video",
   "out.audio": "Audio",

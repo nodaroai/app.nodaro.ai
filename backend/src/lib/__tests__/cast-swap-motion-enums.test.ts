@@ -31,7 +31,8 @@ describe("Nodaro Motion enums", () => {
 
   it("prompt styles and full depth's scene sources, with their defaults", () => {
     expect(CAST_SWAP_PROMPT_STYLES).toEqual(["precise", "flexible"])
-    expect(CAST_SWAP_FULL_DEPTH_SCENES).toEqual(["description", "original", "none"])
+    // "description-and-original" is new and last: every value stored before it reads as it did.
+    expect(CAST_SWAP_FULL_DEPTH_SCENES).toEqual(["description", "original", "none", "description-and-original"])
     expect(CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT).toBe("description")
     // The engine's limit (30 s of reference video, less the original's 2 s and its 0.1 s margin),
     // and what a trend publishes with: 0.4 s below it.
@@ -50,9 +51,9 @@ describe("Nodaro Motion enums", () => {
     expect(isMainFaceMaskMark({ label: { slot: "guest" } })).toBe(false)
   })
 
-  it("the 16 prompt parts, in the engine's assembly order (Flex's art style right after the opener, the face mesh after the depth guard)", () => {
+  it("the 17 prompt parts, in the engine's assembly order (Flex's art style right after the opener, the face mesh after the depth guard, the role outlines after the mesh)", () => {
     expect(CAST_SWAP_PROMPT_PART_IDS).toEqual([
-      "opener", "artStyle", "original", "scene", "quality", "keep", "audio", "face", "depthGuard", "faceMesh",
+      "opener", "artStyle", "original", "scene", "quality", "keep", "audio", "face", "depthGuard", "faceMesh", "roleOutlines",
       "person", "pet", "product", "location", "avoid", "postHeader",
     ])
   })
@@ -69,6 +70,7 @@ describe("Nodaro Motion enums", () => {
       face: [],
       depthGuard: ["{video}"],
       faceMesh: ["{video}"],
+      roleOutlines: ["{video}", "{outlines}"],
       person: ["{name}", "{image}", "{face}", "{outfit}", "{body}", "{hair}"],
       pet: ["{name}", "{image}", "{body}", "{coat}"],
       product: ["{name}", "{image}", "{shape}", "{finish}"],

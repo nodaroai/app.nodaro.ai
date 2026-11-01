@@ -48,6 +48,14 @@
  * (`face_mask_required`). A run that leaves no marked person empty is sent
  * exactly what it was before slot marks existed.
  *
+ * Role outlines (decided 2026-11-01, role-outlines.ts): a trend whose stored
+ * mask rings its person roles in colour runs on that mask only (`required:
+ * true`; out of date, e.g. a box edited since: `face_mask_required`), and its
+ * `storedFaceMask.outlines` says which colour is which role — the outlines
+ * that ringed someone, for the roles with pictures on this run (a variant's
+ * own: the people it still covers). Never `faceMasking.roleOutlines`: the
+ * rings are the stored clip's.
+ *
  * A trend that prepares its clip in a depth mode (`faceMasking.source`
  * `"full-depth"` or `"keep-people"`) runs on its approved stored clip only
  * (`storedFaceMask` with `required: true`; none made from these settings:
@@ -139,6 +147,7 @@ import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type Ch
 import { pickText } from "./localize.js"
 import { faceMaskHasErasedMarks, faceMaskStoredRequired, storedFaceMaskFor } from "./face-mask.js"
 import { faceMaskVariantFor, markedPeople } from "./face-mask-variants.js"
+import { runOutlinesFor } from "./role-outlines.js"
 import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
@@ -238,8 +247,18 @@ export interface TrendRunBody {
    * The trend's approved face mask, while it matches the masking sent (never
    * without `faceMasking`). `required: true` (a trend with marks): the engine
    * fails the run rather than masking per run (`castSwap.storedFaceMaskRequired`).
+   * `outlines` (role outlines, decided 2026-11-01): which colour rings which
+   * role on the clip (`runOutlinesFor`: role N = the Nth role), only to an
+   * engine that declares `castSwap.roleOutlines` (`withoutUnsupportedStoredMask`).
    */
-  storedFaceMask?: { url: string; frames: number; required?: true; facesDrawn?: number }
+  storedFaceMask?: {
+    url: string
+    frames: number
+    required?: true
+    facesDrawn?: number
+    meshRecipe?: string
+    outlines?: Array<{ role: number; colour: string }>
+  }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
@@ -558,12 +577,28 @@ export function composeTrendRun(
   // The variant left nothing to cover: the run goes unmasked (no masking, no stored mask).
   const unmasked = variant === "unmasked"
   const runMasking = unmasked ? undefined : masking
+  // Role outlines: which colour rings which role, from what the clip sent recorded (a variant's own:
+  // the people it still covers), for the outlines that ringed someone whose role has pictures here.
+  const outlinesOf = (recorded: Parameters<typeof runOutlinesFor>[0]) => {
+    const outlines = runOutlinesFor(recorded, slots)
+    return outlines.length > 0 ? { outlines } : {}
+  }
   const storedFaceMask =
     variant && variant !== "unmasked"
       // A person variant is the base mask less some people: a base that drew no face mesh leaves it none.
-      ? { ...variant, required: true as const, ...(stored?.facesDrawn === 0 ? { facesDrawn: 0 } : {}) }
+      ? (() => {
+          const { outlines: recorded, ...clip } = variant
+          // Its lines are the base's (a variant only erases people from it): the base's mesh recipe.
+          return {
+            ...clip,
+            required: true as const,
+            ...(stored?.facesDrawn === 0 ? { facesDrawn: 0 } : {}),
+            ...(stored?.meshRecipe ? { meshRecipe: stored.meshRecipe } : {}),
+            ...outlinesOf(recorded),
+          }
+        })()
       : variant === undefined && stored
-        ? faceMaskStoredRequired(data) ? { ...stored, required: true as const } : stored
+        ? faceMaskStoredRequired(data) ? { ...stored, required: true as const, ...outlinesOf(data.faceMask?.outlines) } : stored
         : undefined
   // A preview's prepared input clip (preview-clip.ts), as a candidate for `withPreparedPreview`:
   // only with a current clip, and never beside a per-person variant (the clip carries a cut of

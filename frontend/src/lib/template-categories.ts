@@ -16,6 +16,7 @@ const LABEL_KEYS: Readonly<Record<TemplateCategory, MessageKey>> = {
   automations: "tcat.automations",
   "campaign-concepts": "tcat.campaignConcepts",
   "social-creatives": "tcat.socialCreatives",
+  mcp: "tcat.mcp",
 }
 
 export const TEMPLATE_CATEGORY_VALUES: readonly string[] = TEMPLATE_CATEGORIES

@@ -3485,6 +3485,7 @@ export const he: ChromeDict = {
   "tcat.automations": "אוטומציות",
   "tcat.campaignConcepts": "קונספטים לקמפיין",
   "tcat.socialCreatives": "קריאייטיבים לסושיאל",
+  "tcat.mcp": "MCP",
   "out.image": "תמונה",
   "out.video": "סרטון",
   "out.audio": "שמע",

@@ -20,6 +20,7 @@ import { largeDirectRun, type PromptPartTexts, type PromptPartsAnswer, type Prom
 import { directRunDrawsFaceMesh, directRunPromptShape, type NodaroMotionMotionEntry } from "../../lib/nodaro-motion-motion.js"
 import type { FaceMasking } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
+import { loadedEngineTakesShotList, type CastSwapSteps } from "../../lib/cast-swap-steps.js"
 import { askPromptParts } from "./cast-swap-prompt-parts.js"
 
 /** One problem, naming the engine and style it was found for. */
@@ -36,7 +37,11 @@ export function loadedEngineHasPromptStyles(): boolean {
  * engine's masking setting (`nodaro_motion_masking`): a run that draws the
  * face mesh says so (`faceMesh: true`, `directRunDrawsFaceMesh`), so the
  * engine counts the mesh's line (sent only to an engine that draws it,
- * `forLoadedEngine`).
+ * `forLoadedEngine`). `steps` is the engine's steps setting
+ * (`nodaro_motion_steps`): a Precise run whose shot list is on says so
+ * (`shotList: true`). On an engine with the shot list (`castSwap.shotList`) a
+ * Flex run is Full depth with a shot list whatever the Motion setting's
+ * masking (`directRunPromptShape`).
  */
 export function directRunRequest(
   engine: NodaroMotionEngine,
@@ -44,12 +49,16 @@ export function directRunRequest(
   entry: NodaroMotionMotionEntry | undefined,
   body: Omit<PromptPartsRequest, "engine" | "style">,
   preciseMasking?: FaceMasking,
+  steps?: CastSwapSteps,
 ): PromptPartsRequest {
+  const shotList = loadedEngineTakesShotList()
   return {
     engine: CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine],
     style,
-    ...(loadedEngineHasPromptStyles() ? directRunPromptShape(style, entry) : {}),
-    ...(directRunDrawsFaceMesh(style, entry, preciseMasking) ? { faceMesh: true as const } : {}),
+    ...(loadedEngineHasPromptStyles() ? directRunPromptShape(style, entry, { shotList }) : {}),
+    ...(directRunDrawsFaceMesh(style, entry, preciseMasking, { shotList }) ? { faceMesh: true as const } : {}),
+    // The engine's Precise shot list on (its steps setting): the marker in its place.
+    ...(style === "precise" && steps?.shotList?.precise?.mode === "on" ? { shotList: true as const } : {}),
     ...body,
   }
 }
@@ -68,9 +77,10 @@ export async function directRunPromptProblems(
   texts: PromptPartTexts,
   entry: NodaroMotionMotionEntry | undefined,
   preciseMasking?: FaceMasking,
+  steps?: CastSwapSteps,
 ): Promise<DirectRunPromptProblem[] | null> {
   const run = largeDirectRun(CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine])
-  const answer = await askPromptParts(app, req, reply, directRunRequest(engine, style, entry, { ...run, overrides: texts }, preciseMasking))
+  const answer = await askPromptParts(app, req, reply, directRunRequest(engine, style, entry, { ...run, overrides: texts }, preciseMasking, steps))
   if (!answer) return null
   return answer.problems.map((p) => ({ ...p, engine, style }))
 }

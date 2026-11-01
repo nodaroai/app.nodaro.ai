@@ -25,8 +25,13 @@
  * engine (one without the step has it stripped). A setting in which any
  * engine sets it On with an image prompt of its own (`clipBodyNeedsEngine`)
  * is 409 while any environment's engine does not declare
- * `castSwap.clipBodySheet`. Each save writes an
- * `admin_actions` row (`update_nodaro_motion_steps`, before and after).
+ * `castSwap.clipBodySheet`. Likewise the shot list away from its defaults
+ * (`shotListNeedsEngine`: Precise on, or an LLM of its own) while any
+ * environment's engine does not declare `castSwap.shotList`. Each save writes an
+ * `admin_actions` row (`update_nodaro_motion_steps`, before and after). A
+ * save that turns an engine's Precise shot list on re-checks that engine's
+ * saved Precise prompt overrides on a large run (as the masking save does for
+ * the face mesh): 422 `prompt_parts_invalid` when they no longer fit.
  *
  * Defaults and check ask this environment's engine (`POST
  * /v1/cast-swap/steps`, internal only, as the admin through `engineRequest`)
@@ -35,7 +40,8 @@
  * engine that does not declare `castSwap.steps` is never asked: defaults
  * answers null, check the platform's problems alone; the engine's 404 reads
  * the same. The check never forwards `clipBody` to an engine that does not
- * declare `castSwap.clipBodySheet` (the platform still checks it). Any other
+ * declare `castSwap.clipBodySheet`, nor `shotList` to one that does not
+ * declare `castSwap.shotList` (the platform still checks both). Any other
  * refusal, or an answer outside the contract, is 502
  * `engine_error` with a fixed sentence (never the engine's words).
  */
@@ -54,8 +60,10 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import {
   castSwapStepsSaveSchema,
   clipBodyNeedsEngine,
+  shotListNeedsEngine,
   stepsThatNeedTheEngine,
   loadedEngineTakesClipBodySheet,
+  loadedEngineTakesShotList,
   loadedEngineTakesSteps,
   stepsProblems,
   type CastSwapStepsProblem,
@@ -65,12 +73,23 @@ import { readNodaroMotionSteps, saveNodaroMotionSteps } from "../../lib/nodaro-m
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import {
   cannotTakeClipBodyMessage,
+  cannotTakeShotListMessage,
   cannotTakeStepsMessage,
   environmentsThatCannotTakeClipBody,
+  environmentsThatCannotTakeShotList,
   environmentsThatCannotTakeSteps,
 } from "../lib/nodaro-motion-steps-gate.js"
 import { engineRequest, isRec, parseJson } from "../lib/trends/run-helpers.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
+import { directRunPromptPartsInvalid, directRunPromptProblems, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
+import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-parts-store.js"
+import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
+import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
+import type { CastSwapSteps } from "../../lib/cast-swap-steps.js"
+
+/** Whether an engine's steps turn its Precise shot list on (its marker in the Precise prompt). */
+const preciseShotListOn = (s: CastSwapSteps | undefined): boolean => s?.shotList?.precise?.mode === "on"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -159,11 +178,18 @@ function mergedProblems(platform: CastSwapStepsProblem[], fromEngine: CastSwapSt
   return out
 }
 
-/** The setting as this environment's engine may be shown it: no `clipBody` unless it declares `castSwap.clipBodySheet`. */
+/**
+ * The setting as this environment's engine may be shown it: no `clipBody` unless it declares
+ * `castSwap.clipBodySheet`, no `shotList` unless it declares `castSwap.shotList`.
+ */
 function forLoadedEngine(steps: unknown): unknown {
-  if (!isRec(steps) || !Object.hasOwn(steps, "clipBody") || loadedEngineTakesClipBodySheet()) return steps
+  if (!isRec(steps)) return steps
+  const dropClipBody = Object.hasOwn(steps, "clipBody") && !loadedEngineTakesClipBodySheet()
+  const dropShotList = Object.hasOwn(steps, "shotList") && !loadedEngineTakesShotList()
+  if (!dropClipBody && !dropShotList) return steps
   const rest: Record<string, unknown> = { ...steps }
-  delete rest.clipBody
+  if (dropClipBody) delete rest.clipBody
+  if (dropShotList) delete rest.shotList
   return rest
 }
 
@@ -199,8 +225,40 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
             return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeClipBodyMessage(lacking), envs: lacking } })
           }
         }
+        // The shot list away from its defaults likewise.
+        if (needing.some((entry) => shotListNeedsEngine(entry?.shotList))) {
+          const lacking = environmentsThatCannotTakeShotList(environments)
+          if (lacking.length > 0) {
+            return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeShotListMessage(lacking), envs: lacking } })
+          }
+        }
       }
       const before = (await readNodaroMotionSteps()).steps
+      // An engine whose Precise shot list turns on adds the list to its Precise runs' prompt: the saved Precise
+      // prompt overrides are checked again on a large run (the masking save's rule), refused when they no longer fit.
+      const listOn = loadedEngineTakesShotList() && loadedEngineHasPromptParts()
+        ? NODARO_MOTION_ENGINES.filter((engine) => preciseShotListOn(steps[engine]) && !preciseShotListOn(before?.[engine]))
+        : []
+      if (listOn.length > 0) {
+        const saved = (await readNodaroMotionPromptParts()).promptParts
+        const motion = (await readNodaroMotionMotion()).motion
+        const masking = (await readNodaroMotionMasking()).masking
+        const problems: DirectRunPromptProblem[] = []
+        for (const engine of listOn) {
+          const texts = saved?.[engine]?.precise
+          if (!texts) continue
+          const found = await directRunPromptProblems(app, req, reply, engine, "precise", texts, motion?.[engine], masking?.[engine], steps[engine])
+          if (!found) return reply
+          problems.push(...found)
+        }
+        if (problems.length > 0) {
+          return directRunPromptPartsInvalid(
+            reply,
+            problems,
+            `With the Precise shot list on, the saved Nodaro Motion prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
+          )
+        }
+      }
       await saveNodaroMotionSteps(steps, req.userId!)
       await audit(req, "update_nodaro_motion_steps", "app_setting", NODARO_MOTION_STEPS_AUDIT_TARGET, {
         key: NODARO_MOTION_STEPS_KEY,

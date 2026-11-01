@@ -14,6 +14,8 @@ export const TEMPLATE_CATEGORIES = [
   "automations",
   "campaign-concepts",
   "social-creatives",
+  // Workflows an AI agent built through the MCP server, kept whole so every step can be opened and changed.
+  "mcp",
 ] as const
 
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number]

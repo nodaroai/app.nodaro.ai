@@ -1909,7 +1909,7 @@ describe("the preview's prepared input clip", () => {
     sha256: "b".repeat(64),
     sourceVideoUrl: SOURCE,
     startSec: 2,
-    recipe: "1",
+    recipe: "2",
     madeAt: "2026-10-27T10:00:00.000Z",
   }
   const CLIP_MASK = { url: PREVIEW_MASK, frames: 150, sha256: "c".repeat(64), sourceMaskUrl: MASK_URL }
@@ -1962,7 +1962,7 @@ describe("the preview's prepared input clip", () => {
       expect(body.previewStart, path).toBe(0)
       expect(body.preview, path).toBe(true)
       expect(body.preparedPreview, path).toBe(true)
-      expect(body.sourceAsset, path).toEqual({ kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" })
+      expect(body.sourceAsset, path).toEqual({ kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "2" })
       // The preview's own prompt parts still ride.
       expect(body.prePrompt, path).toBe(PREVIEW_PRE)
       expectNoHidden(res.body)
@@ -2331,7 +2331,7 @@ describe("GET /v1/trends/runs", () => {
     })
     // The engine's provenance stamp (`sourceAsset`, `preparedPreview`: visible keys, read as-is
     // on GET /v1/jobs/:id) is not part of the run shape: the whitelist below leaves it out.
-    const provenance = { preparedPreview: true, sourceAsset: { kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" } }
+    const provenance = { preparedPreview: true, sourceAsset: { kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "2" } }
     feed(
       [
         fqRow,

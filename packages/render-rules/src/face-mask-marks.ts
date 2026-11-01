@@ -41,7 +41,9 @@ export type CastSwapFaceMaskMarkLabel = (typeof CAST_SWAP_FACE_MASK_MARK_LABELS)
  * person of the trend's optional person slot `slot` (a `TrendSlot.key`). They
  * are left unmasked only when a run leaves that person empty (it then stays
  * as in the clip), through the trend's per-person mask variants; they never
- * shape the base mask.
+ * shape the base mask. With role outlines on (decided 2026-11-01) a slot mark
+ * may name ANY person slot, a required one too (`slotMarkAllowed`): its boxes
+ * then also say whose outline a masked region gets (face-mask-outlines.ts).
  */
 export interface FaceMaskSlotLabel {
   slot: string

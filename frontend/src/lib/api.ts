@@ -11273,7 +11273,7 @@ export type AdminTrendFaceMaskingSource = "faces" | "full-depth" | "keep-people"
  * a description the engine writes per run, the original clip as a second
  * video (clips up to 27.5 s), or none (the admin writes it).
  */
-export type AdminTrendFullDepthScene = "description" | "original" | "none"
+export type AdminTrendFullDepthScene = "description" | "original" | "none" | "description-and-original"
 /** How the engine words a run's prompt. */
 export type CastSwapPromptStyleId = "precise" | "flexible"
 
@@ -11319,6 +11319,16 @@ export interface AdminTrendFaceMasking {
    */
   faceMesh?: boolean
   /**
+   * Role outlines (Faces hidden only): the stored face mask rings each person
+   * role's masked region in that role's colour (by its place among the
+   * person slots), the region told by that role's slot marks, so a run can
+   * say who is who in every shot. While on, a slot mark may name any person
+   * slot (a required one too), and a depth fill is drawn gray. Saved only as
+   * `true` (off = no key), offered only where the engine declares
+   * `castSwap.roleOutlines`.
+   */
+  roleOutlines?: boolean
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11359,6 +11369,8 @@ export interface AdminTrendFaceMask {
   approvedBy: string
   /** The faces its make drew the face mesh on (0 = none: its runs carry no lines); absent without the mesh. */
   facesDrawn?: number
+  /** Role outlines: what each role's ring went round (the regions, summed over the frames); absent without outlines. */
+  outlines?: AdminTrendFaceMaskOutline[]
   /** The mask before any mark (the base the next edit of the marks is made from), when kept. Absent: the first edit makes the mask whole. */
   rawMaskUrl?: string
   depthUrl?: string
@@ -11384,6 +11396,14 @@ export interface AdminTrendFaceMask {
   sceneStepKey?: string
 }
 
+/** One role's outline as a stored face mask recorded it. */
+export interface AdminTrendFaceMaskOutline {
+  slot: string
+  /** `#RRGGBB`. */
+  colour: string
+  regionsDrawn: number
+}
+
 /** One person mask: the face mask for runs that leave exactly the people `emptySlots` empty. */
 export interface AdminTrendFaceMaskVariant {
   emptySlots: string[]
@@ -11394,6 +11414,8 @@ export interface AdminTrendFaceMaskVariant {
   jobId: string
   stats: { coverage: number; erasedRegions: number }
   approvedAt: string
+  /** Role outlines: what its fill ringed (the people it still covers). */
+  outlines?: AdminTrendFaceMaskOutline[]
 }
 
 export interface AdminTrendFaceMaskVariantJob {
@@ -11792,10 +11814,14 @@ export interface TrendEngineEnvironment {
       fullDepthScenes?: AdminTrendFullDepthScene[]
       /** The engine draws the face mesh (`faceMasking.faceMesh`); absent = it cannot. */
       faceMesh?: boolean
+      /** The engine draws role outlines on a stored face mask (`faceMasking.roleOutlines`); absent = it cannot. */
+      roleOutlines?: boolean
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
       clipBodySheet?: boolean
+      /** With `steps`, the engine takes the shot list (`steps.shotList`) and runs Flex as Full depth with a shot list; absent = it cannot. */
+      shotList?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11913,12 +11939,26 @@ export interface ClipBodySetting {
   mode: "on" | "off"
   prompt?: string
 }
+/** The shot list's step for one style: on or off, and its LLM (left out: the engine's default). */
+export interface ShotListStyleSetting {
+  mode: "on" | "off"
+  llm?: LlmStepSetting
+}
+/** The styles a shot list is set per ("flex" is the person's name for the "motion" style). */
+export type ShotListStyle = "precise" | "flex"
+/**
+ * The shot list (the scene description written shot by shot), per style. Left
+ * out = Precise off, Flex on, with the engine's defaults; Flex cannot be
+ * turned off (`shot_list_flex_always_on`).
+ */
+export type ShotListSetting = Partial<Record<ShotListStyle, ShotListStyleSetting>>
 /** A trend's, or one engine's, preparation steps. Absent (or `{}`) = today's run. */
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
   enginePrompt?: TextStepSetting
   sceneDescription?: TextStepSetting
   clipBody?: ClipBodySetting
+  shotList?: ShotListSetting
 }
 
 export interface PhotoLabel {
@@ -11953,7 +11993,8 @@ export interface StepOutputs {
     clipBody?: ClipBodyOutput
   }>
   enginePrompt?: { mode: "template" | "llm"; text?: string }
-  scene?: { mode: "template" | "llm" }
+  /** `shotList`: the run made its shot list; `cuts`: the cut times (s) it was told (absent: none measured). */
+  scene?: { mode: "template" | "llm"; shotList?: true; cuts?: number[] }
 }
 
 /** A refusal of a steps setting: where, the code, and why. */
@@ -11973,8 +12014,13 @@ export interface CastSwapStepDefaults {
     labeller: LlmStepSetting & { instructions: string }
     enginePrompt: LlmStepSetting & { instructions: string }
     sceneDescription: LlmStepSetting & { instructions: string }
-    /** "Body from the clip"'s default image prompt; absent from an engine without the step. */
-    clipBody?: { prompt: string }
+    /**
+     * "Body from the clip"'s default image prompt and mode (what an unset step does; an earlier engine answers no
+     * mode, and runs it); absent from an engine without the step.
+     */
+    clipBody?: { prompt: string; mode?: "on" | "off" }
+    /** The shot list's defaults per style (Precise off, Flex on); absent from an engine without the step. */
+    shotList?: { [S in ShotListStyle]: { mode: "on" | "off"; llm: LlmStepSetting & { instructions: string } } }
   }
   /** Each layout's prompt per kind (null: the collage and "none" have none). */
   layoutPrompts: { [K in SheetKind]: Partial<Record<SheetLayout<K>, string | null>> }
@@ -12386,6 +12432,10 @@ export interface AdminTrendFaceMaskJob {
      * says why), never storing a clip without the lines its setting promises.
      */
     faceMesh?: { frames?: number; framesWithFaces?: number; facesDrawn?: number; recipe?: string }
+    /** Role outlines (a setting with `faceMasking.roleOutlines`): per outline sent, what its ring went round. */
+    outlines?: Array<{ slot?: string; colour?: string; framesDrawn?: number; regionsDrawn?: number }>
+    /** The regions two outlines claimed (left without a ring). */
+    outlinesAmbiguous?: number
     [key: string]: unknown
   } | null
 }

@@ -345,26 +345,29 @@ describe("Body from the clip", { timeout: 20_000 }, () => {
     expect(seen).toEqual([])
   })
 
-  it("Off is stored; On again with no prompt removes the key (the engine's default)", async () => {
+  it("Off and On are each stored as picked (the row is shared); only \"Use the engine's default\" removes the key", async () => {
     const user = userEvent.setup()
     renderWith(<Harness />)
     await waitFor(() => expect(prompt()).toBeEnabled())
+    expect(within(clipBody()).getByText("On (the engine's default)")).toBeInTheDocument()
     await user.click(toggle())
     expect(last()).toEqual({ clipBody: { mode: "off" } })
     expect(toggle()).not.toBeChecked()
     expect(prompt()).toBeDisabled()
     await user.click(toggle())
+    expect(last()).toEqual({ clipBody: { mode: "on" } })
+    await user.click(within(clipBody()).getByRole("button", { name: "Use the engine's default" }))
     expect(last()).toBeUndefined()
   })
 
-  it("a prompt overrides the default; emptied, the key goes; Off drops it", async () => {
+  it("a prompt overrides the default; emptied, the mode stays; Off drops it", async () => {
     const user = userEvent.setup()
     renderWith(<Harness initial={{ enginePrompt: { mode: "template" } as never }} />)
     await waitFor(() => expect(prompt()).toBeEnabled())
     await user.type(prompt(), "ab")
     expect(last()).toMatchObject({ clipBody: { mode: "on", prompt: "ab" } })
     await user.clear(prompt())
-    expect(last()?.clipBody).toBeUndefined()
+    expect(last()?.clipBody).toEqual({ mode: "on" })
     await user.type(prompt(), "c")
     await user.click(toggle())
     expect(last()?.clipBody).toEqual({ mode: "off" })
@@ -383,14 +386,15 @@ describe("Body from the clip", { timeout: 20_000 }, () => {
     await screen.findByRole("region", { name: "Body from the clip step" })
     expect(within(clipBody()).getByText("Runs in: production · Not yet in: staging")).toBeInTheDocument()
     expect(toggle()).toBeEnabled()
-    expect(toggle()).toBeChecked()
+    // This engine's defaults answer the step with no mode (an earlier engine): unset runs it.
+    await waitFor(() => expect(toggle()).toBeChecked())
     // A prompt of its own needs every environment: not offered.
     expect(prompt()).toBeDisabled()
     await user.click(toggle())
     expect(last()).toEqual({ clipBody: { mode: "off" } })
     expect(toggle()).not.toBeChecked()
     await user.click(toggle())
-    expect(last()).toBeUndefined()
+    expect(last()).toEqual({ clipBody: { mode: "on" } })
   })
 
   it("Off reads Off and stays choosable even where no environment takes steps yet", async () => {
@@ -401,8 +405,33 @@ describe("Body from the clip", { timeout: 20_000 }, () => {
     expect(within(clipBody()).getByText("Not yet in: staging, production")).toBeInTheDocument()
     // Off needs nothing: no "remove them" warning for it.
     expect(screen.queryByText(/remove them to publish or save/)).not.toBeInTheDocument()
+    // With no engine defaults, unset reads Off: On is stored as itself.
     await user.click(toggle())
-    expect(last()).toBeUndefined()
+    expect(last()).toEqual({ clipBody: { mode: "on" } })
+  })
+
+  it("an engine whose default is Off: unset reads Off; picking Off (after On) still stores { mode: \"off\" }", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${DEFAULTS_URL}`] = () => ({
+      body: { data: { ...DEFAULTS, defaults: { ...DEFAULTS.defaults, clipBody: { mode: "off", prompt: "test clip body prompt" } } } },
+    })
+    renderWith(<Harness />)
+    await waitFor(() => expect(prompt()).toHaveAttribute("placeholder", "test clip body prompt"))
+    expect(toggle()).not.toBeChecked()
+    expect(prompt()).toBeDisabled()
+    expect(seen).toEqual([])
+    expect(within(clipBody()).getByText("Off (the engine's default)")).toBeInTheDocument()
+    await user.click(toggle())
+    expect(last()).toEqual({ clipBody: { mode: "on" } })
+    expect(toggle()).toBeChecked()
+    await user.click(toggle())
+    expect(last()).toEqual({ clipBody: { mode: "off" } })
+  })
+
+  it("while the engine's default is unknown, an unset step names no definite state", () => {
+    renderWith(<Harness envs={[withSteps("production"), withSteps("staging")]} />)
+    expect(within(clipBody()).getByText("The engine's default")).toBeInTheDocument()
+    expect(seen).toEqual([])
   })
 
   it("a prompt of its own set before, where an environment lacks the step, can be removed", async () => {
@@ -411,7 +440,8 @@ describe("Body from the clip", { timeout: 20_000 }, () => {
     await screen.findByRole("region", { name: "Body from the clip step" })
     expect(within(clipBody()).getByText(/needs every environment's engine to run the step/)).toBeInTheDocument()
     await user.click(within(clipBody()).getByRole("button", { name: "Remove the prompt" }))
-    expect(last()).toBeUndefined()
+    // The prompt goes, the mode picked stays (On with no prompt needs no engine).
+    expect(last()).toEqual({ clipBody: { mode: "on" } })
   })
 
   it("is not choosable while the environments are unknown", () => {
@@ -446,5 +476,69 @@ describe("Body from the clip", { timeout: 20_000 }, () => {
     expect(await within(clipBody()).findByText("test clip body problem")).toBeInTheDocument()
     // Said once, under its own section only.
     expect(screen.getAllByText("test clip body problem")).toHaveLength(1)
+  })
+})
+
+describe("Shot list", { timeout: 20_000 }, () => {
+  const SHOT_LLM = { model: "gemini-3.1-pro", instructions: "test shot list instructions", inputs: ["clip", "rolePhotos"] as const, maxChars: 4000 }
+  const WITH_SHOT_LIST: CastSwapStepDefaults = {
+    ...DEFAULTS,
+    defaults: {
+      ...DEFAULTS.defaults,
+      shotList: { precise: { mode: "off", llm: { ...SHOT_LLM, inputs: [...SHOT_LLM.inputs] } }, flex: { mode: "on", llm: { ...SHOT_LLM, inputs: [...SHOT_LLM.inputs] } } },
+    },
+  }
+  const shotEnv = (env: string, shotList?: boolean): TrendEngineEnvironment => {
+    const e = withSteps(env, true, true)
+    return { ...e, supports: { castSwap: { ...e.supports.castSwap, ...(shotList ? { shotList } : {}) } } }
+  }
+  const SHOT_ENVS = [shotEnv("production", true), shotEnv("staging", true)]
+  const shotList = () => section("Shot list step")
+  const precise = () => within(shotList()).getByRole("switch", { name: "Precise shot list" })
+
+  beforeEach(() => {
+    routes[`GET ${DEFAULTS_URL}`] = () => ({ body: { data: WITH_SHOT_LIST } })
+  })
+
+  it("names the environments whose engine lacks it, greyed out; loading writes nothing", async () => {
+    renderWith(<Harness envs={[shotEnv("production", true), shotEnv("staging")]} />)
+    await waitFor(() => expect(within(shotList()).getByText(/The Cast Swap engine of staging cannot run the shot list yet/)).toBeInTheDocument())
+    expect(precise()).toBeDisabled()
+    expect(precise()).not.toBeChecked()
+    expect(within(shotList()).getByText(/Always on: Flex runs are Full depth with a shot list/)).toBeInTheDocument()
+    expect(seen).toEqual([])
+  })
+
+  it("Precise On is stored, with its LLM once edited; Off again removes the key (the default)", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness envs={SHOT_ENVS} />)
+    await waitFor(() => expect(precise()).toBeEnabled())
+    await user.click(precise())
+    expect(last()).toEqual({ shotList: { precise: { mode: "on" } } })
+    const groups = within(shotList()).getAllByRole("combobox", { name: "Model" })
+    await waitFor(() => expect(groups[0]).toHaveValue("gemini-3.1-pro"))
+    await user.selectOptions(groups[0]!, "claude-haiku-5.5")
+    expect(last()).toEqual({ shotList: { precise: { mode: "on", llm: { model: "claude-haiku-5.5", inputs: ["clip", "rolePhotos"], maxChars: 4000 } } } })
+    await user.click(precise())
+    expect(last()).toBeUndefined()
+  })
+
+  it("Flex's LLM is stored with mode on; Use the default removes it", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness envs={SHOT_ENVS} />)
+    await waitFor(() => expect(precise()).toBeEnabled())
+    const [flexModel] = within(shotList()).getAllByRole("combobox", { name: "Model" })
+    await waitFor(() => expect(flexModel).toHaveValue("gemini-3.1-pro"))
+    await user.selectOptions(flexModel!, "claude-haiku-5.5")
+    expect(last()).toEqual({ shotList: { flex: { mode: "on", llm: { model: "claude-haiku-5.5", inputs: ["clip", "rolePhotos"], maxChars: 4000 } } } })
+    await user.click(within(shotList()).getByRole("button", { name: "Flex shot list: use the engine's default" }))
+    expect(last()).toBeUndefined()
+  })
+
+  it("a stored setting the environments cannot run can be put back to the defaults", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness initial={{ shotList: { precise: { mode: "on" } } }} envs={[shotEnv("production", true), shotEnv("staging")]} />)
+    await user.click(await within(shotList()).findByRole("button", { name: "Back to the defaults" }))
+    expect(last()).toBeUndefined()
   })
 })

@@ -74,6 +74,20 @@ export interface PromptPartsRequest {
    * (`askPromptParts`).
    */
   faceMesh?: true
+  /**
+   * The trend draws role outlines on its stored clip (`faceMasking.roleOutlines`,
+   * on): the engine counts the `roleOutlines` part's line in the prompt's
+   * length, with every person role outlined. Only ever `true`, and sent only
+   * to an engine that declares `castSwap.roleOutlines` (`askPromptParts`).
+   */
+  roleOutlines?: true
+  /**
+   * The Precise set's shot list is on (`steps.shotList.precise.mode` "on"):
+   * the engine shows its marker where the shot list goes and counts it in the
+   * length. Only ever `true`, and sent only to an engine that declares
+   * `castSwap.shotList` (`askPromptParts`).
+   */
+  shotList?: true
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

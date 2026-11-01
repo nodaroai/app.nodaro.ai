@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execFileSync } from "node:child_process"
-import { cutTimesToFrames, detectCutFrames } from "../scene-cut-frames.js"
+import { cutTimesFromFirstFrame, cutTimesToFrames, detectCutFrames, detectCutTimes } from "../scene-cut-frames.js"
 
 describe("cutTimesToFrames", () => {
   it("counts frames from the first decoded frame's time (a source may start past 0), at the clip's rate", () => {
@@ -19,6 +19,18 @@ describe("cutTimesToFrames", () => {
   })
   it("returns nothing for a rate it cannot read", () => {
     expect(cutTimesToFrames([1], 0, "0/0")).toEqual([])
+  })
+})
+
+describe("cutTimesFromFirstFrame", () => {
+  it("counts seconds from the first decoded frame, to the millisecond, ascending, each once", () => {
+    expect(cutTimesFromFirstFrame([2.5, 1], 0)).toEqual([1, 2.5])
+    expect(cutTimesFromFirstFrame([1.5, 3.0004], 0.5)).toEqual([1, 2.5])
+    expect(cutTimesFromFirstFrame([1.0001, 1.0004, 1], 0)).toEqual([1])
+  })
+  it("drops a cut at or before the first frame, and a time that is not a number", () => {
+    expect(cutTimesFromFirstFrame([0.5, 0.2, Number.NaN, 2], 0.5)).toEqual([1.5])
+    expect(cutTimesFromFirstFrame([], 0)).toEqual([])
   })
 })
 
@@ -65,6 +77,13 @@ describe("detectCutFrames (real ffmpeg)", () => {
       ["color=gray:s=160x90:r=24:d=1"], ["testsrc2=s=160x90:r=24:d=1,scroll=horizontal=0.1"],
     ], async (path) => {
       expect(await detectCutFrames(path, "24/1")).toEqual([24])
+    })
+  }, 60_000)
+
+  it("detectCutTimes answers the same cuts in seconds from the first frame, with the input confined", async () => {
+    await clip("two-times.mp4", [["color=red:s=160x90:r=24:d=1"], ["color=blue:s=160x90:r=24:d=1"]], async (path) => {
+      const { cutsSec } = await detectCutTimes(path, { inputArgs: ["-protocol_whitelist", "file", "-format_whitelist", "mov,mp4,m4a,matroska,webm"] })
+      expect(cutsSec).toEqual([1])
     })
   }, 60_000)
 

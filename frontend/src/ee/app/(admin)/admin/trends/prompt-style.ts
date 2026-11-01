@@ -8,12 +8,14 @@
  *   Precise otherwise.
  * - Scene (`faceMasking.scene`, Full depth only): a description the engine
  *   writes on each run (the default), the original clip as a second video
- *   (clips up to 27.5 s), or none.
+ *   (clips up to 27.5 s), both (the description and the original: offered
+ *   only where an engine declares it), or none.
  */
 import {
   CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC,
   CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT,
   defaultPromptStyleFor,
+  fullDepthSceneSendsOriginal,
 } from "@nodaro/render-rules"
 import type { AdminTrendFaceMasking, AdminTrendFullDepthScene, CastSwapPromptStyleId, TrendEngineEnvironment } from "@/lib/api"
 import { clipPreparationOf } from "./clip-preparation"
@@ -23,7 +25,13 @@ export const PROMPT_STYLES: ReadonlyArray<{ value: CastSwapPromptStyleId; label:
   { value: "flexible", label: "Flexible", hint: "Follows the clip's movement and takes the rest from the pictures and the text, more freely." },
 ]
 
-export const FULL_DEPTH_SCENES: ReadonlyArray<{ value: AdminTrendFullDepthScene; label: string; hint: string }> = [
+export const FULL_DEPTH_SCENES: ReadonlyArray<{
+  value: AdminTrendFullDepthScene
+  label: string
+  hint: string
+  /** Offered only where an engine declares it (`castSwap.fullDepthScenes`), or once it is the value. */
+  declaredOnly?: true
+}> = [
   {
     value: "description",
     label: "Description (automatic)",
@@ -33,6 +41,12 @@ export const FULL_DEPTH_SCENES: ReadonlyArray<{ value: AdminTrendFullDepthScene;
     value: "original",
     label: `Original video (up to ${CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC} s)`,
     hint: `The original clip is sent as a second video, and the scene comes from it. Clips up to ${CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC} s.`,
+  },
+  {
+    value: "description-and-original",
+    label: `Description + original (up to ${CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC} s)`,
+    hint: `Both: the engine describes the clip shot by shot into the prompt, and the original clip is sent as a second video. Clips up to ${CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC} s.`,
+    declaredOnly: true,
   },
   {
     value: "none",
@@ -61,7 +75,7 @@ export const ORIGINAL_SCENE_MAX_SEC = CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_
 
 /** A Full depth trend that sends the original, with a clip too long for it (publishing is held: `full_depth_clip_too_long`). */
 export function originalSceneTooLong(m: AdminTrendFaceMasking | undefined, clipSec: number | undefined): boolean {
-  return !!m && m.mode !== "off" && clipPreparationOf(m) === "full-depth" && sceneOf(m) === "original" && clipSec !== undefined && clipSec > ORIGINAL_SCENE_MAX_SEC
+  return !!m && m.mode !== "off" && clipPreparationOf(m) === "full-depth" && fullDepthSceneSendsOriginal(sceneOf(m)) && clipSec !== undefined && clipSec > ORIGINAL_SCENE_MAX_SEC
 }
 
 /** The environments whose engine cannot run this prompt style (none for the preparation's default). */
@@ -72,6 +86,27 @@ export function environmentsLackingStyle(
 ): string[] {
   if (!envs || style === defaultPromptStyleOf(m)) return []
   return envs.filter((e) => !(e.supports.castSwap?.promptStyles ?? []).includes(style)).map((e) => e.env)
+}
+
+/** Whether a scene sends the original as a second video (its clip limit applies). */
+export function sceneSendsOriginal(scene: AdminTrendFullDepthScene): boolean {
+  return fullDepthSceneSendsOriginal(scene)
+}
+
+/**
+ * The scenes the select offers: every scene an engine before the choice could take, plus one an engine must
+ * declare (`declaredOnly`) when some environment's engine in `envs` lists it, or when it is `current`.
+ */
+export function offeredScenes(
+  current: AdminTrendFullDepthScene,
+  envs: readonly TrendEngineEnvironment[] | undefined,
+  only?: readonly AdminTrendFullDepthScene[],
+): typeof FULL_DEPTH_SCENES {
+  return FULL_DEPTH_SCENES.filter((s) => {
+    if (s.value === current) return true
+    if (only && !only.includes(s.value)) return false
+    return !s.declaredOnly || (envs ?? []).some((e) => (e.supports.castSwap?.fullDepthScenes ?? []).includes(s.value))
+  })
 }
 
 /** The environments whose engine cannot take this scene (an engine before scenes sends the original only). */

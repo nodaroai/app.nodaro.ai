@@ -50,7 +50,7 @@ export const JOB_LANE_CLASSES: Readonly<Record<string, LaneClass>> = Object.free
     "trim-audio", "trim-video", "extract-frame", "speed-ramp", "loop-video", "fade-video", "video-overlay",
     "still-to-video", "slideshow", "resize-video", "adjust-volume", "audio-fx", "pitch-tempo", "add-captions",
     "mix-audio", "combine-audio", "transcode-video", "social-media-format", "split-media", "extract-audio",
-    "silence-detect", "audio-sync", "mask-composite", "mask-erase", "reference-sheet",
+    "silence-detect", "audio-sync", "mask-composite", "mask-erase", "mask-outline", "reference-sheet",
     // Video Face Mesh: YuNet + the landmark model (onnxruntime, one thread) and sharp, local.
     "video-face-mesh",
   ]),

@@ -25,8 +25,15 @@
 // blinks. Offered once the engine draws it: a trend's, some environment's
 // engine; Admin → Nodaro Motion's (a setting every environment shares), shown
 // but greyed out, naming the environments that lack it. Off is no key.
+//
+// Role outlines (a trend's, Faces hidden only: `offerRoleOutlines`): the stored
+// face mask rings each person role's masked region in that role's colour, the
+// region told by the role's boxes on the mask, so a run can say who is who in
+// every shot. Offered once some environment's engine draws them; a depth fill
+// is then drawn gray. Off is no key.
 
 import { useId } from "react"
+import { ROLE_OUTLINE_PALETTE } from "@nodaro/render-rules"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -44,9 +51,10 @@ import type {
   AdminTrendFaceMaskingSource,
   AdminTrendFaceMaskingTarget,
   AdminTrendFaceMaskingZone,
+  AdminTrendFullDepthScene,
 } from "@/lib/api"
 import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
-import { defaultTargetFor, isDepthPreparation, someEngineDrawsFaceMesh } from "../clip-preparation"
+import { defaultTargetFor, isDepthPreparation, someEngineDrawsFaceMesh, someEngineDrawsRoleOutlines } from "../clip-preparation"
 import { FullDepthSceneSelect } from "./FullDepthSceneSelect"
 
 const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hint: string }> = [
@@ -121,9 +129,25 @@ interface Props {
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
   readonly envs?: readonly TrendEngineEnvironment[]
+  /** A trend's editor: offer role outlines (Faces hidden only; Admin → Nodaro Motion never does). */
+  readonly offerRoleOutlines?: boolean
+  /** Full depth's scenes offered (left out: every one the environments allow); Admin → Nodaro Motion's Flex column narrows them. */
+  readonly scenes?: readonly AdminTrendFullDepthScene[]
 }
 
-export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces", supportedTargets, bodyMissingIn, faceMeshMissingIn, clipSec, envs }: Props) {
+export function FaceMaskingEditor({
+  value,
+  onChange,
+  autoHint,
+  source = "faces",
+  supportedTargets,
+  bodyMissingIn,
+  faceMeshMissingIn,
+  clipSec,
+  envs,
+  offerRoleOutlines = false,
+  scenes,
+}: Props) {
   const depth = isDepthPreparation(source)
   const keepPeople = source === "keep-people"
   const mode = depth ? "always" : (value?.mode ?? "off")
@@ -166,6 +190,10 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
   const meshOn = value?.faceMesh === true
   const meshUnsupported = faceMeshMissingIn ? faceMeshMissingIn.length > 0 : !someEngineDrawsFaceMesh(envs)
   const meshShown = mode !== "off" && !keepPeople && (meshOn || faceMeshMissingIn !== undefined || !meshUnsupported)
+  // Role outlines: a trend's, Faces hidden only. One already on stays shown (and can be turned off).
+  const outlinesOn = value?.roleOutlines === true
+  const outlinesUnsupported = !someEngineDrawsRoleOutlines(envs)
+  const outlinesShown = offerRoleOutlines && mode !== "off" && source === "faces" && (outlinesOn || !outlinesUnsupported)
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
@@ -174,6 +202,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
   const targetHintId = `${id}-target-hint`
   const noMarginsId = `${id}-no-margins`
   const faceMeshId = `${id}-face-mesh`
+  const outlinesId = `${id}-role-outlines`
 
   return (
     <div className="flex flex-col gap-3">
@@ -224,7 +253,7 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
       )}
 
       {source === "full-depth" && (
-        <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} onChange={(scene) => set({ scene })} />
+        <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} only={scenes} onChange={(scene) => set({ scene })} />
       )}
 
       {meshShown && (
@@ -251,6 +280,35 @@ export function FaceMaskingEditor({ value, onChange, autoHint, source = "faces",
               {faceMeshMissingIn
                 ? `The Cast Swap engine of ${faceMeshMissingIn.join(", ")} cannot draw the face mesh yet, and this setting is shared by every environment${meshOn ? ": turn it off to save" : ""}.`
                 : "No environment's Cast Swap engine draws the face mesh yet: the engine is out of date."}
+            </span>
+          )}
+        </div>
+      )}
+
+      {outlinesShown && (
+        <div className="flex flex-col gap-1 text-sm">
+          <div className="flex min-h-11 items-center gap-2">
+            <Checkbox
+              id={outlinesId}
+              checked={outlinesOn}
+              disabled={outlinesUnsupported && !outlinesOn}
+              aria-describedby={`${outlinesId}-hint`}
+              // Off removes the key: a setting without outlines is saved exactly as before they existed.
+              onCheckedChange={(checked) => set({ roleOutlines: checked === true ? true : undefined })}
+            />
+            <label htmlFor={outlinesId} className="font-medium">
+              Role outlines
+            </label>
+          </div>
+          <span id={`${outlinesId}-hint`} className="text-xs text-muted-foreground">
+            Draws a coloured outline around each masked person, one colour per person slot ({ROLE_OUTLINE_PALETTE.map((c) => c.name).join(", ")}, in
+            slot order), so the video model knows who is who after every cut. Each person&apos;s boxes on the face mask
+            say whose outline a region gets, required people included. A depth fill is then drawn in gray. Make the face mask
+            again after turning it on or moving a box.
+          </span>
+          {outlinesUnsupported && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              No environment&apos;s Cast Swap engine draws role outlines yet: the engine is out of date.
             </span>
           )}
         </div>

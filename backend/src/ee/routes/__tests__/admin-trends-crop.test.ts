@@ -255,7 +255,7 @@ describe("starting a source crop", () => {
     expect(d.previewStart).toBe(5.5)
     // The preview input clip, cut again from the crop at the kept start (the window ends the clip: 4 s, no tail).
     expect(mem.clips).toEqual([{ trendId: T1, sourceUrl: `https://cdn.test/trends/${T1}/cropped.mp4`, startSec: 5.5, durationSec: 4 }])
-    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/cropped.mp4`, startSec: 5.5, recipe: "1" })
+    expect(d.previewClip).toMatchObject({ sourceVideoUrl: `https://cdn.test/trends/${T1}/cropped.mp4`, startSec: 5.5, recipe: "2" })
     expect(d.sourceCrop).toBeUndefined()
     expect(audits().map((a) => a.action)).toEqual(["start_trend_source_crop", "crop_trend_source"])
     expect(await viewOf()).toBeNull()
@@ -264,7 +264,7 @@ describe("starting a source crop", () => {
   it("replaces a stale preview clip in the draft (one cut from the old source is never kept), and a failed cut is the record's error", async () => {
     const stale = {
       videoUrl: `https://cdn.test/trends/${T1}/preview-old.mp4`, durationSec: 4, width: 2568, height: 1080, frames: 120, sha256: "b".repeat(64),
-      sourceVideoUrl: SRC, startSec: 8, recipe: "1", madeAt: "2026-10-27T10:00:00.000Z",
+      sourceVideoUrl: SRC, startSec: 8, recipe: "2", madeAt: "2026-10-27T10:00:00.000Z",
     }
     seed(draftData({ previewClip: stale }))
     expect((await start({ aspect: "16:9" })).statusCode).toBe(202)

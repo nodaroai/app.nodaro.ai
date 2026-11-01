@@ -15,7 +15,8 @@
  * the variant's eraseAlways, erase and keep boxes. Advancing reads the
  * steps (`nextVariantStep`): once the erase is done, the engine's face-mask
  * make (`POST /v1/cast-swap/face-mask`, `fromMask` = the erased mask, no
- * marks) fills it exactly as the base was filled; once that is done, the clip
+ * marks) fills it exactly as the base was filled (with role outlines, ringed
+ * for the people it still covers, and recorded so); once that is done, the clip
  * is copied into the trend's storage and the variant is stored on the face
  * mask, APPROVED as it finishes (the admin can still play it). Every step
  * bills the admin, as the base make's do; a step is asked for with an
@@ -47,7 +48,8 @@ import { markJobCompleted } from "../../workers/shared.js"
 import { TREND_VARIANT_ANCHOR_TYPE, touchTrendVariantAnchor } from "../../lib/reconcile/trend-variant-anchor-sweep.js"
 import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
-import { engineDrawsFaceMesh, faceMeshOn, withResolvedZone, withoutMarks } from "../../lib/cast-swap-face-masking.js"
+import { engineDrawsFaceMesh, engineDrawsRoleOutlines, faceMeshOn, roleOutlinesOn, withResolvedZone, withoutMarks } from "../../lib/cast-swap-face-masking.js"
+import { makeOutlinesOf, recordedOutlinesOf } from "../lib/trends/role-outlines.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
 import { DraftConflictError, getDraftState, saveDraft } from "../lib/trends/store.js"
@@ -255,6 +257,10 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
       if (faceMeshOn(draft.faceMasking) && !engineDrawsFaceMesh(castSwap)) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw the face mesh yet: person masks of a trend that draws it are made where it can.")
       }
+      // Role outlines likewise: a person mask is ringed as the base was (the people it still covers).
+      if (roleOutlinesOn(draft.faceMasking) && !engineDrawsRoleOutlines(castSwap)) {
+        return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw role outlines yet: person masks of a trend that draws them are made where it can.")
+      }
       if (state.baseProblem === "no_raw_mask" || !reusableFaceMaskBase(draft, castSwap.faceMaskRecipe)) {
         return err(reply, 409, "no_raw_mask", "The approved face mask kept no copy from before its marks: make the face mask again first.")
       }
@@ -403,11 +409,23 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
             await fail(job, "The approved face mask can no longer be reused: make the face mask again.")
             continue
           }
+          if (roleOutlinesOn(pruned.data.faceMasking) && !engineDrawsRoleOutlines(castSwap)) {
+            await fail(job, "This environment's Cast Swap engine cannot draw role outlines: make the person masks where it can.")
+            continue
+          }
+          // Filled as the base was; with role outlines, ringed for the people it still covers only (those
+          // it leaves empty are unmasked: no region to ring).
+          const outlinesOn = roleOutlinesOn(pruned.data.faceMasking)
           const res = await engineRequest(
             app,
             req,
             "/v1/cast-swap/face-mask",
-            { videoUrl: pruned.data.source!.videoUrl, faceMasking: withResolvedZone(withoutMarks(pruned.data.faceMasking!)), fromMask: { ...from, maskUrl: step.maskUrl } },
+            {
+              videoUrl: pruned.data.source!.videoUrl,
+              faceMasking: { ...withResolvedZone(withoutMarks(pruned.data.faceMasking!)), ...(outlinesOn ? { roleOutlines: true as const } : {}) },
+              ...(outlinesOn ? { outlines: makeOutlinesOf(pruned.data, job.emptySlots) } : {}),
+              fromMask: { ...from, maskUrl: step.maskUrl },
+            },
             { "idempotency-key": `${FACE_MASK_VARIANT_JOB_TYPE}:${job.jobId}:make` },
             { origin: "trends-admin", source: deriveJobSource(req) },
           )
@@ -415,6 +433,15 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
           if (makeJobId) updates.push({ jobId: job.jobId, job: { ...job, makeJobId } })
           else await fail(job, `Nodaro Motion did not start the person mask's fill (${res.statusCode}).`)
         } else {
+          // With role outlines, a filled person mask only an engine that drew them made (one answer per outline sent).
+          const outlines =
+            step.kind === "done" && roleOutlinesOn(pruned.data.faceMasking)
+              ? recordedOutlinesOf(make?.output_data, makeOutlinesOf(pruned.data, job.emptySlots))
+              : undefined
+          if (outlines === null) {
+            await fail(job, "The person mask was not made with the trend's role outlines: make the person masks again.")
+            continue
+          }
           const url = step.kind === "done" ? (await copyToTrendStorage(trend.id, step.maskedUrl, "video")).url : undefined
           const variant: TrendFaceMaskVariant = {
             emptySlots: job.emptySlots,
@@ -424,6 +451,7 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
             jobId: job.jobId,
             stats: step.kind === "done" ? step.stats : eraseStatsOf(erase),
             approvedAt: new Date().toISOString(),
+            ...(outlines && outlines.length > 0 ? { outlines } : {}),
           }
           // The variant rides on its finished job, so a save that does not land is recovered from it, never redone.
           await markJobCompleted(job.jobId, { output_data: { maskedUrl: url ?? null, frames, variant, ...(job.eraseJobId ? { eraseJobId: job.eraseJobId } : {}), ...(job.makeJobId ? { makeJobId: job.makeJobId } : {}) } })

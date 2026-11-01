@@ -281,6 +281,20 @@ describe("tk.settings.nodaroMotionSteps", () => {
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
   })
 
+  it("answers shotList only to an engine that declares castSwap.shotList", async () => {
+    h.steps = { "motion-prism": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } } }
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "motion-prism": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } },
+      "motion-pro": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } },
+    })
+    stepsEngine(true)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "motion-prism": { enginePrompt: { mode: "template" } },
+      "motion-pro": { enginePrompt: { mode: "template" } },
+    })
+  })
+
   it("answers null to an engine without castSwap.steps", async () => {
     h.steps = saved
     stepsEngine(undefined)

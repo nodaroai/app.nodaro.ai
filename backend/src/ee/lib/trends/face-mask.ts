@@ -38,11 +38,13 @@ import {
   faceMaskingSent,
   faceMaskingSourceOf,
   makeMarksOf,
+  roleOutlinesOn,
   withResolvedZone,
   withoutMarks,
   type FaceMaskMark,
   type FaceMaskingWithMarks,
 } from "../../../lib/cast-swap-face-masking.js"
+import { makeOutlinesOf } from "./role-outlines.js"
 import { sceneStepKeyOf } from "../../../lib/cast-swap-steps.js"
 import type { EngineEnvironment } from "../engine-environments.js"
 import type { TrendFaceMask, TrendVersionData } from "./types.js"
@@ -95,8 +97,23 @@ export function stableJson(v: unknown): string {
  * makes a stored mask out of date. The base key (`faceMaskBaseKey`) carries it
  * too, so a raw mask made without the mesh is never the base of a mask with it
  * (`reusableFaceMaskBase`), nor the other way round.
+ *
+ * Role outlines (`roleOutlines`, decided 2026-11-01; faces hidden only) are
+ * hashed only when on (`roleOutlinesOn`), with the outlines its make draws
+ * (`outlines`: each person slot with slot marks, its colour and its boxes,
+ * from `slots`), so every setting without them hashes exactly as before they
+ * existed, while turning them on, editing a role's boxes or moving a person
+ * slot (its colour) makes a stored mask out of date. The base key carries
+ * only what changes the raw mask and its depth view: a depth fill is drawn
+ * gray while outlines are on (`faceMaskBaseKey`).
  */
-export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks): string {
+export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks, slots: TrendVersionData["slots"]): string {
+  const outlines = makeOutlinesOf({ slots, faceMasking: masking }).map((o) => ({ ...o, boxes: o.boxes.map(stableJson).sort().map((b) => JSON.parse(b) as unknown) }))
+  return settingsHash(videoUrl, masking, roleOutlinesOn(masking) ? { roleOutlines: true, ...(outlines.length > 0 ? { outlines } : {}) } : {})
+}
+
+/** The settings key's hash, with `extra` (faces hidden only) beside the settings. */
+function settingsHash(videoUrl: string, masking: FaceMaskingWithMarks, extra: Record<string, unknown>): string {
   const marks = makeMarksOf(masking).map(stableJson).sort()
   const withMarks = { ...(marks.length > 0 ? { marks: marks.map((mark) => JSON.parse(mark) as unknown) } : {}) }
   if (faceMaskingSourceOf(masking) !== "faces") {
@@ -109,6 +126,7 @@ export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWith
     ...settings,
     ...(target === "head" ? {} : { target }),
     ...withMarks,
+    ...extra,
   }
   return keyOf({ videoUrl, faceMasking })
 }
@@ -116,19 +134,25 @@ export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWith
 const keyOf = (v: unknown): string => `v2:${createHash("sha256").update(stableJson(v)).digest("hex")}`
 
 /** The draft's settings key, or null when it has no source clip or does not mask. */
-export function faceMaskSettingsKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
+export function faceMaskSettingsKey(data: Pick<TrendVersionData, "source" | "faceMasking" | "slots">): string | null {
   if (!data.source || !faceMaskingOn(data.faceMasking)) return null
-  return faceMaskSettingsKeyOf(data.source.videoUrl, data.faceMasking)
+  return faceMaskSettingsKeyOf(data.source.videoUrl, data.faceMasking, data.slots)
 }
 
 /**
- * The draft's BASE key: its settings key with the marks left out (with none,
- * its settings key), or null like `faceMaskSettingsKey`. A mask's raw mask
- * (before any mark) is made from exactly this.
+ * The draft's BASE key: its settings key with the marks (and role outlines)
+ * left out (with neither, its settings key), or null like
+ * `faceMaskSettingsKey`. A mask's raw mask (before any mark) is made from
+ * exactly this. With role outlines on and a depth fill, the depth view is
+ * drawn gray (decided 2026-11-01), so that is hashed too
+ * (`depthColormap: "grayscale"`): a turbo depth view is never the base of a
+ * mask with outlines, nor the other way round; a blur fill's raw mask is the
+ * same either way, so it stays the base.
  */
 export function faceMaskBaseKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
   if (!data.source || !faceMaskingOn(data.faceMasking)) return null
-  return faceMaskSettingsKeyOf(data.source.videoUrl, withoutMarks(data.faceMasking))
+  const grayDepth = roleOutlinesOn(data.faceMasking) && (data.faceMasking.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill) === "depth"
+  return settingsHash(data.source.videoUrl, withoutMarks(data.faceMasking), grayDepth ? { depthColormap: "grayscale" } : {})
 }
 
 /**
@@ -158,10 +182,15 @@ export function faceMaskHasErasedMarks(data: Pick<TrendVersionData, "faceMasking
 /**
  * Whether every run must use the draft's stored clip (`storedFaceMask` with
  * `required: true`), never masking per run: a depth mode's clip (made once and
- * approved, never per run), or a face mask with erased marks.
+ * approved, never per run), a face mask with erased marks, or one with role
+ * outlines (a mask made per run draws none, decided 2026-11-01: a box edited
+ * after approval makes runs refuse `face_mask_required` until it is made again).
  */
 export function faceMaskStoredRequired(data: Pick<TrendVersionData, "faceMasking">): boolean {
-  return faceMaskingOn(data.faceMasking) && (faceMaskingSourceOf(data.faceMasking) !== "faces" || faceMaskHasErasedMarks(data))
+  return (
+    faceMaskingOn(data.faceMasking) &&
+    (faceMaskingSourceOf(data.faceMasking) !== "faces" || faceMaskHasErasedMarks(data) || roleOutlinesOn(data.faceMasking))
+  )
 }
 
 /**
@@ -243,7 +272,7 @@ export interface FaceMaskState {
  * offers a remake.
  */
 export function faceMaskState(
-  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "steps">,
+  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "steps" | "slots">,
   environments: readonly EngineEnvironment[] | null,
   required: readonly string[],
 ): FaceMaskState {
@@ -278,16 +307,34 @@ export function sceneStepChanged(data: Pick<TrendVersionData, "faceMask" | "step
  * What a run sends of the stored mask: `{ url, frames }` when the trend masks
  * and its mask was made from these exact settings, else undefined (the run
  * masks per run, as before stored masks). With the faces its make drew the
- * face mesh on (`facesDrawn`) when it reported them; only an engine that
- * draws the mesh is sent that (`withoutUnsupportedStoredMask`).
+ * face mesh on (`facesDrawn`) and the mesh's recipe (`meshRecipe`) when it
+ * reported them; only an engine that draws the mesh is sent those
+ * (`withoutUnsupportedStoredMask`).
  */
 export function storedFaceMaskFor(
-  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">,
-): { url: string; frames: number; facesDrawn?: number } | undefined {
+  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "slots">,
+): { url: string; frames: number; facesDrawn?: number; meshRecipe?: string } | undefined {
   const mask = data.faceMask
   const key = faceMaskSettingsKey(data)
   if (!mask || key === null || mask.settingsKey !== key) return undefined
-  return { url: mask.url, frames: mask.frames, ...(typeof mask.facesDrawn === "number" ? { facesDrawn: mask.facesDrawn } : {}) }
+  return {
+    url: mask.url,
+    frames: mask.frames,
+    ...(typeof mask.facesDrawn === "number" ? { facesDrawn: mask.facesDrawn } : {}),
+    ...(mask.meshRecipe ? { meshRecipe: mask.meshRecipe } : {}),
+  }
+}
+
+/**
+ * The recipe a finished face mask job's face mesh was drawn by
+ * (`output_data.faceMesh.recipe`, core's `VIDEO_FACE_MESH_RECIPE`): a string
+ * of 1–40 characters, else undefined (no mesh, or an engine that does not
+ * report it).
+ */
+export function faceMeshRecipeOf(output: unknown): string | undefined {
+  const mesh = output && typeof output === "object" ? (output as Record<string, unknown>).faceMesh : undefined
+  const r = mesh && typeof mesh === "object" ? (mesh as Record<string, unknown>).recipe : undefined
+  return typeof r === "string" && r.length >= 1 && r.length <= 40 ? r : undefined
 }
 
 /**
@@ -333,7 +380,7 @@ export interface PendingFaceMaskJob {
   current: boolean
 }
 
-export function pendingFaceMaskJob(data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMaskJob">): PendingFaceMaskJob | null {
+export function pendingFaceMaskJob(data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMaskJob" | "slots">): PendingFaceMaskJob | null {
   const job = data.faceMaskJob
   if (!job) return null
   const key = faceMaskSettingsKey(data)

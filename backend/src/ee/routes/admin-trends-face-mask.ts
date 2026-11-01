@@ -28,7 +28,12 @@
  * person (`"body"`) needs `faceMaskHideTargets` to name it. One that draws
  * the face mesh (`faceMesh: true`) is held back unless the loaded engine
  * declares `castSwap.faceMesh`: an older one refuses the key, so an approved
- * mask never claims a mesh it was made without.
+ * mask never claims a mesh it was made without. Role outlines
+ * (`roleOutlines: true`, decided 2026-11-01) likewise need
+ * `castSwap.roleOutlines`; the make is then sent the flag and `outlines`
+ * (each person slot with slot marks: its colour and boxes), and approving
+ * takes only a mask whose answer accounts for every outline sent
+ * (`face_mask_not_outlined` otherwise), recording what each one ringed.
  *
  * The scene description step (`steps.sceneDescription`): a make that
  * describes the clip (full depth, on an engine that stores a scene
@@ -77,8 +82,10 @@ import {
   faceMaskingSourceOf,
   faceMeshOn,
   loadedEngineDrawsFaceMesh,
+  loadedEngineDrawsRoleOutlines,
   loadedEngineMasksTarget,
   makeMarksOf,
+  roleOutlinesOn,
   withoutMarks,
 } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
@@ -91,6 +98,7 @@ import { TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "..
 import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 import {
   faceMeshFacesDrawnOf,
+  faceMeshRecipeOf,
   FACE_MASK_JOB_TYPE,
   faceMaskBaseKey,
   faceMaskHasErasedMarks,
@@ -105,6 +113,7 @@ import {
 import { engineRequest, isRec, jobIdOf, relay, str, unavailableOrInternal } from "../lib/trends/run-helpers.js"
 import type { TrendFaceMask, TrendFaceMaskVariantJob, TrendRow, TrendVersionData } from "../lib/trends/types.js"
 import { keptVariantsFor, withCurrentVariants, type FaceMaskVariantsState } from "../lib/trends/face-mask-variants.js"
+import { makeOutlinesOf, recordedOutlinesOf } from "../lib/trends/role-outlines.js"
 import { sceneDescriptionsOf, sceneMakeFields } from "../lib/trends/scene-description.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { registerTrendSceneDescriptionRoutes } from "./admin-trends-face-mask-scene.js"
@@ -177,9 +186,16 @@ export function loadedEngineMakesMarks(): boolean {
 export function withMarksForSource(data: TrendVersionData, stored: TrendVersionData): { data: TrendVersionData; cleared: boolean; abandoned: TrendFaceMaskVariantJob[] } {
   const masking = data.faceMasking
   const cleared = !!masking && faceMaskMarksOf(masking).length > 0 && data.source?.videoUrl !== stored.source?.videoUrl
-  const marked = cleared ? { ...data, faceMasking: withoutMarks(masking!) } : data
+  // The marks only: the rest of the setting (role outlines included) stays as the admin set it.
+  const marked = cleared ? { ...data, faceMasking: withoutMarkList(masking!) } : data
   const { data: next, abandoned } = withCurrentVariants(marked)
   return { data: next, cleared, abandoned }
+}
+
+/** The setting without its marks (a new object), everything else kept. */
+function withoutMarkList(m: NonNullable<TrendVersionData["faceMasking"]>): NonNullable<TrendVersionData["faceMasking"]> {
+  const { marks: _marks, ...rest } = m
+  return rest
 }
 
 /** The caller's own job `jobId`, or null. Throws on a database error. */
@@ -279,6 +295,12 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       if (faceMeshOn(draft.faceMasking) && !loadedEngineDrawsFaceMesh()) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw the face mesh yet: turn the face mesh off, or wait for the engine.")
       }
+      // Role outlines an engine does not declare: its make strips them (a mask with no rings, and a turbo
+      // depth fill) under the outlines' settings key, so it is refused before anything is paid.
+      const outlinesOn = roleOutlinesOn(draft.faceMasking)
+      if (outlinesOn && !loadedEngineDrawsRoleOutlines()) {
+        return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw role outlines yet: turn role outlines off, or wait for the engine.")
+      }
       const settingsKey = faceMaskSettingsKey(draft)!
       // Full depth on an engine that describes the original clip as it makes it: the roles to name
       // its people by, and the preview's start (scene-description.ts). Any other make is sent as before.
@@ -302,7 +324,13 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       // existed), so the mask is the one a run would make, plus the make's marks (only when there are
       // some: a setting without is sent exactly as before marks existed). Slot marks never reach a base
       // make: they never shape the base.
-      const faceMasking = { ...faceMaskingSent(withoutMarks(draft.faceMasking)), ...(marks.length > 0 ? { marks: structuredClone([...marks]) } : {}) }
+      // Role outlines: the flag on the setting and the outlines beside it (each person slot with slot marks,
+      // its colour and boxes; none = an empty list, the depth fill still drawn gray).
+      const faceMasking = {
+        ...faceMaskingSent(withoutMarks(draft.faceMasking)),
+        ...(marks.length > 0 ? { marks: structuredClone([...marks]) } : {}),
+        ...(outlinesOn ? { roleOutlines: true as const } : {}),
+      }
       // The approved mask's raw mask, when it is still the base of this one: no new face finding.
       const fromMask = takesMarks ? reusableFaceMaskBase(draft, castSwap.faceMaskRecipe) : undefined
       const res = await engineRequest(
@@ -312,6 +340,7 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         {
           videoUrl: draft.source.videoUrl,
           faceMasking,
+          ...(outlinesOn ? { outlines: makeOutlinesOf(draft) } : {}),
           ...(fromMask ? { fromMask } : {}),
           ...describe,
           ...(sceneStep ? { steps: { sceneDescription: structuredClone(sceneStep) } } : {}),
@@ -412,8 +441,15 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
           return err(reply, 409, "face_mask_not_erased", "This mask was not made by an engine that leaves faces unmasked. Make it again.")
         }
       }
+      // With role outlines, a mask only an engine that drew them makes: one answer per outline sent, in its
+      // colour (an older engine, mid-deploy, answers none — its mask has no rings).
+      const outlines = roleOutlinesOn(draft.faceMasking) ? recordedOutlinesOf(output, makeOutlinesOf(draft)) : undefined
+      if (outlines === null) {
+        return err(reply, 409, "face_mask_not_outlined", "This mask was not made with the trend's role outlines. Make it again.")
+      }
       const frames = output.frames
       const facesDrawn = faceMeshFacesDrawnOf(output)
+      const meshRecipe = faceMeshRecipeOf(output)
       const recipe = isRec(output.recipe) ? output.recipe : {}
       const plugin = str(recipe.plugin)
       if (typeof frames !== "number" || !Number.isInteger(frames) || frames <= 0 || !plugin) {
@@ -431,6 +467,10 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         approvedBy: req.userId!,
         // The faces its make drew the face mesh on (a setting with the mesh only): 0 = no lines on it.
         ...(faceMeshOn(draft.faceMasking) && facesDrawn !== undefined ? { facesDrawn } : {}),
+        // And the recipe it drew them by, so a run words the lines as drawn (absent: the engine's older wording).
+        ...(faceMeshOn(draft.faceMasking) && meshRecipe !== undefined ? { meshRecipe } : {}),
+        // What its rings went round, per outline (role outlines only; none sent = none recorded).
+        ...(outlines && outlines.length > 0 ? { outlines } : {}),
         // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts),
         // and the scene description step its make was sent (absent: none).
         ...(source === "full-depth" ? sceneDescriptionsOf(output, input) : {}),

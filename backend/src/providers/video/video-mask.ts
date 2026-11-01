@@ -668,6 +668,46 @@ function dropMaskRegionsInFrame(
 export interface MaskRegionBox { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number }
 
 /**
+ * One frame's connected white regions, copied out of the shared labelling
+ * pass (`labelMaskRegions`, the same 8-connected regions every region filter
+ * judges): each region's bounding box (`boxes`, region `r` is `boxes[r]`) and
+ * its merged row-runs (`row` / `x0` / `x1`, x1 exclusive) with the region
+ * each belongs to (`region`). What a pass that must know a region's PIXELS
+ * reads (the mask outline's rings, `mask-outline-draw.ts`). Pure apart from
+ * the shared working buffers; throws like `decodeMaskRle` for a run that
+ * leaves the frame.
+ */
+export interface MaskRegions {
+  readonly boxes: MaskRegionBox[]
+  readonly row: Int32Array
+  readonly x0: Int32Array
+  readonly x1: Int32Array
+  readonly region: Int32Array
+}
+
+export function maskRegionsOf(rle: string, width: number, height: number): MaskRegions {
+  const { m } = labelMaskRegions(rle, width, height)
+  const { row, x0, x1, parent, top, bottom, left, right } = filterScratch
+  const boxes: MaskRegionBox[] = []
+  const index = new Map<number, number>()
+  const out = { row: new Int32Array(m), x0: new Int32Array(m), x1: new Int32Array(m), region: new Int32Array(m) }
+  for (let i = 0; i < m; i++) {
+    const root = parent[i]!
+    let r = index.get(root)
+    if (r === undefined) {
+      r = boxes.length
+      index.set(root, r)
+      boxes.push({ top: top[root]!, bottom: bottom[root]!, left: left[root]!, right: right[root]! })
+    }
+    out.row[i] = row[i]!
+    out.x0[i] = x0[i]!
+    out.x1[i] = x1[i]!
+    out.region[i] = r
+  }
+  return { boxes, ...out }
+}
+
+/**
  * Drop the regions `drop` picks from one frame's RLE, by the same labelling
  * pass the size and zone filters use (`labelMaskRegions`): each region is
  * asked once, by its bounding box, and every kept region is kept exactly.
