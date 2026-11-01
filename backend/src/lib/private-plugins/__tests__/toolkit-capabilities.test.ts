@@ -68,6 +68,17 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.llmChatIdempotency).toBe(true)
   })
 
+  it("advertises a workflow estimate that prices an llm-chat node at its own expected usage", () => {
+    // ee/billing/__tests__/llm-chat-expected-usage.test.ts proves the pricing.
+    expect(buildToolkit().capabilities?.llmChatEstimateUsage).toBe(true)
+  })
+
+  it("advertises the video scene cuts route", () => {
+    // routes/__tests__/video-scene-cuts.test.ts proves the route: a child of a
+    // job only, the cuts of a real clip in seconds from its first frame.
+    expect(buildToolkit().capabilities?.videoSceneCuts).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

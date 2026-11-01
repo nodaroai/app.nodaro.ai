@@ -2157,7 +2157,10 @@ interface CastSwapFullQualityResult {
 ```
 
 A role with no images (empty or `null`) is skipped: that subject or place
-stays as in the video. At least one role with images, a reference, or a
+stays as in the video. A person, pet or product role of a direct run may leave
+`name` out (or empty): it is then named by its first picture, matched to the
+subject in the video it fits best, and needs at least one image (`400
+unnamed_role_needs_picture` otherwise); a trend run's roles are always named. At least one role with images, a reference, or a
 `prePrompt` or `postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.

@@ -357,6 +357,32 @@ describe("a run", () => {
     })
   })
 
+  it("the face mesh's recipe rides the stored clip, a preview's prepared cut and a person variant (whose lines are the base's)", () => {
+    setPluginSupports({ castSwap: OUTLINES } as never)
+    const meshed = approved({ ...ON, marks: MARKS }, { outlines: OUTLINED, facesDrawn: 12, meshRecipe: "2026-11-01" })
+    const full = run(meshed)
+    withoutUnsupportedFields(full)
+    expect(full.body.storedFaceMask).toMatchObject({ facesDrawn: 12, meshRecipe: "2026-11-01" })
+    const preview = run(meshed, { preview: true })
+    withoutUnsupportedFields(preview)
+    expect(preview.body.preparedPreview).toBe(true)
+    expect(preview.body.storedFaceMask).toMatchObject({ url: "https://cdn.example/trends/t1/preview-mask.mp4", meshRecipe: "2026-11-01" })
+
+    const base = approved({ ...ON, marks: MARKS }, { outlines: OUTLINED, rawMaskUrl: "https://cdn.example/raw.mp4", meshRecipe: "2026-11-01" })
+    const variant = {
+      emptySlots: ["guest"],
+      key: faceMaskVariantKey(base, ["guest"])!,
+      url: "https://cdn.example/trends/t1/no-guest.mp4",
+      frames: 360,
+      jobId: "job-v",
+      stats: { coverage: 0.5, erasedRegions: 120 },
+      approvedAt: "2026-11-01T10:00:00.000Z",
+    }
+    const d = { ...base, faceMask: { ...base.faceMask!, variants: [variant] } }
+    const r = run(d, { slots: { lead: { images: ["https://cdn.example/me.png"] } } })
+    expect(r.body.storedFaceMask).toMatchObject({ url: variant.url, meshRecipe: "2026-11-01" })
+  })
+
   it("refuses to run once a box changed after approval (face_mask_required), never masking per run", () => {
     const d = outlined()
     const edited = { ...d, faceMasking: { ...ON, marks: [slotMark("lead", 0, 45), MARKS[1]!] } }

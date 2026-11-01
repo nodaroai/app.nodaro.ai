@@ -8,8 +8,9 @@
  * (admin-trends-prompt-parts.ts) and the direct-run overrides per engine and
  * style (admin-nodaro-motion-prompt-parts.ts).
  *
- * `promptStyle` and `scene` are sent only to an engine that declares them
- * (`castSwap.promptStyles`, `castSwap.fullDepthScenes`): one from before them
+ * `promptStyle`, `scene`, `faceMesh`, `roleOutlines` and `shotList` are sent
+ * only to an engine that declares them (`castSwap.promptStyles`,
+ * `castSwap.fullDepthScenes`, `.faceMesh`, `.roleOutlines`, `.shotList`): one from before them
  * may refuse a key it does not know, and words the prompt from the clip
  * preparation anyway (`forLoadedEngine`).
  *
@@ -35,9 +36,10 @@ export function loadedEngineHasPromptParts(): boolean {
 /** The request without the keys the loaded engine does not declare (a new object). */
 export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const cs = getPluginSupports().castSwap
-  const { promptStyle, scene, faceMesh, roleOutlines, ...rest } = body
+  const { promptStyle, scene, faceMesh, roleOutlines, shotList, ...rest } = body
   return {
     ...rest,
+    ...(shotList === true && cs?.steps === true && cs.shotList === true ? { shotList } : {}),
     ...(faceMesh === true && cs?.faceMesh === true ? { faceMesh } : {}),
     ...(roleOutlines === true && cs?.roleOutlines === true ? { roleOutlines } : {}),
     ...(promptStyle && (cs?.promptStyles ?? []).includes(promptStyle) ? { promptStyle } : {}),

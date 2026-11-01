@@ -214,6 +214,7 @@ export default function AdminNodaroMotionPage() {
                       <MotionColumn
                         value={motionDraft[engine.id]}
                         supports={motionQuery.data.supports}
+                        envs={envs.data}
                         bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}

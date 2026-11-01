@@ -3452,6 +3452,27 @@ export interface PluginCapabilities {
    * whose keyed repeat may answer `{ jobId, deduped: true }` with no text.
    */
   readonly llmChatIdempotency?: boolean
+  /**
+   * `POST /v1/video-scene-cuts` (through `tk.http.workerRequest`, a child of
+   * the calling job) answers a clip's measured scene cuts: body
+   * `{ videoUrl }`, answer 200 `{ cutsSec: number[], durationSec: number }` —
+   * seconds from the clip's first frame where each new shot starts
+   * (ascending, never 0; `[]` for one shot), by the platform's scene-cut rule
+   * (`detectCutTimes`, Video Mask's per-shot rule), and the clip's length.
+   * Free, synchronous. Any other caller is refused 403. False (or absent): an
+   * older host, which has no such route.
+   */
+  readonly videoSceneCuts?: boolean
+  /**
+   * The workflow estimate (`POST /v1/credits/estimate-workflow`, and every
+   * figure read through `estimateWorkflowCredits`) prices an `llm-chat` node
+   * at its own `data.expectedUsage: { inputTokens, outputTokens }` (positive
+   * integers, at most 2,000,000 in and 131,072 out) on the model's primary
+   * lane, in place of the feature's typical call; a node without it (or with
+   * one out of bounds) as before. Settlement stays at the call's real tokens.
+   * False (or absent): an older host, which prices the typical call.
+   */
+  readonly llmChatEstimateUsage?: boolean
 }
 
 /**
@@ -3469,8 +3490,11 @@ export interface PluginFaceMasking {
    * default: the engine describes the clip per run into the `scene` prompt
    * part), `"original"` (the original clip as a second video; clips up to
    * 27.9 s; a trend publishes with up to 27.5 s) or `"none"` (depth only). A trend run sends it resolved.
+   *   `"description-and-original"` (both: the description in words and the
+   *   original as the second video, with the original's clip limit) only to an
+   *   engine whose `castSwap.fullDepthScenes` lists it.
    */
-  scene?: "description" | "original" | "none"
+  scene?: "description" | "original" | "none" | "description-and-original"
   target?: "face" | "head" | "body"
   fill?: "blur" | "depth"
   minFaceHeightPct?: number
@@ -3751,7 +3775,9 @@ export interface PluginSupports {
    *   depth Flexible), so a trend that names another style is held back from
    *   publishing and is sent without the key.
    * - `fullDepthScenes`: what a full-depth `faceMasking.scene` may name
-   *   (`"description"`, `"original"`, `"none"`), and the prompt-parts route
+   *   (`"description"`, `"original"`, `"none"`; `"description-and-original"`
+   *   — the description AND the original as the second video — only from an
+   *   engine that lists it), and the prompt-parts route
    *   takes `scene` too. Additive-optional: absent ⇒ `["original"]` (an engine
    *   that always sends the original as the second video), so a full-depth
    *   trend whose scene is another one is held back from publishing and is
@@ -3865,6 +3891,19 @@ export interface PluginSupports {
    *   sets it back from publishing there and refuses to save a shared setting
    *   that sets it while any environment lacks it
    *   (lib/cast-swap-steps.ts `engineTakesClipBodySheet`).
+   * - `shotList`: with `steps`, the setting takes `steps.shotList` (the shot
+   *   list, the scene description written shot by shot, per style:
+   *   `{ precise?: { mode: "on" | "off"; llm? }, flex?: { mode: "on"; llm? } }`;
+   *   absent = Precise off, Flex on; Flex "off" is refused
+   *   `shot_list_flex_always_on`), the defaults route answers
+   *   `defaults.shotList`, the prompt-parts route takes `shotList: true` (the
+   *   Precise set's shot list is on), the step outputs' `scene` may carry
+   *   `shotList: true` and `cuts` (the cut times it was told), and direct
+   *   Flex runs are Full depth with a shot list whatever the Motion setting's
+   *   masking says. Additive-optional: absent ⇒ `false` — the platform never
+   *   sends `shotList`, holds a trend that sets it back from publishing there
+   *   and refuses to save a shared setting that sets it while any environment
+   *   lacks it (lib/cast-swap-steps.ts `engineTakesShotList`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3891,7 +3930,7 @@ export interface PluginSupports {
     readonly styles?: readonly ("precise" | "motion")[]
     readonly generateVideoChildren?: boolean
     readonly promptStyles?: readonly ("precise" | "flexible")[]
-    readonly fullDepthScenes?: readonly ("description" | "original" | "none")[]
+    readonly fullDepthScenes?: readonly ("description" | "original" | "none" | "description-and-original")[]
     readonly preparedPreview?: boolean
     readonly storedSceneDescription?: boolean
     readonly pulseAudio?: boolean
@@ -3902,6 +3941,7 @@ export interface PluginSupports {
     readonly roleOutlines?: boolean
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
+    readonly shotList?: boolean
   }
 }
 

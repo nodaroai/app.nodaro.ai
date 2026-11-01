@@ -15,17 +15,20 @@ import {
   castSwapStepsSaveSchema,
   castSwapStepsSchema,
   engineTakesClipBodySheet,
+  engineTakesShotList,
   engineTakesSteps,
   loadedEngineTakesClipBodySheet,
   loadedEngineTakesSteps,
   normaliseSteps,
   sceneStepKeyOf,
+  shotListNeedsEngine,
   SHEET_LAYOUTS,
   SKIP_REASONS,
   SKIPPABLE_STEPS,
   stepsForEngine,
   stepsProblems,
   stepsSet,
+  stepsThatNeedTheEngine,
   withStepsFor,
   type CastSwapSteps,
   type SheetRules,
@@ -261,5 +264,52 @@ describe("sceneStepKeyOf", () => {
     expect(a).toMatch(/^[0-9a-f]{64}$/)
     expect(a).toBe(b)
     expect(sceneStepKeyOf({ mode: "template" })).not.toBe(a)
+  })
+})
+
+describe("shotList (the shot list per style)", () => {
+  it("reads and saves each style's mode and LLM; an empty style object is nothing set", () => {
+    const shotList = { precise: { mode: "on" as const, llm: llm({ inputs: ["clip", "rolePhotos"] }) }, flex: { mode: "on" as const } }
+    expect(castSwapStepsSchema.parse({ shotList })).toEqual({ shotList })
+    expect(castSwapStepsSaveSchema.parse({ shotList })).toEqual({ shotList })
+    expect(stepsSet({ shotList: {} })).toBe(false)
+    expect(normaliseSteps({ shotList: {} })).toBeUndefined()
+    expect(normaliseSteps({ shotList: { precise: { mode: "off" }, flex: undefined } })).toEqual({ shotList: { precise: { mode: "off" } } })
+  })
+
+  it("refuses Flex off, a list not shown the clip, a repeated input, an unknown key", () => {
+    expect(codesOf(castSwapStepsSchema, { shotList: { flex: { mode: "off" } } })).toEqual(["shot_list_flex_always_on"])
+    expect(codesOf(castSwapStepsSchema, { shotList: { precise: { mode: "on", llm: llm({ inputs: ["rolePhotos"] }) } } })).toEqual(["scene_needs_clip"])
+    expect(codesOf(castSwapStepsSchema, { shotList: { precise: { mode: "on", llm: llm({ inputs: ["clip", "clip"] }) } } })).toEqual(["duplicate_input"])
+    expect(castSwapStepsSchema.safeParse({ shotList: { precise: { mode: "auto" } } }).success).toBe(false)
+    expect(castSwapStepsSchema.safeParse({ shotList: { motion: { mode: "on" } } }).success).toBe(false)
+    const flexOff = castSwapStepsSchema.safeParse({ shotList: { flex: { mode: "off" } } })
+    expect(stepsProblems(flexOff.error!, "steps").map((p) => p.path)).toEqual(["steps.shotList.flex.mode"])
+  })
+
+  it("checks a saved LLM's model like any other step's", () => {
+    expect(codesOf(castSwapStepsSaveSchema, { shotList: { flex: { mode: "on", llm: llm({ model: "no-such-model" }) } } })).toEqual(["unknown_model"])
+    // The stored reading takes any model name (a model later removed never breaks a saved setting).
+    expect(codesOf(castSwapStepsSchema, { shotList: { flex: { mode: "on", llm: llm({ model: "no-such-model" }) } } })).toEqual([])
+  })
+
+  it("needs an engine with the shot list only away from its defaults", () => {
+    expect(shotListNeedsEngine(undefined)).toBe(false)
+    expect(shotListNeedsEngine({ precise: { mode: "off" }, flex: { mode: "on" } })).toBe(false)
+    expect(shotListNeedsEngine({ precise: { mode: "on" } })).toBe(true)
+    expect(shotListNeedsEngine({ precise: { mode: "off", llm: llm() as never } })).toBe(true)
+    expect(shotListNeedsEngine({ flex: { mode: "on", llm: llm() as never } })).toBe(true)
+    expect(stepsThatNeedTheEngine({ shotList: { flex: { mode: "on" } } })).toBeUndefined()
+    expect(stepsThatNeedTheEngine({ shotList: { precise: { mode: "on" } } })).toEqual({ shotList: { precise: { mode: "on" } } })
+  })
+
+  it("is sent only to an engine that declares castSwap.steps and castSwap.shotList", () => {
+    const set: CastSwapSteps = { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } }
+    expect(engineTakesShotList({ shotList: true })).toBe(false)
+    expect(engineTakesShotList({ steps: true, shotList: true })).toBe(true)
+    expect(stepsForEngine(set, { steps: true, shotList: true })).toEqual(set)
+    expect(stepsForEngine(set, { steps: true, clipBodySheet: true })).toEqual({ enginePrompt: { mode: "template" } })
+    const body: { a: number; steps?: CastSwapSteps } = { a: 1, steps: { shotList: { precise: { mode: "on" } } } }
+    expect(Object.hasOwn(withStepsFor(body, { steps: true }), "steps")).toBe(false)
   })
 })

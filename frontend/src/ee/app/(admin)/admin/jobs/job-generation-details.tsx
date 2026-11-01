@@ -239,13 +239,23 @@ export function CastSwapStepsBody({ data, showSkipped }: { data: JobCastSwapStep
           ? <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs" dir="auto" data-testid="llm-prompt-body">{out.enginePrompt.text}</pre>
           : <p className="text-xs text-muted-foreground">The LLM wrote no prompt body for this run.</p>)}
       </div>}
-      {out.scene && <h3 className="text-sm font-semibold">Scene description <span className="font-normal text-muted-foreground">· {out.scene.mode === "llm" ? "LLM" : "Template"}</span></h3>}
+      {out.scene && <div className="flex flex-col gap-1">
+        <h3 className="text-sm font-semibold">{out.scene.shotList ? "Shot list" : "Scene description"} <span className="font-normal text-muted-foreground">· {out.scene.mode === "llm" ? "LLM" : "Template"}</span></h3>
+        {out.scene.shotList && <p className="text-xs text-muted-foreground" data-testid="scene-cuts">{cutsLine(out.scene.cuts)}</p>}
+      </div>}
     </>}
     {sceneText !== null && <div className="flex flex-col gap-1">
       <h3 className="text-sm font-semibold">Scene text</h3>
       <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs" dir="auto" data-testid="scene-text">{sceneText}</pre>
     </div>}
   </div>
+}
+
+/** What the shot list was told of the clip's cuts: their times (s), one shot, or none measured. */
+export function cutsLine(cuts: readonly number[] | undefined): string {
+  if (cuts === undefined) return "No cut times were measured: the step found the shots itself."
+  if (cuts.length === 0) return "Cuts measured: none (one shot)."
+  return `Cuts measured (${cuts.length}): ${cuts.map((t) => `${t.toFixed(1)} s`).join(", ")}.`
 }
 
 /** `CastSwapStepsBody` read for one job, with its loading and error states. */

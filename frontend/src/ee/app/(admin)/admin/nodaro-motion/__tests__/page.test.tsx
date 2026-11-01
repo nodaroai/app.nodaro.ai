@@ -340,6 +340,102 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     expect(sentTo(`PUT ${URL}`)).toEqual([])
   })
 
+  it("once every environment runs the shot list: Full depth alone, its scene a description or a description + the original", async () => {
+    const user = userEvent.setup()
+    const shotList = (env: string): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env,
+      supports: {
+        castSwap: {
+          ...ENVIRONMENTS[0]!.supports.castSwap,
+          steps: true,
+          shotList: true,
+          fullDepthScenes: ["description", "original", "none", "description-and-original"],
+        },
+      },
+    })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [shotList("production"), shotList("staging")] } })
+    routes[`PUT ${MOTION_URL}`] = (init) => ({
+      body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Pulse/)
+    expect(await within(motion).findByText(/Full depth with a shot list/)).toBeInTheDocument()
+    expect(within(motion).queryByRole("combobox", { name: "Motion masking" })).toBeNull()
+    expect(within(motion).getByText("Full depth, the scene from a description, Flexible prompt.")).toBeInTheDocument()
+    await user.click(within(motion).getByRole("combobox", { name: "Scene from" }))
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Description (automatic)", "Description + original (up to 27.5 s)"])
+    await user.click(screen.getByRole("option", { name: "Description + original (up to 27.5 s)" }))
+    // A Precise prompt style with Full depth stays allowed.
+    await user.click(within(motion).getByRole("combobox", { name: "Motion prompt style" }))
+    await user.click(screen.getByRole("option", { name: "Precise" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
+        { motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" }, promptStyle: "precise" } } },
+      ]),
+    )
+  })
+
+  it("once every environment runs the shot list, a stored scene with no shot list says what it runs as", async () => {
+    const shotList = (env: string): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env,
+      supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, steps: true, shotList: true } },
+    })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [shotList("production"), shotList("staging")] } })
+    routes[`GET ${MOTION_URL}`] = () => ({
+      body: {
+        data: {
+          motion: {
+            "motion-prism": { masking: { mode: "always", source: "full-depth", scene: "original" } },
+            "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "none" } },
+          },
+          updatedAt: null,
+          engines: ENGINES,
+          promptStyles: ["precise", "flexible"],
+        },
+      },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    expect(await within(await motionOf(/Prism/)).findByText(/Flex runs it as Description \+ original/)).toBeInTheDocument()
+    expect(await within(await motionOf(/Pulse/)).findByText(/Flex runs it as Description \(automatic\)/)).toBeInTheDocument()
+  })
+
+  it("before every environment runs the shot list, the shared column never offers a scene only some engines take", async () => {
+    const user = userEvent.setup()
+    const both = (env: string): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env,
+      supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, fullDepthScenes: ["description", "original", "none", "description-and-original"] } },
+    })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [ENVIRONMENTS[0]!, both("staging")] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Pulse/)
+    await user.click(within(motion).getByRole("combobox", { name: "Motion masking" }))
+    await user.click(screen.getByRole("option", { name: "Full depth" }))
+    await user.click(within(motion).getByRole("combobox", { name: "Scene from" }))
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).not.toContain("Description + original (up to 27.5 s)")
+  })
+
+  it("once every environment runs the shot list, a stored Faces hidden says it no longer does anything", async () => {
+    const user = userEvent.setup()
+    const shotList = (env: string): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env,
+      supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, steps: true, shotList: true } },
+    })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [shotList("production"), shotList("staging")] } })
+    routes[`GET ${MOTION_URL}`] = () => ({
+      body: { data: { motion: { "motion-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Prism/)
+    expect(await within(motion).findByText(/The saved Motion masking \(Faces hidden\) no longer does anything/)).toBeInTheDocument()
+    await user.click(within(motion).getByRole("button", { name: "Set Full depth" }))
+    expect(within(motion).queryByText(/no longer does anything/)).toBeNull()
+  })
+
   it("starts from the stored setting", async () => {
     routes[`GET ${MOTION_URL}`] = () => ({
       body: { data: { motion: { "motion-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },

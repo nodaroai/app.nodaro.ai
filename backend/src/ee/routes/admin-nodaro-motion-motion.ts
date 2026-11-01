@@ -32,7 +32,11 @@
  * 409 `engine_unsupported` while any environment's engine cannot do it
  * (`nodaro-motion-hide-body.ts`: the row is shared by every environment);
  * so is one whose masking draws the face mesh (`faceMesh: true`) while any
- * environment's engine cannot draw it (`nodaro-motion-face-mesh.ts`).
+ * environment's engine cannot draw it (`nodaro-motion-face-mesh.ts`); so is
+ * one whose Full depth takes its scene from the description AND the original
+ * (`"description-and-original"`) while any environment's engine does not list
+ * that scene (`castSwap.fullDepthScenes`): an engine from before it cannot
+ * read the setting at all.
  *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_motion`)
  * with the setting before and after.
@@ -51,10 +55,15 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
 import { directRunPromptPartsInvalid, directRunPromptProblems, loadedEngineHasPromptStyles, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
 import { requireAdmin } from "../middleware/require-admin.js"
-import { listEngineEnvironments } from "../lib/engine-environments.js"
+import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
+import { engineTakesScene } from "../lib/trends/prompt-style.js"
+import { fullDepthSceneOf, type FaceMaskingScene } from "../../lib/cast-swap-face-masking.js"
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
 import { cannotDrawFaceMeshMessage, drawsFaceMesh, environmentsThatCannotDrawFaceMesh } from "../lib/nodaro-motion-face-mesh.js"
 import { audit } from "./admin-trends-lifecycle.js"
+
+/** The Full depth scenes an engine must list before a shared setting may name them (newer than the setting's scenes). */
+const DECLARED_ONLY_SCENES: readonly FaceMaskingScene[] = ["description-and-original"]
 
 /**
  * `admin_actions.target_id` is a NOT NULL uuid, and a deployment-wide setting
@@ -104,7 +113,11 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
       // engine can do it (the row is shared by every environment).
       const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.motion[engine]?.masking))
       const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(parsed.data.motion[engine]?.masking))
-      if (hides || meshes) {
+      const scenes = NODARO_MOTION_ENGINES.flatMap((engine) => {
+        const scene = parsed.data.motion[engine]?.masking ? fullDepthSceneOf(parsed.data.motion[engine]!.masking!) : null
+        return scene && DECLARED_ONLY_SCENES.includes(scene) ? [scene] : []
+      })
+      if (hides || meshes || scenes.length > 0) {
         const environments = await listEngineEnvironments()
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -113,6 +126,21 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
         if (mesh.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } })
+        }
+        for (const scene of new Set(scenes)) {
+          const lacking = TREND_PUBLISH_ENVIRONMENTS.filter((name) => {
+            const env = environments.find((e) => e.env === name)
+            return !env || !engineTakesScene(env.supports.castSwap, scene)
+          })
+          if (lacking.length > 0) {
+            return reply.status(409).send({
+              error: {
+                code: "engine_unsupported",
+                message: `The Cast Swap engine in ${lacking.join(" and ")} cannot take the scene "${scene}" yet, and this setting is shared by every environment: choose another scene, or wait for the engine.`,
+                envs: lacking,
+              },
+            })
+          }
         }
       }
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style

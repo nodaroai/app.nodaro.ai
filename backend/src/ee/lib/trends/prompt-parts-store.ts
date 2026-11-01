@@ -89,6 +89,8 @@ export function promptPartsRequestFor(
     ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? { faceMesh: true as const } : {}),
     // A trend that draws role outlines: the engine counts their line (`roleOutlines` part) in the length.
     ...(roleOutlinesOn(data.faceMasking) ? { roleOutlines: true as const } : {}),
+    // A trend whose Precise shot list is on: the engine shows its marker where the list goes (a Precise prompt only).
+    ...(data.steps?.shotList?.precise?.mode === "on" ? { shotList: true as const } : {}),
     // The longest prompt: a clip with sound keeps its audio line.
     hasAudio: true,
     roles: texts.slots.map((slot, i) => ({

@@ -398,7 +398,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
 | `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, or a pre_prompt or post_prompt. |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
-| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person` or `pet` or `product`. |
+| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
 | `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
 | `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |

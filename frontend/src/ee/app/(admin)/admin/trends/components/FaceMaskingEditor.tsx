@@ -51,6 +51,7 @@ import type {
   AdminTrendFaceMaskingSource,
   AdminTrendFaceMaskingTarget,
   AdminTrendFaceMaskingZone,
+  AdminTrendFullDepthScene,
 } from "@/lib/api"
 import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
 import { defaultTargetFor, isDepthPreparation, someEngineDrawsFaceMesh, someEngineDrawsRoleOutlines } from "../clip-preparation"
@@ -130,6 +131,8 @@ interface Props {
   readonly envs?: readonly TrendEngineEnvironment[]
   /** A trend's editor: offer role outlines (Faces hidden only; Admin → Nodaro Motion never does). */
   readonly offerRoleOutlines?: boolean
+  /** Full depth's scenes offered (left out: every one the environments allow); Admin → Nodaro Motion's Flex column narrows them. */
+  readonly scenes?: readonly AdminTrendFullDepthScene[]
 }
 
 export function FaceMaskingEditor({
@@ -143,6 +146,7 @@ export function FaceMaskingEditor({
   clipSec,
   envs,
   offerRoleOutlines = false,
+  scenes,
 }: Props) {
   const depth = isDepthPreparation(source)
   const keepPeople = source === "keep-people"
@@ -249,7 +253,7 @@ export function FaceMaskingEditor({
       )}
 
       {source === "full-depth" && (
-        <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} onChange={(scene) => set({ scene })} />
+        <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} only={scenes} onChange={(scene) => set({ scene })} />
       )}
 
       {meshShown && (

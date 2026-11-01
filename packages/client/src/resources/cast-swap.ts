@@ -46,7 +46,8 @@ import type { NodaroClientCore } from "../core.js"
  * `raw_reference_token` (also in a reference's `line`),
  * `invalid_role_mention` (also any `{role:N}` in a reference's `line`),
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
- * `preview_out_of_range`, `no_roles_in_preview` (a preview with every role
+ * `preview_out_of_range`, `unnamed_role_needs_picture` (a role with no name
+ * and no image), `no_roles_in_preview` (a preview with every role
  * `inPreview: false`, always refused even with a prompt, or with no role kept
  * in it that has images and no `prePrompt` or `postPrompt`), `prompt_too_long`
  * (the prompt would build too long: a `{role:N}` reads as the role's name when
@@ -123,8 +124,14 @@ export interface CastSwapRolePreviewSettings {
 /** A person in the video to recast. */
 export interface CastSwapPersonRole extends CastSwapRolePreviewSettings {
   kind: "person"
-  /** How the person is told apart in the video, e.g. `"the woman that attacks"`. */
-  name: string
+  /** How the person is told apart in the video, e.g. `"the woman that attacks"`.
+   *
+   * Direct runs only: omit it (or leave it empty) and the role is named by its
+   * first picture — matched to the subject in the video it fits best; such a
+   * role needs at least one image (else 400 `unnamed_role_needs_picture`). A
+   * trend run's roles are always named (400 `role_name_required`).
+   */
+  name?: string
   /** 0–3 images of ONE person. Empty or `null` keeps the original person. */
   images: string[] | null
   /** Body from the references or the video. Default `"new"`. */
@@ -147,8 +154,14 @@ export interface CastSwapLocationRole extends CastSwapRolePreviewSettings {
 /** An animal in the video to recast. */
 export interface CastSwapPetRole extends CastSwapRolePreviewSettings {
   kind: "pet"
-  /** How the animal is told apart in the video, e.g. `"the dog"`. */
-  name: string
+  /** How the animal is told apart in the video, e.g. `"the dog"`.
+   *
+   * Direct runs only: omit it (or leave it empty) and the role is named by its
+   * first picture — matched to the subject in the video it fits best; such a
+   * role needs at least one image (else 400 `unnamed_role_needs_picture`). A
+   * trend run's roles are always named (400 `role_name_required`).
+   */
+  name?: string
   /** 0–3 images of ONE animal. Empty or `null` keeps the original animal. */
   images: string[] | null
   /** Body (shape, size and build) from the references or the video. Default `"new"`. */
@@ -160,8 +173,14 @@ export interface CastSwapPetRole extends CastSwapRolePreviewSettings {
 /** An object in the video to recast. */
 export interface CastSwapProductRole extends CastSwapRolePreviewSettings {
   kind: "product"
-  /** How the object is told apart in the video, e.g. `"the can"`. */
-  name: string
+  /** How the object is told apart in the video, e.g. `"the can"`.
+   *
+   * Direct runs only: omit it (or leave it empty) and the role is named by its
+   * first picture — matched to the subject in the video it fits best; such a
+   * role needs at least one image (else 400 `unnamed_role_needs_picture`). A
+   * trend run's roles are always named (400 `role_name_required`).
+   */
+  name?: string
   /** 0–3 images of ONE product. Empty or `null` keeps the original object. */
   images: string[] | null
   /** Shape and proportions from the references or the video. Default `"new"`. */

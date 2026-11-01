@@ -30,6 +30,11 @@ const h = vi.hoisted(() => ({
   admin: true,
   invalidated: 0,
   envs: [] as { env: string; pluginBuildId: string | null; supports: Record<string, unknown>; updatedAt: string }[],
+  /** The other Nodaro Motion settings' rows a save may read (the prompt parts, the Motion and masking settings). */
+  others: {} as Record<string, { value: unknown; updated_at: string } | null>,
+  /** What the engine's prompt parts route answers (its problems), and what it was asked. */
+  promptProblems: [] as Array<Record<string, unknown>>,
+  promptCalls: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -39,11 +44,13 @@ vi.mock("@/lib/supabase.js", () => ({
         return { insert: async (row: Record<string, unknown>) => (h.audits.push(row), { error: null }) }
       }
       if (table !== "app_settings") throw new Error(`unexpected table ${table}`)
+      let key = ""
       const chain = {
         select: () => chain,
-        eq: (_c: string, key: string) => (expect(key).toBe("nodaro_motion_steps"), chain),
-        maybeSingle: async () => ({ data: h.row, error: null }),
+        eq: (_c: string, k: string) => ((key = k), key === "nodaro_motion_steps" || expect(Object.keys(h.others)).toContain(key), chain),
+        maybeSingle: async () => ({ data: key === "nodaro_motion_steps" ? h.row : (h.others[key] ?? null), error: null }),
         upsert: async (row: { key: string; value: unknown; updated_at: string }, opts: unknown) => {
+          expect(row.key).toBe("nodaro_motion_steps")
           expect(opts).toEqual({ onConflict: "key" })
           h.upserts.push(row)
           h.row = { value: row.value, updated_at: row.updated_at }
@@ -109,6 +116,11 @@ function build(withEngineRoute = true) {
       engine.calls.push(req.body as Record<string, unknown>)
       return reply.status(engine.status).send(engine.reply)
     })
+    app.post("/v1/cast-swap/prompt-parts", async (req, reply) => {
+      if (req.headers["x-internal-orchestrator-secret"] !== SECRET) return reply.status(403).send({ error: { code: "forbidden", message: "Internal only" } })
+      h.promptCalls.push(req.body as Record<string, unknown>)
+      return reply.send({ set: "precise", parts: [], assembled: "x", length: 1, max: 8000, problems: h.promptProblems })
+    })
   }
   return app
 }
@@ -120,6 +132,9 @@ beforeEach(async () => {
   h.admin = true
   h.invalidated = 0
   h.envs = [envRow("production", STEPS), envRow("staging", STEPS)]
+  h.others = {}
+  h.promptProblems = []
+  h.promptCalls = []
   engine.calls = []
   engine.status = 200
   engine.reply = { conditions: ["head-body"], defaults: { labeller: { instructions: "test instructions" } }, problems: [] }
@@ -229,6 +244,52 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
     expect(h.upserts).toEqual([])
     // The other steps alone still save there.
     expect((await put({ "motion-prism": TEMPLATE })).statusCode).toBe(200)
+  })
+
+  it("409s a shot list away from its defaults while an environment's engine lacks castSwap.shotList; the defaults save anywhere", async () => {
+    const SHOT_LIST = { castSwap: { steps: true, shotList: true } }
+    h.envs = [envRow("production", STEPS), envRow("staging", SHOT_LIST)]
+    const on = await put({ "motion-prism": { shotList: { precise: { mode: "on" } } } })
+    expect(on.statusCode).toBe(409)
+    expect(on.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/shot list/) })
+    expect(h.upserts).toEqual([])
+    // The defaults (Precise off, Flex on) mean the same on every engine.
+    h.envs = []
+    const defaults = { shotList: { precise: { mode: "off" }, flex: { mode: "on" } } }
+    expect((await put({ "motion-prism": defaults })).statusCode).toBe(200)
+    // Flex off is refused with its path and code.
+    const off = await put({ "motion-prism": { shotList: { flex: { mode: "off" } } } })
+    expect(off.statusCode).toBe(400)
+    expect(off.json().error.issues).toEqual([{ path: "steps.motion-prism.shotList.flex.mode", code: "shot_list_flex_always_on", message: expect.any(String) }])
+    // Every environment with it: saved.
+    h.envs = [envRow("production", SHOT_LIST), envRow("staging", SHOT_LIST)]
+    h.upserts = []
+    expect((await put({ "motion-prism": { shotList: { precise: { mode: "on" } } } })).statusCode).toBe(200)
+    expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": { shotList: { precise: { mode: "on" } } } } })
+  })
+
+  it("turning an engine's Precise shot list on re-checks its saved Precise prompt overrides, and refuses the save when they no longer fit", async () => {
+    const SHOT_LIST = { castSwap: { steps: true, shotList: true } }
+    h.envs = [envRow("production", SHOT_LIST), envRow("staging", SHOT_LIST)]
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true, promptParts: true } })
+    h.others = {
+      nodaro_motion_prompt_parts: { value: { "motion-prism": { precise: { face: "Keep every face." } } }, updated_at: "2026-11-01T00:00:00.000Z" },
+      nodaro_motion_motion: null,
+      nodaro_motion_masking: null,
+    }
+    h.promptProblems = [{ code: "prompt_too_long", message: "The prompt is too long." }]
+    const on = { "motion-prism": { shotList: { precise: { mode: "on" } } } }
+    const res = await put(on)
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/Precise shot list on/) })
+    expect(h.promptCalls).toEqual([expect.objectContaining({ style: "precise", shotList: true, overrides: { face: "Keep every face." } })])
+    expect(h.upserts).toEqual([])
+    // Once they fit, it saves; an engine whose list was already on is not asked again.
+    h.promptProblems = []
+    expect((await put(on)).statusCode).toBe(200)
+    h.promptCalls = []
+    expect((await put(on)).statusCode).toBe(200)
+    expect(h.promptCalls).toEqual([])
   })
 
   it("saves Off whatever the environments declare (an engine without the step has it stripped)", async () => {
@@ -405,6 +466,18 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
     const ok = { clipBody: { mode: "off" } }
     await check({ engine: "motion-prism", steps: ok })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps: ok }])
+  })
+
+  it("never forwards shotList to an engine without castSwap.shotList", async () => {
+    engine.reply = { problems: [] }
+    setPluginSupports({ castSwap: { ...CS, steps: true } })
+    const steps = { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } }
+    await check({ engine: "motion-prism", steps })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { enginePrompt: { mode: "template" } } }])
+    engine.calls = []
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } })
+    await check({ engine: "motion-prism", steps })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps }])
   })
 
   it("answers a fixed error when the engine refuses, never the engine's words", async () => {

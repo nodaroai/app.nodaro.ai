@@ -1,8 +1,9 @@
 // Full depth's scene source (hidden from users): where a run's scene
 // (setting, lighting, props, wardrobe, shots) comes from, since the depth
 // clip carries none — a description the engine writes on each run (the
-// default), the original clip as a second video (up to 27.5 s), or
-// nothing (the admin writes it). It changes what a run sends, never the
+// default), the original clip as a second video (up to 27.5 s), both (the
+// description and the original, offered only where an environment's engine
+// declares it, `offeredScenes`), or nothing (the admin writes it). It changes what a run sends, never the
 // stored depth clip: switching it needs no new clip.
 //
 // The original with a clip over the limit is said here and holds publishing
@@ -13,7 +14,7 @@
 import { useId } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { AdminTrendFullDepthScene, TrendEngineEnvironment } from "@/lib/api"
-import { FULL_DEPTH_SCENES, ORIGINAL_SCENE_MAX_SEC, environmentsLackingScene } from "../prompt-style"
+import { FULL_DEPTH_SCENES, ORIGINAL_SCENE_MAX_SEC, environmentsLackingScene, offeredScenes, sceneSendsOriginal } from "../prompt-style"
 
 interface Props {
   /** As stored: undefined = a description. */
@@ -22,13 +23,15 @@ interface Props {
   /** The source clip's length, when known (the original takes up to 27.5 s). */
   readonly clipSec?: number
   readonly envs?: readonly TrendEngineEnvironment[]
+  /** Only these scenes (left out: every one `offeredScenes` allows); a value outside them is still shown. */
+  readonly only?: readonly AdminTrendFullDepthScene[]
 }
 
-export function FullDepthSceneSelect({ value, onChange, clipSec, envs }: Props) {
+export function FullDepthSceneSelect({ value, onChange, clipSec, envs, only }: Props) {
   const id = useId()
   const shown = value ?? "description"
   const hint = FULL_DEPTH_SCENES.find((s) => s.value === shown)?.hint
-  const tooLong = shown === "original" && clipSec !== undefined && clipSec > ORIGINAL_SCENE_MAX_SEC
+  const tooLong = sceneSendsOriginal(shown) && clipSec !== undefined && clipSec > ORIGINAL_SCENE_MAX_SEC
   const lacking = environmentsLackingScene(shown, envs)
   return (
     <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
@@ -40,7 +43,7 @@ export function FullDepthSceneSelect({ value, onChange, clipSec, envs }: Props) 
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {FULL_DEPTH_SCENES.map((s) => (
+          {offeredScenes(shown, envs, only).map((s) => (
             <SelectItem key={s.value} value={s.value}>
               {s.label}
             </SelectItem>

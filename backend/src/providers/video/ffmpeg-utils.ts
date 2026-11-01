@@ -257,6 +257,9 @@ export interface FfmpegLaunchOptions {
    *  knows its peak passes it (`ffmpeg-memory-model.ts`) — every Apply EDL
    *  picture slice and every re-encode does. */
   readonly peakMemoryMiB?: number
+  /** Gives up WAITING for the launch's slot and memory when it aborts (the launch then rejects with its
+   *  reason); never stops a launch already admitted. `runFfmpeg` only. Omitted: waits as long as it takes. */
+  readonly signal?: AbortSignal
 }
 
 export { ffmpegMemoryBudgetNow }
@@ -498,7 +501,7 @@ export async function runFfmpeg(
         child.kill("SIGKILL")
       })
     }
-  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB, ...(launch?.signal ? { signal: launch.signal } : {}) })
 }
 
 /**

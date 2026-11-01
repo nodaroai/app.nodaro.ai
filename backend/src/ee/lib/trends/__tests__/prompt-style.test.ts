@@ -264,7 +264,7 @@ describe("publishing", () => {
 
   it("full depth that sends the original refuses a clip over 27.5 s (0.4 s below the engine's 27.9 s); the other scenes take any", () => {
     expect(FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC).toBe(27.5)
-    const full = (scene: "description" | "original" | "none", sec: number) => withMask(data({ faceMasking: { ...FULL, scene } }, sec))
+    const full = (scene: "description" | "original" | "none" | "description-and-original", sec: number) => withMask(data({ faceMasking: { ...FULL, scene } }, sec))
     expect(fullDepthClipTooLong(full("original", 27.5))).toBe(false)
     expect(fullDepthClipTooLong(full("original", 27.55))).toBe(true)
     // The engine would still take it, but a re-encode or a depth map a frame long could tip it over at run.
@@ -272,6 +272,9 @@ describe("publishing", () => {
     expect(codes(full("original", 29.5), STYLES)).toEqual(["full_depth_clip_too_long"])
     expect(codes(full("description", 29.5), STYLES)).toEqual([])
     expect(codes(full("none", 29.5), STYLES)).toEqual([])
+    // The description beside the original sends the original too: its limit holds.
+    expect(fullDepthClipTooLong(full("description-and-original", 27.55))).toBe(true)
+    expect(fullDepthClipTooLong(full("description-and-original", 27.5))).toBe(false)
     // Not a full-depth trend at all: never.
     expect(fullDepthClipTooLong(data({}, 29.5))).toBe(false)
   })
@@ -288,5 +291,21 @@ describe("a direct Motion run's masking", () => {
     expect(ok(KEEP)).toBe(false)
     expect(ok({ ...FACES, scene: "none" })).toBe(false)
     expect(ok({ ...FACES, marks: [] })).toBe(false)
+  })
+})
+
+describe("the prompt parts request's shot list marker", () => {
+  const BASE = { engine: "seedance-2-5" as const, hasAudio: true, roles: [] }
+  it("is sent only to an engine that takes steps and declares castSwap.shotList", () => {
+    setPluginSupports({ castSwap: { steps: true } as never })
+    expect(forLoadedEngine({ ...BASE, shotList: true })).not.toHaveProperty("shotList")
+    setPluginSupports({ castSwap: { steps: true, shotList: true } as never })
+    expect(forLoadedEngine({ ...BASE, shotList: true })).toMatchObject({ shotList: true })
+  })
+  it("a trend asks for it only when its Precise shot list is on", () => {
+    const on = promptPartsRequestFor(data({ steps: { shotList: { precise: { mode: "on" } } } } as never))
+    expect(on.shotList).toBe(true)
+    expect(promptPartsRequestFor(data({ steps: { shotList: { flex: { mode: "on" } } } } as never))).not.toHaveProperty("shotList")
+    expect(promptPartsRequestFor(data({}))).not.toHaveProperty("shotList")
   })
 })

@@ -1,17 +1,22 @@
 // "Body from the clip" (`steps.clipBody`): for a person role whose Outfit is
 // new and whose Body or Hair is from the clip, the engine redraws the role's
-// reference from a frame of the clip. On by default: left out, the engine runs
-// it with its own image prompt, so the switch reads On while unset.
+// reference from a frame of the clip. Left out, each engine applies its own
+// default — and the setting is shared by environments whose engines read an
+// absent key differently (an earlier engine runs it, a newer one does not), so
+// what the admin picks is always saved as it is (`{ mode }`), never dropped
+// because it matches this environment's default. While unset the switch says
+// this engine's default (`defaults.clipBody.mode`; an earlier engine that
+// answers no mode: On), or "the engine's default" while that is unknown;
+// "Use the engine's default" removes the key.
 //
-// - The switch shows the real state (On when unset or on, Off when off) and is
+// - The switch is
 //   choosable whatever the environments declare: Off is safe everywhere (an
 //   engine without the step has it stripped and does not run it). Beside it,
 //   where the step runs and where it does not yet.
-// - Off is stored as `{ mode: "off" }` (any prompt dropped).
-// - On with no prompt removes the key (the engine's default).
+// - A pick is stored as `{ mode }` (Off drops any prompt).
 // - A prompt of its own replaces the engine's default (shown as the
 //   placeholder, read from the engine's defaults at run time, never written
-//   here); emptied, it goes. Offered only once every environment's engine
+//   here); emptied, it goes (the mode stays). Offered only once every environment's engine
 //   runs the step (`promptOffered`): the server refuses it otherwise. One set
 //   before can always be removed. It may name {subject}, {body} and {hair}
 //   only, said here as it is typed (the save refuses any other).
@@ -29,6 +34,8 @@ interface Props {
   readonly onChange: (next: ClipBodySetting | undefined) => void
   /** The engine's default image prompt (unknown while loading, or from an engine without the step). */
   readonly defaultPrompt: string | undefined
+  /** This environment's engine's default mode (`clipBodyDefaultMode`): what an unset step does; undefined while unknown. */
+  readonly defaultMode: ClipBodySetting["mode"] | undefined
   /** Whether a prompt of its own may be written: the steps are offered and every environment's engine runs it. */
   readonly promptOffered: boolean
   /** The environments whose engine runs it (unknown while loading). */
@@ -54,11 +61,20 @@ export function unknownClipBodyPlaceholders(prompt: string): string[] {
   return [...new Set(names.filter((n) => !(CLIP_BODY_PLACEHOLDERS as readonly string[]).includes(n)))]
 }
 
-/** The setting with `prompt` as typed: an empty prompt is no prompt, and On with none is the default (removed). */
-function withPrompt(mode: ClipBodySetting["mode"], prompt: string | undefined): ClipBodySetting | undefined {
+/**
+ * This environment's engine's default for an unset "Body from the clip", for display only: its defaults'
+ * `clipBody.mode` (an engine that answers the step with no mode runs it: On); undefined while unknown.
+ */
+export function clipBodyDefaultMode(defaults: { readonly mode?: ClipBodySetting["mode"] } | undefined): ClipBodySetting["mode"] | undefined {
+  if (!defaults) return undefined
+  return defaults.mode ?? "on"
+}
+
+/** The setting as picked: always its explicit mode (the row is shared), On with the prompt as typed (empty: none). */
+function withPrompt(mode: ClipBodySetting["mode"], prompt: string | undefined): ClipBodySetting {
   const kept = prompt !== undefined && prompt.trim() !== "" ? prompt : undefined
   if (mode === "off") return { mode: "off" }
-  return kept === undefined ? undefined : { mode: "on", prompt: kept }
+  return kept !== undefined ? { mode: "on", prompt: kept } : { mode: "on" }
 }
 
 /** "Runs in: staging · Not yet in: production"; null while the environments are unknown. */
@@ -71,9 +87,10 @@ function whereItRuns(runsIn: readonly string[] | undefined, notYetIn: readonly s
   return parts.length > 0 ? parts.join(" · ") : null
 }
 
-export function ClipBodyStep({ value, onChange, defaultPrompt, promptOffered, runsIn, notYetIn, problems }: Props) {
+export function ClipBodyStep({ value, onChange, defaultPrompt, defaultMode, promptOffered, runsIn, notYetIn, problems }: Props) {
   const id = useId()
-  const on = (value?.mode ?? "on") === "on"
+  const on = value ? value.mode === "on" : defaultMode === "on"
+  const state = value ? (on ? "On" : "Off") : defaultMode ? `${on ? "On" : "Off"} (the engine's default)` : "The engine's default"
   const known = runsIn !== undefined && notYetIn !== undefined
   const where = whereItRuns(runsIn, notYetIn)
   const unknown = unknownClipBodyPlaceholders(value?.prompt ?? "")
@@ -101,8 +118,13 @@ export function ClipBodyStep({ value, onChange, defaultPrompt, promptOffered, ru
             disabled={!known}
             onCheckedChange={(checked) => onChange(withPrompt(checked ? "on" : "off", value?.prompt))}
           />
-          <span className="font-medium">{on ? "On" : "Off"}</span>
+          <span className="font-medium">{state}</span>
         </label>
+        {value && (
+          <button type="button" className="min-h-9 text-xs underline" onClick={() => onChange(undefined)}>
+            Use the engine's default
+          </button>
+        )}
         {where && <span className="text-xs text-muted-foreground">{where}</span>}
       </div>
       {stalePrompt && (

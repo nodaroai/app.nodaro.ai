@@ -217,6 +217,18 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     })
   })
 
+  it("reads the scene step's shot list and its cut times, dropping cuts that are not a list of seconds", async () => {
+    const read = async (scene: unknown) => {
+      mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ __castSwapStepOutputs: { v: 1, roles: [], scene } }), error: null }))
+      return (await get()).json().data.stepOutputs.scene
+    }
+    expect(await read({ mode: "llm", shotList: true, cuts: [1.2, 2.5, 4] })).toEqual({ mode: "llm", shotList: true, cuts: [1.2, 2.5, 4] })
+    expect(await read({ mode: "llm", shotList: true, cuts: [] })).toEqual({ mode: "llm", shotList: true, cuts: [] })
+    expect(await read({ mode: "llm", shotList: "yes", cuts: [1, -2] })).toEqual({ mode: "llm" })
+    expect(await read({ mode: "llm", cuts: [1, "2"] })).toEqual({ mode: "llm" })
+    expect(await read({ mode: "template", cuts: "1,2" })).toEqual({ mode: "template" })
+  })
+
   it("reads a role's Body from the clip record and its skip (no usable frame)", async () => {
     const clipBody = { frameUrl: "https://cdn.test/frame.jpg", frameSec: 1.5, sheetUrl: "https://cdn.test/redrawn.png", prompt: "test image prompt" }
     mockFrom.mockReturnValue(

@@ -13,9 +13,16 @@
  * - `clipBody` ("Body from the clip"): on / off, with an optional image
  *   prompt in place of the engine's default. For a person role whose Outfit
  *   is new and whose Body or Hair is from the clip, the role's reference is
- *   redrawn from a frame of the clip. Absent = ON (the engine runs it by
- *   default), so it is stored and sent only when an admin set it, and only
+ *   redrawn from a frame of the clip. Absent = the engine's own default
+ *   (Off on an engine whose steps defaults answer `clipBody.mode`, On on an
+ *   earlier one), so it is stored and sent only when an admin set it, and only
  *   to an engine that declares `castSwap.clipBodySheet` (`stepsForEngine`).
+ * - `shotList` (the shot list: the scene description written shot by shot,
+ *   per STYLE): `{ precise?: { mode, llm? }, flex?: { mode, llm? } }`. Absent
+ *   = Precise off, Flex on with the engine's defaults; Flex is always on
+ *   (`flex.mode` "off" is refused, `shot_list_flex_always_on`). Sent only to
+ *   an engine that declares `castSwap.shotList` (`stepsForEngine`); the
+ *   defaults need no engine (`shotListNeedsEngine`).
  *
  * Every step here is non-critical: a failure is skipped (`skippedSteps`), the
  * run goes on. A setting left unset (or empty, `{}`) is today's run exactly:
@@ -109,7 +116,8 @@ export interface StepOutputs {
     clipBody?: ClipBodyOutput
   }>
   enginePrompt?: { mode: "template" | "llm"; text?: string }
-  scene?: { mode: "template" | "llm" }
+  /** `shotList`: the run made its shot list (the style's step); `cuts`: the cut times (s) it was told (absent: none measured). */
+  scene?: { mode: "template" | "llm"; shotList?: true; cuts?: number[] }
 }
 
 /** What the clip-body step recorded for one role. */
@@ -135,6 +143,7 @@ export type CastSwapStepsCode =
   | "model_cannot_see_images"
   | "model_cannot_read_clip"
   | "clip_body_placeholder"
+  | "shot_list_flex_always_on"
 
 export interface LlmStepSetting {
   model: string
@@ -161,17 +170,31 @@ export function unknownClipBodyPlaceholders(prompt: string): string[] {
   return [...new Set(names.filter((n) => !(CLIP_BODY_PLACEHOLDERS as readonly string[]).includes(n)))]
 }
 
-/** "Body from the clip": absent = on (the engine's default prompt). `prompt` replaces that default. */
+/** "Body from the clip": absent = the engine's default (see the header). `prompt` replaces the engine's prompt. */
 export interface ClipBodySetting {
   mode: "on" | "off"
   prompt?: string
 }
+
+/** The shot list's step for one style: on or off, and its LLM (absent: the engine's default). */
+export interface ShotListStyleSetting {
+  mode: "on" | "off"
+  llm?: LlmStepSetting
+}
+
+/** The styles a shot list is set per (a direct run's `style`; "flex" is the person's name for "motion"). */
+export const SHOT_LIST_STYLES = ["precise", "flex"] as const
+export type ShotListStyle = (typeof SHOT_LIST_STYLES)[number]
+
+/** The shot list per style. Absent (either style): Precise off, Flex on, with the engine's defaults. */
+export type ShotListSetting = { [S in ShotListStyle]?: ShotListStyleSetting }
 
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
   enginePrompt?: TextStepSetting
   sceneDescription?: TextStepSetting
   clipBody?: ClipBodySetting
+  shotList?: ShotListSetting
 }
 
 const llmStepSchema = z.strictObject({
@@ -201,11 +224,22 @@ const clipBodySchema = z.strictObject({
   prompt: z.string().trim().min(1).max(CLIP_BODY_PROMPT_MAX).optional(),
 })
 
+const shotListStyleSchema = z.strictObject({
+  mode: z.enum(["on", "off"]),
+  llm: llmStepSchema.optional(),
+})
+
+const shotListSchema = z.strictObject({
+  precise: shotListStyleSchema.optional(),
+  flex: shotListStyleSchema.optional(),
+})
+
 const stepsShape = z.strictObject({
   sheets: sheetsSchema.optional(),
   enginePrompt: textStepSchema.optional(),
   sceneDescription: textStepSchema.optional(),
   clipBody: clipBodySchema.optional(),
+  shotList: shotListSchema.optional(),
 })
 
 type Ctx = z.core.$RefinementCtx<z.output<typeof stepsShape>>
@@ -220,6 +254,10 @@ function llmStepsOf(s: z.output<typeof stepsShape>): Array<{ path: (string | num
   if (s.sheets?.labeller) out.push({ path: ["sheets", "labeller"], llm: s.sheets.labeller })
   if (s.enginePrompt?.mode === "llm") out.push({ path: ["enginePrompt", "llm"], llm: s.enginePrompt.llm })
   if (s.sceneDescription?.mode === "llm") out.push({ path: ["sceneDescription", "llm"], llm: s.sceneDescription.llm })
+  for (const style of SHOT_LIST_STYLES) {
+    const llm = s.shotList?.[style]?.llm
+    if (llm) out.push({ path: ["shotList", style, "llm"], llm })
+  }
   return out
 }
 
@@ -236,6 +274,15 @@ function stepRules(s: z.output<typeof stepsShape>, ctx: Ctx): void {
   }
   if (s.sceneDescription?.mode === "llm" && !s.sceneDescription.llm.inputs.includes("clip")) {
     issue(ctx, ["sceneDescription", "llm", "inputs"], "scene_needs_clip", "The scene description must be shown the clip.")
+  }
+  for (const style of SHOT_LIST_STYLES) {
+    const llm = s.shotList?.[style]?.llm
+    if (llm && !llm.inputs.includes("clip")) {
+      issue(ctx, ["shotList", style, "llm", "inputs"], "scene_needs_clip", "The shot list describes the clip: it must be shown the clip.")
+    }
+  }
+  if (s.shotList?.flex?.mode === "off") {
+    issue(ctx, ["shotList", "flex", "mode"], "shot_list_flex_always_on", "Flex always makes its shot list: it cannot be turned off.")
   }
 }
 
@@ -298,7 +345,10 @@ export function stepsProblems(error: z.ZodError, prefix = ""): CastSwapStepsProb
  * never stored, sent, or counted as a need.
  */
 export function stepsSet(s: CastSwapSteps | undefined | null): s is CastSwapSteps {
-  return !!s && (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined)
+  return (
+    !!s &&
+    (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined || shotListSet(s.shotList))
+  )
 }
 
 /** The setting as stored and sent: `undefined` when nothing is set, else a copy without its absent keys. */
@@ -309,7 +359,21 @@ export function normaliseSteps(s: CastSwapSteps | undefined | null): CastSwapSte
     ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
     ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
+    ...(shotListSet(s.shotList) ? { shotList: normaliseShotList(s.shotList) } : {}),
   })
+}
+
+/** Whether the shot list sets either style (`{}` is nothing set). */
+function shotListSet(s: ShotListSetting | undefined): s is ShotListSetting {
+  return !!s && (s.precise !== undefined || s.flex !== undefined)
+}
+
+/** The shot list without its absent styles. */
+function normaliseShotList(s: ShotListSetting): ShotListSetting {
+  return {
+    ...(s.precise !== undefined ? { precise: s.precise } : {}),
+    ...(s.flex !== undefined ? { flex: s.flex } : {}),
+  }
 }
 
 // ---- Capability gating -----------------------------------------------------
@@ -344,6 +408,32 @@ export function loadedEngineTakesClipBodySheet(): boolean {
 }
 
 /**
+ * Whether a (loaded or recorded) Cast Swap engine takes `steps.shotList` (the
+ * shot list per style): it takes steps AND declares `castSwap.shotList`. An
+ * engine without it is never sent the field (its strict schema refuses it).
+ */
+export function engineTakesShotList(cs: { readonly steps?: boolean; readonly shotList?: boolean } | undefined): boolean {
+  return engineTakesSteps(cs) && cs?.shotList === true
+}
+
+/** Whether this process's Cast Swap engine takes `steps.shotList`. */
+export function loadedEngineTakesShotList(): boolean {
+  return engineTakesShotList(getPluginSupports().castSwap)
+}
+
+/**
+ * Whether the shot list as set needs an engine that declares
+ * `castSwap.shotList` to mean what the admin set: Precise turned on, or an
+ * LLM of its own on either style. The defaults (Precise off, Flex on, no LLM)
+ * mean the same on every engine: one without the step has it stripped and
+ * makes no Precise shot list.
+ */
+export function shotListNeedsEngine(s: ShotListSetting | undefined): boolean {
+  if (!s) return false
+  return s.precise?.mode === "on" || s.precise?.llm !== undefined || s.flex?.llm !== undefined || (s.flex !== undefined && s.flex.mode !== "on")
+}
+
+/**
  * Whether "Body from the clip" as set needs an engine that declares
  * `castSwap.clipBodySheet` to mean what the admin set: only On with an image
  * prompt of its own. Off (and On with no prompt, the default) means the same
@@ -361,22 +451,25 @@ export function clipBodyNeedsEngine(c: ClipBodySetting | undefined): boolean {
 export function stepsThatNeedTheEngine(s: CastSwapSteps | undefined | null): CastSwapSteps | undefined {
   const normalised = normaliseSteps(s)
   if (normalised && !clipBodyNeedsEngine(normalised.clipBody)) delete normalised.clipBody
+  if (normalised && !shotListNeedsEngine(normalised.shotList)) delete normalised.shotList
   return normaliseSteps(normalised)
 }
 
 /**
  * The setting as sent to an engine with these capabilities (`cs`):
  * `undefined` when the engine takes no steps or nothing is left set, else a
- * copy without its absent keys and without `clipBody` unless the engine
- * declares `castSwap.clipBodySheet`.
+ * copy without its absent keys, without `clipBody` unless the engine
+ * declares `castSwap.clipBodySheet`, and without `shotList` unless it
+ * declares `castSwap.shotList`.
  */
 export function stepsForEngine(
   s: CastSwapSteps | undefined | null,
-  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean } | undefined,
+  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean; readonly shotList?: boolean } | undefined,
 ): CastSwapSteps | undefined {
   if (!engineTakesSteps(cs)) return undefined
   const normalised = normaliseSteps(s)
   if (normalised && !engineTakesClipBodySheet(cs)) delete normalised.clipBody
+  if (normalised && !engineTakesShotList(cs)) delete normalised.shotList
   return normaliseSteps(normalised)
 }
 
@@ -387,7 +480,7 @@ export function stepsForEngine(
  */
 export function withStepsFor<T extends { steps?: CastSwapSteps }>(
   body: T,
-  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean } | undefined,
+  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean; readonly shotList?: boolean } | undefined,
 ): T {
   const { steps, ...rest } = body
   const sent = stepsForEngine(steps, cs)

@@ -307,16 +307,34 @@ export function sceneStepChanged(data: Pick<TrendVersionData, "faceMask" | "step
  * What a run sends of the stored mask: `{ url, frames }` when the trend masks
  * and its mask was made from these exact settings, else undefined (the run
  * masks per run, as before stored masks). With the faces its make drew the
- * face mesh on (`facesDrawn`) when it reported them; only an engine that
- * draws the mesh is sent that (`withoutUnsupportedStoredMask`).
+ * face mesh on (`facesDrawn`) and the mesh's recipe (`meshRecipe`) when it
+ * reported them; only an engine that draws the mesh is sent those
+ * (`withoutUnsupportedStoredMask`).
  */
 export function storedFaceMaskFor(
   data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "slots">,
-): { url: string; frames: number; facesDrawn?: number } | undefined {
+): { url: string; frames: number; facesDrawn?: number; meshRecipe?: string } | undefined {
   const mask = data.faceMask
   const key = faceMaskSettingsKey(data)
   if (!mask || key === null || mask.settingsKey !== key) return undefined
-  return { url: mask.url, frames: mask.frames, ...(typeof mask.facesDrawn === "number" ? { facesDrawn: mask.facesDrawn } : {}) }
+  return {
+    url: mask.url,
+    frames: mask.frames,
+    ...(typeof mask.facesDrawn === "number" ? { facesDrawn: mask.facesDrawn } : {}),
+    ...(mask.meshRecipe ? { meshRecipe: mask.meshRecipe } : {}),
+  }
+}
+
+/**
+ * The recipe a finished face mask job's face mesh was drawn by
+ * (`output_data.faceMesh.recipe`, core's `VIDEO_FACE_MESH_RECIPE`): a string
+ * of 1–40 characters, else undefined (no mesh, or an engine that does not
+ * report it).
+ */
+export function faceMeshRecipeOf(output: unknown): string | undefined {
+  const mesh = output && typeof output === "object" ? (output as Record<string, unknown>).faceMesh : undefined
+  const r = mesh && typeof mesh === "object" ? (mesh as Record<string, unknown>).recipe : undefined
+  return typeof r === "string" && r.length >= 1 && r.length <= 40 ? r : undefined
 }
 
 /**

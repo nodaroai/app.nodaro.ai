@@ -15,7 +15,7 @@
  */
 import { CAST_SWAP_POST_PROMPT_MAX, getMaxVideoPromptChars, TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
 import { klingEngineText } from "./cast-swap-kling-trend"
-import { CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT } from "./cast-swap-prompt-parts"
+import { fullDepthSceneDescribes } from "./cast-swap-prompt-parts"
 
 type SlotKind = "person" | "pet" | "product" | "location"
 
@@ -70,13 +70,14 @@ export interface TrendSceneNamingSource {
 /**
  * Whether a preview run of this trend may carry the stored scene description
  * and so name its roles by their `roleName` (`"stored"`): masking on, Full
- * depth, its scene a description (the default). Whether a given run does
+ * depth, its scene written in words (a description, the default, alone or
+ * beside the original). Whether a given run does
  * depends on what only that run knows (the stored clip's text, the engine),
  * so a check that must hold for every run holds both namings.
  */
 export function previewMayUseStoredRoleNames(t: TrendSceneNamingSource): boolean {
   const m = t.faceMasking
-  return !!m && m.mode !== "off" && m.source === "full-depth" && (m.scene ?? CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT) === "description"
+  return !!m && m.mode !== "off" && m.source === "full-depth" && fullDepthSceneDescribes(m.scene)
 }
 
 /**

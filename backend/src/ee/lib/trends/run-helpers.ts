@@ -19,6 +19,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
+import { fullDepthSceneDescribes } from "@nodaro/render-rules"
 import { config } from "../../../lib/config.js"
 import { supabase } from "../../../lib/supabase.js"
 import { callerGrantOf, withJobSubmissionContext, type TrustedJobProvenance } from "../../../lib/job-submission-context.js"
@@ -448,11 +449,12 @@ export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
   if (composed.body.storedFaceMask && cs?.storedFaceMask !== true) {
     delete composed.body.storedFaceMask
   }
-  // The faces the stored clip's face mesh was drawn on: only to an engine that draws the mesh
-  // (`castSwap.faceMesh`), whose strict schema takes the key.
+  // The faces the stored clip's face mesh was drawn on, and the recipe it was drawn by: only to an engine
+  // that draws the mesh (`castSwap.faceMesh`). An engine that does not read `meshRecipe` yet drops it (the
+  // stored-mask object strips keys it does not know), so it is sent as it is to every engine that draws the mesh.
   const stored = composed.body.storedFaceMask
-  if (stored && stored.facesDrawn !== undefined && cs?.faceMesh !== true) {
-    const { facesDrawn: _drawn, ...rest } = stored
+  if (stored && (stored.facesDrawn !== undefined || stored.meshRecipe !== undefined) && cs?.faceMesh !== true) {
+    const { facesDrawn: _drawn, meshRecipe: _recipe, ...rest } = stored
     composed.body.storedFaceMask = rest
   }
   // Which colour is which role on the stored clip: only to an engine that declares role outlines
@@ -515,8 +517,9 @@ export function withoutUnsupportedFaceMesh(composed: ComposedTrendRun): void {
 
 /**
  * The body's `steps` kept only when the loaded engine declares
- * `castSwap.steps`, and its `clipBody` only when it also declares
- * `castSwap.clipBodySheet` (`withStepsFor`); nothing left = no `steps` key at all. THE
+ * `castSwap.steps`, its `clipBody` only when it also declares
+ * `castSwap.clipBodySheet` and its `shotList` only when it also declares
+ * `castSwap.shotList` (`withStepsFor`); nothing left = no `steps` key at all. THE
  * guard for an older engine: its body schema strips an unknown key silently,
  * so a run there would quietly ignore the trend's steps rather than fail.
  * Publishing holds a trend that sets them back from such an environment
@@ -577,7 +580,7 @@ export function withoutUnsupportedPrismReferenceAudio(composed: ComposedTrendRun
 export function withoutUnsupportedSceneDescription(composed: ComposedTrendRun): void {
   const { body } = composed
   if (body.sceneDescription === undefined && body.sceneDescriptionWindow === undefined) return
-  if (getPluginSupports().castSwap?.storedSceneDescription !== true || body.faceMasking?.scene !== "description") {
+  if (getPluginSupports().castSwap?.storedSceneDescription !== true || body.faceMasking?.scene === undefined || !fullDepthSceneDescribes(body.faceMasking.scene)) {
     delete body.sceneDescription
     delete body.sceneDescriptionWindow
     return
@@ -626,7 +629,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
   body.preparedPreview = true
   if (body.storedFaceMask && clip.faceMask) {
     // The clip's cut in place of the whole mask; everything else the mask says (`required`, the face
-    // mesh's `facesDrawn`, the role `outlines`) is the cut's too, as already held to the engine above.
+    // mesh's `facesDrawn` and `meshRecipe`, the role `outlines`) is the cut's too, as already held to the engine above.
     const { url: _url, frames: _frames, ...rest } = body.storedFaceMask
     body.storedFaceMask = { ...rest, url: clip.faceMask.url, frames: clip.faceMask.frames }
   }
@@ -843,6 +846,8 @@ const PUBLIC_400: Readonly<Record<string, string>> = {
   draft_unsupported: "This trend has no draft: run it at 720p or 1080p.",
   resolution_unsupported: "This trend does not run at that resolution.",
   too_many_images: "This trend's model takes fewer pictures in one run: use fewer pictures per slot.",
+  // Every role of a trend run is named (only a direct run's may be unnamed): the trend's own data.
+  role_name_required: "A role of this trend has no name.",
 }
 
 export const TREND_RUN_REJECTED = { code: "trend_run_rejected", message: "This trend couldn't run with these inputs." } as const

@@ -116,7 +116,8 @@ import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits, llmMeteredPricing } from "../../lib/config.js"
 import { parseMeteredLlmId } from "./metered-llm-id.js"
-import { LlmUnpricedModelError, llmChargeId, llmEstimateBaseCredits } from "./llm-metered.js"
+import { LlmUnpricedModelError, llmChargeId, llmEstimateBaseCredits, llmUsageBaseCredits } from "./llm-metered.js"
+import { LLM_TYPICAL_USAGE } from "./llm-typical-usage.js"
 // The model a Generate Script run resolves (a legacy script provider maps to one) — the DAG step's own rule.
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-model-id.js"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -5406,7 +5407,54 @@ function estimateNodeCredits(
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
   })
+  // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
+  // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
+  // can only raise a quote). Without it (or invalid): as before.
+  const sized = node.type === "llm-chat" ? expectedLlmUsageOf(priced.data) : null
+  if (sized) {
+    const credits = meteredUsageCredits(prices, modelId, sized, unitsOf(node, priced))
+    if (credits !== undefined) return credits
+  }
   return (meteredChargedOrThrow(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
+}
+
+/** The largest call an `llm-chat` node's `expectedUsage` may name (tokens): past it, the node is priced as before. */
+export const EXPECTED_LLM_USAGE_MAX = { inputTokens: 2_000_000, outputTokens: 131_072 } as const
+
+/**
+ * An `llm-chat` node's own expected call size (`data.expectedUsage: { inputTokens, outputTokens }`, the
+ * `llmChatEstimateUsage` capability): both positive integers within {@link EXPECTED_LLM_USAGE_MAX}, each floored at
+ * the feature's typical call (`LLM_TYPICAL_USAGE["llm-chat"]`: it can only raise a quote); null when it is absent or
+ * not that shape (the node is then priced at the feature's typical call, as before).
+ */
+export function expectedLlmUsageOf(data: unknown): { inputTokens: number; outputTokens: number } | null {
+  const u = (data as { expectedUsage?: unknown } | undefined)?.expectedUsage
+  if (typeof u !== "object" || u === null) return null
+  const { inputTokens, outputTokens } = u as { inputTokens?: unknown; outputTokens?: unknown }
+  const ok = (n: unknown, max: number): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= max
+  if (!ok(inputTokens, EXPECTED_LLM_USAGE_MAX.inputTokens) || !ok(outputTokens, EXPECTED_LLM_USAGE_MAX.outputTokens)) return null
+  // Floored at the typical call: any caller may write the field into a node, and it may only raise a quote.
+  const typical = LLM_TYPICAL_USAGE["llm-chat"]
+  return { inputTokens: Math.max(typical.inputTokens, inputTokens), outputTokens: Math.max(typical.outputTokens, outputTokens) }
+}
+
+/**
+ * A metered LLM key's charged credits for a call of `usage` tokens: the call on the lane the key runs on
+ * (`:direct` pinned direct; a bare key at its feature's default effort, as `meteredLlmEstimateBase`), marked up at
+ * the call's charge id. Undefined for a key that is not metered (the rollback, a flat row): priced as before.
+ * Throws `LlmUnpricedModelError` for a model with no price on its lane, as every metered estimate does.
+ */
+function meteredUsageCredits(
+  prices: ChargedPriceTable,
+  identifier: string,
+  usage: { inputTokens: number; outputTokens: number },
+  units = 1,
+): number | undefined {
+  const metered = meteredLlmIdOf(identifier)
+  if (!metered) return undefined
+  const direct = metered.lane === "direct"
+  const effort = direct ? undefined : defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
+  return prices.charge(identifier, quoteBaseCredits(llmUsageBaseCredits(usage, metered.modelId, effort, direct), units))
 }
 
 /**

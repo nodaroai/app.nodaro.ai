@@ -75,11 +75,26 @@ export type CastSwapPromptStyle = (typeof CAST_SWAP_PROMPT_STYLES)[number]
  * comes from, as `faceMasking.scene` names it (full depth only):
  * `"description"` (the default: the engine describes the clip on each run and
  * the description goes into the prompt's `scene` part), `"original"` (the
- * original clip is sent as a second video: clips up to 27.5 s) or
- * `"none"` (depth only: the admin writes the scene, or adds pictures).
+ * original clip is sent as a second video: clips up to 27.5 s),
+ * `"description-and-original"` (both: the description in words and the
+ * original as the second video, with the original's clip limit; only to an
+ * engine whose `castSwap.fullDepthScenes` lists it) or `"none"` (depth only:
+ * the admin writes the scene, or adds pictures).
  */
-export const CAST_SWAP_FULL_DEPTH_SCENES = ["description", "original", "none"] as const
+export const CAST_SWAP_FULL_DEPTH_SCENES = ["description", "original", "none", "description-and-original"] as const
 export type CastSwapFullDepthScene = (typeof CAST_SWAP_FULL_DEPTH_SCENES)[number]
+
+/** Whether a full-depth scene is written in words (the clip described: `"description"`, `"description-and-original"`). */
+export function fullDepthSceneDescribes(scene: string | undefined): boolean {
+  const s = scene ?? CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT
+  return s === "description" || s === "description-and-original"
+}
+
+/** Whether a full-depth scene sends the original as the second video (`"original"`, `"description-and-original"`): its clip limit applies. */
+export function fullDepthSceneSendsOriginal(scene: string | undefined): boolean {
+  const s = scene ?? CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT
+  return s === "original" || s === "description-and-original"
+}
 
 /** A full-depth setting's scene left out. */
 export const CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT: CastSwapFullDepthScene = "description"

@@ -32,7 +32,7 @@ import {
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { composeTrendRun, type ComposedTrendRun } from "../compose.js"
-import { faceMaskBaseKey, faceMaskSettingsKey, faceMaskSettingsKeyOf, faceMeshFacesDrawnOf, reusableFaceMaskBase, storedFaceMaskFor } from "../face-mask.js"
+import { faceMaskBaseKey, faceMaskSettingsKey, faceMaskSettingsKeyOf, faceMeshFacesDrawnOf, faceMeshRecipeOf, reusableFaceMaskBase, storedFaceMaskFor } from "../face-mask.js"
 import { trendVersionDataSchema } from "../schemas.js"
 import { FACE_MESH_NEED, publishBlockers } from "../publish-check.js"
 import { withoutUnsupportedFields } from "../run-helpers.js"
@@ -300,6 +300,29 @@ describe("the stored mask's faces drawn (`facesDrawn`)", () => {
     withoutUnsupportedFields(r)
     expect(r.body.storedFaceMask).toBeDefined()
     expect(Object.hasOwn(r.body.storedFaceMask!, "facesDrawn")).toBe(false)
+  })
+
+  it("the mesh's recipe: read from the make's answer, sent with the stored clip to an engine that draws the mesh, never to another", () => {
+    expect(faceMeshRecipeOf({ faceMesh: { facesDrawn: 3, recipe: "2026-11-01" } })).toBe("2026-11-01")
+    for (const v of [{}, { faceMesh: { recipe: "" } }, { faceMesh: { recipe: 7 } }, { faceMesh: { recipe: "x".repeat(41) } }, null]) {
+      expect(faceMeshRecipeOf(v)).toBeUndefined()
+    }
+    const d0 = data({ ...FACES, faceMesh: true })
+    const d = withClip({ ...d0, faceMask: mask(d0, { facesDrawn: 5, meshRecipe: "2026-11-01" }) })
+    setPluginSupports({ castSwap: MESH } as never)
+    const r = run(d)
+    withoutUnsupportedFields(r)
+    expect(r.body.storedFaceMask).toMatchObject({ facesDrawn: 5, meshRecipe: "2026-11-01" })
+    setPluginSupports({ castSwap: ENGINE } as never)
+    const older = run(d)
+    withoutUnsupportedFields(older)
+    expect(Object.hasOwn(older.body.storedFaceMask!, "meshRecipe")).toBe(false)
+    // A mask made before the recipe was recorded sends none.
+    setPluginSupports({ castSwap: MESH } as never)
+    const before = run(withDrawn({ ...FACES, faceMesh: true }, 5))
+    withoutUnsupportedFields(before)
+    expect(Object.hasOwn(before.body.storedFaceMask!, "meshRecipe")).toBe(false)
+    expect(trendVersionDataSchema.safeParse({ ...d, faceMask: { ...d.faceMask, meshRecipe: "" } }).success).toBe(false)
   })
 
   it("is part of the approved mask's schema", () => {

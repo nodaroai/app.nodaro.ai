@@ -11273,7 +11273,7 @@ export type AdminTrendFaceMaskingSource = "faces" | "full-depth" | "keep-people"
  * a description the engine writes per run, the original clip as a second
  * video (clips up to 27.5 s), or none (the admin writes it).
  */
-export type AdminTrendFullDepthScene = "description" | "original" | "none"
+export type AdminTrendFullDepthScene = "description" | "original" | "none" | "description-and-original"
 /** How the engine words a run's prompt. */
 export type CastSwapPromptStyleId = "precise" | "flexible"
 
@@ -11820,6 +11820,8 @@ export interface TrendEngineEnvironment {
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
       clipBodySheet?: boolean
+      /** With `steps`, the engine takes the shot list (`steps.shotList`) and runs Flex as Full depth with a shot list; absent = it cannot. */
+      shotList?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11937,12 +11939,26 @@ export interface ClipBodySetting {
   mode: "on" | "off"
   prompt?: string
 }
+/** The shot list's step for one style: on or off, and its LLM (left out: the engine's default). */
+export interface ShotListStyleSetting {
+  mode: "on" | "off"
+  llm?: LlmStepSetting
+}
+/** The styles a shot list is set per ("flex" is the person's name for the "motion" style). */
+export type ShotListStyle = "precise" | "flex"
+/**
+ * The shot list (the scene description written shot by shot), per style. Left
+ * out = Precise off, Flex on, with the engine's defaults; Flex cannot be
+ * turned off (`shot_list_flex_always_on`).
+ */
+export type ShotListSetting = Partial<Record<ShotListStyle, ShotListStyleSetting>>
 /** A trend's, or one engine's, preparation steps. Absent (or `{}`) = today's run. */
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
   enginePrompt?: TextStepSetting
   sceneDescription?: TextStepSetting
   clipBody?: ClipBodySetting
+  shotList?: ShotListSetting
 }
 
 export interface PhotoLabel {
@@ -11977,7 +11993,8 @@ export interface StepOutputs {
     clipBody?: ClipBodyOutput
   }>
   enginePrompt?: { mode: "template" | "llm"; text?: string }
-  scene?: { mode: "template" | "llm" }
+  /** `shotList`: the run made its shot list; `cuts`: the cut times (s) it was told (absent: none measured). */
+  scene?: { mode: "template" | "llm"; shotList?: true; cuts?: number[] }
 }
 
 /** A refusal of a steps setting: where, the code, and why. */
@@ -11997,8 +12014,13 @@ export interface CastSwapStepDefaults {
     labeller: LlmStepSetting & { instructions: string }
     enginePrompt: LlmStepSetting & { instructions: string }
     sceneDescription: LlmStepSetting & { instructions: string }
-    /** "Body from the clip"'s default image prompt; absent from an engine without the step. */
-    clipBody?: { prompt: string }
+    /**
+     * "Body from the clip"'s default image prompt and mode (what an unset step does; an earlier engine answers no
+     * mode, and runs it); absent from an engine without the step.
+     */
+    clipBody?: { prompt: string; mode?: "on" | "off" }
+    /** The shot list's defaults per style (Precise off, Flex on); absent from an engine without the step. */
+    shotList?: { [S in ShotListStyle]: { mode: "on" | "off"; llm: LlmStepSetting & { instructions: string } } }
   }
   /** Each layout's prompt per kind (null: the collage and "none" have none). */
   layoutPrompts: { [K in SheetKind]: Partial<Record<SheetLayout<K>, string | null>> }

@@ -237,6 +237,7 @@ const trendFaceMaskSchema = z.strictObject({
   approvedAt: z.string().min(1),
   approvedBy: z.string().min(1),
   facesDrawn: z.int().min(0).optional(),
+  meshRecipe: z.string().min(1).max(40).optional(),
   outlines: outlinesSchema.optional(),
   rawMaskUrl: httpUrl.optional(),
   depthUrl: httpUrl.optional(),

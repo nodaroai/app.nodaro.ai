@@ -11,7 +11,7 @@
  * recorded engine, or one that does not declare it: the face mesh's rule
  * (`nodaro-motion-face-mesh.ts`).
  */
-import { engineTakesClipBodySheet, engineTakesSteps } from "../../lib/cast-swap-steps.js"
+import { engineTakesClipBodySheet, engineTakesShotList, engineTakesSteps } from "../../lib/cast-swap-steps.js"
 import { TREND_PUBLISH_ENVIRONMENTS, type EngineEnvironment } from "./engine-environments.js"
 
 /**
@@ -49,4 +49,23 @@ export function environmentsThatCannotTakeClipBody(environments: readonly Engine
 /** The refusal's sentence for "Body from the clip" (`environmentsThatCannotTakeClipBody`). */
 export function cannotTakeClipBodyMessage(envs: readonly string[]): string {
   return `The Cast Swap engine in ${envs.join(" and ")} cannot take the Body from the clip step yet, and this setting is shared by every environment: leave that step unset, or wait for the engine.`
+}
+
+/**
+ * The environments (of `TREND_PUBLISH_ENVIRONMENTS`, in that order) whose
+ * engine cannot take the shot list (`steps.shotList`): none recorded, or one
+ * that does not declare `castSwap.steps` and `castSwap.shotList`. An engine
+ * without it is never sent the field, so a shared setting that sets it away
+ * from its defaults (`shotListNeedsEngine`) would quietly run without it there.
+ */
+export function environmentsThatCannotTakeShotList(environments: readonly EngineEnvironment[]): string[] {
+  return TREND_PUBLISH_ENVIRONMENTS.filter((name) => {
+    const env = environments.find((e) => e.env === name)
+    return !env || !engineTakesShotList(env.supports.castSwap)
+  })
+}
+
+/** The refusal's sentence for the shot list (`environmentsThatCannotTakeShotList`). */
+export function cannotTakeShotListMessage(envs: readonly string[]): string {
+  return `The Cast Swap engine in ${envs.join(" and ")} cannot take the shot list step yet, and this setting is shared by every environment: leave that step at its defaults, or wait for the engine.`
 }

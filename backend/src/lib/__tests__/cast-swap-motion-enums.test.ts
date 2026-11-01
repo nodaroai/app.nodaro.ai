@@ -31,7 +31,8 @@ describe("Nodaro Motion enums", () => {
 
   it("prompt styles and full depth's scene sources, with their defaults", () => {
     expect(CAST_SWAP_PROMPT_STYLES).toEqual(["precise", "flexible"])
-    expect(CAST_SWAP_FULL_DEPTH_SCENES).toEqual(["description", "original", "none"])
+    // "description-and-original" is new and last: every value stored before it reads as it did.
+    expect(CAST_SWAP_FULL_DEPTH_SCENES).toEqual(["description", "original", "none", "description-and-original"])
     expect(CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT).toBe("description")
     // The engine's limit (30 s of reference video, less the original's 2 s and its 0.1 s margin),
     // and what a trend publishes with: 0.4 s below it.

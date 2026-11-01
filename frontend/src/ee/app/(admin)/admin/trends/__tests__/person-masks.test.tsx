@@ -203,7 +203,8 @@ describe("marking people and making their masks", { timeout: 20_000 }, () => {
     renderEditor()
     // The editor loads its steps settings too: under CI load the first paint can take past findAll's 1 s default.
     expect(await screen.findAllByLabelText("The mask for runs without Amy", {}, { timeout: 5000 })).not.toHaveLength(0)
-  }, 20_000)
+    // Two whole editors are rendered (each with every step section): ~10 s on a quiet machine, past 20 s under CI load.
+  }, 40_000)
 
   it("says the marks have no run effect on a trend with examples, and that more than 3 people can't be published", async () => {
     routes[`GET ${BASE}`] = () => ({

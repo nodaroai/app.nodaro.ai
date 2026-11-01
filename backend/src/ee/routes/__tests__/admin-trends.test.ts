@@ -2624,13 +2624,15 @@ describe("the stored face mask", () => {
       seed({}, draftData({ faceMasking: MESHED, faceMaskJob: pendingJob({ settingsKey: meshKey }) }))
       world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { faceMesh: { frames: 360, framesWithFaces: 0, facesDrawn: 0, recipe: "2026-10-31" } }))
       expect((await approve()).statusCode).toBe(200)
-      expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ settingsKey: meshKey, facesDrawn: 0 })
+      // And the recipe its mesh was drawn by.
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ settingsKey: meshKey, facesDrawn: 0, meshRecipe: "2026-10-31" })
 
       mem.trends = []
       seed({}, making())
-      world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { faceMesh: { facesDrawn: 12 } }))
+      world.jobs.set(FACE_MASK_JOB, fmJob({}, {}, { faceMesh: { facesDrawn: 12, recipe: "2026-10-31" } }))
       expect((await approve()).statusCode).toBe(200)
       expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("facesDrawn")
+      expect(mem.trends[0]!.versions[1]!.data.faceMask).not.toHaveProperty("meshRecipe")
     })
 
     it("with role outlines, takes only a mask that answers every outline sent, and records what each one ringed", async () => {

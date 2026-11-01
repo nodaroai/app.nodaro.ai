@@ -59,7 +59,7 @@ import {
   previewPromptBudget,
   type TrendForm,
 } from "../model"
-import { roleOutlineColour, slotMarkAllowed } from "@nodaro/render-rules"
+import { fullDepthSceneDescribes, roleOutlineColour, slotMarkAllowed } from "@nodaro/render-rules"
 import { SourceClipEditor } from "../components/SourceClipEditor"
 import { HideOriginalToggle } from "../components/HideOriginalToggle"
 import { SlotsEditor } from "../components/SlotsEditor"
@@ -574,9 +574,10 @@ export default function AdminTrendEditorPage() {
                         .map((slot) => slot.key)
                     : undefined
                 }
-                // Full depth's scene from a description (the default): the clip's stored descriptions.
+                // Full depth's scene written in words (a description, the default, alone or beside the original):
+                // the clip's stored descriptions.
                 sceneDescription={
-                  savedPreparation === "full-depth" && (server.draft.faceMasking?.scene ?? "description") === "description"
+                  savedPreparation === "full-depth" && fullDepthSceneDescribes(server.draft.faceMasking?.scene)
                     ? { previewStart: server.draft.previewStart }
                     : undefined
                 }

@@ -124,6 +124,14 @@ export interface TrendFaceMask {
    */
   facesDrawn?: number
   /**
+   * The face mesh's recipe (core's `VIDEO_FACE_MESH_RECIPE`) its make drew the
+   * lines with (`output_data.faceMesh.recipe`): a run is told it
+   * (`storedFaceMask.meshRecipe`) so the engine words the lines as they were
+   * drawn. Absent on a mask made before it was recorded: the engine then
+   * words them as the coloured lines of before.
+   */
+  meshRecipe?: string
+  /**
    * Role outlines (a setting with `faceMasking.roleOutlines`, decided
    * 2026-11-01): what its make ringed, one entry per outline it was sent
    * (`makeOutlinesOf`: each person slot with slot marks, in role order), the

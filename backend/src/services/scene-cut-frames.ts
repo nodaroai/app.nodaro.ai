@@ -45,27 +45,60 @@ export interface DetectCutFramesOptions {
   readonly timeoutMs?: number
   /** The scan's predicted peak memory (default: the launcher's estimate). */
   readonly peakMemoryMiB?: number
+  /** Input options placed before `-i` (a caller decoding an untrusted file confines the protocols and demuxers). */
+  readonly inputArgs?: readonly string[]
+  /** Gives up waiting for the ffmpeg slot when it aborts (`FfmpegLaunchOptions.signal`). */
+  readonly slotSignal?: AbortSignal
 }
 
 /**
- * The frame indices where a new shot starts in the clip at `localPath`, at
- * its constant `frameRate`: one decode (`scdet` on every frame, nothing
- * written but the scores), then the proxy's cut rule with the lone-spike escape.
- * Sorted, never 0; `[]` for a single shot.
+ * Where a new shot starts in the clip at `localPath`, in SECONDS from its
+ * first decoded frame: one decode (`scdet` on every frame, nothing written
+ * but the scores), then the proxy's cut rule with the lone-spike escape.
+ * Ascending, each once, never 0; `[]` for a single shot. What both Video
+ * Mask's frames (`detectCutFrames`) and the scene-cuts route
+ * (`/v1/video-scene-cuts`) are measured with.
  */
-export async function detectCutFrames(localPath: string, frameRate: string, opts: DetectCutFramesOptions = {}): Promise<number[]> {
+export async function detectCutTimes(localPath: string, opts: DetectCutFramesOptions = {}): Promise<{ readonly cutsSec: number[]; readonly firstFrameTimeS: number | null }> {
   const workDir = await createWorkDir("scene-cuts")
   try {
     const scores = join(workDir, "scores.txt")
     await runFfmpeg(
-      ["-v", "error", "-i", localPath, "-map", "0:v:0", "-an", "-vf", sceneCutFilter(scores), "-f", "null", "-"],
+      ["-v", "error", ...(opts.inputArgs ?? []), "-i", localPath, "-map", "0:v:0", "-an", "-vf", sceneCutFilter(scores), "-f", "null", "-"],
       opts.timeoutMs,
-      opts.peakMemoryMiB !== undefined ? { peakMemoryMiB: opts.peakMemoryMiB } : undefined,
+      opts.peakMemoryMiB !== undefined || opts.slotSignal
+        ? { ...(opts.peakMemoryMiB !== undefined ? { peakMemoryMiB: opts.peakMemoryMiB } : {}), ...(opts.slotSignal ? { signal: opts.slotSignal } : {}) }
+        : undefined,
     )
     const frames = await readSceneScores(createReadStream(scores, "utf8"))
-    if (frames.length === 0) return []
-    return cutTimesToFrames(findSceneCuts(frames, { isolatedSpikeIsCut: true }), frames[0]!.t, frameRate)
+    if (frames.length === 0) return { cutsSec: [], firstFrameTimeS: null }
+    const first = frames[0]!.t
+    return { cutsSec: cutTimesFromFirstFrame(findSceneCuts(frames, { isolatedSpikeIsCut: true }), first), firstFrameTimeS: first }
   } finally {
     await cleanupWorkDir(workDir)
   }
+}
+
+/**
+ * Cut times (s, as ffmpeg stamps them) → seconds from the first decoded
+ * frame, to the millisecond. Ascending, each once; never 0 or before it (the
+ * first shot's start is not a cut). Pure.
+ */
+export function cutTimesFromFirstFrame(timesS: readonly number[], firstFrameTimeS: number): number[] {
+  const out = new Set<number>()
+  for (const t of timesS) {
+    const s = Math.round((t - firstFrameTimeS) * 1000) / 1000
+    if (Number.isFinite(s) && s > 0) out.add(s)
+  }
+  return [...out].sort((a, b) => a - b)
+}
+
+/**
+ * The frame indices where a new shot starts in the clip at `localPath`, at
+ * its constant `frameRate` (`detectCutTimes`, counted in frames from the
+ * first frame). Sorted, never 0; `[]` for a single shot.
+ */
+export async function detectCutFrames(localPath: string, frameRate: string, opts: DetectCutFramesOptions = {}): Promise<number[]> {
+  const { cutsSec } = await detectCutTimes(localPath, opts)
+  return cutTimesToFrames(cutsSec, 0, frameRate)
 }

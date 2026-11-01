@@ -806,6 +806,8 @@ export {
   CAST_SWAP_PROMPT_PART_PLACEHOLDERS,
   CAST_SWAP_PROMPT_STYLES,
   defaultPromptStyleFor,
+  fullDepthSceneDescribes,
+  fullDepthSceneSendsOriginal,
 } from "./cast-swap-prompt-parts"
 export type { CastSwapFullDepthScene, CastSwapPromptPartId, CastSwapPromptStyle } from "./cast-swap-prompt-parts"
 export {

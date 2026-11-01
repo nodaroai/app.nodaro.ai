@@ -251,7 +251,14 @@ export interface TrendRunBody {
    * role on the clip (`runOutlinesFor`: role N = the Nth role), only to an
    * engine that declares `castSwap.roleOutlines` (`withoutUnsupportedStoredMask`).
    */
-  storedFaceMask?: { url: string; frames: number; required?: true; facesDrawn?: number; outlines?: Array<{ role: number; colour: string }> }
+  storedFaceMask?: {
+    url: string
+    frames: number
+    required?: true
+    facesDrawn?: number
+    meshRecipe?: string
+    outlines?: Array<{ role: number; colour: string }>
+  }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
@@ -581,7 +588,14 @@ export function composeTrendRun(
       // A person variant is the base mask less some people: a base that drew no face mesh leaves it none.
       ? (() => {
           const { outlines: recorded, ...clip } = variant
-          return { ...clip, required: true as const, ...(stored?.facesDrawn === 0 ? { facesDrawn: 0 } : {}), ...outlinesOf(recorded) }
+          // Its lines are the base's (a variant only erases people from it): the base's mesh recipe.
+          return {
+            ...clip,
+            required: true as const,
+            ...(stored?.facesDrawn === 0 ? { facesDrawn: 0 } : {}),
+            ...(stored?.meshRecipe ? { meshRecipe: stored.meshRecipe } : {}),
+            ...outlinesOf(recorded),
+          }
         })()
       : variant === undefined && stored
         ? faceMaskStoredRequired(data) ? { ...stored, required: true as const, ...outlinesOf(data.faceMask?.outlines) } : stored

@@ -205,6 +205,21 @@ describe("the engine's declaration", () => {
     expect(composed.body).toEqual(without.body)
   })
 
+  it("a scene of the description AND the original sends the stored description, only to an engine that lists that scene", () => {
+    const both = data({ faceMasking: { ...FULL, scene: "description-and-original" } })
+    setPluginSupports({ castSwap: { ...SUPPORTS, fullDepthScenes: [...SUPPORTS.fullDepthScenes, "description-and-original"], storedSceneDescription: true } as never })
+    const sent = run(both)
+    withoutUnsupportedFields(sent)
+    expect(sent.body.faceMasking?.scene).toBe("description-and-original")
+    expect(sent.body.sceneDescription).toBe(FULL_TEXT)
+    // An engine that does not list it: the scene is stripped, and the description with it.
+    setPluginSupports({ castSwap: { ...SUPPORTS, storedSceneDescription: true } as never })
+    const older = run(both)
+    withoutUnsupportedFields(older)
+    expect(older.body.faceMasking).not.toHaveProperty("scene")
+    expect(older.body).not.toHaveProperty("sceneDescription")
+  })
+
   it("an engine that does not take the described scene gets neither (its scene key was stripped first)", () => {
     setPluginSupports({ castSwap: { ...SUPPORTS, fullDepthScenes: ["original"], storedSceneDescription: true } as never })
     const composed = run(data())

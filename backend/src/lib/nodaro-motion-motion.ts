@@ -90,13 +90,35 @@ export interface DirectRunPromptShape {
 }
 
 /**
+ * The masking a direct Flex run uses on an engine with the shot list
+ * (`castSwap.shotList`: Flex = Full depth + shot list), as the engine resolves
+ * it: the Motion setting's Full depth with its shot list always made (a scene
+ * of "original" becomes "description-and-original", "none" "description"),
+ * else — none set, Faces hidden, or Off — Full depth with its scene from a
+ * description (the engine's default).
+ */
+export function shotListFlexMasking(masking: FaceMasking | undefined): FaceMasking {
+  if (!masking || !faceMaskingOn(masking) || faceMaskingSourceOf(masking) !== "full-depth") return { mode: "always", source: "full-depth", scene: "description" }
+  const scene = fullDepthSceneOf(masking)
+  if (scene === "original") return { ...masking, scene: "description-and-original" }
+  if (scene === "none") return { ...masking, scene: "description" }
+  return masking
+}
+
+/**
  * A direct run's prompt shape: Precise — the Precise prompt on a face mask;
  * Motion — the engine's Motion setting (`entry`; left out = the Precise
- * masking with the Flexible prompt).
+ * masking with the Flexible prompt). On an engine with the shot list
+ * (`opts.shotList`), Motion is always Full depth with a shot list
+ * (`shotListFlexMasking`).
  */
-export function directRunPromptShape(style: CastSwapStyle, entry: NodaroMotionMotionEntry | undefined): DirectRunPromptShape {
+export function directRunPromptShape(
+  style: CastSwapStyle,
+  entry: NodaroMotionMotionEntry | undefined,
+  opts: { readonly shotList?: boolean } = {},
+): DirectRunPromptShape {
   if (style === "precise") return { promptStyle: "precise", source: "faces" }
-  const masking = entry?.masking
+  const masking = opts.shotList ? shotListFlexMasking(entry?.masking) : entry?.masking
   const source = masking && faceMaskingSourceOf(masking) === "full-depth" ? "full-depth" : "faces"
   const scene = masking ? fullDepthSceneOf(masking) : null
   return {
@@ -110,13 +132,17 @@ export function directRunPromptShape(style: CastSwapStyle, entry: NodaroMotionMo
  * Whether a direct run of this engine and style draws the face mesh: Precise
  * — the engine's masking setting (`preciseMasking`, `nodaro_motion_masking`);
  * Motion — the Motion setting's own masking (`entry.masking`), else (none
- * there) the same Precise masking it falls back to. On and `faceMesh: true`.
+ * there) the same Precise masking it falls back to; on an engine with the
+ * shot list (`opts.shotList`), Motion's Full depth (`shotListFlexMasking`).
+ * On and `faceMesh: true`.
  */
 export function directRunDrawsFaceMesh(
   style: CastSwapStyle,
   entry: NodaroMotionMotionEntry | undefined,
   preciseMasking: FaceMasking | undefined,
+  opts: { readonly shotList?: boolean } = {},
 ): boolean {
-  const masking = style === "motion" && entry?.masking ? entry.masking : preciseMasking
+  const masking =
+    style === "motion" && opts.shotList ? shotListFlexMasking(entry?.masking) : style === "motion" && entry?.masking ? entry.masking : preciseMasking
   return !!masking && faceMaskingOn(masking) && faceMeshOn(masking)
 }

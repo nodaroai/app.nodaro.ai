@@ -25,6 +25,7 @@
 import {
   CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC,
   defaultPromptStyleFor,
+  fullDepthSceneSendsOriginal,
   type CastSwapPromptStyle,
 } from "@nodaro/render-rules"
 import { faceMaskingOn, faceMaskingSourceOf, fullDepthSceneOf, type FaceMaskingScene, type FaceMaskingSource } from "../../../lib/cast-swap-face-masking.js"
@@ -76,13 +77,18 @@ export const FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC = CAST_SWAP_FULL_DEPTH_ORIGINAL
 
 /** A full-depth trend that sends the original as a second video, with a source clip too long for it. */
 export function fullDepthClipTooLong(data: Pick<TrendVersionData, "faceMasking" | "source">): boolean {
-  return trendSceneOf(data) === "original" && !!data.source && data.source.durationSec > FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC
+  return fullDepthSceneSendsOriginal(trendSceneOf(data) ?? undefined) && !!data.source && data.source.durationSec > FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC
 }
 
 export type PromptStyleBlockerCode = "prompt_style_unsupported" | "full_depth_scene_unsupported"
 
 const STYLE_NAMES: Readonly<Record<CastSwapPromptStyle, string>> = { precise: "Precise", flexible: "Flexible" }
-const SCENE_NAMES: Readonly<Record<FaceMaskingScene, string>> = { description: "Description", original: "Original video", none: "None" }
+const SCENE_NAMES: Readonly<Record<FaceMaskingScene, string>> = {
+  description: "Description",
+  original: "Original video",
+  none: "None",
+  "description-and-original": "Description + original",
+}
 
 /**
  * What one environment's engine would run otherwise than the trend says: a

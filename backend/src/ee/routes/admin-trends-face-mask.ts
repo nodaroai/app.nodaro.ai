@@ -98,6 +98,7 @@ import { TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "..
 import { ensurePreviewClip } from "../lib/trends/preview-clip-media.js"
 import {
   faceMeshFacesDrawnOf,
+  faceMeshRecipeOf,
   FACE_MASK_JOB_TYPE,
   faceMaskBaseKey,
   faceMaskHasErasedMarks,
@@ -448,6 +449,7 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       }
       const frames = output.frames
       const facesDrawn = faceMeshFacesDrawnOf(output)
+      const meshRecipe = faceMeshRecipeOf(output)
       const recipe = isRec(output.recipe) ? output.recipe : {}
       const plugin = str(recipe.plugin)
       if (typeof frames !== "number" || !Number.isInteger(frames) || frames <= 0 || !plugin) {
@@ -465,6 +467,8 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         approvedBy: req.userId!,
         // The faces its make drew the face mesh on (a setting with the mesh only): 0 = no lines on it.
         ...(faceMeshOn(draft.faceMasking) && facesDrawn !== undefined ? { facesDrawn } : {}),
+        // And the recipe it drew them by, so a run words the lines as drawn (absent: the engine's older wording).
+        ...(faceMeshOn(draft.faceMasking) && meshRecipe !== undefined ? { meshRecipe } : {}),
         // What its rings went round, per outline (role outlines only; none sent = none recorded).
         ...(outlines && outlines.length > 0 ? { outlines } : {}),
         // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts),

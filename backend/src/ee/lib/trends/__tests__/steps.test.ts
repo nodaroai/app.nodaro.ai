@@ -21,7 +21,7 @@ import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { composeTrendRun, type ComposedTrendRun } from "../compose.js"
 import { faceMaskSettingsKey, faceMaskState } from "../face-mask.js"
-import { CLIP_BODY_NEED, STEPS_NEED, publishBlockers } from "../publish-check.js"
+import { CLIP_BODY_NEED, SHOT_LIST_NEED, STEPS_NEED, publishBlockers } from "../publish-check.js"
 import { withoutUnsupportedFields } from "../run-helpers.js"
 import { trendVersionDataSchema } from "../schemas.js"
 import type { TrendFaceMask, TrendVersionData } from "../types.js"
@@ -191,6 +191,25 @@ describe("Body from the clip (`clipBody`)", () => {
     expect(publishBlockers(both, [env("staging", WITH_CLIP_BODY), env("production", ENGINE)], REQUIRED)).toEqual([
       { code: "engine_unsupported", env: "production", need: STEPS_NEED },
     ])
+  })
+
+  it("the shot list: sent only to an engine that declares castSwap.shotList; publish needs it only away from the defaults", () => {
+    const WITH_SHOT_LIST = { ...WITH_STEPS, shotList: true }
+    const precise = { shotList: { precise: { mode: "on" as const } } }
+    setPluginSupports({ castSwap: WITH_STEPS } as never)
+    const stripped = run(data({ steps: precise }))
+    withoutUnsupportedFields(stripped)
+    expect(Object.hasOwn(stripped.body, "steps")).toBe(false)
+    setPluginSupports({ castSwap: WITH_SHOT_LIST } as never)
+    const sent = run(data({ steps: precise }))
+    withoutUnsupportedFields(sent)
+    expect(sent.body.steps).toEqual(precise)
+    expect(publishBlockers(data({ steps: precise }), [env("staging", WITH_SHOT_LIST), env("production", WITH_STEPS)], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: SHOT_LIST_NEED },
+    ])
+    expect(publishBlockers(data({ steps: precise }), [env("staging", WITH_SHOT_LIST), env("production", WITH_SHOT_LIST)], REQUIRED)).toEqual([])
+    // The defaults (Flex on) need nothing, not even steps.
+    expect(publishBlockers(data({ steps: { shotList: { flex: { mode: "on" } } } }), [env("staging", ENGINE), env("production", ENGINE)], REQUIRED)).toEqual([])
   })
 
   it("a version that does not set it never needs clipBodySheet (absent is the engine's own default)", () => {

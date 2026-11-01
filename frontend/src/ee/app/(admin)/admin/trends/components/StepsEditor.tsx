@@ -13,9 +13,12 @@
 // 3. Scene description: only for Full depth with the scene from a
 //    description (`source`, `scene`); Template or LLM.
 // 4. Body from the clip (ClipBodyStep.tsx): on / off and its image prompt.
-//    On while unset (the engine's default). Off is choosable whatever the
+//    Unset reads the engine's default (`defaults.clipBody.mode`; Off while unknown). Off is choosable whatever the
 //    environments declare; a prompt of its own only once every environment's
 //    engine also declares `castSwap.clipBodySheet`.
+// 5. Shot list (ShotListStep.tsx): per style — Precise off / on, Flex always
+//    on — and each one's LLM; anything but the defaults only once every
+//    environment's engine also declares `castSwap.shotList`.
 // A section whose step the engine marks not critical (`critical`) says it is
 // skipped when it fails: the run goes on without it.
 //
@@ -47,8 +50,16 @@ import {
   type TrendEngineEnvironment,
 } from "@/lib/api"
 import { useAdminLlmModels, type AdminLlmModel } from "@/ee/hooks/queries/use-admin-queries"
-import { environmentsThatCannotTakeClipBody, environmentsThatCannotTakeSteps, environmentsThatTakeClipBody } from "../clip-preparation"
-import { ClipBodyStep, clipBodyNeedsEngine } from "./ClipBodyStep"
+import {
+  environmentsThatCannotTakeClipBody,
+  environmentsThatCannotTakeShotList,
+  environmentsThatCannotTakeSteps,
+  environmentsThatTakeClipBody,
+} from "../clip-preparation"
+import { fullDepthSceneDescribes } from "@nodaro/render-rules"
+import { ClipBodyStep, clipBodyDefaultMode, clipBodyNeedsEngine } from "./ClipBodyStep"
+import { normaliseShotList, shotListNeedsEngine } from "../shot-list"
+import { ShotListStep } from "./ShotListStep"
 import { LABELLER_INPUTS, LlmStepEditor, Problems } from "./LlmStepEditor"
 import { SheetRulesTable } from "./SheetRulesTable"
 import { TextStepSwitch } from "./TextStepSwitch"
@@ -58,7 +69,10 @@ export const STEPS_CHECK_DEBOUNCE_MS = 400
 
 /** Whether anything is set: `{}` (or undefined) is today's run. */
 export function stepsSet(s: CastSwapSteps | undefined | null): s is CastSwapSteps {
-  return !!s && (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined)
+  return (
+    !!s &&
+    (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined || normaliseShotList(s.shotList) !== undefined)
+  )
 }
 
 /** The setting as saved: undefined when nothing is set, else a copy without its absent keys. */
@@ -69,6 +83,7 @@ export function normaliseSteps(s: CastSwapSteps | undefined | null): CastSwapSte
     ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
     ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
+    ...(normaliseShotList(s.shotList) ? { shotList: normaliseShotList(s.shotList) } : {}),
   })
 }
 
@@ -100,7 +115,7 @@ interface Props {
   readonly engine: NodaroMotionEngine | AdminTrendEngine
   /** How the clip is prepared; the scene description applies to Full depth only. */
   readonly source?: AdminTrendFaceMaskingSource
-  /** Full depth's scene source; the scene description applies to "description" only. */
+  /** Full depth's scene source; the scene description applies to one written in words ("description", "description-and-original"). */
   readonly scene?: AdminTrendFullDepthScene
 }
 
@@ -137,7 +152,7 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
       <div>
         <h3 className="text-sm font-semibold">Preparation steps</h3>
         <p className="text-xs text-muted-foreground">
-          How the reference sheets, the engine prompt, the scene description and the body from the clip are made. Left as they are, runs are prepared as today.
+          How the reference sheets, the engine prompt, the scene description, the body from the clip and the shot list are made. Left as they are, runs are prepared as today.
         </p>
       </div>
       {missing === undefined ? (
@@ -145,7 +160,8 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
       ) : missing.length > 0 ? (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
           The Cast Swap engine of {missing.join(", ")} cannot take preparation steps yet
-          {stepsSet(value) && (stepsSet({ ...value, clipBody: undefined }) || clipBodyNeedsEngine(value.clipBody))
+          {stepsSet(value) &&
+          (stepsSet({ ...value, clipBody: undefined, shotList: undefined }) || clipBodyNeedsEngine(value.clipBody) || shotListNeedsEngine(value.shotList))
             ? ": remove them to publish or save"
             : ""}
           .
@@ -163,12 +179,13 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
       <Sections
         value={value}
         onChange={onChange}
-        sceneShown={source === "full-depth" && (scene ?? "description") === "description"}
+        sceneShown={source === "full-depth" && fullDepthSceneDescribes(scene)}
         defaults={defaults}
         models={defaults ? models : undefined}
         problems={problems}
         clipBodyMissing={environmentsThatCannotTakeClipBody(envs)}
         clipBodyHas={environmentsThatTakeClipBody(envs)}
+        shotListMissing={environmentsThatCannotTakeShotList(envs)}
       />
     </div>
   )
@@ -191,6 +208,7 @@ function Sections({
   problems,
   clipBodyMissing,
   clipBodyHas,
+  shotListMissing,
 }: {
   readonly value: CastSwapSteps | undefined
   readonly onChange: (next: CastSwapSteps | undefined) => void
@@ -202,6 +220,8 @@ function Sections({
   readonly clipBodyMissing: readonly string[] | undefined
   /** The environments whose engine runs it (unknown while loading). */
   readonly clipBodyHas: readonly string[] | undefined
+  /** The environments whose engine cannot take the shot list (unknown while loading). */
+  readonly shotListMissing: readonly string[] | undefined
 }) {
   const id = useId()
   const disabled = !defaults
@@ -216,7 +236,8 @@ function Sections({
   const enginePromptProblems = under(problems, "enginePrompt")
   const sceneProblems = under(problems, "sceneDescription")
   const clipBodyProblems = under(problems, "clipBody")
-  const rest = problems.filter((p) => !/^(sheets|enginePrompt|sceneDescription|clipBody)(\.|$)/.test(p.path))
+  const shotListProblems = under(problems, "shotList")
+  const rest = problems.filter((p) => !/^(sheets|enginePrompt|sceneDescription|clipBody|shotList)(\.|$)/.test(p.path))
 
   return (
     <>
@@ -318,11 +339,23 @@ function Sections({
         <ClipBodyStep
           value={value?.clipBody}
           defaultPrompt={defaults?.defaults.clipBody?.prompt}
+          defaultMode={clipBodyDefaultMode(defaults?.defaults.clipBody)}
           promptOffered={!disabled && clipBodyMissing !== undefined && clipBodyMissing.length === 0}
           runsIn={clipBodyHas}
           notYetIn={clipBodyMissing}
           problems={clipBodyProblems}
           onChange={(clipBody) => set({ clipBody })}
+        />
+      </Section>
+      <Section title="Shot list" tag={tag("scene-description")}>
+        <ShotListStep
+          value={value?.shotList}
+          defaults={defaults?.defaults.shotList}
+          models={models}
+          offered={!disabled && shotListMissing !== undefined && shotListMissing.length === 0 && !!defaults?.defaults.shotList}
+          notYetIn={shotListMissing}
+          problems={shotListProblems}
+          onChange={(shotList) => set({ shotList })}
         />
       </Section>
       <Problems list={rest} />

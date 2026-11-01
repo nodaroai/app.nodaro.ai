@@ -46,6 +46,8 @@ import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { CAST_SWAP_STYLES } from "@nodaro/shared/models"
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
 import { directRunPromptPartsInvalid, directRunPromptProblems, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
+import { readNodaroMotionSteps } from "../../lib/nodaro-motion-steps-store.js"
+import { loadedEngineTakesShotList } from "../../lib/cast-swap-steps.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
@@ -136,12 +138,14 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
       if (meshOn.length > 0 && loadedEngineHasPromptParts()) {
         const saved = (await readNodaroMotionPromptParts()).promptParts
         const motion = (await readNodaroMotionMotion()).motion
+        // The Precise shot list's marker counts too, on an engine that runs it.
+        const steps = loadedEngineTakesShotList() ? (await readNodaroMotionSteps()).steps : null
         const problems: DirectRunPromptProblem[] = []
         for (const engine of meshOn) {
           for (const style of CAST_SWAP_STYLES) {
             const texts = saved?.[engine]?.[style]
             if (!texts) continue
-            const found = await directRunPromptProblems(app, req, reply, engine, style, texts, motion?.[engine], parsed.data.masking[engine])
+            const found = await directRunPromptProblems(app, req, reply, engine, style, texts, motion?.[engine], parsed.data.masking[engine], steps?.[engine])
             if (!found) return reply
             problems.push(...found)
           }
