@@ -21,7 +21,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 interface FakeRow { id: string; user_id: string; idempotency_key: string | null }
 
 const mocks = vi.hoisted(() => {
-  const state = { rows: [] as FakeRow[], nextId: 1 }
+  const state = { rows: [] as FakeRow[], nextId: 1, dropWinnerOnConflict: false }
 
   // Track each chain's pending query so .single() / await resolution can read
   // the accumulated filters / payloads.
@@ -88,6 +88,8 @@ const mocks = vi.hoisted(() => {
         const key = (ctx.payload?.idempotency_key as string | null | undefined) ?? null
         const existing = state.rows.find((r) => r.user_id === userId && r.idempotency_key === key)
         if (existing && ctx.upsertOpts?.ignoreDuplicates) {
+          // The winner deleted between the conflict and the read that follows it.
+          if (state.dropWinnerOnConflict) state.rows = state.rows.filter((r) => r !== existing)
           // Conflict — ignoreDuplicates means we get an empty array, not the existing row.
           return Promise.resolve({ data: [], error: null }).then(onResolve)
         }
@@ -117,6 +119,7 @@ const mocks = vi.hoisted(() => {
   function reset() {
     state.rows = []
     state.nextId = 1
+    state.dropWinnerOnConflict = false
   }
 
   return { fromMock, reset, state }
@@ -124,7 +127,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 
-import { insertWithIdempotencyKey } from "../idempotent-insert.js"
+import { IdempotencyWinnerGoneError, insertWithIdempotencyKey } from "../idempotent-insert.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -277,5 +280,15 @@ describe("insertWithIdempotencyKey — a failed write keeps its PostgREST error"
     const err = await insertWithIdempotencyKey("jobs", { user_id: "u" }, "k").catch((e: unknown) => e)
     expect((err as Error).message).toBe(`idempotent upsert failed (jobs): ${pgError.message}`)
     expect((err as Error).cause).toBe(pgError)
+  })
+})
+
+describe("insertWithIdempotencyKey — the winner of a lost race is gone", () => {
+  it("throws IdempotencyWinnerGoneError (a retryable 503 for the caller), not a plain error", async () => {
+    await insertWithIdempotencyKey("jobs", { user_id: "user-1" }, "key-gone-01")
+    mocks.state.dropWinnerOnConflict = true
+    const lost = insertWithIdempotencyKey("jobs", { user_id: "user-1" }, "key-gone-01")
+    await expect(lost).rejects.toBeInstanceOf(IdempotencyWinnerGoneError)
+    await expect(insertWithIdempotencyKey("jobs", { user_id: "user-1" }, "key-gone-01")).resolves.toMatchObject({ created: true })
   })
 })

@@ -3,7 +3,9 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertSyncJob } from "../lib/insert-job.js"
+import { insertSyncJob, insertSyncJobIdempotent } from "../lib/insert-job.js"
+import { IDEMPOTENCY_WINNER_GONE, IdempotencyWinnerGoneError } from "../lib/idempotent-insert.js"
+import { KEYED_CHAT_COLUMNS, answerKeyedChat, claimKeyedChatCall, keyedChatCallOf, relayIdempotencyKeyOf, type KeyedChatRow } from "../lib/llm-chat-keyed.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -26,6 +28,9 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+
+/** What a row whose answer could not be written records (the call itself answered its caller). */
+const ANSWER_NOT_RECORDED = "The answer was sent but could not be saved. Send the request again with a new key."
 
 const llmChatBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K): the "Generate Text" node feeds an LLM whose
@@ -139,13 +144,21 @@ export async function llmChatRoutes(app: FastifyInstance) {
   app.post(
     "/v1/llm-chat/generate",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck }),
+      // A plugin's keyed child call is answered from its key's row before the
+      // guard checks or holds anything (`lib/llm-chat-keyed.ts`).
+      preHandler: [
+        claimKeyedChatCall,
+        creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck }),
+      ],
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
-      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm-chat/generate", "llm-chat")) return
+      // A keyed child call relayed from a keyless install forwards its key: the
+      // cloud is its one dedupe point (`lib/llm-chat-keyed.ts`).
+      const relayKey = relayIdempotencyKeyOf(req)
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm-chat/generate", "llm-chat", relayKey ? { idempotencyKey: relayKey } : {})) return
 
       // The socket's idle timeout is what closes the connection on a long
       // answer — `config.requestTimeout` above is read by nothing.
@@ -194,17 +207,42 @@ export async function llmChatRoutes(app: FastifyInstance) {
         reasoningEffort: parsed.data.reasoningEffort,
       }
 
-      const { data: job, error: jobError } = await insertSyncJob(req, {
-          workflow_id: extractWorkflowId(req.body),
-          node_id: extractNodeId(req.body),
-          force_private: extractForcePrivate(req.body) || undefined,
-          user_id: userId,
-          status: "pending",
-          input_data: buildJobInputData(parsed.data, "llm-chat"),
-        })
-
-      if (jobError) {
-        return sendInternalError(reply, req, jobError, "Failed to create job")
+      const jobRow = {
+        workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
+        user_id: userId,
+        status: "pending",
+        input_data: buildJobInputData(parsed.data, "llm-chat"),
+      }
+      let job: { id: string }
+      const keyed = keyedChatCallOf(req)
+      if (keyed) {
+        // The key and the body's fingerprint land with the row, so a request
+        // racing this one finds a whole row: it waits for this call's answer.
+        let inserted: Awaited<ReturnType<typeof insertSyncJobIdempotent<KeyedChatRow>>>
+        try {
+          inserted = await insertSyncJobIdempotent<KeyedChatRow>(
+            req,
+            { ...jobRow, input_fingerprint: keyed.fingerprint },
+            keyed.key,
+            KEYED_CHAT_COLUMNS,
+          )
+        } catch (err) {
+          // Lost the race to a row that is gone already: retryable, as the guard's lost race.
+          if (err instanceof IdempotencyWinnerGoneError) {
+            return reply.status(503).header("Retry-After", "2").send({ error: IDEMPOTENCY_WINNER_GONE })
+          }
+          return sendInternalError(reply, req, err, "Failed to create job")
+        }
+        if (!inserted.created) return answerKeyedChat(req, reply, inserted.row, "retry")
+        job = inserted.row
+      } else {
+        const { data, error: jobError } = await insertSyncJob(req, jobRow)
+        if (jobError) {
+          return sendInternalError(reply, req, jobError, "Failed to create job")
+        }
+        job = data
       }
 
       // Metered (the default): hold one attempt of this call. A reference
@@ -252,15 +290,32 @@ export async function llmChatRoutes(app: FastifyInstance) {
         const generatedText = response.text
 
         try {
-          await supabase
-            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-            .update({
-              status: "completed",
-              ...completedJobColumns(),
-              output_data: { generatedText, model: llmModel, usage: response.usage },
-              provider_cost: response.providerCost ?? null,
+          // The row is what a keyed repeat replays: a failed write is tried once
+          // more, then the row is failed, so a repeat answers a prompt 502
+          // instead of waiting out the whole limit on a row with no answer.
+          const writeAnswer = async (): Promise<boolean> => {
+            try {
+              const { error } = await supabase
+                .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
+                .update({
+                  status: "completed",
+                  ...completedJobColumns(),
+                  output_data: { generatedText, model: llmModel, usage: response.usage },
+                  provider_cost: response.providerCost ?? null,
+                })
+                .eq("id", job.id)
+              return !error
+            } catch {
+              return false
+            }
+          }
+          if (!(await writeAnswer()) && !(await writeAnswer())) {
+            console.error(`[llm-chat] job ${job.id}: its answer could not be recorded — the row is failed`)
+            await markJobFailed(job.id, {
+              error_message: ANSWER_NOT_RECORDED,
+              extra: { output_data: { error: ANSWER_NOT_RECORDED }, provider_cost: response.providerCost ?? null },
             })
-            .eq("id", job.id)
+          }
 
           if (usageLogId) {
             await CreditsService.commitCredits(usageLogId)

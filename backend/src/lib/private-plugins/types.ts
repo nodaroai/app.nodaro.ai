@@ -1121,6 +1121,30 @@ export interface PluginMediaToolkit {
    * address, a file that is not a picture, or a host that cannot detect.
    */
   detectFacesInImage?(input: PluginDetectFacesInImageInput): Promise<PluginDetectFacesInImageResult>
+  /**
+   * Run `fn` — the plugin's own memory-heavy work in its process (decoding,
+   * compositing or re-encoding pictures) — inside the box's ffmpeg admission:
+   * one ffmpeg slot and a reservation of `peakMiB` from the container's memory
+   * budget, waited for (never refused), released when `fn` settles.
+   * `peakMiB` is clamped to [64, 4096] (`private-plugins/memory-slot.ts`); a
+   * non-finite figure, or an empty `label`, throws a `TypeError` before
+   * anything is reserved. `fn`'s result and errors pass through unchanged; the
+   * one error of the host's own is a hold past its ceiling (10 min, plus the
+   * slot's grace and backstop), released while `fn` is left to settle. A
+   * cancel of the surrounding job while the call is still queued rejects with
+   * the host's `JobCancelledError` (a graceful stop: `JobStopRequestedError`)
+   * and reserves nothing. Additive-optional (no capability flag):
+   * feature-detect the member.
+   *
+   * NEVER call an admitted host member inside `fn` — `tk.ffmpeg.runFfmpeg*`,
+   * `tk.media.detectFaces` / `detectFacesInImage` / `mixAudio` / the other
+   * ffmpeg-backed media members, `renderEdlTimeline`: each waits for a slot
+   * of the same admission, which this hold already keeps, so a few such jobs
+   * at once wait on each other until the backstop fails them all. Make host
+   * media calls before or after the hold; inside it, only the plugin's own
+   * in-process work.
+   */
+  withMemorySlot?<T>(opts: { readonly peakMiB: number; readonly label: string }, fn: () => Promise<T>): Promise<T>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /**
@@ -3410,6 +3434,24 @@ export interface PluginCapabilities {
    * that waits on a job which may queue keeps a timeout that allows for it.
    */
   readonly queueAwareWait?: boolean
+  /**
+   * `POST /v1/llm-chat/generate`, sent by `tk.http.workerRequest` with a
+   * parent job and an `idempotency-key` header, is idempotent per payer and
+   * key: a repeat answers the first call's `{ jobId, generatedText }` and
+   * charges nothing; a repeat while it runs waits for that answer (202
+   * `{ jobId, deduped: true }` past the call's longest run); a failed call
+   * spends its key (a repeat answers its 502). The key alone decides: a repeat
+   * with another body (re-uploaded picture addresses) still replays; only a
+   * key of another kind of job is refused 409 `idempotency_key_reused`.
+   * The wait ends at once with 409 `job_cancelled` / `job_stop_requested`
+   * when the calling job is cancelled or asked to stop, and 503
+   * `worker_draining` (`Retry-After`) when the worker drains. On a keyless
+   * install that relays to the cloud, the cloud dedupes the forwarded key
+   * (no second run or charge; a repeat answers `{ jobId, deduped: true }`).
+   * False (or absent): an older host,
+   * whose keyed repeat may answer `{ jobId, deduped: true }` with no text.
+   */
+  readonly llmChatIdempotency?: boolean
 }
 
 /**

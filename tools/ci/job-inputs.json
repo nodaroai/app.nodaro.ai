@@ -505,6 +505,7 @@
         "backend/src/lib/private-plugins/job-execution.ts",
         "backend/src/lib/private-plugins/llm-metered.ts",
         "backend/src/lib/private-plugins/load.ts",
+        "backend/src/lib/private-plugins/memory-slot.ts",
         "backend/src/lib/private-plugins/plate-gate.ts",
         "backend/src/lib/private-plugins/recipe-registry.ts",
         "backend/src/lib/private-plugins/scene3d-artifact-toolkit.ts",

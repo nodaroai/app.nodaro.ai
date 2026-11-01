@@ -9,6 +9,28 @@ export interface IdempotentInsertResult<T> {
   created: boolean
 }
 
+/** PostgREST's `.single()` answer when no row matched. */
+const NO_ROW = "PGRST116"
+
+/**
+ * The insert lost its race at the unique key, but the row that won is gone by
+ * the time it is read (deleted in between). Nothing was created; the caller
+ * answers it as a retryable 503 (`IDEMPOTENCY_WINNER_GONE`, `Retry-After: 2`):
+ * the next attempt finds the key free, or a row to answer from.
+ */
+export class IdempotencyWinnerGoneError extends Error {
+  constructor(table: string, userId: string, idempotencyKey: string) {
+    super(`idempotency conflict on ${table} for user=${userId} key=${idempotencyKey} but no row found`)
+    this.name = "IdempotencyWinnerGoneError"
+  }
+}
+
+/** The 503 body for {@link IdempotencyWinnerGoneError} — the credit guard's own lost-race answer. */
+export const IDEMPOTENCY_WINNER_GONE = {
+  code: "dedup_race_winner_unresolvable",
+  message: "Duplicate request detected but the canonical job could not be located. Please retry the request.",
+} as const
+
 /**
  * Race-proof idempotent INSERT.
  *
@@ -71,14 +93,14 @@ export async function insertWithIdempotencyKey<T>(
     .eq("idempotency_key", idempotencyKey)
     .single()
 
+  // `.single()` reports "no row" as PGRST116: the winner's row is gone (deleted
+  // between the conflict and this read — a refused reservation, the Trash).
+  if ((selectError && selectError.code === NO_ROW) || (!selectError && !existing)) {
+    throw new IdempotencyWinnerGoneError(table, data.user_id, idempotencyKey)
+  }
   if (selectError) {
     throw new Error(
       `idempotency conflict on ${table} but post-conflict SELECT failed: ${selectError.message}`,
-    )
-  }
-  if (!existing) {
-    throw new Error(
-      `idempotency conflict on ${table} for user=${data.user_id} key=${idempotencyKey} but no row found`,
     )
   }
   return { row: existing as unknown as T, created: false }
