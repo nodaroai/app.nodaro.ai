@@ -110,6 +110,12 @@
  * the stored face mask) and names it as the run's `sourceAsset`. No candidate
  * when the run is sent a per-person variant of the mask (face-mask-variants.ts):
  * the clip carries a cut of the base mask only.
+ *
+ * A trend that sets its preparation steps (`steps`, cast-swap-steps.ts) sends
+ * them as `steps`, a copy without its absent keys (`normaliseSteps`); unset,
+ * or `{}`, sends no key at all. Dropped for an engine that does not declare
+ * `castSwap.steps` (`withoutUnsupportedSteps`, run-helpers.ts): its body
+ * schema would strip the key silently.
  */
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -140,6 +146,7 @@ import { promptStyleOf } from "./prompt-style.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
+import { normaliseSteps, type CastSwapSteps } from "../../../lib/cast-swap-steps.js"
 import {
   prismReferenceAudioByResolutionOf,
   prismReferenceAudioNotFull,
@@ -273,6 +280,12 @@ export interface TrendRunBody {
   sceneDescription?: string
   /** The window of the SOURCE clip `sceneDescription` covers (seconds). */
   sceneDescriptionWindow?: SceneDescriptionWindow
+  /**
+   * The trend's preparation steps, only when it sets some (`normaliseSteps`:
+   * never `{}`). Dropped for an engine that does not declare `castSwap.steps`
+   * (`withoutUnsupportedSteps`, run-helpers.ts).
+   */
+  steps?: CastSwapSteps
   preview: boolean
   previewStart: number
   resolution: TrendResolution
@@ -592,6 +605,7 @@ export function composeTrendRun(
   const prismAudio = prismReferenceAudioNotFull(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
   // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
   const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
+  const steps = normaliseSteps(data.steps)
 
   const display: TrendRunDisplay = {
     trend: { id: trend.id, slug: trend.slug, version: trend.version, name: pickText(data.name, "en")! },
@@ -627,6 +641,8 @@ export function composeTrendRun(
     ...(parts ? { promptParts: parts } : {}),
     promptStyle: promptStyleOf(data),
     ...(scene ?? {}),
+    // The trend's preparation steps, only when it sets some (an engine without them is never sent the key).
+    ...(steps ? { steps } : {}),
     preview: req.preview ?? false,
     previewStart: data.previewStart ?? 0,
     resolution,

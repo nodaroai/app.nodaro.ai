@@ -30,6 +30,17 @@
  * declares `castSwap.faceMesh`: an older one refuses the key, so an approved
  * mask never claims a mesh it was made without.
  *
+ * The scene description step (`steps.sceneDescription`): a make that
+ * describes the clip (full depth, on an engine that stores a scene
+ * description) is sent `steps: { sceneDescription }` when the draft sets the
+ * step and the loaded engine takes steps (`castSwap.steps`); any other make
+ * is sent exactly as before steps existed. The step it was sent is recorded
+ * (`faceMaskJob.sceneStepKey`, and the start's audit row) and carried to the
+ * approved mask (`TrendFaceMask.sceneStepKey`). It never enters the settings
+ * key: a later change of the step leaves the mask up to date, the stored
+ * texts are still sent, and the editor says they were made with another
+ * scene setting (`sceneStepChanged`).
+ *
  * Marks (`faceMasking.marks`, decided 2026-10-26): a make sends the `"erased"`
  * ones to the engine, which leaves their faces out of the mask; slot marks
  * (`{ slot }`, decided 2026-10-27) are never sent — they shape the per-person
@@ -71,6 +82,7 @@ import {
   withoutMarks,
 } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
+import { loadedEngineTakesSteps, sceneStepKeyOf } from "../../lib/cast-swap-steps.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, type EngineEnvironment } from "../lib/engine-environments.js"
 import { DraftConflictError, getDraftState, saveDraft } from "../lib/trends/store.js"
@@ -182,12 +194,18 @@ async function ownJob(jobId: string, userId: string): Promise<Record<string, unk
   return isRec(data) && data.user_id === userId ? data : null
 }
 
+/** What a face mask job was started for: its settings key and the scene description step it was sent (absent: none). */
+interface MadeFrom {
+  settingsKey: string
+  sceneStepKey?: string
+}
+
 /**
- * The settings key a face mask job of trend `trendId` was started for, from
- * the caller's own `make_trend_face_mask` audit row of it, or null. Only for
- * a job the draft could not record (`recorded: false`). Throws on a database error.
+ * What a face mask job of trend `trendId` was started for, from the caller's
+ * own `make_trend_face_mask` audit row of it, or null. Only for a job the
+ * draft could not record (`recorded: false`). Throws on a database error.
  */
-async function auditedSettingsKey(trendId: string, jobId: string, userId: string): Promise<string | null> {
+async function auditedStart(trendId: string, jobId: string, userId: string): Promise<MadeFrom | null> {
   const { data, error } = await supabase
     .from("admin_actions")
     .select("payload")
@@ -199,7 +217,10 @@ async function auditedSettingsKey(trendId: string, jobId: string, userId: string
     .limit(1)
   if (error) throw new Error(`Could not read the face mask's start: ${error.message}`)
   const payload = (data as Array<{ payload?: unknown }> | null)?.[0]?.payload
-  return isRec(payload) && payload.jobId === jobId ? str(payload.settingsKey) : null
+  if (!isRec(payload) || payload.jobId !== jobId) return null
+  const settingsKey = str(payload.settingsKey)
+  const sceneStepKey = str(payload.sceneStepKey)
+  return settingsKey === null ? null : { settingsKey, ...(sceneStepKey ? { sceneStepKey } : {}) }
 }
 
 export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFaceMaskDeps): void {
@@ -259,9 +280,21 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw the face mesh yet: turn the face mesh off, or wait for the engine.")
       }
       const settingsKey = faceMaskSettingsKey(draft)!
+      // Full depth on an engine that describes the original clip as it makes it: the roles to name
+      // its people by, and the preview's start (scene-description.ts). Any other make is sent as before.
+      const describe = source === "full-depth" && castSwap.storedSceneDescription === true ? sceneMakeFields(draft) : undefined
+      // The scene description step, only on a make that describes the clip and to an engine that takes
+      // steps; recorded as made with it (never part of the settings key: the stored text is still sent).
+      const sceneStep = describe && loadedEngineTakesSteps() ? draft.steps?.sceneDescription : undefined
+      const sceneStepKey = sceneStepKeyOf(sceneStep)
       // The job is paid for once the engine is asked: the draft that records it must save, so it is
       // checked first (with a stand-in job), and a draft that cannot is refused before anything is paid.
-      const placeholder = { jobId: "00000000-0000-4000-8000-000000000000", settingsKey, startedAt: new Date().toISOString() }
+      const placeholder = {
+        jobId: "00000000-0000-4000-8000-000000000000",
+        settingsKey,
+        startedAt: new Date().toISOString(),
+        ...(sceneStepKey ? { sceneStepKey } : {}),
+      }
       const valid = trendVersionDataSchema.safeParse({ ...draft, faceMaskJob: placeholder })
       if (!valid.success) return deps.badRequest(reply, valid.error)
       const key = req.headers["idempotency-key"]
@@ -272,21 +305,30 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const faceMasking = { ...faceMaskingSent(withoutMarks(draft.faceMasking)), ...(marks.length > 0 ? { marks: structuredClone([...marks]) } : {}) }
       // The approved mask's raw mask, when it is still the base of this one: no new face finding.
       const fromMask = takesMarks ? reusableFaceMaskBase(draft, castSwap.faceMaskRecipe) : undefined
-      // Full depth on an engine that describes the original clip as it makes it: the roles to name
-      // its people by, and the preview's start (scene-description.ts). Any other make is sent as before.
-      const describe = source === "full-depth" && castSwap.storedSceneDescription === true ? sceneMakeFields(draft) : {}
       const res = await engineRequest(
         app,
         req,
         "/v1/cast-swap/face-mask",
-        { videoUrl: draft.source.videoUrl, faceMasking, ...(fromMask ? { fromMask } : {}), ...describe },
+        {
+          videoUrl: draft.source.videoUrl,
+          faceMasking,
+          ...(fromMask ? { fromMask } : {}),
+          ...describe,
+          ...(sceneStep ? { steps: { sceneDescription: structuredClone(sceneStep) } } : {}),
+        },
         typeof key === "string" && key ? { "idempotency-key": key } : {},
         { origin: "trends-admin", source: deriveJobSource(req) },
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       const jobId = jobIdOf(res.body)
       if (!jobId) return err(reply, 502, "engine_error", "Nodaro Motion did not return a job id.")
-      await audit(req, "make_trend_face_mask", "trend", trend.id, { slug: trend.slug, jobId, settingsKey, ...(fromMask ? { fromMask: true } : {}) })
+      await audit(req, "make_trend_face_mask", "trend", trend.id, {
+        slug: trend.slug,
+        jobId,
+        settingsKey,
+        ...(fromMask ? { fromMask: true } : {}),
+        ...(sceneStepKey ? { sceneStepKey } : {}),
+      })
 
       // The job is paid for: record it on the draft even when another write
       // landed meanwhile (re-read, keep that write), and say so (`draftMoved`).
@@ -326,9 +368,12 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       // What the job was made from: the draft's record of it, else (a start that could not record
       // it) the caller's own audit row of that start for this trend.
       const pending = draft.faceMaskJob
-      const madeFrom =
-        pending && pending.jobId === body.data.jobId ? pending.settingsKey : await auditedSettingsKey(trend.id, body.data.jobId, req.userId!)
-      if (madeFrom === null) {
+      const started: MadeFrom | null =
+        pending && pending.jobId === body.data.jobId
+          ? { settingsKey: pending.settingsKey, ...(pending.sceneStepKey ? { sceneStepKey: pending.sceneStepKey } : {}) }
+          : await auditedStart(trend.id, body.data.jobId, req.userId!)
+      const madeFrom = started?.settingsKey ?? null
+      if (started === null || madeFrom === null) {
         return err(reply, 409, "not_pending_face_mask", "That is not this trend's face mask in the making. Make the face mask here.")
       }
       const settingsKey = faceMaskSettingsKey(draft)
@@ -386,8 +431,10 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
         approvedBy: req.userId!,
         // The faces its make drew the face mesh on (a setting with the mesh only): 0 = no lines on it.
         ...(faceMeshOn(draft.faceMasking) && facesDrawn !== undefined ? { facesDrawn } : {}),
-        // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts).
+        // Full depth: the make's descriptions of the original clip, trimmed and capped (scene-description.ts),
+        // and the scene description step its make was sent (absent: none).
         ...(source === "full-depth" ? sceneDescriptionsOf(output, input) : {}),
+        ...(source === "full-depth" && started.sceneStepKey ? { sceneStepKey: started.sceneStepKey } : {}),
       }
       // Stale on arrival helps no one: the recipes are checked before anything is stored.
       const environments = await environmentsOrNull(req)

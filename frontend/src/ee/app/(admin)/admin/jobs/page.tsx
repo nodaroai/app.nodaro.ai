@@ -1,4 +1,4 @@
-import { JobGenerationDetails, JobSkippedSteps } from "./job-generation-details"
+import { JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "./job-generation-details"
 import { useState, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { Loader2, Info, Copy, Check, ExternalLink } from "lucide-react"
@@ -126,6 +126,7 @@ function JobDetailDialog({
         </DialogHeader>
 
         <JobSkippedSteps output={job.output_data} />
+        <JobStepOutputs job={job} />
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm border rounded-lg p-4">
           <div>

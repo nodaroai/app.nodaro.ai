@@ -29,6 +29,7 @@ import { getPluginSupports } from "../../../lib/private-plugins/supports-registr
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { engineMasksTarget, faceMaskingZoneSchema, loadedEngineDrawsFaceMesh, withFaceMeshFor, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
+import { loadedEngineTakesSteps, withStepsFor } from "../../../lib/cast-swap-steps.js"
 import { TrendsUnavailableError, versionsHidingOriginal } from "./store.js"
 import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
@@ -497,6 +498,23 @@ export function withoutUnsupportedFaceMesh(composed: ComposedTrendRun): void {
 }
 
 /**
+ * The body's `steps` kept only when the loaded engine declares
+ * `castSwap.steps` (`withStepsFor`); otherwise no `steps` key at all. THE
+ * guard for an older engine: its body schema strips an unknown key silently,
+ * so a run there would quietly ignore the trend's steps rather than fail.
+ * Publishing holds a trend that sets them back from such an environment
+ * (`STEPS_NEED`), so only a draft's test run (or a published one,
+ * mid-deploy) gets here, and it runs as today. Mutates `composed.body`.
+ */
+export function withoutUnsupportedSteps(composed: ComposedTrendRun): void {
+  const { body } = composed
+  if (!Object.hasOwn(body, "steps")) return
+  const sent = withStepsFor(body, loadedEngineTakesSteps()).steps
+  if (sent) body.steps = sent
+  else delete body.steps
+}
+
+/**
  * The body without `pulseAudio` when the loaded engine does not declare it
  * takes one (`castSwap.pulseAudio`): such an engine always puts the original
  * audio back, so it gets exactly the body it got before the setting existed.
@@ -608,8 +626,8 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
  * prompt parts, the prompt style and scene, the face mesh, the stored scene
- * description, the Pulse audio, the Prism reference audio, the run's
- * `sourceAsset`), and the
+ * description, the preparation steps, the Pulse audio, the Prism reference
+ * audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
  * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
  */
@@ -619,6 +637,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedPromptStyle(composed)
   withoutUnsupportedFaceMesh(composed)
   withoutUnsupportedSceneDescription(composed)
+  withoutUnsupportedSteps(composed)
   withoutUnsupportedPulseAudio(composed)
   withoutUnsupportedPrismReferenceAudio(composed)
   withPreparedPreview(composed)

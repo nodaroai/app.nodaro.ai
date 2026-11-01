@@ -5,6 +5,7 @@ import { MODEL_MAKER_LOGOS_KEY, parseModelMakerLogos } from "./maker-logo-settin
 import { NODARO_MOTION_MASKING_KEY, parseNodaroMotionMasking, type NodaroMotionMasking } from "./nodaro-motion-masking.js"
 import { NODARO_MOTION_PROMPT_PARTS_KEY, parseNodaroMotionPromptParts, type NodaroMotionPromptParts } from "./nodaro-motion-prompt-parts.js"
 import { NODARO_MOTION_MOTION_KEY, parseNodaroMotionMotion, type NodaroMotionMotion } from "./nodaro-motion-motion.js"
+import { NODARO_MOTION_STEPS_KEY, parseNodaroMotionSteps, type NodaroMotionSteps } from "./nodaro-motion-steps.js"
 import { NODARO_MOTION_PULSE_AUDIO_KEY, parseNodaroMotionPulseAudio, type CastSwapPulseAudio } from "./cast-swap-pulse-audio.js"
 import {
   NODARO_MOTION_PRISM_REFERENCE_AUDIO_KEY,
@@ -107,6 +108,12 @@ export interface AppSettings {
    * not a value this app knows): the full audio.
    */
   nodaro_motion_prism_reference_audio: CastSwapPrismReferenceAudio | null
+  /**
+   * Nodaro Motion's preparation steps per engine (nodaro-motion-steps.ts), for
+   * direct runs. null = never saved (today's run). Each engine's entry is
+   * validated on its own; an invalid or empty one is dropped.
+   */
+  nodaro_motion_steps: NodaroMotionSteps | null
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -153,7 +160,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null }
     readFailures.add(fallback)
     return fallback
   }
@@ -180,6 +187,7 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_motion: null,
     nodaro_motion_pulse_audio: null,
     nodaro_motion_prism_reference_audio: null,
+    nodaro_motion_steps: null,
   }
 
   for (const row of data ?? []) {
@@ -193,6 +201,10 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === NODARO_MOTION_PULSE_AUDIO_KEY) {
       settings.nodaro_motion_pulse_audio = parseNodaroMotionPulseAudio(row.value)
+      continue
+    }
+    if (row.key === NODARO_MOTION_STEPS_KEY) {
+      settings.nodaro_motion_steps = parseNodaroMotionSteps(row.value)
       continue
     }
     if (row.key === NODARO_MOTION_PRISM_REFERENCE_AUDIO_KEY) {

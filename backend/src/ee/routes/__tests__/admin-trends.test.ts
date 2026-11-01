@@ -290,6 +290,7 @@ import { resolveRequestSession } from "../../../lib/generation-session-scope.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { withResolvedZone } from "../../../lib/cast-swap-face-masking.js"
 import { faceMaskBaseKey, faceMaskSettingsKey } from "../../lib/trends/face-mask.js"
+import { sceneStepKeyOf } from "../../../lib/cast-swap-steps.js"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
@@ -3161,6 +3162,190 @@ describe("the stored face mask", () => {
       expect(mem.trends[0]!.versions[1]!.data).not.toHaveProperty("previewClip")
       // The masked clip was copied before the cut; the cuts themselves were not stored.
       expect(mem.uploads).toHaveLength(1)
+    })
+  })
+
+  describe("the preparation steps (`steps`)", () => {
+    const FULL = { mode: "always" as const, source: "full-depth" as const }
+    const FKEY = () => faceMaskSettingsKey(draftData({ faceMasking: FULL }))!
+    const DEPTH = { ...FM_SUPPORTS, sourceModes: ["faces", "full-depth", "keep-people"] as Array<"faces" | "full-depth" | "keep-people">, storedSceneDescription: true }
+    const SCENE = { mode: "llm" as const, llm: { model: "gemini-3.8-flash", inputs: ["clip" as const], maxChars: 3000 } }
+    const PROMPT = { mode: "llm" as const, llm: { model: "gemini-3.8-flash", instructions: "test instructions", inputs: ["rolePhotos" as const], maxChars: 2000 } }
+    const GONE = { mode: "llm" as const, llm: { model: "a-model-since-removed", inputs: ["clip" as const], maxChars: 1000 } }
+    const SCENE_KEY = () => sceneStepKeyOf(SCENE)!
+    const supports = (extra: Record<string, unknown> = {}) =>
+      setPluginSupports({ castSwap: { ...DEPTH, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+    const start = async () => call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+    const save = async (data: unknown) => call("PUT", `/v1/admin/trends/${T1}/draft`, { data, revision: await revisionOf() })
+    const draftNow = () => mem.trends[0]!.versions[1]!.data
+    const startAudits = () =>
+      db.log
+        .filter((q) => q.table === "admin_actions")
+        .flatMap((q) => q.ops.filter((op) => op.m === "insert").map((op) => op.a[0] as Record<string, unknown>))
+        .filter((row) => row.action === "make_trend_face_mask")
+    /** A full-depth make as the engine completes it, with its scene texts. */
+    const describedJob = () =>
+      fmJob({}, { faceMasking: FULL }, { recipe: { core: null, plugin: "1" }, stats: { coverage: 1 }, sceneDescription: "A neon kitchen." })
+    const videoUrl = `https://cdn.test/trends/${T1}/src.mp4`
+    const ROLES = [
+      { name: "the woman on the left", kind: "person" },
+      { name: "the dog", kind: "pet" },
+    ]
+
+    beforeEach(() => {
+      supports({ steps: true })
+      world.envs = [envRow("production", { ...DEPTH, steps: true }), envRow("staging", { ...DEPTH, steps: true })]
+    })
+
+    describe("the draft save", () => {
+      it("trend draft save refuses an invalid steps object with its path (and its code), storing nothing", async () => {
+        seed({}, draftData())
+        const before = structuredClone(draftNow())
+        const res = await save(
+          draftData({
+            steps: {
+              enginePrompt: { mode: "llm", llm: { model: "no-such-model", inputs: ["rolePhotos", "rolePhotos"], maxChars: 2000 } },
+              sceneDescription: { mode: "llm", llm: { model: "gemini-3.8-flash", inputs: ["rolePhotos"], maxChars: 1000 } },
+            },
+          }),
+        )
+        expect(res.statusCode).toBe(400)
+        const error = res.json().error
+        expect(error.code).toBe("validation_error")
+        expect(error.message).toMatch(/^steps\./)
+        expect(error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ path: "steps.enginePrompt.llm.inputs", code: "duplicate_input" }),
+            expect.objectContaining({ path: "steps.enginePrompt.llm.model", code: "unknown_model" }),
+            expect.objectContaining({ path: "steps.sceneDescription.llm.inputs", code: "scene_needs_clip" }),
+          ]),
+        )
+        expect(draftNow()).toEqual(before)
+
+        // A malformed shape is named by its path too (zod's own code).
+        const shape = await save(draftData({ steps: { sheets: {} } as never }))
+        expect(shape.statusCode).toBe(400)
+        expect(shape.json().error.issues).toEqual([expect.objectContaining({ path: "steps.sheets.rules", code: "invalid_type" })])
+      })
+
+      it("stores a valid setting as checked, and never `{}` (the key is left out)", async () => {
+        seed({}, draftData())
+        let res = await save(draftData({ steps: { enginePrompt: { ...PROMPT, llm: { ...PROMPT.llm, instructions: "  test instructions  " } } } }))
+        expect(res.statusCode).toBe(200)
+        expect(draftNow().steps).toEqual({ enginePrompt: PROMPT })
+        res = await save(draftData({ steps: {} }))
+        expect(res.statusCode).toBe(200)
+        expect(Object.hasOwn(draftNow(), "steps")).toBe(false)
+      })
+
+      it("a stored setting whose model left the list is refused at save until another is picked", async () => {
+        seed({}, draftData({ steps: { sceneDescription: GONE } }))
+        const res = await save(draftData({ steps: { sceneDescription: GONE } }))
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.issues).toEqual([expect.objectContaining({ path: "steps.sceneDescription.llm.model", code: "unknown_model" })])
+        expect((await save(draftData({ steps: { sceneDescription: SCENE } }))).statusCode).toBe(200)
+      })
+    })
+
+    describe("the face mask make", () => {
+      it("the face-mask make sends sceneDescription only when supported, and records the step it sent", async () => {
+        seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE, enginePrompt: PROMPT } }))
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: FULL, roles: ROLES, previewStart: 2, steps: { sceneDescription: SCENE } })
+        // Recorded as made with it, never in the settings key.
+        expect(draftNow().faceMaskJob).toEqual({ jobId: FACE_MASK_JOB, settingsKey: FKEY(), startedAt: expect.any(String), sceneStepKey: SCENE_KEY() })
+        expect(startAudits()[0]!.payload).toEqual({ slug: "neon-dance", jobId: FACE_MASK_JOB, settingsKey: FKEY(), sceneStepKey: SCENE_KEY() })
+      })
+
+      it("an engine without castSwap.steps is sent the make exactly as before (and nothing is recorded)", async () => {
+        seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE } }))
+        supports()
+        expect((await start()).statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: FULL, roles: ROLES, previewStart: 2 })
+        expect(draftNow().faceMaskJob).toEqual({ jobId: FACE_MASK_JOB, settingsKey: FKEY(), startedAt: expect.any(String) })
+        expect(startAudits()[0]!.payload).toEqual({ slug: "neon-dance", jobId: FACE_MASK_JOB, settingsKey: FKEY() })
+      })
+
+      it("no scene step, or a make that describes nothing (a face mask), sends no steps", async () => {
+        seed({}, draftData({ faceMasking: FULL, steps: { enginePrompt: PROMPT } }))
+        await start()
+        expect(engine.calls[0]!.body).not.toHaveProperty("steps")
+        expect(draftNow().faceMaskJob).not.toHaveProperty("sceneStepKey")
+
+        mem.trends = []
+        engine.calls.length = 0
+        seed({}, draftData({ faceMasking: MASKING, steps: { sceneDescription: SCENE } }))
+        expect((await start()).statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({ videoUrl, faceMasking: withResolvedZone(MASKING) })
+        expect(draftNow().faceMaskJob).not.toHaveProperty("sceneStepKey")
+      })
+
+      it("a stored version whose model left the list still makes and approves its face mask", async () => {
+        seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: GONE } }))
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(res.json().data.recorded).toBe(true)
+        expect(engine.calls[0]!.body.steps).toEqual({ sceneDescription: GONE })
+        world.jobs.set(FACE_MASK_JOB, describedJob())
+        const approved = await approve()
+        expect(approved.statusCode).toBe(200)
+        expect(draftNow().faceMask).toMatchObject({ sceneStepKey: sceneStepKeyOf(GONE), sceneDescription: "A neon kitchen." })
+      })
+    })
+
+    describe("approving and after", () => {
+      it("the sceneStepKey is recorded and never makes the mask out of date; sceneStepChanged flips with the draft's step", async () => {
+        seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE }, faceMaskJob: pendingJob({ settingsKey: FKEY(), sceneStepKey: SCENE_KEY() }) }))
+        world.jobs.set(FACE_MASK_JOB, describedJob())
+        const res = await approve()
+        expect(res.statusCode).toBe(200)
+        expect(draftNow().faceMask).toMatchObject({ settingsKey: FKEY(), sceneStepKey: SCENE_KEY(), sceneDescription: "A neon kitchen." })
+        expect(res.json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
+
+        // Another scene step: the mask stays approved (its text is still sent), and the state says so.
+        const mask = draftNow().faceMask
+        const changed = await save(draftData({ faceMasking: FULL, steps: { sceneDescription: { mode: "template" } } }))
+        expect(changed.statusCode).toBe(200)
+        expect(changed.json().data.faceMaskState).toEqual({ status: "approved", reasons: [], sceneStepChanged: true })
+        expect(draftNow().faceMask).toEqual(mask)
+        expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskState).toEqual({ status: "approved", reasons: [], sceneStepChanged: true })
+
+        // Back to the step it was made with: the same again.
+        const back = await save(draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE } }))
+        expect(back.json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
+      })
+
+      it("a start the draft could not record carries its step from the audit row", async () => {
+        seed({}, draftData({ faceMasking: FULL, steps: { sceneDescription: SCENE } }))
+        expect((await start()).statusCode).toBe(202)
+        // As if the record never landed: approve finds the start in its audit row.
+        delete mem.trends[0]!.versions[1]!.data.faceMaskJob
+        world.jobs.set(FACE_MASK_JOB, describedJob())
+        expect((await approve()).statusCode).toBe(200)
+        expect(draftNow().faceMask).toMatchObject({ settingsKey: FKEY(), sceneStepKey: SCENE_KEY() })
+      })
+
+      it("a mask made with no step sent records none (and an unset draft step reads as the same)", async () => {
+        seed({}, draftData({ faceMasking: FULL, faceMaskJob: pendingJob({ settingsKey: FKEY() }) }))
+        world.jobs.set(FACE_MASK_JOB, describedJob())
+        const res = await approve()
+        expect(res.statusCode).toBe(200)
+        expect(draftNow().faceMask).not.toHaveProperty("sceneStepKey")
+        expect(res.json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
+      })
+    })
+
+    it("a test run carries the draft's steps only to an engine that takes them, and runs either way", async () => {
+      seed({}, draftData({ steps: { enginePrompt: PROMPT }, examples: [EXAMPLE] }))
+      const slots = { lead: { images: ["https://u.example/me.png"] } }
+      setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, steps: true } as never })
+      expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+      expect(engine.calls[0]!.body.steps).toEqual({ enginePrompt: PROMPT })
+
+      setPluginSupports({ castSwap: { ...CAST_SWAP_ALL } })
+      expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+      expect(engine.calls[1]!.body).not.toHaveProperty("steps")
     })
   })
 })

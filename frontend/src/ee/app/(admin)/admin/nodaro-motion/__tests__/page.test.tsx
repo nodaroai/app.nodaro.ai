@@ -67,6 +67,8 @@ beforeEach(() => {
   routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${ENVS_URL}`] = () => ({ body: { data: ENVIRONMENTS } })
+  // The preparation steps (steps.test.tsx): never saved; these environments' engines take none.
+  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 

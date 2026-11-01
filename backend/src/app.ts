@@ -202,6 +202,7 @@ import { mediaUrlImportRoutes } from "./routes/media-url-import.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
 import { adminJobsRoutes } from "./ee/routes/admin-jobs.js"
+import { adminCastSwapStepsRoutes } from "./ee/routes/admin-cast-swap-steps.js"
 import { adminSsoRoutes } from "./ee/routes/admin-sso.js"
 import { adminLocationRoutes } from "./ee/routes/admin-locations.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
@@ -750,6 +751,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminAccessRoutes)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminJobsRoutes)
+  if (hasAdmin()) await app.register(adminCastSwapStepsRoutes)
   if (hasAdmin()) await app.register(adminSsoRoutes)
   if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)

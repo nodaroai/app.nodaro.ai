@@ -6,7 +6,8 @@
 // with a Full / 4 s preview switch: the engine prompt of the mode the run ran
 // in, and the trend's own prompt parts for either (a preview run sends the
 // preview's own role names, reference lines, pre and trend prompts, each
-// falling back to the full run's).
+// falling back to the full run's). "Steps" opens what its preparation steps
+// made (labels, layouts, sheets, an LLM-written prompt, the scene text).
 // Every chip of every slot can be set here, the ones hidden from people too,
 // so each variant can be tried before choosing what people see.
 //
@@ -16,7 +17,7 @@
 // run and its media after a confirmation (not while it is running).
 
 import { useRef, useState } from "react"
-import { Copy, Eye, Link2, Loader2, Maximize2, Play, Sparkles, Trash2, X } from "lucide-react"
+import { Copy, Eye, Link2, ListChecks, Loader2, Maximize2, Play, Sparkles, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -62,6 +63,7 @@ import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips, type Previ
 import { MediaPicker } from "./MediaPicker"
 import { trendRunCreditLine } from "../../jobs/admin-job-credits"
 import { uploadLocalFile } from "./uploads"
+import { StepsDialog } from "./StepsDialog"
 
 type ChipChoices = Partial<Record<TrendChipKey, TrendChoice>>
 
@@ -105,6 +107,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
   const draftable = hasDraft && resolution === "480p"
   const [details, setDetails] = useState("")
   const [promptOf, setPromptOf] = useState<{ jobId: string; runMode: AdminTrendPromptMode } | null>(null)
+  const [stepsOf, setStepsOf] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<AdminTrendRun | null>(null)
   const remove = useDeleteTrendTestRun(trendId)
   const formTop = useRef<HTMLDivElement>(null)
@@ -353,6 +356,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
                 promoting={promotingId === r.jobId}
                 onPromote={() => onPromote(r.jobId)}
                 onShowPrompt={() => setPromptOf({ jobId: r.jobId, runMode: r.preview ? "preview" : "full" })}
+                onShowSteps={() => setStepsOf(r.jobId)}
                 onCopyInputs={() => copyInputs(r)}
                 onDelete={() => setDeleting(r)}
               />
@@ -362,6 +366,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
       </div>
 
       <PromptDialog key={promptOf?.jobId ?? ""} run={promptOf} onClose={() => setPromptOf(null)} />
+      <StepsDialog jobId={stepsOf} onClose={() => setStepsOf(null)} />
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && !remove.isPending && setDeleting(null)}>
         <DialogContent>
           <DialogHeader>
@@ -432,6 +437,7 @@ function RunCard({
   promoting,
   onPromote,
   onShowPrompt,
+  onShowSteps,
   onCopyInputs,
   onDelete,
 }: {
@@ -439,6 +445,7 @@ function RunCard({
   readonly promoting: boolean
   readonly onPromote: () => void
   readonly onShowPrompt: () => void
+  readonly onShowSteps: () => void
   readonly onCopyInputs: () => void
   readonly onDelete: () => void
 }) {
@@ -515,6 +522,9 @@ function RunCard({
           </Button>
           <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onShowPrompt}>
             <Eye className="mr-1 h-4 w-4" /> Show prompt
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onShowSteps}>
+            <ListChecks className="mr-1 h-4 w-4" /> Steps
           </Button>
           <Button type="button" size="sm" variant="outline" className="min-h-9" onClick={onCopyInputs}>
             <Copy className="mr-1 h-4 w-4" /> Copy inputs

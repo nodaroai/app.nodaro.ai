@@ -87,7 +87,8 @@ import {
   unpublish,
   updateTrendMeta,
 } from "../lib/trends/store.js"
-import { trendRunRequestSchema, trendVersionDataSchema } from "../lib/trends/schemas.js"
+import { trendRunRequestSchema, trendVersionDataSchema, withSavedSteps } from "../lib/trends/schemas.js"
+import type { CastSwapStepsProblem } from "../../lib/cast-swap-steps.js"
 import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { TREND_SOURCE_SECONDS, TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
@@ -221,6 +222,19 @@ const notFound = (reply: FastifyReply, what = "Trend") => err(reply, 404, "not_f
 
 function badRequest(reply: FastifyReply, error: z.ZodError) {
   return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(error) } })
+}
+
+/**
+ * A draft's `steps` refused as an admin saves them (`withSavedSteps`): 400
+ * `validation_error`, the first problem in the message (as `badRequest`
+ * words one), and every problem in `issues` with its path under `steps` and
+ * its code (`castSwapCode`, else zod's).
+ */
+function stepsRefused(reply: FastifyReply, problems: readonly CastSwapStepsProblem[]) {
+  const first = problems[0]
+  const head = first ? `${first.path}: ${first.message}` : "steps: Invalid preparation steps."
+  const message = problems.length > 1 ? `${head} (+${problems.length - 1} more)` : head
+  return err(reply, 400, "validation_error", message, { issues: problems })
 }
 
 const draftConflict = (reply: FastifyReply) =>
@@ -602,9 +616,13 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const loaded = await loadDraft(req, reply)
       if (!loaded) return reply
       if (loaded.revision !== body.data.revision) return draftConflict(reply)
+      // The preparation steps as an admin saves them (a known model that can see what it is shown);
+      // `{}` is never stored.
+      const stepsChecked = withSavedSteps(body.data.data)
+      if ("problems" in stepsChecked) return stepsRefused(reply, stepsChecked.problems)
       // The examples, face mask, upscales, source crop and prompt parts are each written only by their
       // own routes: the body's are ignored, and the row's own (at the revision the client read) are kept.
-      const merged = withServerOwnedFields(keepDisplayCopy(body.data.data, loaded.draft), loaded.draft)
+      const merged = withServerOwnedFields(keepDisplayCopy(stepsChecked.data, loaded.draft), loaded.draft)
       // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
       const { data: marked, cleared, abandoned } = withMarksForSource(merged, loaded.draft)
       // Validated BEFORE the preview clip is cut: a draft that cannot save pays for no ffmpeg run.

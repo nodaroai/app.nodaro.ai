@@ -53,6 +53,7 @@ import type {
   CastSwapPromptStyleId,
   CastSwapPulseAudioId,
   CastSwapPrismReferenceAudioByResolution,
+  CastSwapSteps,
 } from "@/lib/api"
 import { prismReferenceAudioByResolutionOf, prismReferenceAudioNotFull } from "./prism-reference-audio"
 
@@ -188,6 +189,8 @@ export interface TrendForm {
   previewClip: AdminTrendPreviewClip | undefined
   /** Visitors see Example 1 as the original; the original clip is never shown. Saved only when on. */
   hideOriginal: boolean
+  /** The preparation steps, as stored: undefined (or `{}`) = none set, today's run; saved only when something is set. */
+  steps?: CastSwapSteps
 }
 
 let uidSeq = 0
@@ -213,6 +216,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     promptStyle: draft.promptStyle,
     previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
     hideOriginal: draft.hideOriginal === true,
+    ...(draft.steps ? { steps: structuredClone(draft.steps) } : {}),
   }
 }
 
@@ -380,7 +384,19 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(form.promptStyle ? { promptStyle: form.promptStyle } : {}),
     // Left out when off (the original shown), so loading an old draft is no change.
     ...(form.hideOriginal ? { hideOriginal: true } : {}),
+    // Left out when nothing is set (`{}` included), so loading an old draft is no change.
+    ...(stepsOfForm(form.steps) ? { steps: stepsOfForm(form.steps) } : {}),
   }
+}
+
+/** The preparation steps as saved: only the steps set (a copy), undefined when none is. */
+function stepsOfForm(s: CastSwapSteps | undefined): CastSwapSteps | undefined {
+  if (!s || (s.sheets === undefined && s.enginePrompt === undefined && s.sceneDescription === undefined)) return undefined
+  return structuredClone({
+    ...(s.sheets !== undefined ? { sheets: s.sheets } : {}),
+    ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
+    ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
+  })
 }
 
 /** The most images a run of this form may send: 10 on Kling 4, else 30. */
@@ -577,6 +593,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   "faceMaskTarget:body": "whole-person masks (Keep people)",
   "faceMaskHideTarget:body": "whole-person hiding (Faces hidden)",
   faceMesh: "the face mesh",
+  steps: "the preparation steps",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",

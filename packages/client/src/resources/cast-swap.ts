@@ -351,6 +351,8 @@ export interface CastSwapEstimate {
    * - `privacy`: preparing the clip, when the engine's setting does. In both
    *   totals when it always runs; outside both when it is the retry
    *   (`privacyCredits`).
+   * - `prompt`: the prompt written for the run by a language model, when
+   *   Nodaro's setting for the engine does so (absent otherwise).
    *
    * `motion` and `motionExpected` are alternatives, so the parts sum to more
    * than either total: read `totalCredits` and `expectedCredits`, never the
@@ -364,6 +366,7 @@ export interface CastSwapEstimate {
     motion?: number
     motionExpected?: number
     privacy?: number
+    prompt?: number
   } & Record<string, number>
   /**
    * The extra credits charged only if the video model refuses the clip and

@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle` and `previewClip` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `steps` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original, unless the trend hides its original
@@ -25,6 +25,7 @@ import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-f
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
 import type { CastSwapPrismReferenceAudio, CastSwapPrismReferenceAudioMode } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
+import type { CastSwapSteps } from "../../../lib/cast-swap-steps.js"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
 
@@ -179,6 +180,16 @@ export interface TrendFaceMask {
    * recorded (the text reads as made for another start).
    */
   previewSceneDescriptionStart?: number
+  /**
+   * Full depth: the scene description step (`steps.sceneDescription`) the
+   * stored texts were made with, as `sceneStepKeyOf` hashes it (recorded at
+   * the make, `TrendFaceMaskJob.sceneStepKey`); absent when the make was sent
+   * none (unset, or an engine that does not take steps). Never part of the
+   * settings key: a draft whose step differs keeps sending the stored texts,
+   * and the editor says they were made with another scene setting
+   * (`faceMaskState`'s `sceneStepChanged`).
+   */
+  sceneStepKey?: string
 }
 
 /**
@@ -232,6 +243,8 @@ export interface TrendFaceMaskJob {
   jobId: string
   settingsKey: string
   startedAt: string
+  /** The scene description step the make was sent (`sceneStepKeyOf`); absent when none. Carried to `TrendFaceMask.sceneStepKey`. */
+  sceneStepKey?: string
 }
 
 /**
@@ -443,6 +456,16 @@ export interface TrendVersionData {
    * settings, so changing it needs no new mask.
    */
   prismReferenceAudio?: CastSwapPrismReferenceAudio | CastSwapPrismReferenceAudioMode
+  /**
+   * HIDDEN. The preparation steps of every run of this trend (reference
+   * sheets by rules, the engine prompt and the scene description as Template
+   * or LLM; `CastSwapSteps`). Absent = today's run exactly; a save never
+   * stores `{}` (`normaliseSteps`). Sent only to an engine that declares
+   * `castSwap.steps` (`withoutUnsupportedSteps`, run-helpers.ts), and a trend
+   * that sets it publishes only where every engine does (`STEPS_NEED`). Not
+   * part of the face mask's settings key.
+   */
+  steps?: CastSwapSteps
   /**
    * HIDDEN. The 4 s preview's INPUT clip, cut ahead of time from the source at
    * `previewStart` (see `TrendPreviewClip`); absent while the draft offers no

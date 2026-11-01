@@ -43,6 +43,7 @@ import {
   type FaceMaskMark,
   type FaceMaskingWithMarks,
 } from "../../../lib/cast-swap-face-masking.js"
+import { sceneStepKeyOf } from "../../../lib/cast-swap-steps.js"
 import type { EngineEnvironment } from "../engine-environments.js"
 import type { TrendFaceMask, TrendVersionData } from "./types.js"
 
@@ -220,6 +221,12 @@ export interface FaceMaskState {
   /** `none`: no mask stored; `approved`: stored and up to date; `out_of_date`: see `reasons`. */
   status: "none" | "approved" | "out_of_date"
   reasons: FaceMaskOutOfDate[]
+  /**
+   * The stored scene texts were made with another scene description step
+   * than the draft's (`sceneStepChanged`). Present (true) only then: the
+   * texts are still sent, so it never makes the mask out of date.
+   */
+  sceneStepChanged?: true
 }
 
 /**
@@ -229,9 +236,14 @@ export interface FaceMaskState {
  * masks, is not compared either: publishing already refuses it
  * (`engine_unknown` / `engine_unsupported`). A full-depth clip is made with
  * no Video Mask step, so core's recipe is not compared for it.
+ *
+ * A mask with stored scene texts made with another scene description step
+ * than the draft's (`sceneStepChanged`) is said so (`sceneStepChanged:
+ * true`), never out of date: the stored texts are still sent, and the editor
+ * offers a remake.
  */
 export function faceMaskState(
-  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask">,
+  data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "steps">,
   environments: readonly EngineEnvironment[] | null,
   required: readonly string[],
 ): FaceMaskState {
@@ -246,7 +258,20 @@ export function faceMaskState(
     if (cs?.storedFaceMask !== true) continue
     if (cs.faceMaskRecipe !== mask.recipe.plugin) reasons.push({ why: "plugin_recipe", env })
   }
-  return { status: reasons.length > 0 ? "out_of_date" : "approved", reasons }
+  return { status: reasons.length > 0 ? "out_of_date" : "approved", reasons, ...(sceneStepChanged(data) ? { sceneStepChanged: true as const } : {}) }
+}
+
+/**
+ * Whether the approved mask's stored scene texts (`sceneDescription`,
+ * `previewSceneDescription`) were made with another scene description step
+ * than the draft's `steps.sceneDescription`: the key its make recorded
+ * (`sceneStepKey`, absent = none sent) against the draft's (`sceneStepKeyOf`,
+ * absent = unset). Both absent is the same step. False with no stored text.
+ */
+export function sceneStepChanged(data: Pick<TrendVersionData, "faceMask" | "steps">): boolean {
+  const mask = data.faceMask
+  if (!mask || (mask.sceneDescription === undefined && mask.previewSceneDescription === undefined)) return false
+  return mask.sceneStepKey !== sceneStepKeyOf(data.steps?.sceneDescription)
 }
 
 /**

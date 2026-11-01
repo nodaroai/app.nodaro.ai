@@ -11376,6 +11376,12 @@ export interface AdminTrendFaceMask {
   previewSceneDescription?: string
   /** The `previewStart` the preview's text was made for (a preview run uses it only while it is the trend's). */
   previewSceneDescriptionStart?: number
+  /**
+   * A hash of the scene description step (`steps.sceneDescription`) the
+   * stored texts were made with; absent when it was unset. A draft whose step
+   * differs keeps sending the stored text (the panel offers a remake).
+   */
+  sceneStepKey?: string
 }
 
 /** One person mask: the face mask for runs that leave exactly the people `emptySlots` empty. */
@@ -11440,6 +11446,12 @@ export interface AdminTrendFaceMaskState {
   reasons: AdminTrendFaceMaskOutOfDate[]
   /** The person masks, when some optional person has face marks. */
   variants?: AdminTrendFaceMaskVariantsState
+  /**
+   * The approved mask's stored scene texts were made with another scene
+   * description step than the draft's (`sceneStepKey`). The texts are still
+   * sent: the panel says so and offers a remake. Never makes it out of date.
+   */
+  sceneStepChanged?: boolean
 }
 
 export interface AdminTrendData {
@@ -11508,6 +11520,8 @@ export interface AdminTrendData {
    * (`hide_original_needs_example`).
    */
   hideOriginal?: boolean
+  /** The preparation steps (hidden). Absent = today's run. Sent only to an engine that takes them. */
+  steps?: CastSwapSteps
   examples: AdminTrendExample[]
 }
 
@@ -11778,6 +11792,8 @@ export interface TrendEngineEnvironment {
       fullDepthScenes?: AdminTrendFullDepthScene[]
       /** The engine draws the face mesh (`faceMasking.faceMesh`); absent = it cannot. */
       faceMesh?: boolean
+      /** The engine takes the preparation steps (`steps`); absent = it cannot. */
+      steps?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -11839,6 +11855,158 @@ export async function saveNodaroMotionMasking(masking: NodaroMotionMasking): Pro
       method: "PUT",
       body: { masking },
     })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion preparation steps (EE; mirrors backend/src/lib/cast-swap-steps.ts, no texts) ----
+
+export const SHEET_KINDS = ["person", "pet", "product", "location"] as const
+export type SheetKind = (typeof SHEET_KINDS)[number]
+/** What a role's photos cover, from the labels. */
+export const SHEET_CONDITIONS = ["head-body", "body-only", "head-only", "unclear"] as const
+export type SheetCondition = (typeof SHEET_CONDITIONS)[number]
+/** The layouts per kind, in the design's numbering (index 0 = layout 1), then "none" (raw photos). */
+export const SHEET_LAYOUTS = {
+  person: ["collage", "head-body", "head-body-cut", "head-3q-body-cut", "head-3q-front-back-cut", "none"],
+  pet: ["collage", "head-body", "head-body-side", "head-3q-body", "head-3q-side-back", "none"],
+  product: ["collage", "front-3q", "turnaround", "none"],
+  location: ["collage", "wide-detail", "none"],
+} as const
+export type SheetLayout<K extends SheetKind = SheetKind> = (typeof SHEET_LAYOUTS)[K][number]
+/** What an LLM step may be shown. */
+export const LLM_INPUTS = ["clip", "rolePhotos", "references", "extraPrompt"] as const
+export type LlmInput = (typeof LLM_INPUTS)[number]
+/** The steps a run may go on without (`skippedSteps[].step`). */
+export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description"] as const
+export type SkippableStep = (typeof SKIPPABLE_STEPS)[number]
+export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face"] as const
+export type SkipReason = (typeof SKIP_REASONS)[number]
+/** One step a run went on without; `role` is its index in the run's roles. */
+export interface SkippedStep {
+  step: SkippableStep
+  reason: SkipReason
+  role?: number
+}
+
+export interface LlmStepSetting {
+  model: string
+  /** The system prompt; absent = the engine's default. */
+  instructions?: string
+  inputs: LlmInput[]
+  /** The longest text it may write (200–20,000; the run caps it further). */
+  maxChars: number
+}
+export type TextStepSetting = { mode: "template" } | { mode: "llm"; llm: LlmStepSetting }
+export type SheetRules = { [K in SheetKind]: Record<SheetCondition, SheetLayout<K>> }
+/** A trend's, or one engine's, preparation steps. Absent (or `{}`) = today's run. */
+export interface CastSwapSteps {
+  sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
+  enginePrompt?: TextStepSetting
+  sceneDescription?: TextStepSetting
+}
+
+export interface PhotoLabel {
+  index: number
+  subject: "person" | "animal" | "product" | "place" | "other"
+  framing: "head" | "body"
+  angle: "front" | "three-quarter" | "side" | "back"
+  quality: "ok" | "low"
+}
+/** What a run with steps recorded of each step (server-only on the job; read by the admin). */
+export interface StepOutputs {
+  v: 1
+  roles: Array<{ role: number; kind: SheetKind; labels?: PhotoLabel[]; condition?: SheetCondition; layout?: SheetLayout; sheetUrl?: string; kept?: boolean }>
+  enginePrompt?: { mode: "template" | "llm"; text?: string }
+  scene?: { mode: "template" | "llm" }
+}
+
+/** A refusal of a steps setting: where, the code, and why. */
+export interface CastSwapStepsProblem {
+  path: string
+  code: string
+  message: string
+}
+
+/** The engine's vocabulary and defaults for the step editors (read from the engine at run time). */
+export interface CastSwapStepDefaults {
+  conditions: SheetCondition[]
+  layouts: { [K in SheetKind]: SheetLayout<K>[] }
+  todayLayout: { [K in SheetKind]: SheetLayout<K> }
+  defaultRules: SheetRules
+  defaults: {
+    labeller: LlmStepSetting & { instructions: string }
+    enginePrompt: LlmStepSetting & { instructions: string }
+    sceneDescription: LlmStepSetting & { instructions: string }
+  }
+  /** Each layout's prompt per kind (null: the collage and "none" have none). */
+  layoutPrompts: { [K in SheetKind]: Partial<Record<SheetLayout<K>, string | null>> }
+  /** Whether each step fails the run (every step here: false, skipped when it fails). */
+  critical: Partial<Record<SkippableStep, boolean>>
+  problems: CastSwapStepsProblem[]
+}
+
+/** Nodaro Motion's preparation steps per engine, keyed by public id; an engine left out runs as today. */
+export type NodaroMotionSteps = Partial<Record<NodaroMotionEngine, CastSwapSteps>>
+
+export interface NodaroMotionStepsView {
+  /** null = never saved: every direct run is today's. */
+  steps: NodaroMotionSteps | null
+  updatedAt: string | null
+  /** The engines, by public id and name, with the internal engine each runs on. */
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+}
+
+/** What the admin reads of one Cast Swap run's steps (`GET /v1/admin/jobs/:jobId/cast-swap-steps`). */
+export interface JobCastSwapSteps {
+  stepOutputs: StepOutputs | null
+  sceneText: string | null
+  skippedSteps: SkippedStep[]
+}
+
+const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/nodaro-motion/steps"
+
+export async function fetchNodaroMotionSteps(): Promise<NodaroMotionStepsView> {
+  return (await apiRequest<{ data: NodaroMotionStepsView }>(ADMIN_NODARO_MOTION_STEPS, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves every engine's steps; refused (409 `engine_unsupported`) while an environment's engine cannot take them. */
+export async function saveNodaroMotionSteps(steps: NodaroMotionSteps): Promise<NodaroMotionStepsView> {
+  return (
+    await apiRequest<{ data: NodaroMotionStepsView }>(ADMIN_NODARO_MOTION_STEPS, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { steps },
+    })
+  ).data
+}
+
+/**
+ * The engine's vocabulary, default texts and layout prompts for `engine` (a
+ * public or internal engine id). null when this environment's engine does
+ * not take steps.
+ */
+export async function fetchStepDefaults(engine: NodaroMotionEngine | AdminTrendEngine): Promise<CastSwapStepDefaults | null> {
+  return (
+    await apiRequest<{ data: CastSwapStepDefaults | null }>(
+      `${ADMIN_NODARO_MOTION_STEPS}/defaults?engine=${encodeURIComponent(engine)}`,
+      "apiErr.loadNodaroMotion",
+    )
+  ).data
+}
+
+/** What the platform and the engine find wrong with `steps` (empty = nothing). Nothing is saved. */
+export async function checkSteps(engine: NodaroMotionEngine | AdminTrendEngine, steps: CastSwapSteps): Promise<CastSwapStepsProblem[]> {
+  return (
+    await apiRequest<{ data: { problems: CastSwapStepsProblem[] } }>(`${ADMIN_NODARO_MOTION_STEPS}/check`, "apiErr.loadNodaroMotion", {
+      method: "POST",
+      body: { engine, steps },
+    })
+  ).data.problems
+}
+
+/** One Cast Swap run's step outputs, stored scene text and skipped steps (admin only). */
+export async function fetchJobCastSwapSteps(jobId: string): Promise<JobCastSwapSteps> {
+  return (
+    await apiRequest<{ data: JobCastSwapSteps }>(`/v1/admin/jobs/${encodeURIComponent(jobId)}/cast-swap-steps`, "apiErr.loadTrends")
   ).data
 }
 

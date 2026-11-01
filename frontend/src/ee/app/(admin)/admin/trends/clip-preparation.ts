@@ -115,6 +115,20 @@ export function environmentsThatCannotDrawFaceMesh(envs: readonly TrendEngineEnv
   return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.faceMesh !== true)
 }
 
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * engine cannot take the preparation steps — none recorded, or one that does
+ * not declare `castSwap.steps`. Unknown while the environments are
+ * (undefined). The step editors are offered only when this is empty: Admin →
+ * Nodaro Motion's setting is shared (the server refuses the save otherwise,
+ * 409 `engine_unsupported`), and a trend that sets steps can't be published
+ * to an environment that lacks them.
+ */
+export function environmentsThatCannotTakeSteps(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.steps !== true)
+}
+
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
 export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)
