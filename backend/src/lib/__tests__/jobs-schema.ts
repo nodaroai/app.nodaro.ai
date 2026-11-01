@@ -16,18 +16,23 @@ const MIGRATIONS = resolve(__dirname, "../../../../supabase/migrations")
 
 /** The `jobs` columns after every migration, in order. */
 export function jobsColumns(): Set<string> {
+  return tableColumns("jobs")
+}
+
+/** A public table's columns after every migration, in order. */
+export function tableColumns(table: string): Set<string> {
   const cols = new Set<string>()
   const files = readdirSync(MIGRATIONS).filter((f) => /^\d+_.*\.sql$/.test(f)).sort()
   for (const file of files) {
     const sql = readFileSync(join(MIGRATIONS, file), "utf8").replace(/--[^\n]*/g, "")
-    const create = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:"?public"?\.)?"?jobs"?\s*\(([\s\S]*?)\n\);/i.exec(sql)
+    const create = new RegExp(`create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?(?:"?public"?\\.)?"?${table}"?\\s*\\(([\\s\\S]*?)\\n\\);`, "i").exec(sql)
     if (create) {
       for (const line of create[1]!.split("\n")) {
         const col = /^\s*"?([a-z_][a-z0-9_]*)"?\s+[a-z]/i.exec(line)
         if (col && !/^(constraint|primary|unique|check|foreign)$/i.test(col[1]!)) cols.add(col[1]!.toLowerCase())
       }
     }
-    const alter = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:"?public"?\.)?"?jobs"?\s+([\s\S]*?);/gi
+    const alter = new RegExp(`alter\\s+table\\s+(?:if\\s+exists\\s+)?(?:only\\s+)?(?:"?public"?\\.)?"?${table}"?\\s+([\\s\\S]*?);`, "gi")
     for (let m = alter.exec(sql); m; m = alter.exec(sql)) {
       const body = m[1]!
       // `ADD [COLUMN] [IF NOT EXISTS] name` — COLUMN is optional in Postgres.

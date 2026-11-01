@@ -1,6 +1,6 @@
 -- ============================================================================
--- Behavioral proof: concurrency lanes (migrations 568 and 569, the
--- queued-jobs index).
+-- Behavioral proof: concurrency lanes (migrations 568, 569 — the queued-jobs
+-- index — and 573, the queued-runs indexes).
 --
 -- Runs AFTER the whole migration chain, as `postgres`, in a transaction that
 -- rolls back. Its own uuid range (...-0000000568xx).
@@ -10,7 +10,7 @@
 -- job's BullMQ payload carries its billing context (a deployment payer's id),
 -- which no user may read. Each assertion below fails if a later migration
 -- opens one of them to a client role, drops a default the tolerant readers
--- rely on, or loses the queued-jobs index.
+-- rely on, or loses the queued-jobs or queued-runs indexes.
 --
 -- Run locally (throwaway container, same image as CI):
 --   docker run -d --rm --name mig-test -e POSTGRES_PASSWORD=postgres -p 5433:5432 supabase/postgres:15.8.1.085
@@ -113,6 +113,18 @@ SELECT pg_temp.assert_eq('the queued-jobs index',
   'CREATE INDEX idx_jobs_lane_queued ON public.jobs USING btree (lane_env, lane_queued_at) WHERE (status = ''queued''::text)');
 SELECT pg_temp.assert_eq('the queued-jobs index is valid',
   (SELECT indisvalid::text FROM pg_index WHERE indexrelid = 'public.idx_jobs_lane_queued'::regclass), 'true');
+
+-- 5b. The queued-runs indexes (573): a waiting execution stays `pending`, a
+-- waiting pipeline stays `queued`; only a parked one carries lane_queued_at.
+SELECT pg_temp.assert_eq('the queued-pipelines index',
+  (SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_pipelines_lane_queued'),
+  'CREATE INDEX idx_pipelines_lane_queued ON public.pipelines USING btree (lane_env, lane_queued_at) WHERE ((status = ''queued''::text) AND (lane_queued_at IS NOT NULL))');
+SELECT pg_temp.assert_eq('the queued-executions index',
+  (SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_workflow_executions_lane_queued'),
+  'CREATE INDEX idx_workflow_executions_lane_queued ON public.workflow_executions USING btree (lane_env, lane_queued_at) WHERE ((status = ''pending''::text) AND (lane_queued_at IS NOT NULL))');
+SELECT pg_temp.assert_eq('the queued-runs indexes are valid',
+  (SELECT string_agg(indisvalid::text, ',' ORDER BY indexrelid::regclass::text) FROM pg_index
+    WHERE indexrelid IN ('public.idx_pipelines_lane_queued'::regclass, 'public.idx_workflow_executions_lane_queued'::regclass)), 'true,true');
 
 -- 6. A signed-in user, even reading their own override, gets nothing.
 INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES

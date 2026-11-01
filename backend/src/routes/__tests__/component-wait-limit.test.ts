@@ -20,6 +20,9 @@ const h = vi.hoisted(() => ({
   pendingReads: [] as string[],
   /** The owner each budget read was scoped to, in call order. */
   readOwners: [] as string[],
+  /** Concurrency lanes: the inner run's queued time, and every queued-time read (id, owner, opts). */
+  queuedByExecution: new Map<string, number>(),
+  queuedReads: [] as Array<{ id: string; ownerId: string; includeOwnWait: boolean }>,
   userRole: undefined as string | undefined,
   appScopes: undefined as string[] | undefined,
 }))
@@ -44,6 +47,12 @@ vi.mock("@/lib/execution-budget.js", async (importOriginal) => {
     },
   }
 })
+vi.mock("@/lib/concurrency-lanes/execution-wait.js", () => ({
+  executionQueuedMs: async (id: string, ownerId: string, opts?: { includeOwnWait?: boolean }) => {
+    h.queuedReads.push({ id, ownerId, includeOwnWait: opts?.includeOwnWait === true })
+    return h.queuedByExecution.get(id) ?? 0
+  },
+}))
 vi.mock("@/lib/supabase.js", () => {
   function chain() {
     const filters: Record<string, unknown> = {}
@@ -85,6 +94,8 @@ beforeEach(async () => {
   h.pendingExecutions = new Set()
   h.pendingReads = []
   h.readOwners = []
+  h.queuedByExecution = new Map()
+  h.queuedReads = []
   h.userRole = undefined
   h.appScopes = undefined
   app = Fastify()
@@ -104,7 +115,7 @@ describe("GET /v1/component/execute/:jobId/wait-limit", () => {
     const res = await get(WRAPPER)
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({
-      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false },
+      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false, queuedMs: 0 },
     })
     expect(h.budgetReads).toEqual(["exec-inner"])
     expect(h.pendingReads).toEqual(["exec-inner"])
@@ -114,7 +125,7 @@ describe("GET /v1/component/execute/:jobId/wait-limit", () => {
     h.pendingExecutions.add("exec-inner")
     const res = await get(WRAPPER)
     expect(res.json()).toEqual({
-      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: true },
+      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: true, queuedMs: 0 },
     })
   })
 
@@ -122,18 +133,33 @@ describe("GET /v1/component/execute/:jobId/wait-limit", () => {
     h.excessByExecution.set("exec-inner", 150 * MIN)
     const res = await get(WRAPPER)
     expect(res.json()).toEqual({
-      data: { budgetExcessMs: 150 * MIN, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + 150 * MIN, pendingBudgetedNodes: false },
+      data: { budgetExcessMs: 150 * MIN, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + 150 * MIN, pendingBudgetedNodes: false, queuedMs: 0 },
     })
+  })
+
+  // Concurrency lanes (decided 2026-10-30: nothing fails for waiting): the
+  // server's wait grows by the time the inner run waited for slots — its own
+  // run slot (a run started by the editor or the API takes one) and its jobs'.
+  it("the component wait and wait-limit extend by queued time", async () => {
+    h.queuedByExecution.set("exec-inner", 100 * MIN)
+    h.excessByExecution.set("exec-inner", 20 * MIN)
+    const res = await get(WRAPPER)
+    expect(res.json()).toEqual({
+      data: { budgetExcessMs: 20 * MIN, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + 20 * MIN + 100 * MIN, pendingBudgetedNodes: false, queuedMs: 100 * MIN },
+    })
+    // The inner run's own wait for its run slot counts, read as the wrapper owner's.
+    expect(h.queuedReads).toEqual([{ id: "exec-inner", ownerId: "user-1", includeOwnWait: true }])
   })
 
   it("a wrapper whose inner execution is not stamped yet: base wait, nothing pending, no lookup", async () => {
     h.rows.set(WRAPPER, { user_id: "user-1", provider: "component", input_data: {} })
     const res = await get(WRAPPER)
     expect(res.json()).toEqual({
-      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false },
+      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false, queuedMs: 0 },
     })
     expect(h.budgetReads).toEqual([])
     expect(h.pendingReads).toEqual([])
+    expect(h.queuedReads).toEqual([])
   })
 
   it("is owner-scoped: another user's wrapper is not found (and never read for its budget)", async () => {
@@ -165,14 +191,16 @@ describe("GET /v1/component/execute/:jobId/wait-limit", () => {
     h.rows.set(WRAPPER, { user_id: "user-1", provider: "component", input_data: { _executionId: "exec-victim" } })
     h.rows.set("exec-victim", { user_id: "victim" })
     h.excessByExecution.set("exec-victim", 150 * MIN)
+    h.queuedByExecution.set("exec-victim", 150 * MIN)
     h.pendingExecutions.add("exec-victim")
     const res = await get(WRAPPER)
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({
-      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false },
+      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false, queuedMs: 0 },
     })
     expect(h.budgetReads).toEqual([])
     expect(h.pendingReads).toEqual([])
+    expect(h.queuedReads).toEqual([])
   })
 
   it("an admin reading someone's wrapper gets that wrapper owner's inner execution", async () => {

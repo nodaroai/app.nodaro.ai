@@ -139,6 +139,13 @@ describe("from-failed", () => {
     expect(m.execute.mock.calls[0]![0]).toMatchObject({ reviewerPresent: true, billingContext: payer, componentDepth: 2, executingComponentIds: ["c1"] })
   })
 
+  it("internal lane: the parent run named in the header rides the continued run (it takes no run slot)", async () => {
+    m.authKind = "internal"
+    const parent = "00000000-0000-4000-8000-0000000000aa"
+    await post({ jobId: ID, mode: "from-failed", userId: USER, reviewerPresent: true }, { "x-nodaro-parent-execution": parent })
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ parentExecutionId: parent })
+  })
+
   it("internal lane: depth 5 is refused", async () => {
     m.authKind = "internal"
     const res = await post({ jobId: ID, mode: "from-failed", userId: USER, componentDepth: 5 })

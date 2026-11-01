@@ -199,6 +199,15 @@ export function workflowCapMs(budgetExcess: number | undefined): number {
  */
 export const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000
 
-export function staleExecutionThresholdMs(budgetExcess: number | undefined): number {
-  return STALE_EXECUTION_THRESHOLD_MS + (typeof budgetExcess === "number" && budgetExcess > 0 ? budgetExcess : 0)
+/**
+ * The backstop for one run: 4 h + its budget excess + the time its jobs spent
+ * waiting for concurrency slots (`laneWaitMs` — `workflow_executions.
+ * lane_wait_ms` and its still-waiting children, `lib/concurrency-lanes/
+ * execution-wait.ts`; decided 2026-10-30: nothing fails for waiting). Both
+ * read lazily, past the base, so a run that neither budgeted nor queued is
+ * judged exactly as before.
+ */
+export function staleExecutionThresholdMs(budgetExcess: number | undefined, laneWaitMs?: number): number {
+  const extra = (v: number | undefined): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0)
+  return STALE_EXECUTION_THRESHOLD_MS + extra(budgetExcess) + extra(laneWaitMs)
 }

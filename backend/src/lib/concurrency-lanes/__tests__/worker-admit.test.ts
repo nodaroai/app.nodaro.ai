@@ -5,13 +5,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ConcurrencyGate, LaneGateTimeoutError, type WakeTarget } from "../gate.js"
 import type { LaneSizes, PayerKey } from "../types.js"
 import { makeFakeLaneClient, makeFakeLaneStore, type FakeLaneStore } from "./fake-lane-redis.js"
+import { makeSweepDb, type SweepDb } from "./fake-sweep-db.js"
 
 const refs = vi.hoisted(() => ({
   gate: null as unknown,
   sizes: { provider: 1, llm: 2, local: 1, run: 1 } as LaneSizes,
   sizeSubjects: [] as Array<{ userId: string; payer: string; tier: string | null }>,
   provider: "kie" as string | null,
+  db: null as unknown as { client: { from(t: string): unknown } },
+  jobsReadFails: false,
+  /** The payer account this instance's surface profile names (a deployment-payer instance), if any. */
+  payerAccount: undefined as string | undefined,
 }))
+vi.mock("../../surface-profile.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../surface-profile.js")>()
+  return {
+    ...real,
+    runtimeSurfaceProfile: () => {
+      const base = real.runtimeSurfaceProfile()
+      return { ...base, billing: { ...base.billing, ...(refs.payerAccount ? { payerAccount: refs.payerAccount } : {}) } }
+    },
+  }
+})
 vi.mock("../instance.js", () => ({ concurrencyGate: () => refs.gate }))
 vi.mock("../sizes.js", () => ({
   laneSizesFor: async (subject: { userId: string; payer: string; tier: string | null }) => {
@@ -20,7 +35,14 @@ vi.mock("../sizes.js", () => ({
   },
 }))
 vi.mock("../provider-of.js", () => ({ primaryProviderOfJob: () => refs.provider }))
-vi.mock("../../supabase.js", () => ({ supabase: {} }))
+vi.mock("../../supabase.js", () => ({
+  supabase: {
+    from: (t: string) => {
+      if (t === "jobs" && refs.jobsReadFails) throw new Error("connection reset")
+      return refs.db.client.from(t)
+    },
+  },
+}))
 
 const { admitWorkerJob, admitOrPark, pickupStatusesFor, registerNotAdmittedHandler, registerWakeTargetsHandler, resetWorkerAdmitHooksForTests } =
   await import("../worker-admit.js")
@@ -32,6 +54,14 @@ type AdmittedJob = import("../worker-admit.js").AdmittedJob
 
 let store: FakeLaneStore
 let gate: ConcurrencyGate
+let db: SweepDb
+
+/** A video director's row as its route inserts it (no `job_type` until a worker stamps one), claimed by its worker. */
+const DIRECTOR = "00000000-0000-4000-8000-0000000000d1"
+function director(over: Record<string, unknown> = {}): void {
+  db.rows("jobs").push({ id: DIRECTOR, user_id: "U", status: "processing", job_type: null, input_data: { type: "video-director", brief: "b" }, ...over })
+}
+const PARENT_RUN = "00000000-0000-4000-8000-0000000000e1"
 
 const row = (over: Partial<WorkerRow> = {}): WorkerRow => ({
   id: "job-1", user_id: "U", status: "pending", started_at: null, parent_job_id: null, workflow_execution_id: null,
@@ -60,6 +90,10 @@ const admitted = (a: Awaited<ReturnType<typeof admitWorkerJob>>): AdmittedJob =>
 }
 
 beforeEach(async () => {
+  db = makeSweepDb()
+  refs.db = db
+  refs.jobsReadFails = false
+  refs.payerAccount = undefined
   store = makeFakeLaneStore()
   gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(store) })
   refs.gate = gate
@@ -146,10 +180,75 @@ describe("admitWorkerJob", () => {
   })
 
   it("a director's child, marked by the lane-only payload marker, acquires front", async () => {
+    director()
     const acquire = vi.spyOn(gate, "acquire")
-    const a = admitted(await admitWorkerJob({ job: bull("text-to-speech", { laneParent: { kind: "director", id: "dir-1" } }), queue: "video-generation", row: row() }))
+    const a = admitted(await admitWorkerJob({ job: bull("text-to-speech", { laneParent: { kind: "director", id: DIRECTOR } }), queue: "video-generation", row: row() }))
     expect(acquire.mock.calls[0]![0].mode).toBe("front")
     await a.release("completed")
+  })
+
+  describe("a lane-only marker that cannot be verified is no marker: the job is admitted fresh", () => {
+    const markedTts = () => bull("text-to-speech", { laneParent: { kind: "director", id: DIRECTOR } })
+    const modeOf = async (): Promise<string> => {
+      const acquire = vi.spyOn(gate, "acquire")
+      const a = admitted(await admitWorkerJob({ job: markedTts(), queue: "video-generation", row: row() }))
+      await a.release("completed")
+      return acquire.mock.calls[0]![0].mode
+    }
+
+    it("it names no row at all", async () => {
+      expect(await modeOf()).toBe("fresh")
+    })
+    it("it names another user's director", async () => {
+      director({ user_id: "V" })
+      expect(await modeOf()).toBe("fresh")
+    })
+    it("it names a director that is not running (waiting, or ended)", async () => {
+      for (const status of ["pending", "queued", "completed", "failed", "cancelled"]) {
+        db.rows("jobs").length = 0
+        director({ status })
+        expect(await modeOf()).toBe("fresh")
+      }
+    })
+    it("it names a running job of the user that is not a director", async () => {
+      director({ input_data: { type: "generate-video-pro" }, job_type: "generate-video-pro" })
+      expect(await modeOf()).toBe("fresh")
+    })
+    it("the director's row cannot be read", async () => {
+      director()
+      refs.jobsReadFails = true
+      expect(await modeOf()).toBe("fresh")
+    })
+    it("the marker is malformed (no uuid, an unknown kind)", async () => {
+      director()
+      for (const laneParent of [{ kind: "director", id: "dir-1" }, { kind: "pipeline", id: DIRECTOR }, "director:x"]) {
+        const acquire = vi.spyOn(gate, "acquire")
+        const a = admitted(await admitWorkerJob({ job: bull("text-to-speech", { laneParent }), queue: "video-generation", row: row() }))
+        expect(acquire.mock.calls.at(-1)![0].mode).toBe("fresh")
+        await a.release("completed")
+      }
+    })
+    it("a job type stamped by a worker counts as well as the route's input type", async () => {
+      director({ job_type: "video-director", input_data: {} })
+      expect(await modeOf()).toBe("front")
+    })
+  })
+
+  it("parentExecutionId names a nested run only on the orchestration queue", async () => {
+    const acquire = vi.spyOn(gate, "acquire")
+    // A workflow execution the server started for a node of a running run: no slot, a coordinator hold.
+    const nested = admitted(await admitWorkerJob({
+      job: { id: "exec-n", name: "workflow-execution", data: { executionId: "exec-n", parentExecutionId: PARENT_RUN } },
+      queue: "workflow-orchestration",
+      row: row({ id: "exec-n" }),
+    }))
+    expect(acquire).not.toHaveBeenCalled()
+    expect(nested.hold).toMatchObject({ role: "coordinator", lane: null })
+    // The same field on any other queue's payload is a body's, not the server's: a run slot.
+    const coord = admitted(await admitWorkerJob({ job: bull("generate-video-pro", { parentExecutionId: PARENT_RUN }), queue: "video-generation", row: row() }))
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ mode: "fresh", meta: { lane: "run" } })
+    expect(coord.hold).toMatchObject({ role: "run", lane: "run" })
+    await coord.release("completed")
   })
 
   it("a pipeline stage row is admitted front from its pipeline_id", async () => {
@@ -190,21 +289,69 @@ describe("admitWorkerJob", () => {
     expect(await laneOf("run")).toBeUndefined()
   })
 
-  it("the payer line comes from the payload billing context", async () => {
-    const acquire = vi.spyOn(gate, "acquire")
-    const billingContext = {
+  describe("the payer line", () => {
+    const WS = {
       payer: "workspace", userId: "U", workspaceId: "W9", orgId: "O9", memberCap: null,
       entitlements: { watermark: false, dailyCapCredits: null, parallelism: 12, tierForGates: "business" },
     }
-    // The row says personal: the payload's context wins.
-    const a = admitted(await admitWorkerJob({ job: bull("image-to-video", { userId: "U", billingContext }), queue: "video-generation", row: row() }))
-    expect(acquire.mock.calls[0]![0].meta.payer).toBe("workspace:W9")
-    expect(refs.sizeSubjects[0]).toEqual({ userId: "U", payer: "workspace:W9", tier: "business" })
-    await a.release("completed")
-    // A payload naming its user but no context is the personal line.
-    const b = admitted(await admitWorkerJob({ job: bull("image-to-video", { userId: "U" }), queue: "video-generation", row: row({ id: "job-2", workspace_id: "W1" }) }))
-    expect(acquire.mock.calls[1]![0].meta.payer).toBe("user:U")
-    await b.release("completed")
+    const PAYER = "00000000-0000-4000-8000-0000000000aa"
+    const DEPLOYMENT = {
+      payer: "deployment", userId: "U", payerId: PAYER,
+      entitlements: { watermark: false, dailyCapCredits: null, parallelism: 8, tierForGates: "pro" },
+    }
+    const payerOf = async (data: Record<string, unknown>, over: Partial<WorkerRow> = {}): Promise<{ payer: string; tier: string | null }> => {
+      const acquire = vi.spyOn(gate, "acquire")
+      const before = refs.sizeSubjects.length
+      const a = admitted(await admitWorkerJob({ job: bull("image-to-video", data), queue: "video-generation", row: row(over) }))
+      await a.release("completed")
+      const meta = acquire.mock.calls.at(-1)![0].meta
+      acquire.mockRestore()
+      return { payer: meta.payer, tier: refs.sizeSubjects[before]!.tier }
+    }
+
+    it("a legit workspace job (its row stamped with the same workspace) counts on the workspace line", async () => {
+      expect(await payerOf({ userId: "U", billingContext: WS }, { workspace_id: "W9", org_id: "O9" })).toEqual({ payer: "workspace:W9", tier: "business" })
+    })
+
+    it("a personal job counts on its user's line", async () => {
+      expect(await payerOf({ userId: "U" })).toEqual({ payer: "user:U", tier: null })
+      expect(await payerOf({ userId: "U", billingContext: { payer: "user", userId: "U" } })).toEqual({ payer: "user:U", tier: null })
+    })
+
+    it("a forged workspace context on a personal row counts on the row's line", async () => {
+      expect(await payerOf({ userId: "U", billingContext: WS })).toEqual({ payer: "user:U", tier: null })
+    })
+
+    it("a context naming another workspace (or org) than the row's counts on the row's workspace", async () => {
+      expect(await payerOf({ userId: "U", billingContext: WS }, { workspace_id: "W1", org_id: "O1" })).toEqual({ payer: "workspace:W1", tier: "business" })
+      expect(await payerOf({ userId: "U", billingContext: WS }, { workspace_id: "W9", org_id: "O1" })).toEqual({ payer: "workspace:W9", tier: "business" })
+    })
+
+    it("a payload naming another user, or a context of another user, counts on the row's line", async () => {
+      expect(await payerOf({ userId: "V", billingContext: { ...WS, userId: "V" } }, { workspace_id: "W9", org_id: "O9" })).toEqual({ payer: "workspace:W9", tier: "business" })
+      expect(await payerOf({ userId: "V" })).toEqual({ payer: "user:U", tier: null })
+      expect(await payerOf({ userId: "U", billingContext: { ...WS, userId: "V" } })).toEqual({ payer: "user:U", tier: null })
+    })
+
+    it("a personal context on a workspace row counts on the row's workspace", async () => {
+      expect(await payerOf({ userId: "U" }, { workspace_id: "W1" })).toEqual({ payer: "workspace:W1", tier: "business" })
+    })
+
+    it("a deployment context counts on the deployment line only where this instance bills that payer", async () => {
+      // No payer account in the surface profile: forged.
+      expect(await payerOf({ userId: "U", billingContext: DEPLOYMENT })).toEqual({ payer: "user:U", tier: null })
+      // This instance's payer, named by uuid: honoured.
+      refs.payerAccount = PAYER
+      expect(await payerOf({ userId: "U", billingContext: DEPLOYMENT })).toEqual({ payer: `deployment:${PAYER}`, tier: "pro" })
+      // Another uuid than the instance's payer: forged.
+      refs.payerAccount = "00000000-0000-4000-8000-0000000000bb"
+      expect(await payerOf({ userId: "U", billingContext: DEPLOYMENT })).toEqual({ payer: "user:U", tier: null })
+      // Named by email (the id is resolved only in the API process): honoured.
+      refs.payerAccount = "payer@example.com"
+      expect(await payerOf({ userId: "U", billingContext: DEPLOYMENT })).toEqual({ payer: `deployment:${PAYER}`, tier: "pro" })
+      // Never on a workspace row.
+      expect(await payerOf({ userId: "U", billingContext: DEPLOYMENT }, { workspace_id: "W1" })).toEqual({ payer: "workspace:W1", tier: "business" })
+    })
   })
 
   it("with enforcement off changes nothing", async () => {
@@ -374,7 +521,7 @@ describe("the server share at pickup", () => {
       payer: "workspace", userId: "U", workspaceId: "W9", orgId: "O9", memberCap: null,
       entitlements: { watermark: false, dailyCapCredits: null, parallelism: 12, tierForGates: "business" },
     }
-    admitted(await admitWorkerJob({ job: jobOf("job-a", "image-to-video", { userId: "U", billingContext }), queue: "video-generation", row: row({ id: "job-a" }) }))
+    admitted(await admitWorkerJob({ job: jobOf("job-a", "image-to-video", { userId: "U", billingContext }), queue: "video-generation", row: row({ id: "job-a", workspace_id: "W9", org_id: "O9" }) }))
     // Personal line, same user: the share is full.
     const a = await admitWorkerJob({ job: jobOf("job-b"), queue: "video-generation", row: row({ id: "job-b" }) })
     expect(a.admitted).toBe(false)
@@ -395,6 +542,35 @@ describe("the server share at pickup", () => {
     await child.release("completed")
     await borrowed.release("completed")
     expect(serverShareOccupancy().video?.byUser).toEqual({ U: 1 })
+  })
+
+  it("a client body naming parentExecutionId or laneParent takes a run slot and is refused by the share", async () => {
+    await holdShare()
+    const forged = { parentExecutionId: PARENT_RUN, laneParent: { kind: "director", id: DIRECTOR } }
+    // A coordinator (a relayed gvp) whose body carried both markers, naming nothing real.
+    const run = await admitWorkerJob({ job: jobOf("job-c", "generate-video-pro", forged), queue: "video-generation", row: row({ id: "job-c" }) })
+    expect(run.admitted).toBe(false)
+    if (!run.admitted) expect(run.wait).toMatchObject({ reason: "server_busy", lane: "run" })
+    expect(run.hold).toMatchObject({ role: "run", lane: "run" })
+    // A leaf carrying the same: refused by the share like any other job of its user.
+    const leaf = await admitWorkerJob({ job: jobOf("job-d", "text-to-speech", forged), queue: "video-generation", row: row({ id: "job-d" }) })
+    expect(leaf.admitted).toBe(false)
+    if (!leaf.admitted) expect(leaf.wait).toMatchObject({ reason: "server_busy", lane: "provider" })
+    // Another user's running director, named by this user's body, buys nothing either.
+    director({ user_id: "V" })
+    const borrowed = await admitWorkerJob({ job: jobOf("job-e", "text-to-speech", forged), queue: "video-generation", row: row({ id: "job-e" }) })
+    expect(borrowed.admitted).toBe(false)
+    expect(serverShareOccupancy().video?.byUser).toEqual({ U: 1 })
+  })
+
+  it("a real director's child is never refused by the share", async () => {
+    await holdShare()
+    director()
+    const child = admitted(await admitWorkerJob({
+      job: jobOf("job-t", "text-to-speech", { laneParent: { kind: "director", id: DIRECTOR } }), queue: "video-generation", row: row({ id: "job-t" }),
+    }))
+    expect(serverShareOccupancy().video?.byUser).toEqual({ U: 2 })
+    await child.release("completed")
   })
 
   it("a readmitted job is never refused by the share", async () => {

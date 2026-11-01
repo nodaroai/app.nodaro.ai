@@ -3999,12 +3999,12 @@ The same fields are on every job read above, on `GET /v1/jobs/:id` and
 background; poll that wrapper job like any other. With an OAuth app token it needs
 `workflows:execute` (and the wait-limit read below, `jobs:read`). The server gives the run 90 minutes,
 plus the time budget of any long render inside it (today: an Apply EDL final render,
-whose budget is sized from its edit). A client that polls with its own time limit can ask
+whose budget is sized from its edit), plus any time the run spends waiting for a free slot. A client that polls with its own time limit can ask
 how long the server will wait:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/component/execute/:jobId/wait-limit` | `{ data: { budgetExcessMs, waitLimitMs, pendingBudgetedNodes } }` — `waitLimitMs` is the server's wait on this run (90 minutes + `budgetExcessMs`); `budgetExcessMs` is `0` until the run has started a long render. `pendingBudgetedNodes` is `true` while the run still has a long render it has not started yet (and while the run has not started at all), so a `0` excess does not yet mean "nothing long inside". Both can change while the run goes on, so ask again when `waitLimitMs` is reached. Owner-only (404 on a foreign or non-component job); `jobs:read` scope with an OAuth token. |
+| `GET` | `/v1/component/execute/:jobId/wait-limit` | `{ data: { budgetExcessMs, waitLimitMs, pendingBudgetedNodes, queuedMs } }` — `waitLimitMs` is the server's wait on this run (90 minutes + `budgetExcessMs` + `queuedMs`); `budgetExcessMs` is `0` until the run has started a long render. `queuedMs` is how long the run has waited so far for a free slot (its own start and its jobs', when concurrency limits are on — see [Concurrency lanes](./deployment.md#concurrency-lanes)); time spent waiting never counts against the wait, and it is `0` while nothing waits. `pendingBudgetedNodes` is `true` while the run still has a long render it has not started yet (and while the run has not started at all), so a `0` excess does not yet mean "nothing long inside". Both can change while the run goes on, so ask again when `waitLimitMs` is reached. Owner-only (404 on a foreign or non-component job); `jobs:read` scope with an OAuth token. |
 
 The editor keeps its own 30-minute wait for a run with nothing long inside. When the run
 has started a long render it waits `waitLimitMs`; when a long render is still to come

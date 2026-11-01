@@ -7,6 +7,7 @@ import {
   fetchJobCastSwapSteps,
   SKIP_REASONS,
   SKIPPABLE_STEPS,
+  type ClipBodyOutput,
   type JobCastSwapSteps,
   type PhotoLabel,
   type SheetCondition,
@@ -72,6 +73,12 @@ export const STEP_LABELS: Readonly<Record<SkippableStep, string>> = {
   "reference-sheet": "Reference sheet",
   "engine-prompt": "Engine prompt",
   "scene-description": "Scene description",
+  "clip-body": "Body from the clip",
+}
+
+/** A skip reason as an admin reads it; one with no wording of its own reads as its id with spaces. */
+const REASON_LABELS: Readonly<Partial<Record<SkipReason, string>>> = {
+  no_frame: "no usable frame",
 }
 
 const isOneOf = <T extends string>(list: readonly T[], v: string): v is T => (list as readonly string[]).includes(v)
@@ -79,7 +86,7 @@ const isOneOf = <T extends string>(list: readonly T[], v: string): v is T => (li
 /** A skipped step's line: "Reference sheet — role 2: failed" (`role` is an index, shown 1-based). */
 export function skippedStepLine(step: SkippableStep, reason: SkipReason, role?: number): string {
   const who = typeof role === "number" && Number.isInteger(role) && role >= 0 ? ` — role ${role + 1}` : ""
-  return `${STEP_LABELS[step]}${who}: ${reason.replace(/_/g, " ")}`
+  return `${STEP_LABELS[step]}${who}: ${REASON_LABELS[reason] ?? reason.replace(/_/g, " ")}`
 }
 
 /**
@@ -168,6 +175,28 @@ function LabelChips({ label }: { label: PhotoLabel }) {
   </li>
 }
 
+const isWebUrl = (url: string | undefined): url is string => !!url && /^https?:\/\//.test(url)
+
+/** A role's "Body from the clip": the frame picked from the clip, the sheet redrawn from it, and its image prompt. */
+function ClipBodyOutputs({ name, out }: { name: string; out: ClipBodyOutput }) {
+  return <div role="group" aria-label={`${name} body from the clip`} className="flex min-w-0 flex-col gap-2 rounded-md bg-muted/30 p-2">
+    <p className="text-xs font-semibold">Body from the clip</p>
+    {(isWebUrl(out.frameUrl) || isWebUrl(out.sheetUrl)) && <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+      {isWebUrl(out.frameUrl) && <figure className="flex min-w-0 flex-col gap-1">
+        <img src={out.frameUrl} alt={`${name} frame from the clip`} className="max-h-64 w-full rounded bg-muted object-contain" loading="lazy" />
+        <figcaption className="text-xs text-muted-foreground">
+          Frame{typeof out.frameSec === "number" ? <> · <span>At {Number(out.frameSec.toFixed(2))} s</span></> : null}
+        </figcaption>
+      </figure>}
+      {isWebUrl(out.sheetUrl) && <figure className="flex min-w-0 flex-col gap-1">
+        <img src={out.sheetUrl} alt={`${name} sheet redrawn from the clip`} className="max-h-64 w-full rounded bg-muted object-contain" loading="lazy" />
+        <figcaption className="text-xs text-muted-foreground">Redrawn sheet</figcaption>
+      </figure>}
+    </div>}
+    {out.prompt && <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs" dir="auto" data-testid="clip-body-prompt">{out.prompt}</pre>}
+  </div>
+}
+
 function RoleOutputs({ role }: { role: StepOutputs["roles"][number] }) {
   const name = `Role ${role.role + 1}`
   return <section className="flex min-w-0 flex-col gap-2 rounded-md border p-2" aria-label={name}>
@@ -175,16 +204,17 @@ function RoleOutputs({ role }: { role: StepOutputs["roles"][number] }) {
     {role.labels && role.labels.length > 0 && <ul className="flex flex-col gap-1 text-xs">
       {role.labels.map((l, i) => <LabelChips key={`${l.index}-${i}`} label={l} />)}
     </ul>}
-    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+    {(role.condition || role.layout || !role.clipBody) && <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
       <dt className="text-muted-foreground">Covers</dt>
       <dd>{role.condition ? CONDITION_LABELS[role.condition] : "-"}</dd>
       <dt className="text-muted-foreground">Layout</dt>
       <dd className="break-all font-mono">{role.layout ?? "-"}</dd>
-    </dl>
+    </dl>}
     {role.sheetUrl && /^https?:\/\//.test(role.sheetUrl) && <figure className="flex flex-col gap-1">
       <img src={role.sheetUrl} alt={`${name} reference sheet`} className="max-h-64 w-full rounded bg-muted object-contain" loading="lazy" />
       {role.kept && <figcaption><Badge variant="secondary" className="font-normal">Kept (made before, not paid again)</Badge></figcaption>}
     </figure>}
+    {role.clipBody && <ClipBodyOutputs name={name} out={role.clipBody} />}
   </section>
 }
 

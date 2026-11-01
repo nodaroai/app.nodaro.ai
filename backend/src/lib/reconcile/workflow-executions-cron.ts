@@ -50,6 +50,7 @@ import { getRuntimeEnv, scopeToRuntimeEnv } from "../runtime-env.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "../job-budget.js"
 import { executionBudgetExcessMs } from "../execution-budget.js"
+import { executionQueuedMs } from "../concurrency-lanes/execution-wait.js"
 
 /** Every queued-or-running BullMQ state for the orchestration queue — defined
  *  in the Redis-free leaf `../orchestration-queue-config.js` so
@@ -349,10 +350,18 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     // The run's budget excess (Track 0.11) is read only once the base
     // threshold has passed, so an execution with nothing budgeted costs no
     // extra query and is judged exactly as before.
-    const isAbandonable =
-      startedAt === 0 ||
-      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
-        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, row.user_id as string, states)))
+    // The time its jobs spent waiting for concurrency slots is read after
+    // that, and only while the run still looks stale: queued time never
+    // counts (decided 2026-10-30), and a run that never queued costs nothing.
+    // `started_at` is written at the claim, after the run's own admission,
+    // so the run's wait for its run slot is already outside this clock.
+    let isAbandonable = startedAt === 0
+    if (!isAbandonable && startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS) {
+      const excess = await executionBudgetExcessMs(row.id, row.user_id as string, states)
+      isAbandonable =
+        now - startedAt > staleExecutionThresholdMs(excess) &&
+        now - startedAt > staleExecutionThresholdMs(excess, await executionQueuedMs(row.id, row.user_id as string))
+    }
 
     if (isAbandonable) {
       await tryTerminalWrite(

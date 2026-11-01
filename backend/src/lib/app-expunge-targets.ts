@@ -17,6 +17,7 @@ import { onlyServerStampedRows } from "./server-started-runs.js"
 import { serverStamps } from "./trigger-data-stamps.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "./job-budget.js"
 import { executionBudgetExcessMs } from "./execution-budget.js"
+import { executionQueuedMs } from "./concurrency-lanes/execution-wait.js"
 import { USE_CASE_WRAPPER_PROVIDER, isWrapperJobProvider } from "./wrapper-providers.js"
 import { jobIdsOf } from "./node-state-job-ids.js"
 
@@ -194,7 +195,13 @@ async function executionInFlight(row: ExecutionRow, now: number): Promise<boolea
   // The budget excess is read only once the base threshold has passed, as the
   // reconcile sweeps do: a run with nothing budgeted costs no extra query.
   if (age <= STALE_EXECUTION_THRESHOLD_MS) return true
-  return age <= staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, row.user_id as string))
+  const excess = await executionBudgetExcessMs(row.id, row.user_id as string)
+  if (age <= staleExecutionThresholdMs(excess)) return true
+  // Time spent waiting for concurrency slots never counts (decided 2026-10-30),
+  // read last and only for a run that still looks stale. A run never claimed
+  // is aged from `created_at`, so its own wait for a run slot counts too.
+  const queued = await executionQueuedMs(row.id, row.user_id as string, { includeOwnWait: typeof row.started_at !== "string" })
+  return age <= staleExecutionThresholdMs(excess, queued)
 }
 
 function addTo<K, V>(map: Map<K, Set<V>>, key: K, value: V): void {

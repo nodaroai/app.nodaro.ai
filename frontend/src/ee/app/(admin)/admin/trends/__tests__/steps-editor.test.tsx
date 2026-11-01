@@ -42,7 +42,7 @@ import {
   type TrendEngineEnvironment,
 } from "@/lib/api"
 import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "./harness"
-import { environmentsThatCannotTakeSteps } from "../clip-preparation"
+import { environmentsThatCannotTakeClipBody, environmentsThatCannotTakeSteps } from "../clip-preparation"
 import { StepsEditor } from "../components/StepsEditor"
 import { layoutLabel } from "../components/SheetRulesTable"
 
@@ -67,6 +67,7 @@ const DEFAULTS: CastSwapStepDefaults = {
     labeller: { model: "claude-haiku-5.5", instructions: "test labeller instructions", inputs: ["rolePhotos"], maxChars: 900 },
     enginePrompt: { model: "gemini-3.1-pro", instructions: "test instructions", inputs: ["rolePhotos", "extraPrompt"], maxChars: 3000 },
     sceneDescription: { model: "gemini-3.1-pro", instructions: "test scene instructions", inputs: ["clip"], maxChars: 2500 },
+    clipBody: { prompt: "test clip body prompt" },
   },
   layoutPrompts: {
     person: { collage: null, "head-3q-body-cut": "test layout prompt", none: null },
@@ -74,7 +75,7 @@ const DEFAULTS: CastSwapStepDefaults = {
     product: {},
     location: {},
   },
-  critical: { "reference-sheet": false, "engine-prompt": false, "scene-description": false },
+  critical: { "reference-sheet": false, "engine-prompt": false, "scene-description": false, "clip-body": false },
   problems: [],
 }
 
@@ -85,12 +86,18 @@ const MODELS = [
   { id: "gpt-5.5", displayName: "Test Disabled", tier: "standard", vendor: "openai", isEnabled: false },
 ]
 
-const withSteps = (env: string, steps?: boolean): TrendEngineEnvironment => ({
+const withSteps = (env: string, steps?: boolean, clipBodySheet?: boolean): TrendEngineEnvironment => ({
   ...ENVIRONMENTS[0]!,
   env,
-  supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, ...(steps === undefined ? {} : { steps }) } },
+  supports: {
+    castSwap: {
+      ...ENVIRONMENTS[0]!.supports.castSwap,
+      ...(steps === undefined ? {} : { steps }),
+      ...(clipBodySheet === undefined ? {} : { clipBodySheet }),
+    },
+  },
 })
-const STEP_ENVS = [withSteps("production", true), withSteps("staging", true)]
+const STEP_ENVS = [withSteps("production", true, true), withSteps("staging", true, true)]
 
 let seen: Array<CastSwapSteps | undefined> = []
 const last = () => seen[seen.length - 1]
@@ -102,7 +109,8 @@ function Harness({
   scene,
 }: {
   initial?: CastSwapSteps
-  envs?: TrendEngineEnvironment[]
+  /** null = the environments are still unknown. */
+  envs?: TrendEngineEnvironment[] | null
   source?: AdminTrendFaceMaskingSource
   scene?: AdminTrendFullDepthScene
 }) {
@@ -110,7 +118,7 @@ function Harness({
   return (
     <StepsEditor
       value={value}
-      envs={envs}
+      envs={envs ?? undefined}
       engine={ENGINE}
       source={source}
       scene={scene}
@@ -308,5 +316,135 @@ describe("the step editors", { timeout: 20_000 }, () => {
       }
     }
     expect(layoutLabel(SHEET_LAYOUTS.product, "turnaround")).toBe("3 Turnaround")
+  })
+})
+
+describe("environmentsThatCannotTakeClipBody", () => {
+  it("names every shared environment whose engine lacks castSwap.steps or castSwap.clipBodySheet", () => {
+    expect(environmentsThatCannotTakeClipBody(undefined)).toBeUndefined()
+    expect(environmentsThatCannotTakeClipBody([])).toEqual(["staging", "production"])
+    expect(environmentsThatCannotTakeClipBody([withSteps("production", true), withSteps("staging", true, true)])).toEqual(["production"])
+    expect(environmentsThatCannotTakeClipBody([withSteps("production", false, true), withSteps("staging", true, true)])).toEqual(["production"])
+    expect(environmentsThatCannotTakeClipBody(STEP_ENVS)).toEqual([])
+  })
+})
+
+describe("Body from the clip", { timeout: 20_000 }, () => {
+  const clipBody = () => section("Body from the clip step")
+  const toggle = () => within(clipBody()).getByRole("switch", { name: "Body from the clip" })
+  const prompt = () => within(clipBody()).getByRole("textbox", { name: "Image prompt" })
+
+  it("unset reads as on, with the engine's prompt as the placeholder and the hint; loading writes nothing", async () => {
+    renderWith(<Harness />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    expect(toggle()).toBeChecked()
+    expect(prompt()).toHaveValue("")
+    expect(prompt()).toHaveAttribute("placeholder", "test clip body prompt")
+    expect(within(clipBody()).getByText("For a person whose Outfit is new and Body or Hair is from the clip.")).toBeInTheDocument()
+    expect(within(clipBody()).getByText("Not critical — skipped if it fails")).toBeInTheDocument()
+    expect(seen).toEqual([])
+  })
+
+  it("Off is stored; On again with no prompt removes the key (the engine's default)", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    await user.click(toggle())
+    expect(last()).toEqual({ clipBody: { mode: "off" } })
+    expect(toggle()).not.toBeChecked()
+    expect(prompt()).toBeDisabled()
+    await user.click(toggle())
+    expect(last()).toBeUndefined()
+  })
+
+  it("a prompt overrides the default; emptied, the key goes; Off drops it", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness initial={{ enginePrompt: { mode: "template" } as never }} />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    await user.type(prompt(), "ab")
+    expect(last()).toMatchObject({ clipBody: { mode: "on", prompt: "ab" } })
+    await user.clear(prompt())
+    expect(last()?.clipBody).toBeUndefined()
+    await user.type(prompt(), "c")
+    await user.click(toggle())
+    expect(last()?.clipBody).toEqual({ mode: "off" })
+    expect(prompt()).toHaveAttribute("maxlength", "4000")
+  })
+
+  it("names where it runs; with every environment, the prompt is editable", async () => {
+    renderWith(<Harness />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    expect(within(clipBody()).getByText("Runs in: staging, production")).toBeInTheDocument()
+  })
+
+  it("with environments on mixed versions: the real state, where it runs and not, and Off still choosable", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness envs={[withSteps("production", true, true), withSteps("staging", true)]} />)
+    await screen.findByRole("region", { name: "Body from the clip step" })
+    expect(within(clipBody()).getByText("Runs in: production · Not yet in: staging")).toBeInTheDocument()
+    expect(toggle()).toBeEnabled()
+    expect(toggle()).toBeChecked()
+    // A prompt of its own needs every environment: not offered.
+    expect(prompt()).toBeDisabled()
+    await user.click(toggle())
+    expect(last()).toEqual({ clipBody: { mode: "off" } })
+    expect(toggle()).not.toBeChecked()
+    await user.click(toggle())
+    expect(last()).toBeUndefined()
+  })
+
+  it("Off reads Off and stays choosable even where no environment takes steps yet", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness initial={{ clipBody: { mode: "off" } }} envs={[withSteps("production"), withSteps("staging")]} />)
+    expect(toggle()).toBeEnabled()
+    expect(toggle()).not.toBeChecked()
+    expect(within(clipBody()).getByText("Not yet in: staging, production")).toBeInTheDocument()
+    // Off needs nothing: no "remove them" warning for it.
+    expect(screen.queryByText(/remove them to publish or save/)).not.toBeInTheDocument()
+    await user.click(toggle())
+    expect(last()).toBeUndefined()
+  })
+
+  it("a prompt of its own set before, where an environment lacks the step, can be removed", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness initial={{ clipBody: { mode: "on", prompt: "test own prompt" } }} envs={[withSteps("production", true, true), withSteps("staging", true)]} />)
+    await screen.findByRole("region", { name: "Body from the clip step" })
+    expect(within(clipBody()).getByText(/needs every environment's engine to run the step/)).toBeInTheDocument()
+    await user.click(within(clipBody()).getByRole("button", { name: "Remove the prompt" }))
+    expect(last()).toBeUndefined()
+  })
+
+  it("is not choosable while the environments are unknown", () => {
+    renderWith(<Harness envs={null} />)
+    expect(toggle()).toBeDisabled()
+  })
+
+  it("says a placeholder the engine does not fill before Save, once", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${CHECK_URL}`] = () => ({
+      body: { data: { problems: [{ path: "clipBody.prompt", code: "clip_body_placeholder", message: "server placeholder problem" }] } },
+    })
+    renderWith(<Harness />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    await user.type(prompt(), "Draw {{Subject} and {{body}")
+    expect(within(clipBody()).getByText("Unknown placeholder {Subject}: the image prompt may name {subject}, {body} and {hair} only.")).toBeInTheDocument()
+    await waitFor(() => expect(sentTo(`POST ${CHECK_URL}`).length).toBeGreaterThan(0))
+    expect(screen.queryByText("server placeholder problem")).not.toBeInTheDocument()
+    await user.clear(prompt())
+    await user.type(prompt(), "Draw {{subject}")
+    expect(within(clipBody()).queryByText(/Unknown placeholder/)).not.toBeInTheDocument()
+  })
+
+  it("shows the check's problems under it", async () => {
+    const user = userEvent.setup()
+    routes[`POST ${CHECK_URL}`] = () => ({
+      body: { data: { problems: [{ path: "clipBody.prompt", code: "too_big", message: "test clip body problem" }] } },
+    })
+    renderWith(<Harness />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    await user.type(prompt(), "x")
+    expect(await within(clipBody()).findByText("test clip body problem")).toBeInTheDocument()
+    // Said once, under its own section only.
+    expect(screen.getAllByText("test clip body problem")).toHaveLength(1)
   })
 })

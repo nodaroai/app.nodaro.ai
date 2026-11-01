@@ -260,6 +260,27 @@ describe("tk.settings.nodaroMotionSteps", () => {
     expect(saved["motion-prism"]).toEqual({ enginePrompt: { mode: "template" } })
   })
 
+  it("answers clipBody only to an engine that declares castSwap.clipBodySheet, dropping an entry left empty", async () => {
+    h.steps = {
+      "motion-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
+      "motion-pulse": { clipBody: { mode: "on", prompt: "A test prompt." } },
+    }
+    setPluginSupports({ castSwap: { ...CS, steps: true, clipBodySheet: true } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "motion-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
+      "motion-pro": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
+      "motion-pulse": { clipBody: { mode: "on", prompt: "A test prompt." } },
+      "motion-lite": { clipBody: { mode: "on", prompt: "A test prompt." } },
+    })
+    stepsEngine(true)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "motion-prism": { enginePrompt: { mode: "template" } },
+      "motion-pro": { enginePrompt: { mode: "template" } },
+    })
+    h.steps = { "motion-pulse": { clipBody: { mode: "off" } } }
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
+  })
+
   it("answers null to an engine without castSwap.steps", async () => {
     h.steps = saved
     stepsEngine(undefined)

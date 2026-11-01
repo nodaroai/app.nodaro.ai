@@ -1,4 +1,4 @@
-// @test-watches supabase/migrations/*_concurrency_lanes.sql supabase/migrations/*_jobs_lane_queued_index.sql supabase/tests/concurrency-lanes.behavior.sql
+// @test-watches supabase/migrations/*_concurrency_lanes.sql supabase/migrations/*_jobs_lane_queued_index.sql supabase/migrations/*_run_lane_queued_indexes.sql supabase/tests/concurrency-lanes.behavior.sql
 /**
  * The concurrency-lanes migration: the per-plan size table, per-user
  * overrides, platform provider ceilings, the requeue side table, the three
@@ -31,9 +31,9 @@ function laneMigration(): { file: string; code: string } {
   return { file, code }
 }
 
-function indexMigration(): { file: string; code: string } {
-  const files = readdirSync(MIGRATIONS).filter((f) => /^\d{3}_jobs_lane_queued_index\.sql$/.test(f))
-  expect(files, "exactly one NNN_jobs_lane_queued_index.sql").toHaveLength(1)
+function indexMigration(name = "jobs_lane_queued_index"): { file: string; code: string } {
+  const files = readdirSync(MIGRATIONS).filter((f) => new RegExp(`^\\d{3}_${name}\\.sql$`).test(f))
+  expect(files, `exactly one NNN_${name}.sql`).toHaveLength(1)
   const file = files[0]!
   return { file, code: readFileSync(join(MIGRATIONS, file), "utf8").replace(/--.*$/gm, "") }
 }
@@ -152,6 +152,19 @@ describe("concurrency-lanes migration", () => {
     expect(statements).toEqual([
       "SET LOCAL lock_timeout = '2s'",
       "CREATE INDEX IF NOT EXISTS idx_jobs_lane_queued ON public.jobs (lane_env, lane_queued_at) WHERE status = 'queued'",
+    ])
+  })
+
+  it("the queued-runs indexes are alone in a later migration: lock bound, then the two partial indexes, the busier table last", () => {
+    const jobsIndex = indexMigration()
+    const { file, code } = indexMigration("run_lane_queued_indexes")
+    expect(Number(file.slice(0, 3))).toBeGreaterThan(Number(jobsIndex.file.slice(0, 3)))
+    const statements = code.split(";").map((st) => st.trim().replace(/\s+/g, " ")).filter(Boolean)
+    // Each predicate is implied by the sweep's query (readLaneQueuedRows: the waiting status, `lane_queued_at IS NOT NULL`).
+    expect(statements).toEqual([
+      "SET LOCAL lock_timeout = '2s'",
+      "CREATE INDEX IF NOT EXISTS idx_pipelines_lane_queued ON public.pipelines (lane_env, lane_queued_at) WHERE status = 'queued' AND lane_queued_at IS NOT NULL",
+      "CREATE INDEX IF NOT EXISTS idx_workflow_executions_lane_queued ON public.workflow_executions (lane_env, lane_queued_at) WHERE status = 'pending' AND lane_queued_at IS NOT NULL",
     ])
   })
 

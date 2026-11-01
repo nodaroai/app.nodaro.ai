@@ -69,6 +69,14 @@ it("JobSkippedSteps names the new steps and roles", () => {
   ])
   expect(screen.getByText("Finished without 7 steps")).toBeTruthy()
 })
+it("JobSkippedSteps names Body from the clip, its role and a role with no usable frame", () => {
+  render(<JobSkippedSteps output={{ skippedSteps: [
+    { step: "clip-body", reason: "no_frame", role: 0 },
+    { step: "clip-body", reason: "failed", role: 1 },
+  ] }} />)
+  const items = within(screen.getByTestId("job-skipped-steps")).getAllByRole("listitem").map((li) => li.textContent)
+  expect(items).toEqual(["Body from the clip — role 1: no usable frame", "Body from the clip — role 2: failed"])
+})
 function withQuery(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)

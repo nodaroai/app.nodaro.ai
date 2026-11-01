@@ -106,8 +106,14 @@ const TABLE_NAME_ELSEWHERE: Record<string, readonly string[]> = {
   "middleware/token-workflow-scope.ts": ["workflowOfRun"],
   // The tables whose lane columns the enforcement switch checks for (a zero-row select only).
   "lib/concurrency-lanes/enforcement.ts": ["<top>"],
-  // The tables the queued sweep reads parked rows from and the table a line head's row is read in (select only; its one write is in place).
-  "lib/concurrency-lanes/queued-sweep.ts": ["<top>", "headRow"],
+  // The tables the queued sweep reads parked rows from and the table a line head's row is read in (select only), and the
+  // run whose own failure path (run-failure.ts) a timed-out row is failed through (a dispatch on the name, no query).
+  "lib/concurrency-lanes/queued-sweep.ts": ["<top>", "headRow", "failRun"],
+  // The table a queue's waiting rows live in, named for the park (a label; the park's writes go through columns.ts).
+  "lib/concurrency-lanes/park.ts": ["laneTableOfQueue"],
+  // The table whose lane columns are known missing in this process (the tolerant-column flag, a label); the
+  // queries beside it are written in place (an update of `lane_wait_ms` only, and a select).
+  "lib/concurrency-lanes/execution-wait.ts": ["persistRunLaneWait", "readRunRow"],
 }
 
 /** The lane literals a `trigger_type` value can be, or `null` when it is not spelled out. */

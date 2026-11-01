@@ -95,6 +95,44 @@ describe("StepsDialog", () => {
     expect(within(dialog).getByTestId("job-skipped-steps").textContent).toContain("Reference sheet — role 2: failed")
   })
 
+  it("shows a role's Body from the clip: the frame, the redrawn sheet and its prompt", async () => {
+    vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({
+      stepOutputs: {
+        v: 1,
+        roles: [
+          {
+            role: 0,
+            kind: "person",
+            clipBody: {
+              frameUrl: "https://cdn.test/frames/role-1.jpg",
+              frameSec: 2.25,
+              sheetUrl: "https://cdn.test/sheets/role-1-redrawn.png",
+              prompt: "test image prompt",
+            },
+          },
+          { role: 1, kind: "person", clipBody: { frameUrl: "javascript:alert(1)", prompt: "test other prompt" } },
+        ],
+      },
+      sceneText: null,
+      skippedSteps: [{ step: "clip-body", reason: "no_frame", role: 1 }],
+    })
+    renderWith(<StepsDialog jobId={RUN_ID} onClose={() => {}} />)
+    const dialog = await screen.findByRole("dialog")
+    const role1 = await within(dialog).findByRole("region", { name: "Role 1" })
+    const clip = within(role1).getByRole("group", { name: "Role 1 body from the clip" })
+    expect(within(clip).getByRole("img", { name: "Role 1 frame from the clip" })).toHaveAttribute("src", "https://cdn.test/frames/role-1.jpg")
+    expect(within(clip).getByText("At 2.25 s")).toBeInTheDocument()
+    expect(within(clip).getByRole("img", { name: "Role 1 sheet redrawn from the clip" })).toHaveAttribute("src", "https://cdn.test/sheets/role-1-redrawn.png")
+    expect(within(clip).getByTestId("clip-body-prompt").textContent).toBe("test image prompt")
+    // No sheet rules on this run: no empty "Covers" / "Layout" rows.
+    expect(within(role1).queryByText("Covers")).not.toBeInTheDocument()
+    // An address that is not http(s) is never shown as a picture.
+    const role2 = within(dialog).getByRole("region", { name: "Role 2" })
+    expect(within(role2).queryByRole("img")).not.toBeInTheDocument()
+    expect(within(role2).getByTestId("clip-body-prompt").textContent).toBe("test other prompt")
+    expect(within(dialog).getByTestId("job-skipped-steps").textContent).toContain("Body from the clip — role 2: no usable frame")
+  })
+
   it("a template engine prompt shows no body", async () => {
     vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({
       ...STEPS,

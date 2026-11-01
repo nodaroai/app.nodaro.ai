@@ -25,12 +25,25 @@ import { supabase } from "../../lib/supabase.js"
 import { pipelineOrchestrationQueue, enqueuePipelineRun } from "./queue.js"
 import { refundPipelineCredits } from "./credits.js"
 import { MAX_RESUME } from "./resume.js"
+import { laneColumnsAbsent, noteLaneColumnError } from "../../lib/concurrency-lanes/columns.js"
+import { cappedQueuedMs } from "../../lib/concurrency-lanes/queued-clock.js"
 
 const TICK_INTERVAL_MS = 90_000
 const BACKOFF_FROM_START_MS = 120_000
 /** Absolute abandon: 6 hours. Pipelines can legitimately run 1–2 hours
  *  (story-to-video has 4 stages × multi-minute critic loops), so this is
- *  longer than the workflow-executions threshold. */
+ *  longer than the workflow-executions threshold.
+ *
+ *  Queued time never counts (decided 2026-10-30: nothing fails for waiting):
+ *  the 6 hours grow by `pipelines.lane_wait_ms` — the pipeline's wait for its
+ *  run slot (credited when its first drive admits it, engine.ts) plus the
+ *  time its drives waited on stage jobs and calls waiting for slots
+ *  (`lib/concurrency-lanes/coordinator-wait.ts`) — capped at the queue
+ *  timeout's bound. A pipeline that never waited has 0 there and is judged
+ *  exactly as before. A pipeline still waiting for its run slot stays
+ *  `queued`, which this cron never scans; its parked drive keeps its BullMQ
+ *  id (`pipeline-<id>`, also the id a lost entry is added again under), so
+ *  once running, a delayed entry under that id already counts as presence. */
 const PIPELINE_STALE_THRESHOLD_MS = 6 * 60 * 60 * 1000
 const BATCH_LIMIT = 200
 
@@ -69,12 +82,20 @@ export async function reconcilePipelinesTick(): Promise<void> {
   // the pause semantics.
   // `pipelines` table has `created_at` (not `started_at` — that's on
   // `pipeline_stages`). Use created_at for the backoff + abandon threshold.
-  const { data: rows, error } = await supabase
+  const read = (columns: string) => supabase
     .from("pipelines")
-    .select("id, user_id, status, created_at")
+    .select(columns)
     .in("status", ["running", "stopping"])
     .lt("created_at", backoffCutoff)
     .limit(BATCH_LIMIT)
+  // `lane_wait_ms` only once migration 568 is in this database (staging runs dev code on it).
+  const base = "id, user_id, status, created_at"
+  const withLane = !laneColumnsAbsent("pipelines")
+  let { data, error } = await read(withLane ? `${base}, lane_wait_ms` : base)
+  if (error && withLane && noteLaneColumnError("pipelines", error)) {
+    ;({ data, error } = await read(base))
+  }
+  const rows = data as unknown as PipelineRow[] | null
 
   if (error) {
     console.error("[reconcile/pipelines] query failed:", error.message)
@@ -113,6 +134,8 @@ interface PipelineRow {
   user_id: string
   status: string
   created_at: string | null
+  /** Absent while the column is not in this database. */
+  lane_wait_ms?: number | string | null
 }
 
 async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
@@ -146,7 +169,7 @@ async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
   // orchestrator presence. Fail + refund. Refund-only-on-failed is idempotent
   // via the `reservation_usage_log_id` CAS inside `refundPipelineCredits`.
   const createdAt = row.created_at ? new Date(row.created_at).getTime() : 0
-  if (createdAt > 0 && now - createdAt > PIPELINE_STALE_THRESHOLD_MS) {
+  if (createdAt > 0 && now - createdAt > PIPELINE_STALE_THRESHOLD_MS + cappedQueuedMs(row.lane_wait_ms)) {
     await supabase
       .from("pipelines")
       .update({ status: "failed", failure_reason: "stale_abandoned_by_cron" })

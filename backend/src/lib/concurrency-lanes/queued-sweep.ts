@@ -27,22 +27,27 @@
 //     exactly as the never-started sweep leaves them alone;
 //   - waited ≥ the queue timeout (from `lane_queued_at`, so a Redis restart
 //     does not restart the clock): withdraw, fail it (a CAS from the waiting
-//     status only — a worker that admitted it meanwhile wins), and refund only
-//     when that write won;
+//     status only — a worker that admitted it meanwhile wins) through the
+//     row's own failure path — a job's (markJobFailed), a run's
+//     (run-failure.ts: the execution's failure write, event and use-case
+//     wrapper; the pipeline's stages, status, events) — and refund only when
+//     that write won; its parked BullMQ entry is removed;
 //   - in its line or a server-share wait: nothing (its wake or backstop brings it);
 //   - its BullMQ entry delayed: promote it (its pickup re-enters the line);
 //     waiting or active: nothing;
 //   - both gone, a stored payload: add it again under the queue's own
 //     deterministic id (`lane-readd-<id>` for a job, whose claim then accepts
 //     only `queued`; the execution id; `pipeline-<id>`), which BullMQ
-//     de-duplicates and the next pass finds;
+//     de-duplicates and the next pass finds — an ENDED entry still kept under
+//     that id (BullMQ keeps finished jobs per the queue's removeOnComplete /
+//     removeOnFail) is removed first, or the add would be silently dropped;
 //   - both gone, no payload: fail it as lost and refund on the same rule.
 // Then the stored payloads whose row ended or is gone are deleted (the table
 // has no foreign key: this is also what clears them after an account deletion).
 //
-// Executions and pipelines do not park yet: nothing stamps them, so their
-// tables are not read at all (SWEPT_TABLES) until the run lane parks them —
-// their branches below are ready for it, and tested.
+// Jobs, workflow executions and pipelines all park (the run lane parks the
+// last two, run-admit.ts); each table's read is served by a partial index on
+// (lane_env, lane_queued_at) over its waiting rows (migrations 569 and 573).
 import { Job, type Queue } from "bullmq"
 import { isUserQuietStopped } from "../access-blocks.js"
 import { hasCredits } from "../config.js"
@@ -52,7 +57,7 @@ import { markJobFailedDetailed } from "../job-failure.js"
 import type { ReconcileResult } from "../reconcile/cron.js"
 import { supabase } from "../supabase.js"
 import {
-  deleteRequeuePayloads, inChunks, laneColumnsAbsent, laneRowKindOf, LANE_WAITING_STATUS, readLaneQueuedRows, readRequeuePayload,
+  deleteRequeuePayloads, inChunks, laneColumnsAbsent, laneRowKindOf, readLaneQueuedRows, readRequeuePayload,
   readRequeuePayloadOwners, type LaneQueuedRow, type LaneRowKind, type LaneTable, type RequeuePayload,
 } from "./columns.js"
 import { LaneWaitTimeoutError } from "./errors.js"
@@ -64,6 +69,7 @@ import { payerOfRow } from "./payer.js"
 import type { LaneQueueName, PayerKey } from "./types.js"
 import { withdrawFromLane } from "./withdraw.js"
 import { LANE_READD_PREFIX } from "./worker-admit.js"
+import { failWaitingExecution, failWaitingPipeline } from "./run-failure.js"
 
 const MINUTE_MS = 60_000
 
@@ -77,12 +83,8 @@ export const LANE_GHOST_AGE_MS = 2 * LANE_PARK_BACKSTOP_MS
 /** The most one BullMQ call may take before the pass reads Redis as down. */
 const BULL_CALL_TIMEOUT_MS = 5_000
 
-/**
- * The tables the sweep reads: only `jobs` rows park today. `workflow_executions`
- * and `pipelines` join when the run lane parks them (with an index led by
- * their waiting status: `pipelines` has none, so reading it is a full scan).
- */
-const SWEPT_TABLES: readonly LaneTable[] = ["jobs"]
+/** The tables the sweep reads: every table whose rows park. */
+const SWEPT_TABLES: readonly LaneTable[] = ["jobs", "workflow_executions", "pipelines"]
 let sweptTables: readonly LaneTable[] = SWEPT_TABLES
 
 /** The BullMQ id a row is added again under: the id its queue de-duplicates on. */
@@ -132,7 +134,7 @@ export function resetQueuedSweepForTests(): void {
   sweptTables = SWEPT_TABLES
 }
 
-/** For tests: sweep these tables (the run branches, before anything parks runs). */
+/** For tests: sweep only these tables. */
 export function setQueuedSweepTablesForTests(tables: readonly LaneTable[]): void {
   sweptTables = tables
 }
@@ -188,33 +190,29 @@ async function liveEntry(queue: Queue, id: string, table: LaneTable, rowId: stri
 
 // ------------------------------------------------------------- end a wait
 
-/** The CAS that fails a waiting run; true when it won. */
+/**
+ * Fail a waiting run through its own failure path (run-failure.ts); true when
+ * this call failed it. A pipeline has no message column: its failure reason
+ * names what happened.
+ */
 async function failRun(table: Exclude<LaneTable, "jobs">, row: LaneQueuedRow, err: LaneWaitTimeoutError): Promise<boolean> {
-  const { data, error } = (laneRowKindOf(table) === "execution"
-    ? await supabase
-      .from("workflow_executions")
-      .update({ status: "failed", error_message: err.message, completed_at: new Date().toISOString() })
-      .eq("id", row.id)
-      .eq("status", LANE_WAITING_STATUS.workflow_executions)
-      .select("id")
-    // A pipeline has no message column: its failure reason names what happened.
-    : await supabase
-      .from("pipelines")
-      .update({ status: "failed", failure_reason: err.failureHint.reason === "timeout" ? "queue_timeout" : "queue_lost" })
-      .eq("id", row.id)
-      .eq("status", LANE_WAITING_STATUS.pipelines)
-      .select("id")) ?? {}
-  if (error) throw new Error(`could not fail ${table} row ${row.id}: ${error.message ?? error.code}`)
-  return Array.isArray(data) && data.length > 0
+  if (table === "workflow_executions") return failWaitingExecution(row.id, err.message)
+  return failWaitingPipeline(row.id, row.user_id, err.failureHint.reason === "timeout" ? "queue_timeout" : "queue_lost")
 }
 
-/** Remove a timed-out or lost job's parked BullMQ entry, so its backstop does not bring it to a pickup. Best effort. */
-async function removeParkedEntry(row: LaneQueuedRow, pass: Pass): Promise<void> {
-  if (pass.redisDown || !isLaneQueue(row.lane_bull_queue) || !row.lane_bull_job_id) return
-  const queue = queueOf(row.lane_bull_queue)
+/**
+ * Remove a timed-out or lost row's parked BullMQ entry, so its backstop does
+ * not bring it to a pickup: a job's stamped entry, a run's entry under its
+ * queue's own id. Best effort.
+ */
+async function removeParkedEntry(table: LaneTable, row: LaneQueuedRow, pass: Pass): Promise<void> {
+  const queueName = table === "jobs" ? row.lane_bull_queue : RUN_QUEUE[table]
+  const bullJobId = table === "jobs" ? row.lane_bull_job_id : READD_ID[table](row.id)
+  if (pass.redisDown || !isLaneQueue(queueName) || !bullJobId) return
+  const queue = queueOf(queueName)
   if (!queue) return
   try {
-    const live = await liveEntry(queue, row.lane_bull_job_id, "jobs", row.id)
+    const live = await liveEntry(queue, bullJobId, table, row.id)
     // An active entry is a pickup in progress: its claim finds the row failed and discards it.
     if (live && live.state !== "active") await bounded(live.job.remove(), "remove a parked entry")
   } catch (err) {
@@ -278,19 +276,12 @@ async function endWaiting(table: LaneTable, row: LaneQueuedRow, reason: "timeout
     won = outcome === "flipped"
     if (won) {
       await refundEveryHold(row, err, pass)
-      await removeParkedEntry(row, pass)
+      await removeParkedEntry(table, row, pass)
     }
   } else {
+    // The run's own failure path refunds what it holds (a pipeline its reservation, a use-case run its wrapper's fee).
     won = await failRun(table, row, err)
-    // A pipeline row always has its owner; without one there is no one to refund (and the refund would name "").
-    if (won && table === "pipelines" && hasCredits() && row.user_id) {
-      try {
-        const { refundPipelineCredits } = await import("../../ee/pipelines/credits.js")
-        await refundPipelineCredits({ supabase, userId: row.user_id, pipelineId: row.id, reason: err.failureHint.reason === "timeout" ? "queue_timeout" : "queue_lost" })
-      } catch (refundErr) {
-        console.error(`[concurrency-lanes] could not refund pipeline ${row.id} after its queue ${reason}:`, refundErr)
-      }
-    }
+    if (won) await removeParkedEntry(table, row, pass)
   }
   if (!won) {
     pass.result.notStale++
@@ -306,6 +297,25 @@ async function endWaiting(table: LaneTable, row: LaneQueuedRow, reason: "timeout
   console.log(`[concurrency-lanes] ${table} row ${row.id} ${reason === "timeout" ? "timed out in its queue" : "lost its place in line"} after ${Math.floor(waitedMs / MINUTE_MS)} min; failed and refunded`)
 }
 
+/**
+ * Whether a waiting run's BullMQ entry (its queue's own id) is `active` — a
+ * worker picked it up and is admitting or running it. True also whenever
+ * Redis gives no answer (this read failed, or Redis was found down earlier in
+ * the pass), so a run is never failed while it may be starting; it times out
+ * on a pass that can read its entry.
+ */
+async function runPickupInProgress(table: Exclude<LaneTable, "jobs">, row: LaneQueuedRow, pass: Pass): Promise<boolean> {
+  if (pass.redisDown) return true
+  const queue = queueOf(RUN_QUEUE[table]!)
+  if (!queue) return false
+  try {
+    return (await liveEntry(queue, READD_ID[table](row.id), table, row.id))?.state === "active"
+  } catch (err) {
+    noteRedisFailure(pass, "read a timed-out run's BullMQ entry", err)
+    return true
+  }
+}
+
 // ------------------------------------------------------------- per row
 
 async function sweepRow(table: LaneTable, row: LaneQueuedRow, pass: Pass): Promise<void> {
@@ -317,6 +327,15 @@ async function sweepRow(table: LaneTable, row: LaneQueuedRow, pass: Pass): Promi
   const queuedAt = Date.parse(row.lane_queued_at)
   const waitedMs = Number.isFinite(queuedAt) ? Math.max(0, pass.now - queuedAt) : 0
   if (Number.isFinite(queuedAt) && waitedMs >= pass.timeoutMs) {
+    // A run's own claim is no compare-and-set (the orchestrator moves its
+    // execution to `running` unconditionally; a pipeline drive sets its own
+    // status): a run admitted just as it timed out would be failed AND run.
+    // Its BullMQ entry being `active` says a pickup is in progress — that run
+    // is not stale. Without an answer the run waits for the next pass.
+    if (table !== "jobs" && (await runPickupInProgress(table, row, pass))) {
+      pass.result.notStale++
+      return
+    }
     await endWaiting(table, row, "timeout", waitedMs, pass)
     return
   }
@@ -386,6 +405,17 @@ async function sweepRow(table: LaneTable, row: LaneQueuedRow, pass: Pass): Promi
   const target = isLaneQueue(payload.bullQueue) ? queueOf(payload.bullQueue) : queue
   if (!target) return
   try {
+    // An ENDED entry kept under the re-add id (the queue keeps finished jobs)
+    // would swallow the add: BullMQ de-duplicates on the id whatever its state.
+    const kept = await bounded(Job.fromId(target, readdId), "find an ended entry under the re-add id")
+    if (kept) {
+      const state = await bounded(kept.getState(), "read an ended entry's state")
+      if (LIVE_STATES.has(state)) {
+        pass.result.notStale++
+        return
+      }
+      await bounded(kept.remove(), "remove an ended entry under the re-add id")
+    }
     await bounded(target.add(payload.name, payload.data, { ...payload.opts, jobId: readdId } as Parameters<Queue["add"]>[2]), "add a lost entry again")
     pass.result.recovered++
     console.log(`[concurrency-lanes] ${table} row ${row.id} lost its queue entry; added again as ${readdId}`)

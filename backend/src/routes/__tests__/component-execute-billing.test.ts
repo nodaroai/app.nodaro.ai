@@ -156,6 +156,29 @@ describe("POST /v1/component/execute — the forwarded payer (P14)", () => {
     expect(params.previewStopRule).toBeUndefined()
   })
 
+  it("INTERNAL lane: the parent run named in the header reaches the child execution (it takes no run slot)", async () => {
+    authKind = "internal"
+    const parent = "00000000-0000-4000-8000-0000000000aa"
+    const res = await app.inject({
+      method: "POST", url: "/v1/component/execute", payload: { appSlug: "comp" },
+      headers: { "x-nodaro-parent-execution": parent },
+    })
+    await vi.waitFor(() => expect(mockExecuteAppRun).toHaveBeenCalledTimes(1))
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun.mock.calls[0]?.[0]).toMatchObject({ parentExecutionId: parent })
+  })
+
+  it("JWT lane: a parent-run header is IGNORED — a caller cannot buy a run with no slot", async () => {
+    authKind = "jwt"
+    const res = await app.inject({
+      method: "POST", url: "/v1/component/execute", payload: { appSlug: "comp" },
+      headers: { "x-nodaro-parent-execution": "00000000-0000-4000-8000-0000000000aa" },
+    })
+    await vi.waitFor(() => expect(mockExecuteAppRun).toHaveBeenCalledTimes(1))
+    expect(res.statusCode).toBe(202)
+    expect((mockExecuteAppRun.mock.calls[0]?.[0] as { parentExecutionId?: string }).parentExecutionId).toBeUndefined()
+  })
+
   it("INTERNAL lane: a MALFORMED body context degrades to the request's own — never a trusted cast", async () => {
     authKind = "internal"
     const res = await postExecute({

@@ -8,6 +8,7 @@ import { renderVideoCreditId } from "@nodaro/shared/scene3d"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { renderQueue } from "../lib/render-queue.js"
+import { laneParentPayload } from "../lib/concurrency-lanes/lane-parent.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -344,6 +345,8 @@ export async function renderVideoRoutes(app: FastifyInstance) {
         planType,
         plan,
         usageLogId,
+        // A coordinator's child (the video director's render job) goes ahead in its lane; nothing else changes.
+        ...laneParentPayload(req),
       })
     } catch (error) {
       if (await markJobFailed(job.id, { error_message: "Failed to enqueue video render" })) {

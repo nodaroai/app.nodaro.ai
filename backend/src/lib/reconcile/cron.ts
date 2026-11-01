@@ -21,7 +21,8 @@ import { isUserQuietStopped } from "../access-blocks.js"
 import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
 import { sweepCancelledMeteredHolds } from "./cancelled-metered-holds.js"
 import { sweepSideLlmHolds } from "./side-llm-holds.js"
-import { readBullEntry } from "../concurrency-lanes/columns.js"
+import { laneColumnsAbsent, noteLaneColumnError, readBullEntry } from "../concurrency-lanes/columns.js"
+import { cappedQueuedMs } from "../concurrency-lanes/queued-clock.js"
 
 export interface ReconcileResult {
   scanned: number
@@ -221,6 +222,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           provider_task_id: row.provider_task_id,
           reconcile_attempts: row.reconcile_attempts,
           job_type: row.job_type,
+          provider_call_started_at: row.provider_call_started_at,
         })
         result.recovered++
       } else if (COPILOT_KINDS.has(kind)) {
@@ -390,7 +392,15 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
  *  For the CHECKPOINT_RESUMABLE_JOB_TYPES subset (gvp/evp), the sweep first
  *  tries `tryResumeCheckpointedPluginJob` — requeue-for-resume once, and skip
  *  entirely while a live BullMQ entry for the row exists — before falling
- *  back to fail+refund. See that function's doc comment. */
+ *  back to fail+refund. See that function's doc comment.
+ *
+ *  Queued time never counts (decided 2026-10-30: nothing fails for waiting):
+ *  the 90 minutes grow by the row's `lane_wait_ms` — the time the job waited
+ *  inside its handler, for slots of its own calls or for children that
+ *  waited (`lib/concurrency-lanes/coordinator-wait.ts`), written while the
+ *  wait goes on — capped at the queue timeout's bound. The column is read
+ *  tolerantly until it reaches this database; 0 (every job that never waited)
+ *  leaves the threshold exactly as it was. */
 const RENDER_STALE_MS = 90 * 60 * 1000
 
 /** Job types swept by `sweepStuckOrchestratorJobs` — see the doc comment on
@@ -429,6 +439,9 @@ interface StuckOrchestratorRow {
   usage_log_id: string | null
   input_data: Record<string, unknown> | null
   output_data: Record<string, unknown> | null
+  started_at?: string | null
+  /** Absent while the column is not in this database. */
+  lane_wait_ms?: number | string | null
 }
 
 /**
@@ -520,16 +533,24 @@ async function tryResumeCheckpointedPluginJob(
   return "requeued"
 }
 
+const STUCK_ORCHESTRATOR_COLUMNS = "id, provider_kind, reconcile_attempts, reconcile_last_error, user_id, usage_log_id, input_data, output_data, started_at"
+
 async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void> {
-  const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()
-  const { data, error } = await supabase
+  const now = Date.now()
+  const cutoff = new Date(now - RENDER_STALE_MS).toISOString()
+  const read = (columns: string) => supabase
     .from("jobs")
-    .select("id, provider_kind, reconcile_attempts, reconcile_last_error, user_id, usage_log_id, input_data, output_data")
+    .select(columns)
     .eq("status", "processing")
     .is("provider_call_started_at", null)
     .in("input_data->>type", STUCK_ORCHESTRATOR_JOB_TYPES)
     .lt("started_at", cutoff)
     .limit(BATCH_LIMIT)
+  const withLane = !laneColumnsAbsent("jobs")
+  let { data, error } = await read(withLane ? `${STUCK_ORCHESTRATOR_COLUMNS}, lane_wait_ms` : STUCK_ORCHESTRATOR_COLUMNS)
+  if (error && withLane && noteLaneColumnError("jobs", error)) {
+    ;({ data, error } = await read(STUCK_ORCHESTRATOR_COLUMNS))
+  }
 
   if (error) {
     console.error(`[reconcile/cron] stuck-orchestrator query failed:`, error.message)
@@ -539,6 +560,13 @@ async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void
 
   for (const row of (data ?? []) as unknown as StuckOrchestratorRow[]) {
     result.scanned++
+    // Still inside its threshold once the time it waited for slots is left out.
+    const waitedMs = cappedQueuedMs(row.lane_wait_ms)
+    const startedAt = row.started_at ? Date.parse(row.started_at) : NaN
+    if (waitedMs > 0 && Number.isFinite(startedAt) && now - startedAt <= RENDER_STALE_MS + waitedMs) {
+      result.notStale++
+      continue
+    }
     try {
       const jobType = String((row.input_data as { type?: unknown } | null)?.type ?? "")
       const resume = await tryResumeCheckpointedPluginJob(row, jobType)

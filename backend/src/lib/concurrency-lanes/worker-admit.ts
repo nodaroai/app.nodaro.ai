@@ -15,7 +15,14 @@
 //      each of its calls takes its own slot;
 //   3. classify (registry.ts): a nested coordinator — its row names a parent
 //      job, a workflow execution or a pipeline, or its payload the lane-only
-//      `laneParent` marker — takes no slot and runs under a coordinator hold;
+//      `laneParent` marker or (a nested workflow execution) the
+//      `parentExecutionId` of the run that started it — takes no slot, is
+//      never refused by the server share, and runs under a coordinator hold.
+//      The payload's markers are not taken on its word (a route may pass a
+//      client's body into it): `parentExecutionId` counts only on the
+//      orchestration queue, whose payloads the server builds field by field,
+//      and `laneParent` only once the director it names is seen running for
+//      the same user (lane-parent.ts — one read, only when a marker is there);
 //      a top-level coordinator takes a slot of the `run` lane; a leaf, one of
 //      its own lane;
 //   4. acquire, in mode
@@ -31,8 +38,10 @@
 //        fresh   — everything else.
 //
 // The line (user × payer) comes from the payload's billing context when the
-// payload names its user, else from the row (payer.ts). Sizes come from
-// sizes.ts; the provider's platform ceiling is the gate's own.
+// payload names the row's user and the row bears the context out (same
+// workspace, a deployment payer only where this instance bills one), else
+// from the row (payer.ts). Sizes come from sizes.ts; the provider's platform
+// ceiling is the gate's own.
 //
 // With enforcement off every acquire is granted (one that would have waited is
 // an over-limit lease), so nothing here changes what a worker does. With it on,
@@ -59,6 +68,8 @@
 // The render worker does not, and needs not: every render-queue job is a
 // `local` leaf, attributed to "local" before any registry lookup.
 import { payloadBillingContext, type BillingContext } from "../billing-context.js"
+import { deploymentPayerId } from "../deployment-payer.js"
+import { runtimeSurfaceProfile } from "../surface-profile.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus, type JobStatus } from "../job-status.js"
 import { LANE_LEASE_TTL_MS, LaneGateTimeoutError, type ConcurrencyGate, type ReleaseOutcome, type WakeTarget } from "./gate.js"
 import { registerSlotHandOff } from "./handoff.js"
@@ -66,6 +77,7 @@ import {
   countFailOpen, countUngated, keepLeaseAlive, loadConcurrencyGate, logLaneRateLimited, warnLaneRateLimited, type ConcurrencyHold,
 } from "./hold.js"
 import { payerKeyOf, payerOfRow } from "./payer.js"
+import { laneParentInPayload, laneParentIsLive } from "./lane-parent.js"
 import { laneClassOf } from "./registry.js"
 import { noteServerWaiter, SERVER_POOL_OF as POOL, serverShareOf, type ServerPool, type ServerShareKey } from "./server-share.js"
 import { laneSizesFor } from "./sizes.js"
@@ -212,13 +224,65 @@ export function resetWorkerAdmitHooksForTests(): void {
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null)
 const record = (v: unknown): Record<string, unknown> => (v !== null && typeof v === "object" ? (v as Record<string, unknown>) : {})
 
-/** The line of a job: its payload's billing context when the payload names its user, else its row. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Whether a payload's deployment payer is this instance's. Only an instance
+ * whose surface profile names a payer account bills a deployment payer, and
+ * there every run is billed to it; the id is compared wherever this process
+ * knows it (the API server resolved it at boot; a profile may name it by
+ * uuid). Never throws.
+ */
+function isThisDeploymentPayer(payerId: string): boolean {
+  try {
+    const account = runtimeSurfaceProfile().billing.payerAccount
+    if (!account) return false
+    if (UUID_RE.test(account) && account.toLowerCase() !== payerId.toLowerCase()) return false
+    const resolved = deploymentPayerId()
+    return resolved === null || resolved === payerId
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether a payload's billing context agrees with the job's row — the row was
+ * written by the server from the context it resolved (the payer pair
+ * `workspace_id`/`org_id`, insert-job.ts), while a payload can carry fields a
+ * route copied from a client's body. The same requester; a personal context
+ * on a row with no workspace; a workspace context naming the row's workspace
+ * (and org); a deployment context only where this instance bills one.
+ */
+function payloadAgreesWithRow(ctx: BillingContext, row: WorkerRow): boolean {
+  if (ctx.userId !== row.user_id) return false
+  switch (ctx.payer) {
+    case "user":
+      return row.workspace_id === null
+    case "workspace":
+      return ctx.workspaceId === row.workspace_id && (row.org_id === null || ctx.orgId === row.org_id)
+    case "deployment":
+      return row.workspace_id === null && typeof ctx.payerId === "string" && isThisDeploymentPayer(ctx.payerId)
+    default:
+      return false
+  }
+}
+
+/**
+ * The line of a job. Its payload's billing context when the payload names the
+ * row's own user and the context agrees with the row (payloadAgreesWithRow);
+ * otherwise — no user in the payload, another user, a context the row does
+ * not bear out, a malformed one — the row's own line (payerOfRow). A body a
+ * route spread into the payload therefore cannot move a job onto another
+ * payer's line.
+ */
 function lineOf(data: Record<string, unknown>, row: WorkerRow): { payer: PayerKey; tier: string | null } {
   const userId = str(data.userId)
-  if (userId) {
+  if (userId && userId === row.user_id) {
     try {
       const ctx: BillingContext = payloadBillingContext({ userId, billingContext: data.billingContext as BillingContext | undefined })
-      return { payer: payerKeyOf(ctx), tier: ctx.payer === "user" ? null : (str(ctx.entitlements?.tierForGates) ?? null) }
+      if (payloadAgreesWithRow(ctx, row)) {
+        return { payer: payerKeyOf(ctx), tier: ctx.payer === "user" ? null : (str(ctx.entitlements?.tierForGates) ?? null) }
+      }
     } catch {
       // A malformed billing context: the row's line.
     }
@@ -226,11 +290,22 @@ function lineOf(data: Record<string, unknown>, row: WorkerRow): { payer: PayerKe
   return payerOfRow(row)
 }
 
-/** A child of a running coordinator, by its row or the lane-only marker of its payload. */
-function isCoordinatorChild(data: Record<string, unknown>, row: WorkerRow): boolean {
+/**
+ * A child of a running coordinator, by its row, the lane-only marker of its
+ * payload, or — a workflow execution started by a node of a running run (a
+ * component or a use-case node) — the parent run its payload names.
+ *
+ * The payload's fields are checked, never trusted: `parentExecutionId` counts
+ * only on the orchestration queue (its starters set it from the internal
+ * header alone — orchestration-add-census.test.ts), and `laneParent` only when
+ * the director it names runs, for this user, now. A marker that cannot be
+ * verified is no marker: the job is admitted as any other. Never throws.
+ */
+async function isCoordinatorChild(data: Record<string, unknown>, row: WorkerRow, queue: LaneQueueName): Promise<boolean> {
   if (row.parent_job_id || row.pipeline_id) return true
-  const marker = record(data.laneParent)
-  return marker.kind === "director" && str(marker.id) !== null
+  if (queue === "workflow-orchestration" && str(data.parentExecutionId) !== null) return true
+  const parent = laneParentInPayload(data)
+  return parent ? laneParentIsLive(parent, row.user_id) : false
 }
 
 type ProviderOf = typeof import("./provider-of.js")
@@ -336,6 +411,18 @@ function leasedAdmission(hold: ConcurrencyHold & { leaseId: string }, meta: Lane
 // ------------------------------------------------------------------ admit
 
 /**
+ * The table whose row a queue's job id names, for keeping the job's in-handler
+ * wait on it (coordinator-wait.ts). A workflow execution keeps its own
+ * (execution-wait.ts), so its queue has none.
+ */
+const WAIT_TABLE: Partial<Record<LaneQueueName, "jobs" | "pipelines">> = {
+  "video-generation": "jobs",
+  "video-render": "jobs",
+  "video-director": "jobs",
+  "pipeline-orchestration": "pipelines",
+}
+
+/**
  * Admit a job a worker picked up, before it claims the row (see the module
  * comment). Never throws: a gate or config failure admits the job ungated.
  */
@@ -350,12 +437,15 @@ export async function admitWorkerJob(args: { job: AdmittedBullJob; queue: LaneQu
   } catch (err) {
     logLaneRateLimited("error", "could not classify a job for its lane, running it ungated", err)
   }
-  const coordinatorChild = isCoordinatorChild(data, row)
+  const coordinatorChild = await isCoordinatorChild(data, row, queue)
   const nested = cls.kind === "coordinator" && (coordinatorChild || row.workflow_execution_id !== null)
   const lane: ConcurrencyLane | null = cls.kind === "leaf" ? cls.lane : nested ? null : "run"
   const role: ConcurrencyHold["role"] = cls.kind === "leaf" ? "leaf" : nested ? "coordinator" : "run"
   const readmit = row.status === "processing"
-  const base: ConcurrencyHold = { role, lane, userId: row.user_id, payer: line.payer, tier: line.tier, jobId: row.id, leaseId: null }
+  const waitTable = WAIT_TABLE[queue]
+  const base: ConcurrencyHold = {
+    role, lane, userId: row.user_id, payer: line.payer, tier: line.tier, jobId: row.id, leaseId: null, ...(waitTable ? { waitTable } : {}),
+  }
 
   // No row (its read failed) and no user in the payload: nothing to count it
   // against. The worker goes on as it always has.

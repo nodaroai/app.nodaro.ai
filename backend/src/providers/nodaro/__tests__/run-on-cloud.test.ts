@@ -43,6 +43,11 @@ describe("runJobOnCloud", () => {
     })
   })
 
+  it("polls queue-aware: the cloud job's time in line is not the relaying job's budget", async () => {
+    await runJobOnCloud("suno-generate", { prompt: "a song", model: "V5" })
+    expect(waitForCloudJob).toHaveBeenCalledWith("cloud-job-1", undefined, { queueAware: true })
+  })
+
   it("strips instance-only bookkeeping — those ids mean nothing on the cloud", async () => {
     await runJobOnCloud("suno-cover", {
       prompt: "x",
@@ -446,5 +451,11 @@ describe("INSTANCE_ONLY_FIELDS — instance-local identifiers never leave the in
     for (const name of ["jobId", "usageLogId", "userId", "workflowExecutionId", "workflowId", "nodeId"]) {
       expect(INSTANCE_ONLY_FIELDS.has(name), name).toBe(true)
     }
+  })
+
+  it("strips the concurrency lanes' marker: it names a coordinator on this instance", async () => {
+    expect(INSTANCE_ONLY_FIELDS.has("laneParent")).toBe(true)
+    await runJobOnCloud("suno-generate", { prompt: "a song", laneParent: { kind: "director", id: "00000000-0000-4000-8000-0000000000d1" } })
+    expect(createCloudJob).toHaveBeenLastCalledWith("/v1/suno/generate", { prompt: "a song" })
   })
 })

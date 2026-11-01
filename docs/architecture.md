@@ -205,8 +205,19 @@ The orchestrator does:
 1. Load `workflows.nodes` and `workflows.edges`.
 2. Topologically sort the DAG into levels (one level = nodes with no
    uncompleted dependencies).
-3. For each level, run all nodes in parallel up to `tier_parallelism`
-   (per-user) ∧ `MAX_CONCURRENT_NODES_PER_EXECUTION` (server ceiling).
+3. For each level, run its nodes in parallel. How many at once depends on
+   whether concurrency lanes are enforced (they are not in this release; see
+   [Concurrency lanes](./deployment.md#concurrency-lanes)):
+   - **Not enforced:** up to the run's plan parallelism ∧
+     `MAX_CONCURRENT_NODES_PER_EXECUTION` (server ceiling). A node that runs
+     once per item of a list gets its own limit of the same size.
+   - **Enforced:** up to `ORCHESTRATOR_DISPATCH_WIDTH` (default 50), one width
+     shared by the level and the lists inside it, and the person's lanes
+     decide how many of those run: a job over its lane's limit waits in line
+     (`queued`) until a slot frees. Time spent waiting never counts against a
+     node's or the run's time limit; only the queue timeout ends a wait.
+
+   A run reads which mode applies once, when it starts, and keeps it.
 4. Each node falls into one of three execution categories:
 
 | Category | Where | Example node types | Why |

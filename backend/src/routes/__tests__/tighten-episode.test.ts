@@ -172,6 +172,16 @@ describe("POST /v1/tighten-episode", () => {
     expect(p).not.toHaveProperty("previewStopRule")
   })
 
+  it("internal lane: the parent run named in the header rides the run (it takes no run slot); outside a run it is ignored", async () => {
+    const parent = "00000000-0000-4000-8000-0000000000aa"
+    m.authKind = "internal"
+    await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], userId: USER }, { "x-nodaro-parent-execution": parent })
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ parentExecutionId: parent })
+    m.authKind = "jwt"
+    await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "x-nodaro-parent-execution": parent })
+    expect((m.execute.mock.calls[1]![0] as Record<string, unknown>).parentExecutionId).toBeUndefined()
+  })
+
   it("internal lane: depth 5 is refused", async () => {
     m.authKind = "internal"
     const deep = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], componentDepth: 5, userId: USER })

@@ -28,6 +28,7 @@ import { usecaseBodyTakesEmpty, usecaseBodyTakesNull } from "../../lib/use-case/
 import { loopbackFetch } from "./loopback-fetch.js"
 import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import { syncLaneHeaders } from "./sync-lane-headers.js"
+import { PARENT_EXECUTION_HEADER } from "../../lib/concurrency-lanes/parent-execution.js"
 import { NODE_TIMEOUT_MS, type NodeOutput, type OrchestratorContext, type ResolvedInputs, type SimpleNode } from "./types.js"
 
 export interface UseCaseRequest {
@@ -199,7 +200,8 @@ export async function askRoute(request: UseCaseRequest, key: string, ctx: Orches
     `http://localhost:${port}${request.path}`,
     {
       method: "POST",
-      headers: { ...syncLaneHeaders(ctx), "Idempotency-Key": key },
+      // The run this call starts (or continues) is nested in this one: it takes no run slot (concurrency lanes).
+      headers: { ...syncLaneHeaders(ctx), "Idempotency-Key": key, [PARENT_EXECUTION_HEADER]: ctx.executionId },
       body: JSON.stringify(request.body),
       signal: AbortSignal.timeout(NODE_TIMEOUT_MS),
     },

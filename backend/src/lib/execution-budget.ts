@@ -204,18 +204,28 @@ export async function executionMayDispatchBudgetedJob(
  * `elapsed >= limit`, the exit condition of the `while (elapsed < LIMIT)` loops
  * it replaces, so with nothing budgeted it reports exactly when they exited.
  * A failed lookup keeps the excess already known.
+ *
+ * `readQueuedMs` (concurrency lanes, decided 2026-10-30: nothing fails for
+ * waiting) grows the limit, the same lazy way, by the time the awaited run has
+ * spent waiting for slots (`lib/concurrency-lanes/execution-wait.ts ::
+ * executionQueuedMs`). Kept apart from the excess: `excessMs` is what a caller
+ * adds to a run's BUDGET (`addBudgetExcess`), `queuedMs` what it adds to the
+ * run's queued time. Omitted, or a run that never waited: the limit is exactly
+ * what it was.
  */
 export class BudgetedDeadline {
   private excess = 0
+  private queued = 0
 
   constructor(
     private readonly baseMs: number,
     private readonly readExcessMs: () => Promise<number>,
+    private readonly readQueuedMs?: () => Promise<number>,
   ) {}
 
-  /** The current limit: base + the largest excess seen so far. */
+  /** The current limit: base + the largest excess and queued time seen so far. */
   get limitMs(): number {
-    return this.baseMs + this.excess
+    return this.baseMs + this.excess + this.queued
   }
 
   /** The largest excess seen so far (0 until a lookup found one). */
@@ -223,9 +233,15 @@ export class BudgetedDeadline {
     return this.excess
   }
 
+  /** The largest queued time seen so far (0 until a lookup found one). */
+  get queuedMs(): number {
+    return this.queued
+  }
+
   async reached(elapsedMs: number): Promise<boolean> {
     if (elapsedMs < this.limitMs) return false
     await this.refresh()
+    await this.refreshQueued()
     return elapsedMs >= this.limitMs
   }
 
@@ -238,5 +254,17 @@ export class BudgetedDeadline {
       /* keep what is known */
     }
     return this.excess
+  }
+
+  /** Look the queued time up now (never shrinks); 0 without a reader. */
+  async refreshQueued(): Promise<number> {
+    if (!this.readQueuedMs) return this.queued
+    try {
+      const fresh = await this.readQueuedMs()
+      if (Number.isFinite(fresh) && fresh > this.queued) this.queued = fresh
+    } catch {
+      /* keep what is known */
+    }
+    return this.queued
   }
 }

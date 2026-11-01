@@ -143,7 +143,9 @@ function completedWrite(): Record<string, unknown> | undefined {
   const call = mocks.updateExecutionWithRetry.mock.calls.find(([, u]) => (u as { status?: string })?.status === "completed")
   return call?.[1] as Record<string, unknown> | undefined
 }
-const startedWrite = () => mocks.directUpdates.find((u) => u.status === "running")
+// The claim (`running`) is a compare-and-set through the retrying write.
+const startedWrite = () =>
+  mocks.updateExecutionWithRetry.mock.calls.map(([, u]) => u as Record<string, unknown>).find((u) => u?.status === "running")
 
 beforeEach(() => {
   mocks.executeNode.mockClear()

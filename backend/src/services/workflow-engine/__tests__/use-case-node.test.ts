@@ -16,6 +16,8 @@ const m = vi.hoisted(() => ({
   reads: [] as string[],
   cancel: vi.fn(async () => ({ kind: "cancelled", analysisJobId: null })),
   excess: vi.fn(async () => 0),
+  /** The hidden run's time spent waiting for concurrency slots (execution-wait.ts). */
+  queued: vi.fn(async (_id: string, _owner: string, _opts?: unknown) => 0),
   draining: false,
   /** The outer execution's status, read by the wait's cancel check. */
   execStatus: "running",
@@ -65,6 +67,10 @@ vi.mock("../../../lib/supabase.js", () => ({
 vi.mock("../../../lib/execution-budget.js", async (orig) => ({
   ...(await orig<typeof import("../../../lib/execution-budget.js")>()),
   executionBudgetExcessMs: m.excess,
+}))
+vi.mock("../../../lib/concurrency-lanes/execution-wait.js", async (orig) => ({
+  ...(await orig<typeof import("../../../lib/concurrency-lanes/execution-wait.js")>()),
+  executionQueuedMs: m.queued,
 }))
 vi.mock("../../../lib/cancel-job.js", () => ({ cancelOwnedJob: m.cancel }))
 vi.mock("../../../lib/execution-inline-graph.js", () => ({
@@ -136,6 +142,7 @@ beforeEach(() => {
   m.reads.length = 0
   m.cancel.mockClear()
   m.excess.mockReset().mockResolvedValue(0)
+  m.queued.mockReset().mockResolvedValue(0)
   m.draining = false
   m.execStatus = "running"
   m.readErrors = 0
@@ -355,6 +362,45 @@ describe("executeUseCaseNode — the run", () => {
     await executeUseCaseNode(tighten(), wired(), c as never, undefined)
     expect(m.excess).toHaveBeenCalledWith("exec-in", USER)
     expect(c.budgetExcessMs).toBe(30 * 60_000)
+  })
+
+  // Concurrency lanes (decided 2026-10-30: nothing fails for waiting).
+  it("the hidden run's queued time leaves the outer run's cap, apart from its budget, as a wait no longer than the node's", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    try {
+      // The node waits 50 minutes for its hidden run, which spent 40 of them waiting for slots.
+      m.fetch.mockImplementation(async () => {
+        vi.setSystemTime(Date.now() + 50 * 60_000)
+        return answer(202, { jobId: "job-w", executionId: "exec-in" })
+      })
+      m.queued.mockResolvedValue(40 * 60_000)
+      const c = ctx({ runDispatch: { lanesEnforced: true, width: 50 } }) as unknown as { budgetExcessMs?: number; laneWaitMs?: number }
+      await executeUseCaseNode(tighten(), wired(), c as never, undefined)
+      expect(m.queued).toHaveBeenCalledWith("exec-in", USER, { includeOwnWait: true })
+      expect(c.laneWaitMs).toBe(40 * 60_000)
+      expect("budgetExcessMs" in c).toBe(false)
+      // A hidden run that reports more wait than the node has been waiting is credited the node's time only.
+      m.queued.mockResolvedValue(90 * 60_000)
+      const c2 = ctx({ runDispatch: { lanesEnforced: true, width: 50 } }) as unknown as { laneWaitMs?: number }
+      await executeUseCaseNode(tighten(), wired(), c2 as never, undefined)
+      expect(c2.laneWaitMs).toBe(50 * 60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("lanes off and no wait seen: the completion reads no queued time at all", async () => {
+    m.queued.mockResolvedValue(40 * 60_000)
+    const c = ctx() as unknown as Record<string, unknown>
+    await executeUseCaseNode(tighten(), wired(), c as never, undefined)
+    expect(m.queued).not.toHaveBeenCalled()
+    expect("laneWaitMs" in c).toBe(false)
+  })
+
+  it("a hidden run that never waited leaves the outer run's context untouched", async () => {
+    const c = ctx() as unknown as Record<string, unknown>
+    await executeUseCaseNode(tighten(), wired(), c as never, undefined)
+    expect("laneWaitMs" in c).toBe(false)
   })
 })
 

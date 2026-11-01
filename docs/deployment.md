@@ -182,7 +182,7 @@ here for each one anyway.
 | `LANE_PROVIDER_PER_USER` · `LANE_LLM_PER_USER` · `LANE_LOCAL_PER_USER` · `LANE_RUN_PER_USER` | `12` · `24` · `24` · `12` (1 to 500) | Community and Business — how many jobs of each lane one person runs at once. See [Concurrency lanes](#concurrency-lanes) |
 | `LANE_QUEUE_TIMEOUT_MINUTES` · `LANE_LIVE_WAIT_MINUTES` | `120` (5 to 1440) · `10` (1 to 60) | How long a queued job, and a request answered while you wait, may wait for a free slot. See [Concurrency lanes](#concurrency-lanes) |
 | `LANES_ENFORCED` | off | Whether jobs wait for a free slot in their lane, where the Admin lanes switch has no value for this environment (the switch wins once set). Strict parse: only `true` / `1` enable it. **Has no effect in this release:** concurrency limits cannot be turned on yet, so lanes stay off whatever it is set to. See [Concurrency lanes](#concurrency-lanes) |
-| `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced. Not read yet: in this release setting it changes nothing. See [Concurrency lanes](#concurrency-lanes) |
+| `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced, replacing `MAX_CONCURRENT_NODES_PER_EXECUTION` there (the lanes then do the limiting). Lanes cannot be turned on in this release, so it changes nothing yet. See [Concurrency lanes](#concurrency-lanes) |
 | `LANE_SERVER_COORDINATOR_SHARE` · `LANE_SERVER_USER_SHARE` | `0.4` (0.1 to 1) · `0.25` (0.05 to 1) | Shares of a server's background worker pools: what coordinating jobs may hold of the media worker pool, and what one person may hold of each pool |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | unset (Railway's default window) | Railway only: the SIGTERM → SIGKILL window of a replaced container. The media worker reads the same variable and drains for that long minus 5 seconds, so a long model call already in progress (a [3D Render Pro](nodes/composition/pro-3d-render.md) planning or review step can take up to 6 minutes) finishes and is saved before the job moves to the new container. Set it to `420` on a service that runs 3D Render Pro. Unset, the worker keeps its 25-second drain. The container only stays up as long as work is still running |
@@ -1192,13 +1192,22 @@ every line:
 | `LANE_QUEUE_TIMEOUT_MINUTES` | `120` (5 to 1440) | Minutes a queued job may wait for a free slot; past it the job fails |
 | `LANE_LIVE_WAIT_MINUTES` | `10` (1 to 60) | Minutes a request answered while you wait may wait for a free slot; past it the request answers that the server is busy |
 | `LANES_ENFORCED` | off | Whether jobs wait for a free slot, where the Admin lanes switch has no value for this environment. Strict parse: only `true` / `1` enable it. Has no effect in this release: limits cannot be turned on yet (see below) |
-| `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced (the lanes then do the limiting). Not read yet (see below) |
+| `ORCHESTRATOR_DISPATCH_WIDTH` | `50` (1 to 500) | Nodes one run may hand out at once while lanes are enforced (the lanes then do the limiting). Changes nothing while they are off, which they always are in this release (see below) |
 | `LANE_SERVER_COORDINATOR_SHARE` | `0.4` (0.1 to 1) | Share of the media worker pool that coordinating jobs may hold at once |
 | `LANE_SERVER_USER_SHARE` | `0.25` (0.05 to 1) | Share of each background worker pool one person (all their lines together) may hold at once |
 
 `MAX_CONCURRENT_NODES_PER_EXECUTION` limits one run while lanes are not
-enforced; it is ignored once they are. Nodaro Cloud sizes each line by
-its plan and ignores the four `LANE_*_PER_USER` values.
+enforced: the nodes of one stage of the run, and each list a node runs once per
+item (a limit of its own, of the same size). On Nodaro Cloud those two are held
+to the run's plan parallelism when it is lower. Each stage of a sub-workflow
+inside the run is held to `MAX_CONCURRENT_NODES_PER_EXECUTION` itself, whatever
+the plan. It is ignored once lanes are enforced: a run then hands
+out up to `ORCHESTRATOR_DISPATCH_WIDTH` nodes at once — one width shared by a
+stage and the lists inside it, and the same width for each stage of a
+sub-workflow — and the person's lanes decide how many of them run. A run reads
+whether lanes are enforced once, when it starts, and keeps that width to its
+end. Nodaro Cloud sizes each line by its plan and ignores the four
+`LANE_*_PER_USER` values.
 
 On an install with an admin, the lanes switch (`PUT /v1/admin/lanes/enforced`)
 turns lanes on or off for one environment and wins over `LANES_ENFORCED`. Its
@@ -1220,9 +1229,34 @@ that would have waited runs at once and is recorded as over its limit.
 
 Once a release makes them available, turning concurrency limits on changes
 behaviour: a job over its line's limit then waits in line (status `queued`)
-instead of starting, and starts when a slot of its line frees. Whole runs are
-not held to the run lane yet in this release, and
-`ORCHESTRATOR_DISPATCH_WIDTH` is not read yet.
+instead of starting, and starts when a slot of its line frees. Whole runs
+then wait in the `run` lane the same way: a workflow run over its line's run
+limit waits to start (it stays `pending`), as does a pipeline (it stays
+`queued`) and a director job (`queued`). A run started by a node of another
+run — a component or a use-case node — never takes a run slot of its own, so a
+run is never held up by the runs it started. Each worker pool also keeps one
+person to `LANE_SERVER_USER_SHARE` of it (with the defaults: 5 of the 20
+workflow-run workers, 1 of the 5 pipeline workers, 1 of the 2 director
+workers). A single run is then no longer held to its own per-run limit: its
+nodes share the person's lanes with every other run and call they make, and
+two runs at once share the same lanes.
+
+Time spent waiting in line never counts against a workflow's own time limits:
+the 90 minutes a node may take, the 120 minutes a run may take, the 4-hour
+limit after which a run is written off as abandoned, and how long a component
+or use-case node waits for the run it started. Each of those runs only while
+the work is not waiting, and only the queue timeout
+(`LANE_QUEUE_TIMEOUT_MINUTES`) ends a wait. A run picked up again after a
+restart keeps its jobs that are still waiting in line, with their place and the
+time they have waited, instead of cancelling and starting them again. The
+exception is a node that runs once per item of a list: a waiting item of it is
+cancelled (its credits refunded) and starts again at the back of the line.
+Jobs waiting at the same time count once: a run is credited the time during
+which at least one of its jobs waited, and a single wait is credited at most
+the longest queue timeout an admin can set plus 30 minutes. Not yet extended:
+the editor's own wait on a component it runs from the canvas (30 minutes, or
+the server's limit for a long render inside) does not yet grow by the time the
+component waits in line — a later editor update brings that.
 
 ### Plugin daemon host (Cloud)
 

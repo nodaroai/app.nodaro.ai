@@ -3,7 +3,7 @@
 // or one engine's for the runs people start themselves (Admin → Nodaro
 // Motion). Left out, or `{}`, every run is today's exactly.
 //
-// Three sections:
+// Four sections:
 // 1. Reference sheets: "Today's sheet" (the key left out) or "By the photos
 //    (rules)": an LLM labels each role photo (the labeller, LlmStepEditor.tsx
 //    with no input boxes: it reads the role pictures only) and the rules
@@ -12,6 +12,10 @@
 // 2. Engine prompt: Template (the key left out) or LLM (TextStepSwitch.tsx).
 // 3. Scene description: only for Full depth with the scene from a
 //    description (`source`, `scene`); Template or LLM.
+// 4. Body from the clip (ClipBodyStep.tsx): on / off and its image prompt.
+//    On while unset (the engine's default). Off is choosable whatever the
+//    environments declare; a prompt of its own only once every environment's
+//    engine also declares `castSwap.clipBodySheet`.
 // A section whose step the engine marks not critical (`critical`) says it is
 // skipped when it fails: the run goes on without it.
 //
@@ -43,7 +47,8 @@ import {
   type TrendEngineEnvironment,
 } from "@/lib/api"
 import { useAdminLlmModels, type AdminLlmModel } from "@/ee/hooks/queries/use-admin-queries"
-import { environmentsThatCannotTakeSteps } from "../clip-preparation"
+import { environmentsThatCannotTakeClipBody, environmentsThatCannotTakeSteps, environmentsThatTakeClipBody } from "../clip-preparation"
+import { ClipBodyStep, clipBodyNeedsEngine } from "./ClipBodyStep"
 import { LABELLER_INPUTS, LlmStepEditor, Problems } from "./LlmStepEditor"
 import { SheetRulesTable } from "./SheetRulesTable"
 import { TextStepSwitch } from "./TextStepSwitch"
@@ -53,7 +58,7 @@ export const STEPS_CHECK_DEBOUNCE_MS = 400
 
 /** Whether anything is set: `{}` (or undefined) is today's run. */
 export function stepsSet(s: CastSwapSteps | undefined | null): s is CastSwapSteps {
-  return !!s && (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined)
+  return !!s && (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined)
 }
 
 /** The setting as saved: undefined when nothing is set, else a copy without its absent keys. */
@@ -63,6 +68,7 @@ export function normaliseSteps(s: CastSwapSteps | undefined | null): CastSwapSte
     ...(s.sheets !== undefined ? { sheets: s.sheets } : {}),
     ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
+    ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
   })
 }
 
@@ -131,7 +137,7 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
       <div>
         <h3 className="text-sm font-semibold">Preparation steps</h3>
         <p className="text-xs text-muted-foreground">
-          How the reference sheets, the engine prompt and the scene description are made. Left as they are, runs are prepared as today.
+          How the reference sheets, the engine prompt, the scene description and the body from the clip are made. Left as they are, runs are prepared as today.
         </p>
       </div>
       {missing === undefined ? (
@@ -139,7 +145,10 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
       ) : missing.length > 0 ? (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
           The Cast Swap engine of {missing.join(", ")} cannot take preparation steps yet
-          {stepsSet(value) ? ": remove them to publish or save" : ""}.
+          {stepsSet(value) && (stepsSet({ ...value, clipBody: undefined }) || clipBodyNeedsEngine(value.clipBody))
+            ? ": remove them to publish or save"
+            : ""}
+          .
         </p>
       ) : engineLacks ? (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
@@ -158,6 +167,8 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
         defaults={defaults}
         models={defaults ? models : undefined}
         problems={problems}
+        clipBodyMissing={environmentsThatCannotTakeClipBody(envs)}
+        clipBodyHas={environmentsThatTakeClipBody(envs)}
       />
     </div>
   )
@@ -178,6 +189,8 @@ function Sections({
   defaults,
   models,
   problems,
+  clipBodyMissing,
+  clipBodyHas,
 }: {
   readonly value: CastSwapSteps | undefined
   readonly onChange: (next: CastSwapSteps | undefined) => void
@@ -185,6 +198,10 @@ function Sections({
   readonly defaults: CastSwapStepDefaults | undefined
   readonly models: readonly AdminLlmModel[] | undefined
   readonly problems: readonly CastSwapStepsProblem[]
+  /** The environments whose engine cannot take Body from the clip (unknown while loading). */
+  readonly clipBodyMissing: readonly string[] | undefined
+  /** The environments whose engine runs it (unknown while loading). */
+  readonly clipBodyHas: readonly string[] | undefined
 }) {
   const id = useId()
   const disabled = !defaults
@@ -198,7 +215,8 @@ function Sections({
   const sheetsProblems = under(problems, "sheets")
   const enginePromptProblems = under(problems, "enginePrompt")
   const sceneProblems = under(problems, "sceneDescription")
-  const rest = problems.filter((p) => !/^(sheets|enginePrompt|sceneDescription)(\.|$)/.test(p.path))
+  const clipBodyProblems = under(problems, "clipBody")
+  const rest = problems.filter((p) => !/^(sheets|enginePrompt|sceneDescription|clipBody)(\.|$)/.test(p.path))
 
   return (
     <>
@@ -296,6 +314,17 @@ function Sections({
           </p>
         )
       )}
+      <Section title="Body from the clip" tag={tag("clip-body")}>
+        <ClipBodyStep
+          value={value?.clipBody}
+          defaultPrompt={defaults?.defaults.clipBody?.prompt}
+          promptOffered={!disabled && clipBodyMissing !== undefined && clipBodyMissing.length === 0}
+          runsIn={clipBodyHas}
+          notYetIn={clipBodyMissing}
+          problems={clipBodyProblems}
+          onChange={(clipBody) => set({ clipBody })}
+        />
+      </Section>
       <Problems list={rest} />
     </>
   )

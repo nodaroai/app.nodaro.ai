@@ -533,3 +533,18 @@ describe("the editor runs the server's rule (@nodaro/render-rules), never a copy
     expect(promptBudget({ ...form, engine: "kling-4" })).toEqual(trendPromptBudget({ ...form, engine: "kling-4" }))
   })
 })
+
+describe("Body from the clip in the form", () => {
+  it("a draft that sets only clipBody saves it (it counts as set); on with no prompt was never stored", () => {
+    expect(fromForm(toForm(draft({ steps: { clipBody: { mode: "off" } } }))).steps).toEqual({ clipBody: { mode: "off" } })
+    const withPrompt = { steps: { enginePrompt: { mode: "template" as const }, clipBody: { mode: "on" as const, prompt: "test prompt" } } }
+    expect(fromForm(toForm(draft(withPrompt))).steps).toEqual(withPrompt.steps)
+    expect(fromForm(toForm(draft({ steps: {} })))).not.toHaveProperty("steps")
+  })
+
+  it("names its need readably when an environment's engine lacks it", () => {
+    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "clipBodySheet" })).toBe(
+      "production: the Body from the clip step not supported yet",
+    )
+  })
+})

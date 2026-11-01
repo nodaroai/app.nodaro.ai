@@ -14,11 +14,16 @@ vi.mock("@nodaro/shared/llm-models", async (importOriginal) => {
 import {
   castSwapStepsSaveSchema,
   castSwapStepsSchema,
+  engineTakesClipBodySheet,
   engineTakesSteps,
+  loadedEngineTakesClipBodySheet,
   loadedEngineTakesSteps,
   normaliseSteps,
   sceneStepKeyOf,
   SHEET_LAYOUTS,
+  SKIP_REASONS,
+  SKIPPABLE_STEPS,
+  stepsForEngine,
   stepsProblems,
   stepsSet,
   withStepsFor,
@@ -136,6 +141,53 @@ describe("castSwapStepsSaveSchema", () => {
   })
 })
 
+describe("clipBody (Body from the clip)", () => {
+  it("accepts on and off, with or without an image prompt, in both schemas", () => {
+    for (const clipBody of [{ mode: "on" }, { mode: "off" }, { mode: "on", prompt: "Draw the person." }, { mode: "off", prompt: "kept" }]) {
+      expect(castSwapStepsSchema.parse({ clipBody })).toEqual({ clipBody })
+      expect(castSwapStepsSaveSchema.parse({ clipBody })).toEqual({ clipBody })
+    }
+  })
+
+  it("bounds the prompt to 4000 characters and refuses an empty one, an unknown mode and an unknown key", () => {
+    expect(castSwapStepsSaveSchema.safeParse({ clipBody: { mode: "on", prompt: "x".repeat(4000) } }).success).toBe(true)
+    const long = castSwapStepsSaveSchema.safeParse({ clipBody: { mode: "on", prompt: "x".repeat(4001) } })
+    expect(long.success).toBe(false)
+    expect(stepsProblems(long.error!, "steps").map((p) => p.path)).toEqual(["steps.clipBody.prompt"])
+    expect(castSwapStepsSchema.safeParse({ clipBody: { mode: "on", prompt: "   " } }).success).toBe(false)
+    expect(castSwapStepsSchema.safeParse({ clipBody: { mode: "auto" } }).success).toBe(false)
+    expect(castSwapStepsSchema.safeParse({ clipBody: { mode: "on", frames: 3 } }).success).toBe(false)
+    expect(castSwapStepsSchema.safeParse({ clipBody: {} }).success).toBe(false)
+  })
+
+  it("a saved image prompt may name {subject}, {body} and {hair} only (clip_body_placeholder)", () => {
+    const save = (prompt: string) => castSwapStepsSaveSchema.safeParse({ clipBody: { mode: "on", prompt } })
+    expect(save("Draw {subject} with {body} and {hair}.").success).toBe(true)
+    expect(save("No placeholders at all.").success).toBe(true)
+    for (const bad of ["{Subject}", "{name}", "{constructor}", "{body} and {face}", "{toString}"]) {
+      const r = save(`Draw ${bad}.`)
+      expect(r.success, bad).toBe(false)
+      expect(stepsProblems(r.error!, "steps").map((p) => ({ path: p.path, code: p.code })), bad).toEqual([
+        { path: "steps.clipBody.prompt", code: "clip_body_placeholder" },
+      ])
+    }
+    expect(stepsProblems(save("{name} {name} {other}").error!)[0]!.message).toMatch(/\{name\}, \{other\}/)
+    // The stored reading stays tolerant (a saved version is never broken by a rule).
+    expect(castSwapStepsSchema.safeParse({ clipBody: { mode: "on", prompt: "{name}" } }).success).toBe(true)
+  })
+
+  it("counts as set on its own, and is kept by normaliseSteps", () => {
+    expect(stepsSet({ clipBody: { mode: "off" } })).toBe(true)
+    expect(normaliseSteps({ clipBody: { mode: "off" } })).toEqual({ clipBody: { mode: "off" } })
+    expect(normaliseSteps({ clipBody: undefined })).toBeUndefined()
+  })
+
+  it("names its skipped step and the reason for a role with no usable frame", () => {
+    expect(SKIPPABLE_STEPS).toContain("clip-body")
+    expect(SKIP_REASONS).toContain("no_frame")
+  })
+})
+
 describe("set or not", () => {
   it("reads absent and {} as unset", () => {
     expect(stepsSet(undefined)).toBe(false)
@@ -162,12 +214,42 @@ describe("gating", () => {
   })
 
   it("withStepsFor strips steps for an engine without castSwap.steps, and an empty setting always", () => {
-    expect(withStepsFor({ a: 1, steps }, false)).toEqual({ a: 1 })
-    expect(Object.hasOwn(withStepsFor({ a: 1, steps }, false), "steps")).toBe(false)
-    expect(withStepsFor({ a: 1, steps }, true)).toEqual({ a: 1, steps })
-    expect(Object.hasOwn(withStepsFor({ a: 1, steps: {} }, true), "steps")).toBe(false)
+    expect(withStepsFor({ a: 1, steps }, {})).toEqual({ a: 1 })
+    expect(Object.hasOwn(withStepsFor({ a: 1, steps }, { steps: false }), "steps")).toBe(false)
+    expect(withStepsFor({ a: 1, steps }, { steps: true })).toEqual({ a: 1, steps })
+    expect(Object.hasOwn(withStepsFor({ a: 1, steps: {} }, { steps: true }), "steps")).toBe(false)
     const plain: { a: number; steps?: CastSwapSteps } = { a: 1 }
-    expect(withStepsFor(plain, true)).toEqual({ a: 1 })
+    expect(withStepsFor(plain, { steps: true })).toEqual({ a: 1 })
+  })
+
+  it("an engine takes clipBody only when it declares both castSwap.steps and castSwap.clipBodySheet", () => {
+    expect(engineTakesClipBodySheet(undefined)).toBe(false)
+    expect(engineTakesClipBodySheet({ steps: true })).toBe(false)
+    expect(engineTakesClipBodySheet({ clipBodySheet: true })).toBe(false)
+    expect(engineTakesClipBodySheet({ steps: true, clipBodySheet: true })).toBe(true)
+    setPluginSupports({ castSwap: { steps: true } as never })
+    expect(loadedEngineTakesClipBodySheet()).toBe(false)
+    setPluginSupports({ castSwap: { steps: true, clipBodySheet: true } as never })
+    expect(loadedEngineTakesClipBodySheet()).toBe(true)
+  })
+
+  it("stepsForEngine sends clipBody only to an engine that declares it, and nothing when nothing is left", () => {
+    const both: CastSwapSteps = { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } }
+    expect(stepsForEngine(both, { steps: true, clipBodySheet: true })).toEqual(both)
+    expect(stepsForEngine(both, { steps: true })).toEqual({ enginePrompt: { mode: "template" } })
+    expect(stepsForEngine(both, { clipBodySheet: true })).toBeUndefined()
+    expect(stepsForEngine({ clipBody: { mode: "on", prompt: "p" } }, { steps: true })).toBeUndefined()
+    expect(stepsForEngine({ clipBody: { mode: "on", prompt: "p" } }, { steps: true, clipBodySheet: true })).toEqual({ clipBody: { mode: "on", prompt: "p" } })
+    // Never the caller's object.
+    const sent = stepsForEngine(both, { steps: true, clipBodySheet: true })!
+    sent.clipBody!.mode = "on"
+    expect(both.clipBody!.mode).toBe("off")
+  })
+
+  it("withStepsFor drops the key when only clipBody is set and the engine lacks the capability", () => {
+    const only: CastSwapSteps = { clipBody: { mode: "off" } }
+    expect(Object.hasOwn(withStepsFor({ a: 1, steps: only }, { steps: true }), "steps")).toBe(false)
+    expect(withStepsFor({ a: 1, steps: only }, { steps: true, clipBodySheet: true })).toEqual({ a: 1, steps: only })
   })
 })
 

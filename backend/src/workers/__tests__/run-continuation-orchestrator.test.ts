@@ -258,7 +258,7 @@ describe("Render final as a continuation", () => {
       expect(states[id].startedAt).toBeUndefined()
     }
     // Only what ran is counted.
-    expect(mocks.directUpdates.find((u) => u.status === "running")!.total_nodes).toBe(3)
+    expect((mocks.updateExecutionWithRetry.mock.calls.map(([, u]) => u as Record<string, unknown>).find((u) => u?.status === "running"))!.total_nodes).toBe(3)
   })
 
   it("a continuation of the tail alone, past a seeded Preview, stops there: no node consumes a preview", async () => {

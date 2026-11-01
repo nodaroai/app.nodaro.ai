@@ -10,6 +10,12 @@
  * - `enginePrompt`: Template (today) or an LLM that writes the prompt body.
  * - `sceneDescription`: Template (no call) or an LLM with its own config.
  *   Absent = today's call.
+ * - `clipBody` ("Body from the clip"): on / off, with an optional image
+ *   prompt in place of the engine's default. For a person role whose Outfit
+ *   is new and whose Body or Hair is from the clip, the role's reference is
+ *   redrawn from a frame of the clip. Absent = ON (the engine runs it by
+ *   default), so it is stored and sent only when an admin set it, and only
+ *   to an engine that declares `castSwap.clipBodySheet` (`stepsForEngine`).
  *
  * Every step here is non-critical: a failure is skipped (`skippedSteps`), the
  * run goes on. A setting left unset (or empty, `{}`) is today's run exactly:
@@ -55,9 +61,9 @@ export const LLM_INPUTS = ["clip", "rolePhotos", "references", "extraPrompt"] as
 export type LlmInput = (typeof LLM_INPUTS)[number]
 
 /** The steps a run may go on without (`skippedSteps[].step`). */
-export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description"] as const
+export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description", "clip-body"] as const
 export type SkippableStep = (typeof SKIPPABLE_STEPS)[number]
-export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face"] as const
+export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face", "no_frame"] as const
 export type SkipReason = (typeof SKIP_REASONS)[number]
 
 /** One step a run went on without; `role` is its index in the run's roles. */
@@ -99,9 +105,23 @@ export interface StepOutputs {
     sheetUrl?: string
     /** A kept sheet served again (a cache hit). */
     kept?: boolean
+    /** "Body from the clip": the frame picked for the role and the sheet redrawn from it. */
+    clipBody?: ClipBodyOutput
   }>
   enginePrompt?: { mode: "template" | "llm"; text?: string }
   scene?: { mode: "template" | "llm" }
+}
+
+/** What the clip-body step recorded for one role. */
+export interface ClipBodyOutput {
+  /** The frame of the clip picked for the role (a picture). */
+  frameUrl?: string
+  /** Where that frame is in the clip (seconds). */
+  frameSec?: number
+  /** The reference sheet redrawn from the frame and the role's reference. */
+  sheetUrl?: string
+  /** The image prompt it was drawn with. */
+  prompt?: string
 }
 
 // ---- 0.2 The settings shape ------------------------------------------------
@@ -114,6 +134,7 @@ export type CastSwapStepsCode =
   | "unknown_model"
   | "model_cannot_see_images"
   | "model_cannot_read_clip"
+  | "clip_body_placeholder"
 
 export interface LlmStepSetting {
   model: string
@@ -128,10 +149,29 @@ export type TextStepSetting = { mode: "template" } | { mode: "llm"; llm: LlmStep
 
 export type SheetRules = { [K in SheetKind]: Record<SheetCondition, SheetLayout<K>> }
 
+/** The longest image prompt the clip-body step may be given. */
+export const CLIP_BODY_PROMPT_MAX = 4000
+
+/** The placeholders the clip-body image prompt may name (the engine fills them per role); no other `{word}`. */
+export const CLIP_BODY_PLACEHOLDERS = ["subject", "body", "hair"] as const
+
+/** The `{word}` placeholders in `prompt` that are not `CLIP_BODY_PLACEHOLDERS` (exact case), each once, in order. */
+export function unknownClipBodyPlaceholders(prompt: string): string[] {
+  const names = [...prompt.matchAll(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g)].map((m) => m[1]!)
+  return [...new Set(names.filter((n) => !(CLIP_BODY_PLACEHOLDERS as readonly string[]).includes(n)))]
+}
+
+/** "Body from the clip": absent = on (the engine's default prompt). `prompt` replaces that default. */
+export interface ClipBodySetting {
+  mode: "on" | "off"
+  prompt?: string
+}
+
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
   enginePrompt?: TextStepSetting
   sceneDescription?: TextStepSetting
+  clipBody?: ClipBodySetting
 }
 
 const llmStepSchema = z.strictObject({
@@ -156,10 +196,16 @@ const sheetsSchema = z.strictObject({
   rules: z.strictObject({ person: rowsOf("person"), pet: rowsOf("pet"), product: rowsOf("product"), location: rowsOf("location") }),
 })
 
+const clipBodySchema = z.strictObject({
+  mode: z.enum(["on", "off"]),
+  prompt: z.string().trim().min(1).max(CLIP_BODY_PROMPT_MAX).optional(),
+})
+
 const stepsShape = z.strictObject({
   sheets: sheetsSchema.optional(),
   enginePrompt: textStepSchema.optional(),
   sceneDescription: textStepSchema.optional(),
+  clipBody: clipBodySchema.optional(),
 })
 
 type Ctx = z.core.$RefinementCtx<z.output<typeof stepsShape>>
@@ -198,8 +244,13 @@ export function modelReadsClip(model: string): boolean {
   return getLlmModalityCaps(model).video || (CLIP_AS_IMAGE_MODELS as readonly string[]).includes(model)
 }
 
-/** The save-time rules: a known model that can see what it is shown. */
+/** The save-time rules: a known model that can see what it is shown; an image prompt naming only the engine's placeholders. */
 function saveRules(s: z.output<typeof stepsShape>, ctx: Ctx): void {
+  const unknown = unknownClipBodyPlaceholders(s.clipBody?.prompt ?? "")
+  if (unknown.length > 0) {
+    const list = unknown.map((n) => `{${n}}`).join(", ")
+    issue(ctx, ["clipBody", "prompt"], "clip_body_placeholder", `Unknown placeholder ${list}: the image prompt may name {subject}, {body} and {hair} only.`)
+  }
   for (const { path, llm } of llmStepsOf(s)) {
     if (!(LLM_MODEL_IDS as readonly string[]).includes(llm.model)) {
       issue(ctx, [...path, "model"], "unknown_model", `Unknown model: ${llm.model}.`)
@@ -247,7 +298,7 @@ export function stepsProblems(error: z.ZodError, prefix = ""): CastSwapStepsProb
  * never stored, sent, or counted as a need.
  */
 export function stepsSet(s: CastSwapSteps | undefined | null): s is CastSwapSteps {
-  return !!s && (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined)
+  return !!s && (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined)
 }
 
 /** The setting as stored and sent: `undefined` when nothing is set, else a copy without its absent keys. */
@@ -257,6 +308,7 @@ export function normaliseSteps(s: CastSwapSteps | undefined | null): CastSwapSte
     ...(s.sheets !== undefined ? { sheets: s.sheets } : {}),
     ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
+    ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
   })
 }
 
@@ -277,14 +329,69 @@ export function loadedEngineTakesSteps(): boolean {
 }
 
 /**
- * The body with `steps` only when it is set (`stepsSet`) AND the engine takes
- * them (`takes`); else no `steps` key at all, exactly the body before steps
- * existed. A new object.
+ * Whether a (loaded or recorded) Cast Swap engine takes `steps.clipBody`
+ * ("Body from the clip"): it takes steps AND declares
+ * `castSwap.clipBodySheet`. An engine with steps but without it is never sent
+ * the field (it would refuse or drop it).
  */
-export function withStepsFor<T extends { steps?: CastSwapSteps }>(body: T, takes: boolean): T {
+export function engineTakesClipBodySheet(cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean } | undefined): boolean {
+  return engineTakesSteps(cs) && cs?.clipBodySheet === true
+}
+
+/** Whether this process's Cast Swap engine takes `steps.clipBody`. */
+export function loadedEngineTakesClipBodySheet(): boolean {
+  return engineTakesClipBodySheet(getPluginSupports().castSwap)
+}
+
+/**
+ * Whether "Body from the clip" as set needs an engine that declares
+ * `castSwap.clipBodySheet` to mean what the admin set: only On with an image
+ * prompt of its own. Off (and On with no prompt, the default) means the same
+ * on every engine: one without the step has it stripped and does not run it.
+ */
+export function clipBodyNeedsEngine(c: ClipBodySetting | undefined): boolean {
+  return c?.mode === "on" && c.prompt !== undefined
+}
+
+/**
+ * The part of a setting that needs an engine that takes steps: everything
+ * set, less a `clipBody` that does not need one (`clipBodyNeedsEngine`).
+ * `undefined` when nothing is left. What the save and publish gates test.
+ */
+export function stepsThatNeedTheEngine(s: CastSwapSteps | undefined | null): CastSwapSteps | undefined {
+  const normalised = normaliseSteps(s)
+  if (normalised && !clipBodyNeedsEngine(normalised.clipBody)) delete normalised.clipBody
+  return normaliseSteps(normalised)
+}
+
+/**
+ * The setting as sent to an engine with these capabilities (`cs`):
+ * `undefined` when the engine takes no steps or nothing is left set, else a
+ * copy without its absent keys and without `clipBody` unless the engine
+ * declares `castSwap.clipBodySheet`.
+ */
+export function stepsForEngine(
+  s: CastSwapSteps | undefined | null,
+  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean } | undefined,
+): CastSwapSteps | undefined {
+  if (!engineTakesSteps(cs)) return undefined
+  const normalised = normaliseSteps(s)
+  if (normalised && !engineTakesClipBodySheet(cs)) delete normalised.clipBody
+  return normaliseSteps(normalised)
+}
+
+/**
+ * The body with `steps` only when something is set that the engine (`cs`)
+ * takes (`stepsForEngine`); else no `steps` key at all, exactly the body
+ * before steps existed. A new object.
+ */
+export function withStepsFor<T extends { steps?: CastSwapSteps }>(
+  body: T,
+  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean } | undefined,
+): T {
   const { steps, ...rest } = body
-  const normalised = normaliseSteps(steps)
-  return (takes && normalised ? { ...rest, steps: normalised } : rest) as T
+  const sent = stepsForEngine(steps, cs)
+  return (sent ? { ...rest, steps: sent } : rest) as T
 }
 
 /**

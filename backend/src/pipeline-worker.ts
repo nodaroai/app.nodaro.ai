@@ -17,6 +17,8 @@ import { hasCredits } from "./lib/config.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { startLaneParking } from "./lib/concurrency-lanes/park.js"
+import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[pipeline-worker] Unhandled rejection:", err)
@@ -42,13 +44,22 @@ async function main() {
     return
   }
 
+  // Concurrency lanes: promote this queue's parked pipelines when a slot is
+  // reserved for them, and wake every parked one when enforcement goes off.
+  // Started before the worker, so no wake arrives before the subscriber is up.
+  const stopLaneParking = await startLaneParking(["pipeline-orchestration"])
+
   const { startPipelineWorker } = await import("./ee/workers/pipeline-worker.js")
   const worker = startPipelineWorker()
+  // This process's share of the pipeline pool, published every 5 s for the Live usage page.
+  const stopServerOccupancy = startServerOccupancyPublisher()
 
   console.log("[pipeline-worker] started, waiting for pipeline orchestration jobs...")
 
   const shutdown = async () => {
     console.log("[pipeline-worker] shutting down...")
+    stopLaneParking()
+    stopServerOccupancy()
     await worker.close()
     process.exit(0)
   }

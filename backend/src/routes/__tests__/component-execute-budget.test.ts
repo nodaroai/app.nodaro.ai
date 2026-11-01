@@ -17,6 +17,9 @@ const h = vi.hoisted(() => ({
   innerStatus: "running",
   excess: 0,
   budgetReads: [] as string[],
+  /** Concurrency lanes: the inner run's queued time, and every read of it. */
+  queued: 0,
+  queuedReads: [] as Array<{ id: string; includeOwnWait: boolean }>,
 }))
 
 vi.mock("@/services/app-execution.js", () => ({ executeAppRun: h.mockExecuteAppRun }))
@@ -37,6 +40,12 @@ vi.mock("@/lib/execution-budget.js", async (importOriginal) => {
     },
   }
 })
+vi.mock("@/lib/concurrency-lanes/execution-wait.js", () => ({
+  executionQueuedMs: async (id: string, _owner: string, opts?: { includeOwnWait?: boolean }) => {
+    h.queuedReads.push({ id, includeOwnWait: opts?.includeOwnWait === true })
+    return h.queued
+  },
+}))
 vi.mock("@/lib/supabase.js", () => {
   const appRow = {
     id: "app-1", workflow_id: "wf-inner", name: "Comp",
@@ -73,6 +82,8 @@ beforeEach(async () => {
   h.innerStatus = "running"
   h.excess = 0
   h.budgetReads = []
+  h.queued = 0
+  h.queuedReads = []
   h.mockInsertJob.mockResolvedValue({ data: { id: "wrapper-1" }, error: null })
   h.mockExecuteAppRun.mockResolvedValue({ executionId: "exec-inner", appRunId: "run-1" })
   app = Fastify()
@@ -108,9 +119,23 @@ describe("component route — the inner-execution wait grows by the inner run's 
     await advance(89 * MIN)
     expect(timedOut()).toHaveLength(0)
     expect(h.budgetReads).toEqual([])
+    expect(h.queuedReads).toEqual([])
     await advance(2 * MIN)
     await vi.waitFor(() => expect(timedOut()).toHaveLength(1))
     expect(h.budgetReads).toEqual(["exec-inner"])
+  })
+
+  // Concurrency lanes (decided 2026-10-30: nothing fails for waiting): the
+  // wait grows by the time the inner run waited for slots — its own run slot
+  // (a run started here by the editor or the API takes one) and its jobs'.
+  it("the component wait extends by queued time: an inner run that waited 100 minutes is not abandoned at 90", async () => {
+    h.queued = 100 * MIN
+    await start()
+    await advance(185 * MIN) // inside 190
+    expect(timedOut()).toHaveLength(0)
+    expect(h.queuedReads[0]).toEqual({ id: "exec-inner", includeOwnWait: true })
+    await advance(10 * MIN) // 195 min
+    await vi.waitFor(() => expect(timedOut()).toHaveLength(1))
   })
 
   it("an inner long render: still waiting at minute 95, and gives up only past 90 + the excess", async () => {

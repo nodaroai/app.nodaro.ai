@@ -6,6 +6,7 @@ import { pipelineEvents } from "./events.js"
 import { incrementCriticRetry, failPipelineWithCriticReason } from "./stage-utils.js"
 import { validateCanvasAgainstPlan, getStageExpectedEntityIds } from "./drift.js"
 import { applyStageEdit } from "./chat/apply-stage-edit.js"
+import { creditAdmittedPipelineWait } from "../../lib/concurrency-lanes/coordinator-wait.js"
 
 export interface DriveArgs {
   supabase: SupabaseClient
@@ -18,6 +19,9 @@ export interface DriveArgs {
 // by SSE event validators) AND this engine's ordered walk.
 const STAGE_ORDER = PIPELINE_STAGE_NAMES
 type StageOrderName = PipelineStageName
+
+/** The statuses a drive's claim (`running`) moves a pipeline from: every open one (migration 132's CHECK). */
+export const PIPELINE_CLAIM_STATUSES = ["queued", "running", "awaiting_approval"] as const
 
 /**
  * Engine entry. Reads the pipeline row, picks the next stage to run based on
@@ -39,7 +43,25 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
     return // nothing to do
   }
 
-  await supabase.from("pipelines").update({ status: "running" }).eq("id", pipelineId)
+  // THE CLAIM: a compare-and-set from the statuses a drive may start or go
+  // on from. The row read above can be stale by now — a Cancel, or the
+  // concurrency lanes' queue timeout failing a pipeline that still waited,
+  // may have ended it — and a drive that claims nothing runs nothing: no
+  // stage, no charge, no status event. A claim the database could not answer
+  // goes on, as the plain write always did.
+  const claim = await supabase
+    .from("pipelines")
+    .update({ status: "running" })
+    .eq("id", pipelineId)
+    .in("status", [...PIPELINE_CLAIM_STATUSES])
+    .select("id")
+  if (!claim.error && (!Array.isArray(claim.data) || claim.data.length === 0)) {
+    console.warn(`[pipeline] ${pipelineId} ended before its drive claimed it (cancelled, timed out in its queue, or deleted) — not driving it`)
+    return
+  }
+  // A pipeline that waited for its run slot (concurrency lanes) starts now: that wait stays off its clocks.
+  // Credited from the row as read (still `queued`), only once the drive is really going on.
+  await creditAdmittedPipelineWait(supabase as unknown as Parameters<typeof creditAdmittedPipelineWait>[0], pipeline as Record<string, unknown>)
   pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "running" })
 
   // Determine current stage by reading pipeline_stages.

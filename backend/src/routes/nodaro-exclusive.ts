@@ -52,6 +52,7 @@ import { speakerFramesTranscriptSpeakers } from "../providers/video/speaker-fram
 import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/private-plugins/speaker-frames-relay-support.js"
 import { requireNodaroConnection } from "../lib/nodaro-connection-gate.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { withoutLaneOnlyFields } from "../lib/concurrency-lanes/lane-parent.js"
 
 /** Light body checks: only what the RELAY needs to exist. */
 const vcpBody = z.object({
@@ -265,12 +266,29 @@ function slimInputData(body: Record<string, unknown>, jobType: string): Record<s
   }
 }
 
+/**
+ * The client's body as it may reach the job: the passthrough schemas keep any
+ * field, so the ones only the server sets on a payload are dropped — the
+ * concurrency lanes' markers (lane-parent.ts: a forged one would skip its run
+ * slot and its server share), the continue hand-off, which only the continue
+ * route sets (`extraPayload`), and who the job is for and who pays
+ * (`userId`, `billingContext`: the lanes count a job on the payer line its
+ * payload names). The job's id and user are the server's own, written after
+ * the body (`enqueueExclusive`); no billing context is put on these payloads
+ * (the relay bills the connected account, and its body is forwarded).
+ */
+function clientFields(body: Record<string, unknown>): Record<string, unknown> {
+  const { __nodaroContinue: _continue, userId: _userId, billingContext: _billingContext, ...rest } = withoutLaneOnlyFields(body)
+  return rest
+}
+
 /** insertJob + enqueue, mirroring routes/ai-avatar.ts. */
-async function enqueueExclusive({ req, reply, jobType, body, extraPayload }: EnqueueArgs) {
+async function enqueueExclusive({ req, reply, jobType, body: rawBody, extraPayload }: EnqueueArgs) {
   const userId = req.userId
   if (!userId) {
     return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
   }
+  const body = clientFields(rawBody)
   const { data: job, error } = await insertJob(req, {
     workflow_id: extractWorkflowId(req.body),
     node_id: extractNodeId(req.body),
@@ -284,8 +302,9 @@ async function enqueueExclusive({ req, reply, jobType, body, extraPayload }: Enq
     return sendInternalError(reply, req, error, "Failed to create job")
   }
   await videoQueue.add(jobType, {
-    jobId: job.id,
     ...body,
+    jobId: job.id,
+    userId,
     ...(extraPayload ?? {}),
   })
   return reply.send({ jobId: job.id })

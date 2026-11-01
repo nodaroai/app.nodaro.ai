@@ -609,7 +609,8 @@ export function makeNodaroExclusiveHandler(jobType: string): HandlerFn {
       async (p) => {
         await setJobProgress(job, ctx.jobId, Math.min(95, Math.max(5, Math.round(p))))
       },
-      { budgetMs: relayPollBudgetMs(jobType, payload, Date.now() - startedAt) },
+      // Counted from the cloud job's start: its time in line on the connected account is left out.
+      { budgetMs: relayPollBudgetMs(jobType, payload, Date.now() - startedAt), queueAware: true },
     )
     await setJobProgress(job, ctx.jobId, 97)
     const ok = await finalizeExclusiveCloudOutput({

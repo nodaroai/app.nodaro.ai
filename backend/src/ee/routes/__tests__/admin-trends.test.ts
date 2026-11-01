@@ -3238,6 +3238,18 @@ describe("the stored face mask", () => {
         expect(Object.hasOwn(draftNow(), "steps")).toBe(false)
       })
 
+      it("refuses an image prompt naming a placeholder the engine does not fill (clip_body_placeholder)", async () => {
+        seed({}, draftData())
+        const before = structuredClone(draftNow())
+        const res = await save(draftData({ steps: { clipBody: { mode: "on", prompt: "Draw {Subject} as {name}." } } }))
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.issues).toEqual([expect.objectContaining({ path: "steps.clipBody.prompt", code: "clip_body_placeholder" })])
+        expect(draftNow()).toEqual(before)
+        const ok = await save(draftData({ steps: { clipBody: { mode: "on", prompt: "Draw {subject} with {body} and {hair}." } } }))
+        expect(ok.statusCode).toBe(200)
+        expect(draftNow().steps).toEqual({ clipBody: { mode: "on", prompt: "Draw {subject} with {body} and {hair}." } })
+      })
+
       it("a stored setting whose model left the list is refused at save until another is picked", async () => {
         seed({}, draftData({ steps: { sceneDescription: GONE } }))
         const res = await save(draftData({ steps: { sceneDescription: GONE } }))

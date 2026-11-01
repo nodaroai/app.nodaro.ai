@@ -17,6 +17,7 @@ import { alignmentWordsFromTranscript } from "../../services/shot-sequence/align
 import { ensureLogoLockupScene } from "./logo-lockup-net.js"
 import { waitForJob as _waitForJob } from "../../lib/mcp/tools/_wait-for-job.js"
 import { config } from "../../lib/config.js"
+import { LANE_PARENT_HEADER, laneParentHeaderValue } from "../../lib/concurrency-lanes/lane-parent.js"
 import { resolveBrandInput, type BrandTokens } from "@nodaro/prompts/presets"
 import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 import type { FastifyInstance } from "fastify"
@@ -246,13 +247,24 @@ export async function runVideoDirector(
  *   the internal-orchestrator-secret header only. Task 5 should verify the
  *   route accepts this payload shape.
  * - waitForJob timeout: 600s is conservative; tune based on observed render durations.
+ *   It counts from the child's start: the time a child waits for a
+ *   concurrency slot (`queued`) is left out (decided 2026-10-30: nothing fails
+ *   for waiting) and credited to the director's own clocks.
+ *
+ * `directorJobId` (the worker passes its job): the children it makes are
+ * marked as the director's (LANE_PARENT_HEADER), so each enters its lane ahead
+ * of jobs that have not started. They stay ordinary jobs otherwise — listed,
+ * readable by id, firing webhooks (lib/concurrency-lanes/lane-parent.ts).
  */
-export function defaultDirectorDeps(fastify: FastifyInstance): DirectorDeps {
+export function defaultDirectorDeps(fastify: FastifyInstance, opts: { directorJobId?: string } = {}): DirectorDeps {
+  const laneParent = opts.directorJobId
+    ? { [LANE_PARENT_HEADER]: laneParentHeaderValue({ kind: "director", id: opts.directorJobId }) }
+    : {}
   async function injectJob(url: string, payload: unknown): Promise<{ jobId: string }> {
     const res = await fastify.inject({
       method: "POST",
       url,
-      headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+      headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET, ...laneParent },
       payload: payload as object,
     })
     if (res.statusCode >= 400) {
@@ -288,7 +300,7 @@ export function defaultDirectorDeps(fastify: FastifyInstance): DirectorDeps {
       }),
 
     waitForJob: async (jobId) => {
-      const result = await _waitForJob({ jobId, timeoutMs: 600_000 })
+      const result = await _waitForJob({ jobId, timeoutMs: 600_000, queueAware: true })
       // A child parked in `pending_review` (spec §6.4) is NOT a failure and NOT
       // a timeout — but the director composes speech → alignment → render, and
       // a withheld output cannot be composed, so the stage must stop. It gets

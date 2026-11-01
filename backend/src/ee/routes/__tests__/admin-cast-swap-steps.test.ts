@@ -217,6 +217,38 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     })
   })
 
+  it("reads a role's Body from the clip record and its skip (no usable frame)", async () => {
+    const clipBody = { frameUrl: "https://cdn.test/frame.jpg", frameSec: 1.5, sheetUrl: "https://cdn.test/redrawn.png", prompt: "test image prompt" }
+    mockFrom.mockReturnValue(
+      jobChain({
+        data: castSwapRow({
+          __castSwapStepOutputs: {
+            v: 1,
+            roles: [
+              { role: 0, kind: "person", clipBody },
+              { role: 1, kind: "person", clipBody: { frameUrl: 3, frameSec: -1, sheetUrl: " ", prompt: 9, extra: "dropped" } },
+              { role: 2, kind: "person", clipBody: "nope" },
+            ],
+          },
+          skippedSteps: [
+            { step: "clip-body", reason: "no_frame", role: 1 },
+            { step: "clip-body", reason: "failed", role: 2 },
+          ],
+        }),
+        error: null,
+      }),
+    )
+    const res = await get()
+    expect(res.json().data).toEqual({
+      stepOutputs: { v: 1, roles: [{ role: 0, kind: "person", clipBody }, { role: 1, kind: "person" }, { role: 2, kind: "person" }] },
+      sceneText: null,
+      skippedSteps: [
+        { step: "clip-body", reason: "no_frame", role: 1 },
+        { step: "clip-body", reason: "failed", role: 2 },
+      ],
+    })
+  })
+
   it("a record of another version, or without roles, is no record", async () => {
     for (const record of [{ v: 2, roles: [] }, { v: 1 }, { v: 1, roles: "x" }, "x", null]) {
       mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ __castSwapStepOutputs: record, skippedSteps: "nope" }), error: null }))

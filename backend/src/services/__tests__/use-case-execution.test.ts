@@ -84,6 +84,13 @@ describe("executeInlineGraph", () => {
     expect(m.add.mock.calls[0]![1]).not.toHaveProperty("appRun")
   })
 
+  it("a run started by a node of a running run carries its parent onto the job (it takes no run slot); a top-level one carries none", async () => {
+    await executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-1", reviewerPresent: false, webFreeMode: false, appRun: false, parentExecutionId: "exec-parent" })
+    expect(m.add.mock.calls[0]![1]).toMatchObject({ parentExecutionId: "exec-parent" })
+    await executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-2", reviewerPresent: false, webFreeMode: false, appRun: false })
+    expect(m.add.mock.calls[1]![1]).not.toHaveProperty("parentExecutionId")
+  })
+
   it("a workspace payer's pair rides the row", async () => {
     await executeInlineGraph({
       userId: "u1",

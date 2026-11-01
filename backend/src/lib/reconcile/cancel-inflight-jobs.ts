@@ -6,6 +6,7 @@ import { declaredJobBudgetMs } from "../job-budget.js"
 import type { AdoptedJobClocks } from "../../services/workflow-engine/types.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../jobs-slot-wait-column.js"
+import { laneQueuedAtOf } from "../concurrency-lanes/execution-wait.js"
 import { UGC_JOB_TYPES } from "../../services/workflow-engine/ugc-sync-nodes.js"
 import { isExecutionRequestKey } from "../../services/workflow-engine/idempotency-key.js"
 
@@ -43,6 +44,12 @@ export interface CancelInFlightOptions {
    *  cancelling it. Off for the component-timeout cleanup, where the parent has
    *  given up on the inner run and cancelling it is the point. */
   readonly adoptLiveBudgetedRenders?: boolean
+  /** Orchestrator RESUME only (with `adoptLiveBudgetedRenders`): a child still
+   *  waiting for a concurrency slot (`queued`) keeps its place in line and the
+   *  time it has waited — ADOPTED (class 4 below) instead of cancelled and
+   *  re-dispatched at the back of its line. Without it the resume reads and
+   *  touches exactly the statuses it always did. */
+  readonly adoptQueued?: boolean
 }
 
 /**
@@ -165,6 +172,12 @@ function adoptedRender(row: InFlightRow, budgetMs: number | undefined): Adoptabl
  *    the stamp, the CAS misses, and the re-read adopts the now-live row — so
  *    there is never a live render AND a re-dispatch for the same node.
  *
+ * 4. WAITING CHILDREN (`opts.adoptQueued`, the resume only): a single-shot
+ *    `queued` row — waiting for a concurrency slot — is ADOPTED, keeping its
+ *    place in line and the time it has waited (decided 2026-10-30). A queued
+ *    row this cancels (a fan-out iteration, an orphan) is withdrawn from its
+ *    line on the resume too.
+ *
  * A metered LLM job the sweep's rule leaves live (`retry`: its call may be in
  * flight, or a billed hold is not settled yet) is never cancelled; on the
  * RESUME it is ADOPTED like a live render (single-shot, owning node known), so
@@ -213,11 +226,12 @@ export async function cancelInFlightChildJobs(
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
   // A cancel that ENDS the run also takes the children waiting for a
   // concurrency slot (`queued`): left alone they would run and bill later for
-  // a run that is over. The resume does not touch them — it keeps the
-  // statuses it always read (adopting queued children is a change of its own).
+  // a run that is over. The resume reads them only to adopt them
+  // (`adoptQueued`); without it, it keeps the statuses it always read.
   const resume = opts.adoptLiveBudgetedRenders === true
+  const adoptQueued = resume && opts.adoptQueued === true
   const failable = IN_FLIGHT_JOB_STATUSES.filter((s) => !isParkedJobStatus(s))
-  const liveStatuses = resume ? failable.filter((s) => s !== "queued") : failable
+  const liveStatuses = resume && !adoptQueued ? failable.filter((s) => s !== "queued") : failable
   const { data: inFlight, error: selErr } = await readJobsWithSlotWait<Array<Record<string, unknown>>>(
     "id, status, input_data, provider, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key, reconcile_attempts, reconcile_last_error",
     (columns) => supabase
@@ -239,7 +253,13 @@ export async function cancelInFlightChildJobs(
   }
   if (!inFlight || inFlight.length === 0) return result
 
+  // When each waiting child entered its line — its own statement, asked only
+  // when the resume found one (so the read above never names a lane column).
+  const queuedIds = adoptQueued ? inFlight.filter((r) => r.status === "queued").map((r) => r.id as string) : []
+  const queuedAt = await laneQueuedAtOf(queuedIds)
+
   let adoptedRenders = 0
+  let adoptedQueued = 0
   for (const row of inFlight) {
     const id = row.id as string
     // A use-case wrapper is never adopted and never bulk-flipped: the shared
@@ -259,6 +279,31 @@ export async function cancelInFlightChildJobs(
     const nodeId = typeof prevInput.node_id === "string" ? prevInput.node_id : null
     const singleShot = prevInput.iterationIndex === undefined
     const budgetMs = typeof row.job_type === "string" ? declaredJobBudgetMs(row.job_type, prevInput) : undefined
+
+    // Class 4 — a child still WAITING for a concurrency slot (`queued`,
+    // `adoptQueued`, the resume only): single-shot, owning node known.
+    // Re-attached, not cancelled — cancelling would send its node to the back
+    // of its line. Its poll keeps the time it has waited (now −
+    // `lane_queued_at`) off both node clocks, counted from its original
+    // dispatch, so the resume grants it no fresh clock either. A row whose
+    // stamp cannot be read is adopted on fresh clocks (no wait credited). A
+    // fan-out iteration or an orphan takes class 1: cancelled, and withdrawn
+    // from its line below.
+    if (adoptQueued && row.status === "queued" && nodeId && singleShot && !result.adoptable.has(nodeId)) {
+      const since = queuedAt.get(id)
+      const now = Date.now()
+      result.adoptable.set(nodeId, {
+        jobId: id,
+        usageLogId: typeof row.usage_log_id === "string" ? row.usage_log_id : undefined,
+        creditsReserved: typeof row.credits === "number" ? row.credits : undefined,
+        budgetMs,
+        ...(since !== undefined
+          ? { clocks: { dispatchedAtMs: epochMs(row.created_at), queuedMs: Math.max(0, now - since) } }
+          : {}),
+      })
+      adoptedQueued++
+      continue
+    }
 
     // Class 2 — adoptable: provider already paid, single-shot node, owning
     // node known. First-wins if multiple rows somehow point at one node.
@@ -362,9 +407,12 @@ export async function cancelInFlightChildJobs(
       continue
     }
     result.cancelled++
-    // A cancelled child leaves its concurrency lane (only on a cancel that
-    // ends the run: the resume is left exactly as it was). Bounded, never throws.
-    if (!resume) await withdrawFromLane(id)
+    // A cancelled child leaves its concurrency lane: on a cancel that ends the
+    // run, and on the resume for a waiting child it could not adopt (a fan-out
+    // iteration, an orphan) — left there it would stay at the head of its
+    // line, blocking it. Any other resume cancel is left exactly as it was.
+    // Bounded, never throws.
+    if (!resume || row.status === "queued") await withdrawFromLane(id)
     // 554: the job's metered SIDE holds settle on their own call-start markers, after the flip.
     const { settleSideHoldsAfterFlip } = await import("../llm-side-hold.js")
     await settleSideHoldsAfterFlip([id])
@@ -383,8 +431,8 @@ export async function cancelInFlightChildJobs(
   if (result.cancelled > 0 || result.adoptable.size > 0) {
     console.log(
       `[orchestrator/resume] execution ${executionId}: cancelled+refunded ${result.cancelled} ` +
-      `stale job(s), ${result.adoptable.size - adoptedRenders} in-flight provider job(s) and ` +
-      `${adoptedRenders} live budgeted render(s) marked for adoption`,
+      `stale job(s), ${result.adoptable.size - adoptedRenders - adoptedQueued} in-flight provider job(s), ` +
+      `${adoptedRenders} live budgeted render(s) and ${adoptedQueued} waiting job(s) marked for adoption`,
     )
   }
   return result

@@ -56,10 +56,10 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.jobLanes).toBe(true)
   })
 
-  it("does not yet advertise a queue-aware tk.jobs.waitForJob", () => {
-    // The wait still counts a child's queued time against the plugin's timeout;
-    // the marker turns true with the change that makes it queue-aware.
-    expect(buildToolkit().capabilities?.queueAwareWait).toBe(false)
+  it("advertises a queue-aware tk.jobs.waitForJob", () => {
+    // A child's queued time does not count against the plugin's timeout
+    // (toolkit-wait-queue-aware.test.ts proves the wait itself).
+    expect(buildToolkit().capabilities?.queueAwareWait).toBe(true)
   })
 
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {

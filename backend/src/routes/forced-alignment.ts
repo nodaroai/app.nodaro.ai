@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
+import { laneParentPayload } from "../lib/concurrency-lanes/lane-parent.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { FORCED_ALIGNMENT_CREDIT_ID } from "../lib/fixed-row-credit-ids.js"
@@ -60,6 +61,8 @@ export async function forcedAlignmentRoutes(app: FastifyInstance) {
       audioUrl,
       transcript,
       usageLogId,
+      // A coordinator's child (the video director's alignment job) goes ahead in its lane; nothing else changes.
+      ...laneParentPayload(req),
     })
 
     return { jobId: job.id }

@@ -129,7 +129,7 @@ import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
 import { loadedEngineDrawsFaceMesh, withFaceMeshFor } from "../cast-swap-face-masking.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
-import { anyStepsSet, withEarlierStepsKeys, withoutEmptySteps } from "../nodaro-motion-steps.js"
+import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
 import { videoUpscale, editImage, generateImage } from "../../providers/router.js"
@@ -1588,9 +1588,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionMotion: true,
   nodaroMotionSteps: true,
   jobLanes: true,
-  // Turns true with the change that makes tk.jobs.waitForJob discount a
-  // job's queued time; until then a plugin must not rely on it.
-  queueAwareWait: false,
+  // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
+  // (`queued`) out of the plugin's timeout (`queueAware` below).
+  queueAwareWait: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1806,7 +1806,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       readJobsOwnedBy,
       readOwnedJob,
       readJobSubmissionsOwnedBy,
-      waitForJob,
+      // Queue-aware: the awaited job's queued time is not the plugin's timeout,
+      // and is credited to the job the plugin runs for (its own clocks).
+      waitForJob: (opts) => waitForJob({ ...opts, queueAware: true }),
       storeRecastAudioBase,
       readRecastAudioBase,
       clearRecastAudioBase,
@@ -2176,13 +2178,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       // Same rules: a failed read throws. Null when never saved, AND to an engine that does not
       // take steps (`castSwap.steps`): it never asks, and must never be given admin doctrine it would drop.
+      // `clipBody` only to an engine that also declares `castSwap.clipBodySheet`; an entry left empty is dropped.
       nodaroMotionSteps: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_steps: the app settings could not be read")
         const steps = settings.nodaro_motion_steps
-        if (!steps || !anyStepsSet(steps) || !loadedEngineTakesSteps()) return null
+        if (!steps || !loadedEngineTakesSteps()) return null
+        const sent = stepsForLoadedEngine(steps)
+        if (!anyStepsSet(sent)) return null
         // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
-        return withEarlierStepsKeys(withoutEmptySteps(steps))
+        return withEarlierStepsKeys(sent)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

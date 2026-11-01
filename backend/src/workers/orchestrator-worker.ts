@@ -28,11 +28,15 @@ import { prepareVideoLinksForRun } from "./orchestrator-video-links.js"
 import { loadExecutionVideoLinkFiles, mergeVideoLinkFiles, saveExecutionVideoLinkFiles } from "../lib/execution-video-link-files.js"
 import { config, hasCredits } from "../lib/config.js"
 import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
+import { readExecutionWorkerRow, runUnderRunAdmission } from "../lib/concurrency-lanes/run-admit.js"
+import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
+import { serverShare } from "../lib/concurrency-lanes/server-share.js"
+import { lanesEnforced } from "../lib/concurrency-lanes/sizes.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
-import { payloadBillingContext } from "../lib/billing-context.js"
+import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
 import { chargedCreditsOfRejection, fanOutProgressOfRejection, retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
@@ -114,6 +118,7 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs, workflowCapMs } from "../lib/job-budget.js"
 import { executionBudgetExcessMs } from "../lib/execution-budget.js"
+import { executionQueuedMs, persistRunLaneWait } from "../lib/concurrency-lanes/execution-wait.js"
 import { filterCloneNodes, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem } from "@nodaro/shared/workflow"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared/credits"
@@ -123,6 +128,7 @@ import { isFrozenLottieOverride, namedWorkNodeIds } from "../services/workflow-e
 import { savedUserDirectionRefs } from "../services/workflow-engine/node-user-direction.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
+import { dispatchSlots, type DispatchSlots } from "../lib/dispatch-slots.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { resolveFanOutIterationInputs } from "./fan-out-inputs.js"
 import { hydrateEntityNodes } from "../lib/entity-hydration.js"
@@ -137,6 +143,44 @@ export function getParallelismLimit(tier: string | undefined): number {
   if (!hasCredits()) return MAX_CONCURRENT_NODES_CEILING
   const tierLimit = TIER_PARALLELISM[tier ?? "free"] ?? TIER_PARALLELISM.free
   return Math.min(tierLimit, MAX_CONCURRENT_NODES_CEILING)
+}
+
+/** Who a run's width is decided for: the requester's effective tier and the run's payer. */
+export interface DispatchSubject {
+  tier: string | undefined
+  billingContext: BillingContext
+}
+
+/**
+ * Whether concurrency lanes are enforced, and how many nodes one run
+ * dispatches at once (one level, the list fan-outs inside it, its inline
+ * sub-workflows).
+ *
+ *   - Not enforced: today's per-execution limit. A deployment payer's run
+ *     gets the PAYER's grade (stamped into the context at resolve — per
+ *     execution, so every requester gets their own budget at that grade; the
+ *     requester's own tier prices nothing there); any other run gets
+ *     `getParallelismLimit(tier)`. `MAX_CONCURRENT_NODES_PER_EXECUTION` clips both.
+ *   - Enforced: `ORCHESTRATOR_DISPATCH_WIDTH`, whatever the tier or payer. The
+ *     user's lanes then do the limiting, across every run and entry point; the
+ *     width is only the engine's safety valve.
+ *
+ * Reads the enforcement flag once (fails open to "not enforced"). The
+ * orchestrator calls it once per run and keeps the answer for the whole run
+ * (`ctx.runDispatch`).
+ */
+export async function resolveRunDispatch(subject: DispatchSubject): Promise<{ lanesEnforced: boolean; width: number }> {
+  if (await lanesEnforced()) return { lanesEnforced: true, width: config.ORCHESTRATOR_DISPATCH_WIDTH }
+  const { billingContext } = subject
+  const width = billingContext.payer === "deployment"
+    ? Math.min(billingContext.entitlements.parallelism, MAX_CONCURRENT_NODES_CEILING)
+    : getParallelismLimit(subject.tier)
+  return { lanesEnforced: false, width }
+}
+
+/** How many nodes one run dispatches at once (see `resolveRunDispatch`). */
+export async function dispatchWidth(subject: DispatchSubject): Promise<number> {
+  return (await resolveRunDispatch(subject)).width
 }
 
 // ---------------------------------------------------------------------------
@@ -332,10 +376,18 @@ export async function cleanupStaleExecutions(): Promise<void> {
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
     // The run's budget excess is read only once the base threshold is passed,
     // so a run with nothing budgeted is judged exactly as before.
-    const isAbandonable =
-      startedAt === 0 ||
-      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
-        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, row.user_id as string, states)))
+    // The time its jobs spent waiting for concurrency slots is read after
+    // that, and only while the run still looks stale: queued time never
+    // counts (decided 2026-10-30), and a run that never queued costs nothing.
+    // `started_at` is written at the claim, after the run's own admission,
+    // so the run's wait for its run slot is already outside this clock.
+    let isAbandonable = startedAt === 0
+    if (!isAbandonable && startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS) {
+      const excess = await executionBudgetExcessMs(row.id, row.user_id as string, states)
+      isAbandonable =
+        now - startedAt > staleExecutionThresholdMs(excess) &&
+        now - startedAt > staleExecutionThresholdMs(excess, await executionQueuedMs(row.id, row.user_id as string))
+    }
 
     if (isAbandonable) {
       await tryTerminalWrite(
@@ -393,6 +445,14 @@ export {
  *  orchestrator is already listening. Mirrors video-worker.ts's
  *  `DrainAbortError` branch (which uses 2s for the shorter child jobs). */
 export const ORCHESTRATOR_DRAIN_REQUEUE_DELAY_MS = 5_000
+
+/**
+ * The statuses a run's claim (`running`) may move a row from: a run never
+ * started (`pending`), and one a re-pick resumes (`running`, `stopping`). Any
+ * other status ended the run, and its claim runs nothing. `stopping` is
+ * claimed as `running`, as the plain write always did.
+ */
+export const RUN_CLAIM_STATUSES = ["pending", "running", "stopping"] as const
 
 /**
  * Hand a drain-interrupted job back to the queue AT ZERO COST.
@@ -454,20 +514,36 @@ export async function runOrchestratorJob(
   if (isWorkerDraining()) {
     await parkForDrain(job, token, "not started — worker already draining")
   }
-  try {
-    await processWorkflowExecution(job)
-  } catch (err) {
-    if (err instanceof DrainAbortError) {
-      await parkForDrain(job, token, "interrupted by worker drain", err)
+  // CONCURRENCY LANES (lib/concurrency-lanes/run-admit.ts): a top-level run
+  // takes a slot of its user's run lane (after its share of this server's
+  // pool); a run started by a node of a running run (`parentExecutionId`)
+  // takes none; a claimed (`running`) one is re-admitted at once. A refused
+  // run stays `pending` and is parked (DelayedError, no attempt spent). The
+  // execution runs under the hold it got, so every node and funnel under it
+  // knows whose run it is; the slot is released when it settles. With
+  // enforcement off nothing is refused: every run starts at once, counted.
+  const row = await readExecutionWorkerRow(job.data.executionId, job.data.userId)
+  await runUnderRunAdmission({ job, token, queue: "workflow-orchestration", row }, async () => {
+    try {
+      await processWorkflowExecution(job)
+    } catch (err) {
+      if (err instanceof DrainAbortError) {
+        await parkForDrain(job, token, "interrupted by worker drain", err)
+      }
+      throw err
     }
-    throw err
-  }
+  })
 }
 
 export function createOrchestratorWorker() {
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
   })
+  // A run its lane refuses at pickup is parked (still `pending`) and woken by
+  // its reserved slot (lib/concurrency-lanes/park.ts). With enforcement off nothing is refused.
+  registerLaneParking()
+  // No user holds more than a quarter of this pool (server-share.ts): 5 of the default 20.
+  serverShare("orchestrator", config.ORCHESTRATOR_CONCURRENCY)
 
   const worker = new Worker<WorkflowExecutionJob>(
     "workflow-orchestration",
@@ -564,6 +640,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       typeof job.data.reviewerPresent === "boolean" &&
       job.data.previewStopRule !== false,
   }
+
+  // The run's queued time rides beside every write of its row while it runs:
+  // its own statement, written only once it is non-zero and has grown — never
+  // while nothing queues (execution-wait.ts). Beside EVERY write, because a
+  // reader counts a child's wait only after the row's last write
+  // (`updated_at`): the persisted figure must have covered it by then. Never throws.
+  const noteLaneWait = (): void => { void persistRunLaneWait(executionId, ctx) }
 
   try {
     // 1. Load workflow from DB (or from published app snapshot if running a specific version).
@@ -760,24 +843,30 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       .eq("id", userId)
       .single()
 
-    // Effective tier — payg users run at basic-equivalent parallelism (4).
-    // Deployment payer (item 9, D2): the limit is the PAYER's grade,
-    // stamped into the context at resolve — per EXECUTION, so every requester
-    // gets their own budget at that grade rather than the instance sharing
-    // one; the requester's own tier (a signup default no one ever upgrades on
-    // a deployment-payer instance) prices nothing. Env ceiling still applies.
-    const concurrencyLimit =
-      ctx.billingContext.payer === "deployment"
-        ? Math.min(ctx.billingContext.entitlements.parallelism, MAX_CONCURRENT_NODES_CEILING)
-        : getParallelismLimit(
-            userProfile
-              ? resolveEffectiveTier({
-                  tier: (userProfile.tier as string | null) ?? null,
-                  subscription_tier: (userProfile.subscription_tier as string | null) ?? null,
-                  lifetime_topup_credits: (userProfile.lifetime_topup_credits as number) ?? 0,
-                })
-              : undefined
-          )
+    // How many nodes this run dispatches at once (`resolveRunDispatch`):
+    // today's per-execution limit while concurrency lanes are not enforced —
+    // the effective tier (payg runs at basic-equivalent parallelism), or a
+    // deployment payer's grade — and ORCHESTRATOR_DISPATCH_WIDTH once they
+    // are. Decided ONCE, here, and kept for the whole run (`ctx.runDispatch`,
+    // which its inline sub-workflows read too): an admin turning lanes on or
+    // off mid-run never changes this run's width halfway.
+    ctx.runDispatch = await resolveRunDispatch({
+      tier: userProfile
+        ? resolveEffectiveTier({
+            tier: (userProfile.tier as string | null) ?? null,
+            subscription_tier: (userProfile.subscription_tier as string | null) ?? null,
+            lifetime_topup_credits: (userProfile.lifetime_topup_credits as number) ?? 0,
+          })
+        : undefined,
+      billingContext: ctx.billingContext,
+    })
+    const concurrencyLimit = ctx.runDispatch.width
+    // Enforced: one width for the whole run. Every node call — a node, or
+    // one item of a list fan-out — takes a slot of it, so a fan-out inside a
+    // level shares the width instead of nesting a second limiter under it.
+    // Not enforced: no shared limiter — the level and each fan-out keep their
+    // own limiters exactly as before.
+    const runSlots = ctx.runDispatch.lanesEnforced ? dispatchSlots(concurrencyLimit) : null
 
     ctx.workflowSettings = {
       ...((workflowData.settings as Record<string, unknown>) ?? {}),
@@ -1193,8 +1282,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // 2026-09-24). MUST run after the carry-forward above (cancelling earlier
     // would make reconcile map these to "skipped" and carry their nodes
     // forward as done). No-op on a first pick. See cancelInFlightChildJobs for
-    // the residual-race note.
-    const { adoptable } = await cancelInFlightChildJobs(executionId, userId, { adoptLiveBudgetedRenders: true })
+    // the residual-race note. A child still waiting for a concurrency slot
+    // (`queued`) is adopted too, keeping its place in line and the time it
+    // has waited (`adoptQueued`), never cancelled and re-dispatched.
+    const { adoptable } = await cancelInFlightChildJobs(executionId, userId, { adoptLiveBudgetedRenders: true, adoptQueued: true })
     if (adoptable.size > 0) ctx.adoptableJobs = adoptable
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
@@ -1214,6 +1305,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
       // Persist to DB so polling clients also see the jobId
       updateExecution(executionId, { node_states: nodeStates }).catch(() => {})
+      noteLaneWait()
       emitExecutionEvent({
         type: "node:updated",
         executionId,
@@ -1447,10 +1539,17 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
     }
 
-    // 6. Update execution to running with accurate node count
-    await supabase
-      .from("workflow_executions")
-      .update({
+    // 6. THE CLAIM: update the execution to running with an accurate node
+    // count — a compare-and-set from the statuses a worker may start or
+    // resume (`RUN_CLAIM_STATUSES`). The row read above can be stale by now:
+    // a Cancel, or the concurrency lanes' queue timeout failing a run that
+    // still waited, may have ended it while this worker loaded the graph. A
+    // claim that matches nothing runs nothing — no node, no charge, no
+    // started event; the run's slot is released as it returns. A claim the
+    // database could not answer goes on, as the plain write always did.
+    const claim = await updateExecutionWithRetry(
+      executionId,
+      {
         status: "running",
         started_at: new Date().toISOString(),
         total_nodes: totalExecutions,
@@ -1459,8 +1558,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // sweeps filter on it: the orchestration job lives in THIS environment's
         // Redis, so only this environment can tell whether the row is orphaned.
         runtime_env: getRuntimeEnv(),
-      })
-      .eq("id", executionId)
+      },
+      { fromStatuses: RUN_CLAIM_STATUSES },
+    )
+    if (claim.cancelledRace) {
+      console.warn(`[orchestrator] Execution ${executionId} ended before its claim (cancelled, timed out in its queue, or deleted) — not running it`)
+      return
+    }
 
     // PIN the overrides this run applied (round 3, decided 2026-10-06), before
     // any node runs: a later continuation of this execution re-applies exactly
@@ -1589,7 +1693,11 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // long render this run has dispatched (Track 0.11 — `ctx.budgetExcessMs`,
       // grown by the node executor at dispatch). A run with nothing budgeted
       // keeps 120 minutes exactly.
-      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > workflowCapMs(ctx.budgetExcessMs)) {
+      //
+      // The time this run's jobs spent waiting for concurrency slots
+      // (`ctx.laneWaitMs`, grown by the node executor's polls) comes off too:
+      // nothing fails for waiting (decided 2026-10-30). 0 while nothing queues.
+      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) - (ctx.laneWaitMs ?? 0) > workflowCapMs(ctx.budgetExcessMs)) {
         await settleStepCharges()
         await failExecution(executionId, "Workflow execution timed out", nodeStates)
         return
@@ -1695,6 +1803,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // the level-end write below is never reached for it.
         if (stamped > 0) {
           await updateExecution(executionId, { node_states: nodeStates, total_nodes: totalExecutions, completed_nodes: completedCount })
+          noteLaneWait()
         }
         continue
       }
@@ -1726,24 +1835,31 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             started.add(node.id)
           }
           // Mark as running — for component nodes, use the component's label as display name
-          const displayType = node.type === "component"
-            ? (node.data as Record<string, unknown>).label as string || "Component"
-            : node.type
-          nodeStates[node.id] = {
-            status: "running",
-            nodeType: displayType,
-            startedAt: new Date().toISOString(),
-            ...keptFailedAttempt(ctx.continuedFromStates, node.id),
+          const markRunning = async (): Promise<void> => {
+            const displayType = node.type === "component"
+              ? (node.data as Record<string, unknown>).label as string || "Component"
+              : node.type
+            nodeStates[node.id] = {
+              status: "running",
+              nodeType: displayType,
+              startedAt: new Date().toISOString(),
+              ...keptFailedAttempt(ctx.continuedFromStates, node.id),
+            }
+            await updateExecution(executionId, { node_states: nodeStates })
+            noteLaneWait()
+            emitExecutionEvent({
+              type: "node:updated",
+              executionId,
+              nodeStates: { ...nodeStates },
+              nodeId: node.id,
+              completedNodes: completedCount,
+              failedNodes: failedCount,
+            })
           }
-          await updateExecution(executionId, { node_states: nodeStates })
-          emitExecutionEvent({
-            type: "node:updated",
-            executionId,
-            nodeStates: { ...nodeStates },
-            nodeId: node.id,
-            completedNodes: completedCount,
-            failedNodes: failedCount,
-          })
+          // Lanes not enforced: at once, as always. Enforced: a node is
+          // `running` only once it holds a slot of the run's width (below) —
+          // a node still waiting for one stays `pending` on the canvas.
+          if (!runSlots) await markRunning()
 
           // Check for list fan-out input. The plan pins every iteration to the
           // ROW it reads and carries the handle the driving list is wired to.
@@ -1765,6 +1881,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             totalExecutions += runs - counted
             preCount.set(node.id, runs)
             updateExecution(executionId, { total_nodes: totalExecutions }).catch(() => {})
+            noteLaneWait()
           }
 
           let result: ExecuteNodeResult
@@ -1779,6 +1896,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
               updateExecution(executionId, {
                 completed_nodes: completedCount,
               }).catch(() => {})
+              noteLaneWait()
               emitExecutionEvent({
                 type: "node:updated",
                 executionId,
@@ -1789,6 +1907,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
                 failedNodes: failedCount,
               })
             }
+            // A fan-out node takes no slot of its own (its items do): it runs
+            // from here, as it always has.
+            if (runSlots) await markRunning()
             result = await executeNodeForList(
               node,
               expanded,
@@ -1806,32 +1927,65 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
                 // Lets the progress bar reach 100% on partial fan-out success.
                 completedCount += toleratedFailures
                 updateExecution(executionId, { completed_nodes: completedCount }).catch(() => {})
+                noteLaneWait()
               },
+              runSlots,
             )
           } else {
             // Normal single execution
-            const inputs = resolveNodeInputs(
-              node,
-              edges,
-              nodeStates,
-              nodes,
-              triggerData,
-            )
+            const resolveAndRun = () => {
+              const inputs = resolveNodeInputs(
+                node,
+                edges,
+                nodeStates,
+                nodes,
+                triggerData,
+              )
 
-            // Store resolved inputs in node state for debugging visibility
-            nodeStates[node.id] = {
-              ...nodeStates[node.id],
-              inputs: inputs as unknown as Record<string, unknown>,
+              // Store resolved inputs in node state for debugging visibility
+              nodeStates[node.id] = {
+                ...nodeStates[node.id],
+                inputs: inputs as unknown as Record<string, unknown>,
+              }
+
+              return executeNode(
+                node,
+                inputs,
+                edges,
+                nodes,
+                nodeStates,
+                ctx,
+              )
             }
-
-            result = await executeNode(
-              node,
-              inputs,
-              edges,
-              nodes,
-              nodeStates,
-              ctx,
-            )
+            // A node that waited for a shared slot starts only if its level
+            // still runs: a fail-fast or a Stop while it waited skips it, as
+            // settledWithLimit skips a task it never started. A failure raises
+            // the level's fail-fast flag BEFORE its slot is handed on, so the
+            // next waiter already sees it. In a tries-every level only a Stop
+            // stops it, and a node a Stop held back never started: it is
+            // neither delivered nor failed — and, since the wait may have been
+            // long, it asks for a Stop again, fresh, before it starts (as the
+            // check at the top of the task does when lanes are not enforced).
+            // It is marked `running` only here, once it holds its slot, and
+            // its inputs are stored after that mark, which replaces the state.
+            result = runSlots
+              ? await runSlots.run(() => failFastInSlot(
+                  levelAborted,
+                  !triesEveryLevel,
+                  ctx,
+                  "Execution cancelled",
+                  async () => {
+                    await markRunning()
+                    return resolveAndRun()
+                  },
+                  () => {
+                    if (!triesEveryLevel) return
+                    started.delete(node.id)
+                    stoppedMidLevel = true
+                  },
+                  triesEveryLevel ? async () => (await checkExecutionControl(executionId)) === "cancelled" : undefined,
+                ))
+              : await resolveAndRun()
           }
 
           // Update state
@@ -1878,6 +2032,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
               completed_nodes: completedCount,
               node_states: nodeStates,
             }).catch(() => {})
+            noteLaneWait()
             mirrorWrapperProgress()
           }
           totalCredits += result.creditsUsed ?? 0
@@ -1996,6 +2151,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         failed_nodes: failedCount,
         total_credits_used: totalCredits,
       })
+      noteLaneWait()
       mirrorWrapperProgress()
 
       emitExecutionEvent({
@@ -2156,6 +2312,44 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
 // ---------------------------------------------------------------------------
 
 /**
+ * One node call inside a slot of the run's shared limiter (concurrency lanes
+ * enforced). It starts only if nothing stopped its group while it waited for
+ * the slot (a Stop, or fail-fast after a sibling failed), and a failure raises
+ * the group's fail-fast flag itself — inside the slot, so before the slot is
+ * handed to the next waiter, which would otherwise start ahead of
+ * settledWithLimit raising it. `onHeldBack` runs when the call is held back.
+ */
+async function failFastInSlot<T>(
+  group: { cancelled: boolean },
+  failFast: boolean,
+  ctx: OrchestratorContext,
+  cancelledMessage: string,
+  call: () => Promise<T>,
+  onHeldBack?: () => void,
+  /** A fresh read for a Stop, asked once the slot is held (a tries-every
+   *  level: no fail-fast holds its nodes back, so each asks the database).
+   *  True holds the call back as a Stop: the run is cancelled. */
+  stoppedNow?: () => Promise<boolean>,
+): Promise<T> {
+  if (ctx.cancelled || group.cancelled) {
+    onHeldBack?.()
+    throw new Error(cancelledMessage)
+  }
+  if (stoppedNow && (await stoppedNow())) {
+    ctx.cancelled = true
+    group.cancelled = true
+    onHeldBack?.()
+    throw new Error(cancelledMessage)
+  }
+  try {
+    return await call()
+  } catch (err) {
+    if (failFast) group.cancelled = true
+    throw err
+  }
+}
+
+/**
  * Execute a node once per list item sequentially, collecting results.
  * The first result becomes the primary output; all results stored in listResults.
  * Mirrors frontend executeNodeForList() logic.
@@ -2172,6 +2366,8 @@ async function executeNodeForList(
   onIterationComplete?: (iterationIndex: number) => void,
   maxConcurrency?: number,
   onToleratedFailures?: (count: number) => void,
+  /** The run's shared limiter while concurrency lanes are enforced: each item takes a slot of it. */
+  runSlots?: DispatchSlots | null,
 ): Promise<ExecuteNodeResult> {
   // A use-case node whose result is a list, or with review on, cannot run once per item: refused before any item runs.
   const useCaseRefusal = usecaseFanOutRefusal(node)
@@ -2191,6 +2387,7 @@ async function executeNodeForList(
   // fan-out shape from reconcile. Best-effort: a write hiccup just falls back to
   // the old timing for this one node.
   await updateExecutionWithRetry(executionId, { node_states: nodeStates }).catch(() => {})
+  void persistRunLaneWait(executionId, ctx)
 
   // Per-iteration resume: on a crash + BullMQ re-pick this fan-out node re-runs
   // (reconcile leaves it "running"). Reuse the iterations that ALREADY completed
@@ -2230,7 +2427,7 @@ async function executeNodeForList(
         ? { ...node, data: { ...(node.data ?? {}), provider: providerOverride } }
         : node
 
-      result = await executeNode(
+      const runItem = () => executeNode(
         iterationNode,
         inputs,
         edges,
@@ -2243,6 +2440,11 @@ async function executeNodeForList(
         // `rows[i] ?? i`), and the render's clip key must not index the plan by it.
         plan.rows[i],
       )
+      // An item that waited for a shared slot re-checks the fan-out's
+      // fail-fast and a Stop before it starts, as the check above does.
+      result = runSlots
+        ? await runSlots.run(() => failFastInSlot(cancelRef, !triesEvery, ctx, "Cancelled", runItem))
+        : await runItem()
     }
 
     const resultValue = fanOutIterationValue(result.output, node.type)

@@ -129,6 +129,30 @@ export function environmentsThatCannotTakeSteps(envs: readonly TrendEngineEnviro
   return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.steps !== true)
 }
 
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * engine cannot take "Body from the clip" (`steps.clipBody`) — none
+ * recorded, or one that does not declare `castSwap.steps` and
+ * `castSwap.clipBodySheet`. Unknown while the environments are (undefined).
+ * Off is safe everywhere (an engine without the step has it stripped); a
+ * prompt of its own is offered only when this is empty: the server refuses
+ * the shared setting otherwise, and a trend that sets one can't be published
+ * there.
+ */
+export function environmentsThatCannotTakeClipBody(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
+    const cs = envs.find((e) => e.env === name)?.supports.castSwap
+    return cs?.steps !== true || cs.clipBodySheet !== true
+  })
+}
+
+/** The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose engine runs "Body from the clip"; unknown while the environments are. */
+export function environmentsThatTakeClipBody(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  const missing = environmentsThatCannotTakeClipBody(envs)
+  return missing && SHARED_SETTING_ENVIRONMENTS.filter((name) => !missing.includes(name))
+}
+
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
 export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)

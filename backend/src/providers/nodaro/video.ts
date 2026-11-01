@@ -161,7 +161,7 @@ export class NodaroCloudVideoProvider
     }
 
     const jobId = await createCloudJob("/v1/generate-video", body)
-    const job = await waitForCloudJob(jobId, options?.onProgress)
+    const job = await waitForCloudJob(jobId, options?.onProgress, { queueAware: true })
     return extractVideoResult(job, jobId)
   }
 
@@ -189,7 +189,7 @@ export class NodaroCloudVideoProvider
     }
 
     const jobId = await createCloudJob("/v1/text-to-video", body)
-    const job = await waitForCloudJob(jobId, options?.onProgress)
+    const job = await waitForCloudJob(jobId, options?.onProgress, { queueAware: true })
     return extractVideoResult(job, jobId)
   }
 
@@ -226,7 +226,7 @@ export class NodaroCloudVideoProvider
       ...(options?.seed !== undefined ? { seed: options.seed } : {}),
     }
     const jobId = await createCloudJob("/v1/lip-sync", body)
-    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+    return extractVideoResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 
   async speechToVideo(
@@ -255,7 +255,7 @@ export class NodaroCloudVideoProvider
       ...(options?.shift !== undefined ? { shift: options.shift } : {}),
     }
     const jobId = await createCloudJob("/v1/speech-to-video", body)
-    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+    return extractVideoResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 
   async videoUpscale(
@@ -275,7 +275,7 @@ export class NodaroCloudVideoProvider
       ...(request?.upscaleFactor !== undefined ? { upscaleFactor: request.upscaleFactor } : {}),
     }
     const jobId = await createCloudJob("/v1/video-upscale", body)
-    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+    return extractVideoResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 
   async motionTransfer(
@@ -312,7 +312,7 @@ export class NodaroCloudVideoProvider
       ...(options?.videoDuration !== undefined ? { videoDuration: options.videoDuration } : {}),
     }
     const jobId = await createCloudJob("/v1/motion-transfer", body)
-    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+    return extractVideoResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 
   async videoToVideo(
@@ -338,7 +338,7 @@ export class NodaroCloudVideoProvider
       ...sharedVideoBody(cloudOptions),
     }
     const jobId = await createCloudJob("/v1/video-to-video", body)
-    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+    return extractVideoResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 
   /**
@@ -372,6 +372,6 @@ export class NodaroCloudVideoProvider
       ...(opts?.templStartSeconds !== undefined ? { templStartSeconds: opts.templStartSeconds } : {}),
     }
     const jobId = await createCloudJob("/v1/lip-sync", body)
-    return extractVideoResult(await waitForCloudJob(jobId), jobId)
+    return extractVideoResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 }

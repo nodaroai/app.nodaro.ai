@@ -153,6 +153,36 @@ describe("parkForLane", () => {
     expect(laneCounters().ungated).toEqual({})
   })
 
+  it("an execution over its run line stays pending, stamped, and its entry is parked", async () => {
+    // One process handler for every queue: it names the table from the queue.
+    await gate.acquire({
+      meta: { jobId: "other-run", userId: "U", payer: "user:U", lane: "run", provider: null, source: null, sourceDetail: null, jobType: "workflow-execution", model: null, queue: "workflow-orchestration", bullJobId: "other-run" },
+      size: 1, mode: "fresh", leaseTtlMs: 3_600_000,
+    })
+    const exec = { id: "exec-1", user_id: "U", status: "pending", lane_queued_at: null as string | null }
+    db.rows("workflow_executions").push(exec)
+    const job = { ...bullJob("exec-1", { id: "exec-1" }), name: "workflow-execution", data: { executionId: "exec-1", userId: "U" } }
+    expect(await admitOrPark({ job, token: "tok", queue: "workflow-orchestration", row: row("exec-1") })).toBeNull()
+    expect(exec).toMatchObject({ status: "pending", lane_env: "production", lane_queued_at: new Date(NOW).toISOString() })
+    // Its BullMQ entry lives in the payload: executions carry no lane_bull_* columns.
+    expect(exec).not.toHaveProperty("lane_bull_job_id")
+    expect(db.rows("lane_requeue_payloads")).toEqual([expect.objectContaining({ kind: "execution", row_id: "exec-1", bull_queue: "workflow-orchestration", bull_job_id: "exec-1", name: "workflow-execution" })])
+    expect(job.moveToDelayed).toHaveBeenCalledWith(NOW + 600_000, "tok")
+    expect(db.rows("jobs")).toEqual([])
+  })
+
+  it("an execution that started meanwhile is not parked: it runs (the orchestrator finds it started)", async () => {
+    await gate.acquire({
+      meta: { jobId: "other-run", userId: "U", payer: "user:U", lane: "run", provider: null, source: null, sourceDetail: null, jobType: "workflow-execution", model: null, queue: "workflow-orchestration", bullJobId: "other-run" },
+      size: 1, mode: "fresh", leaseTtlMs: 3_600_000,
+    })
+    db.rows("workflow_executions").push({ id: "exec-1", user_id: "U", status: "running", lane_queued_at: null })
+    const job = { ...bullJob("exec-1", { id: "exec-1" }), name: "workflow-execution", data: { executionId: "exec-1", userId: "U" } }
+    const a = await admitOrPark({ job, token: "tok", queue: "workflow-orchestration", row: row("exec-1") })
+    expect(a).not.toBeNull()
+    expect(job.moveToDelayed).not.toHaveBeenCalled()
+  })
+
   it("throws DelayedError, which spends no attempt", async () => {
     jobsRow("job-1")
     const job = bullJob("job-1")

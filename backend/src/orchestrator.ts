@@ -14,6 +14,8 @@ import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { setEditPlanPerMinuteSource } from "./lib/private-plugins/edit-plan-per-minute.js"
 import { askApiEditPlanPerMinute } from "./services/workflow-engine/edit-plan-per-minute-loopback.js"
+import { startLaneParking } from "./lib/concurrency-lanes/park.js"
+import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[orchestrator] Unhandled rejection:", err)
@@ -49,7 +51,15 @@ await loadSwitchedOffModels()
 // started minute before it reserves an edit-plan job (fails closed to steps).
 setEditPlanPerMinuteSource(() => askApiEditPlanPerMinute())
 
+// Concurrency lanes: promote this queue's parked runs when a slot is reserved
+// for them (a release in any process publishes the wake), and wake every
+// parked run when enforcement goes off. Started before the worker, so no wake
+// arrives before the subscriber is up. Stopped on shutdown.
+const stopLaneParking = await startLaneParking(["workflow-orchestration"])
+
 const worker = createOrchestratorWorker()
+// This process's share of the orchestrator pool, published every 5 s for the Live usage page. Stopped on shutdown.
+const stopServerOccupancy = startServerOccupancyPublisher()
 
 console.warn("[orchestrator] Worker started, waiting for workflow executions...")
 
@@ -69,6 +79,8 @@ let shuttingDown = false
 const shutdown = async (signal: NodeJS.Signals) => {
   if (shuttingDown) return
   shuttingDown = true
+  stopLaneParking()
+  stopServerOccupancy()
   console.warn(`[orchestrator] ${signal} received — draining (≤${SHUTDOWN_DRAIN_MS}ms before forced exit)`)
   const hardExit = setTimeout(() => {
     console.error("[orchestrator] Drain timed out, forcing exit")

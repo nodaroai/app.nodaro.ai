@@ -7,7 +7,8 @@
  * Replies `{ data: { stepOutputs, sceneText, skippedSteps } }`:
  * - `stepOutputs`: what a run with `steps` recorded of each step (the labels,
  *   the condition, the layout and sheet per role; the engine prompt's mode and
- *   the LLM-written body; the scene step's mode), from the server-only
+ *   the LLM-written body; the scene step's mode; "Body from the clip"'s frame,
+ *   redrawn sheet and image prompt per role), from the server-only
  *   `output_data.__castSwapStepOutputs`. null when the run recorded none (a
  *   run with no `steps`: today's steps), or the record is of another version.
  * - `sceneText`: the scene description the run used (`__castSwapSceneText`).
@@ -33,6 +34,7 @@ import {
   SHEET_LAYOUTS,
   SKIP_REASONS,
   SKIPPABLE_STEPS,
+  type ClipBodyOutput,
   type PhotoLabel,
   type SkippedStep,
   type StepOutputs,
@@ -77,6 +79,19 @@ function readLabel(v: unknown): PhotoLabel | null {
 
 type RoleOutput = StepOutputs["roles"][number]
 
+const nonBlank = (v: unknown): v is string => typeof v === "string" && v.trim() !== ""
+
+/** A role's "Body from the clip" record: its known fields only; null when it has none. */
+function readClipBody(v: unknown): ClipBodyOutput | null {
+  if (!isRec(v)) return null
+  const out: ClipBodyOutput = {}
+  if (nonBlank(v.frameUrl)) out.frameUrl = v.frameUrl
+  if (typeof v.frameSec === "number" && Number.isFinite(v.frameSec) && v.frameSec >= 0) out.frameSec = v.frameSec
+  if (nonBlank(v.sheetUrl)) out.sheetUrl = v.sheetUrl
+  if (nonBlank(v.prompt)) out.prompt = v.prompt
+  return Object.keys(out).length > 0 ? out : null
+}
+
 /** One role's record; null when it names no role index or no known kind. */
 function readRole(v: unknown): RoleOutput | null {
   if (!isRec(v) || !isIndex(v.role) || !oneOf(SHEET_KINDS, v.kind)) return null
@@ -87,6 +102,8 @@ function readRole(v: unknown): RoleOutput | null {
   if (oneOf<string>(SHEET_LAYOUTS[kind], v.layout)) out.layout = v.layout as RoleOutput["layout"]
   if (typeof v.sheetUrl === "string" && v.sheetUrl.trim()) out.sheetUrl = v.sheetUrl
   if (typeof v.kept === "boolean") out.kept = v.kept
+  const clipBody = readClipBody(v.clipBody)
+  if (clipBody) out.clipBody = clipBody
   return out
 }
 

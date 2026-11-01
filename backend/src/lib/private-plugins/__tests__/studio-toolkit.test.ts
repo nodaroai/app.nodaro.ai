@@ -9,9 +9,10 @@
  * caller's ordering and cap, that a job read still redacts, and that the two
  * pure helpers are the very functions their modules export.
  *
- * Two members are checked by identity on purpose — `waitForJob` and
- * `changesStudioPublishFlag` have their own suites, and an identity assertion
- * is the only one that cannot drift away from them.
+ * `changesStudioPublishFlag` is checked by identity on purpose — it has its
+ * own suite, and an identity assertion is the only one that cannot drift away
+ * from it. `waitForJob` is the shared waiter called queue-aware, pinned by
+ * toolkit-wait-queue-aware.test.ts.
  *
  * Mocking convention mirrors `toolkit-jobs.test.ts` in this directory (partial
  * config mock; full-replace only the modules the members under test call).
@@ -86,7 +87,6 @@ import { WORKFLOW_ACCESS_COLS } from "../../workflow-route-access.js"
 import { canChangeWorkflowVisibility } from "../../workflow-access.js"
 import { changesStudioPublishFlag } from "../../studio-audience.js"
 import { requireScope } from "../../scopes.js"
-import { waitForJob } from "../../mcp/tools/_wait-for-job.js"
 import Fastify from "fastify"
 import { jobSubmissionColumns } from "../../job-submission-context.js"
 
@@ -380,8 +380,10 @@ describe("tk.jobs.readJobsOwnedBy", () => {
 describe("tk.jobs.waitForJob", () => {
   it("is the MCP layer's own waiter, not a second one", () => {
     // The backoff, the jitter, the abort signal and the held-job early return
-    // all live there; an identity assertion is the only one that cannot drift.
-    expect(tk.jobs.waitForJob).toBe(waitForJob)
+    // all live there. The toolkit only asks it to be queue-aware: that it
+    // calls exactly this waiter, with `queueAware: true`, is pinned in
+    // toolkit-wait-queue-aware.test.ts.
+    expect(typeof tk.jobs.waitForJob).toBe("function")
   })
 })
 

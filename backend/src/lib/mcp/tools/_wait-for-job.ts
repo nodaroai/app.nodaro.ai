@@ -16,12 +16,27 @@
  * caller's `signal` (`aborted`), and forgive ONE transient DB error before
  * answering `failed`. A held job (`pending_review`) returns immediately —
  * see below.
+ *
+ * Queue-aware waits (`queueAware`, the in-worker callers: the video director
+ * and the plugin toolkit's `tk.jobs.waitForJob`): the time the awaited job is
+ * seen `queued` — waiting for a concurrency slot — does not count against the
+ * timeout, up to the queue timeout's bound (`QueuedPollClock`), so the wait
+ * counts from the job's start (decided 2026-10-30: nothing fails for
+ * waiting). That time is also the caller's own in-handler wait, credited to
+ * the job it runs for (`creditCoordinatorWait`), so the caller's clocks leave
+ * it out too. Only for a caller running as a job (`waitsAsJob`): a request
+ * waiting inline — a plugin route — keeps its plain timeout. A job never
+ * seen `queued` waits exactly as before. The MCP
+ * `wait_for_job` tool keeps the plain wait: it has its own per-call ceiling
+ * and answers a still-queued job with its place in line.
  */
 import { supabase } from "../../supabase.js"
 import { redactPrivateJobOutput } from "../../public-job-data.js"
 import { isParkedJobStatus, TERMINAL_JOB_STATUSES } from "../../job-status.js"
 import { resolveOutputUrl } from "./_job-view.js"
 import type { ErrorHint } from "../../safety-block.js"
+import { QueuedPollClock } from "../../concurrency-lanes/queued-clock.js"
+import { creditCoordinatorWait, waitsAsJob } from "../../concurrency-lanes/coordinator-wait.js"
 
 /**
  * The most one `wait_for_job` call waits, in seconds. Below the 60 s default
@@ -46,6 +61,8 @@ interface WaitForJobOpts {
   timeoutMs?: number
   /** Stop waiting (status `aborted`) when this fires — the MCP request's own signal. */
   signal?: AbortSignal
+  /** Leave the time the job is seen `queued` out of `timeoutMs`, and credit it to the caller's job, when the caller runs as a job (see the module comment). Default false. */
+  queueAware?: boolean
 }
 
 interface WaitForJobResult {
@@ -98,6 +115,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult> {
   const timeoutMs = opts.timeoutMs ?? 120_000
   const deadline = Date.now() + timeoutMs
+  const queued = opts.queueAware && waitsAsJob() ? new QueuedPollClock(creditCoordinatorWait) : null
   let interval = WAIT_POLL_INITIAL_MS
   let dbErrors = 0
   let lastSeen: WaitForJobResult["lastSeen"]
@@ -128,6 +146,7 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
       }
 
       const status = (data.status as string) ?? "pending"
+      queued?.observe(status)
       const jobType = (data.job_type as string | null) ?? null
       lastJobType = jobType
       lastSeen = {
@@ -163,7 +182,7 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
       }
     }
 
-    const remaining = deadline - Date.now()
+    const remaining = deadline + (queued?.queuedMs ?? 0) - Date.now()
     if (remaining <= 0) break
     const jitter = 1 + (Math.random() * 2 - 1) * WAIT_POLL_JITTER
     await sleep(Math.min(remaining, Math.round(interval * jitter)), opts.signal)

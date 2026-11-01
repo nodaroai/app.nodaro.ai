@@ -224,13 +224,25 @@ export async function parkForLane(args: {
 }
 
 /**
- * The video and render workers' not-admitted handler (a `jobs` row; a worker
- * that gates executions or pipelines needs its own, naming its table): park
- * the job. A row that stopped waiting goes on to the pickup claim.
+ * The table a queue's waiting rows live in: a workflow execution (it stays
+ * `pending` while it waits), a pipeline (it stays `queued`), else a `jobs` row
+ * (it becomes `queued`) — the video, render and director queues.
+ */
+export function laneTableOfQueue(queue: LaneQueueName): LaneTable {
+  if (queue === "workflow-orchestration") return "workflow_executions"
+  if (queue === "pipeline-orchestration") return "pipelines"
+  return "jobs"
+}
+
+/**
+ * Every worker's not-admitted handler — one per process, so it names the
+ * table from the queue (laneTableOfQueue): park the job. A row that stopped
+ * waiting goes on to the pickup claim (a run: to the worker, which finds it
+ * started or ended).
  */
 export const parkRefusedJob: NotAdmittedHandler = async (args) => {
   try {
-    await parkForLane({ job: args.job, token: args.token, queue: args.queue, table: "jobs", rowId: args.row.id, wait: args.wait })
+    await parkForLane({ job: args.job, token: args.token, queue: args.queue, table: laneTableOfQueue(args.queue), rowId: args.row.id, wait: args.wait })
   } catch (err) {
     if (err instanceof DelayedError) return "parked"
     // Not pending or queued any more: its entry is withdrawn and the pickup

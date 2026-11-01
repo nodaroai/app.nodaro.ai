@@ -49,6 +49,12 @@ export interface ExecuteInlineGraphParams {
   readonly idempotencyKey?: string
   readonly mcpClient?: string | null
   /**
+   * The running execution whose use-case node started this run (the internal
+   * lane's `PARENT_EXECUTION_HEADER`, lib/concurrency-lanes/parent-execution.ts):
+   * carried onto the job, where it means "takes no run slot". Absent = top-level.
+   */
+  readonly parentExecutionId?: string
+  /**
    * The run's spend surface and app-run flag, as the route resolved them for
    * its own balance check and fee hold: the steps of the hidden run reserve
    * under the same rules (the component lane's precedent). Required, so a new
@@ -116,6 +122,8 @@ export async function executeInlineGraph(p: ExecuteInlineGraphParams): Promise<E
     ...(p.previewStopRule !== undefined ? { previewStopRule: p.previewStopRule } : {}),
     webFreeMode: p.webFreeMode,
     ...(p.appRun ? { appRun: true } : {}),
+    // Started by a node of a running run: no run slot of its own.
+    ...(p.parentExecutionId ? { parentExecutionId: p.parentExecutionId } : {}),
   }
   try {
     await orchestrationQueue.add("workflow-execution", jobData, { jobId: result.row.id })

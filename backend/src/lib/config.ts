@@ -359,7 +359,11 @@ export const envSchema = z.object({
    * "0 hours" stay distinguishable — see lib/reconcile/hold-expiry.ts.
    */
   JOB_HOLD_TTL_HOURS: z.string().default(""),
-  /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
+  /**
+   * Max nodes a single workflow execution can run concurrently while concurrency
+   * lanes are not enforced (default 6). Ignored once they are: the run then
+   * dispatches up to ORCHESTRATOR_DISPATCH_WIDTH and the user's lanes limit it.
+   */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
   /**
    * Concurrency lanes (lib/concurrency-lanes/). Community / Business: how many
@@ -376,7 +380,7 @@ export const envSchema = z.object({
   LANE_LIVE_WAIT_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
   /** Community / Business: the fallback of the lanes-enforced switch. Strict parse: only "true" or "1" enable it. */
   LANES_ENFORCED: z.string().optional().transform((v) => v === "true" || v === "1"),
-  /** Nodes one run may dispatch at once while lanes are enforced (the lanes then do the limiting). */
+  /** Nodes one run may dispatch at once while lanes are enforced — one level, its list fan-outs, its sub-workflows (the lanes then do the limiting). */
   ORCHESTRATOR_DISPATCH_WIDTH: z.coerce.number().int().min(1).max(500).default(50),
   /** Share of the video worker pool coordinator jobs may hold at once. */
   LANE_SERVER_COORDINATOR_SHARE: z.coerce.number().min(0.1).max(1).default(0.4),
