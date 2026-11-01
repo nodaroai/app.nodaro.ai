@@ -273,6 +273,14 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENE
   // audio-sync — the same shape: a SYNC local analysis (ffmpeg decode +
   // in-process correlation), own markJobCompleted with output_data.json.
   "audio-sync",
+  // The background scrapes (workers/handlers/background-scrape.ts): each runs
+  // its provider to the end in the handler and writes its own data
+  // output_data through markJobCompleted. They DO persist a provider_task_id
+  // (their Apify run, `apify-run`, or their relay's cloud job, `nodaro-cloud`
+  // — lib/background-scrape/scrape-run.ts), but only so their own handler can
+  // re-attach to it on a re-pick; no generic finalize can settle one (the plan
+  // it settles with lives in its worker payload, never on the row).
+  "web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape",
   // Every render (RENDER_NODE_TYPES; Apply EDL today) — a local-ffmpeg EDL
   // render (no provider_task_id; chunked with its OWN R2 checkpoint-resume,
   // all-or-nothing, own markJobCompleted). Recovery is the worker's, not the

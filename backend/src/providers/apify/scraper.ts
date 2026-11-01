@@ -1,16 +1,16 @@
 import { getApifyClient, sanitizeApifyError } from "./client.js"
 import { MissingProviderKeyError } from "../provider-keys.js"
 import { ACTORS, buildActorInput, extractActorOutput, type ActorArgs, type ActorOutput } from "./actors.js"
+import { startOrResumeActorRun, type ApifyRunHooks } from "./run.js"
 
-export async function runScraper(args: ActorArgs): Promise<ActorOutput> {
+/** `hooks`: save the run as it starts, or wait on one this job already started (run.ts). */
+export async function runScraper(args: ActorArgs, hooks: ApifyRunHooks = {}): Promise<ActorOutput> {
   const def = ACTORS[args.actor]
   const input = buildActorInput(args)
 
   try {
     const client = getApifyClient()
-    const run = await client
-      .actor(def.apifyActorId)
-      .call(input, { waitSecs: def.timeoutSecs })
+    const run = await startOrResumeActorRun(client, def.apifyActorId, input, {}, def.timeoutSecs, hooks)
     const { items } = await client
       .dataset((run as { defaultDatasetId: string }).defaultDatasetId)
       .listItems()

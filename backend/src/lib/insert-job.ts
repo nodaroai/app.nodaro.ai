@@ -323,8 +323,16 @@ export type SyncJobRow = Record<string, unknown> & { readonly input_data: Record
 
 /**
  * Insert for a SYNCHRONOUS route — one that works the job inside the request
- * and settles the row itself (the LLM text/JSON routes, the scrapes, the
- * sinks), so no worker ever picks it up.
+ * and settles the row itself (the LLM text/JSON routes, the sinks, a scrape
+ * held open for its result).
+ *
+ * The background scrapes (web-scrape and meta-ads-scrape answered with a job
+ * id, site-capture, instagram-scrape) insert through here too, then hand the
+ * job to the video worker (workers/handlers/background-scrape.ts): its pickup
+ * claim moves the row to `processing`, rewrites `started_at` to the pickup
+ * time and stamps `provider_kind: "pre-task"`, which stays until the scrape
+ * saves its provider run (lib/background-scrape/scrape-run.ts). `job_type`
+ * keeps its value — the pickup writes the job's BullMQ name, which is its type.
  *
  * A queued job gets `job_type` and `started_at` at worker pickup. A synchronous
  * one has no pickup, so unless the insert writes them they stay NULL for the

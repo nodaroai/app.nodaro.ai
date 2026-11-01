@@ -24,10 +24,28 @@ import { replicateRequestFailure } from "./failure-messages.js"
 // Built from the key IN FORCE and rebuilt when it changes (provider keys are
 // live: env, then the operator-supplied key from /setup) — a client
 // constructed once at import would keep a stale token after a paste.
+/**
+ * Whether a call of the SDK's transport creates a prediction (`predictions.create`,
+ * a model's or a deployment's predictions, `replicate.run`): those take a
+ * concurrency slot at the egress. Status reads, waits and cancels do not.
+ */
+export function createsReplicatePrediction(method: string, url: string): boolean {
+  if (method !== "POST") return false
+  let path: string
+  try {
+    path = new URL(url).pathname
+  } catch {
+    return false
+  }
+  return /^\/v1\/(?:predictions|(?:models|deployments)\/[^/]+\/[^/]+\/predictions)\/?$/.test(path)
+}
+
 export const replicate = liveProviderClient(
   // Inject the egress-decorated fetch so the SDK's own transport (predictions,
-  // wait, models.*) flows through the seam like every other provider call.
-  (auth) => new Replicate({ auth, fetch: egressSdkFetch("replicate") }),
+  // wait, models.*) flows through the seam like every other provider call —
+  // and so every prediction this client creates, whichever module calls it,
+  // takes its concurrency slot there (createsWork).
+  (auth) => new Replicate({ auth, fetch: egressSdkFetch("replicate", { createsWork: createsReplicatePrediction }) }),
   "REPLICATE_API_TOKEN",
   () => config.REPLICATE_API_TOKEN,
 )

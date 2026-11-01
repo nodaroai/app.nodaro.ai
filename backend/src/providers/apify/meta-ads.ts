@@ -1,4 +1,5 @@
 import { getApifyClient, sanitizeApifyError } from "./client.js"
+import { startOrResumeActorRun, type ApifyRunHooks } from "./run.js"
 import { MissingProviderKeyError } from "../provider-keys.js"
 import type { MetaAdsPlatform, MetaAdsScrapeMode, MetaAdsScrapePeriod, MetaAdsScrapeStatus } from "@nodaro/shared/social"
 
@@ -318,7 +319,8 @@ interface ActorRunLike {
  */
 export const META_ADS_ACTOR_MIN_CHARGED_RESULTS = 10
 
-export async function runMetaAdsScrape(args: MetaAdsScrapeArgs): Promise<MetaAdsScrapeOutput> {
+/** `hooks`: save the run as it starts, or wait on one this job already started (run.ts). */
+export async function runMetaAdsScrape(args: MetaAdsScrapeArgs, hooks: ApifyRunHooks = {}): Promise<MetaAdsScrapeOutput> {
   const input = buildMetaAdsActorInput(args)
   const sources = metaAdsSourceUrls(args).length
   // The platform's own ceilings, independent of our client-side wait. `timeout`
@@ -333,11 +335,11 @@ export async function runMetaAdsScrape(args: MetaAdsScrapeArgs): Promise<MetaAds
 
   try {
     const client = getApifyClient()
-    const run = (await client
-      .actor(META_ADS_ACTOR.apifyActorId)
-      .call(input, { waitSecs: META_ADS_ACTOR.timeoutSecs, timeout: META_ADS_ACTOR.timeoutSecs, maxItems })) as ActorRunLike
+    const run = (await startOrResumeActorRun(
+      client, META_ADS_ACTOR.apifyActorId, input, { timeout: META_ADS_ACTOR.timeoutSecs, maxItems }, META_ADS_ACTOR.timeoutSecs, hooks,
+    )) as ActorRunLike
 
-    // `.call()` resolves with the run in WHATEVER state it reached at
+    // The wait resolves with the run in WHATEVER state it reached at
     // waitSecs — it never throws on FAILED, and a still-RUNNING run keeps
     // billing us after we've given up. Abort it, then surface a timeout.
     if (run.status === "RUNNING" || run.status === "READY") {

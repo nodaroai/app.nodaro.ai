@@ -21,6 +21,7 @@
 import { supabase } from "./supabase.js"
 import { tryRemoveFromQueue } from "./queue.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
+import { BACKGROUND_SCRAPE_JOB_TYPES } from "./background-scrape/job-types.js"
 
 export type CancelOwnedJobResult =
   | { kind: "not_found" }
@@ -453,7 +454,11 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   }
 
   const inRecovery = ((job.reconcile_attempts as number | null) ?? 0) > 0
-  if (job.provider_task_id && !inRecovery) return { kind: "in_flight" }
+  // A background scrape stays cancellable while it runs, as it was in its
+  // route: it saves its provider run only to re-attach after an interruption,
+  // and its settle loses the completion to a cancel (the cancel refunds).
+  const cancellableWhileRunning = typeof input?.type === "string" && BACKGROUND_SCRAPE_JOB_TYPES.has(input.type)
+  if (job.provider_task_id && !inRecovery && !cancellableWhileRunning) return { kind: "in_flight" }
 
   // D10, BEFORE the flip: a billed metered hold is committed, not refunded. One
   // that cannot be committed yet stays with the reconcile sweep — the job is

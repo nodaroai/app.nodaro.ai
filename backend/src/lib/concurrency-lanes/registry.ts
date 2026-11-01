@@ -22,6 +22,7 @@
 // in the ffmpeg and provider runtimes), so the table is written out and the
 // guard test checks it against the maps.
 import { laneOf } from "../unit-descriptors.js"
+import { INSTAGRAM_SCRAPE_JOB_TYPE, META_ADS_SCRAPE_JOB_TYPE, SITE_CAPTURE_JOB_TYPE, WEB_SCRAPE_JOB_TYPE } from "../background-scrape/job-types.js"
 import { isLeafLane, type LeafLane } from "./leaf-lanes.js"
 import type { LaneClass, LaneQueueName } from "./types.js"
 
@@ -69,6 +70,9 @@ export const JOB_LANE_CLASSES: Readonly<Record<string, LaneClass>> = Object.free
     "generate-character", "generate-face", "generate-character-asset", "generate-object", "generate-object-asset",
     "generate-creature", "generate-creature-asset", "generate-location", "generate-location-asset",
     "generate-character-motion", "generate-location-motion", "generate-object-motion", "generate-creature-motion",
+    // The background scrapes (handlers/background-scrape.ts): the scrape, the
+    // site capture and the ad / post analysis all run under the one slot.
+    WEB_SCRAPE_JOB_TYPE, SITE_CAPTURE_JOB_TYPE, META_ADS_SCRAPE_JOB_TYPE, INSTAGRAM_SCRAPE_JOB_TYPE,
   ]),
   // Coordinators: the community relay of the nodaro.ai-exclusive nodes
   // (handlers/nodaro-exclusive-relay.ts) and surround continuation.

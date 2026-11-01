@@ -50,6 +50,7 @@ import { deleteMemory, listMemories } from "../copilot/memories.js"
 import { toDisplayMessages } from "../copilot/display.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { claudeLaneConfigured } from "../../lib/llm/anthropic-availability.js"
+import { runNotLimited } from "../../lib/concurrency-lanes/hold.js"
 
 /**
  * STRIP mode, deliberately — `z.object` and never `.strict()`.
@@ -473,7 +474,9 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         }),
       ],
     },
-    async (req, reply) => {
+    // The Copilot is not limited by the concurrency lanes (its own per-turn
+    // budget, and it starts no generations): its calls are counted, never gated.
+    async (req, reply) => runNotLimited("copilot", async () => {
       // Access and the kill switch were settled by `accessGate` above.
       const parsed = messageBody.safeParse(req.body)
       if (!parsed.success) {
@@ -683,7 +686,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         clearTimeout(hardStop)
         sse.close()
       }
-    },
+    }),
   )
 }
 

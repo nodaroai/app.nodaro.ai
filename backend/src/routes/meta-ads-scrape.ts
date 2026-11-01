@@ -2,61 +2,42 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-// Core-safe commit/refund (keyed by job id, `ee/` reached via dynamic import) —
-// keeps this route out of the core→ee allowlist that web-scrape still sits on.
-import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
-// The two job-status funnels (CAS-guarded against a mid-flight cancel) instead
-// of a direct jobs UPDATE — no service-role client in this file, and the
-// completion/failure invariants stay in one place.
-import { commitJobCredits, markJobCompleted } from "../workers/shared.js"
-import { markJobFailed } from "../lib/job-failure.js"
-import { baseCreditCostFor } from "../lib/credit-base-cost.js"
-import { runMetaAdsScrape, type MetaAd } from "../providers/apify/meta-ads.js"
 import { searchMetaAdvertisers } from "../providers/apify/meta-ads-advertisers.js"
 import { MissingProviderKeyError } from "../providers/provider-keys.js"
-import { classifyAndStoreMetaAdsMedia, metaAdsWithoutMedia } from "../lib/meta-ads-media.js"
-import { analyzeMetaAds } from "../lib/meta-ads-analysis.js"
 import { adCreativeAnalysisPlannedCall } from "../lib/ad-creative-analysis.js"
-import { LlmSpend } from "../lib/llm-billing.js"
-import { fixedPlusLlmSpendTracker, reserveFixedPlusLlmCalls, settleFixedPlusLlmCalls, settleFixedPlusLlmCallsAfterCancel, type FixedPlusLlmHold } from "../lib/llm-fixed-plus-calls.js"
-import {
-  LLM_FEATURE_DEFAULTS,
-  LLM_MODEL_IDS,
-  STRUCTURED_VISION_MODELS,
-} from "@nodaro/shared/llm-models"
+import { reserveFixedPlusLlmCalls, type FixedPlusLlmHold } from "../lib/llm-fixed-plus-calls.js"
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import {
   META_ADS_ADVERTISER_MAX_RESULTS,
-  META_ADS_ANALYSIS_FOCUS_MAX,
-  META_ADS_FORMATS,
-  META_ADS_PLATFORMS,
-  clampMetaAdsFeaturedIndex,
-  featuredMetaAdOutputs,
-  isFacebookPageUrl,
   metaAdsAdvertisersFrom,
-  metaAdsAnalysisCreditId,
   metaAdsAnalysisTierFrom,
-  META_ADS_SCRAPE_DEFAULT_COUNT,
-  META_ADS_SCRAPE_DEFAULT_COUNTRY,
   META_ADS_SCRAPE_MAX_COUNT,
   META_ADS_SCRAPE_MAX_QUERY_LENGTH,
   META_ADS_SCRAPE_MAX_SOURCES,
-  META_ADS_SCRAPE_NODE_TYPE,
-  META_ADS_SCRAPE_PERIODS,
-  META_ADS_SCRAPE_STATUSES,
   buildMetaAdsScrapeCreditId,
   resolveMetaAdsScrapeCreditId,
 } from "@nodaro/shared/social"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, wantsJobIdFirst } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { normalizeWebUrlInput } from "../lib/web-url-input.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { config, llmMeteredPricing } from "../lib/config.js"
 import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
-import { callCloudRoute, createCloudJob, waitForCloudJob } from "../providers/nodaro/client.js"
+import { callCloudRoute } from "../providers/nodaro/client.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import {
+  META_ADS_SCRAPE_JOB_TYPE,
+  metaAdsScrapeBody,
+  settleMetaAdsScrape,
+  type MetaAdsScrapeJobData,
+  type MetaAdsScrapePlan,
+  type ResolvedAdvertiser,
+} from "../lib/background-scrape/meta-ads.js"
+import { enqueueBackgroundScrape } from "../lib/background-scrape/enqueue.js"
+import { scrapeRunTracker } from "../lib/background-scrape/scrape-run.js"
 
-const ROUTE_PATH = "/v1/meta-ads-scrape"
 const ADVERTISERS_ROUTE_PATH = "/v1/meta-ads-scrape/advertisers"
 
 /** A name to look up; Meta's own search box floor is two characters. */
@@ -91,96 +72,6 @@ export function takeAdvertiserLookup(userId: string, now: () => number = Date.no
 export function _resetAdvertiserLookupMeterForTests(): void {
   lookupsToday.clear()
 }
-
-/**
- * No Apify token of its own + a live nodaro.ai connection: the connection
- * runs the scrape (billed to the connected account) and this route relays
- * the result. Mirrors web-scrape.
- *
- * The relay asks the cloud for the job id first and polls it: the cloud sits
- * behind the same ~100 s edge timeout a browser does. A cloud that predates
- * `respondAsync` ignores the flag and answers when the work is done — that
- * answer carries a `jobId` too, and the poll finds the job already terminal,
- * so a run UNDER the edge timeout reads the same way against both generations.
- * A longer one against such a cloud is cut off exactly as it always was — no
- * better, no worse. The cloud job's `output_data` is the shape this route
- * builds locally.
- */
-async function scrapeViaConnection(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const cloudJobId = await createCloudJob(ROUTE_PATH, { ...body, respondAsync: true })
-  const cloudJob = await waitForCloudJob(cloudJobId)
-  return (cloudJob.output_data as Record<string, unknown> | null) ?? {}
-}
-
-type ScrapeOutcome =
-  | { readonly ok: true; readonly result: Record<string, unknown> }
-  | { readonly ok: false; readonly status: number; readonly code: string; readonly message: string }
-
-/**
- * A Facebook PAGE address — scheme inferred like every other url field, then
- * pinned to facebook.com so the actor is never handed an arbitrary site. The
- * SAME predicate that admits a stored advertiser pick (packages/shared), so a
- * pick the card shows and the badge quotes can never be one Zod rejects.
- */
-const facebookPageUrl = z.preprocess(
-  normalizeWebUrlInput,
-  z.string().url().max(2048).refine(isFacebookPageUrl, { message: "Expected a Facebook Page URL (https://www.facebook.com/page-name)" }),
-)
-
-const countryCode = z.preprocess(
-  (value) => (typeof value === "string" ? value.trim().toUpperCase() : value),
-  z.string().regex(/^(ALL|[A-Z]{2})$/, "Expected a 2-letter country code or ALL").default(META_ADS_SCRAPE_DEFAULT_COUNTRY),
-)
-
-const commonFields = {
-  count: z.number().int().min(1).max(META_ADS_SCRAPE_MAX_COUNT).default(META_ADS_SCRAPE_DEFAULT_COUNT),
-  period: z.enum(META_ADS_SCRAPE_PERIODS).default("30d"),
-  activeStatus: z.enum(META_ADS_SCRAPE_STATUSES).default("active"),
-  countryCode,
-  /** Empty / every platform = no filter (the provider treats both the same). */
-  platforms: z.array(z.enum(META_ADS_PLATFORMS)).max(META_ADS_PLATFORMS.length).optional(),
-  /** Keep only ads whose primary creative has one of these formats (classified from its pixels); empty = all. May return fewer than `count`. */
-  formats: z.array(z.enum(META_ADS_FORMATS)).max(META_ADS_FORMATS.length).optional(),
-  /** Which returned ad feeds the typed text / image / video outputs (clamped). */
-  featuredIndex: z.number().int().min(0).optional(),
-  /** Copy the featured ad's video into the library too (only when its video output is wired — the expensive bytes). */
-  ingestVideo: z.boolean().optional(),
-  /** Copy EVERY returned ad's video into the library (the "copy all videos" setting — the expensive bytes, opt-in). */
-  ingestAllVideos: z.boolean().optional(),
-  /** Per-ad AI analysis (the "competitor ad analyst" pass): priced per requested ad by the model's tier, settled per ad analysed. */
-  analyze: z.boolean().optional(),
-  /** An image-capable structured-output model; absent = the feature default. */
-  analysisModel: z
-    .enum(LLM_MODEL_IDS as [string, ...string[]])
-    .refine((id) => STRUCTURED_VISION_MODEL_IDS.has(id), { message: "analysisModel must be an image-capable model with structured output" })
-    .optional(),
-  /** The user's optional analyst focus, appended to the fixed prompt. */
-  analysisFocus: z.string().trim().max(META_ADS_ANALYSIS_FOCUS_MAX).optional(),
-}
-
-const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
-
-/** The request owns 600 s; the actor may take 480 of them. Media work never starts past this point. */
-const MEDIA_DEADLINE_MS = 570_000
-
-const searchBody = z.object({
-  mode: z.literal("search"),
-  query: z.string().trim().min(1).max(META_ADS_SCRAPE_MAX_QUERY_LENGTH),
-  ...commonFields,
-})
-
-const pagesBody = z.object({
-  mode: z.literal("pages"),
-  // Either Page urls, advertiser names to resolve, or both — the combined
-  // count (1..MAX_SOURCES) is checked in the handler (a discriminated-union
-  // member must stay a bare object, so no cross-field refine here).
-  pageUrls: z.array(facebookPageUrl).max(META_ADS_SCRAPE_MAX_SOURCES).default([]),
-  advertiserNames: z.array(z.string().trim().min(2).max(META_ADS_SCRAPE_MAX_QUERY_LENGTH)).max(META_ADS_SCRAPE_MAX_SOURCES).optional(),
-  ...commonFields,
-})
-
-export const metaAdsScrapeBody = z.discriminatedUnion("mode", [searchBody, pagesBody])
-export type MetaAdsScrapeBody = z.infer<typeof metaAdsScrapeBody>
 
 export async function metaAdsScrapeRoutes(app: FastifyInstance) {
   // Advertiser lookup for the editor's "advertiser" mode: a name → the
@@ -232,7 +123,13 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
     // Guard reads the RAW body (pre-Zod) and only CHECKS affordability — a
     // malformed body is checked at the fixed mid tier and the 400 below fires
     // before any reservation is made.
-    preHandler: creditGuard((req) => resolveMetaAdsScrapeCreditId(req.body)),
+    preHandler: [
+      creditGuard((req) => resolveMetaAdsScrapeCreditId(req.body)),
+      // The lane last: a synchronous run waits for its slot before the handler
+      // resolves advertisers or reserves; its ad analysis runs under the same
+      // slot. A job-id-first request answers at once and takes none.
+      laneGuard(...syncRouteLane("/v1/meta-ads-scrape")),
+    ],
     config: { requestTimeout: 600_000 } as Record<string, unknown>,
   }, async (req, reply) => {
     extendSocketTimeout(req, reply, 600_000)
@@ -279,7 +176,7 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
     // heuristic: the first VERIFIED match, else the first (that is what tells
     // the real brand from a fan page).
     let resolvedPageUrls = body.mode === "pages" ? [...body.pageUrls] : []
-    let resolvedAdvertisers: Array<{ name: string; pageId: string; url: string }> = []
+    const resolvedAdvertisers: ResolvedAdvertiser[] = []
     if (advertiserNames.length > 0 && !viaCloud) {
       // Case-insensitive dedupe: a repeated name is one lookup and one source.
       const uniqueNames = [...new Map(advertiserNames.map((n) => [n.toLowerCase(), n])).values()]
@@ -326,7 +223,7 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
       force_private: extractForcePrivate(req.body) || undefined,
       user_id: userId,
       status: "pending",
-      input_data: { ...buildJobInputData(body, META_ADS_SCRAPE_NODE_TYPE), ...(analysisTier !== null ? { resolvedModel: analysisModel } : {}) },
+      input_data: { ...buildJobInputData(body, META_ADS_SCRAPE_JOB_TYPE), ...(analysisTier !== null ? { resolvedModel: analysisModel } : {}) },
     })
 
     if (jobError || !job) {
@@ -340,7 +237,6 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
     // relay, whose connected account runs and bills the analysis — the run
     // reserves its tier id exactly as before.
     const meteredAnalysis = analysisTier !== null && !viaCloud && llmMeteredPricing()
-    const analysisSpend = new LlmSpend()
     let analysisHold: FixedPlusLlmHold | undefined
     let usageLogId: string | undefined
     if (meteredAnalysis) {
@@ -364,163 +260,28 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
       if (reply.sent) return
       usageLogId = reservation?.usageLogId
     }
-    // Each analysis call is recorded as it returns (or fails) — every item is
-    // a billed call — and the running ledger lands in the job's server-only
-    // billing ledger (R32, never output_data) after each item, so a cancel mid-run commits what was already billed.
-    const tracker = analysisHold ? fixedPlusLlmSpendTracker(job.id, analysisHold.chargeId, analysisSpend) : undefined
 
-    /**
-     * Run the scrape and settle the job — the ONE body both reply modes share,
-     * so what is charged and what is stored cannot differ between them.
-     *
-     * Never throws: in the job-id-first mode nothing awaits it, and an escaping
-     * rejection there is an unhandled one. Mark-failed and the refund are
-     * themselves wrapped, so a failure inside them is logged, not thrown.
-     */
-    const runAndSettle = async (): Promise<ScrapeOutcome> => {
-      try {
-        // Local run scrapes the resolved Page urls (names already turned into
-        // urls above); cloud gets the raw body (names included) to resolve itself.
-        const scrapeArgs = body.mode === "pages" ? { ...body, pageUrls: resolvedPageUrls } : body
-        const scraped = viaCloud
-          ? await scrapeViaConnection(body as Record<string, unknown>)
-          : await runMetaAdsScrape(scrapeArgs)
-        // Cloud reports who it resolved; surface that instead of the local list.
-        const relayedResolved = (scraped as Record<string, unknown>).resolvedAdvertisers
-        if (viaCloud && Array.isArray(relayedResolved)) {
-          resolvedAdvertisers = relayedResolved as typeof resolvedAdvertisers
-        }
-
-        // Classify every creative's format, apply the format filter, and copy
-        // the kept creatives into the user's library (durable urls) — under
-        // the request deadline, never failing the paid scrape. A cloud relay
-        // already stored them on the connected account, so only classify.
-        const scrapedAds = (Array.isArray(scraped.json) ? scraped.json : []) as MetaAd[]
-        const featuredIndex = clampMetaAdsFeaturedIndex(body.featuredIndex, scrapedAds.length)
-        const media = await classifyAndStoreMetaAdsMedia(scrapedAds, {
-          userId,
-          jobId: job.id,
-          deadlineAt: startedAt + MEDIA_DEADLINE_MS,
-          storeImages: !viaCloud,
-          storeFeaturedVideoIndex: body.ingestVideo && !viaCloud ? featuredIndex : undefined,
-          storeAllVideos: body.ingestAllVideos === true && !viaCloud,
-          formats: body.formats,
-        }).catch((err: unknown) => {
-          // The media step degrades internally; this is the belt to its braces —
-          // a scrape the user already paid for never fails because the library
-          // copy did. Source urls go out instead (they expire; the UI says so).
-          req.log.warn({ err, jobId: job.id }, "[meta-ads-scrape] media step failed; returning the ads with their source urls")
-          return { ads: metaAdsWithoutMedia(scrapedAds), stats: { classified: 0, stored: 0, videosStored: 0, kept: scrapedAds.length, filteredOut: 0 } }
-        })
-        // Per-ad AI analysis, under what is left of the same deadline. A cloud
-        // relay already analysed on the connected account (its `analysis`
-        // stats ride along); locally each ad is one structured vision call.
-        const analyzed = analysisTier && !viaCloud
-          ? await analyzeMetaAds(media.ads, {
-            modelId: analysisModel,
-            focus: body.analysisFocus,
-            deadlineAt: startedAt + MEDIA_DEADLINE_MS,
-            ...(tracker ? { complete: tracker.complete } : {}),
-          })
-          : null
-        const ads = analyzed ? analyzed.ads : media.ads
-        const relayedAnalysis = (scraped as Record<string, unknown>).analysis
-        const analysisStats = analyzed
-          ? { model: analysisModel, ...analyzed.stats }
-          : viaCloud && relayedAnalysis && typeof relayedAnalysis === "object" ? relayedAnalysis : undefined
-        const result = {
-          json: ads,
-          mediaStorage: media.stats,
-          ...(analysisStats ? { analysis: analysisStats } : {}),
-          // Who each advertiser NAME resolved to, so a list-driven run shows
-          // which Page a name landed on.
-          ...(resolvedAdvertisers.length > 0 ? { resolvedAdvertisers } : {}),
-          // The featured ad's typed outputs ride on output_data so the
-          // orchestrator's NodeOutput carries them (see output-extractor).
-          ...featuredMetaAdOutputs(ads, featuredIndex),
-        }
-
-        // false = the user cancelled mid-flight and the cancel path already
-        // refunded — returning the data would be a free scrape.
-        // The last running-ledger write lands BEFORE the completion write.
-        await tracker?.flush()
-        const completed = await markJobCompleted(job.id, {
-          output_data: result,
-          ...(analyzed ? { provider_cost: analyzed.stats.providerCostUsd || null } : {}),
-        })
-        if (!completed) {
-          // Cancelled mid-run: the analyses it billed are charged, never refunded
-          // (D10) — the cancel kept the hold while a call was in flight, so the
-          // job settles it now that its calls have ended.
-          if (analysisHold) await settleFixedPlusLlmCallsAfterCancel(job.id)
-          req.log.info({ jobId: job.id }, "[meta-ads-scrape] job left pending before completion; skipping settlement")
-          return { ok: false, status: 409, code: "job_cancelled", message: "The job was cancelled before it completed." }
-        }
-
-        // The job IS completed and its result stored from here on, so a commit
-        // that fails must not fall into the catch below: `markJobFailed` would
-        // miss its CAS on a completed row, nothing would be refunded, and a held
-        // caller would get a 502 for ads that are sitting on the job. The
-        // reservation stays `reserved` and this line is what ops finds it by.
-        const settle = async (): Promise<void> => {
-          if (analysisHold) {
-            // Metered (B5), settled AFTER the completion write (a cancel that
-            // lands first is never charged): the scrape's fixed price plus what
-            // the analyses cost; the receipt writes credits_actual + billing.
-            await settleFixedPlusLlmCalls(job.id, analysisHold, analysisSpend, "charge")
-            return
-          }
-          if (!usageLogId) return
-          if (analyzed && analysisTier) {
-            // The reservation priced analysis per REQUESTED ad; settle per ad
-            // actually analysed (count-based metered commit: BASE credits in,
-            // the reservation's own margin re-applied, never above the reservation).
-            const [scrapeBase, perAd] = await Promise.all([
-              baseCreditCostFor(buildMetaAdsScrapeCreditId({ count: body.count, sources })),
-              baseCreditCostFor(metaAdsAnalysisCreditId(analysisTier)),
-            ])
-            await commitJobCredits(usageLogId, job.id, null, scrapeBase + perAd * analyzed.stats.analyzed, true)
-          } else {
-            await commitReservedCreditsForJob(job.id)
-          }
-        }
-        await settle().catch((commitErr: unknown) => {
-          req.log.error({ err: commitErr, jobId: job.id }, "[meta-ads-scrape] job completed but its reservation did not commit")
-        })
-
-        return { ok: true, result }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Scrape failed"
-        try {
-          // Refund only when WE flipped the row — a cancelled job was refunded by cancel.
-          await tracker?.flush()
-          const flipped = await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
-          if (flipped && analysisHold) {
-            // The scrape failed, so its fixed price is refunded; any analysis
-            // the provider already billed is charged (never refunded, D10).
-            await settleFixedPlusLlmCalls(job.id, analysisHold, analysisSpend, "refund")
-          } else if (flipped && usageLogId) await refundReservedCreditsForJob(job.id)
-          else if (!flipped && analysisHold) await settleFixedPlusLlmCallsAfterCancel(job.id)
-        } catch (failErr) {
-          req.log.error({ err: failErr, jobId: job.id }, "[meta-ads-scrape] failed to mark job failed / refund")
-        }
-        req.log.error({ err, jobId: job.id }, "[meta-ads-scrape] scrape failed")
-        return { ok: false, status: 502, code: "scrape_error", message }
-      }
+    // Everything the run needs, decided here from the validated body and
+    // server state: the same plan in both modes.
+    const plan: MetaAdsScrapePlan = {
+      body, viaCloud, resolvedPageUrls, resolvedAdvertisers, sources, analysisTier, analysisModel,
+      ...(analysisHold ? { analysisHold } : {}),
     }
 
-    // Job id first: the scrape, the media copy and the analysis run as detached
-    // work and the caller polls GET /v1/jobs/:id. A run that copies every video
-    // and analyses every ad outlasts the ~100 s edge timeout — held open, the
-    // browser is cut off with a 524 while the job finishes server-side and is
-    // charged. Durability is unchanged: the work was always in-process here.
+    // Job id first: the scrape, the media copy and the analysis run as the
+    // `meta-ads-scrape` video-worker job and the caller polls GET /v1/jobs/:id.
+    // A run that copies every video and analyses every ad outlasts the ~100 s
+    // edge timeout — held open, the browser is cut off with a 524 while the
+    // job finishes server-side and is charged. On the worker it survives a
+    // deploy, waits for its slot there, and its analysis runs under that slot.
     if (wantsJobIdFirst(req.body)) {
-      reply.send({ jobId: job.id, status: "pending" })
-      void runAndSettle()
-      return
+      const data: MetaAdsScrapeJobData = { ...plan, jobId: job.id, userId, billingContext: req.billingContext, usageLogId }
+      return enqueueBackgroundScrape(req, reply, META_ADS_SCRAPE_JOB_TYPE, { ...data })
     }
 
-    const outcome = await runAndSettle()
+    // Synchronous: the run happens in the request, under the slot its
+    // laneGuard took (the analysis included) — the same settle the worker job runs.
+    const outcome = await settleMetaAdsScrape({ ...plan, jobId: job.id, userId, usageLogId, startedAt, runs: scrapeRunTracker(job.id), log: req.log })
     if (!outcome.ok) {
       return reply.status(outcome.status).send({ error: { code: outcome.code, message: outcome.message } })
     }

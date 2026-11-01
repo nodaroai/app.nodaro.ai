@@ -14,7 +14,7 @@ import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
 import { applySiteCaptureFailure, applySiteCaptureResult, siteCaptureRunStartPatch } from "@/components/nodes/site-capture-run-state"
 import type { SiteCaptureNodeData, WorkflowNode } from "@/types/nodes"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
-import { guardedToast, pollScrapeJobOutput } from "./poll-job"
+import { guardedToast, pollScrapeJobOutput, SCRAPE_POLL_BUDGET_MS } from "./poll-job"
 import type { ExecutionContext } from "./types"
 
 /** Run Site Capture: returns its first still (the `image` pip's value), or "" when it has none. */
@@ -34,7 +34,7 @@ export async function executeSiteCapture(node: WorkflowNode, inputs: FrontendRes
   try {
     const started = await siteCapture({ url, maxStills: siteCaptureMaxStills(d.maxStills) })
     jobId = started.jobId
-    const output = await pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal })
+    const output = await pollScrapeJobOutput(jobId, node.id, { signal: ctx.signal, budgetMs: SCRAPE_POLL_BUDGET_MS })
     updateNodeData(node.id, scrapeResultPatch("site-capture", output, jobId) ?? applySiteCaptureResult(output))
     guardedToast.success(tx("nodeRun.siteCaptureCompleted"))
     return siteCaptureNodeOutputs(output).imageUrl ?? ""

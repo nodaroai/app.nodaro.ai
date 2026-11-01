@@ -57,11 +57,18 @@ vi.mock("../../providers/nodaro/client.js", () => ({
   createCloudJob: cloudMocks.createCloudJob,
   waitForCloudJob: cloudMocks.waitForCloudJob,
 }))
+// The video queue: the route enqueues the scrape's worker job, and this
+// stand-in runs the real handler at once, as the worker does with lanes off.
+vi.mock("../../lib/queue.js", async () => ({ videoQueue: (await import("./helpers/inline-scrape-worker.js")).inlineScrapeQueue }))
 vi.mock("../../lib/supabase.js", () => ({
   supabase: {
     from: () => ({
       insert: () => ({ select: () => ({ single: () => ({ data: { id: "job-1" }, error: null }) }) }),
-      update: () => ({ eq: () => ({ error: null }) }),
+      update: () => {
+        // The relay saves its cloud job (a CAS: .eq().is().in().select()); any other write awaits .eq().
+        const c: Record<string, unknown> = { eq: () => c, is: () => c, in: () => c, select: async () => ({ data: [{ id: "job-1" }], error: null }), then: (ok: (v: unknown) => unknown) => ok({ error: null }) }
+        return c
+      },
     }),
   },
 }))
@@ -101,7 +108,7 @@ describe("POST /v1/meta-ads-scrape", () => {
     expect(res.statusCode).toBe(200)
     expect(runMetaAdsScrape).toHaveBeenCalledWith({
       mode: "search", query: "running shoes", count: 20, period: "30d", activeStatus: "active", countryCode: "ALL",
-    })
+    }, expect.anything())
     // Featured-ad outputs (text / image / video) ride on the response — and
     // therefore on output_data — so the orchestrator's typed handles carry them.
     expect(res.json()).toEqual({
@@ -193,7 +200,7 @@ describe("POST /v1/meta-ads-scrape", () => {
       })
       expect(res.statusCode).toBe(200)
       expect(advertiserMocks.searchMetaAdvertisers).toHaveBeenCalledTimes(1)
-      expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ pageUrls: [NIKE.url] }))
+      expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ pageUrls: [NIKE.url] }), expect.anything())
     })
 
     it("resolves each name (verified-first), scrapes the resolved Pages, and reports who each name matched", async () => {
@@ -209,7 +216,7 @@ describe("POST /v1/meta-ads-scrape", () => {
         payload: { mode: "pages", advertiserNames: ["OpenArt AI", "Nike"], count: 30 },
       })
       expect(res.statusCode).toBe(200)
-      expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ pageUrls: [OPENART.url, NIKE.url] }))
+      expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ pageUrls: [OPENART.url, NIKE.url] }), expect.anything())
       expect(res.json().resolvedAdvertisers).toEqual([
         { name: "OpenArt AI", pageId: "615", url: OPENART.url },
         { name: "Nike", pageId: "150", url: NIKE.url },
@@ -278,7 +285,7 @@ describe("POST /v1/meta-ads-scrape", () => {
     expect(res.statusCode).toBe(200)
     expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({
       pageUrls: ["https://facebook.com/nike"], countryCode: "US", period: "7d", activeStatus: "all", count: 5,
-    }))
+    }), expect.anything())
   })
 
   it("passes a platform filter through and rejects an unknown platform", async () => {
@@ -290,7 +297,7 @@ describe("POST /v1/meta-ads-scrape", () => {
       payload: { mode: "search", query: "nike", platforms: ["INSTAGRAM", "THREADS"] },
     })
     expect(ok.statusCode).toBe(200)
-    expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ platforms: ["INSTAGRAM", "THREADS"] }))
+    expect(runMetaAdsScrape).toHaveBeenCalledWith(expect.objectContaining({ platforms: ["INSTAGRAM", "THREADS"] }), expect.anything())
     const bad = await app.inject({
       method: "POST", url: "/v1/meta-ads-scrape",
       payload: { mode: "search", query: "nike", platforms: ["TIKTOK"] },
@@ -350,8 +357,7 @@ describe("POST /v1/meta-ads-scrape", () => {
     // timeout a browser does.
     expect(cloudMocks.createCloudJob).toHaveBeenCalledWith(
       "/v1/meta-ads-scrape",
-      expect.objectContaining({ mode: "search", query: "nike", respondAsync: true }),
-    )
+      expect.objectContaining({ mode: "search", query: "nike", respondAsync: true }), { idempotencyKey: "scrape-relay:job-1" })
     expect(cloudMocks.waitForCloudJob).toHaveBeenCalledWith("cloud-job-9")
     expect(runMetaAdsScrape).not.toHaveBeenCalled()
     expect(res.json().jobId).toBe("job-1")

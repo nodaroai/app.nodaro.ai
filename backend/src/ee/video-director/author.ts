@@ -15,6 +15,8 @@
 import { shotSequenceBriefSchema, type ShotSequenceBrief } from "../../services/shot-sequence/brief-schema.js"
 import { llmComplete, type LlmRequest, type LlmResponse } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
+import { withConcurrencySlot } from "../../lib/concurrency-lanes/slot.js"
+import { primaryProviderOfLlm } from "../../lib/concurrency-lanes/provider-of.js"
 import { buildAuthorSystemPrompt, type VideoGenre } from "./prompt.js"
 import type { BrandTokens } from "@nodaro/prompts/presets"
 
@@ -243,7 +245,14 @@ export async function authorShotSequence(opts: {
   let lastError = ""
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const resp = await llmFn({ modelId: AUTHOR_MODEL, system, messages, maxTokens: 16000 })
+    const req: LlmRequest = { modelId: AUTHOR_MODEL, system, messages, maxTokens: 16000 }
+    // One llm slot per authoring call, whatever llmFn is: under the director's
+    // run hold it is taken at the front of the user's line, and the router's
+    // own slot (the default llmComplete) runs inside it, never a second.
+    const resp = await withConcurrencySlot(
+      { lane: "llm", provider: primaryProviderOfLlm(req), jobType: "video-director-author", model: AUTHOR_MODEL, coversNested: true },
+      () => llmFn(req),
+    )
     const result = tryParseAndValidate(resp.text)
 
     if (result.ok) return result.value

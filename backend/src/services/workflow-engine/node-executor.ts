@@ -1,4 +1,7 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
+import { SYNC_ROUTE_LANE_RULES } from "../../lib/concurrency-lanes/sync-route-lanes.js"
+import type { LeafLane } from "../../lib/concurrency-lanes/leaf-lanes.js"
+import { withSyncNodeSlot } from "./sync-node-slot.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../lib/speaker-view-plan.js"
 import { speakerFramesCreditOverride } from "../../lib/speaker-frames-plan.js"
@@ -228,6 +231,20 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = Object.fromEntries(
     const route = nodeRunRoute(type)
     if (!route) throw new Error(`SYNC_HTTP_NODES lists "${type}", which has no run route`)
     return [type, route]
+  }),
+)
+/**
+ * Node type → the lane its sync-HTTP route takes in the request: the route's
+ * own rule (lib/concurrency-lanes/sync-route-lanes.ts, which the route's
+ * laneGuard is built from), joined through SYNC_HTTP_ROUTES. Static, so the
+ * orchestrator process — which registers no route — reads the same table. A
+ * node listed here takes that slot before its hop (sync-node-slot.ts); a node
+ * not listed takes none (sync-node-lanes-totality.test.ts says why, per node).
+ */
+export const ROUTE_LANES: ReadonlyMap<string, LeafLane> = new Map(
+  Object.entries(SYNC_HTTP_ROUTES).flatMap(([type, url]): Array<[string, LeafLane]> => {
+    const rule = SYNC_ROUTE_LANE_RULES[url]
+    return rule ? [[type, rule.lane]] : []
   }),
 )
 
@@ -914,15 +931,19 @@ async function executeSyncHttpNode(
     headers["Idempotency-Key"] = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
   }
 
-  const response = await loopbackFetch(
-    url,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(NODE_TIMEOUT_MS),
-    },
-    { label: `Sync HTTP call to ${route}` },
+  // The route's slot is taken here, before the hop, and named in the request
+  // (sync-node-slot.ts). The node's own timeout starts only once it is held.
+  const response = await withSyncNodeSlot(node, ctx, route, { body, headers }, (laneHeaders) =>
+    loopbackFetch(
+      url,
+      {
+        method: "POST",
+        headers: { ...headers, ...laneHeaders },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(NODE_TIMEOUT_MS),
+      },
+      { label: `Sync HTTP call to ${route}` },
+    ),
   )
 
   if (!response.ok) {

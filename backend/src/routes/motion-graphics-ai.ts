@@ -29,6 +29,8 @@ import type { LlmRequest } from "../lib/llm/types.js"
 import { buildLottieRequest } from "../lib/lottie-request.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -74,6 +76,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
             )
           },
         }),
+        laneGuard(...syncRouteLane("/v1/motion-graphics/generate")),
       ],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },

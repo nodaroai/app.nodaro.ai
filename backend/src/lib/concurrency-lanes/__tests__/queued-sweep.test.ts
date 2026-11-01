@@ -293,6 +293,26 @@ describe("sweepLaneQueuedJobs — the queue timeout", () => {
     expect(res.swept).toBe(1)
   })
 
+  it("a background scrape that waits past the queue timeout is failed and refunded", async () => {
+    // Each of the four scrape job types, parked as its route enqueued it (its metered analysis hold, if any, refunded whole: no call ran).
+    for (const jobType of ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape"]) {
+      vi.mocked(refundJobCredits).mockClear()
+      const id = `scrape-${jobType}`
+      await gate.acquire({ meta: meta(id, { jobType }), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+      const r = parkedJob(id, { job_type: jobType, input_data: { type: jobType } }, 121 * MIN)
+      const parked = bullEntry("video-generation", `bull-${id}`, { jobId: id, userId: "U" }, "delayed")
+      payload("job", id, { name: jobType })
+
+      await sweepLaneQueuedJobs(result())
+
+      expect(r, jobType).toMatchObject({ status: "failed", error_hint: { kind: "queue-timeout", reason: "timeout", waitedMinutes: 121 } })
+      expect(refundJobCredits, jobType).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(refundJobCredits).mock.calls[0]!.slice(0, 2), jobType).toEqual([`log-${id}`, id])
+      expect(await gate.describeWait(id), jobType).toBeNull()
+      expect(parked.remove, jobType).toHaveBeenCalledTimes(1)
+    }
+  })
+
   it("a workspace job's timeout is recorded on the line it waited in, read before it leaves the line", async () => {
     const r = await gate.acquire({ meta: meta("job-w", { payer: "workspace:W" }), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
     expect(r.granted).toBe(true) // the workspace line's own slot

@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js"
 import { videoQueue } from "../queue.js"
+import { BACKGROUND_SCRAPE_JOB_TYPES } from "../background-scrape/job-types.js"
 import {
   STALE_THRESHOLD_MS,
   MIN_STALE_THRESHOLD_MS,
@@ -160,6 +161,15 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
       continue
     }
 
+    // A background scrape handed back to the queue by a worker's scrape cap
+    // (workers/worker-capacity.ts) waits there with its stamp ageing — waiting,
+    // not stalled. Spared while its BullMQ entry waits; a running one (`active`)
+    // still ages into the sweep, as any hung job does.
+    if (BACKGROUND_SCRAPE_JOB_TYPES.has(row.job_type ?? "") && await stillOnTheQueue(row.id, WAITING_BULL_STATES)) {
+      result.notStale++
+      continue
+    }
+
     const kind = row.provider_kind as ProviderKind | null
 
     try {
@@ -302,7 +312,7 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - NEVER_STARTED_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, user_id, provider_kind, reconcile_attempts, reconcile_last_error")
+    .select("id, user_id, job_type, provider_kind, reconcile_attempts, reconcile_last_error")
     .eq("status", "pending")
     .is("provider_call_started_at", null)
     .lt("created_at", cutoff)
@@ -319,6 +329,10 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
     // leave them in the queue, lib/access-blocks.ts); failing them here would
     // refund the credits and end the wait.
     if (await isUserQuietStopped((row.user_id as string | null) ?? null)) continue
+    // A background scrape waiting for a worker's scrape capacity stays
+    // `pending` on the queue (workers/worker-capacity.ts) — waiting, not
+    // orphaned — for as long as its BullMQ entry (keyed by the row's id) lives.
+    if (BACKGROUND_SCRAPE_JOB_TYPES.has((row.job_type as string | null) ?? "") && await stillOnTheQueue(row.id as string)) continue
     result.scanned++
     try {
       await sweepStaleSyncJob({
@@ -335,6 +349,25 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
       )
       result.errors++
     }
+  }
+}
+
+/** BullMQ states of a job waiting to start (not running). */
+const WAITING_BULL_STATES: ReadonlySet<string> = new Set(["waiting", "delayed", "prioritized"])
+
+/**
+ * Whether the video queue still holds the job enqueued under `jobId` (the
+ * background scrapes are enqueued with the row's id as their BullMQ id). A
+ * read that fails answers true: the row is looked at again next tick, never
+ * failed on a Redis hiccup.
+ */
+async function stillOnTheQueue(jobId: string, states: ReadonlySet<string> = LIVE_BULL_STATES): Promise<boolean> {
+  try {
+    const job = await videoQueue.getJob(jobId)
+    if (!job) return false
+    return states.has(await job.getState())
+  } catch {
+    return true
   }
 }
 

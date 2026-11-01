@@ -25,6 +25,7 @@ import { llmCompleteStructured } from "./llm-client.js"
 import { spendLlmStructuredCall } from "./meter-sync-llm.js"
 import { clearLlmBillingLedger, writeLlmBillingLedger, writeLlmBillingLedgerIfLive, type LlmBillingLedgerWrite } from "./llm-billing-ledger.js"
 import { JobCancelledError } from "./job-cancellation.js"
+import { supabase } from "./supabase.js"
 
 /** The reservation `reserveFixedPlusLlmCalls` made. */
 export interface FixedPlusLlmHold {
@@ -178,16 +179,30 @@ async function writeInterimBilling(jobId: string, chargeId: string, spend: LlmSp
 }
 
 /**
- * A fixed + calls job that found its row cancelled (its completion or failure
- * write lost its CAS): settle what its calls billed, once they have all ended
+ * A fixed + calls job whose completion or failure write lost its CAS: when its
+ * row was cancelled, settle what its calls billed, once they have all ended
  * (call it after `flush()`). The cancel kept the hold when a call was in
  * flight (`inFlight > 0`), or settled it already; this runs the cancel's own
  * after-flip rule (`settleMeteredHoldAfterFlip`): the billed calls charged at
  * their actual, the fixed part (never delivered) released; nothing billed →
  * refunded. Never throws.
+ *
+ * The row's status is read once first, and only a `cancelled` row is settled
+ * here. A CAS also loses to another attempt of the same job (a re-picked
+ * scrape) that completed or failed it; that attempt owns the settle, and its
+ * hold, still `reserved` until it commits, must not be settled as a cancel.
+ * A status that cannot be read settles nothing: a cancelled row's hold is
+ * left to the cancelled-hold sweep.
  */
 export async function settleFixedPlusLlmCallsAfterCancel(jobId: string): Promise<void> {
   try {
+    const { data, error } = await supabase.from("jobs").select("status").eq("id", jobId).maybeSingle()
+    if (error) throw new Error(`could not read the job's status: ${error.message}`)
+    const status = (data as { status?: unknown } | null)?.status
+    if (status !== "cancelled") {
+      console.info(`[llm-billing] job ${jobId}: its write lost to a ${String(status)} row, not a cancel — another attempt settles it`)
+      return
+    }
     const { settleMeteredHoldAfterFlip } = await import("./cancel-job.js")
     const verdict = await settleMeteredHoldAfterFlip(jobId)
     if (verdict === "refund") {

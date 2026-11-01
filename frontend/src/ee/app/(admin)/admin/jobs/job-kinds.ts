@@ -84,6 +84,8 @@ export const JOB_TYPE_KINDS: Readonly<Record<string, JobKind>> = {
   "scene-graph-ai": "text",
   "text-to-picker": "text",
   "video-director": "text",
+  // The director's authoring call (a lane label for its LLM slot).
+  "video-director-author": "text",
   // `prompt-wizard:${action}` (the AI prompt helper), one per action.
   "prompt-wizard:analyze": "text",
   "prompt-wizard:generate": "text",

@@ -261,6 +261,7 @@ describe("yt-dlp admission census", () => {
     "providers/video/trim-audio.ts": "library options (LIBRARY_LANES): merge only",
     "routes/youtube-audio.ts": "options object for runYtDlpOptions: audio mp3 encode (ENCODES audio, admitted, group-killed at the hold)",
     "workers/shared.ts": "options object for runYtDlpOptions: audio mp3 encode (ENCODES audio, admitted, group-killed at the hold)",
+    "lib/private-plugins/toolkit-lanes.ts": "names the toolkit member `extractAudio` (an ffmpeg member's concurrency lane), not a yt-dlp option: starts no yt-dlp run",
   }
   /** Flags (and their library spellings) only yt-dlp understands. */
   const YTDLP_FLAGS = /["']--(?:no-playlist|download-sections|extract-audio|merge-output-format|force-keyframes-at-cuts|dump-json|extractor-args|use-extractors|break-match-filters)["']|\b(?:noPlaylist|extractAudio|mergeOutputFormat|extractorArgs|downloadSections)\s*:/

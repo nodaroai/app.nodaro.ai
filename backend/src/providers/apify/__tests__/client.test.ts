@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { callBackedRuns } from "./fake-actor-run.js"
 
 // ApifyClient is called with `new`, so the mock must be a regular function (not
 // arrow) for Vitest to correctly attach `this` in the constructor role.
@@ -84,13 +85,16 @@ describe("runScraper", () => {
       items: [{ organicResults: [{ title: "T", url: "u", description: "d" }] }],
     })
     const mockActorCall = vi.fn().mockResolvedValue({ defaultDatasetId: "ds-1" })
-    const mockActor = vi.fn().mockReturnValue({ call: mockActorCall })
+    // `.call` is start + wait on the run: the double drives both from mockActorCall.
+    const runs = callBackedRuns((input, opts) => mockActorCall(input, opts))
+    const mockActor = vi.fn().mockReturnValue({ call: mockActorCall, start: runs.start })
     const mockDataset = vi.fn().mockReturnValue({ listItems: mockListItems })
 
     const { ApifyClient } = await import("apify-client")
     vi.mocked(ApifyClient).mockImplementation(function (this: any) {
       this.actor = mockActor
       this.dataset = mockDataset
+      this.run = (id: string) => runs.runOf(id)
     } as unknown as new () => InstanceType<typeof ApifyClient>)
 
     process.env.APIFY_API_TOKEN = "test-token"
@@ -111,6 +115,7 @@ describe("runScraper", () => {
   it("wraps SDK errors via sanitizeApifyError", async () => {
     const mockActor = vi.fn().mockReturnValue({
       call: vi.fn().mockRejectedValue(new Error("Rate limit exceeded (429)")),
+      start: vi.fn().mockRejectedValue(new Error("Rate limit exceeded (429)")),
     })
     const mockDataset = vi.fn()
     const { ApifyClient } = await import("apify-client")

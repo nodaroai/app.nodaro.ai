@@ -16,8 +16,10 @@ const isKnownModel = (id: string) => Object.hasOwn(MODEL_CATALOG, id) || LLM_MOD
 
 describe("resolvedModelOfJob", () => {
   it("every job whose provider follows from its payload has an entry (provider-of's ROUTED_JOBS)", () => {
-    // speech-to-video runs one fixed model that has no catalog id.
-    const missing = Object.keys(ROUTED_JOBS).filter((j) => j !== "speech-to-video" && !Object.hasOwn(RESOLVED_MODEL_OF_JOB, j))
+    // speech-to-video runs one fixed model that has no catalog id; web-scrape
+    // runs a scraping actor or an RSS fetch, no model at all.
+    const NO_MODEL = new Set(["speech-to-video", "web-scrape"])
+    const missing = Object.keys(ROUTED_JOBS).filter((j) => !NO_MODEL.has(j) && !Object.hasOwn(RESOLVED_MODEL_OF_JOB, j))
     expect(missing).toEqual([])
   })
 

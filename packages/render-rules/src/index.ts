@@ -854,3 +854,11 @@ export {
   topazImageSizeUnits,
   type TopazVideoHoldInput,
 } from "./topaz-pricing.js"
+// Background scrapes on the video worker: the worker's lock geometry, one attempt's bound, and a client's poll budget.
+export {
+  VIDEO_WORKER_LOCK_DURATION_MS,
+  VIDEO_WORKER_STALLED_INTERVAL_MS,
+  VIDEO_WORKER_MAX_STALLED_COUNT,
+  BACKGROUND_SCRAPE_ATTEMPT_MAX_MS,
+  BACKGROUND_SCRAPE_POLL_BUDGET_MS,
+} from "./background-scrape-timing"

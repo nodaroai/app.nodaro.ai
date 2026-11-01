@@ -45,6 +45,12 @@ export interface AcquireRequest {
   size: number
   mode: "fresh" | "front" | "readmit"
   leaseTtlMs: number
+  /**
+   * The id a lease this grants is created under (default: a fresh one) — for
+   * a caller that must name its lease before the gate answers. An entry that
+   * already holds a lease is answered with that one, whatever this says.
+   */
+  leaseId?: string
 }
 
 export type AcquireResult =
@@ -182,7 +188,7 @@ export class ConcurrencyGate {
 
   /** Take a slot, or enter (or stay in) the line. Idempotent per job id. */
   async acquire(req: AcquireRequest): Promise<AcquireResult> {
-    const r = await this.run("acquire", { meta: req.meta, size: req.size, mode: req.mode, leaseId: randomUUID(), leaseTtl: req.leaseTtlMs })
+    const r = await this.run("acquire", { meta: req.meta, size: req.size, mode: req.mode, leaseId: req.leaseId ?? randomUUID(), leaseTtl: req.leaseTtlMs })
     if (r.granted === true) {
       return {
         granted: true, leaseId: String(r.leaseId), overLimit: r.overLimit === true, wouldWait: present(r.wait) ? toWait(r.wait) : null, foreign: r.foreign === true,
@@ -210,6 +216,19 @@ export class ConcurrencyGate {
   async borrow(parentJobId: string): Promise<string | null> {
     const r = await this.run("borrow", { jobId: parentJobId })
     return typeof r.leaseId === "string" ? r.leaseId : null
+  }
+
+  /**
+   * Who the live lease `leaseId` belongs to: its line's user, payer and lane;
+   * null when it expired, was released or never existed. Reads only — never
+   * re-creates a lease (renew would).
+   */
+  async leaseLine(leaseId: string): Promise<{ userId: string; payer: PayerKey; lane: ConcurrencyLane } | null> {
+    const r = await this.run("leaseLine", { leaseId })
+    if (!present(r.lease)) return null
+    const { userId, payer, lane } = r.lease as { userId?: unknown; payer?: unknown; lane?: unknown }
+    if (typeof userId !== "string" || typeof payer !== "string" || typeof lane !== "string" || !userId || !payer || !lane) return null
+    return { userId, payer: payer as PayerKey, lane: lane as ConcurrencyLane }
   }
 
   /** Record a waiter of a server pool's share (no lane position; ordered among the pool's waiters). */

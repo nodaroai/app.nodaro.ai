@@ -12,7 +12,8 @@ import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
 import { llmPrimaryLane } from "../pricing/llm-cost.js"
 import { anthropicKeySet } from "./anthropic-availability.js"
-import { assertInlineVideoLane, claudeMustServeDirect, llmComplete } from "./router.js"
+import { assertInlineVideoLane, claudeMustServeDirect, llmComplete, llmSlot } from "./router.js"
+import { withConcurrencySlot } from "../concurrency-lanes/slot.js"
 import { directFallbackAllowed, kieFallback, serveFromFallback } from "./lane-fallback.js"
 import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
 import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
@@ -89,7 +90,26 @@ export async function llmCompleteStructured<T>(
   schema: ZodType<T>,
   opts?: { schemaName?: string; maxRetries?: number },
 ): Promise<StructuredLlmOutput<T>> {
-  return runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq))
+  // One `llm` slot for the whole call — every attempt, and the direct-tool
+  // backup that goes past the router — so its attempts run under it.
+  return inStructuredSlot(req, undefined, () =>
+    runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq)))
+}
+
+/**
+ * Run a structured call under one `llm` slot (lib/concurrency-lanes/slot.ts).
+ * A request whose model does not resolve runs as it is: its first attempt
+ * fails exactly as it always has.
+ */
+function inStructuredSlot<T>(req: LlmRequest, signal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+  let model: LlmModelDef
+  try {
+    model = resolveModel(req)
+  } catch {
+    return fn()
+  }
+  // Its attempts are part of it (coversNested); its signal ends only a wait.
+  return withConcurrencySlot({ ...llmSlot(req, model), coversNested: true, ...(signal ? { waitSignal: signal } : {}) }, fn)
 }
 
 export interface StructuredStreamOptions {
@@ -141,12 +161,13 @@ export async function llmStreamStructured<T>(
   assertInlineVideoLane(req, model)
   const onToolJson = opts?.onToolJson
   if (!onToolJson || !canStreamStructured(model, req)) {
-    return runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq))
+    return inStructuredSlot(req, opts?.signal, () => runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq)))
   }
   const forward = guardToolJsonCallback(model.id, onToolJson)
-  return runStructuredAttempts(req, schema, opts, (attemptReq, attempt) =>
+  // One `llm` slot for the whole call: the streamed attempt goes past the router.
+  return inStructuredSlot(req, opts?.signal, () => runStructuredAttempts(req, schema, opts, (attemptReq, attempt) =>
     attempt === 0 ? streamStructuredAttempt(model, attemptReq, forward, opts?.signal) : llmComplete(attemptReq),
-  )
+  ))
 }
 
 /** Tool output streams for an `anthropic-tool` model served by the direct SDK

@@ -5,7 +5,9 @@
 //   leaf         — the code already holds a slot (of `lane`): calls under it never acquire;
 //   run          — a top-level run (holds a run slot): its calls acquire at the front of their lane;
 //   coordinator  — a job that dispatches or makes several calls: same as run, without a run slot;
-//   not-limited  — work that is deliberately not limited (training, the Copilot): never acquires.
+//   not-limited  — work that is deliberately not limited (training, the Copilot): never acquires;
+//   request      — a request (request-scope.ts) that holds no slot yet: its first call takes one
+//                  for the rest of the request, and the scope then holds it as a leaf hold.
 //
 // A scope is one runHolding call. It also carries the job's in-handler wait
 // (time spent waiting inside the handler — for a slot of its own calls, or for
@@ -19,13 +21,13 @@
 // The gate is loaded lazily (instance.ts opens the queue's Redis connection),
 // so importing this module never connects.
 import { AsyncLocalStorage } from "node:async_hooks"
-import { LANE_LEASE_RENEW_MS, LANE_LEASE_TTL_MS, type ConcurrencyGate } from "./gate.js"
+import { LANE_LEASE_RENEW_MS, LANE_LEASE_TTL_MS, type ConcurrencyGate, type ReleaseOutcome } from "./gate.js"
 import { coveredMs, mergeWaitInterval, type WaitInterval } from "./queued-clock.js"
 import type { ConcurrencyLane, LaneEntryMeta, PayerKey } from "./types.js"
 
 export interface ConcurrencyHold {
-  role: "leaf" | "run" | "coordinator" | "not-limited"
-  /** The lane of the slot held: the leaf's lane, `run` for a run, null for a coordinator or not-limited scope. */
+  role: "leaf" | "run" | "coordinator" | "not-limited" | "request"
+  /** The lane of the slot held: the leaf's lane, `run` for a run, null for a coordinator, not-limited or request scope. */
   lane: ConcurrencyLane | null
   userId: string
   payer: PayerKey
@@ -44,6 +46,13 @@ export interface ConcurrencyHold {
    * run keeps its own, execution-wait.ts).
    */
   waitTable?: "jobs" | "pipelines"
+  /**
+   * Set on the pass-through hold a call that ran ungated under no hold gives
+   * its nested calls (slot.ts, `coversNested`): it only stops them from being
+   * counted again. It is no job's and no request's: nothing under it waits as
+   * a job (coordinator-wait.ts).
+   */
+  passThrough?: true
 }
 
 /** A job's in-handler wait, shared by every nested scope of the same job. */
@@ -54,13 +63,43 @@ export interface HeldWait {
   intervals: WaitInterval[]
 }
 
-/** One runHolding scope. Internal to the lane modules (slot.ts). */
+/**
+ * What a request scope (request-scope.ts) keeps about the slot it holds. The
+ * scope's hold reads `request` until the first slot is taken, then the leaf
+ * hold of that slot. Written by slot.ts; released by the request's wrapper.
+ */
+export interface RequestSlotState {
+  /** How long a live wait may last: the request's own transport, or none (the queue timeout) under a coordinator. */
+  readonly transport: "json" | "sse" | "mcp" | undefined
+  /** Ends a wait still in progress (the client went away); never a call already running. */
+  readonly signal: AbortSignal | undefined
+  /**
+   * The run or coordinator hold the request was injected under (a job's
+   * in-process request): its calls take a front slot of the job's line under
+   * the queue timeout, never the live limit. Undefined for a live request.
+   */
+  readonly coordinator: ConcurrencyHold | undefined
+  /**
+   * The slot the request holds, once one is taken; null for none (or one run
+   * ungated). `release` frees it (and stops its renewal) and never throws.
+   */
+  lease: { leaseId: string; lane: ConcurrencyLane; release(outcome: ReleaseOutcome): Promise<void> } | null
+  /** The take in progress, shared by every call that asks while it lasts. */
+  pending: Promise<void> | null
+  /** Set when the request's handler has settled: nothing new is taken, and a take still in progress is released. */
+  ended: boolean
+}
+
+/** One runHolding scope (or one request's scope). Internal to the lane modules (slot.ts, request-scope.ts). */
 export interface HoldScope {
-  readonly hold: ConcurrencyHold
+  /** The hold. A request scope's changes once: from its `request` hold to the leaf hold of the slot it takes. */
+  hold: ConcurrencyHold
   /** The job's in-handler wait, shared by every nested scope of the same job. */
   readonly wait: HeldWait
   /** Set when runHolding's `fn` has settled: nothing new is admitted under the scope. */
   closed: boolean
+  /** Present on a request scope only. */
+  readonly request?: RequestSlotState
 }
 
 const scopes = new AsyncLocalStorage<HoldScope>()
@@ -76,7 +115,8 @@ let instanceModule: Promise<InstanceModule> | null = null
 /** The process's gate, loaded on first use. For the lane modules. */
 export async function loadConcurrencyGate(): Promise<ConcurrencyGate> {
   if (!instanceModule) {
-    const p = import("./instance.js")
+    // Outside any hold scope: the gate and its connection live for the process.
+    const p = outsideHoldScopes(() => import("./instance.js"))
     instanceModule = p
     p.catch(() => {
       if (instanceModule === p) instanceModule = null
@@ -102,7 +142,7 @@ export function logLaneRateLimited(level: "warn" | "error", what: string, err: u
 }
 
 /** Free a lease without ever throwing (a lease nobody releases expires after its TTL). */
-export async function releaseQuietly(leaseId: string, outcome: "completed" | "failed"): Promise<void> {
+export async function releaseQuietly(leaseId: string, outcome: ReleaseOutcome): Promise<void> {
   try {
     await (await loadConcurrencyGate()).release(leaseId, outcome)
   } catch (err) {
@@ -117,14 +157,75 @@ export async function releaseQuietly(leaseId: string, outcome: "completed" | "fa
  * delayed by a wait in progress.
  */
 export async function runHolding<T>(hold: ConcurrencyHold, fn: () => Promise<T>): Promise<T> {
-  const parent = scopes.getStore()
-  const wait = parent && parent.hold.jobId === hold.jobId ? parent.wait : { ms: 0, intervals: [] }
-  const scope: HoldScope = { hold, wait, closed: false }
+  const scope = newHoldScope(hold)
   try {
     return await scopes.run(scope, fn)
   } finally {
     scope.closed = true
+    runCloseHooks(scope)
   }
+}
+
+/** What runs when a runHolding scope closes (onHoldScopeClose). */
+const closeHooks = new WeakMap<HoldScope, Set<() => void>>()
+
+/**
+ * Run `fn` once when `scope` (a runHolding scope) closes — at once when it
+ * already has. Returns a function that cancels it. For the lane modules: a
+ * slot taken ahead of its call (slot.ts) is released when its job ends even
+ * if nobody released it.
+ */
+export function onHoldScopeClose(scope: HoldScope, fn: () => void): () => void {
+  if (scope.closed) {
+    fn()
+    return () => {}
+  }
+  let hooks = closeHooks.get(scope)
+  if (!hooks) {
+    hooks = new Set()
+    closeHooks.set(scope, hooks)
+  }
+  const set = hooks
+  set.add(fn)
+  return () => { set.delete(fn) }
+}
+
+function runCloseHooks(scope: HoldScope): void {
+  const hooks = closeHooks.get(scope)
+  if (!hooks) return
+  closeHooks.delete(scope)
+  for (const fn of hooks) {
+    try {
+      fn()
+    } catch (err) {
+      warnLaneRateLimited("a scope-close hook threw", err)
+    }
+  }
+}
+
+/**
+ * A scope for `hold`, nested in the current one: a scope of the same job
+ * shares the job's in-handler wait. For request-scope.ts, which enters it
+ * with runInHoldScope and closes it itself.
+ */
+export function newHoldScope(hold: ConcurrencyHold, request?: RequestSlotState): HoldScope {
+  const parent = scopes.getStore()
+  const wait = parent && parent.hold.jobId === hold.jobId ? parent.wait : { ms: 0, intervals: [] }
+  return request ? { hold, wait, closed: false, request } : { hold, wait, closed: false }
+}
+
+/** Run `fn` (synchronously) with `scope` current. The caller closes the scope when its work has settled. */
+export function runInHoldScope<T>(scope: HoldScope, fn: () => T): T {
+  return scopes.run(scope, fn)
+}
+
+/**
+ * Run `fn` outside every hold scope — for what lives for the process (a
+ * connection, a subscriber) and must not carry the scope of the call that
+ * happened to start it.
+ */
+export function outsideHoldScopes<T>(fn: () => T): T {
+  return scopes.exit(fn)
 }
 
 /** The hold the current code runs under, if any. */

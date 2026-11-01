@@ -193,6 +193,28 @@ describe("tk.http.internalRequest owns how the body is read and who it acts as",
     }
   })
 
+  it("the lane headers never come from plugin code: a held slot or a coordinator is named only by the host", async () => {
+    const { LANE_LEASE_HEADER } = await import("../../concurrency-lanes/request-scope.js")
+    const { LANE_PARENT_HEADER } = await import("../../concurrency-lanes/lane-parent.js")
+    const a = await appWithForms()
+    try {
+      const res = await tk().http.internalRequest!(a, {
+        method: "POST", url: "/v1/echo", userId: CALLER, payload: { prompt: "p" },
+        headers: {
+          [LANE_LEASE_HEADER]: "00000000-0000-4000-8000-0000000000d1",
+          [LANE_PARENT_HEADER.toUpperCase()]: "director:00000000-0000-4000-8000-0000000000d2",
+          "idempotency-key": "k-2",
+        },
+      })
+      const got = JSON.parse(res.body) as { headers: Record<string, string> }
+      expect(got.headers[LANE_LEASE_HEADER]).toBeUndefined()
+      expect(got.headers[LANE_PARENT_HEADER]).toBeUndefined()
+      expect(got.headers["idempotency-key"]).toBe("k-2")
+    } finally {
+      await a.close()
+    }
+  })
+
   it("a header name that only becomes an owned name once lower-cased is dropped too", async () => {
     const a = await appWithForms()
     try {

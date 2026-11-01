@@ -277,6 +277,17 @@ export interface NodeOutput {
  */
 export type { NodeExecutionStatus }
 
+/** Where a node waiting for a concurrency slot stands in its line (`NodeExecutionState.queueInfo`). */
+export interface NodeQueueInfo {
+  lane: "provider" | "llm" | "local" | "run"
+  /** 1-based place in its line. */
+  position: number
+  limit: number
+  running: number
+  reason: "user_lane" | "provider_ceiling" | "server_busy"
+  waitedSeconds: number
+}
+
 export interface NodeExecutionState {
   status: NodeExecutionStatus
   nodeType?: string
@@ -323,6 +334,11 @@ export interface NodeExecutionState {
    *  while a child is legitimately under review. Cleared when the job leaves
    *  review. */
   awaitingReview?: boolean
+  /** Concurrency lanes: where a sync-HTTP node stands while it waits in the
+   *  orchestrator for its route's slot (sync-node-slot.ts) — set on every
+   *  check of the wait, cleared once the slot is granted (or the wait ends).
+   *  Absent whenever the node is not waiting. */
+  queueInfo?: NodeQueueInfo
   /** The run built this state from the node's saved data (or its own config)
    *  instead of running it: a source or parameter node, a node frozen with
    *  Skip, a node outside a partial run's subset. Only then may a reader fall
@@ -887,6 +903,10 @@ export interface OrchestratorContext {
    *  never move again. It is passed on EVERY tick, including the false one
    *  that clears it when the review resolves. */
   onJobProgress?: (jobId: string, progress: number, awaitingReview?: boolean) => void
+  /** Called while a sync-HTTP node waits for its route's concurrency slot
+   *  (sync-node-slot.ts): its place in line on every check, then null once
+   *  the wait is over. The orchestrator shows it as the node's `queueInfo`. */
+  onNodeQueued?: (nodeId: string, queue: NodeQueueInfo | null) => void
   /** The largest `pending_review` dwell time (ms) any child job of this
    *  execution has accumulated so far, written by `pollJobToCompletion`.
    *

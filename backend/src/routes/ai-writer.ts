@@ -8,7 +8,11 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { createSSEStream } from "../lib/sse.js"
+import { createSSEStream, type SSEController } from "../lib/sse.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { acquireStreamLane, restampProviderCallStart, type StreamLaneRefusal } from "../lib/concurrency-lanes/live-routes.js"
+import { primaryProviderOfLlm } from "../lib/concurrency-lanes/provider-of.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmRequest, LlmResponse } from "../lib/llm-client.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
@@ -95,6 +99,34 @@ async function failMetered(jobId: string, reserve: MeteredReserve, spend: LlmSpe
   }
 }
 
+/** A stream's llm slot: its provider, the job named on every queue event, and its call's start stamped again after a wait. */
+function streamLane(jobId: string, request: LlmRequest) {
+  return { lane: "llm" as const, provider: primaryProviderOfLlm(request), metadata: { jobId }, afterWait: restampProviderCallStart(jobId) }
+}
+
+/**
+ * End a stream that never got its llm slot. Nothing was sent, so the job fails
+ * and nothing is charged: a metered hold is settled as billing nothing, a tier
+ * reservation refunded. The stream ends with the refusal (`lane_busy`).
+ */
+async function endRefusedStream(
+  jobId: string,
+  billing: { reserve: MeteredReserve } | { usageLogId: string | undefined },
+  sse: SSEController,
+  refusal: StreamLaneRefusal,
+): Promise<void> {
+  let shown = refusal.message
+  if ("reserve" in billing) {
+    await recordMeteredJobOutput(jobId, { error: refusal.message }, null)
+    shown = await failMetered(jobId, billing.reserve, new LlmSpend(), true, refusal.error, refusal.message)
+  } else {
+    await markJobFailed(jobId, { error_message: refusal.message, extra: { output_data: { error: refusal.message } } })
+    if (billing.usageLogId) await CreditsService.refundCredits(billing.usageLogId)
+  }
+  sse.sendEvent({ type: "error", data: { code: refusal.code, message: shown } })
+  sse.close()
+}
+
 export async function aiWriterRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /v1/ai-writer/generate  (Legacy synchronous endpoint)
@@ -103,7 +135,11 @@ export async function aiWriterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-writer/generate",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck }),
+      // The lane last: the request waits for its slot before the handler reserves.
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck }),
+        laneGuard(...syncRouteLane("/v1/ai-writer/generate")),
+      ],
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -339,6 +375,9 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         // Open SSE stream -- from here on, errors go through the stream
         const sse = await createSSEStream(req, reply)
         sse.sendEvent({ type: "metadata", data: { jobId: job.id, model: llmModel, maxTokens } })
+        // The llm slot, told to the client while it waits; no slot ends the stream.
+        const laneRefusal = await acquireStreamLane(req, sse, streamLane(job.id, request))
+        if (laneRefusal) return endRefusedStream(job.id, { reserve }, sse, laneRefusal)
         // Abort upstream LLM stream when client disconnects
         const abortController = new AbortController()
         // The CLIENT's disconnect (the response closing early) stops the stream:
@@ -413,6 +452,10 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         type: "metadata",
         data: { jobId: job.id, model: llmModel, maxTokens },
       })
+
+      // The llm slot, told to the client while it waits; no slot ends the stream.
+      const laneRefusal = await acquireStreamLane(req, sse, streamLane(job.id, request))
+      if (laneRefusal) return endRefusedStream(job.id, { usageLogId }, sse, laneRefusal)
 
       // Abort upstream LLM stream when client disconnects
       const abortController = new AbortController()

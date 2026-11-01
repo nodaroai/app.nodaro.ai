@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify"
-import { resolveLlmCreditId } from "@nodaro/shared/llm-models"
+import { LLM_FEATURE_DEFAULTS, resolveLlmCreditId } from "@nodaro/shared/llm-models"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOfBody } from "../lib/concurrency-lanes/live-routes.js"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { supabase } from "../lib/supabase.js"
 import { insertSyncJob } from "../lib/insert-job.js"
@@ -61,15 +63,19 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
   app.post(
     "/v1/llm/structured",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body), {
-        // Metered (D1): pre-checked at the body's 1-attempt hold — its text
-        // only. Undefined under the rollback, so the tier row prices it as before.
-        computeCredits: (body) => {
-          const precheck = llmPrecheckBody(body)
-          const raw = (body ?? {}) as Record<string, unknown>
-          return precheck && llmPrecheckBaseCredits("llm-structured", precheck, llmTextChars(raw.system, raw.input, raw.jsonSchema))
-        },
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("llm-structured", req.body), {
+          // Metered (D1): pre-checked at the body's 1-attempt hold — its text
+          // only. Undefined under the rollback, so the tier row prices it as before.
+          computeCredits: (body) => {
+            const precheck = llmPrecheckBody(body)
+            const raw = (body ?? {}) as Record<string, unknown>
+            return precheck && llmPrecheckBaseCredits("llm-structured", precheck, llmTextChars(raw.system, raw.input, raw.jsonSchema))
+          },
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", { provider: llmProviderOfBody(LLM_FEATURE_DEFAULTS["llm-chat"]) }),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same code,

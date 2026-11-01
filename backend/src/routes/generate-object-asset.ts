@@ -20,6 +20,9 @@ import {
   buildObjectAssetDescriptionUserMessage,
 } from "../lib/object-asset-description.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
+import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
 
 const assetTypeEnum = z.enum(["angles", "materials", "variations", "custom"])
 
@@ -98,7 +101,17 @@ function buildVariantPrompt(
 }
 
 export async function generateObjectAssetRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-object-asset", { preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general)) }, async (req, reply) => {
+  app.post("/v1/generate-object-asset", {
+    preHandler: [
+      creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general)),
+      // The lane last, and only for a request that will make the LLM call.
+      laneGuard("llm", {
+        // The studio path drafts a missing description with an LLM before it reserves.
+        when: (req) => { const b = rawBodyOf(req); return b.attachToObjectId != null && !isFilledText(b.description) },
+        provider: () => llmProviderOf(ASSET_DESCRIPTION_MODEL),
+      }),
+    ],
+  }, async (req, reply) => {
     const parsed = generateObjectAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -182,7 +195,7 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
       if (!parsed.data.description && canonicalDescription) {
         try {
           const llm = await llmComplete({
-            modelId: "claude-sonnet-4.6",
+            modelId: ASSET_DESCRIPTION_MODEL,
             system: OBJECT_ASSET_DESCRIPTION_SYSTEM_PROMPT,
             messages: [
               {

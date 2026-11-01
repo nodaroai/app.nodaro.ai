@@ -82,3 +82,17 @@ describe("cloudError — the 402 fallback", () => {
     })
   })
 })
+
+describe("createCloudJob — the idempotency key", () => {
+  it("sends Idempotency-Key when given one, and answers the job the cloud names (a repeat answers the first job: { jobId, deduped })", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { jobId: "cloud-first", deduped: true }))
+    await expect(createCloudJob("/v1/web-scrape", { actor: "rss" }, { idempotencyKey: "job-1" })).resolves.toBe("cloud-first")
+    expect(mockFetch.mock.calls[0]![1]).toMatchObject({ method: "POST", headers: { "Idempotency-Key": "job-1" } })
+  })
+
+  it("sends no such header without one", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { jobId: "cloud-9" }))
+    await createCloudJob("/v1/generate-image", { prompt: "x" })
+    expect(mockFetch.mock.calls[0]![1]).not.toHaveProperty("headers")
+  })
+})

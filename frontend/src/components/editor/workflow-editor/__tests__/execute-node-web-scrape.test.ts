@@ -155,6 +155,8 @@ vi.mock("../poll-job", () => ({
   pollJobWithNodeUpdate: vi.fn(),
   setSuppressToasts: () => {},
   pollScrapeJobOutput: (...args: unknown[]) => mockPollScrapeJobOutput(...args),
+  // The budget a background scrape is polled for (its own value: ./poll-job, @nodaro/render-rules).
+  SCRAPE_POLL_BUDGET_MS: 46 * 60_000,
   guardedToast: {
     info: (...args: unknown[]) => mockToastInfo(...args),
     success: (...args: unknown[]) => mockToastSuccess(...args),
@@ -254,7 +256,7 @@ describe("executeNode: web-scrape", () => {
 
     expect(mockWebScrape).toHaveBeenCalledWith(expect.objectContaining({ actor: "content-crawler", url: "https://owalalife.com/", mode: "site" }))
     // Polled by job id, on the node, with the run's own Stop signal.
-    expect(mockPollScrapeJobOutput).toHaveBeenCalledWith("job-9", "node_1", { signal })
+    expect(mockPollScrapeJobOutput).toHaveBeenCalledWith("job-9", "node_1", { signal, budgetMs: 46 * 60_000 })
     expect(patches().at(-1)).toMatchObject({
       executionStatus: "completed",
       lastRunOutcome: "success",

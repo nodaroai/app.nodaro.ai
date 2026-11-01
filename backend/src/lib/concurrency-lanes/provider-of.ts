@@ -97,6 +97,11 @@ export const HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze
   "suno-add-vocals": "kie",
   "suno-convert-wav": "kie",
   "suno-upload-extend": "kie",
+  // The background scrapes (handlers/background-scrape.ts): an Apify actor,
+  // relayed to the connected cloud on a keyless install (counted as Apify).
+  "site-capture": "apify",
+  "meta-ads-scrape": "apify",
+  "instagram-scrape": "apify",
 })
 
 /** Provider-lane jobs that call no AI provider when they start, each with why — never ceilinged. */
@@ -111,6 +116,16 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v.leng
 /** The first provider in the capability's chain that serves `model`, as the router walks it. */
 function routedProvider(capability: ProviderCapability, model: string): string | null {
   return baseProviderChain(capability).find((id) => providerRegistry.supportsModel(id, capability, model)) ?? null
+}
+
+/**
+ * The provider the provider router serves `model` from for `capability`, as
+ * it walks the chain (routedProvider); null when none in this process lists
+ * it. For a caller that hands the router a model directly (the plugin
+ * toolkit's members).
+ */
+export function providerServingModel(capability: ProviderCapability, model: string): string | null {
+  return routedProvider(capability, model)
 }
 
 const route = (capability: ProviderCapability, model: string | undefined): string | null =>
@@ -192,6 +207,11 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   // tangoflux (Replicate) is reachable only from a stale payload; elevenlabs-sfx is the default.
   "text-to-audio": (d) => (str(d.provider) === "tangoflux" ? "replicate" : "elevenlabs"),
   "transcribe": (d) => ((str(d.provider) ?? DEFAULT_TRANSCRIBE_PROVIDER) === "elevenlabs-stt" ? "elevenlabs" : "replicate"),
+  // An RSS feed is a plain fetch on this server; every other actor is Apify's.
+  "web-scrape": (d) => {
+    const body = d.body !== null && typeof d.body === "object" ? (d.body as Data) : {}
+    return body.actor === "rss" ? null : "apify"
+  },
 })
 
 const LOCAL_QUEUES = ["video-generation", "video-render"] as const

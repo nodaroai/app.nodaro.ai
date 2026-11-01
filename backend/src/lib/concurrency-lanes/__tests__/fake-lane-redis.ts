@@ -523,6 +523,15 @@ const borrow: Body = (x, req) => {
   return x.reply({ leaseId: lid && x.hget(x.lsk(lid), "lane") !== "run" ? lid : null })
 }
 
+const leaseLine: Body = (x, req) => {
+  x.purge()
+  x.settle()
+  const lid = String(req.leaseId)
+  const k = x.lsk(lid)
+  const live = x.r.zscore(`${x.P}leases`, lid) !== null && x.r.exists(k)
+  return x.reply({ lease: live ? { userId: x.hget(k, "user") ?? "", payer: x.hget(k, "payer") ?? "", lane: x.hget(k, "lane") ?? "" } : null })
+}
+
 const serverWait: Body = (x, req) => {
   x.purge()
   const m = req.meta as Meta
@@ -747,7 +756,7 @@ const userEntries: Body = (x, req) => {
   return x.reply({ entries: out })
 }
 
-const BODIES: Record<LaneGateScriptName, Body> = { acquire, renew, release, borrow, serverWait, withdraw, describe, hasReservation, allWaiters, heads, setEnforced, setProviderCeilings, isEnforced, snapshot, userEntries }
+const BODIES: Record<LaneGateScriptName, Body> = { acquire, renew, release, borrow, leaseLine, serverWait, withdraw, describe, hasReservation, allWaiters, heads, setEnforced, setProviderCeilings, isEnforced, snapshot, userEntries }
 const BY_SOURCE = new Map<string, Body>(Object.entries(LANE_GATE_SCRIPTS).map(([name, src]) => [src, BODIES[name as LaneGateScriptName]]))
 
 export interface FakeLaneClient {

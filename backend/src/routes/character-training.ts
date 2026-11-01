@@ -42,6 +42,7 @@ import {
   deleteCharacterLora,
   characterModelDestination,
 } from "../providers/replicate/training.js"
+import { runNotLimited } from "../lib/concurrency-lanes/hold.js"
 
 const idParams = z.object({ id: z.string().uuid() })
 // Optional curation body: the LoRA page sends the subset of candidate image URLs
@@ -207,11 +208,13 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
 
         // Step 5 — derive trigger word + dispatch.
         const triggerWord = buildTriggerWord(character.name)
-        const { trainingId } = await createCharacterTraining({
+        // LoRA training is deliberately not limited by the concurrency lanes:
+        // counted, never gated (lib/concurrency-lanes/hold.ts runNotLimited).
+        const { trainingId } = await runNotLimited("training", () => createCharacterTraining({
           characterId,
           zipUrl,
           triggerWord,
-        })
+        }))
 
         // Persist replicate id IMMEDIATELY — close the webhook-before-update race window.
         await supabase

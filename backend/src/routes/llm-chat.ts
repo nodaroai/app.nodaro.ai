@@ -9,7 +9,11 @@ import { KEYED_CHAT_COLUMNS, answerKeyedChat, claimKeyedChatCall, keyedChatCallO
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { createSSEStream } from "../lib/sse.js"
+import { createSSEStream, type SSEController } from "../lib/sse.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { acquireStreamLane, restampProviderCallStart, type StreamLaneRefusal } from "../lib/concurrency-lanes/live-routes.js"
+import { primaryProviderOfLlm } from "../lib/concurrency-lanes/provider-of.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock, LlmRequest, LlmResponse } from "../lib/llm-client.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
@@ -136,6 +140,34 @@ async function failMetered(jobId: string, reserve: MeteredReserve, spend: LlmSpe
   }
 }
 
+/** A stream's llm slot: its provider, the job named on every queue event, and its call's start stamped again after a wait. */
+function streamLane(jobId: string, request: LlmRequest) {
+  return { lane: "llm" as const, provider: primaryProviderOfLlm(request), metadata: { jobId }, afterWait: restampProviderCallStart(jobId) }
+}
+
+/**
+ * End a stream that never got its llm slot. Nothing was sent, so the job fails
+ * and nothing is charged: a metered hold is settled as billing nothing, a tier
+ * reservation refunded. The stream ends with the refusal (`lane_busy`).
+ */
+async function endRefusedStream(
+  jobId: string,
+  billing: { reserve: MeteredReserve } | { usageLogId: string | undefined },
+  sse: SSEController,
+  refusal: StreamLaneRefusal,
+): Promise<void> {
+  let shown = refusal.message
+  if ("reserve" in billing) {
+    await recordMeteredJobOutput(jobId, { error: refusal.message }, null)
+    shown = await failMetered(jobId, billing.reserve, new LlmSpend(), true, refusal.error, refusal.message)
+  } else {
+    await markJobFailed(jobId, { error_message: refusal.message, extra: { output_data: { error: refusal.message } } })
+    if (billing.usageLogId) await CreditsService.refundCredits(billing.usageLogId)
+  }
+  sse.sendEvent({ type: "error", data: { code: refusal.code, message: shown } })
+  sse.close()
+}
+
 export async function llmChatRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /v1/llm-chat/generate  (Synchronous — used by backend orchestrator)
@@ -145,10 +177,12 @@ export async function llmChatRoutes(app: FastifyInstance) {
     "/v1/llm-chat/generate",
     {
       // A plugin's keyed child call is answered from its key's row before the
-      // guard checks or holds anything (`lib/llm-chat-keyed.ts`).
+      // guard checks or holds anything (`lib/llm-chat-keyed.ts`). The lane
+      // last: the request waits for its slot before the handler reserves.
       preHandler: [
         claimKeyedChatCall,
         creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck }),
+        laneGuard(...syncRouteLane("/v1/llm-chat/generate")),
       ],
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
@@ -423,6 +457,9 @@ export async function llmChatRoutes(app: FastifyInstance) {
         if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
         const sse = await createSSEStream(req, reply)
         sse.sendEvent({ type: "metadata", data: { jobId: job.id, model: llmModel, maxTokens } })
+        // The llm slot, told to the client while it waits; no slot ends the stream.
+        const laneRefusal = await acquireStreamLane(req, sse, streamLane(job.id, request))
+        if (laneRefusal) return endRefusedStream(job.id, { reserve }, sse, laneRefusal)
         const abortController = new AbortController()
         // The CLIENT's disconnect (the response closing early) stops the stream:
         // charged its estimated usage (D2), or refunded if not yet dispatched.
@@ -488,6 +525,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
         type: "metadata",
         data: { jobId: job.id, model: llmModel, maxTokens },
       })
+
+      // The llm slot, told to the client while it waits; no slot ends the stream.
+      const laneRefusal = await acquireStreamLane(req, sse, streamLane(job.id, request))
+      if (laneRefusal) return endRefusedStream(job.id, { usageLogId }, sse, laneRefusal)
 
       const abortController = new AbortController()
       req.raw.once("close", () => abortController.abort())

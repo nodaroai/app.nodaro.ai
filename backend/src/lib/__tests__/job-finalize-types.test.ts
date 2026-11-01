@@ -102,9 +102,11 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // analysis that writes its own completion, like audio-sync) to 67, and
   // Mask Erase (local ffmpeg on a mask, completeFfmpegVideoJob) to 68, and
   // Video Face Mesh (local drawing, its own markJobCompleted) to 69, and
-  // Mask Outline (local drawing, its own markJobCompleted) to 70.
-  it("has exactly 70 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(70)
+  // Mask Outline (local drawing, its own markJobCompleted) to 70, and the
+  // four background scrapes (web-scrape, site-capture, meta-ads-scrape,
+  // instagram-scrape: run to the end in the handler, own markJobCompleted) to 74.
+  it("has exactly 74 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(74)
   })
 
   it("denies generate-script and no other entity handler key", () => {

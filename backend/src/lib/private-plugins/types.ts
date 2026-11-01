@@ -3025,7 +3025,12 @@ export interface PluginLlmSideHoldToolkit {
   /**
    * Reserve a side hold for job `jobId` (live, owned by `userId`), paid by the
    * job's payer. `key` (unique per job, e.g. `take:3`) makes it idempotent.
-   * A refusal is an answer, never a throw.
+   * A refusal is an answer, never a throw. Before reserving, the host takes
+   * the reading's concurrency slot (its `llm` lane), which a coordinator job
+   * may wait for; a wait that ends throws the lane's error exactly as any
+   * toolkit call would (a queue timeout, the job's cancel), and no hold is
+   * reserved. The reading's `llm.completeStructuredMetered` then runs in that
+   * slot, which the hold's settle frees. Never thrown while the lanes are off.
    */
   reserve(args: {
     jobId: string

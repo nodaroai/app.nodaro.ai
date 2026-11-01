@@ -32,6 +32,7 @@ import { readExecutionWorkerRow, runUnderRunAdmission } from "../lib/concurrency
 import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
 import { serverShare } from "../lib/concurrency-lanes/server-share.js"
 import { lanesEnforced } from "../lib/concurrency-lanes/sizes.js"
+import { nodeQueueReporter } from "./node-queue-reporter.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
@@ -1342,6 +1343,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         nodeId,
       })
     }
+
+    // A sync-HTTP node waiting in the orchestrator for its route's concurrency
+    // slot: its `queueInfo`, the row writes and the run's queued time
+    // (node-queue-reporter.ts).
+    ctx.onNodeQueued = nodeQueueReporter({
+      nodeStates,
+      persistNodeStates: () => updateExecution(executionId, { node_states: nodeStates }),
+      noteLaneWait,
+      emit: (nodeId) => emitExecutionEvent({ type: "node:updated", executionId, nodeStates: { ...nodeStates }, nodeId }),
+    })
 
     // 3. Inject source node outputs + pre-complete nodes outside the subset
     //    Also handle skipped/frozen nodes — they keep their saved output

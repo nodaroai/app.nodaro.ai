@@ -19,6 +19,9 @@ import {
   buildCreatureAssetDescriptionUserMessage,
 } from "../lib/creature-asset-description.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
+import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
 
 // Creature asset types (mirrors object's angles/materials/variations/custom
 // with `materials`→`poses` per the Creature delta map). `custom` carries a
@@ -123,7 +126,17 @@ function buildVariantPrompt(
 }
 
 export async function generateCreatureAssetRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-creature-asset", { preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)) }, async (req, reply) => {
+  app.post("/v1/generate-creature-asset", {
+    preHandler: [
+      creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)),
+      // The lane last, and only for a request that will make the LLM call.
+      laneGuard("llm", {
+        // The studio path drafts a missing description with an LLM before it reserves.
+        when: (req) => { const b = rawBodyOf(req); return b.attachToCreatureId != null && !isFilledText(b.description) },
+        provider: () => llmProviderOf(ASSET_DESCRIPTION_MODEL),
+      }),
+    ],
+  }, async (req, reply) => {
     const parsed = generateCreatureAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -207,7 +220,7 @@ export async function generateCreatureAssetRoutes(app: FastifyInstance) {
       if (!parsed.data.description && canonicalDescription) {
         try {
           const llm = await llmComplete({
-            modelId: "claude-sonnet-4.6",
+            modelId: ASSET_DESCRIPTION_MODEL,
             system: CREATURE_ASSET_DESCRIPTION_SYSTEM_PROMPT,
             messages: [
               {

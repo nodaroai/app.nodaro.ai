@@ -40,6 +40,7 @@ import type { SiteCaptureRun } from "../../providers/apify/site-capture.js"
 const CTX = { userId: "u1", jobId: "job-1", pageUrl: "https://example.com/" }
 const section = (order: number, category: "hero" | "feature" | "pricing" | "faq") => ({ order, label: `S${order}`, category, kind: category === "faq" ? "filler" as const : "key" as const, rect: { x: 0, y: order * 1000, width: 412, height: 600 }, text: "Pro $12 per month", stillIndex: order < 3 ? order : null })
 const RUN: SiteCaptureRun = {
+  deleteStorages: async () => undefined,
   providerRunId: "run-1",
   finalUrl: "https://www.example.com/",
   title: "Example",

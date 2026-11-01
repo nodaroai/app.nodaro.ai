@@ -23,6 +23,8 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOfBody } from "../lib/concurrency-lanes/live-routes.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -286,7 +288,11 @@ export async function promptHelperRoutes(app: FastifyInstance) {
   app.post(
     "/v1/prompt-helper/wizard",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("prompt-helper", req.body), { computeCredits: promptHelperPrecheck }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("prompt-helper", req.body), { computeCredits: promptHelperPrecheck }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", { provider: llmProviderOfBody(LLM_FEATURE_DEFAULTS["prompt-helper"]) }),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same

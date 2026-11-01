@@ -1,4 +1,5 @@
 import { getApifyClient, sanitizeApifyError } from "./client.js"
+import { startOrResumeActorRun, type ApifyRunHooks } from "./run.js"
 import { MissingProviderKeyError } from "../provider-keys.js"
 import {
   INSTAGRAM_SCRAPE_MAX_COUNT,
@@ -234,16 +235,17 @@ interface ActorRunLike {
   defaultDatasetId: string
 }
 
-export async function runInstagramScrape(args: InstagramScrapeArgs): Promise<InstagramScrapeOutput> {
+/** `hooks`: save the run as it starts, or wait on one this job already started (run.ts). */
+export async function runInstagramScrape(args: InstagramScrapeArgs, hooks: ApifyRunHooks = {}): Promise<InstagramScrapeOutput> {
   const input = buildInstagramActorInput(args)
   const sources = args.targets.length
   const perSource = Math.min(instagramRequestedCount(args.mode, args.count), INSTAGRAM_SCRAPE_MAX_COUNT)
   const maxItems = perSource * Math.max(1, sources)
   try {
     const client = getApifyClient()
-    const run = (await client
-      .actor(INSTAGRAM_ACTOR.apifyActorId)
-      .call(input, { waitSecs: INSTAGRAM_ACTOR.timeoutSecs, timeout: INSTAGRAM_ACTOR.timeoutSecs, maxItems })) as ActorRunLike
+    const run = (await startOrResumeActorRun(
+      client, INSTAGRAM_ACTOR.apifyActorId, input, { timeout: INSTAGRAM_ACTOR.timeoutSecs, maxItems }, INSTAGRAM_ACTOR.timeoutSecs, hooks,
+    )) as ActorRunLike
 
     if (run.status === "RUNNING" || run.status === "READY") {
       if (run.id) {

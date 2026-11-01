@@ -14,6 +14,7 @@ import { isStorageConfigured } from "../storage.js"
 import { deleteKeyRecordingFailure } from "../storage-delete.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
+import { FFMPEG_MEMBER_LANES, LLM_MEMBER_LANES, MEDIA_MEMBER_LANES, PROVIDER_MEMBER_LANES, withMemberSlots, withSideHoldSlot } from "./toolkit-lanes.js"
 import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
@@ -147,6 +148,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify"
 import { type LlmReasoningEffort, getLlmModel } from "@nodaro/shared/llm-models"
 import { ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared/entities"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
+import { LANE_LEASE_HEADER } from "../concurrency-lanes/request-scope.js"
+import { LANE_PARENT_HEADER } from "../concurrency-lanes/lane-parent.js"
 import { DEFAULT_SUNO_MODEL, billsReferenceVideoSeconds } from "@nodaro/shared/models"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
 import { writeCompatible } from "../compatible-workflow-writes.js"
@@ -165,6 +168,7 @@ import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
 import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
+import type { PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -1471,8 +1475,13 @@ export function pinPayloadToCaller(payload: object, userId: string): object {
 /** Bodies that are not JSON (they would serialize to `{}`), refused like a string. */
 const NON_JSON_BODY_TAGS: ReadonlySet<string> = new Set(["[object FormData]", "[object URLSearchParams]", "[object Blob]", "[object File]"])
 
+/** A header name as a literal piece of a pattern. */
+const literalHeader = (name: string): string => name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+// The lane headers name a slot a caller holds or a coordinator a child belongs
+// to: only the host's own internal callers set them, never plugin code.
 const HOST_OWNED_HEADER = new RegExp(
-  `^(x-internal-.*|x-app-run|x-web-free-mode|${WORKSPACE_HEADER_LOWER}|authorization|cookie|content-type|content-length|host)$`,
+  `^(x-internal-.*|x-app-run|x-web-free-mode|${WORKSPACE_HEADER_LOWER}|${literalHeader(LANE_LEASE_HEADER)}|${literalHeader(LANE_PARENT_HEADER)}|authorization|cookie|content-type|content-length|host)$`,
   "i",
 )
 
@@ -1637,7 +1646,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     },
     scenePlayback: sceneArtifacts ? createScene3DPlaybackToolkit(sceneArtifacts) : undefined,
     stages: createDurableScene3DStageJournal(),
-    providers: {
+    // Each provider / ffmpeg / media / llm member holds one concurrency slot of
+    // its lane for its whole call (toolkit-lanes.ts).
+    providers: withMemberSlots<PluginProvidersToolkit>("providers", {
       directVoiceChanger,
       // Voice `text` with one ElevenLabs voice and store it under the job's key. `opts.voiceType`
       // is accepted for the contract and not forwarded: `directElevenLabsTTS` falls back to a
@@ -1727,8 +1738,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
       probeSocialPostVideo,
       downloadSocialPostVideo,
-    },
-    ffmpeg: {
+    }, PROVIDER_MEMBER_LANES),
+    ffmpeg: withMemberSlots<PluginFfmpegToolkit>("ffmpeg", {
       runFfmpeg,
       runFfmpegCapture,
       createWorkDir,
@@ -1747,8 +1758,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       transcodeToBrowserSafe,
       needsContainerRemux,
       remuxToMp4,
-    },
-    media: {
+    }, FFMPEG_MEMBER_LANES),
+    media: withMemberSlots<PluginMediaToolkit>("media", {
       readPublicVideoFrame,
       ensureMediaProxy,
       proxyFrameToSourceMs,
@@ -1769,7 +1780,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       applyAudioFx,
       applyImageWatermark,
       uploadVideoMaybeWatermark,
-    },
+    }, MEDIA_MEMBER_LANES),
     storage: {
       retainImage, readRetainedImage, copyRetainedImage, canRetainImages: isStorageConfigured(),
       retainJobImage, readRetainedJobImages,
@@ -2007,7 +2018,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       hostnameMatchesAllowlist,
       youtubeHosts: YOUTUBE_HOSTS,
     },
-    llm: {
+    llm: withMemberSlots<PluginLlmToolkit>("llm", {
       isKnownModel: (modelId: string) => getLlmModel(modelId) !== undefined,
       completeStructuredMetered,
       // Adapts PluginLlmRequest {model, system?, prompt, maxTokens?} to
@@ -2093,7 +2104,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
           ...(result.attempts ? { attempts: result.attempts } : {}),
         }
       },
-    },
+    }, LLM_MEMBER_LANES),
     llmBilling: {
       meteredPricing: () => llmMeteredPricing(),
       // The contract types are structural mirrors of the host's (feature is a
@@ -2119,8 +2130,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         },
         // The payer's context is opaque to the plugin and checked by the host
         // (another user's or a malformed one is refused).
-        reserve: async (args) =>
+        // The reading's llm slot is taken BEFORE the hold is reserved (toolkit-lanes.ts).
+        reserve: withSideHoldSlot(async (args) =>
           (await reserveLlmSideHold(args as Parameters<typeof reserveLlmSideHold>[0])) as unknown as Awaited<ReturnType<PluginLlmSideHoldToolkit["reserve"]>>,
+        () => sideHoldsAvailable()),
       },
     },
     pipelines: {

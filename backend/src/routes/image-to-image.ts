@@ -21,10 +21,13 @@ import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
 import {
+  ASSET_DESCRIPTION_MODEL,
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
   ASSET_DESCRIPTION_LLM_OPTIONS,
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 
 export const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
@@ -85,7 +88,17 @@ const IDENTITY_PRESERVE_SUFFIX =
 export { resolveImageToImageCreditIdentifier }
 
 export async function imageToImageRoutes(app: FastifyInstance) {
-  app.post("/v1/image-to-image", { preHandler: creditGuard(resolveImageToImageCreditIdentifier) }, async (req, reply) => {
+  app.post("/v1/image-to-image", {
+    preHandler: [
+      creditGuard(resolveImageToImageCreditIdentifier),
+      // The lane last, and only for a request that will make the LLM call.
+      laneGuard("llm", {
+        // The studio refine drafts a missing description with an LLM before it reserves.
+        when: (req) => { const b = rawBodyOf(req); return b.attachToCharacterId != null && b.injectCharacterContext !== true && !isFilledText(b.description) },
+        provider: () => llmProviderOf(ASSET_DESCRIPTION_MODEL),
+      }),
+    ],
+  }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -192,7 +205,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       if (!parsed.data.description) {
         try {
           const llm = await llmComplete({
-            modelId: "claude-sonnet-4.6",
+            modelId: ASSET_DESCRIPTION_MODEL,
             system: ASSET_DESCRIPTION_SYSTEM_PROMPT,
             messages: [
               {

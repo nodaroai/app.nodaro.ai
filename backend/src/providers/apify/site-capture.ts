@@ -11,6 +11,7 @@
  */
 import type { ActorRun, ApifyClient } from "apify-client"
 import { getApifyClient, sanitizeApifyError } from "./client.js"
+import { startOrResumeActorRun, type ApifyRunHooks } from "./run.js"
 import { MissingProviderKeyError } from "../provider-keys.js"
 import { SITE_CAPTURE_ACTOR } from "./site-capture-actor.js"
 import {
@@ -66,6 +67,12 @@ export interface SiteCaptureRun {
   /** The page's visible text one element per line; empty from a capture that carries none. */
   leafText: string
   warnings: string[]
+  /**
+   * Delete the run's Apify storages (when the actor is configured to) — for the
+   * caller to call once its job has settled, never before: a re-attached
+   * attempt re-reads them. Logs a failure and never throws.
+   */
+  deleteStorages: () => Promise<void>
 }
 
 export interface CaptureLog {
@@ -146,20 +153,19 @@ async function deleteRunStorages(client: ApifyClient, run: ActorRun, log: Captur
   )
 }
 
-export async function runSiteCapture(args: { url: string; maxStills: number }, log: CaptureLog = SILENT): Promise<SiteCaptureRun> {
+/** `hooks`: save the run as it starts, or wait on one this job already started (run.ts). */
+export async function runSiteCapture(args: { url: string; maxStills: number }, log: CaptureLog = SILENT, hooks: ApifyRunHooks = {}): Promise<SiteCaptureRun> {
   // The only token access. On an install with no key and no connection this
   // throws MissingProviderKeyError, which the route shows verbatim.
   const client = getApifyClient()
   const def = SITE_CAPTURE_ACTOR
   let runId: string | undefined
   try {
-    const run = await client.actor(def.apifyActorId).call(buildSiteCaptureInput(args.url, args.maxStills), {
-      build: def.build,
-      memory: def.memoryMbytes,
-      timeout: def.runTimeoutSecs,
-      waitSecs: def.waitSecs,
-      log: null,
-    })
+    const run = await startOrResumeActorRun(
+      client, def.apifyActorId, buildSiteCaptureInput(args.url, args.maxStills),
+      { build: def.build, memory: def.memoryMbytes, timeout: def.runTimeoutSecs },
+      def.waitSecs, hooks,
+    )
     runId = run.id
     if (run.status === "READY" || run.status === "RUNNING") {
       await client.run(run.id).abort().catch((err: unknown) => log.warn({ err, runId: run.id }, "[site-capture] abort failed"))
@@ -195,8 +201,8 @@ export async function runSiteCapture(args: { url: string; maxStills: number }, l
     if (full === "oversize") warnings.push("full_page_dropped_oversize")
     const fullPage = typeof full === "object" ? { ...full, truncated: item.fullPage.truncated } : null
 
-    if (def.deleteStoragesAfterSuccess) await deleteRunStorages(client, run, log)
     return {
+      deleteStorages: def.deleteStoragesAfterSuccess ? () => deleteRunStorages(client, run, log) : async () => undefined,
       providerRunId: run.id,
       finalUrl: item.finalUrl,
       title: item.title,

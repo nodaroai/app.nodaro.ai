@@ -24,6 +24,8 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const imageCriticBody = z.object({
   imageUrl: safeUrlSchema,
@@ -110,10 +112,14 @@ export async function imageCriticRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-critic",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("image-critic", req.body), {
-        // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
-        computeCredits: (body) => llmGuardPrecheck("image-critic", body),
-      }),
+      preHandler: [
+        creditGuard((req) => resolveLlmCreditId("image-critic", req.body), {
+          // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
+          computeCredits: (body) => llmGuardPrecheck("image-critic", body),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/image-critic")),
+      ],
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same

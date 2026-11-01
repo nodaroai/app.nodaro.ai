@@ -41,6 +41,7 @@ vi.mock("../../../providers/video/pitch-tempo.js", async (importOriginal) => ({
 // ---------------------------------------------------------------------------
 
 import { buildToolkit } from "../toolkit.js"
+import { memberFnOf } from "../toolkit-lanes.js"
 import type { PluginToolkit } from "../types.js"
 import { safeFetch } from "../../safe-fetch.js"
 import { applyImageWatermark } from "../../../utils/watermark.js"
@@ -114,20 +115,20 @@ describe("buildToolkit", () => {
   it("media: the detection proxy and its clock are the real core functions (P3.2; optional in the contract, answered here)", () => {
     // One clock: the plugin converts a detector's frame index through the
     // same function that built the map, never a copy of it.
-    expect(tk.media.ensureMediaProxy).toBe(ensureMediaProxy)
+    expect(memberFnOf(tk.media.ensureMediaProxy)).toBe(ensureMediaProxy)
     expect(tk.media.proxyFrameToSourceMs).toBe(proxyFrameToSourceMs)
   })
 
   it("media: the face detector is the real core function (P3.3; optional in the contract, answered here)", () => {
     // Core owns the decode, the session, the admission and the clock; the
     // plugin passes only the window and its score floor.
-    expect(tk.media.detectFaces).toBe(detectFaces)
+    expect(memberFnOf(tk.media.detectFaces)).toBe(detectFaces)
   })
 
   it("media: the still-picture face detector is the real core function (optional in the contract, no capability flag: answered here)", () => {
     // A plugin feature-detects the member; a dropped wiring line would send
     // every plugin to its no-detector path.
-    expect(tk.media.detectFacesInImage).toBe(detectFacesInImage)
+    expect(memberFnOf(tk.media.detectFacesInImage)).toBe(detectFacesInImage)
   })
 
   it("media: the memory slot is the host's admission hold (optional in the contract, no capability flag: answered here)", () => {
@@ -189,7 +190,7 @@ describe("buildToolkit", () => {
 
   it("S8 plumbing: tk.http.safeFetch and tk.media.applyImageWatermark are the real imported functions", () => {
     expect(tk.http.safeFetch).toBe(safeFetch)
-    expect(tk.media.applyImageWatermark).toBe(applyImageWatermark)
+    expect(memberFnOf(tk.media.applyImageWatermark)).toBe(applyImageWatermark)
   })
 
   // -------------------------------------------------------------------------

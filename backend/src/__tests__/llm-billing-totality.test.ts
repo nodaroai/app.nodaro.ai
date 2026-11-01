@@ -171,9 +171,9 @@ const ROUTE_REGISTRATION = ["app.ts"]
 
 interface Exemption {
   why: string
-  /** The call it covers: the file's own (`DIRECT`) or its calls into this one wrapper. */
-  via: string
-  /** How many such call sites the file has — a second one fails until it is reasoned. */
+  /** The call it covers: the file's own (`DIRECT`) or its calls into this wrapper (or these wrappers). */
+  via: string | readonly string[]
+  /** How many such call sites the file has (into all of `via`) — another one fails until it is reasoned. */
   sites: number
   /** Every file allowed to call it (a trailing `/` admits a subtree). A new caller fails. */
   callers: readonly string[]
@@ -196,6 +196,13 @@ const EXEMPT: ReadonlyMap<string, Exemption> = new Map<string, Exemption>([
   ["ee/lib/gallery-word-suggestions.ts", { why: "admin gallery moderation — a platform cost; no user is charged", via: DIRECT, sites: 1, callers: ["ee/lib/gallery-word-import.ts", "ee/routes/admin-gallery-moderation.ts"] }],
   // D9 (owner decision): pipeline products are priced as a whole.
   ["ee/pipelines/llms/call-llm.ts", { why: "D9: pipeline products are priced as a whole — their LLM calls are inside the product price", via: DIRECT, sites: 2, callers: ["ee/pipelines/"] }],
+  // The background scrapes' ad / post analysis: metered, but by the reservation
+  // its ROUTE makes (reserveFixedPlusLlmCalls) — the settle that runs the calls,
+  // records each one and settles that hold runs here, on the video worker (and
+  // for meta-ads-scrape's synchronous mode, in its request). The callers are
+  // pinned to the two that hand it a hold from that route.
+  ["lib/background-scrape/meta-ads.ts", { why: "metered by its route's reservation (reserveFixedPlusLlmCalls in routes/meta-ads-scrape.ts), handed in as the job's plan; this settle records and settles the calls", via: ["lib/meta-ads-analysis.ts", "lib/llm-fixed-plus-calls.ts"], sites: 2, callers: ["routes/meta-ads-scrape.ts", "workers/handlers/background-scrape.ts"] }],
+  ["lib/background-scrape/instagram.ts", { why: "metered by its route's reservation (reserveFixedPlusLlmCalls in routes/instagram-scrape.ts), handed in as the job's plan; this settle records and settles the calls", via: ["lib/instagram-analysis.ts", "lib/llm-fixed-plus-calls.ts"], sites: 2, callers: ["workers/handlers/background-scrape.ts"] }],
   // Plugins.
   ["lib/private-plugins/toolkit.ts", { why: "plugins are handed llmCompleteStructured by toolkit and bill through toolkit.llmBilling by convention — not enforced here", via: DIRECT, sites: 2, callers: ["lib/private-plugins/load.ts", "plugin-daemons.ts"] }],
   ["lib/private-plugins/llm-metered.ts", { why: "plugins are handed llmCompleteStructured by toolkit and bill through toolkit.llmBilling by convention — not enforced here", via: DIRECT, sites: 1, callers: ["lib/private-plugins/toolkit.ts"] }],
@@ -207,6 +214,9 @@ const EXEMPT: ReadonlyMap<string, Exemption> = new Map<string, Exemption>([
  * also call each other. A file on a chain with no pin fails.
  */
 const CHAIN_PINS: ReadonlyMap<string, readonly string[]> = new Map<string, readonly string[]>([
+  // the background scrapes' settles: the scrape's route (synchronous mode) and its video-worker handler
+  ["routes/meta-ads-scrape.ts", ["app.ts"]],
+  ["workers/handlers/background-scrape.ts", ["workers/video-worker.ts"]],
   // video-director: author → orchestrate → the worker → its process entries
   ["ee/video-director/orchestrate.ts", ["workers/video-director-worker.ts"]],
   ["workers/video-director-worker.ts", ["server.ts", "video-director.ts"]],
@@ -596,7 +606,8 @@ function analyse(sources: ReadonlyMap<string, string>, extraExempt: ReadonlyMap<
 
   const exemptFor = (file: string, callee: string): boolean => {
     for (const dir of EXEMPT_DIRS.keys()) if (file.startsWith(dir)) return true
-    return (EXEMPT.get(file) ?? extraExempt.get(file))?.via === callee
+    const via = (EXEMPT.get(file) ?? extraExempt.get(file))?.via
+    return typeof via === "string" ? via === callee : via !== undefined && via.includes(callee)
   }
 
   const viaCallers = new Map<string, string[]>()
@@ -699,8 +710,9 @@ function chainWalk(a: Analysis): { violations: string[]; usedPins: Map<string, S
 function siteCountViolations(a: Analysis): string[] {
   const out: string[] = []
   for (const [file, ex] of EXEMPT) {
-    const n = ex.via === DIRECT ? (a.direct.get(file)?.length ?? 0) : (a.callers.get(ex.via)?.get(file) ?? 0)
-    if (n !== ex.sites) out.push(`  • ${file}: ${n} call site(s) ${ex.via === DIRECT ? "of its own" : `into ${ex.via}`}, EXEMPT reasons ${ex.sites}`)
+    const vias = typeof ex.via === "string" ? [ex.via] : ex.via
+    const n = vias.reduce((sum, v) => sum + (v === DIRECT ? (a.direct.get(file)?.length ?? 0) : (a.callers.get(v)?.get(file) ?? 0)), 0)
+    if (n !== ex.sites) out.push(`  • ${file}: ${n} call site(s) ${ex.via === DIRECT ? "of its own" : `into ${vias.join(" + ")}`}, EXEMPT reasons ${ex.sites}`)
   }
   return out
 }
@@ -776,7 +788,8 @@ describe("every LLM call site is metered or exempt with a reason", () => {
   it("has no stale EXEMPT / METER entry or caller pin", () => {
     const stale: string[] = []
     for (const [file, ex] of EXEMPT) {
-      const live = ex.via === DIRECT ? analysis.direct.has(file) : analysis.callers.get(ex.via)?.has(file) === true
+      const vias = typeof ex.via === "string" ? [ex.via] : ex.via
+      const live = vias.every((v) => (v === DIRECT ? analysis.direct.has(file) : analysis.callers.get(v)?.has(file) === true))
       if (!live) stale.push(`  • ${file} (via ${ex.via})`)
       const actual = [...(analysis.callers.get(file)?.keys() ?? [])]
       for (const pin of ex.callers) if (!actual.some((c) => allowed(c, [pin]))) stale.push(`  • ${file}: caller pin ${pin} matches no caller`)

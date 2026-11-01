@@ -16,12 +16,14 @@ import { buildPortraitPrompt } from "../lib/character-prompts.js"
 import { renderEntitySubjectHints } from "../lib/entity-subject.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { isMinorAge, containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
-import { resolveFacetInjections } from "../lib/character-facet-extract.js"
+import { FACET_MODEL, facetInjectionsNeedLlm, resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared/entities"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 
 const generateCharacterBody = z
   .object({
@@ -162,18 +164,26 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       // "gpt-image:high") via the shared resolver — the SAME function the
       // handler's DEBIT uses, so the advisory CHECK can never price a
       // different tier than the reservation.
-      preHandler: creditGuard((req: FastifyRequest) => resolveEntityImageCreditIdentifier(req.body), {
-        computeCredits: async (body) => {
-          const count = extractCount(body)
-          const identifier = resolveEntityImageCreditIdentifier(body)
-          // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
-          // core free of static ee/ imports. Only reached in cloud edition
-          // (creditGuard short-circuits to a no-op otherwise).
-          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const pricing = await getModelCreditBaseCost(identifier)
-          return pricing.creditCost * count
-        },
-      }),
+      preHandler: [
+        creditGuard((req: FastifyRequest) => resolveEntityImageCreditIdentifier(req.body), {
+          computeCredits: async (body) => {
+            const count = extractCount(body)
+            const identifier = resolveEntityImageCreditIdentifier(body)
+            // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
+            // core free of static ee/ imports. Only reached in cloud edition
+            // (creditGuard short-circuits to a no-op otherwise).
+            const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+            const pricing = await getModelCreditBaseCost(identifier)
+            return pricing.creditCost * count
+          },
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", {
+          // Only a facet other than `full` is extracted by an LLM (before it reserves).
+          when: (req) => facetInjectionsNeedLlm(rawBodyOf(req).facetInjections),
+          provider: () => llmProviderOf(FACET_MODEL),
+        }),
+      ],
     },
     async (req, reply) => {
       const parsed = generateCharacterBody.safeParse(req.body)

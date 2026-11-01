@@ -12,6 +12,8 @@ import { billedFailureMessage, llmGuardPrecheck, meterOptionalSyncLlm, spendLlmC
 import { sendInternalError } from "../lib/http-errors.js"
 import { PORTRAIT_CAPTION_MODEL } from "../lib/portrait-caption-model.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { laneGuard, takeLiveLaneIfFree } from "../lib/concurrency-lanes/request-scope.js"
+import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
 // Bill the paid Sonnet vision caption at the shared prompt-helper rate (same as
 // llm-suggest-description) — the dedicated /llm-caption retry route is otherwise
@@ -204,8 +206,15 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
     // is NEVER blocked by credits (owner decision D11): when the caption's hold is
     // refused the portrait is still approved, the caption skipped
     // (canonical_description null) and /llm-caption retries it later.
+    // Nor by a busy lane (decided 2026-11-01): the caption runs only if an llm
+    // slot is free now; at the limit it is skipped like a refused hold, and
+    // nothing is reserved for it.
+    const captionSlotFree = await takeLiveLaneIfFree(req, { lane: "llm", provider: llmProviderOf(PORTRAIT_CAPTION_MODEL) })
     let meter: MeteredSyncLlmMeter | null | undefined
-    if (llmMeteredPricing()) {
+    if (!captionSlotFree) {
+      meter = null
+      req.log.info({ characterId }, "[character-portrait-approval] caption skipped: no llm slot free")
+    } else if (llmMeteredPricing()) {
       // The caption guard runs inline (spend surface, instance cap, payer
       // balance); a refusal or a billing error skips the caption, never the approval.
       const optional = await meterOptionalSyncLlm(req, captionGuard, "character-portrait-approval", {
@@ -258,11 +267,16 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       // dedup:false — this route returns { canonicalDescription }, not the
       // { jobId, deduped:true } shape the idempotency short-circuit would send.
       // Scope first: an app without assets:write is refused before any credit check.
-      preHandler: [requireAppScope("assets:write"), creditGuard(() => CAPTION_CREDIT_IDENTIFIER, {
-        dedup: false,
-        // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
-        computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: PORTRAIT_CAPTION_MODEL, maxTokens: PORTRAIT_CAPTION_MAX_TOKENS }),
-      })],
+      preHandler: [
+        requireAppScope("assets:write"),
+        creditGuard(() => CAPTION_CREDIT_IDENTIFIER, {
+          dedup: false,
+          // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
+          computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: PORTRAIT_CAPTION_MODEL, maxTokens: PORTRAIT_CAPTION_MAX_TOKENS }),
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard("llm", { provider: () => llmProviderOf(PORTRAIT_CAPTION_MODEL) }),
+      ],
       // 10 req/min/IP — gates the paid LLM caption. Mirrors location-llm-caption.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },

@@ -24,6 +24,9 @@ import { userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { judgeModelOf, requestedStrategy } from "../lib/reduce-request.js"
 
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
@@ -41,21 +44,6 @@ const reduceBody = z.object({
     ctx.addIssue({ code: "custom", path: ["strategyConfig", "llmModel"], message: `Unknown AI model "${String(model)}"` })
   }
 })
-
-/**
- * Credit identifier for a reduce call. Every strategy bills at its flat
- * `reduce:<strategyId>` key EXCEPT the AI judge, whose price follows the
- * chosen model's tier exactly like every other LLM node
- * (buildLlmCreditIdentifier: economy → `reduce:pick-best-llm:economy`,
- * standard → `reduce:pick-best-llm`, premium → `reduce:pick-best-llm:premium`).
- * Reads the raw body so the creditGuard preHandler (pre-Zod) and the
- * reservation (post-Zod) resolve the SAME id.
- */
-/** The strategy this raw (pre-Zod) body asks for, when it is a known one. */
-function requestedStrategy(body: unknown): ReduceStrategyId | null {
-  const id = (body as { strategyId?: unknown } | undefined)?.strategyId
-  return typeof id === "string" && (REDUCE_STRATEGY_IDS as readonly string[]).includes(id) ? (id as ReduceStrategyId) : null
-}
 
 /**
  * What the proxy must do differently for the AI judge on IMAGE candidates.
@@ -92,12 +80,16 @@ export function reduceProxyHooks(rawBody: unknown): CloudProxyHooks | undefined 
   }
 }
 
-/** The AI judge's model a raw body names, when it is a registry id (else the default prices it; Zod answers the rest). */
-function judgeModelOf(body: unknown): string | undefined {
-  const model = (body as { strategyConfig?: { llmModel?: unknown } } | undefined)?.strategyConfig?.llmModel
-  return typeof model === "string" && (LLM_MODEL_IDS as readonly string[]).includes(model) ? model : undefined
-}
 
+/**
+ * Credit identifier for a reduce call. Every strategy bills at its flat
+ * `reduce:<strategyId>` key EXCEPT the AI judge, whose price follows the
+ * chosen model's tier exactly like every other LLM node
+ * (buildLlmCreditIdentifier: economy → `reduce:pick-best-llm:economy`,
+ * standard → `reduce:pick-best-llm`, premium → `reduce:pick-best-llm:premium`).
+ * Reads the raw body so the creditGuard preHandler (pre-Zod) and the
+ * reservation (post-Zod) resolve the SAME id.
+ */
 function reduceCreditIdentifier(body: unknown): string {
   const b = body as { strategyId?: unknown; strategyConfig?: { llmModel?: unknown } } | undefined
   const strategyId = String(b?.strategyId ?? "concat")
@@ -113,15 +105,19 @@ export async function reduceRoutes(app: FastifyInstance) {
       // dedup: false — the same upstream fan-in run may legitimately be invoked
       // multiple times in quick succession (loop iterations, retries) and we
       // never want two distinct runs to silently collapse into one.
-      preHandler: creditGuard((req) => reduceCreditIdentifier(req.body), {
-        dedup: false,
-        // The AI judge bills metered (D1): its pre-check is the judge call's
-        // 1-attempt hold; every other strategy (and the rollback) prices its row.
-        computeCredits: (body) =>
-          requestedStrategy(body) === "pick-best-llm"
-            ? llmGuardPrecheck("reduce:pick-best-llm", body, { llmModel: judgeModelOf(body) })
-            : undefined,
-      }),
+      preHandler: [
+        creditGuard((req) => reduceCreditIdentifier(req.body), {
+          dedup: false,
+          // The AI judge bills metered (D1): its pre-check is the judge call's
+          // 1-attempt hold; every other strategy (and the rollback) prices its row.
+          computeCredits: (body) =>
+            requestedStrategy(body) === "pick-best-llm"
+              ? llmGuardPrecheck("reduce:pick-best-llm", body, { llmModel: judgeModelOf(body) })
+              : undefined,
+        }),
+        // The lane last: the request waits for its slot before the handler reserves.
+        laneGuard(...syncRouteLane("/v1/reduce")),
+      ],
     },
     async (req, reply) => {
       // The AI judge is an LLM call: on a keyless install with a live

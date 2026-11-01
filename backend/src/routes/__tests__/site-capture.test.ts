@@ -26,13 +26,18 @@ const h = vi.hoisted(() => ({
   restoreRelay: vi.fn(),
   deleteAssets: vi.fn(async (..._a: unknown[]) => undefined),
   checkRobots: vi.fn(async (..._a: unknown[]) => "allowed"),
+  deleteStorages: vi.fn(async () => { h.order.push("delete-storages") }),
 }))
 
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => { h.guardCalls++ },
   reserveCreditsForJob: h.reserve,
 }))
-vi.mock("../../lib/queue.js", () => ({
+// The rate limiter's Redis, and the video queue: the route enqueues the
+// capture's worker job, and the stand-in runs the real handler at once, as the
+// worker does with lanes off.
+vi.mock("../../lib/queue.js", async () => ({
+  videoQueue: (await import("./helpers/inline-scrape-worker.js")).inlineScrapeQueue,
   redis: {
     incr: async () => { if (h.redisDown) throw new Error("redis down"); return 1 },
     expire: async () => 1,
@@ -80,12 +85,17 @@ vi.mock("../../lib/supabase.js", () => ({
         h.inserted.push(row)
         return { select: () => ({ single: () => ({ data: { id: "job-1" }, error: null }) }) }
       },
-      update: () => ({ eq: () => ({ error: null }) }),
+      update: () => {
+        // The relay saves its cloud job (a CAS: .eq().is().in().select()); any other write awaits .eq().
+        const c: Record<string, unknown> = { eq: () => c, is: () => c, in: () => c, select: async () => ({ data: [{ id: "job-1" }], error: null }), then: (ok: (v: unknown) => unknown) => ok({ error: null }) }
+        return c
+      },
     }),
   },
 }))
 
-const { siteCaptureRoutes, SITE_CAPTURE_RELAY_BUDGET_MS } = await import("../site-capture.js")
+const { siteCaptureRoutes } = await import("../site-capture.js")
+const { SITE_CAPTURE_RELAY_BUDGET_MS } = await import("../../lib/background-scrape/site-capture.js")
 const { SiteCaptureError } = await import("../../providers/apify/site-capture.js")
 const { CaptureStorageFullError } = await import("../../lib/site-capture-store.js")
 const { NodaroCloudError } = await import("../../providers/nodaro/client.js")
@@ -111,7 +121,7 @@ beforeEach(() => {
   h.reserve.mockResolvedValue({ usageLogId: "usage-1" })
   h.completed.mockResolvedValue("completed")
   h.failed.mockResolvedValue(true)
-  h.run.mockResolvedValue({ providerRunId: "run-1" })
+  h.run.mockResolvedValue({ providerRunId: "run-1", deleteStorages: h.deleteStorages })
   h.storeLocal.mockResolvedValue({ output: OUTPUT, assetIds: ["a1", "a2"] })
   h.restoreRelay.mockResolvedValue({ output: { ...OUTPUT, source: "relay" }, assetIds: ["r1"] })
 })
@@ -160,7 +170,7 @@ describe("runners and the keyed pre-flight", () => {
     await post({ url: "https://example.com/", maxStills: 5 })
     await vi.waitFor(() => expect(h.restoreRelay).toHaveBeenCalled())
     expect(h.checkRobots).not.toHaveBeenCalled()
-    expect(h.createCloudJob).toHaveBeenCalledWith("/v1/site-capture", { url: "https://example.com/", maxStills: 5, respondAsync: true })
+    expect(h.createCloudJob).toHaveBeenCalledWith("/v1/site-capture", { url: "https://example.com/", maxStills: 5, respondAsync: true }, { idempotencyKey: "scrape-relay:job-1" })
     expect(h.waitForCloudJob).toHaveBeenCalledWith("cloud-9", undefined, { budgetMs: SITE_CAPTURE_RELAY_BUDGET_MS })
     expect(h.restoreRelay).toHaveBeenCalledWith({ stills: [] }, { userId: "u1", jobId: "job-1", pageUrl: "https://example.com/" })
   })
@@ -192,7 +202,7 @@ describe("always job-id-first, and idempotency", () => {
   it.each([[{}], [{ respondAsync: true }], [{ respondAsync: false }]])("answers { jobId, status: pending } for %j", async (extra) => {
     const res = await post({ url: "https://example.com/", ...extra })
     expect(res.json()).toEqual({ jobId: "job-1", status: "pending" })
-    await vi.waitFor(() => expect(h.run).toHaveBeenCalledWith({ url: "https://example.com/", maxStills: 8 }, expect.anything()))
+    await vi.waitFor(() => expect(h.run).toHaveBeenCalledWith({ url: "https://example.com/", maxStills: 8 }, expect.anything(), expect.anything()))
   })
 
   it("a repeated idempotency key returns the first job and runs nothing", async () => {
@@ -212,6 +222,39 @@ describe("settlement", () => {
     await post({ url: "https://example.com/" })
     await vi.waitFor(() => expect(h.commit).toHaveBeenCalledWith("job-1"))
     expect(h.completed).toHaveBeenCalledWith("job-1", { output_data: OUTPUT })
+    expect(h.refund).not.toHaveBeenCalled()
+  })
+
+  it("the run's Apify storages are deleted only after the completion write AND its commit (nothing widens the gap between them)", async () => {
+    h.completed.mockImplementation(async () => { h.order.push("completed"); return "completed" })
+    h.commit.mockImplementation(async () => { h.order.push("commit") })
+    await post({ url: "https://example.com/" })
+    await vi.waitFor(() => expect(h.deleteStorages).toHaveBeenCalledTimes(1))
+    expect(h.order.filter((e) => ["completed", "commit", "delete-storages"].includes(e))).toEqual(["completed", "commit", "delete-storages"])
+    h.completed.mockReset()
+    h.completed.mockResolvedValue("completed")
+    h.commit.mockReset()
+    h.commit.mockResolvedValue(undefined)
+  })
+
+  it("a failed capture deletes the storages after the failure write and its refund", async () => {
+    h.storeLocal.mockRejectedValue(new CaptureStorageFullError("Storage limit exceeded"))
+    h.failed.mockImplementation(async () => { h.order.push("failed"); return true })
+    h.refund.mockImplementation(async () => { h.order.push("refund"); return 0 })
+    await post({ url: "https://example.com/" })
+    await vi.waitFor(() => expect(h.deleteStorages).toHaveBeenCalledTimes(1))
+    expect(h.order.filter((e) => ["failed", "refund", "delete-storages"].includes(e))).toEqual(["failed", "refund", "delete-storages"])
+    h.failed.mockReset()
+    h.failed.mockResolvedValue(true)
+    h.refund.mockReset()
+    h.refund.mockResolvedValue(0)
+  })
+
+  it("the storages are still deleted when the failure write itself throws — and the job is not failed by the delete", async () => {
+    h.storeLocal.mockRejectedValue(new CaptureStorageFullError("Storage limit exceeded"))
+    h.failed.mockRejectedValueOnce(new Error("db down"))
+    await post({ url: "https://example.com/" })
+    await vi.waitFor(() => expect(h.deleteStorages).toHaveBeenCalledTimes(1))
     expect(h.refund).not.toHaveBeenCalled()
   })
 

@@ -35,8 +35,21 @@ vi.mock("../../lib/config.js", async (importActual) => {
   // settle; the metered analysis is llm-metered-creative-routes.test.ts.
   return { ...actual, config: { ...actual.config, KIE_API_KEY: "test-key" }, llmMeteredPricing: () => false }
 })
+// The video queue: the route enqueues the scrape's worker job, and this
+// stand-in runs the real handler at once, as the worker does with lanes off.
+vi.mock("../../lib/queue.js", async () => ({ videoQueue: (await import("./helpers/inline-scrape-worker.js")).inlineScrapeQueue }))
 vi.mock("../../lib/supabase.js", () => ({
-  supabase: { from: () => ({ insert: () => ({ select: () => ({ single: () => ({ data: { id: "job-1" }, error: null }) }) }) }) },
+  supabase: {
+    from: () => ({
+      insert: () => ({ select: () => ({ single: () => ({ data: { id: "job-1" }, error: null }) }) }),
+      // The relay saves the cloud job's id on the row before it polls it.
+      update: () => {
+        // The relay saves its cloud job (a CAS: .eq().is().in().select()); any other write awaits .eq().
+        const c: Record<string, unknown> = { eq: () => c, is: () => c, in: () => c, select: async () => ({ data: [{ id: "job-1" }], error: null }), then: (ok: (v: unknown) => unknown) => ok({ error: null }) }
+        return c
+      },
+    }),
+  },
 }))
 
 async function buildTestApp() {
@@ -80,7 +93,7 @@ describe("POST /v1/instagram-scrape", () => {
     expect(creditMocks.reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "instagram-scrape:100")
     // The scrape finishes in the background after the response.
     await vi.waitFor(() => expect(jobMocks.markJobCompleted).toHaveBeenCalled())
-    expect(runInstagramScrape).toHaveBeenCalledWith(expect.objectContaining({ mode: "profile", targets: ["nike", "adidas"], count: 30, period: "30d" }))
+    expect(runInstagramScrape).toHaveBeenCalledWith(expect.objectContaining({ mode: "profile", targets: ["nike", "adidas"], count: 30, period: "30d" }), expect.anything())
     const out = lastCompletion().output_data as Record<string, unknown>
     expect(out.json).toEqual([POST_OUT])
     expect(out.text).toBe("just do it")
@@ -108,7 +121,7 @@ describe("POST /v1/instagram-scrape", () => {
     const res = await app.inject({ method: "POST", url: "/v1/instagram-scrape", payload: { mode: "profile", targets: ["nike", "NIKE", "@nike"], count: 20 } })
     expect(res.statusCode).toBe(200)
     expect(creditMocks.guardIds).toEqual(["instagram-scrape:20"]) // 3 duplicate targets → 1 source → 20 × 1 tier
-    await vi.waitFor(() => expect(runInstagramScrape).toHaveBeenCalledWith(expect.objectContaining({ targets: ["nike"] })))
+    await vi.waitFor(() => expect(runInstagramScrape).toHaveBeenCalledWith(expect.objectContaining({ targets: ["nike"] }), expect.anything()))
   })
 
   it("forwards analysis and settles per analysed post (count-based commit)", async () => {
@@ -136,7 +149,7 @@ describe("POST /v1/instagram-scrape", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().jobId).toBe("job-1")
     await vi.waitFor(() => expect(jobMocks.markJobCompleted).toHaveBeenCalled())
-    expect(cloudMocks.createCloudJob).toHaveBeenCalledWith("/v1/instagram-scrape", expect.objectContaining({ mode: "hashtag" }))
+    expect(cloudMocks.createCloudJob).toHaveBeenCalledWith("/v1/instagram-scrape", expect.objectContaining({ mode: "hashtag" }), { idempotencyKey: "scrape-relay:job-1" })
     expect(runInstagramScrape).not.toHaveBeenCalled()
   })
 
@@ -167,7 +180,7 @@ describe("POST /v1/instagram-scrape", () => {
     expect(runInstagramScrape).toHaveBeenCalledWith(expect.objectContaining({
       mode: "post",
       targets: ["https://www.instagram.com/p/AbC123/", "https://www.instagram.com/reel/Zz9/"],
-    }))
+    }), expect.anything())
     // A post link names one post: the format filter never reaches the media step.
     expect(mediaMocks.classifyAndStoreInstagramMedia).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ formats: undefined }))
     // Settlement re-derives the scrape base from the SAME requested count (the mock prices the scrape id at 20).

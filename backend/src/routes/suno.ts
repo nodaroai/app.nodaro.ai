@@ -36,6 +36,8 @@ import { markJobFailed } from "../lib/job-failure.js"
 import type { SunoSeparateJobData } from "../workers/handlers/suno-separate.js"
 import { pickSunoSeparateSource } from "@nodaro/render-rules"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -870,7 +872,9 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/style-boost",
     {
-      preHandler: creditGuard(() => "suno-style-boost"),
+      // The lane last: the style boost calls the provider in the request, so it
+      // waits for its slot before the handler reserves.
+      preHandler: [creditGuard(() => "suno-style-boost"), laneGuard(...syncRouteLane("/v1/suno/style-boost"))],
     },
     async (req, reply) => {
       const parsed = sunoStyleBoostBody.safeParse(req.body)
@@ -1194,7 +1198,8 @@ export async function sunoRoutes(app: FastifyInstance) {
   // Inserts a `jobs` row of `job_type="suno-voice-validate"` (holding the KIE task id) so
   // subsequent polls / regenerate / generate calls can verify the caller owns
   // the returned taskId.
-  app.post("/v1/suno/voice/validate", async (req, reply) => {
+  // Its provider call runs in the request: it waits for a provider slot first.
+  app.post("/v1/suno/voice/validate", { preHandler: laneGuard("provider", { provider: () => "kie" }) }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
@@ -1331,7 +1336,9 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       // Pass 3 — rate-limit so a stolen JWT can't burn 20cr×N quickly.
       config: { rateLimit: { max: 5, timeWindow: "1m" } },
-      preHandler: creditGuard(() => SUNO_VOICE_CREATE_CREDIT_ID),
+      // The lane last: the request waits for its provider slot before the
+      // handler reserves; the provider call runs in the request.
+      preHandler: [creditGuard(() => SUNO_VOICE_CREATE_CREDIT_ID), laneGuard("provider", { provider: () => "kie" })],
     },
     async (req, reply) => {
       const userId = req.userId

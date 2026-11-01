@@ -15,6 +15,14 @@
  *     threshold plus the longest queue timeout and slack
  *     (`MAX_QUEUED_CREDIT_MS`) — the cloud's own queued sweep ends a wait by
  *     then, so a job that reads `queued` forever is still exhausted.
+ *
+ * A background scrape's relay (web-scrape, site-capture, meta-ads-scrape,
+ * instagram-scrape) saves its cloud job under this kind too, but is never
+ * finalized here: its handler re-attaches to that cloud job on a re-pick (the
+ * plan it settles with is in its BullMQ payload, which no row carries). For
+ * those rows this sweep only ends a failed cloud job (fail + refund) and spares
+ * one waiting in line; anything else is bumped toward exhaustion — a live
+ * worker wins the completion first, a lost job is failed + refunded in the end.
  */
 
 import { supabase } from "../supabase.js"
@@ -27,6 +35,7 @@ import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { MAX_QUEUED_CREDIT_MS } from "../concurrency-lanes/queued-clock.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
+import { BACKGROUND_SCRAPE_JOB_TYPES } from "../background-scrape/job-types.js"
 
 /** Terminal failure, per the local-file convention of the sibling handlers
  *  (kie.ts/fal.ts/elevenlabs.ts each keep their own): the shared `markJobFailed`
@@ -93,6 +102,20 @@ export async function reconcileNodaroCloudJob(
   }
   if (!cloudJob?.status) {
     await bumpAttemptsOrExhaust(row.id, "nodaro.ai poll returned no job")
+    return
+  }
+
+  if (BACKGROUND_SCRAPE_JOB_TYPES.has(row.job_type)) {
+    if (cloudJob.status === "failed" || cloudJob.status === "cancelled") {
+      await markFailed(row.id, cloudJob.error_message || `nodaro.ai: cloud job ${cloudJob.status}`)
+      return
+    }
+    if (cloudJob.status === "queued") {
+      const stampedAt = row.provider_call_started_at ? Date.parse(row.provider_call_started_at) : NaN
+      if (Number.isFinite(stampedAt) && Date.now() - stampedAt <= NODARO_CLOUD_QUEUED_BOUND_MS) return
+    }
+    // Never finalized here (no plan) and never created again: only its handler settles it.
+    await bumpAttemptsOrExhaust(row.id, `nodaro.ai scrape job ${cloudJob.status}; settled only by its worker`)
     return
   }
 
