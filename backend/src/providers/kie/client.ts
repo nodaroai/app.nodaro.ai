@@ -341,6 +341,17 @@ export function createSanitizedError(
   ) {
     sanitizedMessage =
       "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image."
+  } else if (
+    // BEFORE the request-reject status branch: KIE answers "[400] upload
+    // failed" when IT could not fetch or re-upload the media it was sent, not
+    // when the request was wrong. Prod 2026-10-31 (job d3736b0d) and 2026-11-01
+    // (job 57c29d77): two Kling 4 runs, each told "rejected these settings…
+    // will fail again", each succeeded on the same request moments later.
+    /\bupload failed\b/.test(lowerMsg)
+  ) {
+    sanitizedMessage =
+      `${context} failed: the provider couldn't load the input media. ` +
+      "This is usually temporary — try again."
   } else if (isRequestRejectStatus(opts?.upstreamStatus)) {
     // LAST, immediately before the generic fallback: every branch above reads
     // the provider's WORDS, this one reads its STATUS. A 400/422 means the

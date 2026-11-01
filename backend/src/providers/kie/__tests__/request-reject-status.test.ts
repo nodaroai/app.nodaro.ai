@@ -224,3 +224,41 @@ describe("a 4xx that is really a content block stays a content block", () => {
     expect(isRetryableFailure(err.message)).toBe(false)
   })
 })
+
+describe("KIE's \"upload failed\" is the provider failing to fetch the media, not a rejected request", () => {
+  // Prod 2026-10-31 (job d3736b0d) and 2026-11-01 (job 57c29d77): Kling 4 runs
+  // failed "[400] upload failed" and the same requests succeeded moments later.
+  const UPLOAD_FAILED_COPY =
+    "Generation failed: the provider couldn't load the input media. This is usually temporary — try again."
+
+  it("reads as temporary, never as rejected settings", () => {
+    const err = createSanitizedError("task failed: [400] upload failed", "Generation", true, false, {
+      upstreamStatus: "400",
+    })
+    expect(err.message).toBe(UPLOAD_FAILED_COPY)
+    expect(err.message).not.toContain(REJECT_PHRASE)
+    expect(err.message).not.toContain("will fail again")
+  })
+
+  it("through the real throw path, it stays an upstream failure and is retryable for MCP callers", () => {
+    const failMsg = "upload failed"
+    const cls = classifyContentPolicyClass(failMsg)
+    const err = createUpstreamFailureError(`task failed: [400] ${failMsg}`, "Generation", {
+      contentPolicy: cls !== null,
+      contentPolicyClass: cls,
+      upstreamStatus: "400",
+    })
+    expect(err.message).toBe(UPLOAD_FAILED_COPY)
+    expect(err.isUpstreamFailure).toBe(true)
+    expect(err.contentPolicy).toBe(false)
+    expect(isContentRejection(err.message)).toBe(false)
+    expect(isRetryableFailure(err.message)).toBe(true)
+  })
+
+  it("keeps the context prefix", () => {
+    const err = createSanitizedError("task failed: [400] upload failed", "Video generation", true, false, {
+      upstreamStatus: 400,
+    })
+    expect(err.message.startsWith("Video generation failed: the provider couldn't load the input media.")).toBe(true)
+  })
+})
