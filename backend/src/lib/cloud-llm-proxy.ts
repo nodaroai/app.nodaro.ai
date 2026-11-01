@@ -136,6 +136,13 @@ async function rehostBodyMedia(body: unknown, depth = 0): Promise<unknown> {
 export interface CloudProxyHooks {
   prepareBody?: (body: unknown) => Promise<unknown> | unknown
   mapAnswer?: (answer: Record<string, unknown>) => Record<string, unknown>
+  /**
+   * Sent as the forwarded request's `Idempotency-Key`, so the cloud dedupes a
+   * repeat (no second call, no second charge). The caller namespaces it by its
+   * local user: every user of this install relays as the one connected
+   * account, whose keys the cloud holds in one space.
+   */
+  idempotencyKey?: string
 }
 
 /**
@@ -246,6 +253,7 @@ export async function maybeProxyLlmRouteToCloud(
       headers: {
         Authorization: `Bearer ${credential.token}`,
         "Content-Type": "application/json",
+        ...(hooks.idempotencyKey ? { "Idempotency-Key": hooks.idempotencyKey } : {}),
       },
       body: JSON.stringify(body ?? {}),
       signal: abort.signal,

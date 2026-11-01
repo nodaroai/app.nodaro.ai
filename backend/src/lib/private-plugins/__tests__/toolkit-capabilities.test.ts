@@ -62,6 +62,12 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.queueAwareWait).toBe(true)
   })
 
+  it("advertises idempotent keyed chat child calls", () => {
+    // llm-chat-idempotency.test.ts proves the route: the same key answers the
+    // first call's text, waits for one still running, and refuses another body.
+    expect(buildToolkit().capabilities?.llmChatIdempotency).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

@@ -48,6 +48,7 @@ import { ensureMediaProxy } from "../../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../../services/media-proxy-span-map.js"
 import { detectFaces } from "../../../services/face-detect/detect-faces.js"
 import { detectFacesInImage } from "../../../services/face-detect/detect-faces-image.js"
+import { withPluginMemorySlot } from "../memory-slot.js"
 import { PitchTempoInputError } from "../../../providers/video/pitch-tempo.js"
 
 describe("buildToolkit", () => {
@@ -127,6 +128,12 @@ describe("buildToolkit", () => {
     // A plugin feature-detects the member; a dropped wiring line would send
     // every plugin to its no-detector path.
     expect(tk.media.detectFacesInImage).toBe(detectFacesInImage)
+  })
+
+  it("media: the memory slot is the host's admission hold (optional in the contract, no capability flag: answered here)", () => {
+    // memory-slot.test.ts proves the hold against the real admission; a dropped
+    // wiring line would leave a plugin's image work outside the budget.
+    expect(tk.media.withMemorySlot).toBe(withPluginMemorySlot)
   })
 
   it("storage: every member is a function", () => {

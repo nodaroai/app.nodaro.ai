@@ -9,6 +9,7 @@ import { ensureMediaProxy } from "../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../services/media-proxy-span-map.js"
 import { detectFaces } from "../../services/face-detect/detect-faces.js"
 import { detectFacesInImage } from "../../services/face-detect/detect-faces-image.js"
+import { withPluginMemorySlot } from "./memory-slot.js"
 import { isStorageConfigured } from "../storage.js"
 import { deleteKeyRecordingFailure } from "../storage-delete.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
@@ -1591,6 +1592,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
   queueAwareWait: true,
+  // A plugin's keyed chat child call answers its first answer, never runs
+  // twice and charges once (`lib/llm-chat-keyed.ts`).
+  llmChatIdempotency: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1744,6 +1748,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       detectFaces,
       // One still picture (https, guarded download), the same session and hold.
       detectFacesInImage,
+      // The plugin's own image work, admitted like an ffmpeg launch (slot + memory).
+      withMemorySlot: withPluginMemorySlot,
       extractAudio,
       removeAudio: ({ videoUrl }) => removeAudio({ videoUrl, workDirPrefix: "cast-swap" }),
       // A pitch shift only; a PitchTempoInputError reaches the plugin unchanged.
