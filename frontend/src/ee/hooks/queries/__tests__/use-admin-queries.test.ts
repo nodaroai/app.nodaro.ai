@@ -293,7 +293,7 @@ describe("useAdminJobs filters", () => {
   it("requests the server params and reports an unknown address", async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [], userNotFound: true }) })
     useAdminJobs(2, 50, jobFilters({ status: "failed", userEmail: "nobody@x.test", excludeAdmins: false }), ["u1"])
-    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: true })
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: true, filtersUnavailable: false })
     const url = new URL(String(mockFetch.mock.calls[0]![0]), "http://x")
     expect(url.pathname).toBe("/v1/admin/jobs")
     expect(Object.fromEntries(url.searchParams)).toEqual({ page: "2", pageSize: "50", status: "failed", userEmail: "nobody@x.test" })
@@ -302,9 +302,15 @@ describe("useAdminJobs filters", () => {
   it("sends the admins' ids when they are hidden", async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) })
     useAdminJobs(0, 50, jobFilters({ excludeAdmins: true }), ["u2", "u1"])
-    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: false })
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: false, filtersUnavailable: false })
     const url = new URL(String(mockFetch.mock.calls[0]![0]), "http://x")
     expect(url.searchParams.get("excludeUserIds")?.split(",").sort()).toEqual(["u1", "u2"])
+  })
+
+  it("passes on that the server could not apply the newer filters", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [], filtersUnavailable: true }) })
+    useAdminJobs(0, 50, jobFilters({ kind: "video" }))
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({ jobs: [], userNotFound: false, filtersUnavailable: true })
   })
 
   it("a caller can hold the request (the admins' ids not loaded yet)", () => {
@@ -320,8 +326,8 @@ describe("useAdminJobs filters", () => {
     useAdminJobsInfinite(50, jobFilters({ kind: "video" }))
     const opts = mockUseInfiniteQuery.mock.calls[0][0]
     expect(opts.queryKey).toEqual(["admin", "jobs-infinite", 50, "kind=video", ""])
-    expect(opts.getNextPageParam({ jobs: new Array(50), userNotFound: false }, [{}, {}])).toBe(2)
-    expect(opts.getNextPageParam({ jobs: new Array(3), userNotFound: false }, [{}])).toBeUndefined()
+    expect(opts.getNextPageParam({ jobs: new Array(50), userNotFound: false, filtersUnavailable: false }, [{}, {}])).toBe(2)
+    expect(opts.getNextPageParam({ jobs: new Array(3), userNotFound: false, filtersUnavailable: false }, [{}])).toBeUndefined()
   })
 })
 

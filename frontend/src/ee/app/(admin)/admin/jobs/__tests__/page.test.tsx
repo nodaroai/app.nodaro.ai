@@ -13,6 +13,7 @@ vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
 
 import {
   useAdminJobs,
+  useAdminJobsInfinite,
   useAdminJobSources,
   useAllAdminUsersLite,
 } from "@/ee/hooks/queries/use-admin-queries"
@@ -45,7 +46,7 @@ const lastJobsCall = () => vi.mocked(useAdminJobs).mock.calls.at(-1)!
 
 beforeEach(() => {
   vi.mocked(useAdminJobs).mockReturnValue({
-    data: { jobs: [], userNotFound: true },
+    data: { jobs: [], userNotFound: true, filtersUnavailable: false },
     isLoading: false,
   } as unknown as ReturnType<typeof useAdminJobs>)
   vi.mocked(useAdminJobSources).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useAdminJobSources>)
@@ -106,5 +107,34 @@ describe("AdminJobsPage", () => {
     expect(filters).toMatchObject({ excludeAdmins: true })
     expect(excluded).toEqual(["a1"])
     expect(options).toEqual({ enabled: true })
+  })
+
+  const NOTICE = "These filters arrive with the next release — showing jobs by status and user only."
+
+  it("the table says when the server could not apply the newer filters", () => {
+    vi.mocked(useAdminJobs).mockReturnValue({
+      data: { jobs: [], userNotFound: false, filtersUnavailable: true },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useAdminJobs>)
+    renderAt("/admin/jobs?kind=video")
+    expect(screen.getByText(NOTICE)).toBeTruthy()
+  })
+
+  it("the table shows no notice when every filter applied", () => {
+    renderAt("/admin/jobs?kind=video")
+    expect(screen.queryByText(NOTICE)).toBeNull()
+  })
+
+  it("the gallery says when the server could not apply the newer filters", () => {
+    vi.mocked(useAdminJobsInfinite).mockReturnValue({
+      data: { pages: [{ jobs: [], userNotFound: false, filtersUnavailable: true }] },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    } as unknown as ReturnType<typeof useAdminJobsInfinite>)
+    renderAt("/admin/jobs?view=gallery&kind=video")
+    expect(screen.getByText(NOTICE)).toBeTruthy()
   })
 })

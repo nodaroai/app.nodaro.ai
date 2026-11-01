@@ -11,7 +11,7 @@ import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
 import { useAdminJobs, useAdminJobSources, useAllAdminUsersLite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import { JobsGallery } from "./jobs-gallery"
-import { JobsFilterBar } from "./jobs-filter-bar"
+import { FiltersUnavailableNotice, JobsFilterBar } from "./jobs-filter-bar"
 import { ADMIN_JOB_STATUSES, jobFiltersKey, parseJobFilters, serializeJobFilters, type AdminJobFilters } from "./jobs-filters"
 import { rowJobType } from "./job-kinds"
 import { creditCell, creditDetailLines } from "./admin-job-credits"
@@ -375,6 +375,7 @@ export default function AdminJobsPage() {
         </div>
       ) : (
       <>
+      {data?.filtersUnavailable && <FiltersUnavailableNotice />}
       {data?.userNotFound && (
         <p className="mb-3 text-sm text-destructive">No user with that email</p>
       )}

@@ -442,6 +442,12 @@ export interface AdminJobsPage {
   readonly jobs: AdminJob[]
   /** The filter named an address no account has: the page is empty because of it. */
   readonly userNotFound: boolean
+  /**
+   * The server could not apply the newer filters (type, model, source,
+   * credits, dates, search) and filtered by status and user only — it runs
+   * ahead of the database function those filters need.
+   */
+  readonly filtersUnavailable: boolean
 }
 
 // workflow_execution_id column exists in DB but not in generated Supabase types
@@ -496,8 +502,10 @@ export async function fetchAdminJobsPage(
     headers: await getAuthHeaders(),
   })
   if (!res.ok) throw await adminError(res, "Failed to fetch jobs")
-  const { data: jobs, userNotFound } = (await res.json()) as { data: JobRow[]; userNotFound?: true }
-  if (!jobs || jobs.length === 0) return { jobs: [], userNotFound: userNotFound === true }
+  const body = (await res.json()) as { data: JobRow[]; userNotFound?: true; filtersUnavailable?: true }
+  const jobs = body.data
+  const filtersUnavailable = body.filtersUnavailable === true
+  if (!jobs || jobs.length === 0) return { jobs: [], userNotFound: body.userNotFound === true, filtersUnavailable }
   const userIds = [...new Set(jobs.map((j) => j.user_id))]
   // Orchestrator-created rows carry only workflow_execution_id (their
   // workflow_id is null), so the owning workflow is resolved through the
@@ -561,7 +569,7 @@ export async function fetchAdminJobsPage(
     reconcile_last_error: j.reconcile_last_error ?? null,
     provider_call_started_at: j.provider_call_started_at ?? null,
   }))
-  return { jobs: enriched, userNotFound: false }
+  return { jobs: enriched, userNotFound: false, filtersUnavailable }
 }
 
 /** `enabled: false` holds the request, e.g. until the admins' ids it must exclude have loaded. */

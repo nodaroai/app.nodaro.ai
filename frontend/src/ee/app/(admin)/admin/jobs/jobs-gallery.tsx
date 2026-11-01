@@ -9,6 +9,7 @@ import { creditTileLabel } from "./admin-job-credits"
 import { jobKindOf, rowJobType } from "./job-kinds"
 import { claimPlayer, releasePlayer, type PlayerSlot } from "./tile-players"
 import type { AdminJobFilters } from "./jobs-filters"
+import { FiltersUnavailableNotice } from "./jobs-filter-bar"
 
 const STATUS_TAG: Record<string, string> = {
   failed: "bg-red-500 text-white",
@@ -237,6 +238,7 @@ export function JobsGallery({ filters, excludeUserIds, enabled = true, onOpenJob
 
   const groups = useMemo(() => buildGroups(items, primary), [items, primary])
   const userNotFound = data?.pages[0]?.userNotFound === true
+  const filtersUnavailable = data?.pages.some((p) => p.filtersUnavailable) === true
 
   return (
     <div>
@@ -257,6 +259,8 @@ export function JobsGallery({ filters, excludeUserIds, enabled = true, onOpenJob
           <span className="font-mono text-xs text-muted-foreground">{items.length} outputs shown</span>
         </div>
       </div>
+
+      {filtersUnavailable && <FiltersUnavailableNotice />}
 
       {isError && items.length === 0 ? (
         <div className="py-16 text-center font-mono text-sm text-destructive">

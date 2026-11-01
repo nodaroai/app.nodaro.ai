@@ -73,11 +73,16 @@ function jobsChain(result: { data: unknown; error: unknown }) {
 // ---------------------------------------------------------------------------
 
 let app: FastifyInstance
+let warns: unknown[][] = []
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  warns = []
   mockRpc.mockResolvedValue({ data: [], error: null })
   app = Fastify({ logger: false })
+  app.addHook("onRequest", async (req) => {
+    req.log = Object.assign(Object.create(req.log), { warn: (...a: unknown[]) => void warns.push(a) })
+  })
   app.addHook("preHandler", async (req) => {
     const userId = req.headers["x-user-id"]
     if (typeof userId === "string") req.userId = userId
@@ -207,6 +212,131 @@ describe("GET /v1/admin/jobs", () => {
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
     expect(mockFrom).not.toHaveBeenCalledWith("jobs")
+  })
+
+  it("a coded RPC error that is not a missing function stays a 500 (no fallback)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } })
+    const res = await adminGet("/v1/admin/jobs")
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(mockFrom).not.toHaveBeenCalledWith("jobs")
+  })
+
+  describe("before migration 575 reaches the database (admin_job_page missing)", () => {
+    // What PostgREST answers when the function is not in its schema cache at all.
+    const MISSING = {
+      code: "PGRST202",
+      message: "Could not find the function public.admin_job_page(p_exclude_user_ids, p_from, p_limit, p_offset) in the schema cache",
+      details: "Searched for the function public.admin_job_page with parameters p_exclude_user_ids, p_from, p_limit, p_offset or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.",
+      hint: null,
+    }
+    const EXCLUDE = "00000000-0000-4000-8000-0000000000aa,00000000-0000-4000-8000-0000000000bb"
+
+    beforeEach(() => {
+      mockRpc.mockImplementation(async (fn: string) =>
+        fn === "admin_job_page" ? { data: null, error: MISSING } : { data: [], error: null },
+      )
+    })
+
+    it.each([
+      ["PGRST202", MISSING],
+      ["42883", { code: "42883", message: "function public.admin_job_page(...) does not exist" }],
+    ])("serves the page the old way on %s: status, user and exclude applied, newest first, offset paged", async (_code, error) => {
+      mockRpc.mockImplementation(async (fn: string) => (fn === "admin_job_page" ? { data: null, error } : { data: [], error: null }))
+      const rows = [
+        { id: "job-2", status: "failed", user_id: VALID_UUID, usage_log_id: null },
+        { id: "job-1", status: "failed", user_id: VALID_UUID, usage_log_id: null },
+      ]
+      const chain = jobsChain({ data: rows, error: null })
+      mockFrom.mockReturnValue(chain)
+      const res = await adminGet(`/v1/admin/jobs?page=1&pageSize=20&status=failed&userId=${VALID_UUID}&excludeUserIds=${EXCLUDE}`)
+      expect(res.statusCode).toBe(200)
+      expect(mockFrom).toHaveBeenCalledWith("jobs")
+      expect(chain.order).toHaveBeenCalledWith("created_at", { ascending: false })
+      expect(chain.range).toHaveBeenCalledWith(20, 39)
+      expect(chain.eq).toHaveBeenCalledWith("status", "failed")
+      expect(chain.eq).toHaveBeenCalledWith("user_id", VALID_UUID)
+      expect(chain.not).toHaveBeenCalledWith("user_id", "in", `(${EXCLUDE})`)
+      expect(chain.in).not.toHaveBeenCalledWith("id", expect.anything())
+      const body = res.json()
+      expect(body.data.map((r: { id: string }) => r.id)).toEqual(["job-2", "job-1"])
+      expect(body.data[0]).not.toHaveProperty("usage_log_id")
+      expect(body.data[0].credit).toEqual({ status: null, charged: null, held: null, released: null, run: null })
+      // No new filter was asked for, so nothing went unapplied.
+      expect(body).not.toHaveProperty("filtersUnavailable")
+      // Every fallback is logged, so a post-release defect cannot hide in it.
+      expect(warns).toEqual([[{ err: error }, "admin_job_page is not in the database yet (migration 575) — serving the pre-575 page"]])
+    })
+
+    it.each([
+      [
+        "PGRST202 for arguments no signature of the existing function takes",
+        {
+          code: "PGRST202",
+          message: "Could not find the function public.admin_job_page(p_exclude_user_ids, p_limit) in the schema cache",
+          details: "Searched for the function public.admin_job_page with parameters p_exclude_user_ids, p_limit or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.",
+          hint: "Perhaps you meant to call the function public.admin_job_page(p_from, p_limit, p_offset, p_to)",
+        },
+      ],
+      [
+        "PGRST202 naming a different function",
+        { code: "PGRST202", message: "Could not find the function public.admin_job_pages(p_limit) in the schema cache", hint: null },
+      ],
+      ["42883 for an operator inside the body", { code: "42883", message: "operator does not exist: text = uuid" }],
+      ["42883 for a function the body calls", { code: "42883", message: "function public.unaccent_lower(text) does not exist" }],
+    ])("a %s is a 500, never the unfiltered fallback", async (_what, error) => {
+      mockRpc.mockImplementation(async (fn: string) => (fn === "admin_job_page" ? { data: null, error } : { data: [], error: null }))
+      const res = await adminGet("/v1/admin/jobs?types=generate-image")
+      expect(res.statusCode).toBe(500)
+      expect(res.json().error.code).toBe("internal_error")
+      expect(mockFrom).not.toHaveBeenCalledWith("jobs")
+      expect(warns).toEqual([])
+    })
+
+    it("applies the user an address resolved to", async () => {
+      const profiles = jobsChain({ data: [{ id: ADMIN_UUID, email: "a@example.com" }], error: null })
+      const jobs = jobsChain({ data: [], error: null })
+      mockFrom.mockImplementation((table: string) => (table === "profiles" ? profiles : jobs))
+      const res = await adminGet("/v1/admin/jobs?userEmail=a@example.com")
+      expect(res.statusCode).toBe(200)
+      expect(jobs.eq).toHaveBeenCalledWith("user_id", ADMIN_UUID)
+    })
+
+    it.each([
+      "types=generate-image",
+      "models=gpt-image",
+      "sources=web:studio",
+      "minCredits=10",
+      "from=2026-06-01",
+      "to=2026-06-30",
+      "q=fox",
+    ])("says the new filters were not applied when one was asked for (%s)", async (query) => {
+      mockFrom.mockReturnValue(jobsChain({ data: [{ id: "job-1", status: "completed", user_id: VALID_UUID }], error: null }))
+      const res = await adminGet(`/v1/admin/jobs?${query}`)
+      expect(res.statusCode).toBe(200)
+      expect(res.json().filtersUnavailable).toBe(true)
+      expect(res.json().data).toHaveLength(1)
+    })
+
+    it("says so on an empty page too", async () => {
+      mockFrom.mockReturnValue(jobsChain({ data: [], error: null }))
+      const res = await adminGet("/v1/admin/jobs?types=generate-image")
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ data: [], filtersUnavailable: true })
+    })
+
+    it("a blank search is no filter", async () => {
+      mockFrom.mockReturnValue(jobsChain({ data: [], error: null }))
+      const res = await adminGet("/v1/admin/jobs?q=%20%20")
+      expect(res.json()).toEqual({ data: [] })
+    })
+
+    it("returns 500 when the fallback read errors", async () => {
+      mockFrom.mockReturnValue(jobsChain({ data: null, error: { message: "boom" } }))
+      const res = await adminGet("/v1/admin/jobs")
+      expect(res.statusCode).toBe(500)
+      expect(res.json().error.code).toBe("internal_error")
+    })
   })
 
   it("passes every filter to admin_job_page", async () => {
@@ -414,6 +544,29 @@ describe("GET /v1/admin/jobs/sources", () => {
     const since = Date.parse((args as { p_since: string }).p_since)
     expect(since).toBeGreaterThanOrEqual(before - ninetyDays - 1000)
     expect(since).toBeLessThanOrEqual(Date.now() - ninetyDays + 1000)
+  })
+
+  it("answers no choices before migration 575 reaches the database (admin_job_sources missing)", async () => {
+    const error = { code: "PGRST202", message: "Could not find the function public.admin_job_sources(p_since) in the schema cache", hint: null }
+    mockRpc.mockResolvedValue({ data: null, error })
+    const res = await adminGet("/v1/admin/jobs/sources")
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: [] })
+    expect(warns).toEqual([[{ err: error }, "admin_job_sources is not in the database yet (migration 575) — serving no choices"]])
+  })
+
+  it("a call the existing admin_job_sources does not take is a 500", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "PGRST202",
+        message: "Could not find the function public.admin_job_sources(p_since) in the schema cache",
+        hint: "Perhaps you meant to call the function public.admin_job_sources(p_from)",
+      },
+    })
+    const res = await adminGet("/v1/admin/jobs/sources")
+    expect(res.statusCode).toBe(500)
+    expect(warns).toEqual([])
   })
 
   it("returns 500 when admin_job_sources errors", async () => {

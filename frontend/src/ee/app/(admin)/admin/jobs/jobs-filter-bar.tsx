@@ -403,3 +403,12 @@ export function JobsFilterBar({ filters, onChange, sources }: JobsFilterBarProps
     </div>
   )
 }
+
+/** Shown above the results when the server filtered by status and user only (`filtersUnavailable`). */
+export function FiltersUnavailableNotice() {
+  return (
+    <p role="status" className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+      These filters arrive with the next release — showing jobs by status and user only.
+    </p>
+  )
+}

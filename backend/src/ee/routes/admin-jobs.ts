@@ -5,6 +5,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { JOB_STATUSES } from "../../lib/job-status.js"
 import { runCreditsFor, runCreditsOf, type RunCreditFigures } from "../../lib/job-credit-status.js"
 import { sendInternalError } from "../../lib/http-errors.js"
+import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
 
 /**
  * GET /v1/admin/jobs -- the admin Jobs table's data source.
@@ -24,7 +25,9 @@ import { sendInternalError } from "../../lib/http-errors.js"
  * id and put back in that order. A text search (`q`) always runs inside a date
  * range -- with no `from`, the 7 days before the range's end (`to`, else
  * today); a `q` that is a uuid is a job id, matched exactly over every date
- * (`from` / `to` are ignored).
+ * (`from` / `to` are ignored). Until migration 575 is in the database the page
+ * falls back to the pre-575 read (status / user / excluded accounts only) and
+ * answers `filtersUnavailable: true` when a newer filter went unapplied.
  *
  * Core `GET /v1/jobs` could not be reused: it always narrows to one user
  * (routes/jobs.ts), pages by created_at cursor rather than offset, has no
@@ -152,6 +155,26 @@ const listQuery = z.object({
   q: z.string().max(200).optional(),
 }).refine((v) => v.page * v.pageSize <= INT4_MAX, { message: "Page is past the last row the list can reach", path: ["page"] })
 
+/**
+ * `name` ITSELF is not in the database yet (migration 575 not applied) — not
+ * merely any "missing function" error, which would let a real defect after
+ * the release quietly serve the unfiltered fallback:
+ * - PostgREST's `PGRST202` ("Could not find the function public.<name>(…) in
+ *   the schema cache") also answers a call whose arguments match no signature
+ *   of an EXISTING function; then its hint offers that same function
+ *   ("Perhaps you meant to call the function public.<name>(…)").
+ * - Postgres' `42883` is also raised inside an existing body (an operator or a
+ *   function it calls); only "function public.<name>(…) does not exist" counts.
+ */
+function functionNotInDatabase(err: { code?: string; message?: string; hint?: string | null }, name: string): boolean {
+  if (!isMissingFunctionError(err)) return false
+  const named = new RegExp(`\\b(?:public\\.)?${name}\\(`)
+  const message = err.message ?? ""
+  if (!named.test(message)) return false
+  if (err.code === "42883" && !new RegExp(`^function (?:public\\.)?${name}\\(.*\\) does not exist$`).test(message)) return false
+  return !named.test(err.hint ?? "")
+}
+
 /** `profiles.email` as a LIKE pattern that matches only itself (case aside). */
 function exactIlikePattern(email: string): string {
   return email.replace(/[\\%_]/g, (c) => `\\${c}`)
@@ -212,21 +235,50 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
       // Only for a real uuid: the RPC casts the search when this is set.
       p_q_is_id: q === null ? null : qIsId,
     })
-    if (pageError) return sendInternalError(reply, req, pageError, "Lookup failed")
-    const ids = ((pageIds ?? []) as Array<{ id: string }>).map((r) => r.id)
-    if (ids.length === 0) return reply.send({ data: [] })
-
-    const { data, error } = await supabase.from("jobs").select(ADMIN_JOB_COLUMNS).in("id", ids)
-    if (error) return sendInternalError(reply, req, error, "Lookup failed")
     type Row = Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }
-    const byId = new Map(((data ?? []) as unknown as Row[]).map((r) => [r.id, r]))
-    // The page's order is the RPC's; a job deleted between the two reads drops out.
-    const rows = ids.flatMap((id) => byId.get(id) ?? [])
+    let rows: Row[]
+    let filtersUnavailable = false
+    if (pageError && functionNotInDatabase(pageError, "admin_job_page")) {
+      // Migration 575 creates admin_job_page, and migrations reach the shared
+      // database only on a push to main, so staging runs this code before the
+      // function exists. Until then the page is served the way it was before
+      // 575: newest first, offset paged, filtered by status, user and the
+      // excluded accounts only — and says so when a newer filter was asked
+      // for. Once 575 is applied the RPC exists and this branch never runs.
+      req.log.warn({ err: pageError }, "admin_job_page is not in the database yet (migration 575) — serving the pre-575 page")
+      let query = supabase
+        .from("jobs")
+        .select(ADMIN_JOB_COLUMNS)
+        .order("created_at", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+      if (status) query = query.eq("status", status)
+      if (userId) query = query.eq("user_id", userId)
+      // A URL-borne `not.in` list (up to 200 ids) is acceptable only in this temporary fallback.
+      if (excludeUserIds.length > 0) query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`)
+      const { data, error } = await query
+      if (error) return sendInternalError(reply, req, error, "Lookup failed")
+      rows = (data ?? []) as unknown as Row[]
+      filtersUnavailable = types.length > 0 || models.length > 0 || sources.length > 0 ||
+        minCredits !== undefined || from !== undefined || to !== undefined || q !== null
+    } else {
+      if (pageError) return sendInternalError(reply, req, pageError, "Lookup failed")
+      const ids = ((pageIds ?? []) as Array<{ id: string }>).map((r) => r.id)
+      if (ids.length === 0) return reply.send({ data: [] })
+
+      const { data, error } = await supabase.from("jobs").select(ADMIN_JOB_COLUMNS).in("id", ids)
+      if (error) return sendInternalError(reply, req, error, "Lookup failed")
+      const byId = new Map(((data ?? []) as unknown as Row[]).map((r) => [r.id, r]))
+      // The page's order is the RPC's; a job deleted between the two reads drops out.
+      rows = ids.flatMap((id) => byId.get(id) ?? [])
+    }
+    const unapplied = filtersUnavailable ? { filtersUnavailable: true as const } : {}
+    if (rows.length === 0) return reply.send({ data: [], ...unapplied })
     // One read per table for the page: each job's own figures and, for a
     // parent, its run's (its steps included).
     const credits = await runCreditsFor(rows, [...new Set(rows.map((r) => r.user_id as string))])
     return reply.send({
       data: rows.map(({ usage_log_id: _log, ...row }) => ({ ...row, credit: adminJobCredit(runCreditsOf(row.id, credits)) })),
+      ...unapplied,
     })
   })
 
@@ -240,6 +292,11 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
     const { data, error } = await supabase.rpc("admin_job_sources", {
       p_since: new Date(Date.now() - SOURCES_WINDOW_MS).toISOString(),
     })
+    // Before migration 575 reaches the database the function is missing: no choices yet, not a failed page.
+    if (error && functionNotInDatabase(error, "admin_job_sources")) {
+      req.log.warn({ err: error }, "admin_job_sources is not in the database yet (migration 575) — serving no choices")
+      return reply.send({ data: [] })
+    }
     if (error) return sendInternalError(reply, req, error, "Lookup failed")
     const rows = (data ?? []) as Array<{ key: string; source: string | null; source_detail: string | null; count: number | string }>
     return reply.send({
