@@ -34,6 +34,7 @@ import {
   engineMasksTarget,
   faceMaskingZoneSchema,
   loadedEngineDrawsFaceMesh,
+  withDepthColormapFor,
   withFaceMeshFor,
   withResolvedZone,
   type FaceMaskingZone,
@@ -516,6 +517,21 @@ export function withoutUnsupportedFaceMesh(composed: ComposedTrendRun): void {
 }
 
 /**
+ * The body's `faceMasking` without `depthColormap` unless the loaded engine
+ * declares that map (`castSwap.depthColormaps`, `withDepthColormapFor`): an
+ * engine from before the choice gets exactly the body it got before it
+ * existed, and draws (and words) the source's default. Publishing holds a
+ * trend that names one back from such an environment (`depthColormap:<map>`),
+ * so only a draft's test run (or a published one, mid-deploy) gets here.
+ * Mutates `composed.body` (its `faceMasking` is its own copy).
+ */
+export function withoutUnsupportedDepthColormap(composed: ComposedTrendRun): void {
+  const masking = composed.body.faceMasking
+  if (!masking || !Object.hasOwn(masking, "depthColormap")) return
+  composed.body.faceMasking = withDepthColormapFor(masking, getPluginSupports().castSwap)
+}
+
+/**
  * The body's `steps` kept only when the loaded engine declares
  * `castSwap.steps`, its `clipBody` only when it also declares
  * `castSwap.clipBodySheet` and its `shotList` only when it also declares
@@ -644,7 +660,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
- * prompt parts, the prompt style and scene, the face mesh, the stored scene
+ * prompt parts, the prompt style and scene, the face mesh, the depth colormap, the stored scene
  * description, the preparation steps, the Pulse audio, the Prism reference
  * audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
@@ -655,6 +671,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedPromptParts(composed)
   withoutUnsupportedPromptStyle(composed)
   withoutUnsupportedFaceMesh(composed)
+  withoutUnsupportedDepthColormap(composed)
   withoutUnsupportedSceneDescription(composed)
   withoutUnsupportedSteps(composed)
   withoutUnsupportedPulseAudio(composed)

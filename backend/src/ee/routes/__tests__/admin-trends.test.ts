@@ -2475,6 +2475,40 @@ describe("the stored face mask", () => {
       expect(key).not.toBe(KEY())
     })
 
+    it("draws the depth in a chosen colormap only on an engine that lists it (refused before anything is paid), sending it", async () => {
+      const MAPPED = { ...MASKING, fill: "depth" as const, depthColormap: "inferno" as const }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      seed({}, draftData({ faceMasking: MAPPED }))
+      for (const extra of [{}, { depthColormaps: ["grayscale", "turbo"] }]) {
+        supports(extra)
+        const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+        expect(held.statusCode, JSON.stringify(extra)).toBe(503)
+        expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/cannot draw the depth in inferno/) })
+      }
+      expect(engine.calls).toEqual([])
+
+      supports({ depthColormaps: ["grayscale", "inferno"] })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({
+        videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+        faceMasking: { ...withResolvedZone({ ...MASKING, fill: "depth" }), depthColormap: "inferno" },
+      })
+      const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+      expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: MAPPED })))
+      expect(key).not.toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
+    })
+
+    it("a colormap that changes nothing drawn (the default) needs no engine support and is sent as no key", async () => {
+      setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } as never })
+      seed({}, draftData({ faceMasking: { ...MASKING, fill: "depth", depthColormap: "turbo" } }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone({ ...MASKING, fill: "depth" }) })
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
+    })
+
     it("draws role outlines only on an engine that declares them (refused before anything is paid), sending the flag and the outlines", async () => {
       const lead = { label: { slot: "lead" }, fromFrame: 0, toFrame: 359, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 100 }
       const OUTLINED = { ...MASKING, roleOutlines: true, marks: [lead] }

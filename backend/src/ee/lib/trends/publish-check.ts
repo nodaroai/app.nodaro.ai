@@ -56,6 +56,11 @@
  * hidden) likewise needs an engine that declares them (`castSwap.roleOutlines`,
  * need `ROLE_OUTLINES_NEED`): one from before them would be sent a clip with
  * rings and no word of what they mean.
+ * A trend that names a depth colormap (`faceMasking.depthColormap`, only when
+ * it changes what is drawn: `depthColormapSent`) needs an engine that
+ * declares that map (`castSwap.depthColormaps`, need `depthColormap:<map>`):
+ * one from before the choice is sent no colormap and draws (and words) the
+ * source's default.
  * A trend that sets its preparation steps (`steps`, anything but `{}`:
  * `stepsSet`) likewise needs an engine that declares them (`castSwap.steps`,
  * need `STEPS_NEED`): an older engine's body schema strips the key silently,
@@ -99,6 +104,8 @@
  */
 import type { EngineEnvironment } from "../engine-environments.js"
 import {
+  depthColormapSent,
+  engineDrawsDepthColormap,
   engineDrawsFaceMesh,
   engineDrawsRoleOutlines,
   engineMasksTarget,
@@ -108,6 +115,8 @@ import {
   faceMaskingSourceOf,
   faceMeshOn,
   roleOutlinesOn,
+  FACE_MASKING_DEPTH_COLORMAPS,
+  type FaceMaskingDepthColormap,
   type FaceMaskingSource,
 } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
@@ -166,7 +175,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "steps", "clipBodySheet", "shotList", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "steps", "clipBodySheet", "shotList", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -221,6 +230,19 @@ export const FACE_MESH_NEED = "faceMesh"
 /** The need of a trend that draws role outlines (`faceMasking.roleOutlines: true`, `castSwap.roleOutlines`). */
 export const ROLE_OUTLINES_NEED = "roleOutlines"
 
+/** The need of a trend that draws its depth with `colormap` (`faceMasking.depthColormap`, `castSwap.depthColormaps`). */
+export function depthColormapNeed(colormap: FaceMaskingDepthColormap): string {
+  return `${DEPTH_COLORMAP_NEED_PREFIX}${colormap}`
+}
+const DEPTH_COLORMAP_NEED_PREFIX = "depthColormap:"
+
+/** The colormap a `depthColormap:<map>` need names, or null for any other need. */
+function depthColormapOfNeed(need: string): FaceMaskingDepthColormap | null {
+  if (!need.startsWith(DEPTH_COLORMAP_NEED_PREFIX)) return null
+  const colormap = need.slice(DEPTH_COLORMAP_NEED_PREFIX.length)
+  return (FACE_MASKING_DEPTH_COLORMAPS as readonly string[]).includes(colormap) ? (colormap as FaceMaskingDepthColormap) : null
+}
+
 /** The need of a trend that sets its preparation steps (`steps`, `castSwap.steps`). */
 export const STEPS_NEED = "steps"
 
@@ -260,6 +282,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? [FACE_MESH_NEED] : []),
     // Role outlines: an engine from before them would be sent the ringed clip and no word of the rings.
     ...(roleOutlinesOn(data.faceMasking) ? [ROLE_OUTLINES_NEED] : []),
+    // A depth colormap: an engine from before it is sent none, and draws the source's default.
+    ...depthColormapNeeds(data),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
     // ("Body from the clip" Off, or On with no prompt, is safe everywhere: not a need.)
     ...(stepsSet(stepsThatNeedTheEngine(data.steps)) ? [STEPS_NEED] : []),
@@ -274,6 +298,12 @@ function needsOf(data: TrendVersionData): string[] {
     ...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine],
     "fullQuality",
   ]
+}
+
+/** The draft's depth colormap need, when its masking is on and names a colormap that changes what is drawn. */
+function depthColormapNeeds(data: TrendVersionData): string[] {
+  const colormap = faceMaskingOn(data.faceMasking) ? depthColormapSent(data.faceMasking) : undefined
+  return colormap === undefined ? [] : [depthColormapNeed(colormap)]
 }
 
 function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
@@ -291,6 +321,8 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === HIDE_BODY_NEED) return !engineMasksTarget(cs, "body", "faces")
     if (need === FACE_MESH_NEED) return !engineDrawsFaceMesh(cs)
     if (need === ROLE_OUTLINES_NEED) return !engineDrawsRoleOutlines(cs)
+    const colormap = depthColormapOfNeed(need)
+    if (colormap !== null) return !engineDrawsDepthColormap(cs, colormap)
     if (need === STEPS_NEED) return !engineTakesSteps(cs)
     if (need === CLIP_BODY_NEED) return !engineTakesClipBodySheet(cs)
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)

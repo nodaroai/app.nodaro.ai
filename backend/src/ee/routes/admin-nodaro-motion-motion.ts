@@ -36,7 +36,9 @@
  * one whose Full depth takes its scene from the description AND the original
  * (`"description-and-original"`) while any environment's engine does not list
  * that scene (`castSwap.fullDepthScenes`): an engine from before it cannot
- * read the setting at all.
+ * read the setting at all; and one whose masking names a depth colormap
+ * (`depthColormap`) while any environment's engine cannot draw that map
+ * (`nodaro-motion-depth-colormap.ts`).
  *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_motion`)
  * with the setting before and after.
@@ -60,6 +62,7 @@ import { engineTakesScene } from "../lib/trends/prompt-style.js"
 import { fullDepthSceneOf, type FaceMaskingScene } from "../../lib/cast-swap-face-masking.js"
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
 import { cannotDrawFaceMeshMessage, drawsFaceMesh, environmentsThatCannotDrawFaceMesh } from "../lib/nodaro-motion-face-mesh.js"
+import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /** The Full depth scenes an engine must list before a shared setting may name them (newer than the setting's scenes). */
@@ -117,7 +120,9 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const scene = parsed.data.motion[engine]?.masking ? fullDepthSceneOf(parsed.data.motion[engine]!.masking!) : null
         return scene && DECLARED_ONLY_SCENES.includes(scene) ? [scene] : []
       })
-      if (hides || meshes || scenes.length > 0) {
+      // A depth colormap likewise (each map named, once).
+      const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
+      if (hides || meshes || scenes.length > 0 || colormaps.length > 0) {
         const environments = await listEngineEnvironments()
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -141,6 +146,10 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
               },
             })
           }
+        }
+        const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
+        if (maps.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } })
         }
       }
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style

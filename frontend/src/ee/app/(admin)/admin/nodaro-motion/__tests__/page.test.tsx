@@ -54,6 +54,12 @@ const meshes = (env: string): TrendEngineEnvironment => ({
   env,
   supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, faceMesh: true } },
 })
+/** An engine that draws the depth in every colormap (`castSwap.depthColormaps`), or in some. */
+const maps = (env: string, depthColormaps: string[] = ["grayscale", "turbo", "inferno", "magma", "viridis"]): TrendEngineEnvironment => ({
+  ...ENVIRONMENTS[0]!,
+  env,
+  supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, depthColormaps } as never },
+})
 /** Every environment the setting is shared by can hide whole people. */
 const HIDE_ENVS: TrendEngineEnvironment[] = [hides("production"), hides("staging")]
 
@@ -167,6 +173,36 @@ describe("Admin → Nodaro Motion", () => {
     expect(mesh).toBeChecked()
     expect(mesh).toBeEnabled()
     expect(within(prism).getByText(/staging cannot draw the face mesh yet.*turn it off to save/)).toBeInTheDocument()
+  })
+
+  it("saves a depth fill's colormap once every environment's engine draws it; the default is no key", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [maps("production"), maps("staging")] } })
+    routes[`PUT ${URL}`] = (init) => ({
+      body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    expect(within(prism).queryByRole("combobox", { name: "Depth colormap" })).not.toBeInTheDocument()
+    await user.click(within(prism).getByRole("combobox", { name: "Fill" }))
+    await user.click(screen.getByRole("option", { name: "Depth colors" }))
+    await user.click(within(prism).getByRole("combobox", { name: "Depth colormap" }))
+    await user.click(await screen.findByRole("option", { name: "Inferno" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", fill: "depth", depthColormap: "inferno" } } }]))
+  })
+
+  it("greys out a colormap an environment's engine cannot draw, naming it", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } } })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [maps("production"), maps("staging", ["inferno"])] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await section(/Prism/)
+    await user.click(await within(prism).findByRole("combobox", { name: "Depth colormap" }))
+    await waitFor(() => expect(screen.getByRole("option", { name: "Magma (not supported yet)" })).toHaveAttribute("aria-disabled", "true"))
+    expect(screen.getByRole("option", { name: "Inferno" })).not.toHaveAttribute("aria-disabled")
   })
 
   it("saves Body (the whole person hidden) once an environment's engine can", async () => {

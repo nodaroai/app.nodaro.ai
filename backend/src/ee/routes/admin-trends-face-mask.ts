@@ -34,6 +34,10 @@
  * (each person slot with slot marks: its colour and boxes), and approving
  * takes only a mask whose answer accounts for every outline sent
  * (`face_mask_not_outlined` otherwise), recording what each one ringed.
+ * A depth colormap (`depthColormap`, decided 2026-11-01; only when it changes
+ * what is drawn, `depthColormapSent`) is held back unless the loaded engine
+ * declares that map (`castSwap.depthColormaps`): an older one's make strips
+ * the key and would store the default render under the map's settings key.
  *
  * The scene description step (`steps.sceneDescription`): a make that
  * describes the clip (full depth, on an engine that stores a scene
@@ -75,12 +79,14 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { deriveJobSource } from "../../lib/job-source.js"
 import {
+  depthColormapSent,
   faceMaskMarksOf,
   faceMaskTargetOf,
   faceMaskingOn,
   faceMaskingSent,
   faceMaskingSourceOf,
   faceMeshOn,
+  loadedEngineDrawsDepthColormap,
   loadedEngineDrawsFaceMesh,
   loadedEngineDrawsRoleOutlines,
   loadedEngineMasksTarget,
@@ -300,6 +306,12 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const outlinesOn = roleOutlinesOn(draft.faceMasking)
       if (outlinesOn && !loadedEngineDrawsRoleOutlines()) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw role outlines yet: turn role outlines off, or wait for the engine.")
+      }
+      // A depth colormap an engine does not declare: its make strips the key (the default render) under the
+      // colormap's settings key, so it is refused before anything is paid.
+      const colormap = depthColormapSent(draft.faceMasking)
+      if (colormap !== undefined && !loadedEngineDrawsDepthColormap(colormap)) {
+        return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth in ${colormap} yet: choose the default colormap, or wait for the engine.`)
       }
       const settingsKey = faceMaskSettingsKey(draft)!
       // Full depth on an engine that describes the original clip as it makes it: the roles to name

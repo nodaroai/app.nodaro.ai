@@ -165,6 +165,25 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect(h.upserts).toHaveLength(1)
   })
 
+  it("takes a masking that names a depth colormap only while every environment's engine draws that map", async () => {
+    const MAPS = { ...HIDES, depthColormaps: ["grayscale", "turbo", "inferno", "magma", "viridis"] }
+    h.envs = [envRow("production", MAPS), envRow("staging", MAPS)]
+    const motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", depthColormap: "inferno" } },
+      "motion-pulse": { masking: { mode: "always", fill: "depth", depthColormap: "viridis" } },
+    }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    h.envs = [envRow("production", MAPS), envRow("staging", { ...HIDES, depthColormaps: ["inferno"] })]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/cannot draw the depth in inferno or viridis/) })
+    expect(h.upserts).toHaveLength(1)
+    // A colormap that changes nothing drawn (the source's default, a blur fill) asks no engine.
+    h.envs = []
+    const same = { "motion-prism": { masking: { mode: "always", source: "full-depth", depthColormap: "grayscale" } }, "motion-pulse": { masking: { mode: "always", depthColormap: "magma" } } }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion: same } })).statusCode).toBe(200)
+  })
+
   it("takes Full depth's description + original scene only while every environment's engine lists it", async () => {
     const BOTH = { ...HIDES, fullDepthScenes: ["description", "original", "none", "description-and-original"] }
     const motion = { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" } } }

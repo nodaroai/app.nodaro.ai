@@ -31,9 +31,19 @@
 // region told by the role's boxes on the mask, so a run can say who is who in
 // every shot. Offered once some environment's engine draws them; a depth fill
 // is then drawn gray. Off is no key.
+//
+// Depth colormap (wherever the setting draws depth: Full depth, Keep people, a
+// Faces hidden depth fill): the depth map's colormap, of the depth provider's
+// (grayscale, turbo, inferno, magma, viridis). The default (grayscale; turbo
+// for a depth fill) is no key, exactly as before the choice existed. A map is
+// offered once the engine draws it (a trend's: some environment's engine;
+// Admin → Nodaro Motion's: every environment's, naming those that lack it);
+// with none offered the select is greyed out and says why. While role
+// outlines are on, a depth fill is fixed at grayscale, and says so.
 
 import { useId } from "react"
 import { ROLE_OUTLINE_PALETTE } from "@nodaro/render-rules"
+import type { VideoDepthColormap } from "@nodaro/shared/media"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -54,7 +64,16 @@ import type {
   AdminTrendFullDepthScene,
 } from "@/lib/api"
 import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
-import { defaultTargetFor, isDepthPreparation, someEngineDrawsFaceMesh, someEngineDrawsRoleOutlines } from "../clip-preparation"
+import {
+  DEPTH_COLORMAPS,
+  defaultTargetFor,
+  depthColormapApplies,
+  depthColormapDefaultFor,
+  depthColormapsSomeEngineDraws,
+  isDepthPreparation,
+  someEngineDrawsFaceMesh,
+  someEngineDrawsRoleOutlines,
+} from "../clip-preparation"
 import { FullDepthSceneSelect } from "./FullDepthSceneSelect"
 
 const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hint: string }> = [
@@ -84,6 +103,14 @@ const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> 
   { value: "blur", label: "Blur (default)" },
   { value: "depth", label: "Depth colors" },
 ]
+
+const COLORMAP_LABELS: Readonly<Record<VideoDepthColormap, string>> = {
+  grayscale: "Grayscale",
+  turbo: "Turbo",
+  inferno: "Inferno",
+  magma: "Magma",
+  viridis: "Viridis",
+}
 
 const ZONE_LABELS: Readonly<Record<keyof AdminTrendFaceMaskingZone, string>> = {
   leftPct: "Left",
@@ -125,6 +152,14 @@ interface Props {
    * once some environment's engine in `envs` draws it.
    */
   readonly faceMeshMissingIn?: readonly string[]
+  /**
+   * Admin → Nodaro Motion (a setting every environment shares): for each
+   * depth colormap, the environments whose engine cannot draw it
+   * (`environmentsThatCannotDrawColormaps`). When given, a map is offered only
+   * while its list is empty; left out, once some environment's engine in
+   * `envs` draws it.
+   */
+  readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
   /** The source clip's length, when known: Full depth's original scene takes up to 27.5 s. */
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
@@ -143,6 +178,7 @@ export function FaceMaskingEditor({
   supportedTargets,
   bodyMissingIn,
   faceMeshMissingIn,
+  depthColormapsMissingIn,
   clipSec,
   envs,
   offerRoleOutlines = false,
@@ -194,6 +230,19 @@ export function FaceMaskingEditor({
   const outlinesOn = value?.roleOutlines === true
   const outlinesUnsupported = !someEngineDrawsRoleOutlines(envs)
   const outlinesShown = offerRoleOutlines && mode !== "off" && source === "faces" && (outlinesOn || !outlinesUnsupported)
+  // Depth colormap: wherever depth is drawn. Under role outlines a depth fill is fixed at grayscale.
+  const colormapShown = mode !== "off" && depthColormapApplies({ source, fill })
+  const colormapForced = outlinesOn && source === "faces" && fill === "depth"
+  const defaultColormap = depthColormapDefaultFor(source)
+  const colormap: VideoDepthColormap = colormapForced ? "grayscale" : (value?.depthColormap ?? defaultColormap)
+  const drawnSomewhere = depthColormapsSomeEngineDraws(envs)
+  const colormapOffered = (c: VideoDepthColormap) =>
+    c === defaultColormap || (depthColormapsMissingIn ? depthColormapsMissingIn[c].length === 0 : drawnSomewhere.includes(c))
+  const noColormapOffered = DEPTH_COLORMAPS.every((c) => c === defaultColormap || !colormapOffered(c))
+  const colormapUnsupported = !colormapForced && !colormapOffered(colormap)
+  const colormapLacking = depthColormapsMissingIn
+    ? [...new Set(DEPTH_COLORMAPS.filter((c) => c !== defaultColormap).flatMap((c) => depthColormapsMissingIn[c]))]
+    : []
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
@@ -203,6 +252,7 @@ export function FaceMaskingEditor({
   const noMarginsId = `${id}-no-margins`
   const faceMeshId = `${id}-face-mesh`
   const outlinesId = `${id}-role-outlines`
+  const colormapId = `${id}-depth-colormap`
 
   return (
     <div className="flex flex-col gap-3">
@@ -250,6 +300,51 @@ export function FaceMaskingEditor({
         <p id={hintId} className="text-xs text-muted-foreground">
           {hint}
         </p>
+      )}
+
+      {colormapShown && (
+        <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
+          <label htmlFor={colormapId} className="font-medium">
+            Depth colormap
+          </label>
+          <Select
+            value={colormap}
+            disabled={colormapForced || (noColormapOffered && colormap === defaultColormap)}
+            // The default is no key: a setting without a colormap is saved exactly as before the choice existed.
+            onValueChange={(c) => set({ depthColormap: c === defaultColormap ? undefined : (c as VideoDepthColormap) })}
+          >
+            <SelectTrigger id={colormapId} className="h-9" aria-describedby={`${colormapId}-hint`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DEPTH_COLORMAPS.map((c) => (
+                <SelectItem key={c} value={c} disabled={!colormapOffered(c) && c !== colormap}>
+                  {COLORMAP_LABELS[c]}
+                  {c === defaultColormap ? " (default)" : !colormapOffered(c) ? " (not supported yet)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span id={`${colormapId}-hint`} className="text-xs text-muted-foreground">
+            {colormapForced
+              ? "Role outlines draw the depth fill in grayscale, so every outline colour reads: turn them off to choose another colormap."
+              : `The colors the depth map is drawn in; the prompt describes the depth by them.${offerRoleOutlines ? " Make the face mask again after a change." : ""}`}
+          </span>
+          {!colormapForced && colormapUnsupported && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {depthColormapsMissingIn
+                ? `The Cast Swap engine of ${depthColormapsMissingIn[colormap].join(", ")} cannot draw the depth in ${COLORMAP_LABELS[colormap]} yet, and this setting is shared by every environment: choose the default to save.`
+                : `No environment's Cast Swap engine draws the depth in ${COLORMAP_LABELS[colormap]} yet: the engine is out of date.`}
+            </span>
+          )}
+          {!colormapForced && !colormapUnsupported && noColormapOffered && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {depthColormapsMissingIn
+                ? `The Cast Swap engine of ${colormapLacking.join(", ")} cannot draw other depth colormaps yet, and this setting is shared by every environment.`
+                : "No environment's Cast Swap engine draws other depth colormaps yet: the engine is out of date."}
+            </span>
+          )}
+        </div>
       )}
 
       {source === "full-depth" && (

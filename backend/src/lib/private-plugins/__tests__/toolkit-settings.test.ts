@@ -195,6 +195,42 @@ describe("tk.settings.nodaroMotionMotion", () => {
   })
 })
 
+describe("tk.settings: the depth colormap", () => {
+  beforeEach(() => {
+    h.masking = null
+    h.motion = null
+    h.failed = false
+  })
+
+  it("answers a colormap only to an engine that lists the map, and only where it changes what is drawn", async () => {
+    h.masking = {
+      "motion-prism": { mode: "always", fill: "depth", depthColormap: "inferno" },
+      // The default of a depth fill: never answered, whatever the engine lists.
+      "motion-pulse": { mode: "always", fill: "depth", depthColormap: "turbo" },
+    }
+    h.motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", depthColormap: "magma" } } }
+    try {
+      setPluginSupports({ castSwap: { ...CS, depthColormaps: ["turbo", "inferno", "magma"] } } as never)
+      const masking = await buildToolkit().settings!.nodaroMotionMasking!()
+      expect(masking!["motion-prism"]).toEqual({ mode: "always", fill: "depth", depthColormap: "inferno" })
+      expect(masking!["motion-pro"]).toEqual(masking!["motion-prism"])
+      expect(masking!["motion-pulse"]).toEqual({ mode: "always", fill: "depth" })
+      const motion = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthColormap: "magma" } })
+      for (const castSwap of [CS, { ...CS, depthColormaps: ["grayscale"] }]) {
+        setPluginSupports({ castSwap } as never)
+        const older = await buildToolkit().settings!.nodaroMotionMasking!()
+        expect(older!["motion-prism"], JSON.stringify(castSwap)).toEqual({ mode: "always", fill: "depth" })
+        expect(Object.values(older!).some((m) => m && Object.hasOwn(m, "depthColormap"))).toBe(false)
+        const olderMotion = await buildToolkit().settings!.nodaroMotionMotion!()
+        expect(olderMotion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+      }
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+})
+
 describe("the plugin-side types mirror the host's", () => {
   it("what the host answers for the Motion setting (both key sets) is the plugin's NodaroMotionMotion", () => {
     expectTypeOf<NodaroMotionMotionForPlugin>().toExtend<PluginNodaroMotionMotion>()

@@ -17,6 +17,8 @@
  * with Keep people: switching modes here never leaves the draft in one of
  * those states.
  */
+import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
+import { videoDepthColormaps, type VideoDepthColormap } from "@nodaro/shared/media"
 import type { AdminTrendFaceMasking, AdminTrendFaceMaskingSource, AdminTrendFaceMaskingTarget, TrendEngineEnvironment } from "@/lib/api"
 
 export const CLIP_PREPARATIONS: ReadonlyArray<{ value: AdminTrendFaceMaskingSource; label: string; hint: string }> = [
@@ -180,6 +182,67 @@ export function roleOutlinesOn(m: AdminTrendFaceMasking | undefined): boolean {
 /** A trend's editor: whether some environment's engine draws role outlines (unknown while the environments are: false). */
 export function someEngineDrawsRoleOutlines(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.roleOutlines === true)
+}
+
+/**
+ * The depth colormaps a setting may name: what Nodaro Motion's depth provider
+ * offers (`videoDepthColormaps("video-depth-anything")`), in display order.
+ */
+export const DEPTH_COLORMAPS: readonly VideoDepthColormap[] = videoDepthColormaps("video-depth-anything")
+
+/**
+ * Whether the setting draws depth, where a colormap applies: Full depth, Keep
+ * people, or Faces hidden with the depth fill (a fill left out is the blur).
+ * The server's `depthColormapApplies`.
+ */
+export function depthColormapApplies(m: Pick<AdminTrendFaceMasking, "source" | "fill"> | undefined): boolean {
+  return clipPreparationOf(m) !== "faces" || (m?.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill) === "depth"
+}
+
+/** The colormap a clip preparation draws its depth with when the setting names none: turbo for a depth fill, else grayscale. */
+export function depthColormapDefaultFor(source: AdminTrendFaceMaskingSource): VideoDepthColormap {
+  return source === "faces" ? "turbo" : "grayscale"
+}
+
+/** Whether role outlines draw the setting's depth fill gray (on, with Faces hidden's depth fill): no colormap applies then. */
+export function depthColormapForcedGray(m: AdminTrendFaceMasking | undefined): boolean {
+  return roleOutlinesOn(m) && depthColormapApplies(m)
+}
+
+/**
+ * The colormap the setting saves (the server's `depthColormapSent`): the one
+ * it names, only where it draws depth, when it is not the source's default,
+ * and not under role outlines; else undefined (no key).
+ */
+export function depthColormapSaved(m: AdminTrendFaceMasking | undefined): VideoDepthColormap | undefined {
+  const c = m?.depthColormap
+  if (!m || c === undefined || !depthColormapApplies(m) || depthColormapForcedGray(m)) return undefined
+  return c === depthColormapDefaultFor(clipPreparationOf(m)) ? undefined : c
+}
+
+/** A trend's editor: the colormaps some environment's engine draws (`castSwap.depthColormaps`; unknown while the environments are: none). */
+export function depthColormapsSomeEngineDraws(envs: readonly TrendEngineEnvironment[] | undefined): VideoDepthColormap[] {
+  return DEPTH_COLORMAPS.filter((c) => (envs ?? []).some((e) => (e.supports.castSwap?.depthColormaps ?? []).includes(c)))
+}
+
+/**
+ * Admin → Nodaro Motion: for each colormap, the environments (of
+ * `SHARED_SETTING_ENVIRONMENTS`, in that order) whose engine cannot draw it —
+ * none recorded, or one whose `castSwap.depthColormaps` lacks it. Unknown
+ * while the environments are (undefined). The setting is shared, so a map is
+ * offered only when its list is empty; the server refuses the save otherwise
+ * (409 `engine_unsupported`).
+ */
+export function environmentsThatCannotDrawColormaps(
+  envs: readonly TrendEngineEnvironment[] | undefined,
+): Readonly<Record<VideoDepthColormap, string[]>> | undefined {
+  if (!envs) return undefined
+  return Object.fromEntries(
+    DEPTH_COLORMAPS.map((c) => [
+      c,
+      SHARED_SETTING_ENVIRONMENTS.filter((name) => !(envs.find((e) => e.env === name)?.supports.castSwap?.depthColormaps ?? []).includes(c)),
+    ]),
+  ) as Record<VideoDepthColormap, string[]>
 }
 
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */

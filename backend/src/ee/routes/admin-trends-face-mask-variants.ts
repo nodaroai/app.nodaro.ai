@@ -48,7 +48,16 @@ import { markJobCompleted } from "../../workers/shared.js"
 import { TREND_VARIANT_ANCHOR_TYPE, touchTrendVariantAnchor } from "../../lib/reconcile/trend-variant-anchor-sweep.js"
 import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
-import { engineDrawsFaceMesh, engineDrawsRoleOutlines, faceMeshOn, roleOutlinesOn, withResolvedZone, withoutMarks } from "../../lib/cast-swap-face-masking.js"
+import {
+  depthColormapSent,
+  engineDrawsDepthColormap,
+  engineDrawsFaceMesh,
+  engineDrawsRoleOutlines,
+  faceMeshOn,
+  roleOutlinesOn,
+  withResolvedZone,
+  withoutMarks,
+} from "../../lib/cast-swap-face-masking.js"
 import { makeOutlinesOf, recordedOutlinesOf } from "../lib/trends/role-outlines.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
@@ -261,6 +270,11 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
       if (roleOutlinesOn(draft.faceMasking) && !engineDrawsRoleOutlines(castSwap)) {
         return err(reply, 503, "engine_unsupported", "This environment's Cast Swap engine cannot draw role outlines yet: person masks of a trend that draws them are made where it can.")
       }
+      // The depth colormap likewise: a person mask's depth fill is drawn in the base's map.
+      const colormap = depthColormapSent(draft.faceMasking)
+      if (colormap !== undefined && !engineDrawsDepthColormap(castSwap, colormap)) {
+        return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth in ${colormap} yet: person masks of a trend that uses it are made where it can.`)
+      }
       if (state.baseProblem === "no_raw_mask" || !reusableFaceMaskBase(draft, castSwap.faceMaskRecipe)) {
         return err(reply, 409, "no_raw_mask", "The approved face mask kept no copy from before its marks: make the face mask again first.")
       }
@@ -411,6 +425,11 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
           }
           if (roleOutlinesOn(pruned.data.faceMasking) && !engineDrawsRoleOutlines(castSwap)) {
             await fail(job, "This environment's Cast Swap engine cannot draw role outlines: make the person masks where it can.")
+            continue
+          }
+          const colormap = depthColormapSent(pruned.data.faceMasking)
+          if (colormap !== undefined && !engineDrawsDepthColormap(castSwap, colormap)) {
+            await fail(job, `This environment's Cast Swap engine cannot draw the depth in ${colormap}: make the person masks where it can.`)
             continue
           }
           // Filled as the base was; with role outlines, ringed for the people it still covers only (those

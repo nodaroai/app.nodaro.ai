@@ -53,7 +53,7 @@ import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/Puls
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
-import { environmentsThatCannotDrawFaceMesh, environmentsThatCannotHideBodies } from "../trends/clip-preparation"
+import { environmentsThatCannotDrawColormaps, environmentsThatCannotDrawFaceMesh, environmentsThatCannotHideBodies } from "../trends/clip-preparation"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
 import { MotionColumn } from "./components/MotionColumn"
@@ -84,6 +84,8 @@ export default function AdminNodaroMotionPage() {
   const bodyMissingIn = environmentsThatCannotHideBodies(envs.data)
   // The face mesh likewise: shown, greyed out and naming the environments whose engine cannot draw it.
   const faceMeshMissingIn = environmentsThatCannotDrawFaceMesh(envs.data)
+  // The depth colormaps likewise: each offered only once every environment's engine draws it.
+  const depthColormapsMissingIn = environmentsThatCannotDrawColormaps(envs.data)
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
@@ -198,6 +200,7 @@ export default function AdminNodaroMotionPage() {
                       autoHint={AUTO_HINT}
                       bodyMissingIn={bodyMissingIn}
                       faceMeshMissingIn={faceMeshMissingIn}
+                      depthColormapsMissingIn={depthColormapsMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
                           const out = { ...d }
@@ -217,6 +220,7 @@ export default function AdminNodaroMotionPage() {
                         envs={envs.data}
                         bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
+                        depthColormapsMissingIn={depthColormapsMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
                       />
                     ) : motionQuery.error ? (

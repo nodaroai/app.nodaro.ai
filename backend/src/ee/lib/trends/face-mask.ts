@@ -33,6 +33,7 @@ import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
 import { isErasedFaceMaskMark } from "@nodaro/render-rules"
 import {
+  depthColormapSent,
   faceMaskTargetOf,
   faceMaskingOn,
   faceMaskingSent,
@@ -106,6 +107,12 @@ export function stableJson(v: unknown): string {
  * slot (its colour) makes a stored mask out of date. The base key carries
  * only what changes the raw mask and its depth view: a depth fill is drawn
  * gray while outlines are on (`faceMaskBaseKey`).
+ *
+ * The depth colormap (`depthColormap`, decided 2026-11-01) is hashed only
+ * when it changes what is drawn (`depthColormapSent`: present, where depth is
+ * drawn, not the source's default, not under role outlines), so every setting
+ * without one hashes exactly as before it existed, while choosing another map
+ * makes a stored clip out of date.
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks, slots: TrendVersionData["slots"]): string {
   const outlines = makeOutlinesOf({ slots, faceMasking: masking }).map((o) => ({ ...o, boxes: o.boxes.map(stableJson).sort().map((b) => JSON.parse(b) as unknown) }))
@@ -148,11 +155,23 @@ export function faceMaskSettingsKey(data: Pick<TrendVersionData, "source" | "fac
  * (`depthColormap: "grayscale"`): a turbo depth view is never the base of a
  * mask with outlines, nor the other way round; a blur fill's raw mask is the
  * same either way, so it stays the base.
+ *
+ * A chosen depth colormap (`depthColormapSent`) is never hashed here: an
+ * engine that draws one renders the depth GRAY once and colours it with the
+ * map for the clip it makes, so its depth view is the gray render whatever
+ * the map (Full depth and Keep people render gray today too), and another map
+ * re-colours the same base. A faces-hidden depth fill with a colormap is
+ * therefore the gray view, hashed as role outlines' (`depthColormap:
+ * "grayscale"`): today's turbo depth view (no colormap) is never the base of
+ * one with a colormap, nor the other way round.
  */
 export function faceMaskBaseKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
   if (!data.source || !faceMaskingOn(data.faceMasking)) return null
-  const grayDepth = roleOutlinesOn(data.faceMasking) && (data.faceMasking.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill) === "depth"
-  return settingsHash(data.source.videoUrl, withoutMarks(data.faceMasking), grayDepth ? { depthColormap: "grayscale" } : {})
+  const m = data.faceMasking
+  const depthFill = faceMaskingSourceOf(m) === "faces" && (m.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill) === "depth"
+  const grayDepth = depthFill && (roleOutlinesOn(m) || depthColormapSent(m) !== undefined)
+  const { depthColormap: _colormap, ...base } = withoutMarks(m)
+  return settingsHash(data.source.videoUrl, base, grayDepth ? { depthColormap: "grayscale" } : {})
 }
 
 /**

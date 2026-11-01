@@ -3509,6 +3509,16 @@ export interface PluginFaceMasking {
    * engine that declares `supports.castSwap.faceMesh`.
    */
   faceMesh?: boolean
+  /**
+   * The depth map's colormap wherever the setting draws depth: full depth,
+   * keep people, or a faces-hidden depth fill. Absent = the source's default,
+   * exactly as before the choice existed (grayscale for full depth and keep
+   * people, turbo for a depth fill). Sent (and answered by `tk.settings`) only
+   * when it differs from that default, never under role outlines (which draw
+   * a depth fill gray), and only to an engine that lists the map in
+   * `supports.castSwap.depthColormaps`.
+   */
+  depthColormap?: "grayscale" | "turbo" | "inferno" | "magma" | "viridis"
 }
 
 /**
@@ -3865,6 +3875,26 @@ export interface PluginSupports {
    *   `storedFaceMask.outlines` from a run and holds a trend that draws them
    *   back from publishing there), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsRoleOutlines`).
+   * - `depthColormaps`: the colormaps a `faceMasking.depthColormap` may name
+   *   for this engine (of Video Depth Anything's: grayscale, turbo, inferno,
+   *   magma, viridis) — on a run, a stored clip's make (and its person
+   *   variants) and the Nodaro Motion settings read through `tk.settings`.
+   *   Absent, the key means the source's default (grayscale for full depth
+   *   and keep people, turbo for a faces-hidden depth fill) and the engine
+   *   behaves exactly as before. Present: the engine renders the depth GRAY
+   *   once (Video Depth, `colormap: "grayscale"`), colours it with the map for
+   *   the clip it sends or stores, answers that gray render as a make's
+   *   `depthUrl` (and takes a gray `fromMask.depthUrl` back: the platform
+   *   hands it one exactly when the setting carries a colormap or role
+   *   outlines), draws the face mesh through `/v1/video-face-mesh` with
+   *   `colormap` and that gray `depthUrl` so its lines are tones of the map,
+   *   and words every prompt line that names the depth look by the map.
+   *   Additive-optional: absent ⇒ none — the platform never sends
+   *   `depthColormap` (it strips it from a run and the settings, refuses a
+   *   make, holds a trend that names one back from publishing there, and
+   *   refuses to save a shared Nodaro Motion setting with one while any
+   *   environment lacks it), so the wire is byte-identical
+   *   (lib/cast-swap-face-masking.ts `engineDrawsDepthColormap`).
    * - `artStyle`: a DIRECT Flex run (`style: "motion"`) and its estimate take
    *   `direction?: { style: string }`, an id of the platform's `style` picker
    *   catalog. Absent ⇒ `false` — the host must not send `direction`.
@@ -3939,6 +3969,7 @@ export interface PluginSupports {
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
     readonly roleOutlines?: boolean
+    readonly depthColormaps?: readonly ("grayscale" | "turbo" | "inferno" | "magma" | "viridis")[]
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
     readonly shotList?: boolean

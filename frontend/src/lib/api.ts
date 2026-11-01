@@ -11329,6 +11329,14 @@ export interface AdminTrendFaceMasking {
    */
   roleOutlines?: boolean
   /**
+   * The depth map's colormap wherever the setting draws depth (Full depth,
+   * Keep people, a Faces hidden depth fill). Left out = the source's default
+   * (grayscale; turbo for a depth fill), saved only when it differs from it,
+   * never under role outlines (they draw a depth fill gray), and offered only
+   * where the engine lists the map in `castSwap.depthColormaps`.
+   */
+  depthColormap?: VideoDepthColormap
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11816,6 +11824,8 @@ export interface TrendEngineEnvironment {
       faceMesh?: boolean
       /** The engine draws role outlines on a stored face mask (`faceMasking.roleOutlines`); absent = it cannot. */
       roleOutlines?: boolean
+      /** The colormaps the engine draws depth with on request (`faceMasking.depthColormap`); absent = none (the defaults only). */
+      depthColormaps?: VideoDepthColormap[]
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
