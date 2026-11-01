@@ -144,6 +144,9 @@ export const INSTANCE_ONLY_FIELDS = new Set([
   "should_watermark",
   "tier",
   "creditsReserved",
+  // The concurrency lanes' marker naming a coordinator on THIS instance
+  // (lib/concurrency-lanes/lane-parent.ts): its id means nothing on the cloud.
+  "laneParent",
 ])
 
 
@@ -237,7 +240,8 @@ export async function runJobOnCloud(
     await Promise.all(kept.map(async ([key, value]) => [key, await rehostIfUrlField(key, value)])),
   )
   const jobId = await createCloudJob(route, body)
-  const job = await waitForCloudJob(jobId, onProgress)
+  // Worker-side relay: the cloud job's time in line on the connected account is not this job's budget.
+  const job = await waitForCloudJob(jobId, onProgress, { queueAware: true })
   // Relay provenance, lane 2 (spec §8.2, migration 383). This lane is the one
   // that already holds the LOCAL job id — `payload.jobId`, one of the
   // INSTANCE_ONLY_FIELDS stripped from the wire body above — so it writes the

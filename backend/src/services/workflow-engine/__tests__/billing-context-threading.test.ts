@@ -208,6 +208,21 @@ describe("W4d — component dispatch forwards the parent's payer in the BODY", (
     expect(bodies).toHaveLength(1)
     expect(bodies[0]?.billingContext).toEqual(WS_CTX)
   })
+
+  it("names its own execution as the inner run's parent (concurrency lanes: the inner run takes no run slot)", async () => {
+    const headers: Array<Record<string, string>> = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+        headers.push(init.headers)
+        return { ok: true, json: async () => ({ jobId: "wrapper-1" }) }
+      }),
+    )
+    const ctx = makeCtx(WS_CTX)
+    await executeNode(node, {}, [], [], {}, ctx).catch(() => null)
+    expect(headers).toHaveLength(1)
+    expect(headers[0]?.["x-nodaro-parent-execution"]).toBe(ctx.executionId)
+  })
 })
 
 describe("W4d — sub-workflows inherit the parent ctx object", () => {

@@ -96,7 +96,26 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
     expect(mocks.refundMock).toHaveBeenCalledWith("j-queued")
   })
 
-  it("the resume path's status list is exactly [\"pending\", \"processing\"] — read and CAS — and it withdraws nothing", async () => {
+  // The orchestrator's resume now also passes `adoptQueued` (concurrency lanes,
+  // decided 2026-10-30): it READS waiting children to adopt them, so its list
+  // gains `queued` — deliberately, and only with that option. A resume without
+  // it keeps exactly the list it always had.
+  it("the resume path with adoptQueued reads and CASes exactly [\"pending\", \"queued\", \"processing\"], never a held row", async () => {
+    mocks.rows.push({ id: "j-pre", input_data: { node_id: "node-1", type: "generate-image" }, provider_task_id: null })
+
+    await cancelInFlightChildJobs("exec-1", "owner-1", { adoptLiveBudgetedRenders: true, adoptQueued: true })
+
+    const RESUME_STATUSES = ["pending", "queued", "processing"]
+    expect(mocks.statusLists).toEqual([
+      { op: "read", statuses: RESUME_STATUSES },
+      { op: "cas", statuses: RESUME_STATUSES },
+    ])
+    for (const l of mocks.statusLists) expect(l.statuses).not.toContain("pending_review")
+    // A pending row it cancels is not in any line: nothing to withdraw.
+    expect(lanes.withdrawFromLane).not.toHaveBeenCalled()
+  })
+
+  it("a resume WITHOUT adoptQueued keeps its status list exactly [\"pending\", \"processing\"] — read and CAS — and it withdraws nothing", async () => {
     mocks.rows.push({ id: "j-pre", input_data: { node_id: "node-1", type: "generate-image" }, provider_task_id: null })
 
     await cancelInFlightChildJobs("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })

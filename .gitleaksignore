@@ -48,9 +48,13 @@ dc3d4b181caf83977d1d90220c64d3b6aada8286:backend/scripts/gen-skills.ts:linkedin-
 # - pro-3d-render.test.ts: the literal idempotency-header fixture `idem-key-abcdef0123`.
 # - billing-admin tests: the fake integration-key bearer, `ndr_bill_` + the hex alphabet spelled
 #   out four times, never a minted key (real ones are 256 random bits and never in the tree).
+# - video-director-lane-clocks.test.ts: a test-only internal-request secret literal, since replaced
+#   by a repeated character in the tree; the fingerprints pin the commit that first carried it.
 7d8c11f7b845512f21b17724bc7e9d7e2907c146:CLAUDE.md:curl-auth-header:2799
 95fc4af89e7b775759fcb4ae94d5c68240899570:CLAUDE.md:curl-auth-header:4464
 8e4e4615bd25c7518c9cf10f667799d37f075f9b:CLAUDE.md:curl-auth-header:4536
 5a907037b8b6a30f7e8db3f34c2edcde0ac96c3b:backend/src/routes/__tests__/pro-3d-render.test.ts:generic-api-key:65
 ffd6dc89479c59b6ab90ec2eadb945a14d34f2a6:frontend/src/ee/app/billing-admin/__tests__/deployment-billing-wire.test.tsx:generic-api-key:110
 2a279ad2c4a707c360b8e4af88afd7ab2a3b6415:frontend/src/ee/app/billing-admin/__tests__/integrations-block.test.tsx:generic-api-key:54
+334088553155641a789d8874bfc73be05c1bfa3f:backend/src/ee/video-director/__tests__/video-director-lane-clocks.test.ts:generic-api-key:48
+334088553155641a789d8874bfc73be05c1bfa3f:backend/src/ee/video-director/__tests__/video-director-lane-clocks.test.ts:generic-api-key:76

@@ -35,6 +35,7 @@ import { CONTINUATION_NOT_FAILED, CONTINUATION_NOT_FOUND, CONTINUATION_SUBSET_RE
 import { isUseCaseNodeType, usecaseCancelledMessage, usecaseDescriptor } from "@nodaro/render-rules"
 import { supabase } from "../../lib/supabase.js"
 import { BudgetedDeadline, executionBudgetExcessMs } from "../../lib/execution-budget.js"
+import { addRunLaneWait, executionQueuedMs } from "../../lib/concurrency-lanes/execution-wait.js"
 import { addBudgetExcess } from "../../lib/job-budget.js"
 import { DrainAbortError, isWorkerDraining } from "../../lib/worker-drain.js"
 import { cancelOwnedJob } from "../../lib/cancel-job.js"
@@ -200,10 +201,19 @@ export async function executeUseCaseNode(
   let hops = 0
   let pollCycle = 0
 
-  const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, async () => {
-    const inner = target ? await innerExecutionIdOf(target.jobId) : null
-    return inner ? executionBudgetExcessMs(inner, ctx.userId) : 0
-  })
+  // Grown, the same lazy way, by the time the hidden run has waited for
+  // concurrency slots: queued time never counts (decided 2026-10-30).
+  const deadline = new BudgetedDeadline(
+    POLL_ABSOLUTE_TIMEOUT_MS,
+    async () => {
+      const inner = target ? await innerExecutionIdOf(target.jobId) : null
+      return inner ? executionBudgetExcessMs(inner, ctx.userId) : 0
+    },
+    async () => {
+      const inner = target ? await innerExecutionIdOf(target.jobId) : null
+      return inner ? executionQueuedMs(inner, ctx.userId, { includeOwnWait: true }) : 0
+    },
+  )
   const follow = (jobId: string, startedHere: boolean, own: boolean | null) => {
     target = { jobId, startedHere, own }
     ctx.onJobCreated?.(node.id, jobId)
@@ -290,7 +300,7 @@ export async function executeUseCaseNode(
         wait = USE_CASE_SETTLING_RETRY_MS
       } else if (row) {
         if (target.own === null) target.own = row.idempotency_key === key
-        if (row.status === "completed") return completed(target, row, deadline.excessMs)
+        if (row.status === "completed") return completed(target, row, deadline.excessMs, deadline.queuedMs)
         if (row.status === "failed" && !target.startedHere) {
           // A continuation this node did not start failed: continue it in turn.
           hop(target.jobId, row.error_message ?? `${label} failed`)
@@ -315,10 +325,19 @@ export async function executeUseCaseNode(
   await stop()
   throw new Error(`${label} timed out after ${Math.round(deadline.limitMs / 60000)} minutes`)
 
-  async function completed(t: Target, row: WrapperRow, excessSoFar: number): Promise<Result> {
+  async function completed(t: Target, row: WrapperRow, excessSoFar: number, queuedSoFar: number): Promise<Result> {
     const out = (row.output_data ?? {}) as Record<string, unknown>
     const inner = typeof out._executionId === "string" ? out._executionId : null
     addBudgetExcess(ctx, Math.max(excessSoFar, inner ? await executionBudgetExcessMs(inner, ctx.userId) : 0))
+    // The hidden run's queued time leaves the parent's cap as a direct child's
+    // would: a wait that ended now, no longer than this node has waited. Read
+    // only when the deadline already saw a wait or the run started with lanes
+    // enforced: nothing queues otherwise.
+    if (queuedSoFar > 0 || ctx.runDispatch?.lanesEnforced === true) {
+      const innerQueued = Math.max(queuedSoFar, inner ? await executionQueuedMs(inner, ctx.userId, { includeOwnWait: true }) : 0)
+      const now = Date.now()
+      addRunLaneWait(ctx, now - Math.min(innerQueued, now - startedAt), now)
+    }
     // Another request's continuation was paid there, not by this run.
     const credits = t.own && typeof row.credits_actual === "number" ? row.credits_actual : 0
     return { output: wrapperOutputOf(out, t.jobId), jobId: t.jobId, creditsUsed: credits }

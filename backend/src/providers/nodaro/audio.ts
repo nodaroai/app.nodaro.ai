@@ -76,6 +76,6 @@ export class NodaroCloudAudioProvider implements TextToSpeechProvider {
       ...(neighbours.nextText !== undefined ? { nextText: neighbours.nextText } : {}),
     }
     const jobId = await createCloudJob("/v1/text-to-speech", body)
-    return extractAudioResult(await waitForCloudJob(jobId), jobId)
+    return extractAudioResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)
   }
 }

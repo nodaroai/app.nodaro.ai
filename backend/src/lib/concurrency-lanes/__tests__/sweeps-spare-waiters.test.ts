@@ -15,9 +15,11 @@
 // Not here: the concurrency lanes' own queued sweep (queued-sweep.ts), which
 // is the one that DOES end a waiting job — at the queue timeout, in its own
 // environment only; its suite proves both. Clocks that queued time can still
-// outgrow (a run's 4-hour backstop, a coordinator's stuck sweep, a pipeline's
-// 6-hour abandon) grow by the queued time in a later change: they are the
-// `it.todo` cases below, and none can fail a job while enforcement is off.
+// outgrow grow by the queued time, capped at the queue timeout's bound: a run's
+// 4-hour backstop, a coordinator's stuck sweep (its `lane_wait_ms`) and a
+// pipeline's 6-hour abandon — each also judged exactly as before for a row
+// that never waited. (The pre-task heartbeat's cap pauses for the same wait:
+// workers/__tests__/pre-task-lane-wait.test.ts.)
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeSweepDb, type Row, type SweepDb } from "./fake-sweep-db.js"
 
@@ -30,6 +32,8 @@ const h = vi.hoisted(() => ({
   pipelineRefunds: [] as string[],
   pipelineEnqueues: [] as string[],
   withdrawn: [] as string[],
+  /** What the connected cloud answers for a relayed job, by cloud job id. */
+  cloudJobs: new Map<string, string>(),
 }))
 
 vi.mock("../../supabase.js", () => ({
@@ -67,6 +71,14 @@ vi.mock("../../access-blocks.js", () => ({
 vi.mock("../../credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: async (jobId: string) => { h.refunds.push(jobId); return 0 },
   refundJobHoldsConfirmed: async () => true,
+}))
+// A Connect relay's cloud job, as the connected account reports it.
+vi.mock("../../nodaro-connect.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../nodaro-connect.js")>()),
+  nodaroCloudFetch: async (path: string) => {
+    const status = h.cloudJobs.get(path.replace("/v1/jobs/", ""))
+    return { ok: true, status: 200, json: async () => ({ data: status ? { id: "c", status } : null }) }
+  },
 }))
 // What a failure write does after it wins (both lazy, both best-effort).
 vi.mock("../withdraw.js", () => ({ withdrawFromLane: async (jobId: string) => { h.withdrawn.push(jobId) } }))
@@ -143,6 +155,7 @@ beforeEach(() => {
   h.pipelineRefunds.length = 0
   h.pipelineEnqueues.length = 0
   h.withdrawn.length = 0
+  h.cloudJobs.clear()
   vi.stubEnv("RUNTIME_ENV", "staging")
   vi.spyOn(console, "log").mockImplementation(() => undefined)
   vi.spyOn(console, "warn").mockImplementation(() => undefined)
@@ -200,7 +213,54 @@ describe("the job reconcile tick (lib/reconcile/cron.ts)", () => {
     expect(status("jobs", 2)).toBe("failed")
   })
 
-  it.todo("the stuck-orchestrator sweep spares a director whose children were queued: its 90 minutes grow by the row's lane_wait_ms")
+  it("the stuck-orchestrator sweep spares a director whose children were queued: its 90 minutes grow by the row's lane_wait_ms", async () => {
+    const director = (n: number, startedMin: number, laneWaitMin: number) => job(n, {
+      status: "processing", job_type: "video-director", input_data: { type: "video-director" },
+      started_at: ago(startedMin * MIN), lane_wait_ms: laneWaitMin * MIN,
+    })
+    // 2 hours in, 40 minutes of it waiting on children that waited for slots: 80 minutes of its own.
+    director(1, 120, 40)
+    // Controls: no wait recorded (today's 90 minutes), and a wait that does not cover the overrun.
+    director(2, 120, 0)
+    director(3, 140, 40)
+    // A wait past the queue timeout's bound (24.5 hours) is credited only up to it.
+    director(4, 27 * 60, 100 * 24 * 60)
+    await reconcileInflightJobs()
+    expect([1, 2, 3, 4].map((n) => status("jobs", n))).toEqual(["processing", "failed", "failed", "failed"])
+    expect(h.refunds.sort()).toEqual([id(2), id(3), id(4)].sort())
+  })
+
+  it("a Connect relay is not failed while its cloud job waits in line on the connected account", async () => {
+    const relay = (n: number, cloudStatus: string, stampMin: number, attempts: number) => {
+      h.cloudJobs.set(`cloud-${n}`, cloudStatus)
+      return job(n, {
+        status: "processing", provider_kind: "nodaro-cloud", provider_task_id: `cloud-${n}`, job_type: "generate-video-pro",
+        provider_call_started_at: ago(stampMin * MIN), started_at: ago(stampMin * MIN), reconcile_attempts: attempts,
+      })
+    }
+    // 160 minutes past its stamp, one tick from exhaustion (17 of 18), its cloud job still in line: spared, no bump.
+    relay(1, "queued", 160, 17)
+    // Controls: the same row whose cloud job is running is exhausted as before; a wait past the bound (24.5 h + 75 min) too.
+    relay(2, "processing", 160, 17)
+    relay(3, "queued", 27 * 60, 17)
+    await reconcileInflightJobs()
+    expect(db.row("jobs", id(1))).toMatchObject({ status: "processing", reconcile_attempts: 17 })
+    expect(status("jobs", 2)).toBe("failed")
+    expect(status("jobs", 3)).toBe("failed")
+  })
+
+  it("the stuck-orchestrator sweep reads no lane column where the database has none, and judges as before", async () => {
+    const { noteLaneColumnError, resetLaneColumnsForTests } = await import("../columns.js")
+    noteLaneColumnError("jobs", { code: "42703" })
+    try {
+      job(1, { status: "processing", input_data: { type: "video-director" }, started_at: ago(120 * MIN), lane_wait_ms: 40 * MIN })
+      job(2, { status: "processing", input_data: { type: "video-director" }, started_at: ago(60 * MIN) })
+      await reconcileInflightJobs()
+      expect([1, 2].map((n) => status("jobs", n))).toEqual(["failed", "processing"])
+    } finally {
+      resetLaneColumnsForTests()
+    }
+  })
 })
 
 // --------------------------------------------------------------- side holds
@@ -269,7 +329,51 @@ describe("the workflow-executions cron (lib/reconcile/workflow-executions-cron.t
     expect(status("workflow_executions", 11)).toBe("failed")
   })
 
-  it.todo("the 4-hour backstop of a run grows by the run's queued time (lane_wait_ms)")
+  it("the 4-hour backstop of a run grows by the run's queued time (lane_wait_ms)", async () => {
+    // Three runs started 5 hours ago, each with a live orchestrator job: past
+    // the 4-hour backstop on the wall clock. The first's jobs waited 2 hours
+    // for slots (its persisted figure); the second's node has waited 2 hours
+    // and still does (a node that waits writes no node state, so its wait is
+    // read live). The control waited for nothing — abandoned, as today.
+    const states = (jobN: number) => ({ n1: { status: "running", jobId: id(jobN), startedAt: ago(5 * 60 * MIN) } })
+    execution(10, { started_at: ago(5 * 60 * MIN), lane_wait_ms: 2 * 60 * MIN, node_states: states(1) })
+    job(1, { status: "processing", workflow_execution_id: id(10), started_at: ago(30 * MIN) })
+    execution(11, { started_at: ago(5 * 60 * MIN), lane_wait_ms: 0, node_states: states(2) })
+    job(2, { status: "queued", workflow_execution_id: id(11), lane_queued_at: ago(2 * 60 * MIN) })
+    execution(12, { started_at: ago(5 * 60 * MIN), lane_wait_ms: 0, node_states: states(3) })
+    job(3, { status: "processing", workflow_execution_id: id(12), started_at: ago(30 * MIN) })
+    for (const n of [10, 11, 12]) h.orchestration.set(id(n), "active")
+    await reconcileWorkflowExecutionsTick()
+    expect([10, 11, 12].map((n) => status("workflow_executions", n))).toEqual(["running", "running", "failed"])
+  })
+
+  it("a run whose component node's inner run is waiting is not written off", async () => {
+    // Started 5 hours ago, its only node a component whose inner run's job has waited 2 hours for a slot.
+    const parent = (n: number, wrapper: number) =>
+      execution(n, { started_at: ago(5 * 60 * MIN), lane_wait_ms: 0, node_states: { cmp: { status: "running", jobId: id(wrapper), startedAt: ago(3 * 60 * MIN) } } })
+    parent(10, 1)
+    job(1, { status: "processing", provider: "component", started_at: ago(3 * 60 * MIN), created_at: ago(3 * 60 * MIN), input_data: { type: "component", _executionId: id(20) } })
+    execution(20, { started_at: ago(3 * 60 * MIN), lane_wait_ms: 0 })
+    job(2, { status: "queued", workflow_execution_id: id(20), lane_queued_at: ago(2 * 60 * MIN) })
+    // Control: the same, its inner run waiting for nothing.
+    parent(11, 3)
+    job(3, { status: "processing", provider: "component", started_at: ago(3 * 60 * MIN), created_at: ago(3 * 60 * MIN), input_data: { type: "component", _executionId: id(21) } })
+    execution(21, { started_at: ago(3 * 60 * MIN), lane_wait_ms: 0 })
+    job(4, { status: "processing", workflow_execution_id: id(21), started_at: ago(30 * MIN) })
+    for (const n of [10, 11, 20, 21]) h.orchestration.set(id(n), "active")
+    await reconcileWorkflowExecutionsTick()
+    expect(status("workflow_executions", 10)).toBe("running")
+    expect(status("workflow_executions", 11)).toBe("failed")
+  })
+
+  it("the stale sweep extends by lane_wait_ms only for a run still past its base: a young run is never asked", async () => {
+    execution(10, { started_at: ago(60 * MIN), lane_wait_ms: 0, node_states: { n1: { status: "running", jobId: id(1) } } })
+    job(1, { status: "processing", workflow_execution_id: id(10), started_at: ago(30 * MIN) })
+    h.orchestration.set(id(10), "active")
+    await reconcileWorkflowExecutionsTick()
+    expect(status("workflow_executions", 10)).toBe("running")
+    expect(db.reads.filter((t) => t === "workflow_executions").length).toBe(1) // the scan alone
+  })
 })
 
 describe("the orchestrator boot sweep (workers/orchestrator-worker.ts cleanupStaleExecutions)", () => {
@@ -282,6 +386,16 @@ describe("the orchestrator boot sweep (workers/orchestrator-worker.ts cleanupSta
     expect(status("workflow_executions", 10)).toBe("running")
     expect(status("workflow_executions", 11)).toBe("failed")
     expect(status("jobs", 1)).toBe("queued")
+  })
+
+  it("the stale sweep extends by lane_wait_ms: a 5-hour-old run whose jobs waited 2 hours is left for its re-pick", async () => {
+    execution(10, { started_at: ago(5 * 60 * MIN), lane_wait_ms: 2 * 60 * MIN, node_states: { n1: { status: "running", jobId: id(1) } } })
+    job(1, { status: "processing", workflow_execution_id: id(10), started_at: ago(30 * MIN) })
+    execution(11, { started_at: ago(5 * 60 * MIN), lane_wait_ms: 0, node_states: { n1: { status: "running", jobId: id(2) } } })
+    job(2, { status: "processing", workflow_execution_id: id(11), started_at: ago(30 * MIN) }) // control
+    await cleanupStaleExecutions()
+    expect(status("workflow_executions", 10)).toBe("running")
+    expect(status("workflow_executions", 11)).toBe("failed")
   })
 
   it("a run waiting to start is never scanned", async () => {
@@ -307,6 +421,16 @@ describe("app-expunge targets (lib/app-expunge-targets.ts)", () => {
     run(21, 11) // control: the same run whose job has finished
     execution(11, { status: "running", started_at: ago(5 * 60 * MIN), trigger_type: "app" })
     job(2, { status: "completed", workflow_execution_id: id(11) })
+    const targets = await collectAppExpungeTargets(APP, WORKFLOW)
+    expect(targets.skippedRunIds).toEqual([id(20)])
+    expect(targets.runIds).toEqual([id(21)])
+  })
+
+  it("a run that has waited 5 hours for its run slot is still in flight (its own wait counts as queued)", async () => {
+    run(20, 10)
+    execution(10, { status: "pending", started_at: null, created_at: ago(5 * 60 * MIN), lane_queued_at: ago(5 * 60 * MIN - 1 * MIN), trigger_type: "app" })
+    run(21, 11) // control: never parked, never claimed, 5 hours old
+    execution(11, { status: "pending", started_at: null, created_at: ago(5 * 60 * MIN), lane_queued_at: null, trigger_type: "app" })
     const targets = await collectAppExpungeTargets(APP, WORKFLOW)
     expect(targets.skippedRunIds).toEqual([id(20)])
     expect(targets.runIds).toEqual([id(21)])
@@ -350,5 +474,41 @@ describe("the pipelines reconcile (ee/pipelines/reconcile-cron.ts)", () => {
     expect(status("jobs", 1)).toBe("queued")
   })
 
-  it.todo("the 6-hour abandon is measured from admission plus the pipeline's queued time, and a parked drive's delayed entry counts as presence")
+  it("the 6-hour abandon is measured from admission plus the pipeline's queued time, and a parked drive's delayed entry counts as presence", async () => {
+    // 7 hours since creation, 2 of them waiting (its run slot, then stage jobs): 5 of its own → re-driven, not abandoned.
+    pipeline(30, { lane_wait_ms: 2 * 60 * MIN })
+    // Control: no wait → abandoned as before.
+    pipeline(31, { lane_wait_ms: 0 })
+    // A wait past the queue timeout's bound counts only up to it (24.5 h): 31 hours old → abandoned.
+    pipeline(32, { created_at: ago(31 * 60 * MIN), lane_wait_ms: 100 * 24 * 60 * MIN })
+    // A drive parked again or added back after Redis lost it keeps its id: delayed under it is presence.
+    pipeline(33, { lane_queued_at: ago(8 * 60 * MIN), lane_wait_ms: 0 })
+    h.pipelineJobs.set(`pipeline-${id(33)}`, "delayed")
+    await reconcilePipelinesTick()
+    expect([30, 31, 32, 33].map((n) => status("pipelines", n))).toEqual(["running", "failed", "failed", "running"])
+    expect(h.pipelineEnqueues).toEqual([id(30)])
+    expect(h.pipelineRefunds.sort()).toEqual([id(31), id(32)].sort())
+  })
+
+  it("the pipelines reconcile spares a pipeline waiting for its run slot", async () => {
+    const { creditAdmittedPipelineWait } = await import("../coordinator-wait.js")
+    // Created 8 hours ago; it waited 3 hours for its run slot, then its first drive admitted it.
+    pipeline(30, { status: "queued", created_at: ago(8 * 60 * MIN), lane_queued_at: ago(3 * 60 * MIN), lane_wait_ms: 0 })
+    await creditAdmittedPipelineWait(db.client as never, { ...db.row("pipelines", id(30)) })
+    db.row("pipelines", id(30))!.status = "running"
+    expect(Number(db.row("pipelines", id(30))!.lane_wait_ms)).toBeGreaterThanOrEqual(3 * 60 * MIN - 1_000)
+    // A second drive reading the same row adds nothing: the figure moved under it.
+    await creditAdmittedPipelineWait(db.client as never, { id: id(30), status: "queued", lane_queued_at: ago(3 * 60 * MIN), lane_wait_ms: 0 })
+    expect(Number(db.row("pipelines", id(30))!.lane_wait_ms)).toBeLessThan(3 * 60 * MIN + 60_000)
+    // Controls: the same age with no wait for its slot is abandoned; a row that never parked gets no write.
+    pipeline(31, { created_at: ago(8 * 60 * MIN), lane_wait_ms: 0 })
+    const writesBefore = db.writes.length
+    await creditAdmittedPipelineWait(db.client as never, { id: id(31), status: "queued", lane_queued_at: null, lane_wait_ms: 0 })
+    await creditAdmittedPipelineWait(db.client as never, { id: id(31), status: "running", lane_queued_at: ago(60 * MIN), lane_wait_ms: 0 })
+    expect(db.writes.length).toBe(writesBefore)
+    await reconcilePipelinesTick()
+    expect(status("pipelines", 30)).toBe("running")
+    expect(status("pipelines", 31)).toBe("failed")
+    expect(h.pipelineEnqueues).toEqual([id(30)])
+  })
 })

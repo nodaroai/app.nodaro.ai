@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { PIPELINE_STAGE_TIMEOUT_MS } from "@nodaro/shared/pipeline"
+import { QueuedPollClock } from "../../../lib/concurrency-lanes/queued-clock.js"
+import { creditCoordinatorWait, waitsAsJob } from "../../../lib/concurrency-lanes/coordinator-wait.js"
 
 /**
  * Initial poll cadence. The fast majority of jobs (image-gen, extract-frame)
@@ -78,6 +80,16 @@ export interface PollJobOptions {
  * the same shape: insert jobs row → reserve credits → enqueue worker →
  * pollJobUntilComplete. The worker commits/refunds credits on its own — the
  * wrappers never double-commit here.
+ *
+ * The timeout counts from the job's start: a read that finds it `queued` —
+ * waiting for a concurrency slot — moves the deadline by the time since the
+ * previous read, up to the queue timeout's bound (decided 2026-10-30: nothing
+ * fails for waiting). That time is also the pipeline's own wait, credited to
+ * its drive (`creditCoordinatorWait` → `pipelines.lane_wait_ms`, which the
+ * pipelines reconcile's 6-hour abandon leaves out). Only inside a drive
+ * (`waitsAsJob`): a route that waits on a stage job inline (a shot's
+ * keyframe or clip regenerated from the editor) keeps its plain timeout. A
+ * job never seen `queued` times out exactly as before.
  */
 export async function pollJobUntilComplete(
   supabase: SupabaseClient,
@@ -89,9 +101,10 @@ export async function pollJobUntilComplete(
   // and skip the exponential ramp — tests advance fake timers in fixed steps.
   const fixedInterval = opts.pollIntervalMs
   const deadline = Date.now() + timeoutMs
+  const queued = waitsAsJob() ? new QueuedPollClock(creditCoordinatorWait) : null
   let intervalMs = fixedInterval ?? INITIAL_POLL_INTERVAL_MS
 
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline + (queued?.queuedMs ?? 0)) {
     await sleep(intervalMs)
     if (fixedInterval === undefined) {
       intervalMs = Math.min(Math.floor(intervalMs * POLL_BACKOFF_FACTOR), MAX_POLL_INTERVAL_MS)
@@ -103,6 +116,7 @@ export async function pollJobUntilComplete(
       .maybeSingle()
     if (!row) continue
     const r = row as JobPollRow
+    queued?.observe(r.status)
     // BEFORE the terminal checks and before the deadline can expire: a held
     // job is neither failed nor completed, and it will not become either
     // without a human. See JobHeldError above.

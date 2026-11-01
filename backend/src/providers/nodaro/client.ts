@@ -20,6 +20,8 @@ import { getR2ObjectSize, r2KeyFromOurUrl, readR2Object } from "../../lib/storag
 import { isUnroutableMediaUrl } from "../../lib/media-portability.js"
 import type { ProgressCallback } from "../provider.interface.js"
 import { MAX_REHOST_BYTES } from "./rehost-limit.js"
+import { QueuedPollClock } from "../../lib/concurrency-lanes/queued-clock.js"
+import { creditCoordinatorWait, waitsAsJob } from "../../lib/concurrency-lanes/coordinator-wait.js"
 import { SPEAKER_TRACKS_UPLOAD_PURPOSE } from "../../lib/speaker-track-upload.js"
 import { NODARO_CONNECTION_REJECTED_MESSAGE } from "../../lib/nodaro-connection-messages.js"
 
@@ -213,12 +215,22 @@ export async function createCloudJob(
  * - Transient poll errors (network, 5xx, 429) are tolerated up to
  *   MAX_TRANSIENT_POLL_FAILURES consecutive occurrences; auth-ish statuses
  *   (401/403/404) fail fast — the token was revoked or the job vanished.
- * - Gives up after POLL_BUDGET_MS (~15 min).
+ * - Gives up after POLL_BUDGET_MS (~15 min), or the caller's `budgetMs`.
+ *   With `queueAware` (the worker-side relays: the exclusive relay and
+ *   `run-on-cloud`) and running as a job (`waitsAsJob`), the budget counts
+ *   from the cloud job's START: a poll that finds it `queued` — waiting for a
+ *   free slot on the connected account's lines — moves the budget by the time
+ *   since the previous poll, up to the queue timeout's bound (decided
+ *   2026-10-30: nothing fails for waiting). That time is also the relaying
+ *   job's own in-handler wait (`creditCoordinatorWait`), so its pre-task
+ *   heartbeat keeps it alive while the cloud job waits. A route that waits
+ *   inline (the scrapers, site capture) keeps its plain budget, as does any
+ *   cloud job never seen `queued`.
  */
 export async function waitForCloudJob(
   jobId: string,
   onProgress?: ProgressCallback,
-  opts: { budgetMs?: number } = {},
+  opts: { budgetMs?: number; queueAware?: boolean } = {},
 ): Promise<CloudJob> {
   const startedAt = Date.now()
   // Default stays POLL_BUDGET_MS (~15 min). The exclusive-node relay passes
@@ -227,8 +239,9 @@ export async function waitForCloudJob(
   const budgetMs = opts.budgetMs ?? POLL_BUDGET_MS
   let attempt = 0
   let transientFailures = 0
+  const queued = opts.queueAware && waitsAsJob() ? new QueuedPollClock(creditCoordinatorWait) : null
 
-  while (Date.now() - startedAt < budgetMs) {
+  while (Date.now() - startedAt - (queued?.queuedMs ?? 0) < budgetMs) {
     if (attempt > 0) {
       await sleep(attempt <= POLL_FAST_ATTEMPTS ? POLL_FAST_MS : POLL_SLOW_MS)
     }
@@ -273,6 +286,7 @@ export async function waitForCloudJob(
       continue
     }
     transientFailures = 0
+    queued?.observe(job.status)
 
     if (typeof job.progress === "number" && onProgress) {
       try {

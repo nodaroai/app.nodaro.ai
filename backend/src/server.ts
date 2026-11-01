@@ -157,13 +157,19 @@ async function main() {
   // LANES_ENFORCED) and the provider ceilings into the gate's Redis every 30 s
   // — ALL editions. Never throws; an error is retried on the next pass.
   // Registered first: the off-transition (seen here by the mirror or the admin
-  // switch) wakes every parked job by its stored id. Nothing to subscribe to:
-  // no lane queue runs in this process yet.
-  await startLaneParking([])
+  // switch) wakes every parked job by its stored id. Subscribed to the run
+  // queues this process works (below): the orchestrator's always, the
+  // director's on Cloud, the pipeline's when it runs in-process.
+  const stopLaneParking = await startLaneParking([
+    "workflow-orchestration",
+    ...(hasCredits() ? (["video-director"] as const) : []),
+    ...(hasCredits() && process.env.PIPELINE_WORKER_INPROCESS === "true" ? (["pipeline-orchestration"] as const) : []),
+  ])
   const stopEnforcementMirror = startEnforcementMirror()
-  // This process's share of the pools it sizes, published every 5 s for the
-  // Live usage page (none yet: the orchestrator and director pools size theirs
-  // when they are gated). Stopped on shutdown.
+  // This process's share of the pools it sizes (the orchestrator's, the
+  // director's, the in-process pipeline's — each sized when its worker is
+  // created below), published every 5 s for the Live usage page. Stopped on
+  // shutdown.
   const stopServerOccupancy = startServerOccupancyPublisher()
   // The lanes' daily history for Admin → Live usage (admin editions): this
   // environment's gate sampled every minute, its rows written every 5 minutes
@@ -300,6 +306,7 @@ async function main() {
     // instead of a silent exit 0.
     try {
       stopScheduleCron()
+      stopLaneParking()
       stopEnforcementMirror()
       stopServerOccupancy()
       stopLaneHistory?.()

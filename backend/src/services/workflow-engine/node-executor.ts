@@ -90,6 +90,7 @@ import { ugcFailure, ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 import { syncLaneHeaders } from "./sync-lane-headers.js"
+import { PARENT_EXECUTION_HEADER } from "../../lib/concurrency-lanes/parent-execution.js"
 import { executionCancelledNow } from "./execution-cancel-check.js"
 import { executeUseCaseNode } from "./use-case-node.js"
 import { isUseCaseNodeType, previewRefusalOfCode } from "@nodaro/render-rules"
@@ -126,6 +127,7 @@ import type {
 import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "./types.js"
 import { addBudgetExcess, declaredJobBudgetMs, nodeCeilings, type NodeCeilings } from "../../lib/job-budget.js"
 import { BudgetedDeadline, executionBudgetExcessMs } from "../../lib/execution-budget.js"
+import { addRunLaneWait, executionQueuedMs } from "../../lib/concurrency-lanes/execution-wait.js"
 import { isParkedJobStatus } from "../../lib/job-status.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
@@ -133,7 +135,8 @@ import { withdrawFromLane } from "../../lib/concurrency-lanes/withdraw.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
+import { readPollJobRow } from "./poll-job-row.js"
+import { cappedQueuedMs } from "../../lib/concurrency-lanes/queued-clock.js"
 import { GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC } from "../../lib/generate-video-pro-length.js"
 import { speakerViewDispatchGate } from "./speaker-view-source.js"
 
@@ -2865,6 +2868,7 @@ interface JobPollRow {
   credits: number | null
   error_hint: unknown
   slot_wait_ms?: number | null
+  lane_wait_ms?: number | null
 }
 
 async function pollJobToCompletion(
@@ -2909,6 +2913,32 @@ async function pollJobToCompletion(
    *  are not credited). Undefined until the first read; 0 with adopted clocks,
    *  which count from the row's own start. */
   let slotWaitAtStart: number | undefined = clocks ? 0 : undefined
+  /** Concurrency lanes: how long the row has waited for a slot (`queued`) —
+   *  the time between consecutive reads that found it `queued` (decided
+   *  2026-10-30: nothing fails for waiting; only the queue timeout ends a
+   *  wait). Both node clocks leave it out, and each wait also grows the run's
+   *  `ctx.laneWaitMs`, which the workflow cap leaves out. A queued child
+   *  adopted on a resume starts from its wait so far (`clocks.queuedMs`),
+   *  which predates this attempt and so is never added to the run's. Stays 0
+   *  — every clock exactly as before — for a job that never waits. */
+  let queuedMs = clocks?.queuedMs ?? 0
+  /** The queued time banked when the worker picked the job up: the processing
+   *  clock starts there, so only a wait after it (none today — a started job
+   *  is never parked) would come off it. */
+  let queuedBeforeProcessingMs = 0
+  /** Concurrency lanes: the time the job, once running, waited INSIDE its
+   *  handler — for slots of its own calls, or on children that waited
+   *  (`jobs.lane_wait_ms`, written while the wait lasts by
+   *  `lib/concurrency-lanes/coordinator-wait.ts`). Both node clocks leave it
+   *  out, and each growth is reported to the run (`addRunLaneWait`), so the
+   *  workflow cap and the persisted run figure leave it out too. Counted from
+   *  the row's figure at the first read that finds it `processing` (an
+   *  adopted render's clocks count from the row's own start, so from 0), and
+   *  capped at the queue timeout's bound. Stays 0 — every clock exactly as
+   *  before — for a job that never waits. */
+  let childLaneWaitMs = 0
+  let laneWaitAtStart: number | undefined = clocks ? 0 : undefined
+  let lastReadMs = Date.now()
 
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
@@ -2921,7 +2951,7 @@ async function pollJobToCompletion(
     // starts counting after the worker picks up the job. Both clocks are
     // `POLL_ABSOLUTE_TIMEOUT_MS` / `NODE_TIMEOUT_MS` plus the job's declared
     // budget excess (`ceilings`, 0 for a job that declares none).
-    if (Date.now() - pollStartTime - heldSoFar() - slotWaitMs > ceilings.pollAbsoluteMs) {
+    if (Date.now() - pollStartTime - heldSoFar() - slotWaitMs - queuedMs - childLaneWaitMs > ceilings.pollAbsoluteMs) {
       return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${ceilings.pollAbsoluteMs / 1000}s (may still be pending in queue)`, nodeType, creditsUsed, ctx)
     }
 
@@ -2939,18 +2969,11 @@ async function pollJobToCompletion(
     // (migration 376) is the worker's structured safety-block verdict — carried
     // onto the thrown Error below so it can ride into nodeStates[nodeId] the
     // way a mapped billing refusal's errorCode already does.
-    // `slot_wait_ms` (migration 451) only once it has reached this shared
-    // database: naming a missing column fails the whole select.
+    // `slot_wait_ms` (migration 451) and `lane_wait_ms` (migration 568) only
+    // once each has reached this shared database: naming a missing column
+    // fails the whole select (poll-job-row.ts drops exactly the missing one).
     const POLL_COLUMNS = "status, output_data, error_message, progress, credits_actual, credits, error_hint"
-    const readJob = async (columns: string) => {
-      const { data, error } = await supabase.from("jobs").select(columns).eq("id", jobId).single()
-      // A runtime column list loses the typed row; these are the columns above.
-      return { data: data as unknown as JobPollRow | null, error }
-    }
-    let { data: jobRecord, error: jobReadError } = await readJob(withSlotWaitColumn(POLL_COLUMNS))
-    if (jobReadError && noteSlotWaitColumnError(jobReadError)) {
-      ;({ data: jobRecord, error: jobReadError } = await readJob(POLL_COLUMNS))
-    }
+    const { data: jobRecord } = await readPollJobRow<JobPollRow>(jobId, POLL_COLUMNS)
 
     if (!jobRecord) {
       throw new Error(`Job ${jobId} not found`)
@@ -2966,6 +2989,23 @@ async function pollJobToCompletion(
     // during backend runs (Run-from-here, triggers). Without this, node-level
     // currentJobProgress stayed undefined and the bar never appeared.
     const status = jobRecord.status as string
+    const readMs = Date.now()
+    if (status === "queued") {
+      queuedMs += readMs - lastReadMs
+      addRunLaneWait(ctx, lastReadMs, readMs)
+    }
+    lastReadMs = readMs
+    const reportedLaneWait = Number(jobRecord.lane_wait_ms ?? 0)
+    if (Number.isFinite(reportedLaneWait)) {
+      if (laneWaitAtStart === undefined && status === "processing") laneWaitAtStart = reportedLaneWait
+      if (laneWaitAtStart !== undefined) {
+        const sinceStart = cappedQueuedMs(reportedLaneWait - laneWaitAtStart)
+        if (sinceStart > childLaneWaitMs) {
+          addRunLaneWait(ctx, readMs - (sinceStart - childLaneWaitMs), readMs)
+          childLaneWaitMs = sinceStart
+        }
+      }
+    }
 
     // Accumulate the parked time BEFORE either timeout is evaluated, so the
     // tick that discovers the hold already counts. `heldSinceMs` stays set for
@@ -3023,19 +3063,20 @@ async function pollJobToCompletion(
 
     // Detect when the worker picks up the job. `status === "processing"` (not
     // `!== "pending"`) is what the line above has always claimed: `queued` is
-    // still queue wait, which POLL_ABSOLUTE_TIMEOUT_MS above already bounds,
+    // waiting for a concurrency slot, which no clock above counts,
     // and `pending_review` is a HOLD — starting the processing clock on it
     // would hand the node's whole 90-minute budget to the review queue.
     if (processingStartTime === null && status === "processing") {
       processingStartTime = Date.now()
       heldBeforeProcessingMs = heldMs
+      queuedBeforeProcessingMs = queuedMs
     }
 
     // Check processing timeout — only starts once the worker picks up the job.
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
     if (
       processingStartTime !== null &&
-      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) - slotWaitMs > ceilings.processingMs
+      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) - slotWaitMs - (queuedMs - queuedBeforeProcessingMs) - childLaneWaitMs > ceilings.processingMs
     ) {
       return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${ceilings.processingMs / 1000}s of processing`, nodeType, creditsUsed, ctx)
     }
@@ -3154,6 +3195,8 @@ async function executeComponentNode(
         "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
         // The rate limiter's key; the body's userId stays the identity (#1888).
         "X-Internal-User-Id": ctx.userId,
+        // The component's inner run is nested in this one: it takes no run slot (concurrency lanes).
+        [PARENT_EXECUTION_HEADER]: ctx.executionId,
       },
       body: JSON.stringify({
         appSlug,
@@ -3193,10 +3236,20 @@ async function executeComponentNode(
   // once the base is spent — so a component with nothing budgeted inside times
   // out exactly as before, and one whose inner run renders for hours is not
   // abandoned (and its inner run cancelled) at minute 90.
-  const deadline = new BudgetedDeadline(COMPONENT_TIMEOUT_MS, async () => {
-    const innerId = await componentInnerExecutionId(jobId)
-    return innerId ? executionBudgetExcessMs(innerId, ctx.userId) : 0
-  })
+  // …and by the time the inner run has waited for concurrency slots (its own
+  // run slot, if it took one, and its jobs'), looked up the same lazy way:
+  // queued time never counts (decided 2026-10-30).
+  const deadline = new BudgetedDeadline(
+    COMPONENT_TIMEOUT_MS,
+    async () => {
+      const innerId = await componentInnerExecutionId(jobId)
+      return innerId ? executionBudgetExcessMs(innerId, ctx.userId) : 0
+    },
+    async () => {
+      const innerId = await componentInnerExecutionId(jobId)
+      return innerId ? executionQueuedMs(innerId, ctx.userId, { includeOwnWait: true }) : 0
+    },
+  )
   const startTime = Date.now()
   while (!(await deadline.reached(Date.now() - startTime))) {
     if (ctx.cancelled) throw new Error("Component execution cancelled")
@@ -3218,6 +3271,15 @@ async function executeComponentNode(
         ctx,
         Math.max(deadline.excessMs, typeof innerId === "string" ? await executionBudgetExcessMs(innerId, ctx.userId) : 0),
       )
+      // …and its queued time, as a direct child's wait would: the parent's
+      // cap leaves it out. Credited as a wait that ended now, no longer than
+      // this node has waited. Read only when the deadline already saw a wait
+      // or the run started with lanes enforced: nothing queues otherwise.
+      if (deadline.queuedMs > 0 || ctx.runDispatch?.lanesEnforced === true) {
+        const innerQueued = Math.max(deadline.queuedMs, typeof innerId === "string" ? await executionQueuedMs(innerId, ctx.userId, { includeOwnWait: true }) : 0)
+        const now = Date.now()
+        addRunLaneWait(ctx, now - Math.min(innerQueued, now - startTime), now)
+      }
       // credits_actual on the wrapper job = the inner execution's
       // total_credits_used (set by component-execute.ts on completion). This is
       // a SEPARATE workflow_executions row, so surfacing it here is the ONLY

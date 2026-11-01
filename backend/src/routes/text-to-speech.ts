@@ -4,6 +4,7 @@ import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
+import { laneParentPayload } from "../lib/concurrency-lanes/lane-parent.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -214,6 +215,8 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       // only they get the Rachel voice_not_found fallback. User-picked
       // voices fail loudly (see directElevenLabsTTS).
       allowDefaultVoiceFallback: Boolean(mcpClient),
+      // A coordinator's child (the video director's speech job) goes ahead in its lane; nothing else changes.
+      ...laneParentPayload(req),
     })
 
     return { jobId: job.id }

@@ -170,6 +170,17 @@ vi.mock("@/services/execution-stats.js", () => ({
   buildStatsKey: vi.fn().mockReturnValue(null),
   upsertExecutionStats: vi.fn().mockResolvedValue(undefined),
 }))
+// Concurrency lanes: run admission on the gate's JS twin (enforcement off, as
+// in production), so this file never reaches a real Redis.
+vi.mock("@/lib/concurrency-lanes/instance.js", async () => {
+  const { ConcurrencyGate } = await import("../../lib/concurrency-lanes/gate.js")
+  const { makeFakeLaneClient, makeFakeLaneStore } = await import("../../lib/concurrency-lanes/__tests__/fake-lane-redis.js")
+  const client = makeFakeLaneClient(makeFakeLaneStore())
+  const gate = new ConcurrencyGate({ client: () => client })
+  return { concurrencyGate: () => gate }
+})
+vi.mock("@/lib/concurrency-lanes/sizes.js", () => ({ laneSizesFor: async () => ({ provider: 12, llm: 24, local: 24, run: 12 }), lanesEnforced: async () => false }))
+vi.mock("@/lib/concurrency-lanes/provider-of.js", () => ({ primaryProviderOfJob: () => null }))
 
 import {
   ORCHESTRATOR_LOCK_MS,
@@ -433,11 +444,10 @@ describe("orchestrator runtime-env scoping", () => {
     // Step 6 of the orchestrator: the row goes to `running`. That write is the
     // ONE place a claimed execution learns which environment owns it — without
     // it the sweeps have nothing to filter on.
-    const claim = mocks.supabaseUpdates.find(
-      (u) => u.table === "workflow_executions" && u.payload.status === "running",
-    )
+    // The claim is a compare-and-set through the retrying write.
+    const claim = mocks.executionWrites.find((w) => w.updates.status === "running")
     expect(claim, "orchestrator never wrote the claim payload").toBeDefined()
-    expect(claim!.payload.runtime_env).toBe("staging")
+    expect(claim!.updates.runtime_env).toBe("staging")
   })
 })
 

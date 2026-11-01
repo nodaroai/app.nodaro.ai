@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     builder.update = () => builder
     builder.eq = () => builder
     builder.neq = () => builder
+    builder.in = () => builder
     // `.select("id")` is chained at the end of the builder so PostgREST
     // returns the matched rows. The mock just continues the chain — the
     // injected `dataQueue` value already represents the post-select payload.
@@ -59,6 +60,26 @@ beforeEach(() => {
 })
 
 describe("updateExecutionWithRetry", () => {
+  it("a compare-and-set (fromStatuses) that matched no row answers cancelledRace, terminal or not", async () => {
+    // A run's claim (`running`) from the statuses a worker may start: another
+    // write moved the row first (a queue-timeout failure, a cancel).
+    mocks.errorQueue.push(null)
+    mocks.dataQueue.push([])
+    const missed = await updateExecutionWithRetry("exec-1", { status: "running" }, { fromStatuses: ["pending", "running", "stopping"] })
+    expect(missed).toEqual({ ok: false, cancelledRace: true, attempts: 1 })
+
+    mocks.errorQueue.push(null)
+    mocks.dataQueue.push([{ id: "exec-1" }])
+    const claimed = await updateExecutionWithRetry("exec-1", { status: "running" }, { fromStatuses: ["pending", "running", "stopping"] })
+    expect(claimed).toEqual({ ok: true, attempts: 1 })
+  })
+
+  it("a non-terminal write with no compare-and-set is ok however many rows it matched (unchanged)", async () => {
+    mocks.errorQueue.push(null)
+    mocks.dataQueue.push([])
+    expect(await updateExecutionWithRetry("exec-1", { node_states: {} })).toEqual({ ok: true, attempts: 1 })
+  })
+
   it("returns ok=true on first-try success", async () => {
     mocks.errorQueue.push(null)
     mocks.dataQueue.push([{ id: "exec-1" }])

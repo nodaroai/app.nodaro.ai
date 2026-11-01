@@ -8,8 +8,10 @@
 //   not-limited  — work that is deliberately not limited (training, the Copilot): never acquires.
 //
 // A scope is one runHolding call. It also carries the job's in-handler wait
-// (time spent waiting for slots inside the handler, which the job's own clocks
-// leave out). When the scope ends it is closed: a call that STARTS after that
+// (time spent waiting inside the handler — for a slot of its own calls, or for
+// a child job that waits for one — which the job's own clocks leave out). Waits
+// are kept as merged wall-clock intervals, so calls waiting at the same time
+// count once. When the scope ends it is closed: a call that STARTS after that
 // (detached work that kept the context) takes the no-hold path and never leaves
 // a lease behind. A call already waiting when the scope ends keeps waiting,
 // bounded by the queue timeout, and releases its own slot when it is done.
@@ -18,6 +20,7 @@
 // so importing this module never connects.
 import { AsyncLocalStorage } from "node:async_hooks"
 import { LANE_LEASE_RENEW_MS, LANE_LEASE_TTL_MS, type ConcurrencyGate } from "./gate.js"
+import { coveredMs, mergeWaitInterval, type WaitInterval } from "./queued-clock.js"
 import type { ConcurrencyLane, LaneEntryMeta, PayerKey } from "./types.js"
 
 export interface ConcurrencyHold {
@@ -34,13 +37,28 @@ export interface ConcurrencyHold {
   leaseId: string | null
   transport?: "json" | "sse" | "mcp"
   reason?: "training" | "copilot"
+  /**
+   * The table whose row `jobId` names, when its in-handler wait is kept on the
+   * row (`lane_wait_ms`, coordinator-wait.ts): `jobs` for a job, `pipelines`
+   * for a pipeline drive. Absent: the wait is kept in memory only (a workflow
+   * run keeps its own, execution-wait.ts).
+   */
+  waitTable?: "jobs" | "pipelines"
+}
+
+/** A job's in-handler wait, shared by every nested scope of the same job. */
+export interface HeldWait {
+  /** Waits added as a bare amount (addHeldWaitMs). */
+  ms: number
+  /** Waits added as wall-clock intervals (addHeldWait), merged. */
+  intervals: WaitInterval[]
 }
 
 /** One runHolding scope. Internal to the lane modules (slot.ts). */
 export interface HoldScope {
   readonly hold: ConcurrencyHold
   /** The job's in-handler wait, shared by every nested scope of the same job. */
-  readonly wait: { ms: number }
+  readonly wait: HeldWait
   /** Set when runHolding's `fn` has settled: nothing new is admitted under the scope. */
   closed: boolean
 }
@@ -100,7 +118,7 @@ export async function releaseQuietly(leaseId: string, outcome: "completed" | "fa
  */
 export async function runHolding<T>(hold: ConcurrencyHold, fn: () => Promise<T>): Promise<T> {
   const parent = scopes.getStore()
-  const wait = parent && parent.hold.jobId === hold.jobId ? parent.wait : { ms: 0 }
+  const wait = parent && parent.hold.jobId === hold.jobId ? parent.wait : { ms: 0, intervals: [] }
   const scope: HoldScope = { hold, wait, closed: false }
   try {
     return await scopes.run(scope, fn)
@@ -126,9 +144,39 @@ export function addHeldWaitMs(ms: number): void {
   scope.wait.ms += ms
 }
 
+/**
+ * Add the wall-clock interval `[fromMs, toMs]` during which the current job
+ * waited inside its handler; one that overlaps a wait already added counts
+ * once. Outside any hold, nothing.
+ */
+export function addHeldWait(fromMs: number, toMs: number): void {
+  const scope = scopes.getStore()
+  if (!scope) return
+  const merged = mergeWaitInterval(scope.wait.intervals, fromMs, toMs)
+  if (merged) scope.wait.intervals = merged
+}
+
+/** The in-handler wait `wait` holds so far. */
+export function heldWaitOf(wait: HeldWait): number {
+  return wait.ms + coveredMs(wait.intervals)
+}
+
+/**
+ * A reader of the current job's in-handler wait, bound to the scope it is
+ * taken in — for a timer, which must not depend on carrying the async context
+ * into its callback. Outside any hold it always reads 0.
+ */
+export function heldWaitReader(): () => number {
+  const scope = scopes.getStore()
+  if (!scope) return () => 0
+  const { wait } = scope
+  return () => heldWaitOf(wait)
+}
+
 /** How long the current job has waited for slots inside its handler so far; 0 outside any hold. */
 export function heldWaitMs(): number {
-  return scopes.getStore()?.wait.ms ?? 0
+  const scope = scopes.getStore()
+  return scope ? heldWaitOf(scope.wait) : 0
 }
 
 /**

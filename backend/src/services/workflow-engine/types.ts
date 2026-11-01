@@ -390,6 +390,14 @@ export interface WorkflowExecutionJob {
   inlineGraph?: true
   /** The use-case wrapper job this inline run reports to. */
   wrapperJobId?: string
+  /**
+   * The running execution whose node started this one (a component node or a
+   * use-case node of a run, sent by the node executor on the internal lane and
+   * honoured only there — lib/concurrency-lanes/parent-execution.ts). Such a
+   * run takes no run slot and is never refused by the orchestrator's server
+   * share: its parent holds the slot and waits for it. Absent = top-level.
+   */
+  parentExecutionId?: string
   /** A continuation that re-runs what a FAILED inline run did not finish. */
   continueMode?: "from-failed"
   /**
@@ -832,6 +840,11 @@ export interface AdoptedJobClocks {
   /** The row's `slot_wait_ms` when adopted: its earlier ffmpeg-slot wait,
    *  credited from the first tick (Track 0.13). */
   readonly slotWaitMs?: number
+  /** A job adopted while it still waits for a concurrency slot (`queued`):
+   *  how long it has waited so far (now − `jobs.lane_queued_at`), credited
+   *  from the first tick, so the resume neither restarts its clocks nor
+   *  counts its wait against them. */
+  readonly queuedMs?: number
 }
 
 export interface OrchestratorContext {
@@ -893,6 +906,34 @@ export interface OrchestratorContext {
    *  Inline sub-workflows share this context, so their long nodes count too.
    *  Undefined (= 0) for a run with nothing budgeted — today's 120 minutes. */
   budgetExcessMs?: number
+  /** The wall-clock time (ms) during which at least one of this run's child
+   *  jobs waited for a concurrency slot (`queued`) since this orchestrator
+   *  attempt started — the UNION of their waits, so siblings waiting at once
+   *  count once and waits one after another count in full. Grown by
+   *  `pollJobToCompletion` and by a component or use-case node for its inner
+   *  run (`lib/concurrency-lanes/execution-wait.ts :: addRunLaneWait`).
+   *  Queued time never counts against a workflow clock (decided 2026-10-30:
+   *  nothing fails for waiting): the orchestrator takes it off the elapsed
+   *  time its cap is measured against, and persists it to
+   *  `workflow_executions.lane_wait_ms` (only while non-zero) for the stale
+   *  sweeps. Undefined (= 0) while nothing waits. */
+  laneWaitMs?: number
+  /** The waits `laneWaitMs` counts, as merged `[from, to]` intervals (epoch
+   *  ms), sorted and non-overlapping, at most `MAX_LANE_WAIT_INTERVALS`
+   *  (`addRunLaneWait`). Undefined while nothing waits. */
+  laneWaitIntervals?: Array<[number, number]>
+  /**
+   * How many nodes this run dispatches at once, decided ONCE when the run
+   * starts (`dispatchWidth` in workers/orchestrator-worker.ts) and fixed for
+   * the run, so turning concurrency lanes on or off mid-run never changes a
+   * run's width halfway. `lanesEnforced` false: `width` is today's
+   * per-execution limit, and an inline sub-workflow keeps
+   * `MAX_CONCURRENT_NODES_PER_EXECUTION`. True: `width` is
+   * `ORCHESTRATOR_DISPATCH_WIDTH` for the run's levels, its list fan-outs and
+   * its sub-workflows, and the user's lanes do the limiting. Absent (a context
+   * built outside the orchestrator): today's limits.
+   */
+  runDispatch?: { lanesEnforced: boolean; width: number }
   /**
    * What each node's figure already counts of its job's STEPS (child jobs),
    * by job id (`run-step-charges.ts`): `included` is the steps' settled charge

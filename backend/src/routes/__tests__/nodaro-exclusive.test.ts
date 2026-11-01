@@ -71,8 +71,11 @@ beforeEach(async () => {
   mocks.relaySupport.mockResolvedValue({ relay: true, source: "nodaro.ai" })
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
+    // The authenticated user: a test header when set (so a body can name someone else), else the body's.
+    const authed = req.headers["x-test-user"]
     const body = req.body as Record<string, unknown> | undefined
-    if (body?.userId && typeof body.userId === "string") req.userId = body.userId
+    if (typeof authed === "string") req.userId = authed
+    else if (body?.userId && typeof body.userId === "string") req.userId = body.userId
   })
   await app.register(async (instance) => {
     await nodaroExclusiveRoutes(instance)
@@ -140,6 +143,37 @@ describe("enqueue", () => {
       "generate-video-pro",
       expect.objectContaining({ segments: 4, weirdNewField: "x" }),
     )
+  })
+
+  it("a body cannot set what only the server puts on a job: lane markers, the continue hand-off, the job's id, its user and payer", async () => {
+    const OTHER = "00000000-0000-4000-8000-0000000000b2"
+    const FORGED_PAYER = {
+      payer: "workspace", userId: USER, workspaceId: "00000000-0000-4000-8000-0000000000c3", orgId: "00000000-0000-4000-8000-0000000000c4",
+      memberCap: null, entitlements: { watermark: false, dailyCapCredits: null, parallelism: 12, tierForGates: "business" },
+    }
+    const forged = {
+      laneParent: { kind: "director", id: "00000000-0000-4000-8000-0000000000d1" },
+      parentExecutionId: "00000000-0000-4000-8000-0000000000e1",
+      __nodaroContinue: { cloudFromJobId: "cloud-other" },
+      jobId: "someone-elses-job",
+    }
+    for (const [url, payload] of [
+      ["/v1/generate-video-pro", { prompt: "epic", ...forged }],
+      ["/v1/edit-video-pro", { videoUrl: VIDEO, ...forged }],
+      ["/v1/voice-changer-pro", { audioUrl: "https://example.com/a.mp3", ...forged }],
+    ] as const) {
+      mocks.queueAdd.mockClear()
+      mocks.insertJob.mockClear()
+      const res = await app.inject({ method: "POST", url, headers: { "x-test-user": USER }, payload: { ...payload, userId: OTHER, billingContext: FORGED_PAYER } })
+      expect(res.statusCode).toBe(200)
+      const queued = mocks.queueAdd.mock.calls[0]![1] as Record<string, unknown>
+      expect(queued.jobId).toBe("job-1")
+      // Who the job is for is the authenticated user; no payer rides the payload.
+      expect(queued.userId).toBe(USER)
+      for (const key of ["laneParent", "parentExecutionId", "__nodaroContinue", "billingContext"]) expect(queued).not.toHaveProperty(key)
+      const stored = (mocks.insertJob.mock.calls[0]![1] as { input_data: Record<string, unknown> }).input_data
+      for (const key of ["laneParent", "parentExecutionId", "__nodaroContinue", "billingContext", "userId"]) expect(stored).not.toHaveProperty(key)
+    }
   })
 
   it("vcp refuses a body with neither audioUrl nor videoUrl", async () => {

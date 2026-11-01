@@ -57,6 +57,7 @@ import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../
 import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 
 /**
  * The per-user limit on starting a measurement of a recording (decided
@@ -296,6 +297,8 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
         ...(firstRun ? { nodeIds: firstRun } : {}),
         idempotencyKey: `uc-exec-${wrapperId}`,
         mcpClient,
+        // A node of a running run started it (internal lane only): no run slot of its own.
+        parentExecutionId: parentExecutionIdOf(req),
         // The run's steps reserve under the rules its balance check and fee hold used.
         webFreeMode,
         appRun: req.isAppRun === true,

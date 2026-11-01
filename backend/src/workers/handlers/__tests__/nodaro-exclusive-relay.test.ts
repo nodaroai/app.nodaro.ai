@@ -529,10 +529,12 @@ describe("relay to the cloud", () => {
     })
   })
 
-  it("polls with the type's own budget (gvp gets the hour-plus budget)", async () => {
+  it("polls with the type's own budget (gvp gets the hour-plus budget), counted from the cloud job's start", async () => {
     await nodaroExclusiveRelayHandlers["generate-video-pro"](bullJob({ prompt: "p" }), ctx)
+    // queueAware: the cloud job's time in line is left out of the budget (relay-lane-wait.test.ts).
     expect(mocks.waitForCloudJob).toHaveBeenCalledWith("cloud-job-1", expect.any(Function), {
       budgetMs: 85 * 60 * 1000,
+      queueAware: true,
     })
     vi.clearAllMocks()
     mocks.waitForCloudJob.mockResolvedValue({
@@ -545,6 +547,7 @@ describe("relay to the cloud", () => {
     await nodaroExclusiveRelayHandlers["video-analysis"](bullJob({ videoUrl: "https://x/v.mp4" }), ctx)
     expect(mocks.waitForCloudJob).toHaveBeenCalledWith("c", expect.any(Function), {
       budgetMs: 30 * 60 * 1000,
+      queueAware: true,
     })
   })
 })

@@ -7,10 +7,12 @@ import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { executeAppRun } from "../services/app-execution.js"
+import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 import type { ComponentMetadata } from "@nodaro/shared/apps"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../lib/execution-budget.js"
+import { executionQueuedMs } from "../lib/concurrency-lanes/execution-wait.js"
 import { estimateWorkflowCreditsDetailed, type EstimateEdge, type EstimateNode } from "../ee/billing/credits.js"
 import { refuseIfRunUnpriced, replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
@@ -250,6 +252,8 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           appId: appRow.id as string,
           inputOverrides,
           isComponentExecution: true,
+          // A component node of a running run started it (internal lane only): no run slot of its own.
+          parentExecutionId: parentExecutionIdOf(req),
           componentDepth,
           executingComponentIds,
           webFreeMode: req.webFreeMode === true,
@@ -273,8 +277,15 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         // budget excess (podcast Track 0.11) — the inner run's own cap grows by
         // the excess of any long render it dispatches, so this wait must too.
         // Looked up only once the base is spent: a component with nothing
-        // budgeted inside times out exactly as before.
-        const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, () => executionBudgetExcessMs(result.executionId, req.userId!))
+        // budgeted inside times out exactly as before. It grows the same lazy
+        // way by the time the inner run waited for concurrency slots — for its
+        // own run slot (a run started here by the editor or the API takes
+        // one) and for its jobs': queued time never counts (decided 2026-10-30).
+        const deadline = new BudgetedDeadline(
+          POLL_ABSOLUTE_TIMEOUT_MS,
+          () => executionBudgetExcessMs(result.executionId, req.userId!),
+          () => executionQueuedMs(result.executionId, req.userId!, { includeOwnWait: true }),
+        )
         const startTime = Date.now()
         while (!(await deadline.reached(Date.now() - startTime))) {
           // Poll status + progress counts to propagate progress to wrapper job
@@ -468,16 +479,21 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // still in its early steps would read "nothing budgeted" and give up on a
     // run the server keeps waiting on. No inner run stamped → false (a wrapper
     // with no inner run has nothing to wait for).
-    const [budgetExcessMs, pendingBudgetedNodes] = inner !== null
+    // `queuedMs`: how long the run has waited for concurrency slots so far —
+    // its own run slot and its jobs' (`executionQueuedMs`). Queued time never
+    // counts (decided 2026-10-30), so the server's wait grows by it as the
+    // background wait above does.
+    const [budgetExcessMs, pendingBudgetedNodes, queuedMs] = inner !== null
       // The readers are owner-scoped too (a second fence behind the lookup
       // above): another user's execution reads as missing.
       ? await Promise.all([
         executionBudgetExcessMs(inner, wrapper.user_id as string),
         executionMayDispatchBudgetedJob(inner, wrapper.user_id as string),
+        executionQueuedMs(inner, wrapper.user_id as string, { includeOwnWait: true }),
       ])
-      : [0, false]
+      : [0, false, 0]
     return reply.send({
-      data: { budgetExcessMs, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + budgetExcessMs, pendingBudgetedNodes },
+      data: { budgetExcessMs, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + budgetExcessMs + queuedMs, pendingBudgetedNodes, queuedMs },
     })
   })
 }

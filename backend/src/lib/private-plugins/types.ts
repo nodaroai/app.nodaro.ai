@@ -3403,6 +3403,9 @@ export interface PluginCapabilities {
   /**
    * `tk.jobs.waitForJob` is queue-aware: the time the awaited job spends
    * waiting for a free slot does not count against the caller's timeout.
+   * Plugin JOBS only (a handler run by a worker): a plugin ROUTE waiting
+   * inline keeps its plain timeout, so an open request is never held for the
+   * queue timeout.
    * False (or absent) — the wait counts from when it was called, so a plugin
    * that waits on a job which may queue keeps a timeout that allows for it.
    */

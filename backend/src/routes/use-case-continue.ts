@@ -59,6 +59,7 @@ import { usecaseInnerDenial } from "../lib/use-case/inner-availability.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 
 const STAMP_ATTEMPTS = 3
 
@@ -302,6 +303,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
           ...(plan.inputOverrides ? { inputOverrides: plan.inputOverrides } : {}),
           idempotencyKey: `uc-exec-${wrapperId}`,
           mcpClient: extractMcpClient(req.body),
+          // A node of a running run started it (internal lane only): no run slot of its own.
+          parentExecutionId: parentExecutionIdOf(req),
           // The run's steps reserve under the rules its balance check and fee hold used.
           webFreeMode,
           appRun: req.isAppRun === true,

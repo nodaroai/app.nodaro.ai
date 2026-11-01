@@ -115,7 +115,7 @@ export class NodaroCloudImageProvider
     }
 
     const jobId = await createCloudJob("/v1/generate-image", body)
-    const job = await waitForCloudJob(jobId)
+    const job = await waitForCloudJob(jobId, undefined, { queueAware: true })
 
     return extractImageResult(job, jobId)
   }
@@ -144,7 +144,7 @@ export class NodaroCloudImageProvider
       ...mapExtraParams(extraParams),
     }
     const jobId = await createCloudJob("/v1/edit-image", body)
-    const job = await waitForCloudJob(jobId)
+    const job = await waitForCloudJob(jobId, undefined, { queueAware: true })
     return extractImageResult(job, jobId)
   }
 }

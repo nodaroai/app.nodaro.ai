@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     return executeNodeImpl(node.id, rest[4] as Record<string, unknown>)
   })
   const executionWrites: Array<{ id: string; updates: Record<string, unknown> }> = []
+  const directUpdates: Array<{ table: string; patch: Record<string, unknown> }> = []
   let workflowRow: Record<string, unknown> | null = null
   let staleRows: Array<Record<string, unknown>> = []
   let queueJobState: string | null = null
@@ -52,7 +53,14 @@ const mocks = vi.hoisted(() => {
   }
   const from = vi.fn((table: string) => ({
     select: (columns?: string) => (makeChain(table, columns) as { select: (c?: string) => unknown }).select(columns),
-    update: () => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+    update: (patch: Record<string, unknown>) => {
+      // Direct writes (the run's claim, its queued time): recorded, thenable at any point of the chain.
+      directUpdates.push({ table, patch })
+      const c: Record<string, unknown> = {}
+      for (const m of ["eq", "lt", "in", "neq", "select"]) c[m] = () => c
+      c.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(res)
+      return c
+    },
     insert: () => ({ select: () => ({ single: vi.fn().mockResolvedValue({ data: null, error: null }) }) }),
   }))
   const getJob = vi.fn(async () => (queueJobState === null ? null : { getState: async () => queueJobState }))
@@ -62,7 +70,7 @@ const mocks = vi.hoisted(() => {
   })
 
   return {
-    executeNode, executeNodeCalls, executionWrites, from, getJob, updateExecutionWithRetry,
+    executeNode, executeNodeCalls, executionWrites, directUpdates, from, getJob, updateExecutionWithRetry,
     budgetExcess, budgetReads,
     setExecuteNodeImpl: (fn: typeof executeNodeImpl) => { executeNodeImpl = fn },
     setWorkflowRow: (row: Record<string, unknown> | null) => { workflowRow = row },
@@ -71,6 +79,7 @@ const mocks = vi.hoisted(() => {
     reset: () => {
       executeNodeCalls.length = 0
       executionWrites.length = 0
+      directUpdates.length = 0
       staleRows = []
       queueJobState = null
       budgetExcess.clear()
@@ -106,6 +115,17 @@ vi.mock("@/services/execution-stats.js", () => ({
   buildStatsKey: vi.fn().mockReturnValue(null),
   upsertExecutionStats: vi.fn().mockResolvedValue(undefined),
 }))
+// Concurrency lanes: run admission on the gate's JS twin (enforcement off, as
+// in production), so this file never reaches a real Redis.
+vi.mock("@/lib/concurrency-lanes/instance.js", async () => {
+  const { ConcurrencyGate } = await import("../../lib/concurrency-lanes/gate.js")
+  const { makeFakeLaneClient, makeFakeLaneStore } = await import("../../lib/concurrency-lanes/__tests__/fake-lane-redis.js")
+  const client = makeFakeLaneClient(makeFakeLaneStore())
+  const gate = new ConcurrencyGate({ client: () => client })
+  return { concurrencyGate: () => gate }
+})
+vi.mock("@/lib/concurrency-lanes/sizes.js", () => ({ laneSizesFor: async () => ({ provider: 12, llm: 24, local: 24, run: 12 }), lanesEnforced: async () => false }))
+vi.mock("@/lib/concurrency-lanes/provider-of.js", () => ({ primaryProviderOfJob: () => null }))
 vi.mock("@/lib/execution-budget.js", () => ({
   executionBudgetExcessMs: async (id: string) => {
     mocks.budgetReads.push(id)
@@ -184,6 +204,60 @@ describe("orchestrator workflow cap — WORKFLOW_TIMEOUT_MS + the run's budget e
   })
 })
 
+// Concurrency lanes (decided 2026-10-30: nothing fails for waiting): the time
+// the run's jobs waited for slots (`ctx.laneWaitMs`, grown by the node
+// executor's polls — node-executor-lane-wait.test.ts) comes off the elapsed
+// time, and is persisted beside the node states only once it is non-zero.
+describe("orchestrator workflow cap — queued time does not count", () => {
+  beforeEach(() => {
+    mocks.reset()
+    vi.useFakeTimers({ toFake: ["Date"] })
+  })
+  afterEach(() => vi.useRealTimers())
+
+  function firstNodeWaits(tookMs: number, queuedMs: number) {
+    mocks.setExecuteNodeImpl(async (nodeId, ctx) => {
+      if (nodeId === "cut") {
+        ;(ctx as unknown as OrchestratorContext).laneWaitMs = queuedMs
+        vi.setSystemTime(Date.now() + tookMs)
+      }
+      return { output: { text: "x" }, creditsUsed: 0 }
+    })
+  }
+  const laneWrites = () => mocks.directUpdates.filter((u) => "lane_wait_ms" in u.patch)
+
+  it("the run cap ignores queued time: 220 minutes, 110 of them queued, continues to its next level", async () => {
+    firstNodeWaits(220 * MIN, 110 * MIN)
+    await runOrchestratorJob(makeJob(), "tok")
+    expect(mocks.executeNodeCalls).toEqual(["cut", "after"])
+    expect(timedOut()).toHaveLength(0)
+    // …and the run's figure is persisted for the stale sweeps, in its own statement.
+    expect(laneWrites().map((u) => u.patch)).toContainEqual({ lane_wait_ms: 110 * MIN })
+    expect(mocks.executionWrites.some((w) => "lane_wait_ms" in w.updates)).toBe(false)
+  })
+
+  it("…but the time NOT spent queued still meets the 120-minute cap", async () => {
+    firstNodeWaits(220 * MIN, 90 * MIN)
+    await runOrchestratorJob(makeJob(), "tok")
+    expect(mocks.executeNodeCalls).toEqual(["cut"])
+    expect(timedOut()).toHaveLength(1)
+  })
+
+  it("with enforcement off changes nothing: nothing queued, no lane_wait_ms write, today's cap", async () => {
+    firstNodeTakes121()
+    await runOrchestratorJob(makeJob(), "tok")
+    expect(timedOut()).toHaveLength(1)
+    expect(laneWrites()).toEqual([])
+  })
+
+  function firstNodeTakes121() {
+    mocks.setExecuteNodeImpl(async (nodeId) => {
+      if (nodeId === "cut") vi.setSystemTime(Date.now() + 121 * MIN)
+      return { output: { text: "x" }, creditsUsed: 0 }
+    })
+  }
+})
+
 describe("orchestrator boot sweep — abandon threshold grows by the run's excess", () => {
   const HOUR = 60 * MIN
   beforeEach(() => mocks.reset())
@@ -229,7 +303,8 @@ describe("orchestrator resume — a live budgeted render is re-attached, not res
 
     await runOrchestratorJob(makeJob(), "tok")
 
-    expect(cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })
+    // …and its children still waiting for a concurrency slot (concurrency lanes, decided 2026-10-30).
+    expect(cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", "owner-1", { adoptLiveBudgetedRenders: true, adoptQueued: true })
     expect(seen?.get("cut")).toEqual(adopted)
   })
 })

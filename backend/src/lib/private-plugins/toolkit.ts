@@ -1588,9 +1588,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionMotion: true,
   nodaroMotionSteps: true,
   jobLanes: true,
-  // Turns true with the change that makes tk.jobs.waitForJob discount a
-  // job's queued time; until then a plugin must not rely on it.
-  queueAwareWait: false,
+  // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
+  // (`queued`) out of the plugin's timeout (`queueAware` below).
+  queueAwareWait: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1806,7 +1806,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       readJobsOwnedBy,
       readOwnedJob,
       readJobSubmissionsOwnedBy,
-      waitForJob,
+      // Queue-aware: the awaited job's queued time is not the plugin's timeout,
+      // and is credited to the job the plugin runs for (its own clocks).
+      waitForJob: (opts) => waitForJob({ ...opts, queueAware: true }),
       storeRecastAudioBase,
       readRecastAudioBase,
       clearRecastAudioBase,

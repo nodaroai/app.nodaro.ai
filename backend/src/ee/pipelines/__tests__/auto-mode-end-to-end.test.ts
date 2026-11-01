@@ -158,7 +158,8 @@ interface MockState {
  * engine to read pipelines + pipeline_stages and write status updates.
  *
  * - `from("pipelines").select("*").eq("id", v).single()` → pipeline row
- * - `from("pipelines").update(patch).eq("id", v)` → mutate row
+ * - `from("pipelines").update(patch).eq("id", v)` → mutate row (with
+ *   `.in("status", [...]).select("id")`: the drive's compare-and-set claim)
  * - `from("pipeline_stages").select("stage_name, status, stage_order")
  *      .eq("pipeline_id", v).order(...)` → all stage rows
  * - `from("pipeline_stages").select("id").eq("pipeline_id", v).eq("stage_name", v).maybeSingle()` → one row
@@ -169,24 +170,39 @@ interface MockState {
 function makeSupabase(state: MockState): unknown {
   const pipelinesUpdate = (patch: Record<string, unknown>) => {
     const filters: Record<string, unknown> = {}
+    const inFilters: Record<string, readonly unknown[]> = {}
+    let returning = false
     const apply = () => {
+      const ids: Array<{ id: string }> = []
       for (const row of state.pipelines.values()) {
+        const r = row as unknown as Record<string, unknown>
         if (
-          Object.entries(filters).every(
-            ([k, v]) => (row as unknown as Record<string, unknown>)[k] === v,
-          )
+          Object.entries(filters).every(([k, v]) => r[k] === v) &&
+          Object.entries(inFilters).every(([k, vs]) => vs.includes(r[k]))
         ) {
           Object.assign(row, patch)
+          ids.push({ id: r.id as string })
         }
       }
-      return { data: null, error: null }
+      return { data: returning ? ids : null, error: null }
     }
     const chain: {
       eq: (col: string, val: unknown) => unknown
+      in: (col: string, vals: readonly unknown[]) => unknown
+      // The drive's claim is a compare-and-set that reads back what it moved.
+      select: (cols: string) => unknown
       then: (resolve: (v: unknown) => unknown) => unknown
     } = {
       eq: (col, val) => {
         filters[col] = val
+        return chain
+      },
+      in: (col, vals) => {
+        inFilters[col] = vals
+        return chain
+      },
+      select: () => {
+        returning = true
         return chain
       },
       then: (resolve) => resolve(apply()),

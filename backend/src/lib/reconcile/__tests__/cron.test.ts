@@ -39,6 +39,9 @@ vi.mock("../../concurrency-lanes/queued-sweep.js", () => ({
 }))
 vi.mock("../../concurrency-lanes/columns.js", () => ({
   readBullEntry: vi.fn(async (jobId: string) => mocks.bullStamps.get(jobId) ?? null),
+  // The stuck-orchestrator sweep's tolerant `lane_wait_ms` read: here as in a database without the column.
+  laneColumnsAbsent: () => true,
+  noteLaneColumnError: () => false,
 }))
 
 vi.mock("../../access-blocks.js", () => ({

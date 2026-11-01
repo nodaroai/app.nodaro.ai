@@ -30,8 +30,9 @@
 import { randomUUID } from "node:crypto"
 import { LANE_LEASE_TTL_MS, LaneGateTimeoutError, type ConcurrencyGate, type WakeTarget } from "./gate.js"
 import { EnsureUnderCoordinatorError, LaneWaitAbortedError, LaneWaitTimeoutError } from "./errors.js"
+import { creditCoordinatorWait } from "./coordinator-wait.js"
 import {
-  addHeldWaitMs, countFailOpen, countUngated, currentHoldScope, keepLeaseAlive, loadConcurrencyGate, logLaneRateLimited,
+  countFailOpen, countUngated, currentHoldScope, keepLeaseAlive, loadConcurrencyGate, logLaneRateLimited,
   releaseQuietly, runHolding, warnLaneRateLimited, type ConcurrencyHold, type HoldScope,
 } from "./hold.js"
 import type { LeafLane } from "./leaf-lanes.js"
@@ -114,7 +115,9 @@ type Admission = { leaseId: string; meta: LaneEntryMeta } | { leaseId: null }
  * waiting for it up to the queue timeout. The wait ends early (withdrawn,
  * LaneWaitAbortedError) only on the caller's signal; a wait still in progress
  * when the hold's scope ends goes on.
- * The time waited is added to the job's in-handler wait whatever the outcome.
+ * The time waited is added to the job's in-handler wait (and to its row's
+ * `lane_wait_ms`, coordinator-wait.ts) as it goes — on every re-check, so a
+ * long wait already counts while it lasts — whatever the outcome.
  */
 async function admitUnderHold(scope: HoldScope, req: SlotRequest): Promise<Admission> {
   const { hold } = scope
@@ -136,6 +139,13 @@ async function admitUnderHold(scope: HoldScope, req: SlotRequest): Promise<Admis
   const started = Date.now()
   let gate: ConcurrencyGate | null = null
   let waited = false
+  /** The wait is credited up to here. */
+  let creditedTo = started
+  const creditWait = () => {
+    const now = Date.now()
+    creditCoordinatorWait(creditedTo, now)
+    creditedTo = now
+  }
   const withdraw = async () => {
     if (!gate) return
     await gate.withdraw(entryId).catch((err: unknown) => { warnLaneRateLimited("could not withdraw a waiting call", err) })
@@ -156,6 +166,7 @@ async function admitUnderHold(scope: HoldScope, req: SlotRequest): Promise<Admis
       const r = await gate.acquire({ meta, size: sizes[req.lane], mode: "front", leaseTtlMs: LANE_LEASE_TTL_MS })
       if (r.granted) return { leaseId: r.leaseId, meta }
       waited = true
+      creditWait()
       try {
         req.onWaiting?.(r.wait)
       } catch (err) {
@@ -168,6 +179,7 @@ async function admitUnderHold(scope: HoldScope, req: SlotRequest): Promise<Admis
       }
       ensureWakeSubscriber()
       await waitForTurn(entryId, Math.min(SLOT_RECHECK_MS, deadline - now), signal)
+      creditWait()
       await abortIfAsked()
     }
   } catch (err) {
@@ -184,7 +196,7 @@ async function admitUnderHold(scope: HoldScope, req: SlotRequest): Promise<Admis
     void withdraw()
     return { leaseId: null }
   } finally {
-    if (waited) addHeldWaitMs(Date.now() - started)
+    if (waited) creditWait()
   }
 }
 

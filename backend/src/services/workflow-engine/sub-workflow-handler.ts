@@ -323,6 +323,16 @@ export async function findNestedWordlessTranscriptFeeds(
 }
 
 /**
+ * How many nodes of one sub-workflow level run at once: the run's dispatch
+ * width while concurrency lanes are enforced (decided once at the run's start,
+ * `ctx.runDispatch`), otherwise `MAX_CONCURRENT_NODES_PER_EXECUTION` exactly as
+ * before — never the tier-clipped width of the run's own levels.
+ */
+export function subWorkflowWidth(ctx: OrchestratorContext): number {
+  return ctx.runDispatch?.lanesEnforced === true ? ctx.runDispatch.width : config.MAX_CONCURRENT_NODES_PER_EXECUTION
+}
+
+/**
  * Execute a sub-workflow node.
  *
  * @param node - The sub-workflow node
@@ -573,7 +583,7 @@ export async function executeSubWorkflow(
         return result
     })
     const levelAborted = { cancelled: ctx.cancelled }
-    const results = await settledWithLimit(tasks, config.MAX_CONCURRENT_NODES_PER_EXECUTION, levelAborted)
+    const results = await settledWithLimit(tasks, subWorkflowWidth(ctx), levelAborted)
 
     // Check for failures + accumulate committed inner credits.
     for (let i = 0; i < results.length; i++) {

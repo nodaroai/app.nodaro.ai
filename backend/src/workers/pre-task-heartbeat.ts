@@ -65,6 +65,17 @@
  * render worker's own semaphore, the API and orchestrator processes), and a
  * component node's deadline — a sub-workflow's cap, like the workflow cap.
  *
+ * WAITING FOR A CONCURRENCY SLOT IS NOT RUNNING EITHER (decided 2026-10-30:
+ * nothing fails for waiting). A coordinator's calls wait for slots of their
+ * lanes inside the handler, and a coordinator waits on child jobs that wait in
+ * `queued`; a relay waits on a cloud job that waits for one. Each wait is the
+ * job's in-handler wait (`lib/concurrency-lanes/hold.ts :: heldWaitMs`,
+ * credited as it goes by `coordinator-wait.ts`), and the cap's clock pauses
+ * for it exactly as for an ffmpeg-slot wait — the beats go on. Its bound is
+ * the queue timeout: every such wait ends by then (each credit is capped
+ * there), so a hung job still ages into the sweep. A job that never waits gets
+ * exactly the cap it had.
+ *
  * WHAT NO CAP BOUNDS (stated, not padded over):
  *  - Storage I/O — apply-edl's chunk checkpoints, the 404 fallback download,
  *    the deliverable upload after the render. Every call is bounded on its own
@@ -109,6 +120,8 @@
 import { recordJobSlotWait, refreshPreTaskSentinel } from "../lib/reconcile/persistence.js"
 import { SlotWaitLedger, runWithSlotWaitLedger } from "../lib/ffmpeg-slot-wait.js"
 import { NODE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
+import { heldWaitReader } from "../lib/concurrency-lanes/hold.js"
+import { cappedQueuedMs } from "../lib/concurrency-lanes/queued-clock.js"
 
 /** Beat cadence. Same as the core long-runners (`SCENE3D_HEARTBEAT_MS`) and the
  *  video-analysis plugin: one missed write still leaves 28 minutes of margin. */
@@ -151,7 +164,10 @@ export function effectiveHeartbeatMaxMs(declared: number | undefined): number {
 }
 
 /** One handler, beating while it runs. The cap counts the run's own time:
- *  time stalled on the ffmpeg slot queue is taken off (see the header). */
+ *  time stalled on the ffmpeg slot queue, and time waiting for concurrency
+ *  slots, are taken off (see the header). The lane wait is read from the hold
+ *  scope the wrapper is CALLED in (the worker runs it inside its admission's
+ *  hold); called outside any hold it is 0. */
 export function withPreTaskHeartbeat<J, C extends { jobId: string }>(
   handler: QueueHandler<J, C>,
   options: PreTaskHeartbeatOptions = {},
@@ -165,9 +181,12 @@ export function withPreTaskHeartbeat<J, C extends { jobId: string }>(
     const startedAt = Date.now()
     const ledger = new SlotWaitLedger()
     let reportedWait = 0
+    // The job's wait for concurrency slots, read from the hold scope this attempt runs in.
+    const laneWaitMs = heldWaitReader()
     const timer = setInterval(() => {
       // The cap counts THIS attempt's own running time.
-      if (Date.now() - startedAt - ledger.waitedMs() >= maxMs) {
+      // The lane wait at most the queue timeout's bound, so a hung handler always ages into the sweep.
+      if (Date.now() - startedAt - ledger.waitedMs() - cappedQueuedMs(laneWaitMs()) >= maxMs) {
         clearInterval(timer)
         return
       }

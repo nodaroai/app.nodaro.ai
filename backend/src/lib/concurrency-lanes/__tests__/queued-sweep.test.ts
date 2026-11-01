@@ -89,6 +89,8 @@ vi.mock("../../../ee/billing/credits.js", () => ({
   CreditsService: { refundCredits: vi.fn(async (id: string) => refundLog(id)) },
 }))
 vi.mock("../../../ee/pipelines/credits.js", () => ({ refundPipelineCredits: vi.fn(async () => undefined) }))
+vi.mock("../../../ee/pipelines/events.js", () => ({ pipelineEvents: { publish: vi.fn() } }))
+vi.mock("../../use-case/finalize-wrapper.js", () => ({ finalizeUseCaseWrapper: vi.fn(async () => "not_use_case") }))
 vi.mock("../../mcp/flows/hydrate.js", () => ({ hydrateFlowNodeForJob: async () => undefined }))
 vi.mock("../../queue.js", () => ({ redis: { fake: "connection" } }))
 vi.mock("../../access-blocks.js", () => ({ isUserQuietStopped: vi.fn(async (u: string | null | undefined) => !!u && refs.quietUsers.has(u)) }))
@@ -113,6 +115,9 @@ function makeBullJob(id: string, name: string, data: Record<string, unknown>, op
 
 const { refundJobCredits } = await import("../../../workers/shared.js")
 const { refundPipelineCredits } = await import("../../../ee/pipelines/credits.js")
+const { pipelineEvents } = await import("../../../ee/pipelines/events.js")
+const { finalizeUseCaseWrapper } = await import("../../use-case/finalize-wrapper.js")
+const { executionEvents } = await import("../../execution-events.js")
 const { CreditsService } = await import("../../../ee/billing/credits.js")
 const { setLaneQueueConnection, resetLaneParkingForTests } = await import("../park.js")
 const { resetLaneColumnsForTests, dropRequeuePayload } = await import("../columns.js")
@@ -187,6 +192,8 @@ beforeEach(async () => {
   refs.quietUsers.clear()
   vi.mocked(refundJobCredits).mockClear()
   vi.mocked(refundPipelineCredits).mockClear()
+  vi.mocked(pipelineEvents.publish).mockClear()
+  vi.mocked(finalizeUseCaseWrapper).mockClear()
   vi.mocked(CreditsService.refundCredits).mockReset().mockImplementation(async (logId: string) => refundLog(logId))
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(NOW)
@@ -234,13 +241,25 @@ describe("sweepLaneQueuedJobs — a quietly stopped account", () => {
 })
 
 describe("sweepLaneQueuedJobs — what it reads", () => {
-  it("reads only jobs: nothing parks executions or pipelines yet", async () => {
-    db.rows("workflow_executions").push({ id: "exec-1", user_id: "U", status: "pending", lane_env: "production", lane_env_id: null, lane_queued_at: iso(NOW - 130 * MIN) })
-    db.rows("pipelines").push({ id: "pipe-1", user_id: "U", status: "queued", lane_env: "production", lane_env_id: null, lane_queued_at: iso(NOW - 130 * MIN) })
+  it("reads waiting jobs, executions and pipelines: every table whose rows park", async () => {
     await sweepLaneQueuedJobs(result())
-    expect(db.selects.filter((q) => q.startsWith("workflow_executions:") || q.startsWith("pipelines:"))).toEqual([])
+    const read = db.selects.map((q) => q.split(":")[0]).filter((t) => t === "jobs" || t === "workflow_executions" || t === "pipelines")
+    expect([...new Set(read)].sort()).toEqual(["jobs", "pipelines", "workflow_executions"])
+  })
+
+  it("a waiting execution or pipeline of another environment is never touched", async () => {
+    db.rows("workflow_executions").push({ id: "exec-1", user_id: "U", status: "pending", lane_env: "staging", lane_env_id: null, lane_queued_at: iso(NOW - 130 * MIN) })
+    db.rows("pipelines").push({ id: "pipe-1", user_id: "U", status: "queued", lane_env: "staging", lane_env_id: null, lane_queued_at: iso(NOW - 130 * MIN) })
+    await sweepLaneQueuedJobs(result())
     expect(db.rows("workflow_executions")[0]!.status).toBe("pending")
     expect(db.rows("pipelines")[0]!.status).toBe("queued")
+    expect(refs.adds).toEqual([])
+  })
+
+  it("a pending execution no lane stamped (on its way to a worker) is never touched", async () => {
+    db.rows("workflow_executions").push({ id: "exec-1", user_id: "U", status: "pending" })
+    await sweepLaneQueuedJobs(result())
+    expect(db.rows("workflow_executions")[0]!.status).toBe("pending")
   })
 })
 
@@ -625,8 +644,6 @@ describe("sweepLaneQueuedJobs — lost entries", () => {
 })
 
 describe("sweepLaneQueuedJobs — runs and pipelines", () => {
-  // Ready for when the run lane parks them; not read in production until then.
-  beforeEach(() => setQueuedSweepTablesForTests(["jobs", "workflow_executions", "pipelines"]))
 
   function parkedRun(table: "workflow_executions" | "pipelines", id: string, queuedAgoMs = 5 * MIN): Record<string, unknown> {
     const r = {
@@ -664,14 +681,94 @@ describe("sweepLaneQueuedJobs — runs and pipelines", () => {
   it("an execution or pipeline past the timeout fails through its own path with the same message", async () => {
     const exec = parkedRun("workflow_executions", "exec-1", 130 * MIN)
     const pipe = parkedRun("pipelines", "pipe-1", 130 * MIN)
+    const events: unknown[] = []
+    const listener = (e: unknown) => events.push(e)
+    executionEvents.on("exec-1", listener)
 
-    await sweepLaneQueuedJobs(result())
+    try {
+      await sweepLaneQueuedJobs(result())
+    } finally {
+      executionEvents.off("exec-1", listener)
+    }
 
     expect(exec).toMatchObject({ status: "failed", error_message: "Waited longer than 120 min for a free slot." })
     expect(typeof exec.completed_at).toBe("string")
+    // The execution's own failure path: its event for the editor and MCP, its use-case wrapper settled.
+    expect(events).toEqual([expect.objectContaining({ type: "execution:failed", executionId: "exec-1", errorMessage: "Waited longer than 120 min for a free slot." })])
+    expect(finalizeUseCaseWrapper).toHaveBeenCalledWith("exec-1")
+    // The pipeline's own failure path: status, event, refund.
     expect(pipe).toMatchObject({ status: "failed", failure_reason: "queue_timeout" })
+    expect(pipelineEvents.publish).toHaveBeenCalledWith({ type: "pipeline:status", pipelineId: "pipe-1", status: "failed" })
     expect(refundPipelineCredits).toHaveBeenCalledWith(expect.objectContaining({ pipelineId: "pipe-1", userId: "U", reason: "queue_timeout" }))
     expect(refundJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("a run picked up just as it timed out (its entry active) is not failed: it runs", async () => {
+    const exec = parkedRun("workflow_executions", "exec-1", 130 * MIN)
+    const pipe = parkedRun("pipelines", "pipe-1", 130 * MIN)
+    bullEntry("workflow-orchestration", "exec-1", { executionId: "exec-1" }, "active")
+    bullEntry("pipeline-orchestration", "pipeline-pipe-1", { pipelineId: "pipe-1" }, "active")
+    const r = result()
+    await sweepLaneQueuedJobs(r)
+    expect(exec.status).toBe("pending")
+    expect(pipe.status).toBe("queued")
+    expect(finalizeUseCaseWrapper).not.toHaveBeenCalled()
+    expect(pipelineEvents.publish).not.toHaveBeenCalled()
+    expect(refundPipelineCredits).not.toHaveBeenCalled()
+    expect(r.notStale).toBeGreaterThanOrEqual(2)
+  })
+
+  it("a timed-out run whose entry cannot be read is left for the next pass, never failed while it may be starting", async () => {
+    const exec = parkedRun("workflow_executions", "exec-1", 130 * MIN)
+    refs.bullError = new Error("connection lost")
+    await sweepLaneQueuedJobs(result())
+    expect(exec.status).toBe("pending")
+  })
+
+  it("once Redis stops answering mid-pass, a later timed-out run is not failed either", async () => {
+    // A job early in the pass finds Redis silent; the timed-out run read after it must not be failed unchecked.
+    parkedJob("job-1")
+    const exec = parkedRun("workflow_executions", "exec-1", 130 * MIN)
+    const { LaneGateTimeoutError } = await import("../gate.js")
+    vi.spyOn(gate, "describeWait").mockRejectedValue(new LaneGateTimeoutError("describeWait", 1000))
+    await sweepLaneQueuedJobs(result())
+    expect(exec.status).toBe("pending")
+    expect(finalizeUseCaseWrapper).not.toHaveBeenCalled()
+  })
+
+  it("a waiting pipeline's open stage is failed with it", async () => {
+    parkedRun("pipelines", "pipe-1", 130 * MIN)
+    const stage = { id: "st-1", pipeline_id: "pipe-1", stage_name: "script", status: "pending" }
+    const done = { id: "st-0", pipeline_id: "pipe-1", stage_name: "brief", status: "approved" }
+    db.rows("pipeline_stages").push(stage, done)
+    await sweepLaneQueuedJobs(result())
+    expect(stage).toMatchObject({ status: "failed", output: { failure_reason: "queue_timeout" } })
+    expect(done.status).toBe("approved")
+    expect(pipelineEvents.publish).toHaveBeenCalledWith({ type: "stage:status", pipelineId: "pipe-1", stageName: "script", status: "failed" })
+  })
+
+  it("a timed-out run's parked BullMQ entry is removed, so its backstop never brings it to a worker", async () => {
+    parkedRun("workflow_executions", "exec-1", 130 * MIN)
+    parkedRun("pipelines", "pipe-1", 130 * MIN)
+    const exec = bullEntry("workflow-orchestration", "exec-1", { executionId: "exec-1" }, "delayed")
+    const pipe = bullEntry("pipeline-orchestration", "pipeline-pipe-1", { pipelineId: "pipe-1" }, "delayed")
+    await sweepLaneQueuedJobs(result())
+    expect(exec.remove).toHaveBeenCalledTimes(1)
+    expect(pipe.remove).toHaveBeenCalledTimes(1)
+  })
+
+  it("a lost execution is re-added after removing the ended entry kept under its id (BullMQ would drop the add)", async () => {
+    parkedRun("workflow_executions", "exec-1")
+    payload("execution", "exec-1", { bull_queue: "workflow-orchestration", bull_job_id: "exec-1", name: "workflow-execution", data: { executionId: "exec-1" }, opts: {} })
+    const ended = bullEntry("workflow-orchestration", "exec-1", { executionId: "exec-1" }, "completed")
+
+    await sweepLaneQueuedJobs(result())
+
+    expect(ended.remove).toHaveBeenCalledTimes(1)
+    expect(refs.adds).toEqual([["workflow-orchestration", "workflow-execution", { executionId: "exec-1" }, { jobId: "exec-1" }]])
+    const added = refs.bull.get("workflow-orchestration/exec-1") as FakeBullJob
+    expect(added).not.toBe(ended)
+    expect(added.state).toBe("waiting")
   })
 
   it("a lost run with no payload fails as lost", async () => {

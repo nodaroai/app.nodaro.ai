@@ -168,4 +168,16 @@ describe("reconcileNodaroCloudJob", () => {
     expect(mocks.cloudFetch).not.toHaveBeenCalled()
     expect(mocks.bump).toHaveBeenCalledWith("j-1", expect.stringContaining("missing provider_task_id"))
   })
+
+  it("a cloud job waiting in line (`queued`) is looked at again without a bump, within its bound", async () => {
+    const { NODARO_CLOUD_QUEUED_BOUND_MS } = await import("../nodaro-cloud.js")
+    mocks.cloudFetch.mockResolvedValue(okPoll({ id: "cloud-9", status: "queued" }))
+    await reconcileNodaroCloudJob(row({ provider_call_started_at: new Date(Date.now() - 3 * 60 * 60_000).toISOString() }))
+    expect(mocks.bump).not.toHaveBeenCalled()
+    // Past the bound, or with no stamp to bound it by: bumped as before.
+    await reconcileNodaroCloudJob(row({ provider_call_started_at: new Date(Date.now() - NODARO_CLOUD_QUEUED_BOUND_MS - 60_000).toISOString() }))
+    await reconcileNodaroCloudJob(row())
+    expect(mocks.bump).toHaveBeenCalledTimes(2)
+    expect(mocks.bump).toHaveBeenCalledWith("j-1", "nodaro.ai job still queued")
+  })
 })

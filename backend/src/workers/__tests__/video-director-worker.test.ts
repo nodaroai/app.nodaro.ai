@@ -127,8 +127,9 @@ describe("processVideoDirectorJob", () => {
   it("marks the job completed with videoUrl on successful runVideoDirector", async () => {
     await processVideoDirectorJob(BASE_PAYLOAD, FAKE_APP)
 
-    // defaultDirectorDeps should have been called with the app instance
-    expect(mocks.mockDefaultDirectorDeps).toHaveBeenCalledWith(FAKE_APP)
+    // defaultDirectorDeps should have been called with the app instance, naming
+    // the director so its children enter their lanes ahead of fresh jobs.
+    expect(mocks.mockDefaultDirectorDeps).toHaveBeenCalledWith(FAKE_APP, { directorJobId: BASE_PAYLOAD.jobId })
 
     // runVideoDirector should be called with correct opts
     expect(mocks.mockRunVideoDirector).toHaveBeenCalledOnce()

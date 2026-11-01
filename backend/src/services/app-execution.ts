@@ -35,6 +35,12 @@ export interface ExecuteAppRunParams {
   executingComponentIds?: string[]
   /** Mark the created workflow_execution as a component inner execution */
   isComponentExecution?: boolean
+  /**
+   * The running execution whose component node started this run (the internal
+   * lane's `PARENT_EXECUTION_HEADER`, lib/concurrency-lanes/parent-execution.ts):
+   * carried onto the job, where it means "takes no run slot". Absent = top-level.
+   */
+  parentExecutionId?: string
   /** A component's inner run: the PARENT execution's answer to "does the
    *  preview stop rule apply?", carried onto the job verbatim (see
    *  `WorkflowExecutionJob.previewStopRule`). Absent = the rule's default. */
@@ -98,6 +104,7 @@ export async function executeAppRun(
     webFreeMode,
     billingContext,
     isComponentExecution,
+    parentExecutionId,
     previewStopRule,
     cheapLanesOnly,
     idempotencyKey,
@@ -184,6 +191,8 @@ export async function executeAppRun(
     // has no Render final path).
     reviewerPresent: reviewerPresent === true && !isComponentExecution,
     ...(isComponentExecution ? { isComponentExecution: true } : {}),
+    // Started by a node of a running run: no run slot of its own.
+    ...(parentExecutionId ? { parentExecutionId } : {}),
     // A component's inner run inherits its parent's stop-rule answer.
     ...(previewStopRule !== undefined ? { previewStopRule } : {}),
     // …and its parent's cheap-lanes rule.

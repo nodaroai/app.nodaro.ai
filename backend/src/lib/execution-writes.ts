@@ -55,6 +55,15 @@ const BACKOFF_BASE_MS = 100
 export async function updateExecutionWithRetry(
   executionId: string,
   updates: Record<string, unknown>,
+  /**
+   * `fromStatuses`: write only while the row is in one of these statuses (a
+   * CAS), in place of the terminal write's `.neq("status", "cancelled")`. A
+   * row in another status matches nothing and answers `cancelledRace: true`
+   * — someone else's write won. Used by the concurrency lanes to fail a run
+   * still waiting (`pending`) for its slot without touching one a worker
+   * started meanwhile.
+   */
+  opts: { fromStatuses?: readonly string[] } = {},
 ): Promise<ExecutionUpdateResult> {
   const isTerminal = updates.status === "completed" || updates.status === "failed"
   const maxAttempts = isTerminal ? TERMINAL_RETRIES : 1
@@ -80,7 +89,9 @@ export async function updateExecutionWithRetry(
       .from("workflow_executions")
       .update(updates)
       .eq("id", executionId)
-    const filtered = isTerminal ? base.neq("status", "cancelled") : base
+    const filtered = opts.fromStatuses
+      ? base.in("status", [...opts.fromStatuses])
+      : isTerminal ? base.neq("status", "cancelled") : base
     const builder = filtered.select("id")
 
     const { data, error } = (await builder) as unknown as {
@@ -93,7 +104,9 @@ export async function updateExecutionWithRetry(
       // (e.g. terminal write blocked by `.neq("status","cancelled")` because
       // the user already cancelled), and `[{ id }]` on a successful update.
       // The cancelled-race outcome is correct — we don't retry.
-      if (isTerminal && (!data || data.length === 0)) {
+      // A compare-and-set (`fromStatuses`) that matched nothing lost to
+      // another write whatever it wrote — a run's claim (`running`) included.
+      if ((isTerminal || opts.fromStatuses) && (!data || data.length === 0)) {
         return { ok: false, cancelledRace: true, attempts: attempt }
       }
       return { ok: true, attempts: attempt }

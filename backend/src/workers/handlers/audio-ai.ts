@@ -496,7 +496,7 @@ async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<
   const { createCloudJob, waitForCloudJob, NodaroCloudError } = await import("../../providers/nodaro/client.js")
   const { relayResultFields } = await import("../../providers/nodaro/relay-cost.js")
   const jobId = await createCloudJob("/v1/text-to-dialogue", body)
-  const cloudJob = await waitForCloudJob(jobId)
+  const cloudJob = await waitForCloudJob(jobId, undefined, { queueAware: true })
   const output = (cloudJob.output_data ?? {}) as { audioUrl?: unknown; transcript?: unknown }
   const url = typeof output.audioUrl === "string" ? output.audioUrl : undefined
   if (!url) {
