@@ -40,6 +40,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "misc.sourceCli",
   "misc.sourceMcp",
   "misc.sourceSdk",
+  "tcat.mcp",
   "node.mmaudioReplicate",
   "nodecat.AI",
   "overlayEditor.quick.linkedin",

@@ -76,6 +76,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "scene.gifLabel",
   "studioNav.lora",
   "scenecfg.opt.sciFi",
+  "tcat.mcp",
   "tgacct.apiHash",
   "tgacct.apiId",
   "tut.countEight",

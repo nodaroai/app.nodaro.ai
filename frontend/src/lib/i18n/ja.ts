@@ -3452,6 +3452,7 @@ export const ja: ChromeDict = {
   "tcat.automations": "自動化",
   "tcat.campaignConcepts": "キャンペーンコンセプト",
   "tcat.socialCreatives": "SNS クリエイティブ",
+  "tcat.mcp": "MCP",
   "out.image": "画像",
   "out.video": "動画",
   "out.audio": "オーディオ",

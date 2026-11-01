@@ -3386,6 +3386,7 @@ export const ptBR: ChromeDict = {
   "tcat.automations": "Automações",
   "tcat.campaignConcepts": "Conceitos de campanha",
   "tcat.socialCreatives": "Criativos para redes",
+  "tcat.mcp": "MCP",
   "out.image": "Imagem",
   "out.video": "Vídeo",
   "out.audio": "Áudio",
