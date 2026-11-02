@@ -32,8 +32,10 @@ describe("physical object deletion boundaries", () => {
       visit(source)
     }
     expect(counts).toEqual({
-      // Ordinary single/batch deletes reject the reserved namespace.
-      "lib/storage.ts": 2,
+      // Ordinary single/batch deletes reject the reserved namespace; so does a
+      // restricted file's move to or from evidence (migration 583): its
+      // ordinary side passes the same check, its other side is `evidence/…`.
+      "lib/storage.ts": 3,
       // Only claimed tombstones can enter this exceptional delete lane.
       "lib/retained-images.ts": 1,
       "lib/retained-videos.ts": 1,

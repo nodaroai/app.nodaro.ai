@@ -25,7 +25,10 @@ import { parseText, relPath, SCAN_TIMEOUT_MS, sourceFiles } from "./source-scan.
  * comments are not code, and a string holding `/*` cannot hide a call.
  */
 const RAW_DELETES_ALLOWED: Readonly<Record<string, { count: number; why: string }>> = {
-  "lib/storage.ts": { count: 2, why: "the delete helpers themselves: the two storage commands they send (a definition is not a use)" },
+  "lib/storage.ts": {
+    count: 3,
+    why: "the delete helpers themselves: the two storage commands they send (a definition is not a use), and the second half of a restricted file's move to or from the evidence prefix, after a HEAD confirmed the copy (migration 583)",
+  },
   "lib/storage-delete.ts": { count: 2, why: "the funnel: it deletes, then records what failed" },
   "lib/storage-delete-retries.ts": { count: 1, why: "the retry pass: a failure counts an attempt on the existing record" },
   "lib/speaker-frames-cache-sweep.ts": {

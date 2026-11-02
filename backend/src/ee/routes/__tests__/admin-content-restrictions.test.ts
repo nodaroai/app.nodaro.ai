@@ -56,6 +56,11 @@ vi.mock("../../../lib/content-restrictions.js", async () => {
       state.calls.push(["lift", id, input])
       return record({ id, assetId: "00000000-0000-4000-8000-000000000011", liftedAt: "2026-11-02T01:00:00Z", liftedBy: "admin" })
     }),
+    finishRestrictionBytes: vi.fn(async (id: string) => {
+      state.calls.push(["bytes", id])
+      if (id === "00000000-0000-4000-8000-00000000dead") throw new real.ContentRestrictionError("not_found", "No such restriction")
+      return record({ id, assetId: "00000000-0000-4000-8000-000000000011", liftedAt: "2026-11-02T01:00:00Z", bytes: { lift: { keys: {}, purge: { status: "done", at: "x" } } } })
+    }),
     listRestrictions: vi.fn(async (opts: unknown) => {
       state.calls.push(["list", opts])
       return [record({})]
@@ -128,6 +133,15 @@ describe("the lift and the list", () => {
     expect(res.statusCode).toBe(200)
     expect(state.calls[0]).toEqual(["lift", "00000000-0000-4000-8000-000000000044", { reason: "counter-notice", adminUserId: USER }])
     expect(state.audits[0]).toEqual(["content_restriction_lift", "asset", ASSET, { restrictionId: "00000000-0000-4000-8000-000000000044", reason: "counter-notice" }])
+  })
+
+  it("finishes a record's bytes on request, audits the phase, and answers 404 for an unknown record", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/content-restrictions/00000000-0000-4000-8000-000000000044/bytes", headers: asAdmin })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.bytes.lift.purge.status).toBe("done")
+    expect(state.calls[0]).toEqual(["bytes", "00000000-0000-4000-8000-000000000044"])
+    expect(state.audits[0]).toEqual(["content_restriction_bytes", "asset", ASSET, { restrictionId: "00000000-0000-4000-8000-000000000044", phase: "lift" }])
+    expect((await app.inject({ method: "POST", url: "/v1/admin/content-restrictions/00000000-0000-4000-8000-00000000dead/bytes", headers: asAdmin })).statusCode).toBe(404)
   })
 
   it("lists every record, or the active ones", async () => {

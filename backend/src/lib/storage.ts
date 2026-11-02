@@ -13,6 +13,7 @@ import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { keptStoragePrefix, type KeptStoragePrefix } from "./kept-storage-prefixes.js"
 import { heldAmong, LegalHoldUnavailableError } from "./legal-hold.js"
+import { evidenceKeyOf, isEvidenceKey, EVIDENCE_STORAGE_PREFIX } from "./evidence-keys.js"
 import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
 import { IMAGE_HEADER_MAX_READ_BYTES, forgetStoredImage, noteStoredImage } from "./image-dimensions.js"
@@ -142,6 +143,13 @@ export function buildPublicReadPolicy(bucket: string): string {
         Principal: { AWS: ["*"] },
         Action: ["s3:GetObject"],
         Resource: [`arn:aws:s3:::${bucket}/*`],
+      },
+      // A restricted file's evidence copy (migration 583) is read by nobody.
+      {
+        Effect: "Deny",
+        Principal: { AWS: ["*"] },
+        Action: ["s3:GetObject"],
+        Resource: [`arn:aws:s3:::${bucket}/${EVIDENCE_STORAGE_PREFIX}*`],
       },
     ],
   })
@@ -322,6 +330,7 @@ export async function copyRecastObject(
   sourceUrl: string,
   destKey: string,
 ): Promise<{ url: string; bytes: number }> {
+  refuseEvidenceKey(destKey)
   const sourceKey = r2KeyFromOurUrl(sourceUrl)
   if (!sourceKey) throw new Error(`copyRecastObject: not one of our R2 objects: ${sourceUrl}`)
   const ext = destKey.slice(destKey.lastIndexOf(".") + 1).toLowerCase()
@@ -361,6 +370,7 @@ export async function copyRecastObject(
  * notes them again once they have.
  */
 async function streamToR2(key: string, body: Readable | Buffer, contentType: string): Promise<void> {
+  refuseEvidenceKey(key)
   forgetStoredImage(r2Url(key))
   const upload = new Upload({
     client: s3,
@@ -581,6 +591,7 @@ export async function uploadBufferToR2(
   contentType: string,
   trackUserId?: string,
 ): Promise<string> {
+  refuseEvidenceKey(key)
   await s3.send(
     new PutObjectCommand(withObjectAcl({
       Bucket: config.R2_BUCKET_NAME,
@@ -923,6 +934,7 @@ export async function copyToTemplatePreview(
 ): Promise<string> {
   const ext = extractExtensionFromUrl(sourceUrl) ?? MEDIA_EXT[mediaType]
   const destKey = templatePreviewKey(templateId, sourceUrl, ext)
+  refuseEvidenceKey(destKey)
   const contentType = PREVIEW_EXT_TO_MIME[ext] ?? MEDIA_MIME[mediaType]
 
   const sourceKey = r2KeyFromOurUrl(sourceUrl)
@@ -1017,6 +1029,7 @@ export async function copyToTemplateKept(sourceUrl: string, templateId: string, 
   if (!sourceKey) throw new Error("copyToTemplateKept: not an object on our storage")
   const ext = extractExtensionFromUrl(sourceUrl) ?? "bin"
   const destKey = templateKeptKey(templateId, sourceUrl, ext)
+  refuseEvidenceKey(destKey)
   const contentType = PREVIEW_EXT_TO_MIME[ext] ?? MEDIA_MIME[/^(mp4|webm|mov|m4v)$/i.test(ext) ? "video" : "image"]
   await s3.send(
     new CopyObjectCommand(withObjectAcl({
@@ -1122,6 +1135,7 @@ export async function copyR2ObjectToPrefix(
 ): Promise<{ url: string; bytes: number }> {
   const ext = extractExtensionFromUrl(sourceUrl) ?? "bin"
   const destKey = `${destPrefix}${randomUUID()}.${ext}`
+  refuseEvidenceKey(destKey)
   const contentType = PREVIEW_EXT_TO_MIME[ext] ?? "application/octet-stream"
 
   const sourceKey = r2KeyFromOurUrl(sourceUrl)
@@ -1214,6 +1228,74 @@ export async function deleteFromR2(key: string): Promise<void> {
       Key: key,
     }),
   )
+}
+
+/**
+ * A restricted file's bytes move under the evidence prefix (migration 583,
+ * lib/content-restriction-bytes.ts): copied there, then the original is
+ * deleted; a lift copies them back and deletes the evidence copy. The
+ * delete is the move's second half, of a key whose bytes now exist at the
+ * other end, so it is the one delete that asks neither the hold nor the
+ * kept prefixes (both would refuse it: the original is held, the evidence
+ * copy is kept). The copy is confirmed by a HEAD before the original goes.
+ *
+ * Idempotent, so a move cut short is finished by the next call: a copy
+ * already at the destination is not copied again, a source already gone is
+ * not an error. Answers what it did.
+ */
+export type ObjectMoveOutcome = "moved" | "already_there" | "missing"
+
+async function moveObject(from: string, to: string): Promise<ObjectMoveOutcome> {
+  const [source, destination] = await Promise.all([headR2Object(from), headR2Object(to)])
+  if (!destination.exists) {
+    if (!source.exists) return "missing"
+    await s3.send(
+      new CopyObjectCommand(withObjectAcl({
+        Bucket: config.R2_BUCKET_NAME,
+        Key: to,
+        CopySource: `/${config.R2_BUCKET_NAME}/${encodeURIComponent(from).replace(/%2F/g, "/")}`,
+        MetadataDirective: "COPY",
+      })),
+      storageTransferOptions(await getR2ObjectSize(from)),
+    )
+    const copied = await headR2Object(to)
+    if (!copied.exists) throw new Error(`[storage] the copy of ${from} to ${to} did not land`)
+  } else if (source.exists && (destination.etag === undefined || destination.etag !== source.etag)) {
+    // Both ends hold bytes and they are not the same bytes (or storage will
+    // not say): nothing is deleted. A file written to the key since the move
+    // must not replace the evidence, and the evidence must not be lost.
+    throw new Error(`[storage] ${to} holds different bytes than ${from}; nothing moved`)
+  }
+  if (source.exists) {
+    await s3.send(new DeleteObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: from }))
+    forgetStoredImage(r2Url(from))
+    return "moved"
+  }
+  return "already_there"
+}
+
+/** The ordinary side of a move: never a retained snapshot, never a key under a kept prefix (the deployment's own files, another restriction's evidence). */
+function assertMovableMediaKey(key: string): void {
+  assertOrdinaryMediaKey(key)
+  const kept = keptStoragePrefix(key)
+  if (kept) throw new Error(`[storage] ${key} is under a kept prefix (${kept.why}) and is not moved`)
+}
+
+/** Move `key`'s bytes under the evidence prefix of restriction `restrictionId`. */
+export async function moveObjectToEvidence(key: string, restrictionId: string): Promise<ObjectMoveOutcome> {
+  assertMovableMediaKey(key)
+  return moveObject(key, evidenceKeyOf(restrictionId, key))
+}
+
+/** Move the bytes kept as evidence under restriction `restrictionId` back to `key`. */
+export async function restoreObjectFromEvidence(key: string, restrictionId: string): Promise<ObjectMoveOutcome> {
+  assertMovableMediaKey(key)
+  return moveObject(evidenceKeyOf(restrictionId, key), key)
+}
+
+/** No writer of the media bucket writes under the evidence prefix: only a restriction's move does (`moveObject`). */
+function refuseEvidenceKey(key: string): void {
+  if (isEvidenceKey(key)) throw new Error(`[storage] ${key} is under the evidence prefix and is not written`)
 }
 
 /**

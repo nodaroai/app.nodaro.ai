@@ -21,6 +21,27 @@ const mem = vi.hoisted(() => ({
 }))
 
 vi.mock("../config.js", () => ({ config: { R2_PUBLIC_URL: "https://cdn.example.test", R2_PUBLIC_FALLBACK_DOMAIN: "fallback.example.test" } }))
+// The file's thumbnail is its owner's unless the ownership lookup says otherwise.
+const ownership = vi.hoisted(() => ({ deny: new Set<string>(), fail: false }))
+vi.mock("../key-ownership.js", () => ({
+  keysUserMayDelete: vi.fn(async (_user: string, keys: string[]) => {
+    if (ownership.fail) throw new Error("lookup down")
+    return new Set(keys.filter((k) => !ownership.deny.has(k)))
+  }),
+}))
+// The bytes' move and purge (lib/content-restriction-bytes.ts) have a test of
+// their own; here each is the record it was handed, with the call counted.
+const bytes = vi.hoisted(() => ({ relocated: [] as string[], restored: [] as string[] }))
+vi.mock("../content-restriction-bytes.js", () => ({
+  relocateRestrictedBytes: vi.fn(async (r: { id: string }) => {
+    bytes.relocated.push(r.id)
+    return r
+  }),
+  restoreRestrictedBytes: vi.fn(async (r: { id: string }) => {
+    bytes.restored.push(r.id)
+    return r
+  }),
+}))
 vi.mock("../supabase.js", () => {
   const record = (over: Record<string, unknown>) => ({
     id: `r-${++mem.seq}`,
@@ -124,6 +145,10 @@ beforeEach(() => {
   mem.rpcError = null
   mem.setReads = 0
   mem.seq = 0
+  bytes.relocated.length = 0
+  bytes.restored.length = 0
+  ownership.deny.clear()
+  ownership.fail = false
   __resetRestrictedSetForTests()
   vi.useRealTimers()
   mem.assets.push({
@@ -151,6 +176,19 @@ describe("restrictAsset", () => {
       ["restrict_content", { p_asset_id: "a-1", p_job_id: null, p_keys: ["videos/a.mp4", "thumbs/a.jpg"], p_content_hash: "h1", p_source_url: "https://youtube.com/watch?v=x", p_owner_user_id: "u1", p_reason: "complaint CR-1", p_complaint_id: "c-1", p_admin_user_id: "admin" }],
     ])
     expect(r).toMatchObject({ assetId: "a-1", r2Keys: ["videos/a.mp4", "thumbs/a.jpg"], contentHash: "h1", reason: "complaint CR-1", complaintId: "c-1", restrictedBy: "admin", liftedAt: null })
+  })
+
+  it("leaves out a thumbnail the owner cannot be shown to own, or whose ownership cannot be read: a saved file's metadata is the caller's", async () => {
+    ownership.deny.add("thumbs/a.jpg")
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    expect((mem.rpcCalls[0]![1] as { p_keys: string[] }).p_keys).toEqual(["videos/a.mp4"])
+    mem.rpcCalls.length = 0
+    mem.assets[0]!.restricted_at = null
+    mem.restrictions.length = 0
+    ownership.deny.clear()
+    ownership.fail = true
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    expect((mem.rpcCalls[0]![1] as { p_keys: string[] }).p_keys).toEqual(["videos/a.mp4"])
   })
 
   it("refuses an unknown file and a file restricted already before asking the function", async () => {
@@ -192,9 +230,11 @@ describe("restrictJob", () => {
 describe("liftRestriction and listRestrictions", () => {
   it("lifts through the function once, and maps an unknown or lifted record", async () => {
     const r = await restrictAsset("a-1", { reason: "x", adminUserId: "admin" })
+    expect(bytes.relocated).toEqual([r.id])
     const lifted = await liftRestriction(r.id, { reason: "counter-notice", adminUserId: "admin2" })
     expect(lifted).toMatchObject({ id: r.id, liftedBy: "admin2", liftReason: "counter-notice" })
     expect(lifted.liftedAt).toBeTruthy()
+    expect(bytes.restored).toEqual([r.id])
     await expect(liftRestriction(r.id, { reason: null, adminUserId: null })).rejects.toMatchObject({ code: "already_lifted" })
     await expect(liftRestriction("nope", { reason: null, adminUserId: null })).rejects.toMatchObject({ code: "not_found" })
   })

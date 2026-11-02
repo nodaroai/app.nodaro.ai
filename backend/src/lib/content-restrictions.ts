@@ -30,6 +30,9 @@ import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { extractJobOutputs, isOwnedObjectKey } from "./job-policy-outputs.js"
 import { restrictedKeyOfAddress } from "./content-restriction-address.js"
 import { invalidateRestrictedSet, restrictedKeys } from "./content-restriction-set.js"
+import { isEvidenceKey } from "./evidence-keys.js"
+import { keysUserMayDelete } from "./key-ownership.js"
+import { relocateRestrictedBytes, restoreRestrictedBytes, type RestrictionBytes } from "./content-restriction-bytes.js"
 
 // The light halves, re-exported so every reader keeps one import.
 export { restrictedKeyOfAddress, restrictedKeys, invalidateRestrictedSet }
@@ -70,6 +73,8 @@ export interface ContentRestriction {
   readonly liftedBy: string | null
   readonly liftedAt: string | null
   readonly liftReason: string | null
+  /** What happened to the bytes (migration 583): each key's move, and the edge purge. */
+  readonly bytes: RestrictionBytes
 }
 
 interface RestrictionRow {
@@ -89,10 +94,11 @@ interface RestrictionRow {
   lifted_by: string | null
   lifted_at: string | null
   lift_reason: string | null
+  bytes?: RestrictionBytes | null
 }
 
 const RESTRICTION_COLUMNS =
-  "id, asset_id, job_id, r2_keys, content_hash, asset_ids, job_ids, source_url, owner_user_id, reason, complaint_id, restricted_by, restricted_at, lifted_by, lifted_at, lift_reason"
+  "id, asset_id, job_id, r2_keys, content_hash, asset_ids, job_ids, source_url, owner_user_id, reason, complaint_id, restricted_by, restricted_at, lifted_by, lifted_at, lift_reason, bytes"
 
 function toRestriction(row: RestrictionRow): ContentRestriction {
   return {
@@ -112,6 +118,7 @@ function toRestriction(row: RestrictionRow): ContentRestriction {
     liftedBy: row.lifted_by,
     liftedAt: row.lifted_at,
     liftReason: row.lift_reason,
+    bytes: row.bytes ?? {},
   }
 }
 
@@ -170,7 +177,30 @@ async function callRestrict(target: RestrictTarget, input: RestrictInput): Promi
     throw new Error(`Restriction failed: ${error.message}`)
   }
   invalidateRestrictedSet()
-  return toRestriction(data as RestrictionRow)
+  // The rows are hidden; now the bytes: moved under the evidence prefix and
+  // dropped from the edge, each outcome written on the record (never a
+  // failure of the restriction that already happened).
+  return relocateRestrictedBytes(toRestriction(data as RestrictionRow))
+}
+
+/**
+ * The file's thumbnail key, when the file's owner can be shown to own that
+ * object (lib/key-ownership.ts). `metadata.thumbnail_url` is written by the
+ * server for the uploads it makes thumbnails for, but a library save takes
+ * its metadata from the caller: a key the owner does not own — another
+ * account's file, one of the deployment's own — is not the restriction's to
+ * mark, hide or move. A lookup that fails keeps the thumbnail out.
+ */
+async function ownedThumbnailKey(asset: { user_id: string | null; metadata: Record<string, unknown> | null }): Promise<string | null> {
+  const thumb = asset.metadata?.thumbnail_url
+  const key = typeof thumb === "string" ? r2KeyFromPublicUrl(thumb, config.R2_PUBLIC_URL) : null
+  if (!key || !asset.user_id) return null
+  try {
+    return (await keysUserMayDelete(asset.user_id, [key])).has(key) ? key : null
+  } catch (e) {
+    console.warn(`[content-restrictions] the thumbnail's ownership could not be read; left out:`, e instanceof Error ? e.message : e)
+    return null
+  }
 }
 
 /**
@@ -188,13 +218,12 @@ export async function restrictAsset(assetId: string, input: RestrictInput): Prom
   if (!data) throw new ContentRestrictionError("not_found", "No such file")
   const asset = data as { id: string; user_id: string | null; r2_key: string | null; content_hash: string | null; metadata: Record<string, unknown> | null; restricted_at: string | null }
   if (asset.restricted_at) throw new ContentRestrictionError("already_restricted", "The file is already restricted")
-  const thumb = asset.metadata?.thumbnail_url
   const sourceUrl = typeof asset.metadata?.source_url === "string" ? (asset.metadata.source_url as string) : null
   return callRestrict(
     {
       assetId: asset.id,
       jobId: null,
-      keys: keysOf([asset.r2_key, typeof thumb === "string" ? r2KeyFromPublicUrl(thumb, config.R2_PUBLIC_URL) : null]),
+      keys: keysOf([asset.r2_key, await ownedThumbnailKey(asset)]),
       contentHash: asset.content_hash,
       sourceUrl,
       ownerUserId: asset.user_id,
@@ -247,7 +276,22 @@ export async function liftRestriction(restrictionId: string, input: { reason: st
     throw new Error(`Restriction lift failed: ${error.message}`)
   }
   invalidateRestrictedSet()
-  return toRestriction(data as RestrictionRow)
+  // The rows are back; now the bytes, moved back to their keys.
+  return restoreRestrictedBytes(toRestriction(data as RestrictionRow))
+}
+
+/**
+ * Finishes a restriction's bytes: the phase its current side calls for
+ * (the move to evidence while it stands, the move back once lifted), run
+ * again over the record. Idempotent; the administrator's "finish" action
+ * and the reconcile sweep both come here.
+ */
+export async function finishRestrictionBytes(restrictionId: string): Promise<ContentRestriction> {
+  const { data, error } = await supabase.from("content_restrictions").select(RESTRICTION_COLUMNS).eq("id", restrictionId).maybeSingle()
+  if (error) throw new Error(`Restriction read failed: ${error.message}`)
+  if (!data) throw new ContentRestrictionError("not_found", "No such restriction")
+  const restriction = toRestriction(data as RestrictionRow)
+  return restriction.liftedAt ? restoreRestrictedBytes(restriction) : relocateRestrictedBytes(restriction)
 }
 
 /** Every restriction, newest first; `active` keeps the unlifted ones only. */
@@ -271,6 +315,8 @@ export async function listRestrictions(opts: { active?: boolean; limit?: number 
 export async function isRestrictedAddress(url: string): Promise<boolean> {
   const key = restrictedKeyOfAddress(url)
   if (!key) return false
+  // The evidence copy of a restricted file (migration 583): refused here whatever the set says.
+  if (isEvidenceKey(key)) return true
   try {
     return (await restrictedKeys()).has(key)
   } catch (e) {

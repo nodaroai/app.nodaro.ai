@@ -144,6 +144,10 @@ vi.mock("../fal.js", () => ({
 // The ONE sweep permitted to write a `pending_review` row (spec D31). It is
 // gated on JOB_HOLD_TTL_HOURS INSIDE itself, so the cron calls it
 // unconditionally and an unset variable costs nothing — not even a query.
+// The restriction bytes' sweep (restriction-bytes.ts) has a test of its own.
+vi.mock("../restriction-bytes.js", () => ({
+  sweepRestrictionBytes: vi.fn().mockResolvedValue({ finished: 0, errors: 0 }),
+}))
 vi.mock("../hold-expiry.js", () => ({
   sweepExpiredHolds: vi.fn().mockResolvedValue({ expired: 0, errors: 0 }),
 }))

@@ -1,5 +1,6 @@
 import { SITE_ASSET_ARCHIVE_PREFIX } from "./site-asset-keys.js"
 import { MAKER_LOGO_PREFIX } from "./maker-logo-keys.js"
+import { EVIDENCE_STORAGE_PREFIX } from "./evidence-keys.js"
 
 export interface KeptStoragePrefix {
   prefix: string
@@ -28,6 +29,10 @@ export const KEPT_STORAGE_PREFIXES: readonly KeptStoragePrefix[] = [
   {
     prefix: MAKER_LOGO_PREFIX,
     why: "the operator's model maker marks, served on GET /v1/models (lib/maker-logos.ts)",
+  },
+  {
+    prefix: EVIDENCE_STORAGE_PREFIX,
+    why: "a restricted file's bytes, kept as evidence of a complaint until its lift moves them back (lib/content-restriction-bytes.ts)",
   },
 ]
 

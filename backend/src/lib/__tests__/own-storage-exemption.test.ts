@@ -133,11 +133,11 @@ describe("resolveStorageEndpoint", () => {
 })
 
 describe("buildPublicReadPolicy", () => {
-  it("grants anonymous GetObject on the bucket objects only", () => {
+  it("grants anonymous GetObject on the bucket objects only, and denies it under the evidence prefix (migration 583)", () => {
     const policy = JSON.parse(buildPublicReadPolicy("nodaro-assets"))
-    expect(policy.Statement).toHaveLength(1)
-    expect(policy.Statement[0].Action).toEqual(["s3:GetObject"])
-    expect(policy.Statement[0].Resource).toEqual(["arn:aws:s3:::nodaro-assets/*"])
+    expect(policy.Statement).toHaveLength(2)
+    expect(policy.Statement[0]).toMatchObject({ Effect: "Allow", Action: ["s3:GetObject"], Resource: ["arn:aws:s3:::nodaro-assets/*"] })
+    expect(policy.Statement[1]).toMatchObject({ Effect: "Deny", Action: ["s3:GetObject"], Resource: ["arn:aws:s3:::nodaro-assets/evidence/*"] })
   })
 })
 

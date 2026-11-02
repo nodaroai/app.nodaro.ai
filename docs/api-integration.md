@@ -5275,11 +5275,32 @@ its own is held once an administrator restricts it.
 A restriction is lifted by an administrator (a counter-notice, a mistake),
 which restores each row to what it was, in one step. The records of
 restrictions and lifts are the deployment's own and are not part of the
-public API; the handler's screen is a later change. Two things are later
-changes too: the bytes on the content network (an address copied before the
-restriction still resolves there until that change), and the addresses
-copied into workflow documents, run states and published apps, which are
-not rewritten.
+public API; the handler's screen is a later change.
+
+**The bytes.** A restriction also moves each file it names out of reach:
+the object leaves its address on the content network for an evidence
+address that nothing publishes (the byte proxies and the job gate refuse
+it, no listing or record a user can read names it, and only the
+restriction's record, which administrators alone read, holds it; a
+self-hosted bucket denies reads of it outright, and a deployment on
+Cloudflare should add a rule refusing the `evidence/` path on its media
+hosts, see [deployment](./deployment.md)), and the edge is asked to drop
+its copies of the address where the deployment has the keys for it. An
+address copied before the restriction then answers not found, and so do
+the renditions made from it. Three limits hold: a browser that already
+holds the file keeps it until its own cache expires (the files are served
+as immutable for a year); a copy the edge keeps under an address with a
+query string is a separate copy, dropped only when it expires or when the
+deployment's cache rule ignores query strings; and the addresses copied
+into workflow documents, run states and published apps are not rewritten
+(a run that reads one is refused, as above). A lift moves the bytes back
+to the same address, unless another restriction or an open complaint still
+holds them. What happened to each file and to the purge is written on the
+restriction's record, per phase, so a deployment without purge keys, or an
+edge that did not answer, is on record rather than assumed; a move left
+unfinished (a file that could not be moved, an edge that did not answer)
+is finished again by the server's hourly reconcile, and by an
+administrator's own action (`POST /v1/admin/content-restrictions/:id/bytes`).
 
 ## 14. Pipelines
 
