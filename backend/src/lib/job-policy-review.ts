@@ -62,11 +62,14 @@ interface HeldJobRow {
 export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: string): Promise<ReviewResult> {
   const { data } = await supabase
     .from("jobs")
-    .select("id, user_id, status, workflow_execution_id, input_data, held_output_data, held_completion_fields")
+    .select("id, user_id, status, workflow_execution_id, input_data, held_output_data, held_completion_fields, restricted_at")
     .eq("id", jobId)
     .single()
-  const row = (data as HeldJobRow | null) ?? null
+  const row = (data as (HeldJobRow & { restricted_at?: string | null }) | null) ?? null
   if (!row) return { ok: false, reason: "not_found" }
+  // A held job an administrator restricted after a complaint (migration 581)
+  // has its held output moved aside: there is nothing here to publish.
+  if (row.restricted_at) return { ok: false, reason: "already_resolved", status: "restricted" }
   if (row.status !== "pending_review") return { ok: false, reason: "already_resolved", status: row.status }
 
   const { columns, commit } = splitHeldCompletionFields(row.held_completion_fields)

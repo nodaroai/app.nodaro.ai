@@ -112,6 +112,10 @@ const KEPT_JOB_COLUMNS = [
   "held_at",
   "held_completion_fields",
   "held_objects",
+  // When an administrator restricted the output after a complaint (581): the
+  // record of the restriction, not the runner's content (that is in
+  // restricted_output_data, which expunge erases).
+  "restricted_at",
   "idempotency_key",
   "is_public",
   "force_private",
@@ -267,6 +271,7 @@ describe("what expunge erases", () => {
       input_data: {},
       output_data: null,
       held_output_data: null,
+      restricted_output_data: null,
       error_message: null,
       error_detail: null,
       input_fingerprint: null,

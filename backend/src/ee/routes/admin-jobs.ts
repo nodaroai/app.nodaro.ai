@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -42,6 +42,12 @@ import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
  * Cost fields ARE returned here on purpose -- this route is `requireAdmin`, the
  * same stance `sanitizeJobForPublic` (routes/jobs.ts) already takes for admins
  * on the public jobs route.
+ *
+ * The response carries a `Server-Timing` header: how long the request waited
+ * before the handler (`auth`: the key or session, then the admin check) and
+ * each read it made (`user`, `page`, `rows`, then `runCreditsFor`'s `steps`,
+ * `logs` and `side`), in ms, with `total`. Admin-only like the route itself;
+ * it is how the page's load time is measured on the deployed server.
  *
  * `credits` is the job's HOLD. What it was charged comes beside it in
  * `credit` (`AdminJobCredit`), read off the usage logs through the one run
@@ -175,13 +181,38 @@ function functionNotInDatabase(err: { code?: string; message?: string; hint?: st
   return !named.test(err.hint ?? "")
 }
 
+/** Each request's `Server-Timing` entries, in the order they were measured. */
+const timingsOf = new WeakMap<FastifyRequest, string[]>()
+
+function recordTiming(req: FastifyRequest, name: string, ms: number): void {
+  const list = timingsOf.get(req) ?? []
+  list.push(`${name};dur=${ms.toFixed(1)}`)
+  timingsOf.set(req, list)
+}
+
+async function timed<T>(req: FastifyRequest, name: string, run: () => PromiseLike<T>): Promise<T> {
+  const start = performance.now()
+  try {
+    return await run()
+  } finally {
+    recordTiming(req, name, performance.now() - start)
+  }
+}
+
+async function sendServerTiming(req: FastifyRequest, reply: FastifyReply, payload: unknown): Promise<unknown> {
+  const list = timingsOf.get(req)
+  if (list) reply.header("Server-Timing", [...list, `total;dur=${reply.elapsedTime.toFixed(1)}`].join(", "))
+  return payload
+}
+
 /** `profiles.email` as a LIKE pattern that matches only itself (case aside). */
 function exactIlikePattern(email: string): string {
   return email.replace(/[\\%_]/g, (c) => `\\${c}`)
 }
 
 export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/admin/jobs", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/jobs", { preHandler: requireAdmin, onSend: sendServerTiming }, async (req, reply) => {
+    recordTiming(req, "auth", reply.elapsedTime)
     const parsed = listQuery.safeParse(req.query)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -197,11 +228,11 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
     if (userEmail) {
       // `ilike` with the LIKE wildcards escaped, then the same address exactly:
       // the pattern only narrows, the comparison decides.
-      const { data, error } = await supabase
+      const { data, error } = await timed(req, "user", () => supabase
         .from("profiles")
         .select("id, email")
         .ilike("email", exactIlikePattern(userEmail))
-        .limit(5)
+        .limit(5))
       if (error) return sendInternalError(reply, req, error, "Lookup failed")
       const match = ((data ?? []) as Array<{ id: string; email: string | null }>).find(
         (p) => (p.email ?? "").trim().toLowerCase() === userEmail,
@@ -219,7 +250,7 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
     const fromAt = qIsId ? null : from ?? (q !== null ? new Date((to ?? today).getTime() - SEARCH_DEFAULT_WINDOW_MS) : null)
     const toAt = qIsId || !to ? null : new Date(to.getTime() + DAY_MS)
 
-    const { data: pageIds, error: pageError } = await supabase.rpc("admin_job_page", {
+    const { data: pageIds, error: pageError } = await timed(req, "page", () => supabase.rpc("admin_job_page", {
       p_offset: page * pageSize,
       p_limit: pageSize,
       p_status: status ?? null,
@@ -234,7 +265,7 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
       p_q: q,
       // Only for a real uuid: the RPC casts the search when this is set.
       p_q_is_id: q === null ? null : qIsId,
-    })
+    }))
     type Row = Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }
     let rows: Row[]
     let filtersUnavailable = false
@@ -265,7 +296,7 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
       const ids = ((pageIds ?? []) as Array<{ id: string }>).map((r) => r.id)
       if (ids.length === 0) return reply.send({ data: [] })
 
-      const { data, error } = await supabase.from("jobs").select(ADMIN_JOB_COLUMNS).in("id", ids)
+      const { data, error } = await timed(req, "rows", () => supabase.from("jobs").select(ADMIN_JOB_COLUMNS).in("id", ids))
       if (error) return sendInternalError(reply, req, error, "Lookup failed")
       const byId = new Map(((data ?? []) as unknown as Row[]).map((r) => [r.id, r]))
       // The page's order is the RPC's; a job deleted between the two reads drops out.
@@ -275,7 +306,7 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
     if (rows.length === 0) return reply.send({ data: [], ...unapplied })
     // One read per table for the page: each job's own figures and, for a
     // parent, its run's (its steps included).
-    const credits = await runCreditsFor(rows, [...new Set(rows.map((r) => r.user_id as string))])
+    const credits = await runCreditsFor(rows, [...new Set(rows.map((r) => r.user_id as string))], (read, ms) => recordTiming(req, read, ms))
     return reply.send({
       data: rows.map(({ usage_log_id: _log, ...row }) => ({ ...row, credit: adminJobCredit(runCreditsOf(row.id, credits)) })),
       ...unapplied,

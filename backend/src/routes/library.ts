@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { RESTRICTED_ASSET_COLUMN } from "../lib/content-restrictions-column.js"
 import { isCloud } from "../lib/config.js"
 import { permanentlyDeleteAsset } from "../lib/asset-delete.js"
 import { judgeUrlForRecording } from "../lib/key-ownership.js"
@@ -87,6 +88,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       let cq = supabase
         .from("assets")
         .select("id", { count: "exact", head: true })
+        .is(RESTRICTED_ASSET_COLUMN, null)
 
       if (owned) {
         cq = cq.eq("user_id", userId)
@@ -112,6 +114,7 @@ export async function libraryRoutes(app: FastifyInstance) {
     let query = supabase
       .from("assets")
       .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail, created_at, job_id")
+      .is(RESTRICTED_ASSET_COLUMN, null)
 
     if (owned) {
       // Storage page: show ALL user assets (regardless of in_library flag)
@@ -157,6 +160,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       // Both interpolated values are trusted: `cursor` is `z.string().uuid()`
       // at the schema, and `createdAt` is read back OUT of the database rather
       // than taken from the request.
+      // restricted-read: the cursor's own timestamp, never answered
       const { data: cursorRow } = await supabase
         .from("assets")
         .select("created_at")
@@ -327,6 +331,7 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     if (permanent) {
       // Permanent delete: remove R2 file + DB record + update storage
+      // restricted-read: a delete's own pre-check; whether a restricted file may be deleted is the evidence hold, a later change
       const { data: asset, error: fetchError } = await supabase
         .from("assets") // tenant-scope-ignore: ownership verified post-fetch below (404 vs 403 are distinct answers)
         // `job_id` and `relay_job_id` are the relay delete rule's inputs
@@ -458,6 +463,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       // Already in this user's library? An object of ours is matched by its
       // key, so another spelling of its url finds the same row (the upload's
       // own row, the worker's row for an output); a url elsewhere by itself.
+      // restricted-read: a write's own dedup pre-check, answering an id and never the file
       const existingQuery = supabase.from("assets").select("id").eq("user_id", userId)
       const { data: existing, error: existingError } = await (target.kind === "owned"
         ? existingQuery.eq("r2_key", r2Key).limit(1).maybeSingle()

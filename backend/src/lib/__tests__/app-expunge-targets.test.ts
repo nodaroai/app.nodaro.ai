@@ -728,6 +728,7 @@ const JOB_PATCH = {
   input_data: {},
   output_data: null,
   held_output_data: null,
+  restricted_output_data: null,
   error_message: null,
   error_detail: null,
   input_fingerprint: null,

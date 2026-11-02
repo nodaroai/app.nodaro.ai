@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { RESTRICTED_ASSET_COLUMN } from "../../content-restrictions-column.js"
 import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
@@ -550,6 +551,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // /v1/library route's cursor-resolution step.
         let cursorTimestamp: string | null = null
         if (args.cursor) {
+          // restricted-read: the cursor's own timestamp, never answered
           const { data: cursorRow } = await supabase
             .from("assets")
             .select("created_at")
@@ -565,6 +567,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at, job_id",
           )
           .eq("user_id", session.userId)
+          .is(RESTRICTED_ASSET_COLUMN, null)
           .order("created_at", { ascending: false })
           .limit(limit + 1) // +1 to detect hasMore
 
@@ -595,6 +598,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .from("assets")
             .select("id", { count: "exact", head: true })
             .eq("user_id", session.userId)
+            .is(RESTRICTED_ASSET_COLUMN, null)
           if (args.kind) countQuery = countQuery.eq("type", args.kind)
           for (const filter of filenameFilters) countQuery = countQuery.or(filter)
           const { count } = await countQuery

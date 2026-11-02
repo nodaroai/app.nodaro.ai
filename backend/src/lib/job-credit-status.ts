@@ -166,19 +166,32 @@ const releasedOf = (held: number | null, charged: number | null): number | null 
  * the users it may hold, each row then naming its own (`user_id`; a row whose
  * owner is not among them gets no steps). Steps are read as that owner's only.
  */
-export async function runCreditsFor(rows: readonly JobChargeRow[], owners: string | readonly string[]): Promise<RunCredits> {
+export async function runCreditsFor(
+  rows: readonly JobChargeRow[],
+  owners: string | readonly string[],
+  onTiming?: (read: "steps" | "logs" | "side", ms: number) => void,
+): Promise<RunCredits> {
+  const timed = async <T>(read: "steps" | "logs" | "side", run: () => Promise<T>): Promise<T> => {
+    if (!onTiming) return run()
+    const start = performance.now()
+    try {
+      return await run()
+    } finally {
+      onTiming(read, performance.now() - start)
+    }
+  }
   const jobs = rows.filter((r): r is JobChargeRow => typeof r?.id === "string" && r.id.length > 0)
   const allowed = typeof owners === "string" ? null : new Set(owners)
   const ownerOf = (j: JobChargeRow): string | null =>
     typeof owners === "string" ? owners : j.user_id && allowed!.has(j.user_id) ? j.user_id : null
-  const { steps, incomplete } = await runStepsOf(jobs.flatMap((j) => {
+  const { steps, incomplete } = await timed("steps", () => runStepsOf(jobs.flatMap((j) => {
     const owner = ownerOf(j)
     return owner ? [{ id: j.id, owner }] : []
-  }))
+  })))
   const everyStep = new Map<string, { usage_log_id: string | null }>()
   for (const list of steps.values()) for (const s of list) everyStep.set(s.id, s)
-  const logs = await creditStatusMapFor([...jobs.map((j) => j.usage_log_id), ...[...everyStep.values()].map((s) => s.usage_log_id)])
-  const side = await sideHoldChargesFor([...jobs.map((j) => j.id), ...everyStep.keys()])
+  const logs = await timed("logs", () => creditStatusMapFor([...jobs.map((j) => j.usage_log_id), ...[...everyStep.values()].map((s) => s.usage_log_id)]))
+  const side = await timed("side", () => sideHoldChargesFor([...jobs.map((j) => j.id), ...everyStep.keys()]))
 
   const out = new Map<string, RunCreditFigures>()
   for (const job of jobs) {

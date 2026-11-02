@@ -160,6 +160,7 @@ import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
 import { redactPrivateJobOutput, TRASHED_JOB_COLUMN } from "../public-job-data.js"
+import { RESTRICTED_ASSET_COLUMN } from "../content-restrictions-column.js"
 import { assertParentJobId, hostRequestGrantOf, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
@@ -1247,9 +1248,10 @@ async function getPipelineSnapshot(
 
   let finalOutputUrl: string | null = null
   if (pipeline.final_output_asset_id) {
+    // restricted-read: the column is read and a restricted output answers no address, below
     const { data: asset, error: assetError } = await supabase
       .from("assets")
-      .select("r2_url")
+      .select(`r2_url, ${RESTRICTED_ASSET_COLUMN}`)
       .eq("id", pipeline.final_output_asset_id)
       .maybeSingle()
     if (assetError) {
@@ -1260,7 +1262,8 @@ async function getPipelineSnapshot(
         assetError.message,
       )
     }
-    finalOutputUrl = (asset as { r2_url: string | null } | null)?.r2_url ?? null
+    const finalAsset = asset as { r2_url: string | null; restricted_at?: string | null } | null
+    finalOutputUrl = finalAsset?.restricted_at ? null : (finalAsset?.r2_url ?? null)
   }
 
   return {

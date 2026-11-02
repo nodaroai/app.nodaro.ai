@@ -327,6 +327,8 @@
         "backend/src/lib/concurrency-lanes/worker-admit.ts",
         "backend/src/lib/config.ts",
         "backend/src/lib/connected-reference-schema.ts",
+        "backend/src/lib/content-restrictions-column.ts",
+        "backend/src/lib/content-restrictions.ts",
         "backend/src/lib/content-rights.ts",
         "backend/src/lib/continuation-run-root.ts",
         "backend/src/lib/continue-from-failed-lineage.ts",

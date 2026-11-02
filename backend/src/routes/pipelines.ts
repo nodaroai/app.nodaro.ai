@@ -10,6 +10,7 @@ import { RESERVE_STATUS_BY_CODE } from "../lib/reserve-errors.js"
 import { createSSEStream } from "../lib/sse.js"
 import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 import { supabase } from "../lib/supabase.js"
+import { RESTRICTED_ASSET_COLUMN } from "../lib/content-restrictions-column.js"
 import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
 import { queueField, queueInfoFor, waitingRowsOf } from "../lib/concurrency-lanes/queue-info.js"
@@ -2435,9 +2436,10 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           ? lastAttemptedAssetId
           : null
       if (!mainAssetId) {
+        // restricted-read: the column is read and a restricted file is never made the main image, below
         const { data: latestAsset } = await supabase
           .from("assets")
-          .select("id")
+          .select(`id, ${RESTRICTED_ASSET_COLUMN}`)
           .eq("pipeline_entity_id", req.params.entity_id)
           // The pipeline owner's assets only (decided 2026-10-06): before
           // migration 480 a browser could insert an asset row naming any
@@ -2446,7 +2448,8 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle()
-        mainAssetId = (latestAsset?.id as string | undefined) ?? null
+        const latest = latestAsset as { id?: string; restricted_at?: string | null } | null
+        mainAssetId = latest && !latest.restricted_at ? (latest.id ?? null) : null
       }
       if (!mainAssetId) {
         return reply.status(409).send({ error: { code: "no_asset_to_approve" } })

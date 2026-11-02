@@ -12,9 +12,12 @@ import { isMissingTableError } from "./postgrest-errors.js"
 export const SAVED_POSTS_TABLE = "saved_posts"
 
 /** The still's asset rides along, so a copy whose bytes were cleaned up is
- *  never handed out (the asset row survives the cleanup, its url does not). */
+ *  never handed out (the asset row survives the cleanup, its url does not),
+ *  and neither is a restricted one (`hasLiveStill` reads the column; an embed
+ *  cannot filter it). */
+// restricted-read: the embed's restricted_at is read by hasLiveStill, which drops a restricted still
 export const SAVED_POST_COLUMNS =
-  "id, post_id, platform, url, post, thumbnail_asset_id, thumbnail_url, note, tags, source, created_at, updated_at, still:assets!thumbnail_asset_id(r2_url, r2_key)"
+  "id, post_id, platform, url, post, thumbnail_asset_id, thumbnail_url, note, tags, source, created_at, updated_at, still:assets!thumbnail_asset_id(r2_url, r2_key, restricted_at)"
 
 export type SavedPostRow = {
   id: string
@@ -29,7 +32,7 @@ export type SavedPostRow = {
   source: string
   created_at: string
   updated_at: string
-  still?: { r2_url: string | null; r2_key: string | null } | null
+  still?: { r2_url: string | null; r2_key: string | null; restricted_at?: string | null } | null
 }
 
 /** A row as PostgREST returns it: the still is a many-to-one embed (one object
@@ -38,9 +41,9 @@ export function asSavedPostRow(data: unknown): SavedPostRow {
   return data as SavedPostRow
 }
 
-/** True when the save's copied still still has its bytes. */
+/** True when the save's copied still still has its bytes and is not restricted. */
 export function hasLiveStill(row: SavedPostRow): boolean {
-  return Boolean(row.thumbnail_asset_id && row.still?.r2_key && row.still.r2_url)
+  return Boolean(row.thumbnail_asset_id && row.still?.r2_key && row.still.r2_url && !row.still.restricted_at)
 }
 
 export function toSavedPost(row: SavedPostRow): SavedPost {

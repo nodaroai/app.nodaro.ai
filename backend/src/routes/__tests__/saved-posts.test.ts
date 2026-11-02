@@ -137,7 +137,7 @@ describe("GET /v1/saved-posts", () => {
     expect(body.data).toHaveLength(1)
     expect(body.data[0]).toMatchObject({ id: SAVE_ID, postId: "tiktok:7300000000000000001", thumbnailUrl: STILL_URL })
     expect(parseSavedPostsCursor(body.nextCursor)).toEqual({ createdAt: row().created_at, id: SAVE_ID })
-    expect(qb.select).toHaveBeenCalledWith(expect.stringContaining("still:assets!thumbnail_asset_id(r2_url, r2_key)"))
+    expect(qb.select).toHaveBeenCalledWith(expect.stringContaining("still:assets!thumbnail_asset_id(r2_url, r2_key, restricted_at)"))
     expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
     expect(qb.limit).toHaveBeenCalledWith(2)
   })

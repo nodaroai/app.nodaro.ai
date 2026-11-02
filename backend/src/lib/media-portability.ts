@@ -8,6 +8,7 @@ import {
   isExecutionDataKey,
 } from "@nodaro/shared/workflow"
 import { safeFetch } from "./safe-fetch.js"
+import { RESTRICTED_ASSET_COLUMN } from "./content-restrictions-column.js"
 
 /**
  * Workflow media portability (#866).
@@ -512,13 +513,16 @@ async function importerOwnsBytes(url: string, userId: string, deps: ImportDeps):
   const key = r2KeyFromOurUrl(url)
   if (!key) return false
   try {
+    // A restricted file is not the importer's to carry anywhere.
+    // restricted-read: the column is read and a restricted file counts as not owned, below
     const { data, error } = await supabase
       .from("assets")
-      .select("id")
+      .select(`id, ${RESTRICTED_ASSET_COLUMN}`)
       .eq("r2_key", key)
       .eq("user_id", userId)
       .limit(1)
-    return !error && Array.isArray(data) && data.length > 0
+    const rows = Array.isArray(data) ? (data as Array<{ restricted_at?: string | null }>) : []
+    return !error && rows.length > 0 && !rows[0]!.restricted_at
   } catch {
     return false
   }

@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js"
 import { TRASHED_JOB_COLUMN } from "../public-job-data.js"
+import { RESTRICTED_ASSET_COLUMN } from "../content-restrictions-column.js"
 
 interface ResolveOpts {
   assetId: string | null | undefined
@@ -156,15 +157,16 @@ export async function resolveAssetId(opts: ResolveOpts): Promise<string | null> 
   // 2. Fall back to assets (uploads). The `assets.type` column stores the
   // media kind directly (image / video / audio) — no job_type mapping
   // needed. The R2 url is on `r2_url`.
+  // restricted-read: the column is read and a restricted file resolves as one that does not exist, below
   const assetResult = await supabase
     .from("assets")
-    .select("id, user_id, type, r2_url")
+    .select(`id, user_id, type, r2_url, ${RESTRICTED_ASSET_COLUMN}`)
     .eq("id", assetId)
     .maybeSingle()
   if (assetResult.error) {
     throw new Error(`Failed to resolve asset: ${assetResult.error.message}`)
   }
-  if (!assetResult.data) {
+  if (!assetResult.data || (assetResult.data as { restricted_at?: string | null }).restricted_at) {
     throw new Error(`Asset ${assetId} not found`)
   }
   const asset = assetResult.data

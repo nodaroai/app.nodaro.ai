@@ -244,11 +244,13 @@ SELECT pg_temp.assert_eq('deleting an account with no content succeeds',
 -- taken in the same transaction could only ever equal itself.
 -- [480] The three write policies are gone with the browser's write grants (the
 -- server writes every assets row); the read policy is the one left.
-SELECT pg_temp.assert_eq('assets still has exactly its read policy',
+-- [581] adds one RESTRICTIVE read policy beside it (a restricted file is
+-- hidden); the permissive read policy and its predicate are the ones pinned.
+SELECT pg_temp.assert_eq('assets still has exactly its read policies',
   (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'assets'),
-  '{"Users can view own and shared assets"}');
+  '{"A restricted file is hidden","Users can view own and shared assets"}');
 SELECT pg_temp.assert_eq('the assets SELECT predicate is unchanged',
-  (SELECT qual FROM pg_policies WHERE tablename = 'assets' AND cmd = 'SELECT'),
+  (SELECT qual FROM pg_policies WHERE tablename = 'assets' AND cmd = 'SELECT' AND policyname = 'Users can view own and shared assets'),
   '((user_id = ( SELECT auth.uid() AS uid)) OR (is_shared = true) OR (is_library_item = true) OR is_admin())');
 
 -- ---------------------------------------------- part b: triggers and backfills

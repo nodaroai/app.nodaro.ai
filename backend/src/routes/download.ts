@@ -5,7 +5,11 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { config } from "../lib/config.js"
 import { isOurCdnUrl } from "../lib/cdn-host.js"
+import { isRestrictedAddress } from "../lib/content-restrictions.js"
 import path from "path"
+
+/** The answer for bytes an administrator restricted after a complaint: one sentence, no detail. */
+export const CONTENT_RESTRICTED_BODY = { error: { code: "content_restricted", message: "This content is not available." } } as const
 
 const downloadQuery = z.object({
   url: safeUrlSchema,
@@ -32,6 +36,10 @@ export async function downloadRoutes(app: FastifyInstance) {
         error: { code: "forbidden", message: "Only files from the R2 bucket can be downloaded" },
       })
     }
+
+    // A file an administrator restricted after a complaint is not served
+    // (lib/content-restrictions.ts): 451, the status for exactly that.
+    if (await isRestrictedAddress(url)) return reply.status(451).send(CONTENT_RESTRICTED_BODY)
 
     // safeFetch: defense-in-depth. The origin allowlist above is the
     // primary gate (only our R2 bucket reaches this line), but routing the
