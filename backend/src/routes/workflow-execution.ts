@@ -40,6 +40,7 @@ import { liveUseCaseWrappersOf } from "../lib/use-case/execution-wrappers.js"
 import { USE_CASE_WRAPPER_PROVIDER } from "../lib/wrapper-providers.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { importViaOf } from "../lib/import-via.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CHILD_JOB_COLUMN, nonAdminJobInputData, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
@@ -1137,6 +1138,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       workflowId,
       userId: req.userId,
       triggerType: "manual",
+      // How the run was started: what its imports of links are held to (`lib/import-via.ts`).
+      ...(importViaOf(req) ? { importVia: importViaOf(req) as NonNullable<WorkflowExecutionJob["importVia"]> } : {}),
       // A PLAIN stored credential travels only on the owner's own run from
       // the app: a personal API token or an OAuth app token also sets
       // req.userId to the owner, so the token kind is part of the answer.

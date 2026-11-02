@@ -75,6 +75,9 @@ vi.mock("@/lib/content-rights.js", () => ({
   },
   checkRightsConfirmation: vi.fn().mockResolvedValue(null),
   consumeRightsConfirmation: vi.fn().mockResolvedValue(undefined),
+  contentRightsRequired: vi.fn().mockResolvedValue(false),
+  coversStandingAuthorization: (via: unknown) => via === "api" || via === "app" || via === "mcp",
+  deriveAndConsumeConfirmation: vi.fn().mockResolvedValue(null),
   recordEvent: vi.fn().mockResolvedValue(true),
   contentHashOf: vi.fn().mockResolvedValue("ab".repeat(32)),
 }))
@@ -94,7 +97,7 @@ import { DownloadSlots } from "../../lib/download-slots.js"
 import { setDownloadSlotsForTests } from "../../lib/download-slots-instance.js"
 import { RedisDownloadLedger } from "../../lib/download-slot-ledger.js"
 import { makeFakeDownloadClient, makeFakeDownloadStore } from "../../lib/__tests__/fake-download-redis.js"
-import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, recordEvent } from "../../lib/content-rights.js"
+import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, deriveAndConsumeConfirmation, recordEvent } from "../../lib/content-rights.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -117,11 +120,20 @@ beforeEach(async () => {
 
   app = Fastify({ logger: false })
 
-  // Bypass auth — set userId from the request body for protected routes.
+  // Bypass auth — set userId from the request body for protected routes; a
+  // `x-key: 1` header makes the call a personal API key's, and `x-app-scopes`
+  // a connected app's with those scopes (space-separated).
   app.addHook("preHandler", async (req) => {
     const body = req.body as Record<string, unknown> | undefined
     if (typeof body?.userId === "string") {
       req.userId = body.userId
+      const appScopes = req.headers["x-app-scopes"]
+      if (typeof appScopes === "string") {
+        req.appAuthorization = { appId: "app-1", authorizationId: "11111111-1111-4111-8111-111111111111", scopes: appScopes.split(" ") } as never
+        req.authKind = "app_token"
+      } else {
+        req.authKind = req.headers["x-key"] === "1" ? "api_token" : "jwt"
+      }
     }
   })
 
@@ -629,6 +641,38 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
     // Refused before anything started: no second download, no slot taken, nothing consumed.
     expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1)
     expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("a key's download without a confirmation runs under the one derived from the standing authorization, and the file records it", async () => {
+    const derived = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e09"
+    vi.mocked(deriveAndConsumeConfirmation).mockResolvedValueOnce(derived)
+    const res = await app.inject({ method: "POST", url: "/v1/download-video", headers: { "x-key": "1" }, payload: { userId: TEST_USER_ID, url: YT_URL } })
+    expect(res.statusCode).toBe(200)
+    expect(checkRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ url: YT_URL, userId: TEST_USER_ID, via: "api" }))
+    expect(deriveAndConsumeConfirmation).toHaveBeenCalledWith(expect.objectContaining({ userId: TEST_USER_ID, url: YT_URL, via: "api", appId: null, authorizationId: null }))
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
+    expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: derived })
+    await vi.waitFor(() => expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ confirmationId: derived, kind: "download_completed" })))
+    // A session's download derives nothing.
+    await post({ url: YT_URL })
+    expect(checkRightsConfirmation).toHaveBeenLastCalledWith(expect.objectContaining({ via: "session" }))
+    expect(deriveAndConsumeConfirmation).toHaveBeenCalledTimes(1)
+  })
+
+  it("a connected app imports only with a scope that lets it write: one granted read scopes alone is refused before the rights check, one with a write scope stands on the authorization as the app", async () => {
+    const readOnly = await app.inject({ method: "POST", url: "/v1/download-video", headers: { "x-app-scopes": "jobs:read presets:read" }, payload: { userId: TEST_USER_ID, url: YT_URL } })
+    expect(readOnly.statusCode).toBe(403)
+    expect(readOnly.json().error.code).toBe("insufficient_scope")
+    expect(checkRightsConfirmation).not.toHaveBeenCalled()
+    expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
+
+    vi.mocked(deriveAndConsumeConfirmation).mockResolvedValueOnce("7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e0a")
+    const writer = await app.inject({ method: "POST", url: "/v1/download-video", headers: { "x-app-scopes": "jobs:read assets:write" }, payload: { userId: TEST_USER_ID, url: YT_URL } })
+    expect(writer.statusCode).toBe(200)
+    expect(deriveAndConsumeConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ via: "app", appId: "app-1", authorizationId: "11111111-1111-4111-8111-111111111111" }),
+    )
   })
 
   it("a confirmation is spent only once the download is about to start: a refusal for another reason keeps it, a race on it gives the slot back", async () => {

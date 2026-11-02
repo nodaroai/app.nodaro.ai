@@ -28,6 +28,9 @@ vi.mock("@/lib/content-rights.js", () => ({
   },
   checkRightsConfirmation: vi.fn().mockResolvedValue(null),
   consumeRightsConfirmation: vi.fn().mockResolvedValue(undefined),
+  contentRightsRequired: vi.fn().mockResolvedValue(false),
+  coversStandingAuthorization: (via: unknown) => via === "api" || via === "app" || via === "mcp",
+  deriveAndConsumeConfirmation: vi.fn().mockResolvedValue(null),
   recordEvent: vi.fn().mockResolvedValue(true),
   contentHashOf: vi.fn().mockResolvedValue("ab".repeat(32)),
 }))
@@ -47,7 +50,7 @@ import { RedisDownloadLedger } from "../download-slot-ledger.js"
 import { makeFakeDownloadClient, makeFakeDownloadStore } from "./fake-download-redis.js"
 import { downloadYouTubeVideo } from "../../providers/video/youtube-video.js"
 import { recordDownloadedVideoAsset } from "../asset-records.js"
-import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation } from "../content-rights.js"
+import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, deriveAndConsumeConfirmation } from "../content-rights.js"
 
 const URL_ = "https://www.tiktok.com/@someone/video/7676964064458738952"
 
@@ -102,6 +105,16 @@ describe("a run's download goes through the route's downloader", () => {
     await expect(downloadVideoForRun({ url: URL_, userId: "u1", rightsConfirmationId: confirmationId })).rejects.toMatchObject({ kind: "failed", message: "Used already" })
     expect(runningDownloadsFor("u1")).toBe(0)
     expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1)
+  })
+
+  it("a run started by a key or an agent, with no confirmation, downloads under the one derived from the standing authorization", async () => {
+    const derived = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e09"
+    vi.mocked(deriveAndConsumeConfirmation).mockResolvedValueOnce(derived)
+    await downloadVideoForRun({ url: URL_, userId: "u1", requestId: "exec-1:src", importVia: "mcp" })
+    expect(checkRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", lane: "run", via: "mcp" }))
+    expect(deriveAndConsumeConfirmation).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", url: URL_, via: "mcp", requestId: "exec-1:src" }))
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    expect(recordDownloadedVideoAsset).toHaveBeenCalledWith(expect.objectContaining({ rightsConfirmationId: derived }))
   })
 
   it("a provider failure is a `failed` error carrying the provider's message", async () => {

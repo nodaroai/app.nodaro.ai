@@ -12,6 +12,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
+import { importJobFields, importViaOf } from "../lib/import-via.js"
 
 const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
@@ -47,9 +48,10 @@ export async function trimAudioRoutes(app: FastifyInstance) {
     // A social link is an import of a link: the site's policy and the rights
     // check (reads) answer here, before any job row exists; the worker spends
     // the confirmation when it fetches.
+    const importVia = importViaOf(req)
     if (isAllowedSocialVideoUrl(restData.videoUrl)) {
       try {
-        await requireImportAllowed(restData.videoUrl, { userId, confirmationId: restData.confirmationId, lane: "route", requestId: req.id })
+        await requireImportAllowed(restData.videoUrl, { userId, confirmationId: restData.confirmationId, lane: "route", requestId: req.id, via: importVia })
       } catch (e) {
         if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
         throw e
@@ -78,7 +80,7 @@ export async function trimAudioRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("trim-audio", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("trim-audio", { jobId: job.id, ...restData, usageLogId, ...importJobFields(req) })
     return { jobId: job.id }
   })
 }

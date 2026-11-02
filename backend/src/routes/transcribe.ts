@@ -7,6 +7,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { importJobFields } from "../lib/import-via.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
@@ -117,6 +118,8 @@ export async function transcribeRoutes(app: FastifyInstance) {
       tagAudioEvents,
       wordTimestamps: parsed.data.wordTimestamps,
       usageLogId,
+      // A link's sound is an import of the link: the way in (and the connected app), for the worker's gate (`importRightsOf`).
+      ...importJobFields(req),
     })
 
     return { jobId: job.id }

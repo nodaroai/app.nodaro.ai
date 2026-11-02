@@ -13,6 +13,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
+import { importViaOf } from "../lib/import-via.js"
+import { requireAppWriteScope } from "../lib/scope-prehandler.js"
 
 const downloadVideoBody = z
   .object({
@@ -84,8 +86,11 @@ const downloadVideoBody = z
 export { MAX_ACTIVE_DOWNLOADS_PER_USER }
 
 export async function downloadVideoRoutes(app: FastifyInstance) {
-  // POST /v1/download-video - Start download, return downloadId immediately
-  app.post("/v1/download-video", async (req, reply) => {
+  // POST /v1/download-video - Start download, return downloadId immediately.
+  // An import lands a file in the account: a connected app needs a scope that
+  // lets it write (so one granted only read scopes cannot import, nor stand on
+  // the account's standing authorization).
+  app.post("/v1/download-video", { preHandler: requireAppWriteScope() }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -105,7 +110,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     // The site's policy and the rights check (reads) come before anything else
     // that can refuse the import; the confirmation is SPENT only once the slot
     // is held, below, so a consumed confirmation always has a download behind it.
-    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
+    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id, via: importViaOf(req), appId: req.appAuthorization?.appId ?? null, authorizationId: req.appAuthorization?.authorizationId ?? null }
     try {
       await requireImportAllowed(url, rights)
     } catch (e) {
@@ -152,10 +157,12 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // Nothing else can refuse the import now: spend the confirmation. A race
-    // with another download on the same id gives the slot back and refuses.
+    // Nothing else can refuse the import now: spend the confirmation (the one
+    // sent, or one derived from a key's standing authorization). A race with
+    // another download on the same id gives the slot back and refuses.
+    let spent: string | null
     try {
-      await spendImportConfirmation(url, rights)
+      spent = await spendImportConfirmation(url, rights)
     } catch (e) {
       slot.release()
       if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
@@ -172,7 +179,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
         maxHeight,
         maxFilesizeBytes: isSocial ? undefined : DIRECT_FILE_MAX_BYTES,
         requireAudio: requireAudio ?? true,
-        rightsConfirmationId: confirmationId ?? null,
+        rightsConfirmationId: spent,
       },
       slot,
     )

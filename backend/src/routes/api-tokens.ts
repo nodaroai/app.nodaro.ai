@@ -840,6 +840,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         userId: resolved.userId,
         triggerType: "api",
         triggerData: { apiTokenId: resolved.id },
+        // A personal key's run: its imports of links stand on the account's standing authorization.
+        importVia: "api",
         inputOverrides,
         // P14: the token's authenticated context — resolved once by the
         // billing hook (a workspace-BOUND token acts as an implicit header).

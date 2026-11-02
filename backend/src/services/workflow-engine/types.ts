@@ -432,6 +432,16 @@ export interface WorkflowExecutionJob {
    */
   appRun?: boolean
   triggerData?: Record<string, unknown>
+  /**
+   * How the run was started (`lib/import-via.ts`): a person's own session, a
+   * personal API key, a connected app, or an AI agent through the MCP server.
+   * A link the run imports (a Video URL node's fetch, a node that fetches a
+   * link through a route) is held to the content rights rules of that way in:
+   * a key's or an agent's import stands on the account's standing
+   * authorization. Absent for a trigger's run and a server's own relay: no
+   * way in, no standing authorization.
+   */
+  importVia?: "session" | "api" | "app" | "mcp"
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
   /**
@@ -885,6 +895,8 @@ export interface OrchestratorContext {
   userId: string
   triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run" | "use_case"
   triggerData?: Record<string, unknown>
+  /** How the run was started (`WorkflowExecutionJob.importVia`): what its imports of links are held to. */
+  importVia?: "session" | "api" | "app" | "mcp"
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean
   /** Epoch ms of last cancel-check DB query (shared across parallel nodes to avoid duplicate queries) */

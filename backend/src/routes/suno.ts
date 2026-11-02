@@ -7,6 +7,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { importJobFields } from "../lib/import-via.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
@@ -462,6 +463,8 @@ export async function sunoRoutes(app: FastifyInstance) {
 
       await videoQueue.add("suno-cover", {
         jobId: job.id,
+        // A link as the source is an import of the link: the way in (and the connected app), for the worker's gate (`importRightsOf`).
+        ...importJobFields(req),
         prompt,
         uploadUrl,
         model,
@@ -1178,6 +1181,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         negativeStyle,
         vocalGender,
         usageLogId,
+        ...importJobFields(req),
       })
 
       return { jobId: job.id }

@@ -250,14 +250,14 @@ describe("suno-cover handler", () => {
 
   it("downloads audio first for social URLs", async () => {
     mocks.mockIsSocialUrl.mockReturnValueOnce(true)
-    const job = makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://youtube.com/watch?v=abc" })
+    const job = makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://youtube.com/watch?v=abc", importVia: "mcp" })
     await handler(job as never, makeCtx())
 
     // The job's own copy: its scratch folder, emptied when the job ends (decided 2026-10-09).
-    // The import rights ride along: the job's owner, the confirmation its route put in the job data.
+    // The import rights ride along: the job's owner, the confirmation its route put in the job data, and the way in.
     expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith(
       "https://youtube.com/watch?v=abc",
-      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" },
+      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1", via: "mcp", appId: null, authorizationId: null },
       { scratchJobId: "job-1" },
     )
     expect(mocks.mockSunoCover).toHaveBeenCalledWith(
@@ -453,10 +453,10 @@ describe("suno-upload-extend handler", () => {
     await handler(job as never, makeCtx())
 
     // The job's own copy: its scratch folder, emptied when the job ends (decided 2026-10-09).
-    // The import rights ride along: the job's owner, the confirmation its route put in the job data.
+    // The import rights ride along: the job's owner, the confirmation its route put in the job data; no way in named = none.
     expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith(
       "https://youtube.com/watch?v=abc",
-      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" },
+      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null },
       { scratchJobId: "job-1" },
     )
     expect(mocks.mockSunoUploadExtend).toHaveBeenCalledWith(

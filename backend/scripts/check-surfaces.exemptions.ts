@@ -121,12 +121,16 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   },
   // Content rights: a PERSON confirms the declaration with a checkbox in the
   // client that imports the link; a command line and an agent have no checkbox.
-  // Their standing authorization (saved once in the account's settings) is a
-  // later change; until then their downloads go through while the deployment
-  // does not require a confirmation.
+  // Their imports stand on the standing authorization the person gives ONCE,
+  // in their own session (Settings; `POST /v1/content-rights/authorization`
+  // refuses a key, an app and an agent), so none of these routes is theirs.
   ...(["GET /v1/content-rights/declaration", "POST /v1/content-rights/confirm"] as const).flatMap((atom) => [
-    { feature: "contentRights", surface: "cli" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; the CLI's standing authorization is a later change" },
-    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; an agent's standing authorization is a later change" },
+    { feature: "contentRights", surface: "cli" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; a key's import stands on the standing authorization the person gives in Settings" },
+    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; an agent's import stands on the standing authorization the person gives in Settings" },
+  ]),
+  ...(["GET /v1/content-rights/authorization", "POST /v1/content-rights/authorization", "DELETE /v1/content-rights/authorization"] as const).flatMap((atom) => [
+    { feature: "contentRights", surface: "cli" as const, atom, reason: "the standing authorization is given and revoked by the person in their own session (the server refuses a key), and a key reading it learns nothing a refused import does not say" },
+    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the standing authorization is given and revoked by the person in their own session (the server refuses an agent): an agent must not authorize its own imports" },
   ]),
   {
     feature: "characters",

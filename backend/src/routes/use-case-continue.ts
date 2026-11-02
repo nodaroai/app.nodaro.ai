@@ -60,6 +60,7 @@ import { continuationInputOverrides } from "../services/workflow-engine/run-cont
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
+import { importViaOf } from "../lib/import-via.js"
 
 const STAMP_ATTEMPTS = 3
 
@@ -308,6 +309,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
           // The run's steps reserve under the rules its balance check and fee hold used.
           webFreeMode,
           appRun: req.isAppRun === true,
+          // How the run was started: its imports of links are held to the same authorization as the caller's own.
+          ...(importViaOf(req) ? { importVia: importViaOf(req)! } : {}),
         })
         executionId = started.executionId
       } catch (err) {

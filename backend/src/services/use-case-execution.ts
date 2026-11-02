@@ -24,6 +24,7 @@ import {
 } from "../lib/execution-inline-graph.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
+import type { ImportVia } from "../lib/content-rights.js"
 
 /** The database has no snapshot columns yet: nothing was inserted or enqueued. */
 export class InlineGraphUnavailableError extends Error {
@@ -62,6 +63,8 @@ export interface ExecuteInlineGraphParams {
    */
   readonly webFreeMode: boolean
   readonly appRun: boolean
+  /** How the run was started (`lib/import-via.ts`): what its imports of links are held to. */
+  readonly importVia?: ImportVia
 }
 
 export interface ExecuteInlineGraphResult {
@@ -122,6 +125,7 @@ export async function executeInlineGraph(p: ExecuteInlineGraphParams): Promise<E
     ...(p.previewStopRule !== undefined ? { previewStopRule: p.previewStopRule } : {}),
     webFreeMode: p.webFreeMode,
     ...(p.appRun ? { appRun: true } : {}),
+    ...(p.importVia ? { importVia: p.importVia } : {}),
     // Started by a node of a running run: no run slot of its own.
     ...(p.parentExecutionId ? { parentExecutionId: p.parentExecutionId } : {}),
   }

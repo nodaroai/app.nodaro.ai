@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { config } from "../config.js"
+import { IMPORT_VIA_HEADER } from "../import-via.js"
 import { withJobSubmissionContext } from "../job-submission-context.js"
 import type { McpSession } from "./session.js"
 
@@ -122,6 +123,9 @@ function inject(fastify: FastifyInstance, session: McpSession, opts: McpInjectOp
       ...opts.headers,
       "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
       "x-internal-user-id": session.userId,
+      // An agent's request: an import of a link it makes, or a run it starts,
+      // is held to the content rights rules of the MCP way in (`lib/import-via.ts`).
+      [IMPORT_VIA_HEADER]: "mcp",
       ...(session.workspaceId ? { [WORKSPACE_HEADER_LOWER]: session.workspaceId } : {}),
       // An object body is always read as JSON, whatever content type a caller passed.
       ...(isObjectBody(opts.payload) ? { "content-type": "application/json" } : {}),

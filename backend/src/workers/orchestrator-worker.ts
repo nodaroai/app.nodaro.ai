@@ -616,6 +616,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     userId,
     triggerType,
     triggerData,
+    // How the run was started: what its imports of links are held to (`lib/import-via.ts`).
+    ...(job.data.importVia ? { importVia: job.data.importVia } : {}),
     cancelled: false,
     // An app version's run, or a use-case node's hidden run inside one (its
     // route's X-App-Run, carried on the job): its steps reserve as app-run steps.
@@ -1629,6 +1631,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       const fetched = await prepareVideoLinksForRun({
         userId,
         executionId,
+        ...(ctx.importVia ? { importVia: ctx.importVia } : {}),
         nodes,
         edges,
         executingIds: new Set(executableNodes.filter((n) => nodeStates[n.id]?.status === "pending").map((n) => n.id)),

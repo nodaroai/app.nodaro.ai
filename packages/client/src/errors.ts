@@ -73,6 +73,7 @@ export class ModelUnavailableError extends ForbiddenError {
 export type ImportRefusalCode =
   | "import_source_disabled"
   | "rights_confirmation_required"
+  | "rights_authorization_required"
   | "rights_confirmation_not_found"
   | "rights_confirmation_mismatch"
   | "rights_confirmation_stale"
@@ -82,13 +83,16 @@ export type ImportRefusalCode =
 /**
  * The 403 codes {@link ImportRefusedError} carries: the link's site is
  * disabled by an administrator (`import_source_disabled`), or the content
- * rights confirmation is missing while the deployment requires one, does not
- * exist, is for another link or account, was made under an older declaration,
- * expired, or was used for an import already.
+ * rights confirmation is missing while the deployment requires one
+ * (`rights_confirmation_required`; for an import through an API key or an AI
+ * agent with no standing authorization, `rights_authorization_required`), does
+ * not exist, is for another link or account, was made under an older
+ * declaration, expired, or was used for an import already.
  */
 export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<ImportRefusalCode>([
   "import_source_disabled",
   "rights_confirmation_required",
+  "rights_authorization_required",
   "rights_confirmation_not_found",
   "rights_confirmation_mismatch",
   "rights_confirmation_stale",
@@ -103,8 +107,10 @@ export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<Impo
  * {@link ForbiddenError}, so existing catches keep working; `code` is the
  * server's own code and says which. The remedy for a `rights_confirmation_*`
  * code is `contentRights.confirm({ url })` again and a new import with the
- * answered id; an `import_source_disabled` site has no remedy on the caller's
- * side, and the message names no site.
+ * answered id; for `rights_authorization_required` it is the person giving
+ * the standing authorization in their settings (`contentRights.authorize`, in
+ * their own session); an `import_source_disabled` site has no remedy on the
+ * caller's side, and the message names no site.
  */
 export class ImportRefusedError extends ForbiddenError {
   declare readonly code: ImportRefusalCode

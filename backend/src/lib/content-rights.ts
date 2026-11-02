@@ -30,8 +30,26 @@ export const CONFIRMATION_TTL_MS = 60 * 60 * 1000
 
 export type RightsLane = "editor" | "app" | "api" | "mcp" | "admin" | "run" | "route"
 
+/**
+ * How the person reached the import: their own session (a browser, the
+ * editor, an app page), a personal API key or billing key (`api`), a
+ * connected OAuth app (`app`), or an AI agent through the MCP server (`mcp`).
+ * A key or an agent cannot tick a box per link, so under `api`, `app` and
+ * `mcp` a STANDING authorization (migration 579) stands in for the box: each
+ * import is recorded as a confirmation derived from it.
+ */
+export type ImportVia = "session" | "api" | "app" | "mcp"
+
+/** The ways in that a standing authorization covers. */
+export const STANDING_AUTHORIZATION_VIAS: ReadonlySet<ImportVia> = new Set<ImportVia>(["api", "app", "mcp"])
+
+export function coversStandingAuthorization(via: ImportVia | null | undefined): boolean {
+  return via !== undefined && via !== null && STANDING_AUTHORIZATION_VIAS.has(via)
+}
+
 export type ContentRightsErrorCode =
   | "rights_confirmation_required"
+  | "rights_authorization_required"
   | "rights_confirmation_not_found"
   | "rights_confirmation_mismatch"
   | "rights_confirmation_stale"
@@ -153,7 +171,10 @@ export interface CreateConfirmationInput {
   kind?: "checkbox" | "standing" | "derived"
   runnerUserId?: string | null
   appId?: string | null
+  /** The OAuth grant the confirmation came through, when it came through a connected app. */
   authorizationId?: string | null
+  /** The standing authorization a `derived` confirmation was made from. */
+  standingAuthorizationId?: string | null
   /** The caller's address as `lib/client-address.ts` resolved it; stored on the record. */
   clientAddress?: string | null
   userAgent?: string | null
@@ -180,6 +201,7 @@ export async function createConfirmation(input: CreateConfirmationInput): Promis
       runner_user_id: input.runnerUserId ?? null,
       app_id: input.appId ?? null,
       authorization_id: input.authorizationId ?? null,
+      standing_authorization_id: input.standingAuthorizationId ?? null,
       kind: input.kind ?? "checkbox",
       declaration_version: declaration.version,
       declaration_hash: declaration.hash,
@@ -246,23 +268,122 @@ export async function recordEvent(input: RightsEventInput): Promise<boolean> {
   return true
 }
 
+// ── standing authorizations (migration 579) ──────────────────────────────────
+
+export interface StandingAuthorization {
+  id: string
+  userId: string | null
+  declarationVersion: number
+  createdAt: string
+}
+
+/**
+ * The account's current standing authorization: the newest unrevoked one,
+ * and only when it was made under the CURRENT declaration — a new text asks
+ * for a new authorization, as it asks for a new tick. Null otherwise.
+ */
+export async function currentStandingAuthorization(userId: string): Promise<StandingAuthorization | null> {
+  const { data, error } = await supabase
+    .from("content_rights_authorizations")
+    .select("id, user_id, declaration_version, created_at")
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`[content-rights] authorization read failed: ${error.message}`)
+  if (!data) return null
+  const row = data as { id: string; user_id: string | null; declaration_version: number; created_at: string }
+  const declaration = await currentDeclaration()
+  if (row.declaration_version !== declaration.version) return null
+  return { id: row.id, userId: row.user_id, declarationVersion: row.declaration_version, createdAt: row.created_at }
+}
+
+export interface CreateAuthorizationInput {
+  userId: string
+  declarationVersion: number
+  clientAddress?: string | null
+  userAgent?: string | null
+}
+
+/**
+ * Records that the person authorized imports through their keys and agents
+ * under the CURRENT declaration (a stale version is refused: they must see
+ * the new text), and answers the authorization. An earlier unrevoked one of
+ * the same account is revoked first: one current authorization per account —
+ * held by the database too (a partial unique index on the unrevoked row), so
+ * two requests racing here (a double click) leave one; the loser revokes
+ * what the winner made and records its own, once more.
+ */
+export async function createStandingAuthorization(input: CreateAuthorizationInput): Promise<StandingAuthorization> {
+  const declaration = await currentDeclaration()
+  if (input.declarationVersion !== declaration.version) {
+    throw new ContentRightsError("rights_confirmation_stale", "The declaration changed; read the current text and authorize again.")
+  }
+  const email = await accountEmail(input.userId)
+  for (let attempt = 0; ; attempt++) {
+    await revokeStandingAuthorization(input.userId)
+    const { data, error } = await supabase
+      .from("content_rights_authorizations")
+      .insert({
+        user_id: input.userId,
+        declaration_version: declaration.version,
+        declaration_hash: declaration.hash,
+        ip: input.clientAddress ?? null,
+        user_agent: input.userAgent?.slice(0, 1000) ?? null,
+        email,
+      })
+      .select("id, created_at")
+      .single()
+    if (error?.code === "23505" && attempt === 0) continue
+    if (error || !data) throw new Error(`[content-rights] authorization insert failed: ${error?.message ?? "no row"}`)
+    const row = data as { id: string; created_at: string }
+    return { id: row.id, userId: input.userId, declarationVersion: declaration.version, createdAt: row.created_at }
+  }
+}
+
+/** Revokes the account's unrevoked authorizations (the record stays); answers how many. */
+export async function revokeStandingAuthorization(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("content_rights_authorizations")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .select("id")
+  if (error) throw new Error(`[content-rights] authorization revoke failed: ${error.message}`)
+  return Array.isArray(data) ? data.length : 0
+}
+
 export interface CheckRightsInput {
   url: string
   userId: string
   confirmationId?: string | null
   lane: RightsLane
+  /** How the import was reached; a key's or an agent's import may stand on a standing authorization. */
+  via?: ImportVia | null
 }
 
 /**
  * The READ half of the check every download makes, before anything else can
  * refuse it. With a confirmation id: it must exist, be this account's (or name
  * it as the runner), be for this link, under the current declaration, and not
- * older than an hour — nothing is written. Without one: null while
- * `content_rights_required` is off; refused once it is on.
+ * older than an hour — nothing is written. Without one: an import through a
+ * key or an agent (`via`) that holds a standing authorization passes (the
+ * write half derives its confirmation from it); otherwise null while
+ * `content_rights_required` is off, and refused once it is on — with the
+ * code that names the remedy: a confirmation for a person, an authorization
+ * in the account's settings for a key or an agent.
  */
 export async function checkRightsConfirmation(input: CheckRightsInput): Promise<ConfirmationRecord | null> {
   if (!input.confirmationId) {
+    if (coversStandingAuthorization(input.via) && (await currentStandingAuthorization(input.userId))) return null
     if (await contentRightsRequired()) {
+      if (coversStandingAuthorization(input.via)) {
+        throw new ContentRightsError(
+          "rights_authorization_required",
+          "Imports through API keys and agents need a standing authorization of the content rights declaration: authorize them in Settings, or confirm the link first.",
+        )
+      }
       throw new ContentRightsError("rights_confirmation_required", "Confirm that you hold the rights to this content before it is imported.")
     }
     return null
@@ -304,6 +425,66 @@ export async function consumeRightsConfirmation(input: ConsumeRightsInput): Prom
   // fetch failure, keyed by its job id) passes; another download is refused.
   if (input.requestId && (await consumedByRequest(input.confirmationId)) === input.requestId) return
   throw new ContentRightsError("rights_confirmation_used", "That confirmation was used for an import already (a failed one counts). Confirm again to import.")
+}
+
+export interface DeriveRightsInput {
+  userId: string
+  url: string
+  via: ImportVia
+  requestId?: string | null
+  appId?: string | null
+  authorizationId?: string | null
+}
+
+/**
+ * A key's or an agent's import, with no confirmation of its own: a
+ * confirmation DERIVED from the account's standing authorization is recorded
+ * for this link and spent at once, so the record of the import is as complete
+ * as a ticked box's. Null when the account holds none (the read half decided
+ * whether that is allowed). The same request tried again (a job's retry, an
+ * execution picked up after a deploy) finds the confirmation it spent by its
+ * request id instead of recording a second one.
+ */
+export async function deriveAndConsumeConfirmation(input: DeriveRightsInput): Promise<string | null> {
+  if (input.requestId) {
+    // The retry's confirmation is this account's, for this link — a request id
+    // is the caller's (a job id, an execution and node, a request's own id),
+    // never a proof by itself, so a stranger's id answers nothing.
+    const spent = await confirmationConsumedByRequest(input.requestId)
+    const row = spent ? await readConfirmation(spent) : null
+    if (row && row.userId === input.userId && row.normalizedUrl === normalizeSourceUrl(input.url)) return row.id
+  }
+  const standing = await currentStandingAuthorization(input.userId)
+  if (!standing) return null
+  // The lane a derived confirmation is recorded in is the way in that stands on the authorization.
+  const lane: RightsLane = input.via === "session" ? "editor" : input.via
+  const made = await createConfirmation({
+    userId: input.userId,
+    url: input.url,
+    declarationVersion: standing.declarationVersion,
+    lane,
+    kind: "derived",
+    standingAuthorizationId: standing.id,
+    appId: input.appId ?? null,
+    authorizationId: input.authorizationId ?? null,
+    requestId: input.requestId ?? null,
+  })
+  await consumeRightsConfirmation({ confirmationId: made.id, url: input.url, lane, requestId: input.requestId ?? null })
+  return made.id
+}
+
+/** The confirmation a request already spent (its `consumed` event names it), or null. */
+async function confirmationConsumedByRequest(requestId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("rights_events")
+    .select("confirmation_id")
+    .eq("request_id", requestId)
+    .eq("kind", "consumed")
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`[content-rights] event read failed: ${error.message}`)
+  const id = (data as { confirmation_id?: unknown } | null)?.confirmation_id
+  return typeof id === "string" ? id : null
 }
 
 /** The request id on the confirmation's `consumed` event, or null. */

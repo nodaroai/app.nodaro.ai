@@ -50,6 +50,8 @@ export interface ExecuteAppRunParams {
   cheapLanesOnly?: boolean
   /** Spend-surface flag captured at the originating route (D1 v2). */
   webFreeMode?: boolean
+  /** How the run was started (`lib/import-via.ts`), carried onto the job: what its imports of links are held to. */
+  importVia?: "session" | "api" | "app" | "mcp"
   /**
    * A person in the app runner can review a Preview render of this run (its
    * card carries Render final; lib/app-reviewer.ts). Absent = nobody: an SDK /
@@ -102,6 +104,7 @@ export async function executeAppRun(
     componentDepth,
     executingComponentIds,
     webFreeMode,
+    importVia,
     billingContext,
     isComponentExecution,
     parentExecutionId,
@@ -180,6 +183,7 @@ export async function executeAppRun(
     workflowId,
     userId,
     triggerType: "app_run",
+    ...(importVia ? { importVia } : {}),
     inputOverrides,
     appVersionId,
     nodeIds,

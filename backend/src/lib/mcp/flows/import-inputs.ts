@@ -1,6 +1,6 @@
 import { r2KeyFromOurUrl } from "../../storage.js"
 import { importImageFromUrl } from "../../media-import.js"
-import { requireImportAllowed } from "../../import-gate.js"
+import { requireImportAllowed, spendImportConfirmation, type ImportRights } from "../../import-gate.js"
 import type { ImportedInput } from "./flow-graph.js"
 import type { FlowNodeInput } from "./node-mappers.js"
 
@@ -22,12 +22,18 @@ export async function importOutsideImages(
   const results = await Promise.all(
     outside.map(async (input) => {
       try {
-        // An import of a link: the site's policy and the rights check (reads)
-        // first; a refusal keeps the link as it was, like any failed import.
-        // Nothing is spent: this lane carries no confirmation (an agent's
-        // standing authorization is a later change).
-        await requireImportAllowed(input.url, { userId, lane: "mcp" })
-        const imported = await importImageFromUrl(userId, input.url)
+        // An import of a link by an agent: the site's policy and the rights
+        // check (reads) first — the agent's import stands on the account's
+        // standing authorization (`via: "mcp"`), and the confirmation derived
+        // from it is spent right before the fetch. A refusal keeps the link as
+        // it was, like any failed import.
+        const rights: ImportRights = { userId, lane: "mcp", via: "mcp" }
+        await requireImportAllowed(input.url, rights)
+        const imported = await importImageFromUrl(userId, input.url, {
+          beforeFetch: async () => {
+            await spendImportConfirmation(input.url, rights)
+          },
+        })
         return imported.ok
           ? ([input.url, { url: imported.url, assetId: imported.assetId, thumbnailUrl: imported.thumbnailUrl }] as const)
           : null

@@ -14,6 +14,7 @@ import { uploadJobScratchFile } from "../lib/job-scratch.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import type { ImportRights } from "../lib/import-gate.js"
+import { parseImportVia } from "../lib/import-via.js"
 import sharp from "sharp"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { getSizeLimit } from "../utils/file-validation.js"
@@ -137,14 +138,20 @@ export function isSocialUrl(url: string): boolean {
  * A job with no owner can match no confirmation, and passes only while the
  * deployment does not require one. The lane is the route's: every job that
  * fetches a link is enqueued by its route (the orchestrator calls routes too).
+ * The route also puts the way in (`importVia`, `lib/import-via.ts`) in the job
+ * data, so a key's or an agent's job stands on the account's standing
+ * authorization like its direct imports do.
  */
 export function importRightsOf(job: Pick<Job, "data">, ctx: Pick<JobContext, "jobId" | "jobUserId">): ImportRights {
-  const data = job.data as { confirmationId?: unknown }
+  const data = job.data as { confirmationId?: unknown; importVia?: unknown; importAppId?: unknown; importAuthorizationId?: unknown }
   return {
     userId: ctx.jobUserId ?? "",
     confirmationId: typeof data.confirmationId === "string" ? data.confirmationId : null,
     lane: "route",
     requestId: ctx.jobId,
+    via: parseImportVia(data.importVia),
+    appId: typeof data.importAppId === "string" ? data.importAppId : null,
+    authorizationId: typeof data.importAuthorizationId === "string" ? data.importAuthorizationId : null,
   }
 }
 

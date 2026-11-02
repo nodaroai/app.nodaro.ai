@@ -22,6 +22,7 @@ import { personalPayer, shouldRefuseDegradedRun } from "../lib/billing-context.j
 import { billingPairColumns } from "../lib/insert-job.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { importViaOf } from "../lib/import-via.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCreditsDetailed, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { isLlmUnpricedError, llmUnpricedMessage, refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
@@ -436,6 +437,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       workflowId: workflow.id,
       userId: req.userId,
       triggerType: "manual",
+      ...(importViaOf(req) ? { importVia: importViaOf(req) as "session" | "api" | "app" | "mcp" } : {}),
       inputOverrides,
       nodeIds,
       // P14: the viewer's authenticated context (a shared-workflow run —

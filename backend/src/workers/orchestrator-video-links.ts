@@ -57,6 +57,8 @@ export interface PrepareVideoLinksArgs {
   readonly userId: string
   /** The execution: with each node's id, the request its confirmation is spent by (`VideoLinkFetchInput.executionId`). */
   readonly executionId?: string
+  /** How the run was started (`VideoLinkFetchInput.importVia`). */
+  readonly importVia?: "session" | "api" | "app" | "mcp"
   /** The run's nodes — their `data` is replaced, never mutated. */
   readonly nodes: SimpleNode[]
   readonly edges: ReadonlyArray<Pick<SimpleEdge, "source" | "target">>
@@ -140,6 +142,7 @@ export async function prepareVideoLinksForRun(args: PrepareVideoLinksArgs): Prom
         scopeIds: [...args.executingIds],
         userId: args.userId,
         ...(args.executionId ? { executionId: args.executionId } : {}),
+        ...(args.importVia ? { importVia: args.importVia } : {}),
         signal: controller.signal,
         recorded,
         ...(args.continued ? { continued: true } : {}),

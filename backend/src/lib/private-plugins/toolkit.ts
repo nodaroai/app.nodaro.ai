@@ -1494,6 +1494,20 @@ const HOST_OWNED_HEADER = new RegExp(
  * the same name, in any letter case, is dropped rather than left to race the
  * one set here. What remains (an `idempotency-key`, say) passes through.
  */
+// A worker job's import rights are its route's (`importRightsOf`,
+// workers/shared.ts): the way the caller came in, and the connected app and
+// grant it came through. A plugin enqueues jobs with free-form data, so these
+// keys are dropped from it as the host-owned headers are from its requests: a
+// plugin cannot name a way in it does not have. (`confirmationId` stays: a
+// confirmation is checked against the job's owner, so it names nothing a
+// plugin could forge.)
+const IMPORT_WAY_IN_JOB_KEYS: ReadonlySet<string> = new Set(["importVia", "importAppId", "importAuthorizationId"])
+
+/** A plugin's job data as the queue receives it: without the import way-in keys only a route sets. */
+export function pluginJobData(data: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).filter(([name]) => !IMPORT_WAY_IN_JOB_KEYS.has(name)))
+}
+
 export function callerHeaders(headers: Record<string, string> | undefined): Record<string, string> {
   if (!headers) return {}
   // Lower-cased the way the request is built (light-my-request lower-cases
@@ -1894,7 +1908,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       internalRequest,
       ...(opts.workerApp ? { workerRequest: workerRequestVia(opts.workerApp) } : {}),
       supportsJobSubmissionContext: true,
-      videoQueue,
+      videoQueue: { add: (name, data, queueOpts) => videoQueue.add(name, pluginJobData(data), queueOpts) },
       creditGuard,
       reserveCreditsForJob,
       reserveCreditsForJobOnce,

@@ -5080,6 +5080,9 @@ text, when, from where) and of the download made under it.
 |---|---|---|
 | `GET` | `/v1/content-rights/declaration` | The current declaration: `{ data: { version, text } }`. Public — a client shows it before anyone signs in. |
 | `POST` | `/v1/content-rights/confirm` | Records that the signed-in account confirmed the declaration for one link (`{ url, declarationVersion }`) → `201 { data: { id, declarationVersion, expiresAt } }`. `409 rights_confirmation_stale` when the declaration changed since the client read it: read it again and ask again. |
+| `GET` | `/v1/content-rights/authorization` | The account's standing authorization for imports through its API keys and AI agents: `{ data: { id, declarationVersion, createdAt } }`, or `{ data: null }` when there is none (never given, revoked, or given under an older declaration). |
+| `POST` | `/v1/content-rights/authorization` | Records one for the current declaration (`{ declarationVersion }`) → `201 { data: { id, declarationVersion, createdAt } }`. The person's own session only: a key, an agent or a connected app answers `403 forbidden`. `409 rights_confirmation_stale` when the declaration changed since. |
+| `DELETE` | `/v1/content-rights/authorization` | Revokes it (the record stays) → `{ data: { revoked } }`. The person's own session only. |
 
 The flow in a client: read the declaration, show its `text` with a checkbox
 that starts unticked, call `confirm` with the link once it is ticked, and send
@@ -5091,7 +5094,9 @@ the stored file. Checked and consumed before anything is fetched — a refused
 import never starts.
 
 `POST /v1/download-video` answers `403` with one of these codes when the
-confirmation does not fit: `rights_confirmation_not_found`,
+confirmation does not fit (`rights_authorization_required` is the import of a
+key or an agent with no confirmation and no standing authorization, below):
+`rights_confirmation_not_found`,
 `rights_confirmation_mismatch` (another account, or another link),
 `rights_confirmation_stale` (the declaration changed), `rights_confirmation_expired`,
 `rights_confirmation_used` (a download was made under it already).
@@ -5128,13 +5133,46 @@ downloads confirm as they go, one confirmation per download; a published app's
 page confirms a link whose sound the run fetches when Run is pressed, for that
 run.
 
-**Not covered yet, and a blocker before the
-setting is turned on** — these lanes run the check but have no way to send a
-confirmation, so with the setting on each one is refused: a run started by an
-agent over MCP (`run_app`, `run_workflow`: nobody ticks a box), `POST /v1/transcribe`
-and the Suno cover and upload-extend routes given a link, the MCP audio tool,
-the editor's own picture-link import, and a private plugin's own download.
-Those lanes, and the standing authorization for API keys and agents, are a
+**The standing authorization (API keys, connected apps, AI agents).** An
+import made through a personal API key or billing key, a connected OAuth app,
+or an AI agent over MCP (`run_app`, `run_workflow`, the audio tool, and every
+import a run so started makes) has nobody to tick a box per link. The person
+authorizes those imports ONCE, in their own session: Settings → "Imports
+through API keys, connected apps and AI agents", or
+`POST /v1/content-rights/authorization` from a session (the SDK's
+`contentRights.authorize`). Every such import is then recorded as a
+confirmation DERIVED from that authorization — one per download, as a ticked
+box would be — and the import passes without a `confirmationId`. A
+`confirmationId` sent along is still honored first. The authorization names
+the declaration version it was given for: a new declaration asks for a new
+one, exactly as it asks for a new tick, and until then the account counts as
+not authorized. Revoking keeps the record and ends the cover from then on.
+
+A connected app imports, and confirms, only with a scope that lets it write
+for the account (any `:write` or `:execute` scope, the line a generation
+draws): an app granted read scopes alone is answered `403 insufficient_scope`
+by the import routes and by `POST /v1/content-rights/confirm`, before any
+rights check, so it neither imports nor stands on the authorization. A run a
+key, an app or an agent started carries its way in to every import the run
+makes: the Video URL node's fetches, the routes its nodes call, and the
+worker-run nodes that fetch a link (a transcription, a Suno cover or extend,
+a trim of a link's sound).
+
+With `content_rights_required` on, an import through a key, an app or an agent
+with neither a confirmation nor a standing authorization is refused with
+`403 rights_authorization_required` (the SDK's `ImportRefusedError` carries the
+code); the remedy is the person authorizing in their settings, never the key
+or the agent itself (`POST /v1/content-rights/authorization` answers
+`403 forbidden` to anything but a session). A run or a request that reaches an
+import from no way in at all (a schedule's or a webhook's run, a server's own
+relay) is covered by no authorization and, with the setting on, refused like a
+person who did not tick.
+
+**Not covered yet** — these lanes run the check but have no way to send a
+confirmation, so with the setting on each one is refused unless it came
+through a key or an agent with a standing authorization: `POST /v1/transcribe`
+and the Suno cover and upload-extend routes given a link, the editor's own
+picture-link import, and a private plugin's own download. Those lanes are a
 later change.
 
 **Import source policies.** Before the confirmation is checked, the link's

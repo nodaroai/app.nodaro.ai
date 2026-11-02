@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
+import { importJobFields, importViaOf } from "../lib/import-via.js"
 
 const extractYouTubeAudioBody = z.object({
   youtubeUrl: safeUrlSchema.refine(
@@ -43,8 +44,9 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
 
     // The site's policy and the rights check (reads) answer here, before any
     // job row exists; the worker spends the confirmation when it fetches.
+    const importVia = importViaOf(req)
     try {
-      await requireImportAllowed(youtubeUrl, { userId, confirmationId, lane: "route", requestId: req.id })
+      await requireImportAllowed(youtubeUrl, { userId, confirmationId, lane: "route", requestId: req.id, via: importVia })
     } catch (e) {
       if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
       throw e
@@ -69,6 +71,8 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
       jobId: job.id,
       youtubeUrl,
       ...(confirmationId ? { confirmationId } : {}),
+      // The way in (and the connected app), for the worker's spend (`importRightsOf`): a key's or an agent's job stands on a standing authorization.
+      ...importJobFields(req),
     })
 
     return { jobId: job.id }

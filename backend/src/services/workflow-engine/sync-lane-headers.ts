@@ -6,6 +6,7 @@
  */
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { config } from "../../lib/config.js"
+import { IMPORT_VIA_HEADER } from "../../lib/import-via.js"
 import type { OrchestratorContext } from "./types.js"
 
 /** The orchestrator's internal-lane headers: the secret, the run's user, X-App-Run, X-Web-Free-Mode, the workspace payer. */
@@ -37,6 +38,12 @@ export function syncLaneHeaders(ctx: OrchestratorContext): Record<string, string
   // loopback wire shape stays as it was before workspace payers.
   if (ctx.billingContext.payer === "workspace") {
     headers[WORKSPACE_HEADER_LOWER] = ctx.billingContext.workspaceId
+  }
+  // The way the run was started: a node that imports a link through a route
+  // is held to the same content rights rules as the run's own fetch
+  // (`lib/import-via.ts`).
+  if (ctx.importVia) {
+    headers[IMPORT_VIA_HEADER] = ctx.importVia
   }
   return headers
 }

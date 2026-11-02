@@ -284,6 +284,12 @@ export const queryKeys = {
     list: () => ["connected-apps", "list"] as const,
   },
 
+  // Content rights: the account's standing authorization for imports through its keys and agents
+  contentRights: {
+    all: ["content-rights"] as const,
+    authorization: () => ["content-rights", "authorization"] as const,
+  },
+
   // API Tokens
   apiTokens: {
     all: ["api-tokens"] as const,
