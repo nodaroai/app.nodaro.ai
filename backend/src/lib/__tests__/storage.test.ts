@@ -134,6 +134,8 @@ import {
   r2KeyFromOurUrl,
   mediaObjectKey,
   copyRecastObject,
+  moveObjectToEvidence,
+  restoreObjectFromEvidence,
   StorageLimitError,
   isStorageLimitError,
 } from "@/lib/storage.js"
@@ -371,6 +373,109 @@ describe("batchDeleteFromR2 and the legal hold", () => {
     } finally {
       hold.held.clear()
     }
+  })
+})
+
+describe("a restricted file's move to and from evidence (migration 583)", () => {
+  // The bucket as a set of keys: HEAD answers from it, COPY and DELETE change it.
+  const bucket = new Set<string>()
+  const notFound = () => Object.assign(new Error("not found"), { name: "NotFound", $metadata: { httpStatusCode: 404 } })
+  beforeEach(() => {
+    bucket.clear()
+    mocks.copyCalls.length = 0
+    mocks.deleteCalls.length = 0
+    mocks.headCalls.length = 0
+    mocks.mockSend.mockImplementation(async (cmd: { constructor: { name: string }; Key?: string; CopySource?: string }) => {
+      switch (cmd.constructor.name) {
+        case "MockHeadObjectCommand":
+          if (!bucket.has(cmd.Key!)) throw notFound()
+          // One file's bytes wherever they sit: the same ETag at both ends.
+          return { ContentLength: 12, ETag: '"same"' }
+        case "MockCopyObjectCommand":
+          bucket.add(cmd.Key!)
+          return {}
+        case "MockDeleteObjectCommand":
+          bucket.delete(cmd.Key!)
+          return {}
+        default:
+          return {}
+      }
+    })
+  })
+
+  it("copies the object under the evidence prefix, confirms it, then deletes the original — the one delete that asks no hold", async () => {
+    bucket.add("videos/a.mp4")
+    expect(await moveObjectToEvidence("videos/a.mp4", "r-1")).toBe("moved")
+    expect([...bucket]).toEqual(["evidence/r-1/videos/a.mp4"])
+    expect(mocks.copyCalls[0]).toMatchObject({ Key: "evidence/r-1/videos/a.mp4", CopySource: "/test-bucket/videos/a.mp4", MetadataDirective: "COPY" })
+    expect(mocks.deleteCalls).toEqual([expect.objectContaining({ Key: "videos/a.mp4" })])
+  })
+
+  it("is idempotent: a move cut short is finished, a finished one is left alone, nothing stored is said so", async () => {
+    bucket.add("videos/a.mp4")
+    bucket.add("evidence/r-1/videos/a.mp4")
+    expect(await moveObjectToEvidence("videos/a.mp4", "r-1")).toBe("moved")
+    expect(mocks.copyCalls).toHaveLength(0)
+    expect(mocks.deleteCalls).toHaveLength(1)
+    expect(await moveObjectToEvidence("videos/a.mp4", "r-1")).toBe("already_there")
+    expect(mocks.deleteCalls).toHaveLength(1)
+    expect(await moveObjectToEvidence("videos/gone.mp4", "r-1")).toBe("missing")
+    expect(mocks.copyCalls).toHaveLength(0)
+  })
+
+  it("a lift moves the bytes back to the same key and deletes the evidence copy", async () => {
+    bucket.add("evidence/r-1/videos/a.mp4")
+    expect(await restoreObjectFromEvidence("videos/a.mp4", "r-1")).toBe("moved")
+    expect([...bucket]).toEqual(["videos/a.mp4"])
+    expect(mocks.copyCalls[0]).toMatchObject({ Key: "videos/a.mp4", CopySource: "/test-bucket/evidence/r-1/videos/a.mp4" })
+    expect(mocks.deleteCalls).toEqual([expect.objectContaining({ Key: "evidence/r-1/videos/a.mp4" })])
+  })
+
+  it("both ends holding different bytes: nothing is deleted, in either direction", async () => {
+    const etags = new Map([["videos/a.mp4", '"new"'], ["evidence/r-1/videos/a.mp4", '"old"']])
+    bucket.add("videos/a.mp4")
+    bucket.add("evidence/r-1/videos/a.mp4")
+    mocks.mockSend.mockImplementation(async (cmd: { constructor: { name: string }; Key?: string }) => {
+      if (cmd.constructor.name === "MockHeadObjectCommand") {
+        if (!bucket.has(cmd.Key!)) throw notFound()
+        return { ContentLength: 12, ETag: etags.get(cmd.Key!) }
+      }
+      return {}
+    })
+    await expect(restoreObjectFromEvidence("videos/a.mp4", "r-1")).rejects.toThrow("different bytes")
+    await expect(moveObjectToEvidence("videos/a.mp4", "r-1")).rejects.toThrow("different bytes")
+    expect(mocks.deleteCalls).toHaveLength(0)
+    expect(mocks.copyCalls).toHaveLength(0)
+  })
+
+  it("a key under a kept prefix (another restriction's evidence included) is never the ordinary side of a move", async () => {
+    await expect(moveObjectToEvidence("evidence/r-0/videos/a.mp4", "r-1")).rejects.toThrow("kept prefix")
+    await expect(restoreObjectFromEvidence("brand/makers/x.svg", "r-1")).rejects.toThrow("kept prefix")
+    expect(mocks.headCalls).toHaveLength(0)
+  })
+
+  it("encodes the copy's source: a key with a space and a non-ASCII letter", async () => {
+    bucket.add("videos/a b é.mp4")
+    expect(await moveObjectToEvidence("videos/a b é.mp4", "r-1")).toBe("moved")
+    expect(mocks.copyCalls[0]).toMatchObject({ CopySource: "/test-bucket/videos/a%20b%20%C3%A9.mp4" })
+  })
+
+  it("no writer writes under the evidence prefix", async () => {
+    await expect(uploadBufferToR2(Buffer.from("x"), "evidence/r-1/videos/a.mp4", "video/mp4")).rejects.toThrow("evidence prefix")
+    expect(mocks.putCalls).toHaveLength(0)
+  })
+
+  it("a copy that does not land leaves the original where it is", async () => {
+    bucket.add("videos/a.mp4")
+    mocks.mockSend.mockImplementation(async (cmd: { constructor: { name: string }; Key?: string }) => {
+      if (cmd.constructor.name === "MockHeadObjectCommand") {
+        if (cmd.Key === "videos/a.mp4") return { ContentLength: 12 }
+        throw notFound()
+      }
+      return {}
+    })
+    await expect(moveObjectToEvidence("videos/a.mp4", "r-1")).rejects.toThrow("did not land")
+    expect(mocks.deleteCalls).toHaveLength(0)
   })
 })
 

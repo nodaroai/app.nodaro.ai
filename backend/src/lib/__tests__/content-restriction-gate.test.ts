@@ -62,6 +62,11 @@ describe("restrictedInputKey", () => {
     expect(await restrictedInputKey({ refs: [{ url: "https://cdn.example.test/videos/evidence.mp4" }] })).toBe("videos/evidence.mp4")
   })
 
+  it("refuses an address under the evidence prefix whatever the set says", async () => {
+    expect(await restrictedInputKey({ imageUrl: "https://cdn.example.test/evidence/r-1/videos/a.mp4" })).toBe("evidence/r-1/videos/a.mp4")
+    expect(await restrictedInputKey({ imageUrl: "https://elsewhere.test/evidence/r-1/a.mp4" })).toBeNull()
+  })
+
   it("logs a refusal with the key and the owner, server side", async () => {
     fake.restricted.add("videos/evidence.mp4")
     await restrictedInputKey({ videoUrl: "https://cdn.example.test/videos/evidence.mp4" }, { userId: "u-9" })

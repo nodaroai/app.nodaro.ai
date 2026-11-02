@@ -17,6 +17,7 @@ import {
 import { sweepStaleSyncJob } from "./sync-sweep.js"
 import { sweepIdleTrendVariantAnchors } from "./trend-variant-anchor-sweep.js"
 import { sweepExpiredHolds } from "./hold-expiry.js"
+import { sweepRestrictionBytes } from "./restriction-bytes.js"
 import { markJobFailed } from "../job-failure.js"
 import { isUserQuietStopped } from "../access-blocks.js"
 import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
@@ -270,6 +271,8 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   // A trend person mask's own job, idle for a day (it waits for the editor; trend-variant-anchor-sweep.ts).
   await sweepIdleTrendVariantAnchors(result)
   await sweepHeldJobsPastTtl(result)
+  // A restriction's bytes not where its side says (migration 583): finished again.
+  await sweepRestrictionBytesLeft(result)
   // R38: a cancelled job's reserved metered LLM hold (kept by the cancel when
   // its call had started) is settled from its ledger after the same grace.
   await sweepCancelledMeteredHolds(result)
@@ -732,6 +735,17 @@ async function sweepStuckUseCaseWrappers(result: ReconcileResult): Promise<void>
  * deployment that registers no job policy pays nothing for the possibility —
  * not even one query per tick.
  */
+async function sweepRestrictionBytesLeft(result: ReconcileResult): Promise<void> {
+  try {
+    const { finished, errors } = await sweepRestrictionBytes()
+    result.swept += finished
+    result.errors += errors
+  } catch (err) {
+    console.error(`[reconcile/cron] restriction-bytes sweep failed:`, err)
+    result.errors++
+  }
+}
+
 async function sweepHeldJobsPastTtl(result: ReconcileResult): Promise<void> {
   try {
     const { expired, errors } = await sweepExpiredHolds()

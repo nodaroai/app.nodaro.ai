@@ -248,6 +248,7 @@ export default function AdminNodaroMotionPage() {
                       bodyMissingIn={bodyMissingIn}
                       faceMeshMissingIn={faceMeshMissingIn}
                       depthColormapsMissingIn={depthColormapsMissingIn}
+                      faceMeshPartsMissingIn={faceMeshPartsMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
                           const out = { ...d }

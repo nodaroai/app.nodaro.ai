@@ -132,7 +132,7 @@ export async function isRelayOwnedObject(
  */
 const STEM_PROBE_CHUNK = 100
 
-async function relayStemOwnedKeys(keys: readonly string[]): Promise<Set<string>> {
+async function relayStemOwnedKeys(keys: readonly string[], strict = false): Promise<Set<string>> {
   const keysByCandidate = new Map<string, string[]>()
   for (const key of keys) {
     for (const candidate of objectKeyJobIdCandidates(key)) {
@@ -156,6 +156,7 @@ async function relayStemOwnedKeys(keys: readonly string[]): Promise<Set<string>>
         .select("relay_job_id")
         .in("relay_job_id", chunk)
       if (error) {
+        if (strict) throw new Error(`relay stem probe could not be read: ${error.message}`)
         console.warn(
           `[relay-delete] stem probe failed for ${chunk.length} candidate(s): ${error.message} ` +
             "— treating them as ours (the same error policy as isRelayOwnedObject)",
@@ -167,6 +168,7 @@ async function relayStemOwnedKeys(keys: readonly string[]): Promise<Set<string>>
         if (hits) for (const key of hits) owned.add(key)
       }
     } catch (err) {
+      if (strict) throw err
       console.warn("[relay-delete] stem probe threw:", err)
     }
   }
@@ -201,24 +203,39 @@ async function relayStemOwnedKeys(keys: readonly string[]): Promise<Set<string>>
  * mainline. Per probe, so one failing read never discards the other's answer.
  */
 export async function relayOwnedKeys(keys: readonly string[]): Promise<Set<string>> {
+  return relayOwnedKeysWith(keys, false)
+}
+
+/**
+ * `relayOwnedKeys` for a caller that must not act on "unknown": a lookup
+ * that fails THROWS instead of answering the empty set. The restriction's
+ * bytes move (lib/content-restriction-bytes.ts) asks this way — moving the
+ * relay target's bytes would break the hosted instance, so a question that
+ * cannot be answered leaves every key where it is.
+ */
+export async function relayOwnedKeysStrict(keys: readonly string[]): Promise<Set<string>> {
+  return relayOwnedKeysWith(keys, true)
+}
+
+async function relayOwnedKeysWith(keys: readonly string[], strict: boolean): Promise<Set<string>> {
   const unique = [...new Set(keys.filter((k) => !!k))]
   if (unique.length === 0) return new Set()
   // The arming gate, as in `isRelayOwnedObject`: no relay target, no query.
   if (!relayPossible()) return new Set()
 
-  const marked = await relayMarkedAssetKeys(unique)
+  const marked = await relayMarkedAssetKeys(unique, strict)
   // The stem probe is asked only about what the marker did NOT settle, and it
   // is the half that answers after the marked row itself was deleted — the
   // "<entity> delete after library delete" residual the note above used to
   // merely document.
   const undecided = unique.filter((k) => !marked.has(k))
   if (undecided.length === 0) return marked
-  for (const key of await relayStemOwnedKeys(undecided)) marked.add(key)
+  for (const key of await relayStemOwnedKeys(undecided, strict)) marked.add(key)
   return marked
 }
 
 /** Marker (1) of the batch rule: `assets.relay_job_id`, migration 384. */
-async function relayMarkedAssetKeys(unique: readonly string[]): Promise<Set<string>> {
+async function relayMarkedAssetKeys(unique: readonly string[], strict = false): Promise<Set<string>> {
   try {
     const { data, error } = await supabase
       .from("assets")
@@ -226,6 +243,7 @@ async function relayMarkedAssetKeys(unique: readonly string[]): Promise<Set<stri
       .in("r2_key", unique)
       .not("relay_job_id", "is", null)
     if (error) {
+      if (strict) throw new Error(`relay provenance could not be read: ${error.message}`)
       console.warn(
         `[relay-delete] could not read relay provenance for ${unique.length} key(s): ${error.message} ` +
           "— treating them as ours (the same error policy as isRelayOwnedObject)",
@@ -235,6 +253,7 @@ async function relayMarkedAssetKeys(unique: readonly string[]): Promise<Set<stri
     const rows = (data ?? []) as Array<{ r2_key: string | null; relay_job_id: string | null }>
     return new Set(rows.filter((r) => !!r.r2_key && !!r.relay_job_id).map((r) => r.r2_key as string))
   } catch (err) {
+    if (strict) throw err
     console.warn("[relay-delete] batch relay provenance read threw:", err)
     return new Set()
   }

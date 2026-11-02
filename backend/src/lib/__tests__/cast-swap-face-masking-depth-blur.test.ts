@@ -31,8 +31,9 @@ describe("the schemas", () => {
     expect(faceMaskingMotionSchema.parse(FD)).toEqual(FD)
   })
 
-  it("the Precise setting and a trend's refuse both keys (strict): they are the Motion setting's alone", () => {
-    expect(faceMaskingSchema.safeParse({ mode: "always", faceMesh: true, faceMeshParts: "mouth" }).success).toBe(false)
+  it("the Precise setting takes the face mesh's parts but refuses the depth blur; a trend's refuses both (strict)", () => {
+    expect(faceMaskingSchema.safeParse({ mode: "always", faceMesh: true, faceMeshParts: "mouth" }).success).toBe(true)
+    expect(faceMaskingSchema.safeParse({ mode: "always", faceMesh: true, faceMeshParts: "nose" }).success).toBe(false)
     expect(faceMaskingSchema.safeParse({ mode: "always", depthBlur: 10 }).success).toBe(false)
     expect(faceMaskingWithMarksSchema.safeParse({ ...FD, depthBlur: 10 }).success).toBe(false)
     expect(faceMaskingWithMarksSchema.safeParse({ ...FD, faceMesh: true, faceMeshParts: "features" }).success).toBe(false)

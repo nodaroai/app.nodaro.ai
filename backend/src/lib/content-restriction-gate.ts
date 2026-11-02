@@ -13,6 +13,8 @@
  * barest config never reaches either.
  */
 
+import { isEvidenceKey } from "./evidence-keys.js"
+
 /** The policy id a refusal of this gate carries, beside the account block's. */
 export const CONTENT_RESTRICTION_POLICY_ID = "platform:content-restriction"
 /** The proxies' sentence; the request's refusal says the same and no more. */
@@ -68,12 +70,13 @@ export async function restrictedInputKey(
   if (addresses.length === 0) return null
   // Only an address of ours can name a restricted key; the set is asked for
   // nothing else, and asked as this server knows it now, never waited on
-  // (content-restriction-set.ts `restrictedKeysNow`).
+  // (content-restriction-set.ts `restrictedKeysNow`). An address under the
+  // evidence prefix (migration 583) is refused whatever the set says.
   const { restrictedKeyOfAddress } = await import("./content-restriction-address.js")
   const keys = addresses.map(restrictedKeyOfAddress).filter((k): k is string => typeof k === "string" && k.length > 0)
   if (keys.length === 0) return null
   const restricted = (await import("./content-restriction-set.js")).restrictedKeysNow()
-  const hit = keys.find((key) => restricted.has(key)) ?? null
+  const hit = keys.find((key) => restricted.has(key) || isEvidenceKey(key)) ?? null
   if (hit) console.warn(`[content-restriction] refused a job input naming restricted key ${hit}${who?.userId ? ` (user ${who.userId})` : ""}`)
   return hit
 }

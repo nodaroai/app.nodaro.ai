@@ -163,8 +163,8 @@ export interface FaceMasking {
    */
   depthBlur?: number
   /**
-   * What the face mesh draws (decided 2026-11-02; the Nodaro Motion Motion
-   * setting's alone, as `depthBlur`): `"full"` (left out), `"features"` or
+   * What the face mesh draws (decided 2026-11-02; the Nodaro Motion settings',
+   * Precise and Motion, never a trend's): `"full"` (left out), `"features"` or
    * `"mouth"` (`FaceMaskingFaceMeshParts`). Read through `faceMeshPartsSent`
    * (the face mesh on, not `"full"`), so a full mesh is never sent the key.
    * An engine draws a part only when it lists it in `castSwap.faceMeshParts`
@@ -309,10 +309,11 @@ function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
  * A face masking setting without marks: what a run takes, and Nodaro Motion's
  * defaults (`nodaro_motion_masking`). A direct run's setting masks faces only:
  * a depth mode is a trend's (a direct run picks `style` instead), so any
- * `source` but `"faces"` is refused here.
+ * `source` but `"faces"` is refused here. Beside the shared keys it takes the
+ * face mesh's `faceMeshParts`, as the Motion setting does.
  */
 export const faceMaskingSchema: z.ZodType<FaceMasking> = z
-  .strictObject(faceMaskingShape)
+  .strictObject({ ...faceMaskingShape, faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional() })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
   .refine((m) => faceMaskingSourceOf(m) === "faces", { path: ["source"], message: 'A direct run masks faces only: clip preparation is a trend setting (a direct run uses "style").' })

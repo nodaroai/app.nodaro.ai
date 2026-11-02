@@ -4,7 +4,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
-import { ContentRestrictionError, liftRestriction, listRestrictions, restrictAsset, restrictJob } from "../../lib/content-restrictions.js"
+import { ContentRestrictionError, finishRestrictionBytes, liftRestriction, listRestrictions, restrictAsset, restrictJob } from "../../lib/content-restrictions.js"
 
 /**
  * Admin → content restrictions (migration 581; lib/content-restrictions.ts):
@@ -16,6 +16,7 @@ import { ContentRestrictionError, liftRestriction, listRestrictions, restrictAss
  *   GET  /v1/admin/content-restrictions?active=1  — the records, newest first.
  *   POST /v1/admin/content-restrictions           — { assetId | jobId, reason, complaintId? }
  *   POST /v1/admin/content-restrictions/:id/lift  — { reason? }
+ *   POST /v1/admin/content-restrictions/:id/bytes — finish the bytes' move (or move back) the record says is left
  */
 
 const restrictBody = z
@@ -82,6 +83,24 @@ export async function adminContentRestrictionsRoutes(app: FastifyInstance) {
         return reply.status(e.code === "not_found" ? 404 : 409).send({ error: { code: e.code, message: e.message } })
       }
       return sendInternalError(reply, req, e, "Failed to lift the restriction")
+    }
+  })
+
+  app.post("/v1/admin/content-restrictions/:id/bytes", { preHandler: requireAdmin }, async (req, reply) => {
+    const params = liftParams.safeParse(req.params)
+    if (!params.success) return reply.status(400).send({ error: { code: "validation_error", message: "Invalid restriction" } })
+    try {
+      const restriction = await finishRestrictionBytes(params.data.id)
+      await audit(req, "content_restriction_bytes", restriction.assetId ? "asset" : "job", restriction.assetId ?? restriction.jobId ?? restriction.id, {
+        restrictionId: restriction.id,
+        phase: restriction.liftedAt ? "lift" : "restrict",
+      })
+      return { data: restriction }
+    } catch (e) {
+      if (e instanceof ContentRestrictionError) {
+        return reply.status(e.code === "not_found" ? 404 : 409).send({ error: { code: e.code, message: e.message } })
+      }
+      return sendInternalError(reply, req, e, "Failed to finish the restriction's bytes")
     }
   })
 }
