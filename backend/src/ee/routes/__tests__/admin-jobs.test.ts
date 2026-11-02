@@ -148,6 +148,28 @@ describe("GET /v1/admin/jobs", () => {
     expect(body.data[0].display_cost).toBe(0.01)
   })
 
+  it("times the wait before the handler and each read in a Server-Timing header", async () => {
+    mockRpc.mockResolvedValue({ data: [{ id: "job-1" }], error: null })
+    mockFrom.mockReturnValue(jobsChain({ data: [{ id: "job-1", status: "completed", user_id: VALID_UUID }], error: null }))
+
+    const res = await adminGet("/v1/admin/jobs?page=0&pageSize=50")
+    expect(res.statusCode).toBe(200)
+    const names = String(res.headers["server-timing"]).split(", ").map((entry) => {
+      expect(entry).toMatch(/^[a-z]+;dur=\d+\.\d$/)
+      return entry.split(";")[0]
+    })
+    expect(names).toEqual(["auth", "page", "rows", "steps", "logs", "side", "total"])
+  })
+
+  it("times an empty page and an address lookup too", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null })
+    mockFrom.mockReturnValue(jobsChain({ data: [{ id: VALID_UUID, email: "a@b.co" }], error: null }))
+
+    const res = await adminGet("/v1/admin/jobs?userEmail=a@b.co")
+    expect(res.statusCode).toBe(200)
+    expect(String(res.headers["server-timing"]).split(", ").map((e) => e.split(";")[0])).toEqual(["auth", "user", "page", "total"])
+  })
+
   it("pages by offset — page=2 pageSize=50 asks admin_job_page for offset 100, limit 50", async () => {
     const res = await adminGet("/v1/admin/jobs?page=2&pageSize=50")
     expect(res.statusCode).toBe(200)
