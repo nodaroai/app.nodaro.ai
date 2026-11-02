@@ -65,10 +65,28 @@ function useInvalidateRadar() {
   return () => qc.invalidateQueries({ queryKey: queryKeys.admin.trendRadar() })
 }
 
+/** The declaration an admin confirms before a candidate's top post is downloaded (public; cached for the session). */
+export function useRightsDeclaration(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.admin.trendRadarDeclaration(),
+    queryFn: () => radarClient.contentRights.declaration(),
+    enabled: enabled && hasAdmin(),
+    staleTime: Infinity,
+    retry,
+  })
+}
+
+/**
+ * Approve: with a top post, the admin's confirmation of the declaration for
+ * its link is recorded first and rides into the clip's download.
+ */
 export function useApproveCandidate() {
   const invalidate = useInvalidateRadar()
   return useMutation({
-    mutationFn: (id: string) => radarClient.trendRadar.approve(id),
+    mutationFn: async ({ id, confirm }: { id: string; confirm?: { url: string; declarationVersion: number } }) => {
+      const confirmation = confirm ? await radarClient.contentRights.confirm(confirm) : null
+      return radarClient.trendRadar.approve(id, confirmation ? { confirmationId: confirmation.id } : {})
+    },
     onSuccess: () => void invalidate(),
   })
 }

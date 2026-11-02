@@ -18,9 +18,19 @@ const state = vi.hoisted(() => ({
   runs: 0,
   due: true,
   claimedDay: null as string | null,
+  gateAsked: [] as Array<{ url: string; rights: unknown }>,
+  gateRefuses: false,
 }))
 
 vi.mock("../../../lib/admin-check.js", () => ({ checkIsAdmin: vi.fn(async () => state.admin), ADMIN_ROLES: ["admin", "super_admin"] }))
+// The import gate has its own tests; here it records what it was asked and refuses on demand.
+vi.mock("../../../lib/import-gate.js", () => ({
+  isImportRefusal: (e: unknown) => e instanceof Error && "code" in e,
+  requireImportAllowed: vi.fn(async (url: string, rights: unknown) => {
+    state.gateAsked.push({ url, rights })
+    if (state.gateRefuses) throw Object.assign(new Error("That confirmation is for another link. Confirm the link you are importing."), { code: "rights_confirmation_mismatch" })
+  }),
+}))
 vi.mock("../admin-trends-lifecycle.js", () => ({
   audit: vi.fn(async (_req: unknown, ...rest: unknown[]) => {
     state.audits.push(rest)
@@ -98,6 +108,8 @@ beforeEach(async () => {
   state.audits = []
   state.createdTrends = []
   state.attached = []
+  state.gateAsked = []
+  state.gateRefuses = false
   state.runs = 0
   state.due = true
   state.claimedDay = null
@@ -150,14 +162,30 @@ describe("the queue and one candidate", () => {
 
 describe("the decisions", () => {
   it("approve creates a draft trend named after the candidate, once, and attaches the top post's clip as the admin", async () => {
-    const res = await app.inject({ method: "POST", url: `/v1/trend-radar/candidates/${CANDIDATE}/approve`, headers: asAdmin })
+    expect((await app.inject({ method: "POST", url: `/v1/trend-radar/candidates/${CANDIDATE}/approve`, headers: asAdmin, payload: { confirmationId: "nope" } })).statusCode).toBe(400)
+    // A misspelled key is refused, never a silent download with no confirmation.
+    expect((await app.inject({ method: "POST", url: `/v1/trend-radar/candidates/${CANDIDATE}/approve`, headers: asAdmin, payload: { confirmation_id: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" } })).statusCode).toBe(400)
+    // A confirmation that does not fit the top post as the server has it is a 403 before anything is claimed.
+    state.gateRefuses = true
+    const refused = await app.inject({ method: "POST", url: `/v1/trend-radar/candidates/${CANDIDATE}/approve`, headers: asAdmin, payload: { confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" } })
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error.code).toBe("rights_confirmation_mismatch")
+    expect(state.createdTrends).toEqual([])
+    expect(state.candidates.get(CANDIDATE)!.status).not.toBe("approved")
+    state.gateRefuses = false
+    const res = await app.inject({ method: "POST", url: `/v1/trend-radar/candidates/${CANDIDATE}/approve`, headers: asAdmin, payload: { confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" } })
     expect(res.statusCode).toBe(200)
+    expect(state.gateAsked).toEqual([
+      { url: "https://www.tiktok.com/@a/video/7300000000000000001", rights: { userId: USER, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01", lane: "admin" } },
+      { url: "https://www.tiktok.com/@a/video/7300000000000000001", rights: { userId: USER, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01", lane: "admin" } },
+    ])
     expect(res.json()).toEqual({ data: { trendId: "trend-for-phone-on-train", clip: "attaching" } })
     expect(state.createdTrends).toEqual([{ slug: "phone-on-train", data: expect.objectContaining({ name: { en: "phone on train" }, source: null, slots: [] }), createdBy: USER }])
     expect(state.candidates.get(CANDIDATE)!.status).toBe("approved")
     expect(state.audits[0]).toEqual(["approve_trend_candidate", "trend_radar_candidate", CANDIDATE, { trendId: "trend-for-phone-on-train", slug: "phone-on-train" }])
     await new Promise((r) => setTimeout(r, 0))
-    expect(state.attached).toEqual([{ trendId: "trend-for-phone-on-train", candidateId: CANDIDATE, post: expect.objectContaining({ url: "https://www.tiktok.com/@a/video/7300000000000000001" }), userId: USER }])
+    // The admin's confirmation for the top post's link rides into the clip's download.
+    expect(state.attached).toEqual([{ trendId: "trend-for-phone-on-train", candidateId: CANDIDATE, post: expect.objectContaining({ url: "https://www.tiktok.com/@a/video/7300000000000000001" }), userId: USER, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" }])
     // Again: the same trend, no second draft, no second download.
     const again = await app.inject({ method: "POST", url: `/v1/trend-radar/candidates/${CANDIDATE}/approve`, headers: asAdmin })
     expect(again.json()).toEqual({ data: { trendId: "trend-for-phone-on-train", clip: "none" } })
