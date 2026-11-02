@@ -349,48 +349,79 @@ function grantedSlot(admission: Admission): TakenSlot {
   }
 }
 
+/** A take fired while limits are locked (fireWithoutWaiting). */
+export interface FiredTake<A> {
+  /** What the take landed — or, should it fail, what the failure stands for. Never rejects. */
+  readonly landed: Promise<A>
+  /** Free what the take landed, once, whenever it lands. Never waits for the gate; calling it again changes nothing. */
+  release(outcome: ReleaseOutcome): Promise<void>
+}
+
 /**
- * Fire the take of `e` and answer at once (limits locked: measured, never
- * waited for). The slot names the lease id the take asked for, so the call
- * can run under it before the gate answers. Its release never waits for the
- * gate: it chains on the take and frees the lease the take landed — once,
- * whenever the take lands — and nothing when the take failed (the call was
- * then counted as ungated). The lease is renewed from when the take lands
- * until it is released. The take never waits in line: a slot the gate would
- * not grant at once (it always does while limits are off) is withdrawn and
- * counted as ungated.
+ * The one shape of a take measured without waiting (limits locked), shared
+ * by a call's slot (takeWithoutWaiting) and a worker's pickup admission
+ * (worker-admit.ts): fire `take`, never await it; a take that fails becomes
+ * `failed(err)` (counted as ungated by the caller); the release is asked at
+ * most once, chains on the take and frees exactly what it landed (`free`),
+ * whenever it lands. `take` is handed `releasing()`, true from the moment a
+ * release is asked: a take that lands after it must start no renewals for
+ * what it landed, which is about to be freed.
  */
-function takeWithoutWaiting(e: EntryRequest): TakenSlot {
-  const leaseId = randomUUID()
-  // No signal: a caller that goes away after this point is still counted.
-  const taken: Promise<Admission> = admitEntry({ ...e, leaseId, signal: undefined, waitSignal: undefined, req: { ...e.req, noWait: true } })
-    .catch((err: unknown) => {
-      // A final wait error (the gate would not grant at once): the call ran anyway, uncounted by the gate.
-      if (!(err instanceof LaneBusyError)) warnLaneRateLimited("a measured take failed", err)
-      countUngated(e.req.jobType)
-      return { leaseId: null }
-    })
+export function fireWithoutWaiting<A>(
+  take: (releasing: () => boolean) => Promise<A>,
+  failed: (err: unknown) => A,
+  free: (landed: A, outcome: ReleaseOutcome) => Promise<void>,
+): FiredTake<A> {
   let releasing = false
-  let keep: { stop(): void } | null = null
-  void taken.then((a) => {
-    if (a.leaseId !== null && !releasing) keep = keepLeaseAlive(a.leaseId, a.meta)
-  })
+  const landed = take(() => releasing).catch(failed)
   let released: Promise<void> | null = null
   return {
-    leaseId,
+    landed,
     release: (outcome) => {
       if (!released) {
         releasing = true
-        released = taken.then(async (a) => {
-          keep?.stop()
-          // The lease the take actually landed: never the id it asked for, which may not exist.
-          if (a.leaseId !== null) await releaseQuietly(a.leaseId, outcome)
-        })
+        released = landed.then((a) => free(a, outcome))
       }
       // Never waits for the gate: the release lands whenever the take does.
       return Promise.resolve()
     },
   }
+}
+
+/**
+ * Fire the take of `e` and answer at once (limits locked: measured, never
+ * waited for — fireWithoutWaiting). The slot names the lease id the take
+ * asked for, so the call can run under it before the gate answers. Its
+ * release frees the lease the take landed — once, whenever the take lands —
+ * and nothing when the take failed (the call was then counted as ungated).
+ * The lease is renewed from when the take lands until it is released, never
+ * when the release came first. The take never waits in line: a slot the gate
+ * would not grant at once (it always does while limits are off) is withdrawn
+ * and counted as ungated.
+ */
+function takeWithoutWaiting(e: EntryRequest): TakenSlot {
+  const leaseId = randomUUID()
+  let keep: { stop(): void } | null = null
+  const fired = fireWithoutWaiting<Admission>(
+    // No signal: a caller that goes away after this point is still counted.
+    (releasing) => admitEntry({ ...e, leaseId, signal: undefined, waitSignal: undefined, req: { ...e.req, noWait: true } })
+      .then((a) => {
+        if (a.leaseId !== null && !releasing()) keep = keepLeaseAlive(a.leaseId, a.meta)
+        return a
+      }),
+    (err) => {
+      // A final wait error (the gate would not grant at once): the call ran anyway, uncounted by the gate.
+      if (!(err instanceof LaneBusyError)) warnLaneRateLimited("a measured take failed", err)
+      countUngated(e.req.jobType)
+      return { leaseId: null }
+    },
+    async (a, outcome) => {
+      keep?.stop()
+      // The lease the take actually landed: never the id it asked for, which may not exist.
+      if (a.leaseId !== null) await releaseQuietly(a.leaseId, outcome)
+    },
+  )
+  return { leaseId, release: fired.release }
 }
 
 /** Refuse a call whose caller already gave up, before it asks for a slot (the one refusal before a take). */

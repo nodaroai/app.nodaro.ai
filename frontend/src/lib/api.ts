@@ -6356,6 +6356,9 @@ export interface Job {
   source_detail?: string | null
 }
 
+import type { JobQueueInfo } from "@nodaro/sdk/jobs"
+export type { JobQueueInfo }
+
 /**
  * Lean status shape returned by `GET /v1/jobs/:id/status`. Only the fields a
  * poll loop needs — skips `input_data` JSONB + cost/timestamp columns + the
@@ -6379,6 +6382,10 @@ export type JobStatusLean = {
   error_hint?: JobErrorHint | null
   /** When the job finished, on the server's clock (null until it has): a result the editor lands from it is stamped with it. */
   completed_at?: string | null
+  /** Where the job stands in line, present only while its status is `queued`
+   *  (waiting for a free concurrency slot). The node-owning poll funnel keeps
+   *  it on the node as `queueInfo`, which the queue badge reads. */
+  queue?: JobQueueInfo
 }
 
 /**
@@ -9836,6 +9843,32 @@ export async function getComponentWaitLimit(jobId: string): Promise<ComponentWai
     `/v1/component/execute/${encodeURIComponent(jobId)}/wait-limit`,
     "apiErr.readTheComponentSWaitLimit",
   )
+  return data
+}
+
+/** How many jobs of each kind a concurrency line runs at once. */
+export interface LaneSizes {
+  provider: number
+  llm: number
+  local: number
+  run: number
+}
+
+/**
+ * `GET /v1/me/lanes`: whether concurrency lanes are enforced, and the caller's
+ * lines — the personal one, and the one the request is billed to when that is
+ * another (a workspace's, or the deployment payer's). Exactly one line is
+ * `current`: the billed one. With `workflowId`, the line that workflow's jobs
+ * count in (its workspace wins over the selected one).
+ */
+export interface MyLanes {
+  enforced: boolean
+  lines: Array<{ payer: string; current: boolean; sizes: LaneSizes }>
+}
+
+export async function getMyLanes(opts: { workflowId?: string; signal?: AbortSignal } = {}): Promise<MyLanes> {
+  const query = opts.workflowId ? `?workflowId=${encodeURIComponent(opts.workflowId)}` : ""
+  const { data } = await apiRequest<{ data: MyLanes }>(`/v1/me/lanes${query}`, "apiErr.loadConcurrencyLimits", opts.signal ? { signal: opts.signal } : undefined)
   return data
 }
 

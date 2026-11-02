@@ -15,7 +15,7 @@
  * engine) and assert the matching contract goes FAIL.
  *
  * Scope on purpose: this file asserts the Scene3D, Video Overlay, Speaker Map, Site Capture,
- * Tighten Episode, Chapters, Trailer, Clip Pack and Speaker Layout contracts only. The stub is faithful enough for the
+ * Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout and concurrency lanes contracts only. The stub is faithful enough for the
  * probe to reach them, not a second implementation of the platform — the
  * other contracts are asserted against the real image by
  * `.github/workflows/community-e2e.yml`.
@@ -60,6 +60,9 @@ const CLIP_PACK = "Clip Pack on an unconnected install: hidden from discovery, r
 
 /** The Speaker Layout contract name, spelled exactly as the probe records it. */
 const SPEAKER_LAYOUT = "Speaker Layout on an unconnected install: hidden from discovery, refused 503 before any job"
+
+/** The concurrency lanes contract name, spelled exactly as the probe records it. */
+const LANES = "concurrency lanes report the env sizes and are not enforced on a fresh install"
 
 /** The entity search contract name, spelled exactly as the probe records it. */
 const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
@@ -202,6 +205,11 @@ function communityShape() {
     // GET /v1/characters?q= — (rows, q) => the rows the list answers with, or
     // { status, body } for a refusal.
     characterSearch: wordSearch,
+    // GET /v1/me/lanes — the caller's lines with the LANE_*_PER_USER defaults.
+    lanes: {
+      status: 200,
+      body: { data: { enforced: false, lines: [{ payer: "user:u_1", current: true, sizes: { provider: 12, llm: 24, local: 24, run: 12 } }] } },
+    },
   }
 }
 
@@ -253,6 +261,7 @@ function stubServer(shape) {
         return send(200, { access_token: "stub-session-token", user: { id: "u_1" } })
       }
       if (path === "/v1/workflows" && req.method === "POST") return send(201, { id: "wf_1" })
+      if (path === "/v1/me/lanes") return send(shape.lanes.status, shape.lanes.body)
 
       // ── the saved-entity search ───────────────────────────────────────────
       if (path === "/v1/projects" && req.method === "POST") return send(201, { data: { id: "proj_1" } })
@@ -889,4 +898,44 @@ test("a Speaker Layout refusal that left a job row behind fails the Speaker Layo
     shape.speakerLayout = { ...shape.speakerLayout, createsJob: true }
   })
   assertContract(out, SPEAKER_LAYOUT, "FAIL")
+})
+
+test("the keyless community shape passes the concurrency lanes contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, LANES, "PASS")
+})
+
+test("lanes reported as enforced fail the concurrency lanes contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.lanes.body.data.enforced = true
+  })
+  assertContract(out, LANES, "FAIL")
+})
+
+test("a size other than the env default fails the concurrency lanes contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.lanes.body.data.lines[0].sizes = { provider: 2, llm: 4, local: 4, run: 2 }
+  })
+  assertContract(out, LANES, "FAIL")
+})
+
+test("a second line on a fresh install fails the concurrency lanes contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.lanes.body.data.lines.push({ payer: "workspace:w_1", current: true, sizes: { provider: 12, llm: 24, local: 24, run: 12 } })
+  })
+  assertContract(out, LANES, "FAIL")
+})
+
+test("a personal line not marked current fails the concurrency lanes contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.lanes.body.data.lines[0].current = false
+  })
+  assertContract(out, LANES, "FAIL")
+})
+
+test("an unregistered lanes route fails the concurrency lanes contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.lanes = { status: 404, body: { error: { code: "not_found", message: "not found" } } }
+  })
+  assertContract(out, LANES, "FAIL")
 })

@@ -12,6 +12,11 @@ const refs = vi.hoisted(() => ({
   gate: null as unknown,
   woken: [] as WakeTarget[][],
 }))
+// Waiting is tested here, so turning limits on is made available; a case sets
+// `lanesAvailable.on = false` for the shipped, locked path.
+const lanesAvailable = vi.hoisted(() => ({ on: true }))
+vi.mock("../enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return lanesAvailable.on } }))
+
 vi.mock("../instance.js", () => ({ concurrencyGate: () => refs.gate }))
 
 const { withdrawFromLane, registerWithdrawWaker, resetWithdrawWakerForTests, LANE_WITHDRAW_DEADLINE_MS } = await import("../withdraw.js")
@@ -45,6 +50,7 @@ const leaseOf = async (jobId: string, ttl = LONG, over: Partial<LaneEntryMeta> =
 
 beforeEach(async () => {
   clock = T0
+  lanesAvailable.on = true
   refs.woken = []
   const store = makeFakeLaneStore()
   gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(store), now: () => clock })
@@ -206,5 +212,34 @@ describe("a ghost — a waiter whose row ended through a path that skipped the w
     expect(await gate.describeWait("c")).toMatchObject({ position: 1 })
     expect((await gate.release(a, "completed")).map((t) => t.jobId)).toEqual(["c"])
     expect((await acquire("c")).granted).toBe(true)
+  })
+})
+
+describe("limits locked (this release): a cancel never waits for the gate", () => {
+  it("returns at once while the gate hangs, and the withdraw still lands when it answers", async () => {
+    // A ghost entry an earlier, enforced spell left behind: the withdraw still clears it.
+    await leaseOf("a")
+    await acquire("b")
+    lanesAvailable.on = false
+    let answer!: () => void
+    const answered = new Promise<void>((r) => { answer = r })
+    const real = gate.withdraw.bind(gate)
+    const withdraw = vi.spyOn(gate, "withdraw").mockImplementation(async (id) => {
+      await answered
+      return real(id)
+    })
+    // Resolves before the gate answers: nothing here waits for it.
+    await withdrawFromLane("b")
+    await vi.waitFor(() => expect(withdraw).toHaveBeenCalledWith("b"))
+    expect(await gate.describeWait("b")).not.toBeNull()
+    answer()
+    await vi.waitFor(async () => expect(await gate.describeWait("b")).toBeNull())
+  })
+
+  it("never rejects when the fired withdraw fails", async () => {
+    lanesAvailable.on = false
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    vi.spyOn(gate, "withdraw").mockRejectedValue(new Error("redis down"))
+    await expect(withdrawFromLane("b")).resolves.toBeUndefined()
   })
 })

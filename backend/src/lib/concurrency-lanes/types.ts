@@ -1,8 +1,10 @@
 // backend/src/lib/concurrency-lanes/types.ts — the vocabulary of per-user
 // concurrency lanes. "Concurrency lane", not "lane": that word already names
 // the LLM serving lane (direct / KIE). Types only; nothing here runs (the
-// closed list of leaf lanes is a value, so it lives in leaf-lanes.ts).
+// closed lists are values, so they live in leaf-lanes.ts and vocabulary.ts,
+// and the unions below are derived from them).
 import type { LeafLane } from "./leaf-lanes.js"
+import type { CONCURRENCY_LANES, WAIT_REASONS } from "./vocabulary.js"
 
 /**
  * The four lanes a user's work is counted in. `provider`: calls to an external
@@ -10,7 +12,7 @@ import type { LeafLane } from "./leaf-lanes.js"
  * compute (ffmpeg, sharp, Remotion); `run`: top-level runs (workflow
  * executions, pipelines, directors, top-level plugin coordinators).
  */
-export type ConcurrencyLane = "provider" | "llm" | "local" | "run"
+export type ConcurrencyLane = (typeof CONCURRENCY_LANES)[number]
 
 /** A lane a leaf job holds one slot of while it runs; `run` is held only by a top-level coordinator. */
 export type { LeafLane } from "./leaf-lanes.js"
@@ -34,7 +36,7 @@ export interface LaneSizes { provider: number; llm: number; local: number; run: 
 export type PayerKey = `user:${string}` | `workspace:${string}` | `deployment:${string}`
 
 /** Why a job is waiting: its own lane is full, the provider's platform ceiling, or the server share. */
-export type WaitReason = "user_lane" | "provider_ceiling" | "server_busy"
+export type WaitReason = (typeof WAIT_REASONS)[number]
 
 /** What a waiting job tells its caller. */
 export interface WaitInfo {

@@ -6,9 +6,11 @@
 // waits, nothing is refused and no answer changes.
 import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-// These tests wait for slots, so they run on the path where limits can be
-// turned on (test-only: this release locks them, and a locked take never waits).
-vi.mock("../../lib/concurrency-lanes/enforcement-available.js", () => ({ LANES_ENFORCEMENT_AVAILABLE: true }))
+// The waiting tests run on the path where limits can be turned on (test-only:
+// this release locks them, and a locked take never waits); the last block runs
+// both with the gate off and locked, as this release ships.
+const availability = vi.hoisted(() => ({ on: true }))
+vi.mock("../../lib/concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return availability.on } }))
 import { ConcurrencyGate, type WakeTarget } from "../../lib/concurrency-lanes/gate.js"
 import type { LaneSizes } from "../../lib/concurrency-lanes/types.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
@@ -262,6 +264,7 @@ function seedApproval(): void {
 const withoutIds = (body: string) => body.replace(/job-\d+/g, "job-N")
 
 beforeEach(async () => {
+  availability.on = true
   m.db.current = strictJobsSupabase()
   for (const fn of [m.creditCheck, m.reserveCreditsForJob, m.commitCredits, m.refundCredits, m.markJobFailed, m.markJobCompleted, m.queueAdd, m.suno.validate, m.suno.generate, m.metaAds.run, m.analyze, m.llmComplete, m.llmStream]) fn.mockClear()
   m.llmComplete.mockImplementation(async () => ({ text: "ok", usage: { inputTokens: 1, outputTokens: 1 } }))
@@ -622,10 +625,14 @@ describe("the voice routes", () => {
   })
 })
 
-describe("with lanes locked (the default), nothing waits and no answer changes", () => {
+describe.each([
+  { available: true, mode: "the gate off" },
+  { available: false, mode: "limits locked, as this release ships" },
+])("with $mode, nothing waits and no answer changes", ({ available }) => {
   let plain: FastifyInstance
 
   beforeEach(async () => {
+    availability.on = available
     await gate.setEnforced(false)
     refs.settings = { ...refs.settings, liveWaitLimitMs: 1 }
     await fillLane("llm")
@@ -655,11 +662,22 @@ describe("with lanes locked (the default), nothing waits and no answer changes",
   }
   const expectSameAnswer = (after: Answer, before: Answer) => expect(answerOf(after)).toEqual(answerOf(before))
 
+  /** The request's takes were made (fired, when locked: they land when they land) and every one released: only the fillers still run. */
+  async function expectCountedAndReleased(acquire: { mock: { calls: unknown[]; results: Array<{ value: unknown }> } }, takes: number): Promise<void> {
+    await until(async () => acquire.mock.calls.length >= takes && ((await laneOf("llm"))?.running ?? 0) === 1 && ((await laneOf("provider"))?.running ?? 0) === 1)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(acquire.mock.calls.length).toBe(takes)
+    // Counted: each take was granted (over the limit, never waiting), then released.
+    for (const r of acquire.mock.results) expect(await r.value).toMatchObject({ granted: true })
+    expect(await laneOf("llm")).toMatchObject({ running: 1, queued: 0 })
+    expect(await laneOf("provider")).toMatchObject({ running: 1, queued: 0 })
+  }
+
   it("an LLM JSON route", async () => {
     const { before, after, acquire } = await both("/v1/llm-chat/generate", CHAT)
     expect(after.statusCode).toBe(200)
     expectSameAnswer(after, before)
-    expect(acquire).toHaveBeenCalledTimes(1)
+    await expectCountedAndReleased(acquire, 1)
     expect(await laneOf("llm")).toMatchObject({ queued: 0 })
   })
 
@@ -668,14 +686,14 @@ describe("with lanes locked (the default), nothing waits and no answer changes",
     expect(after.statusCode).toBe(200)
     expect(sseEvents(after.body).map((e) => e.type)).toEqual(["metadata", "token", "token", "done"])
     expectSameAnswer(after, before)
-    expect(acquire).toHaveBeenCalledTimes(1)
+    await expectCountedAndReleased(acquire, 1)
   })
 
   it("a scraper in its synchronous mode", async () => {
     const { before, after, acquire } = await both("/v1/meta-ads-scrape", META_ADS)
     expect(after.statusCode).toBe(200)
     expectSameAnswer(after, before)
-    expect(acquire).toHaveBeenCalledTimes(1)
+    await expectCountedAndReleased(acquire, 1)
   })
 
   it("a voice route", async () => {
@@ -690,7 +708,7 @@ describe("with lanes locked (the default), nothing waits and no answer changes",
     const after = await post("/v1/suno/voice/generate", create)
     expect(after.statusCode).toBe(200)
     expectSameAnswer(after, before)
-    expect(acquire).toHaveBeenCalledTimes(2)
+    await expectCountedAndReleased(acquire, 2)
   })
 
   it("an approval: its caption runs as before", async () => {
@@ -700,6 +718,6 @@ describe("with lanes locked (the default), nothing waits and no answer changes",
     expect(after.json()).toMatchObject({ canonicalDescription: "a small blue dragon" })
     expectSameAnswer(after, before)
     expect(m.caption).toHaveBeenCalledTimes(2)
-    expect(acquire).toHaveBeenCalledTimes(1)
+    await expectCountedAndReleased(acquire, 1)
   })
 })

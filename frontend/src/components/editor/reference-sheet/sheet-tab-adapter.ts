@@ -1,5 +1,6 @@
 import type { EntityKind } from "@nodaro/shared/entities"
 import { tx } from "@/lib/i18n"
+import { QueuedPollClock } from "@/lib/queued-poll-clock"
 import {
   generateCharacterAsset,
   generateObjectAsset,
@@ -136,7 +137,11 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
  * failed/cancelled. 2s cadence mirrors the in-flight node poll loops.
  */
 const PANEL_POLL_MS = 2000
-const PANEL_POLL_MAX_ATTEMPTS = 150 // ~5 min ceiling so a stuck job can't hang the chain forever
+// ~5 min ceiling so a stuck job can't hang the chain forever. A read that finds
+// the job `queued` — waiting for a free slot — is not counted (up to the most
+// queued time any clock credits, lib/queued-poll-clock.ts): waiting in line is
+// not being stuck.
+const PANEL_POLL_MAX_ATTEMPTS = 150
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function awaitViaPoll(jobs: any, jobId: string, name: string): Promise<string> {
@@ -146,11 +151,12 @@ function awaitViaPoll(jobs: any, jobId: string, name: string): Promise<string> {
   // uses track/trackAndWait), so feature-detect rather than swallow a TypeError.
   if (typeof jobs?.trackJob === "function") jobs.trackJob({ jobId, assetType: "sheet-panel", name })
   return new Promise<string>((resolve, reject) => {
+    const queued = new QueuedPollClock()
     let attempts = 0
     const tick = async () => {
-      attempts += 1
       try {
         const job = await getJobStatusLean(jobId)
+        if (!queued.observe(job.status)) attempts += 1
         if (job.status === "completed") {
           const out = job.output_data as { imageUrl?: string; videoUrl?: string } | undefined
           const url = out?.imageUrl ?? out?.videoUrl
@@ -171,6 +177,8 @@ function awaitViaPoll(jobs: any, jobId: string, name: string): Promise<string> {
         }
       } catch {
         // transient — retry next tick
+        queued.observe(undefined)
+        attempts += 1
       }
       if (attempts >= PANEL_POLL_MAX_ATTEMPTS) {
         reject(new Error("panel generation timed out"))

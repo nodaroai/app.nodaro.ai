@@ -471,9 +471,11 @@ describe("GET /v1/jobs/status", () => {
     // before answering (jobs-render-label.test.ts pins that). The trend-run
     // marker (only `input_data.trend`, never the rest of the input) tells the
     // failure-text mask a trend run; it is removed before answering too.
+    // `lane_queued_at` is the clock of a waiting job's `queue.waitedSeconds`,
+    // read and then removed before answering (jobs-queue.test.ts pins that).
     expect(capturedSelect).toEqual([
       "id", "status", "progress", "output_data", "error_message", "error_hint", "usage_log_id",
-      "job_type", "input_quality:input_data->>quality", "trend_run_marker:input_data->trend",
+      "job_type", "input_quality:input_data->>quality", "trend_run_marker:input_data->trend", "lane_queued_at",
     ])
     for (const secret of ["provider_cost", "display_cost", "credits", "provider"]) {
       expect(capturedSelect).not.toContain(secret)

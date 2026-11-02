@@ -36,6 +36,12 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // running and the watch keeps polling. Pure run state, cleared by the next
   // check that gets through, so it is ALSO in TRANSIENT_RUNTIME_KEYS below.
   "jobConnectionLost",
+  // Where this node's job stands in line while it waits for a free slot
+  // (the job read's `queue` field), shown by the editor's queue badge. Pure run
+  // state, replaced on each read and cleared once the job leaves `queued`, so
+  // it is ALSO in TRANSIENT_RUNTIME_KEYS below: a badge never marks the
+  // workflow dirty and is never saved.
+  "queueInfo",
   "isStreaming",
   "generatedImageUrl",
   "generatedVideoUrl",
@@ -228,6 +234,7 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "currentJobProgress",
   "jobAwaitingReview",
   "jobConnectionLost",
+  "queueInfo",
   "isStreaming",
   "subWorkflowProgress",
   "__listTotal",

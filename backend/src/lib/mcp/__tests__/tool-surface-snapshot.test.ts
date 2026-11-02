@@ -1369,6 +1369,13 @@ const TRENDS_HIDE_ORIGINAL_BYTES = 43
 // = 66 B (33 B on each of the two tools; no headroom left).
 const TRENDS_EXAMPLE_NUMBERING_BYTES = 66
 
+// RAISED 2026-11-02 by a job waiting for a free slot, and nothing else: `get_job` lists `queued`
+// among its statuses and says its guidance gives the place in line; `wait_for_job` says such a job
+// answers `timeout` with its place in line. No tool was added, so the fixture does NOT move.
+// Measured by this suite on top of the Style raise below: 509_914 total − 509_723 = 191 B
+// (no headroom left).
+const JOB_QUEUE_WORDING_BYTES = 191
+
 // RAISED 2026-11-02 by Nodaro Motion's Style choice, and nothing else: `cast_swap`'s `style` says
 // a style an admin forced for the engine overrides it. No tool was added, so the fixture does NOT
 // move. Measured by this suite: 509_723 total − 509_682 = 41 B (no headroom left).
@@ -1544,6 +1551,7 @@ export const TOOL_WIRE_BUDGET = {
     TRENDS_FULL_DEPTH_WORDING_BYTES +
     TRENDS_HIDE_ORIGINAL_BYTES +
     TRENDS_EXAMPLE_NUMBERING_BYTES +
+    JOB_QUEUE_WORDING_BYTES +
     CAST_SWAP_STYLE_FORCED_BYTES,
 }
 

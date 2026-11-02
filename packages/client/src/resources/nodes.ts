@@ -692,7 +692,12 @@ export interface RunAndWaitOptions {
   readonly onProgress?: (status: JobStatusResult) => void
   /** Poll interval in ms. Default 2000. */
   readonly pollMs?: number
-  /** Wall-clock cap before giving up, in ms. Default ~15 min (900_000). */
+  /**
+   * Wall-clock cap before giving up, in ms. Default ~15 min (900_000). Time
+   * the poll sees the job `queued` (waiting for a free slot) does not count,
+   * so waiting for a slot never uses it up; every other status counts as
+   * before.
+   */
   readonly maxMs?: number
   /**
    * `Idempotency-Key` for the submit half. Reuse the same value when retrying a
@@ -719,8 +724,15 @@ export interface RunManyResult {
 // `pollJob`: `completed` resolves output_data, `failed`/`cancelled` throw a
 // JobFailedError — matching studio's `completed | failed | cancelled` set.
 const DEFAULT_POLL_MS = 2000
-/** Safety cap so a stuck job can't poll forever (~15 min at 2s). */
+/** Safety cap so a stuck job can't poll forever (~15 min at 2s); time seen `queued` does not count. */
 const DEFAULT_MAX_MS = 15 * 60 * 1000
+/**
+ * The most time seen `queued` that extends `maxMs`: 24 h 30 min. The
+ * platform ends every wait for a slot before then (a job that waits too
+ * long fails with a `queue-timeout` hint), so this only bounds the wait if a
+ * job were somehow left `queued`.
+ */
+const MAX_QUEUED_CREDIT_MS = (24 * 60 + 30) * 60 * 1000
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise<void>((resolve, reject) => {
@@ -1078,7 +1090,10 @@ export class NodesResource {
   /** Poll an already-kicked job id until it stops moving; resolve output_data
    *  or throw. Two non-terminal statuses end the loop: an abort, and
    *  `pending_review` (a job policy held the output for a human — see
-   *  {@link JobHeldError}). */
+   *  {@link JobHeldError}). `maxMs` counts from the first poll, as it always
+   *  has, and is extended by the time the job was seen `queued` (waiting for a
+   *  free slot): the stretch since the previous read, each time a read finds
+   *  it queued — so waiting for a slot never uses it up. */
   private async pollUntilSettled(
     jobId: string,
     label: string,
@@ -1086,10 +1101,19 @@ export class NodesResource {
   ): Promise<NodeJobOutput> {
     const pollMs = opts.pollMs ?? DEFAULT_POLL_MS
     const maxMs = opts.maxMs ?? DEFAULT_MAX_MS
-    const deadline = Date.now() + maxMs
+    const startedAt = Date.now()
+    /** When the previous read returned (or the wait began). */
+    let lastReadAt = startedAt
+    /** The time the job was seen `queued`, which `maxMs` does not count. */
+    let queuedMs = 0
     for (;;) {
       if (opts.signal?.aborted) throw new JobAbortedError(undefined, jobId)
       const { data } = await this.client.jobs.getStatus(jobId)
+      const readAt = Date.now()
+      if (data.status === "queued") {
+        queuedMs = Math.min(MAX_QUEUED_CREDIT_MS, queuedMs + Math.max(0, readAt - lastReadAt))
+      }
+      lastReadAt = readAt
       opts.onProgress?.(data)
       if (data.status === "completed") {
         return (data.output_data ?? {}) as NodeJobOutput
@@ -1109,7 +1133,7 @@ export class NodesResource {
       if (data.status === "pending_review") {
         throw new JobHeldError(`${label} is awaiting review`, jobId)
       }
-      if (Date.now() > deadline) {
+      if (Date.now() > startedAt + maxMs + queuedMs) {
         throw new JobTimeoutError(`${label} timed out`, jobId, maxMs)
       }
       await sleep(pollMs, opts.signal)

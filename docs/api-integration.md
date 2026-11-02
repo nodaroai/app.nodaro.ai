@@ -4003,8 +4003,8 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&source=&favorited=&rating=&batchId=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `source` is one or more of the surfaces that created the job (`mcp`, `cli`, `sdk`, `web`, `extension`, `app`, `api`, `internal` — the job's `source` field), comma-separated or repeated; `source=mcp` lists what your MCP clients made, and an unknown value is `400 validation_error`. `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). `batchId` matches `input_data.batchId` — the jobs of one generate-image batch ([§ 4g](#4g-several-images-in-one-call-count-models)). Every filter is exact-match and they combine with AND. Every job carries `favorited` and `rating`. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
-| `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
-| `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
+| `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status, queue? }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
+| `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint, queue? }[] }` (no `credit_status` on this route). |
 
 An Apply EDL job's `output_data` says what the render was cut from: `quality` (`"proxy"` is a preview), `clipKey` (the plan clip, when one was given), `planBasis` (the plan value, when one was given: `POST /v1/apply-edl` accepts an optional `planBasis` of 16 lowercase hex digits, `renderReadBasis` in `@nodaro/shared`) and `renderBasis` (always: the server's fingerprint of the render's `output`, `crossfadeMs` and the effective source URLs). See the SDK's [`applyEdl`](./sdk-reference.md#applyedlinput) for the full parameter list.
 
@@ -4016,6 +4016,119 @@ editor but are equally suited to external polling clients. `input_data` and
 `output_data` are public projections: server-only fields such as Recast's
 private pre-watermark remux base are removed recursively for every caller,
 including administrators.
+
+<a id="waiting-for-a-slot"></a>
+### Waiting for a slot (`queue`)
+
+A job, a workflow run or a pipeline that is waiting for a free slot says where
+it stands in a `queue` field. The field is present **only while it waits**. It
+is absent on every other read, and absent when the server could not read the
+line at that moment.
+
+**This release never makes anything wait for a slot, so `queue` never
+appears yet.** Clients can handle the field now. Nothing else in these answers
+changes.
+
+| Read | When `queue` is present |
+|---|---|
+| `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs/status`, `POST /v1/jobs/batch-status` | The job's `status` is `queued`. |
+| `GET /v1/workflow-executions/:id` | The run is waiting for its turn. Its `status` stays `pending`. A single-node job read through this route carries it as on `GET /v1/jobs/:id`. |
+| `GET /v1/api/status/:execId` | The run is waiting for its turn. Its `status` stays `pending`. |
+| `POST /v1/api/run?wait=true` | The wait timed out while the run was still waiting for its turn: the `202` answer (`status: "pending"`) carries it. |
+| `GET /v1/pipelines/:id` | The pipeline is waiting for its turn. Its `status` stays `queued`. |
+
+```json
+"queue": {
+  "lane": "provider",
+  "position": 2,
+  "limit": 4,
+  "running": 4,
+  "reason": "user_lane",
+  "waitedSeconds": 37,
+  "upgradeHint": "plan"
+}
+```
+
+- `lane` is the kind of work it waits to run as: `provider` (a call to an AI
+  provider), `llm` (a text model call), `local` (processing on our servers) or
+  `run` (a whole workflow run or pipeline).
+- `position` is its place in line: `1` runs next.
+- `limit` is how many of that kind the line it waits in runs at once, and
+  `running` how many run in that line now. The line is yours, or the
+  workspace's when the work is billed to a workspace; a workspace line is
+  shared by its members, so `running` counts their work too. Both are `0` when
+  it waits for the server rather than in a line (`reason: "server_busy"`).
+- `reason`: `user_lane` (the line is full: work of that kind already fills its
+  slots), `provider_ceiling` (the provider is busy across the platform) or
+  `server_busy` (the server is busy across the platform).
+- `waitedSeconds` is how long it has waited so far, counted from when it
+  first started waiting for a slot.
+- `upgradeHint` is set only when the line itself is full
+  (`reason: "user_lane"`), and says what would let more run at once.
+  `"workspace"`: the work is billed to a workspace, whose plan sets the line's
+  slots. `"plan"`: a bigger plan would help — work billed to you (or to the
+  account that pays for your install) on a plan below Business. It is `null`
+  for a wait on the provider or the server (a bigger plan does not shorten
+  those), on Business and above, and when the plan could not be read.
+
+The field carries counts only, never who else is in the line. The batch reads
+answer every waiting job of the request from one read of the line.
+
+A single-node job listed by `GET /v1/workflows/:id/executions` or
+`GET /v1/workflow-executions` (and read by `GET /v1/workflow-executions/:id`)
+shows as `pending` while it waits; its one
+entry in `nodeStates` then also carries `"queued": true` and, when known,
+`"waitedSeconds"`, counted the same way. Both keys are absent once it starts,
+and absent in this release.
+
+<a id="your-lanes"></a>
+### Your lanes (`GET /v1/me/lanes`)
+
+`GET /v1/me/lanes` says whether concurrency limits are enforced on this server
+and how many jobs of each kind your own lines run at once.
+
+**Who may call it.** It answers a signed-in session, a personal API key, and
+an app's OAuth token (`ndr_app_…`, no particular scope needed), each for the
+account it signs in as. A personal API key limited to some workflows is
+refused with `403 forbidden`, as on every route outside its workflows, and a
+billing integration key with `403 billing_key_scope`.
+
+**Query.** `workflowId` (optional, a uuid): answer for the line that
+workflow's jobs count in. The workflow's own workspace then decides it, ahead
+of the workspace header, exactly as when a generation names that workflow. It
+is used only for a workflow you may run; any other id — one you cannot reach,
+or one that does not exist — is ignored, and the answer is the same as
+without it. An id that is not a uuid is `400 validation_error`.
+
+```json
+{
+  "data": {
+    "enforced": false,
+    "lines": [
+      { "payer": "user:<your user id>", "current": false, "sizes": { "provider": 4, "llm": 8, "local": 8, "run": 4 } },
+      { "payer": "workspace:<workspace id>", "current": true, "sizes": { "provider": 12, "llm": 24, "local": 24, "run": 12 } }
+    ]
+  }
+}
+```
+
+- `enforced`: whether work over a line's limit waits for a slot. **Concurrency
+  limits are not enforced in this release, so this is always `false`.** Once
+  they can be turned on it follows the server's switch, refreshed every 30
+  seconds; while the server cannot reach its Redis, it keeps the last value it
+  read.
+- `lines`: your personal line first. When the request is billed elsewhere, the
+  line it is billed to follows: the workflow's workspace (with `workflowId`),
+  the workspace you selected (the workspace header), or `deployment:install` on
+  an install whose usage one account pays for. Only your own lines are listed;
+  a workspace line is shared by its members.
+- `current`: `true` on exactly one line, the one the request (or the
+  `workflowId` workflow's jobs) is billed to. It is the last line.
+- `sizes`: per lane (`provider`, `llm`, `local`, `run`, as in
+  [`queue`](#waiting-for-a-slot)), how many run at once. On Nodaro Cloud they
+  follow the plan of whoever pays for the line; a self-hosted install sets one
+  size per lane for every line (`LANE_*_PER_USER`, by default
+  `provider 12 · llm 24 · local 24 · run 12`).
 
 ### Image size on image jobs
 

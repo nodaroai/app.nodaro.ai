@@ -28,7 +28,8 @@
  * waiting inline — a plugin route — keeps its plain timeout. A job never
  * seen `queued` waits exactly as before. The MCP
  * `wait_for_job` tool keeps the plain wait: it has its own per-call ceiling
- * and answers a still-queued job with its place in line.
+ * and answers a still-queued job with its place in line (`withQueue`: a
+ * timeout of a job last seen `queued` reads its queue once, onto `lastSeen`).
  */
 import { supabase } from "../../supabase.js"
 import { redactPrivateJobOutput } from "../../public-job-data.js"
@@ -37,6 +38,8 @@ import { resolveOutputUrl } from "./_job-view.js"
 import type { ErrorHint } from "../../safety-block.js"
 import { QueuedPollClock } from "../../concurrency-lanes/queued-clock.js"
 import { creditCoordinatorWait, waitsAsJob } from "../../concurrency-lanes/coordinator-wait.js"
+import { queueInfoFor, waitingRowsOf, type QueueInfo } from "../../concurrency-lanes/queue-info.js"
+import { readWithLaneStamp } from "../../concurrency-lanes/columns.js"
 
 /**
  * The most one `wait_for_job` call waits, in seconds. Below the 60 s default
@@ -63,6 +66,12 @@ interface WaitForJobOpts {
   signal?: AbortSignal
   /** Leave the time the job is seen `queued` out of `timeoutMs`, and credit it to the caller's job, when the caller runs as a job (see the module comment). Default false. */
   queueAware?: boolean
+  /**
+   * On a timeout of a job last seen `queued`, read where it stands in its line
+   * (one gate read, bounded at 1 s, none on a gate error) onto
+   * `lastSeen.queue`. Default false: no gate read at all.
+   */
+  withQueue?: boolean
 }
 
 interface WaitForJobResult {
@@ -82,7 +91,14 @@ interface WaitForJobResult {
   /** On `timeout`: what the last read saw — the job's own status
    *  (pending / processing) and its 0-100 progress — so a caller can say how
    *  far along a still-running job is instead of only "not yet". */
-  lastSeen?: { status: string; progress: number | null; createdAt: string | null; startedAt: string | null }
+  lastSeen?: {
+    status: string
+    progress: number | null
+    createdAt: string | null
+    startedAt: string | null
+    /** A job last seen `queued`: its place in line, when the caller asked (`withQueue`) and the gate answered. */
+    queue?: QueueInfo
+  }
 }
 
 /** Correctly terminal-ONLY: `pending_review` is handled by its own early
@@ -110,6 +126,23 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     }
     signal?.addEventListener("abort", done, { once: true })
   })
+}
+
+/**
+ * Where a job last seen `queued` stands in its line: its row read again with
+ * the lane stamp (tolerantly), so it counts as waiting only once a lane
+ * stamped it and its wait counts from that stamp, as on every job read.
+ * Undefined when it no longer waits, the read fails, or the gate does not answer.
+ */
+async function queueOfJob(jobId: string): Promise<QueueInfo | undefined> {
+  const { data } = await readWithLaneStamp("job", (stamp) => supabase
+    // trash-read: the job the caller is already waiting on, read once more for its place in line.
+    .from("jobs")
+    .select(`id, status${stamp}`)
+    .eq("id", jobId)
+    .maybeSingle())
+  const waiting = data ? waitingRowsOf("job", [data]) : []
+  return waiting.length > 0 ? (await queueInfoFor(waiting)).get(jobId) : undefined
 }
 
 export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult> {
@@ -187,6 +220,11 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
     const jitter = 1 + (Math.random() * 2 - 1) * WAIT_POLL_JITTER
     await sleep(Math.min(remaining, Math.round(interval * jitter)), opts.signal)
     interval = Math.min(WAIT_POLL_MAX_MS, interval * WAIT_POLL_GROWTH)
+  }
+
+  if (opts.withQueue && lastSeen?.status === "queued") {
+    const queue = await queueOfJob(opts.jobId)
+    if (queue) lastSeen = { ...lastSeen, queue }
   }
 
   return {

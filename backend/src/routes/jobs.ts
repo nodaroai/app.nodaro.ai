@@ -14,6 +14,8 @@ import type { ErrorHint } from "../lib/safety-block.js"
 import { creditStatusMapFor, creditStatusOf, publicCreditFieldsOf, runCreditsFor } from "../lib/job-credit-status.js"
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../lib/job-owner-state.js"
 import { applyJobListFilters, jobListFilterSelect, parseJobListQuery, ratingsNotAvailable, withoutFilterEmbeds } from "../lib/job-list-filters.js"
+import { queueField, queueInfoFor, waitingRowsOf, withoutLaneStamp } from "../lib/concurrency-lanes/queue-info.js"
+import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -155,6 +157,10 @@ export function sanitizeCostSummaryForPublic<
   } as unknown as T
 }
 
+// Each status read below also reads `lane_queued_at` (tolerantly, through
+// readWithLaneStamp, which hands it the `stamp` to end its column list with): a
+// waiting job's `queue.waitedSeconds` counts from it, the clock its queue
+// timeout runs from. The stamp is never sent to the client.
 export async function jobRoutes(app: FastifyInstance) {
   // Light batch-status endpoint for studio polling (every ~2s).
   // Declared BEFORE /v1/jobs/:id so the literal `status` segment wins
@@ -200,15 +206,18 @@ export async function jobRoutes(app: FastifyInstance) {
     // (CHILD_JOB_COLUMN); the marker tells a trend run, whose failure text a
     // non-admin never reads (maskTrendRunError removes the marker).
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-    let query = supabase
-      .from("jobs")
-      .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
-      .in("id", ids)
-      .eq("user_id", req.userId)
-      // A job in the Trash is left out like an id that does not exist.
-      .is(TRASHED_JOB_COLUMN, null)
-    if (!isAdmin) query = query.is(CHILD_JOB_COLUMN, null)
-    const { data, error } = await query
+    const userId = req.userId
+    const { data, error } = await readWithLaneStamp("job", (stamp) => {
+      let query = supabase
+        .from("jobs")
+        .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .in("id", ids)
+        .eq("user_id", userId)
+        // A job in the Trash is left out like an id that does not exist.
+        .is(TRASHED_JOB_COLUMN, null)
+      if (!isAdmin) query = query.is(CHILD_JOB_COLUMN, null)
+      return query
+    })
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
@@ -221,9 +230,12 @@ export async function jobRoutes(app: FastifyInstance) {
       { dropJobType: true },
     )
     const creditMap = await creditStatusMapFor(rows.map((r) => r.usage_log_id))
+    // A job waiting for a slot says where it stands: one gate read for every waiting job, none when none waits.
+    const queues = await queueInfoFor(waitingRowsOf("job", rows))
     const withCreditStatus = rows.map(({ usage_log_id: usageLogId, ...rest }) => ({
-      ...rest,
+      ...withoutLaneStamp(rest),
       credit_status: creditStatusOf(usageLogId, creditMap),
+      ...queueField(String(rest.id), queues),
     }))
 
     return { jobs: redactPrivateJobData(withCreditStatus) }
@@ -244,20 +256,26 @@ export async function jobRoutes(app: FastifyInstance) {
     const { id } = req.params
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
-    let query = supabase
-      .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id")
-      .eq("id", id)
-      // A job in the Trash answers, for every caller, as one that does not exist.
-      .is(TRASHED_JOB_COLUMN, null)
+    const userId = req.userId
+    // sanitizeJobForPublic's allowlist keeps the lane stamp out of the answer.
+    const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
+      let query = supabase
+        .from("jobs")
+        .select(`id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id${stamp}`)
+        .eq("id", id)
+        // A job in the Trash answers, for every caller, as one that does not exist.
+        .is(TRASHED_JOB_COLUMN, null)
 
-    // A non-admin reads only their own jobs, and never a child job: it answers
-    // exactly as a job that does not exist (CHILD_JOB_COLUMN).
-    if (!isAdmin) {
-      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
-    }
+      // A non-admin reads only their own jobs, and never a child job: it answers
+      // exactly as a job that does not exist (CHILD_JOB_COLUMN).
+      if (!isAdmin) {
+        query = query.eq("user_id", userId).is(CHILD_JOB_COLUMN, null)
+      }
 
-    const { data: job, error } = await query.single()
+      return query.single()
+    })
+    // The stamp makes the column list a union the client cannot type: the row is the columns above.
+    const job = read as unknown as (JobRecord & { usage_log_id?: string | null; lane_queued_at?: string | null }) | null
 
     if (error || !job) {
       return reply.status(404).send({
@@ -265,7 +283,7 @@ export async function jobRoutes(app: FastifyInstance) {
       })
     }
 
-    const usageLogId = (job as { usage_log_id?: string | null }).usage_log_id ?? null
+    const usageLogId = job.usage_log_id ?? null
     // The job as a run: its own charge, its steps' (child jobs) and its side holds.
     const runCredits = await runCreditsFor([{ id: job.id, usage_log_id: usageLogId, credits: job.credits }], job.user_id)
     // The owner's favorite and rating of it — the owner's, also when an admin
@@ -277,6 +295,8 @@ export async function jobRoutes(app: FastifyInstance) {
     } catch (err) {
       req.log.warn({ err, jobId: job.id }, "job owner state unavailable: favorited / rating omitted")
     }
+    // Where a job waiting for a slot stands (no gate read for any other job).
+    const queues = await queueInfoFor(waitingRowsOf("job", [job]))
 
     return {
       data: {
@@ -288,6 +308,7 @@ export async function jobRoutes(app: FastifyInstance) {
         // and the run's hold; `credits` stays the job's own hold.
         ...publicCreditFieldsOf(job.id, runCredits),
         ...ownerStateFields(job.id, ownerState),
+        ...queueField(job.id, queues),
       },
     }
   })
@@ -311,18 +332,23 @@ export async function jobRoutes(app: FastifyInstance) {
     const { id } = req.params
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
-    let query = supabase
-      .from("jobs")
-      .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
-      .eq("id", id)
-      .is(TRASHED_JOB_COLUMN, null)
+    const userId = req.userId
+    const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
+      let query = supabase
+        .from("jobs")
+        .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .eq("id", id)
+        .is(TRASHED_JOB_COLUMN, null)
 
-    // As GET /v1/jobs/:id: a non-admin never reads a child job (CHILD_JOB_COLUMN).
-    if (!isAdmin) {
-      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
-    }
+      // As GET /v1/jobs/:id: a non-admin never reads a child job (CHILD_JOB_COLUMN).
+      if (!isAdmin) {
+        query = query.eq("user_id", userId).is(CHILD_JOB_COLUMN, null)
+      }
 
-    const { data: job, error } = await query.single()
+      return query.single()
+    })
+    // The stamp makes the column list a union the client cannot type: the row is the columns above.
+    const job = read as unknown as (Record<string, unknown> & { id: string; status: string }) | null
 
     if (error || !job) {
       return reply.status(404).send({
@@ -338,9 +364,13 @@ export async function jobRoutes(app: FastifyInstance) {
     const {
       reconcile_attempts: attempts,
       usage_log_id: usageLogId,
+      // Read for the queue's clock only; never sent.
+      lane_queued_at: _laneQueuedAt,
       ...rest
     } = fillJobRenderQuality(maskTrendRunError(job as unknown as Record<string, unknown>, isAdmin), { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
     const creditMap = await creditStatusMapFor([usageLogId])
+    // Where a job waiting for a slot stands (no gate read for any other job).
+    const queues = await queueInfoFor(waitingRowsOf("job", [job]))
     return redactPrivateJobData({
       data: {
         ...rest,
@@ -348,6 +378,7 @@ export async function jobRoutes(app: FastifyInstance) {
         ...(job.status === "processing" && ((attempts as number | null) ?? 0) > 0
           ? { recovering: true }
           : {}),
+        ...queueField(job.id, queues),
       },
     })
   })
@@ -603,29 +634,36 @@ export async function jobRoutes(app: FastifyInstance) {
     const { jobIds } = parsed.data
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
-    let query = supabase
-      .from("jobs")
-      .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
-      .in("id", jobIds)
-      .is(TRASHED_JOB_COLUMN, null)
+    const userId = req.userId
+    const { data: jobs, error } = await readWithLaneStamp("job", (stamp) => {
+      let query = supabase
+        .from("jobs")
+        .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .in("id", jobIds)
+        .is(TRASHED_JOB_COLUMN, null)
 
-    // A child job is left out for a non-admin, as an id that does not exist
-    // (CHILD_JOB_COLUMN).
-    if (!isAdmin) {
-      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
-    }
+      // A child job is left out for a non-admin, as an id that does not exist
+      // (CHILD_JOB_COLUMN).
+      if (!isAdmin) {
+        query = query.eq("user_id", userId).is(CHILD_JOB_COLUMN, null)
+      }
 
-    const { data: jobs, error } = await query
+      return query
+    })
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
+    // A job waiting for a slot says where it stands: one gate read for every waiting job, none when none waits.
+    const rows = (jobs ?? []) as unknown as Record<string, unknown>[]
+    const queues = await queueInfoFor(waitingRowsOf("job", rows))
     // The reopen restore reads this: an old render's Preview label comes from
     // the order (read-time only; the answer stays lean).
     return {
       data: redactPrivateJobData(
-        fillJobsRenderQuality(maskTrendRunErrors((jobs ?? []) as unknown as Record<string, unknown>[], isAdmin), { dropJobType: true }),
+        fillJobsRenderQuality(maskTrendRunErrors(rows, isAdmin), { dropJobType: true })
+          .map((row) => ({ ...withoutLaneStamp(row), ...queueField(String(row.id), queues) })),
       ),
     }
   })

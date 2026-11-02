@@ -26,6 +26,14 @@ vi.mock("../../../job-owner-state.js", async (importOriginal) => ({
 const runSteps = vi.hoisted(() => ({ map: new Map<string, Array<{ id: string; parent_job_id: string; usage_log_id: string | null; credits: number | null }>>() }))
 vi.mock("../../../job-run-steps.js", () => ({ runStepsOf: async () => ({ steps: runSteps.map, incomplete: new Set<string>() }) }))
 
+// A job waiting for a slot: its place in line comes from the gate
+// (queueInfoFor, which has its own tests); none unless a test says so.
+const lanes = vi.hoisted(() => ({ queueInfoFor: vi.fn(async (_rows: Array<{ id: string; queuedAt: string | null }>) => new Map<string, unknown>()) }))
+vi.mock("../../../concurrency-lanes/queue-info.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../concurrency-lanes/queue-info.js")>()),
+  queueInfoFor: lanes.queueInfoFor,
+}))
+
 const { registerJobs } = await import("../jobs.js")
 const { supabase } = await import("../../../supabase.js")
 const { WAIT_FOR_JOB_CALL_CEILING_S, waitForJobCallSeconds } = await import("../_wait-for-job.js")
@@ -33,6 +41,7 @@ const { WAIT_FOR_JOB_CALL_CEILING_S, waitForJobCallSeconds } = await import("../
 beforeEach(() => {
   vi.clearAllMocks()
   runSteps.map = new Map()
+  lanes.queueInfoFor.mockResolvedValue(new Map())
 })
 
 function mockListJobs(rows: unknown[]) {
@@ -860,5 +869,112 @@ describe("MCP job reads never return server-only `__` output keys", () => {
     expect(sc.status).toBe("completed")
     expect(sc.outputData).toEqual({ videoUrl: "https://r2/x.mp4" })
     expect(JSON.stringify(result)).not.toContain("__checkpoint")
+  })
+})
+
+// ── A job waiting for a free slot (concurrency lanes) ─────────────────────
+// Waiting is never a failure to the agent: the answer says where the job
+// stands in line and to keep waiting. With no queue known, every answer is
+// what it was before.
+describe("MCP job tools — a job waiting for a slot", () => {
+  const QUEUE = { lane: "provider", position: 3, limit: 4, running: 4, reason: "user_lane", waitedSeconds: 42, upgradeHint: "plan" }
+  // A waiting row carries the lane stamp the park writes before it marks the row `queued`.
+  const queuedRow = { id: JOB, user_id: "u1", status: "queued", progress: 0, job_type: "generate-video", output_data: null, error_message: null, created_at: null, started_at: null, lane_queued_at: "2026-11-02T09:00:00.000Z" }
+
+  it("a queued job's timeout says it is waiting, with position", async () => {
+    mockJobReads([{ id: JOB }, queuedRow])
+    lanes.queueInfoFor.mockResolvedValue(new Map([[JOB, QUEUE]]))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 1 })
+    expect(result.isError).toBeUndefined()
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("timeout")
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting.")
+    expect(text).toContain("Need more at once? Upgrade your plan.")
+    expect(text).toContain("Do not re-run the generation")
+    expect(text).not.toContain("still running")
+    expect(text).toBe(`Job ${JOB} has not started yet. ${sc.guidance}`)
+    expect(sc.guidance).toBe(
+      "Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting. Need more at once? Upgrade your plan. " +
+      "Waiting is not a failure: the job keeps its place and nothing is lost. Do not re-run the generation.",
+    )
+    expect(lanes.queueInfoFor).toHaveBeenCalledTimes(1)
+  })
+
+  it("a wait on a provider ceiling says the platform is busy, with no upgrade line", async () => {
+    mockJobReads([{ id: JOB }, queuedRow])
+    lanes.queueInfoFor.mockResolvedValue(new Map([[JOB, { ...QUEUE, reason: "provider_ceiling", position: 12, upgradeHint: null }]]))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 1 })
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("Waiting — busy across the platform, 12th in line. Call wait_for_job again to keep waiting.")
+    expect(text).not.toContain("Need more at once?")
+  })
+
+  it("a queued job with no queue known answers exactly as before", async () => {
+    mockJobReads([{ id: JOB }, queuedRow])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 1 })
+    expect(result.content[0]?.text).toBe(
+      `Job ${JOB} is still running after this 1 s wait (queued, 0%). ` +
+      "Call wait_for_job again with the same job_id to keep waiting — the job is not affected and nothing is lost. Do not re-run the generation.",
+    )
+    expect(result.structuredContent).not.toHaveProperty("guidance")
+  })
+
+  it("a running job's timeout never asks for a queue", async () => {
+    mockJobReads([{ id: JOB }, { ...queuedRow, status: "processing" }])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 1 })
+    expect(lanes.queueInfoFor).not.toHaveBeenCalled()
+  })
+
+  it("get_job shows the queue line", async () => {
+    mockGetJob({ ...queuedRow, lane_queued_at: "2026-11-02T10:00:00.000Z" })
+    lanes.queueInfoFor.mockResolvedValue(new Map([[JOB, { ...QUEUE, upgradeHint: "workspace" }]]))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    expect(result.isError).toBeUndefined()
+    expect(lanes.queueInfoFor).toHaveBeenCalledWith([{ id: JOB, queuedAt: "2026-11-02T10:00:00.000Z" }])
+    const parsed = JSON.parse(result.content[0]?.text as string)
+    expect(parsed.data.status).toBe("queued")
+    expect(parsed.data.queue).toEqual({ ...QUEUE, upgradeHint: "workspace" })
+    expect(parsed.data).not.toHaveProperty("lane_queued_at")
+    const line = "Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting. Need more at once? Ask your workspace owner to upgrade."
+    expect(parsed.guidance).toContain(line)
+    expect(parsed.guidance).toMatch(/not a failure/)
+    expect(parsed.retryable).toBeUndefined()
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("queued")
+    expect(sc.guidance).toBe(parsed.guidance)
+  })
+
+  it("get_job: a job that does not wait asks no gate, and the lane stamp never reaches the answer", async () => {
+    mockGetJob({ ...queuedRow, status: "processing", lane_queued_at: null })
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    expect(lanes.queueInfoFor).not.toHaveBeenCalled()
+    const parsed = JSON.parse(result.content[0]?.text as string)
+    expect(Object.keys(parsed)).toEqual(["data"])
+    expect(parsed.data).not.toHaveProperty("lane_queued_at")
+    expect(parsed.data).not.toHaveProperty("queue")
+  })
+
+  it("get_job: a queued job with no queue known answers as before", async () => {
+    mockGetJob(queuedRow)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const parsed = JSON.parse(result.content[0]?.text as string)
+    expect(Object.keys(parsed)).toEqual(["data"])
+    expect(parsed.data).not.toHaveProperty("queue")
+    expect(result.structuredContent).not.toHaveProperty("guidance")
   })
 })

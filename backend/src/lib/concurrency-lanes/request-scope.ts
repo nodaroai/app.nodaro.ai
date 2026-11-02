@@ -63,7 +63,7 @@ import { LANE_BUSY_MESSAGE, LaneBusyError, LaneWaitAbortedError, LaneWaitTimeout
 import type { ConcurrencyGate, ReleaseOutcome } from "./gate.js"
 import { countUngated, currentHoldScope, loadConcurrencyGate, newHoldScope, runInHoldScope, warnLaneRateLimited, type ConcurrencyHold, type HoldScope, type RequestSlotState } from "./hold.js"
 import type { LeafLane } from "./leaf-lanes.js"
-import { payerKeyOf } from "./payer.js"
+import { lineOfBillingContext } from "./payer.js"
 import { lanesMeasureOnly, releaseRequestSlot, takeRequestSlot } from "./slot.js"
 import type { PayerKey, WaitInfo } from "./types.js"
 
@@ -108,10 +108,7 @@ function transportOf(req: FastifyRequest): Transport {
 
 /** The line a request's own calls count in (worker-admit.ts reads a job's the same way). */
 function lineOfRequest(req: FastifyRequest): { userId: string; payer: PayerKey; tier: string | null } {
-  const userId = req.userId ?? ""
-  const ctx = req.billingContext
-  if (!ctx) return { userId, payer: `user:${userId}`, tier: null }
-  return { userId, payer: payerKeyOf(ctx), tier: ctx.payer === "user" ? null : (ctx.entitlements?.tierForGates ?? null) }
+  return lineOfBillingContext(req.userId ?? "", req.billingContext)
 }
 
 /**

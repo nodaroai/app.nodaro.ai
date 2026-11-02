@@ -711,6 +711,21 @@ export function runLaneGateContract(makeFixture: () => LaneGateFixture): void {
     expect(await gate.waitingPayer("b")).toBeNull()
   })
 
+  it("describeWaits answers many jobs in one call: each waiter with its payer line, nothing for the rest", async () => {
+    await acquire("a", { size: 1, meta: { payer: "workspace:W" } })
+    await acquire("b", { size: 1, meta: { payer: "workspace:W" } })
+    await acquire("c", { size: 1, meta: { payer: "workspace:W" } })
+    clock += 7_000
+    await gate.markServerWait({ ...meta("s", { lane: "run", queue: "workflow-orchestration" }), pool: "orchestrator" })
+    const waits = await gate.describeWaits(["c", "a", "nobody", "b", "s", "c"])
+    expect([...waits.keys()]).toEqual(["c", "b", "s"])
+    expect(waits.get("b")).toEqual({ payer: "workspace:W", wait: { lane: "provider", position: 1, limit: 1, running: 1, reason: "user_lane", waitedMs: 7_000, enqueuedAtMs: T0 } })
+    expect(waits.get("c")?.wait).toMatchObject({ position: 2 })
+    expect(waits.get("s")).toMatchObject({ payer: null, wait: { reason: "server_busy", position: 1 } })
+    expect((await gate.describeWaits(["a", "nobody"])).size).toBe(0)
+    expect((await gate.describeWaits([])).size).toBe(0)
+  })
+
   it("snapshot reports a provider's ceiling, null without one", async () => {
     await gate.setProviderCeilings({ kie: 2 })
     await acquire("a", { size: 5, meta: { provider: "kie" } })

@@ -497,7 +497,8 @@ describe("POST /v1/admin/lanes/jobs/:jobId/cancel", () => {
     const res = await call("POST", `/v1/admin/lanes/jobs/${JOB}/cancel`)
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ cancelled: true, inFlight: false, userId: USER })
-    expect(await gate.describeWait(JOB)).toBeNull()
+    // Out of its line once the withdraw lands (fired, not awaited, while limits are locked).
+    await vi.waitFor(async () => expect(await gate.describeWait(JOB)).toBeNull())
     expect(db.rows("jobs")[0]!.status).toBe("cancelled")
     expect(refs.refund).toEqual(["usage-1"])
     expect(refs.balance).toEqual([USER])

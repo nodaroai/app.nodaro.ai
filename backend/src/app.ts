@@ -232,6 +232,7 @@ import { registerSpeakerViewVideoGuard } from "./routes/speaker-view-video-guard
 import clipLengthRoutes from "./routes/clip-length.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
+import { meLanesRoutes } from "./routes/me-lanes.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminGalleryModerationRoutes } from "./ee/routes/admin-gallery-moderation.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
@@ -811,6 +812,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (!runtimeSurfaceProfile().nav.hide.includes("gallery")) await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)
   await app.register(meRoutes)
+  await app.register(meLanesRoutes)
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
   if (hasAdmin()) await app.register(adminGalleryModerationRoutes)
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)

@@ -102,6 +102,19 @@ export interface NodeExecutionStateWire<TOutput = Record<string, unknown>> {
   completedAt?: string | null
   /** The node's job is parked in `pending_review`; `status` stays "running". */
   awaitingReview?: boolean
+  /**
+   * The node's job is waiting for a free concurrency slot (the job's status is
+   * `queued`; `status` here stays "pending"). Present only while it waits, and
+   * only on the node state of a single-node job as the execution reads list
+   * it. Concurrency limits are not enforced in this release, so nothing waits
+   * for a slot yet and the key does not appear yet.
+   */
+  queued?: true
+  /**
+   * With `queued`: whole seconds the job has waited, counted from when it
+   * first started waiting. Absent when that time cannot be read.
+   */
+  waitedSeconds?: number
   progress?: number
   /** Present on a `skipped` node the RUN skipped (see {@link NodeSkipReason}); absent on a router-gated one. */
   skipReason?: NodeSkipReason | (string & {})

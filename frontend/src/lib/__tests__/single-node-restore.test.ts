@@ -9,6 +9,7 @@ import {
   LONG_RUNNING_RESTORE_MAX_AGE_MS,
   type ActiveExecItem,
 } from "../single-node-restore"
+import { MAX_QUEUED_CREDIT_MS } from "../queued-poll-clock"
 
 // ---------------------------------------------------------------------------
 // Helpers — build the merged executions-list items the backend returns.
@@ -26,8 +27,10 @@ function singleNodeJob(opts: {
   nodeType?: string
   ageMs?: number
   awaitingReview?: boolean
+  queued?: boolean
+  waitedSeconds?: number
 }): ActiveExecItem {
-  const { jobId, nodeId, status = "running", progress = 0, nodeType = "generate-image", ageMs = 0, awaitingReview } = opts
+  const { jobId, nodeId, status = "running", progress = 0, nodeType = "generate-image", ageMs = 0, awaitingReview, queued, waitedSeconds } = opts
   return {
     id: jobId,
     triggerType: "single-node",
@@ -37,6 +40,8 @@ function singleNodeJob(opts: {
       [nodeId ?? jobId]: {
         nodeId, jobId, status, progress, nodeType,
         ...(awaitingReview ? { awaitingReview: true } : {}),
+        ...(queued ? { queued: true } : {}),
+        ...(waitedSeconds !== undefined ? { waitedSeconds } : {}),
       },
     },
   }
@@ -188,6 +193,54 @@ describe("collectRestorableSingleNodeJobs", () => {
   it("the age bound still drops a NON-held job past the horizon (exemption is hold-only)", () => {
     const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS + 60_000 })]
     expect(collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)).toEqual([])
+  })
+
+  it("single-node restore does not give up while queued", () => {
+    // Waiting for a free slot (the `queued` sidecar, status "pending") for 40
+    // minutes of its 41: past the 30-min horizon by less than its wait.
+    const out = collectRestorableSingleNodeJobs(
+      [singleNodeJob({ jobId: "jq", nodeId: "n1", status: "pending", queued: true, waitedSeconds: 40 * 60, ageMs: 41 * 60_000 })],
+      canvas(["n1", "generate-image"]),
+      NOW,
+    )
+    expect(out).toEqual([{ nodeId: "n1", jobId: "jq", nodeType: "generate-image", progress: 0, status: "pending", awaitingReview: false }])
+  })
+
+  it("a queued job's horizon grows by exactly the time it has waited, never the whole cap", () => {
+    const at = (ageMs: number, waitedSeconds?: number) =>
+      collectRestorableSingleNodeJobs([singleNodeJob({ jobId: "jq", nodeId: "n1", status: "pending", queued: true, waitedSeconds, ageMs })], canvas(["n1", "generate-image"]), NOW)
+    const waited = 10 * 60
+    expect(at(SINGLE_NODE_RESTORE_MAX_AGE_MS + waited * 1000, waited)).toHaveLength(1)
+    expect(at(SINGLE_NODE_RESTORE_MAX_AGE_MS + waited * 1000 + 1, waited)).toEqual([])
+    // No figure from the server: nothing is credited.
+    expect(at(SINGLE_NODE_RESTORE_MAX_AGE_MS + 1)).toEqual([])
+    // A long-running type extends its own wider horizon the same way.
+    const gvp = collectRestorableSingleNodeJobs(
+      [singleNodeJob({ jobId: "jg", nodeId: "n2", status: "pending", queued: true, waitedSeconds: waited, ageMs: LONG_RUNNING_RESTORE_MAX_AGE_MS + waited * 1000 })],
+      canvas(["n2", "generate-video-pro"]),
+      NOW,
+    )
+    expect(gvp).toHaveLength(1)
+  })
+
+  it("the credit stops at the most queued time any clock credits", () => {
+    const at = (ageMs: number) =>
+      collectRestorableSingleNodeJobs(
+        [singleNodeJob({ jobId: "jq", nodeId: "n1", status: "pending", queued: true, waitedSeconds: MAX_QUEUED_CREDIT_MS / 1000 + 3_600, ageMs })],
+        canvas(["n1", "generate-image"]),
+        NOW,
+      )
+    expect(at(SINGLE_NODE_RESTORE_MAX_AGE_MS + MAX_QUEUED_CREDIT_MS)).toHaveLength(1)
+    expect(at(SINGLE_NODE_RESTORE_MAX_AGE_MS + MAX_QUEUED_CREDIT_MS + 1)).toEqual([])
+  })
+
+  it("a pending job NOT waiting for a slot still ages out at the horizon, as before", () => {
+    const out = collectRestorableSingleNodeJobs(
+      [singleNodeJob({ jobId: "jp", nodeId: "n1", status: "pending", waitedSeconds: 3_600, ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS + 1 })],
+      canvas(["n1", "generate-image"]),
+      NOW,
+    )
+    expect(out).toEqual([])
   })
 
   it("restores multiple distinct running nodes at once", () => {

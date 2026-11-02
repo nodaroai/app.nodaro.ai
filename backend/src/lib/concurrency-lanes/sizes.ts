@@ -112,6 +112,16 @@ export async function laneSizesFor(subject: LaneSubject): Promise<LaneSizes> {
 }
 
 /**
+ * The effective tier of the account paying for a personal or deployment line
+ * (Cloud only, from the same cached profile read the sizes use); null on
+ * Community / Business, for a workspace line, and when it cannot be read.
+ */
+export async function payerTier(payer: PayerKey): Promise<string | null> {
+  if (!hasCredits() || payer.startsWith("workspace:")) return null
+  return fromCloud((reader) => reader.cloudPayerTier(payer), () => null)
+}
+
+/**
  * The providers' platform ceilings (provider id → running jobs at most). A
  * provider absent from the map has none. Community / Business have none; on
  * Cloud they are admin-set (lane_provider_ceilings). The gate owns

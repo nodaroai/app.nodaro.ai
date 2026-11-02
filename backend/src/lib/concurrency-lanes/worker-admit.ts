@@ -58,6 +58,11 @@
 // picked up again): it runs under that lease and never renews, hands off or
 // releases it — the render does.
 //
+// While limits cannot be turned on in this release (lanesMeasureOnly), a
+// pickup never waits for any of this: the job runs at once under the hold its
+// row and payload decide, and its admission is fired and only counted
+// (admitWithoutWaiting); its release and hand-over chain on that admission.
+//
 // Fails open: any failure of the gate (no answer within its call timeout, a
 // Redis error, the module not loading) or of the lane config admits the job
 // ungated, counted, with a best-effort withdraw of its entry. A lane problem
@@ -67,6 +72,7 @@
 // is right only in a process that ran initProviders() — the video worker does.
 // The render worker does not, and needs not: every render-queue job is a
 // `local` leaf, attributed to "local" before any registry lookup.
+import { randomUUID } from "node:crypto"
 import { payloadBillingContext, type BillingContext } from "../billing-context.js"
 import { deploymentPayerId } from "../deployment-payer.js"
 import { runtimeSurfaceProfile } from "../surface-profile.js"
@@ -81,6 +87,7 @@ import { laneParentInPayload, laneParentIsLive } from "./lane-parent.js"
 import { laneClassOf } from "./registry.js"
 import { noteServerWaiter, SERVER_POOL_OF as POOL, serverShareOf, type ServerPool, type ServerShareKey } from "./server-share.js"
 import { laneSizesFor } from "./sizes.js"
+import { fireWithoutWaiting, lanesMeasureOnly } from "./slot.js"
 import type { ConcurrencyLane, LaneClass, LaneEntryMeta, LaneQueueName, PayerKey, WaitInfo } from "./types.js"
 
 /** The jobs-row columns admission reads (each selected by the workers' pickup read). */
@@ -302,10 +309,15 @@ function lineOf(data: Record<string, unknown>, row: WorkerRow): { payer: PayerKe
  * verified is no marker: the job is admitted as any other. Never throws.
  */
 async function isCoordinatorChild(data: Record<string, unknown>, row: WorkerRow, queue: LaneQueueName): Promise<boolean> {
-  if (row.parent_job_id || row.pipeline_id) return true
-  if (queue === "workflow-orchestration" && str(data.parentExecutionId) !== null) return true
+  if (isCoordinatorChildByRow(data, row, queue)) return true
   const parent = laneParentInPayload(data)
   return parent ? laneParentIsLive(parent, row.user_id) : false
+}
+
+/** The part of isCoordinatorChild that needs no read: the row's parent, and a nested run's `parentExecutionId`. */
+function isCoordinatorChildByRow(data: Record<string, unknown>, row: WorkerRow, queue: LaneQueueName): boolean {
+  if (row.parent_job_id || row.pipeline_id) return true
+  return queue === "workflow-orchestration" && str(data.parentExecutionId) !== null
 }
 
 type ProviderOf = typeof import("./provider-of.js")
@@ -385,15 +397,32 @@ function leaselessAdmission(hold: ConcurrencyHold, leave: (() => void) | null): 
   }
 }
 
-/** An admission holding its own lease: kept alive until released, released once, its wakes handed on. */
-function leasedAdmission(hold: ConcurrencyHold & { leaseId: string }, meta: LaneEntryMeta, leave: () => void): AdmittedJob {
-  const keep = keepLeaseAlive(hold.leaseId, meta)
+/** An admission as admitWorkerJob grants it: a leased one can also be handed over (release as `handoff`). */
+type GrantedAdmission = AdmittedJob & { handOff?(): Promise<void> }
+
+/** What a measured admission (admitWithoutWaiting) hands admitWorkerJob. */
+interface MeasuredGrant {
+  /** The id its lease is asked under. */
+  leaseId: string
+  /** True once the job's release was asked: a lease landing after it is not kept alive (it is freed at once). */
+  releasing(): boolean
+}
+
+/**
+ * An admission holding its own lease: kept alive until released, released
+ * once, its wakes handed on. Under a measured admission (`measured`) its
+ * hand-off is not registered here — the measured admission registered its
+ * own, at once, and calls `handOff` once this one lands — and it is not kept
+ * alive when the job's release came first.
+ */
+function leasedAdmission(hold: ConcurrencyHold & { leaseId: string }, meta: LaneEntryMeta, leave: () => void, measured?: MeasuredGrant): GrantedAdmission {
+  const keep = measured?.releasing() ? null : keepLeaseAlive(hold.leaseId, meta)
   let released = false
   let unregister = () => {}
   const release = async (outcome: ReleaseOutcome): Promise<void> => {
     if (released) return
     released = true
-    keep.stop()
+    keep?.stop()
     unregister()
     leave()
     try {
@@ -404,8 +433,9 @@ function leasedAdmission(hold: ConcurrencyHold & { leaseId: string }, meta: Lane
       warnLaneRateLimited("could not release a job's lease", err)
     }
   }
-  unregister = registerSlotHandOff(meta.jobId, () => release("handoff"))
-  return { admitted: true, leaseId: hold.leaseId, hold, release }
+  const handOff = () => release("handoff")
+  if (!measured) unregister = registerSlotHandOff(meta.jobId, handOff)
+  return { admitted: true, leaseId: hold.leaseId, hold, release, handOff }
 }
 
 // ------------------------------------------------------------------ admit
@@ -422,12 +452,19 @@ const WAIT_TABLE: Partial<Record<LaneQueueName, "jobs" | "pipelines">> = {
   "pipeline-orchestration": "pipelines",
 }
 
-/**
- * Admit a job a worker picked up, before it claims the row (see the module
- * comment). Never throws: a gate or config failure admits the job ungated.
- */
-export async function admitWorkerJob(args: { job: AdmittedBullJob; queue: LaneQueueName; row: WorkerRow }): Promise<Admission> {
-  const { job, queue, row } = args
+/** What an admission decides before any gate call or read: the job's class, its line and the hold it runs under. */
+interface AdmissionPlan {
+  data: Record<string, unknown>
+  cls: LaneClass
+  line: { payer: PayerKey; tier: string | null }
+  /** A coordinator that takes no slot (a child of a running coordinator, or a run's own job). */
+  nested: boolean
+  lane: ConcurrencyLane | null
+  /** The hold, with no lease yet. */
+  base: ConcurrencyHold
+}
+
+function planAdmission(job: AdmittedBullJob, queue: LaneQueueName, row: WorkerRow, coordinatorChild: boolean): AdmissionPlan {
   const data = record(job.data)
   let cls: LaneClass = { kind: "coordinator" }
   let line: { payer: PayerKey; tier: string | null } = { payer: `user:${row.user_id}`, tier: null }
@@ -437,15 +474,31 @@ export async function admitWorkerJob(args: { job: AdmittedBullJob; queue: LaneQu
   } catch (err) {
     logLaneRateLimited("error", "could not classify a job for its lane, running it ungated", err)
   }
-  const coordinatorChild = await isCoordinatorChild(data, row, queue)
   const nested = cls.kind === "coordinator" && (coordinatorChild || row.workflow_execution_id !== null)
   const lane: ConcurrencyLane | null = cls.kind === "leaf" ? cls.lane : nested ? null : "run"
   const role: ConcurrencyHold["role"] = cls.kind === "leaf" ? "leaf" : nested ? "coordinator" : "run"
-  const readmit = row.status === "processing"
   const waitTable = WAIT_TABLE[queue]
   const base: ConcurrencyHold = {
     role, lane, userId: row.user_id, payer: line.payer, tier: line.tier, jobId: row.id, leaseId: null, ...(waitTable ? { waitTable } : {}),
   }
+  return { data, cls, line, nested, lane, base }
+}
+
+/**
+ * Admit a job a worker picked up, before it claims the row (see the module
+ * comment). Never throws: a gate or config failure admits the job ungated.
+ * `measured` (admitWithoutWaiting): its lease is created under that id (a
+ * re-admitted job may get its old one back), and leasedAdmission's hand-off
+ * and renewals follow the measured admission.
+ */
+export async function admitWorkerJob(
+  args: { job: AdmittedBullJob; queue: LaneQueueName; row: WorkerRow },
+  measured?: MeasuredGrant,
+): Promise<Admission> {
+  const { job, queue, row } = args
+  const coordinatorChild = await isCoordinatorChild(record(job.data), row, queue)
+  const { data, cls, line, nested, lane, base } = planAdmission(job, queue, row, coordinatorChild)
+  const readmit = row.status === "processing"
 
   // No row (its read failed) and no user in the payload: nothing to count it
   // against. The worker goes on as it always has.
@@ -504,14 +557,14 @@ export async function admitWorkerJob(args: { job: AdmittedBullJob; queue: LaneQu
     const [sizes, provider] = await Promise.all([laneSizesFor({ userId: row.user_id, payer: line.payer, tier: line.tier }), providerOf(cls, job)])
     const meta = metaOf(slotLane, provider)
     const mode = readmit ? "readmit" : coordinatorChild ? "front" : "fresh"
-    const r = await gate.acquire({ meta, size: sizes[slotLane], mode, leaseTtlMs: LANE_LEASE_TTL_MS })
+    const r = await gate.acquire({ meta, size: sizes[slotLane], mode, leaseTtlMs: LANE_LEASE_TTL_MS, ...(measured ? { leaseId: measured.leaseId } : {}) })
     if (!r.granted) {
       leave?.()
       return { admitted: false, wait: r.wait, hold: base }
     }
     // Another BullMQ entry of this job holds the lease (see the module comment): run under it, never release it.
     if (r.foreign) return leaselessAdmission({ ...base, leaseId: r.leaseId }, leave)
-    return leasedAdmission({ ...base, leaseId: r.leaseId }, meta, leave ?? (() => {}))
+    return leasedAdmission({ ...base, leaseId: r.leaseId }, meta, leave ?? (() => {}), measured)
   } catch (err) {
     // The gate did not answer, failed, or the line could not be sized: run ungated.
     if (err instanceof LaneGateTimeoutError) {
@@ -538,6 +591,7 @@ export async function admitOrPark(args: {
   queue: LaneQueueName
   row: WorkerRow
 }): Promise<AdmittedJob | null> {
+  if (lanesMeasureOnly()) return admitWithoutWaiting(args)
   const admission = await admitWorkerJob(args)
   if (admission.admitted) return admission
   try {
@@ -554,6 +608,58 @@ export async function admitOrPark(args: {
     logLaneRateLimited("error", "could not park a job its lane refused, running it ungated", err)
     return runRefusedJobUngated({ ...args, hold: admission.hold })
   }
+}
+
+/**
+ * Limits locked (lanesMeasureOnly): admit the job at once and measure it
+ * without waiting, as a call's take is (slot.ts takeWithoutWaiting). The job
+ * runs under the hold its row and payload decide with no read, holding the
+ * lease id its admission asks for; the admission itself — the server share,
+ * the borrow, the check of a `laneParent` marker, the sizes and the acquire —
+ * is fired and never awaited. One the gate would not grant at once is never
+ * parked (the job already runs): its entry is withdrawn and it counts as
+ * ungated. The release chains on the fired admission and never waits for the
+ * gate: it frees exactly what that admission took — the lease it landed, a
+ * re-admitted job's own, never another entry's — once, whenever it lands; a
+ * lease that lands after the release is never kept alive. This is the shape
+ * a call's take has too (slot.ts fireWithoutWaiting). A hand-over
+ * (handoff.ts) is registered at once and chains on the admission the same
+ * way, so it no longer reaches the gate before the job enqueues its successor
+ * (see handoff.ts).
+ *
+ * The hold is decided from what needs no read: a coordinator whose only parent
+ * is an unverified `laneParent` marker runs under a run hold, where the fired
+ * admission may find it nested and take no run slot. A run and a coordinator
+ * hold treat their calls alike (each takes its own slot), so only the count
+ * of the run lane can differ, never what the job does.
+ */
+function admitWithoutWaiting(args: { job: AdmittedBullJob; token: string | undefined; queue: LaneQueueName; row: WorkerRow }): AdmittedJob {
+  const { job, queue, row } = args
+  const leaseId = randomUUID()
+  const { base } = planAdmission(job, queue, row, isCoordinatorChildByRow(record(job.data), row, queue))
+  const hold: ConcurrencyHold = base.role === "coordinator" || !row.user_id ? base : { ...base, leaseId }
+  let unregister = () => {}
+  const fired = fireWithoutWaiting<GrantedAdmission>(
+    (releasing) => admitWorkerJob(args, { leaseId, releasing })
+      .then((a) => (a.admitted ? a : runRefusedJobUngated({ ...args, hold: a.hold }))),
+    (err) => {
+      // admitWorkerJob never throws; should it, the job ran anyway, ungated.
+      warnLaneRateLimited("a measured admission failed", err)
+      countUngated(job.name)
+      return leaselessAdmission(base, null)
+    },
+    (a, outcome) => a.release(outcome),
+  )
+  const release = (outcome: ReleaseOutcome): Promise<void> => {
+    unregister()
+    return fired.release(outcome)
+  }
+  // Only a leased admission hands its slot over; the job's own release after it changes nothing.
+  unregister = registerSlotHandOff(row.id, () => {
+    void fired.landed.then((a) => a.handOff?.())
+    return Promise.resolve()
+  })
+  return { admitted: true, leaseId: hold.leaseId, hold, release }
 }
 
 /** A row read that failed: admission still runs, on the payload's line, as a fresh job. */

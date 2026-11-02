@@ -3,6 +3,7 @@ import { VoiceBrowser } from "../config-panels/voice-browser"
 import { textToSpeech, lipSyncApi, voiceDesignApi, getJobStatusLean } from "@/lib/api"
 import type { CharacterVoice } from "@/types/nodes"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { QueuedPollClock } from "@/lib/queued-poll-clock"
 
 /** The voice source's caption beside the chosen voice. */
 const VOICE_TYPE_KEYS: Record<"premade" | "custom" | "library", MessageKey> = {
@@ -49,15 +50,20 @@ export interface VoiceResourceProps {
  *  `VoiceResource` unmounts on every studio navigation (StudioShell renders only the
  *  active page). `isMounted()` is checked at the top of each iteration so an
  *  orphaned poll returns early instead of running its full ~3 min budget — the
- *  job still finishes server-side, there's just nowhere to show the preview. */
+ *  job still finishes server-side, there's just nowhere to show the preview.
+ *  A read that finds the job waiting for a free slot (`queued`) is not counted
+ *  against that budget (lib/queued-poll-clock.ts). */
 async function pollJobUrl(
   jobId: string,
   field: "audioUrl" | "videoUrl",
   isMounted: () => boolean,
 ): Promise<string | null> {
-  for (let i = 0; i < 120; i++) {
+  const queued = new QueuedPollClock()
+  let counted = 0
+  while (counted < 120) {
     if (!isMounted()) return null
     const job = await getJobStatusLean(jobId)
+    if (!queued.observe(job.status)) counted += 1
     if (job.status === "completed") return (job.output_data?.[field] as string | undefined) ?? null
     // A held job is neither done nor failed, and it will outlive this ~3 min
     // budget by hours. Returning `null` would land in the caller's

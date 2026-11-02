@@ -9,7 +9,10 @@
  *  - failed → an error carrying the job's message (or "Unknown error" in the
  *    reader's language) and its classified hint;
  *  - a run that outlasts `longRunMs` is never given up on: `onLongRun` is told
- *    once, and the run is then followed less often until it ends;
+ *    once, and the run is then followed less often until it ends. The time
+ *    the run is seen waiting for a free slot (`queued`) does not count toward
+ *    `longRunMs` (lib/queued-poll-clock.ts): waiting in line is not taking
+ *    longer than usual;
  *  - Stop cancels the job (as the editor's Stop does everywhere) and ends in an
  *    AbortError; a workflow switch ends it in `WorkflowStaleError`. The poll is
  *    a tracked interval, so leaving the workflow stops it.
@@ -22,6 +25,7 @@
  */
 import { cancelJob } from "@/lib/api"
 import { tx } from "@/lib/i18n"
+import { QueuedPollClock } from "@/lib/queued-poll-clock"
 import type { ExecutionContext } from "./types"
 
 /** How often a running text run is asked about. */
@@ -64,6 +68,7 @@ type PollCtx = Pick<ExecutionContext, "signal" | "isWorkflowStale" | "trackInter
 export function pollUseCaseTextJob(jobId: string, nodeId: string, ctx: PollCtx, deps: UseCaseTextPollDeps, opts: UseCaseTextPollOptions): Promise<UseCaseTextPollOutcome> {
   return new Promise<UseCaseTextPollOutcome>((resolve, reject) => {
     const startedAt = Date.now()
+    const queued = new QueuedPollClock(startedAt)
     let lastAsked = 0
     let failures = 0
     let busy = false
@@ -91,7 +96,7 @@ export function pollUseCaseTextJob(jobId: string, nodeId: string, ctx: PollCtx, 
       if (busy || done) return
       if (ctx.isWorkflowStale()) return finish(() => reject(deps.stale()))
       const now = Date.now()
-      const long = now - startedAt >= opts.longRunMs
+      const long = queued.countedMs(startedAt, now) >= opts.longRunMs
       if (long && !toldLong) {
         toldLong = true
         opts.onLongRun?.()
@@ -101,6 +106,7 @@ export function pollUseCaseTextJob(jobId: string, nodeId: string, ctx: PollCtx, 
       lastAsked = now
       try {
         const job = await deps.status(jobId, nodeId)
+        queued.observe(job.status)
         failures = 0
         if (done) return
         if (job.status === "completed") return finish(() => resolve({ kind: "completed", output: (job.output_data as Record<string, unknown> | null) ?? {} }))
@@ -114,6 +120,7 @@ export function pollUseCaseTextJob(jobId: string, nodeId: string, ctx: PollCtx, 
           deps.onProgress(job.progress)
         }
       } catch (err) {
+        queued.observe(undefined)
         failures += 1
         const message = deps.gaveUp(err, failures)
         if (message !== null) finish(() => reject(new Error(message)))

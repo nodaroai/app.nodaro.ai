@@ -225,4 +225,33 @@ describe("useLocationDataSubscription", () => {
     expect(__store.__updateNodeData).not.toHaveBeenCalled()
     unmount()
   })
+
+  describe("the 30-minute hard stop and waiting for a free slot", () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    const data = { ...NODE_DATA, atmosphereStatus: "running" as const }
+    const subscribe = () =>
+      renderHook(() => useLocationDataSubscription({ nodeId: "n-1", locationDbId: "loc-1", anyAssetRunning: true, currentNodeData: data }))
+
+    it("keeps polling past 30 minutes while a job waits in line", async () => {
+      mockGetLocation.mockResolvedValue({ ...DB_LOC, pendingJobs: [{ jobId: "j-1", assetType: "motion", name: "drift", status: "queued" }] })
+      const { unmount } = subscribe()
+      await vi.advanceTimersByTimeAsync(40 * 60_000)
+      const calls = mockGetLocation.mock.calls.length
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(mockGetLocation.mock.calls.length).toBeGreaterThan(calls)
+      unmount()
+    })
+
+    it("stops after 30 minutes, as before, when no job waits in line", async () => {
+      mockGetLocation.mockResolvedValue({ ...DB_LOC, pendingJobs: [{ jobId: "j-1", assetType: "motion", name: "drift", status: "processing" }] })
+      const { unmount } = subscribe()
+      await vi.advanceTimersByTimeAsync(31 * 60_000)
+      const calls = mockGetLocation.mock.calls.length
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(mockGetLocation.mock.calls.length).toBe(calls)
+      unmount()
+    })
+  })
 })

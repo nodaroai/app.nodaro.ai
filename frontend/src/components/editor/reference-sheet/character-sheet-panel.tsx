@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, referenceSheetCreditId, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared/entities"
-import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
+import { generateReferenceSheet } from "@/lib/api"
 import { useT, tx } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { hasCredits } from "@/lib/edition"
@@ -9,6 +9,7 @@ import { creditUnits } from "@/lib/credit-units"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { SHEET_PANEL_PROVIDER, type SheetTabAdapter } from "./sheet-tab-adapter"
 import { SheetGallery } from "./sheet-gallery"
+import { pollSheetJob } from "./poll-sheet-job"
 
 /**
  * Character-only Sheet panel: named, explained, live-costed presets
@@ -17,9 +18,6 @@ import { SheetGallery } from "./sheet-gallery"
  * `entries` field; cost is the live charged price of a panel and of composing,
  * gated behind hasCredits(). Object/Location keep the classic chip UI (see reference-sheet-tab).
  */
-
-const SHEET_POLL_MS = 2000
-const SHEET_POLL_MAX_ATTEMPTS = 180 // ~6 min ceiling
 
 type Status = "idle" | "preparing" | "composing" | "done" | "error"
 type Bucket = Record<string, Array<{ name?: string; url?: string }> | undefined>
@@ -108,27 +106,6 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
     })
   }
 
-  async function pollSheet(jobId: string): Promise<{ imageUrl: string; panelUrls: string[] }> {
-    for (let attempt = 0; attempt < SHEET_POLL_MAX_ATTEMPTS; attempt++) {
-      await new Promise((r) => setTimeout(r, SHEET_POLL_MS))
-      let job: Awaited<ReturnType<typeof getJobStatusLean>> | undefined
-      try { job = await getJobStatusLean(jobId) } catch { continue }
-      if (job.status === "completed") {
-        const out = job.output_data as { imageUrl?: string; panelUrls?: string[] } | undefined
-        if (out?.imageUrl) return { imageUrl: out.imageUrl, panelUrls: out.panelUrls ?? [] }
-        throw new Error(tx("entity.sheetNoImageUrl"))
-      }
-      // A held job is parked on a human reviewer and will outlive this bound by
-      // hours. Break out NOW with the truth instead of falling through to
-      // "timed out" (a lie) or an empty panel that never fills.
-      if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
-      if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error_message ?? tx(job.status === "cancelled" ? "entity.sheetCancelledFallback" : "entity.sheetFailedFallback"))
-      }
-    }
-    throw new Error(tx("entity.sheetTimedOut"))
-  }
-
   async function onPrepare(): Promise<void> {
     if (!sourceImageUrl) { toast.error(tx("entity.approveMainImageFirst")); return }
     setStatus("preparing"); setProgressLine(tx("entity.sheetPreparing"))
@@ -155,7 +132,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
     try {
       const dbId = await adapter.ensureSaved(studio)
       const { jobId } = await generateReferenceSheet({ type: preset.type, skin, entityKind: "character", entityDbId: dbId, flavour })
-      const { imageUrl: url, panelUrls } = await pollSheet(jobId)
+      const { imageUrl: url, panelUrls } = await pollSheetJob(jobId)
       setResultUrl(url)
       // Mirror the worker's persisted record (carry presetId for labeling) so the
       // grid updates immediately and a later hydration dedupes by url.

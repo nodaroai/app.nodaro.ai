@@ -375,7 +375,9 @@ export class JobFailedError extends NodaroError {
 
 /**
  * `nodes.runAndWait` polled past its `maxMs` deadline without the job reaching
- * a terminal status. Not an HTTP error — `status` is 0; catch by type/`code`.
+ * a terminal status. Time the job spent `queued` (waiting for a free slot)
+ * does not count toward the deadline. Not an HTTP error — `status` is 0; catch
+ * by type/`code`.
  */
 export class JobTimeoutError extends NodaroError {
   constructor(

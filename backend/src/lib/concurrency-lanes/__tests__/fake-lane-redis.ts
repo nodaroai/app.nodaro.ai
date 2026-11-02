@@ -581,6 +581,19 @@ const describe: Body = (x, req) => {
   return x.reply({ wait: out, payer: x.hget(x.ek(J), "payer") })
 }
 
+const describeMany: Body = (x, req) => {
+  x.purge()
+  x.settle()
+  const out: Array<{ jobId: string; wait: WaitOut; payer: string | null }> = []
+  for (const J of (req.jobIds as unknown[]).map(String)) {
+    let w: WaitOut | null = null
+    if (x.hget(x.sk(J), "pool")) w = x.serverWaitInfo(J)
+    else if (x.hget(x.ek(J), "line")) w = x.waitInfo(J)
+    if (w) out.push({ jobId: J, wait: w, payer: x.hget(x.ek(J), "payer") })
+  }
+  return x.reply({ waits: out })
+}
+
 const hasReservation: Body = (x, req) => {
   x.purge()
   x.settle()
@@ -756,7 +769,7 @@ const userEntries: Body = (x, req) => {
   return x.reply({ entries: out })
 }
 
-const BODIES: Record<LaneGateScriptName, Body> = { acquire, renew, release, borrow, leaseLine, serverWait, withdraw, describe, hasReservation, allWaiters, heads, setEnforced, setProviderCeilings, isEnforced, snapshot, userEntries }
+const BODIES: Record<LaneGateScriptName, Body> = { acquire, renew, release, borrow, leaseLine, serverWait, withdraw, describe, describeMany, hasReservation, allWaiters, heads, setEnforced, setProviderCeilings, isEnforced, snapshot, userEntries }
 const BY_SOURCE = new Map<string, Body>(Object.entries(LANE_GATE_SCRIPTS).map(([name, src]) => [src, BODIES[name as LaneGateScriptName]]))
 
 export interface FakeLaneClient {

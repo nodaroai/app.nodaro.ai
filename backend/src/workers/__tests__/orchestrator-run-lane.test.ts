@@ -94,6 +94,11 @@ const lanes = vi.hoisted(() => ({
   sizes: { provider: 10, llm: 20, local: 20, run: 2 } as LaneSizes,
 }))
 
+// Waiting is tested here, so turning limits on is made available; a case sets
+// `lanesAvailable.on = false` for the shipped, locked path.
+const lanesAvailable = vi.hoisted(() => ({ on: true }))
+vi.mock("@/lib/concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return lanesAvailable.on } }))
+
 vi.mock("@/lib/config.js", () => ({
   config: { REDIS_URL: "redis://localhost:6379", ORCHESTRATOR_CONCURRENCY: 20, MAX_CONCURRENT_NODES_PER_EXECUTION: 12, ORCHESTRATOR_DISPATCH_WIDTH: 50 },
   hasCredits: () => false,
@@ -152,7 +157,7 @@ vi.mock("@/lib/concurrency-lanes/sizes.js", () => ({
 vi.mock("@/lib/concurrency-lanes/provider-of.js", () => ({ primaryProviderOfJob: () => null }))
 
 import { runOrchestratorJob } from "../orchestrator-worker.js"
-import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"
+import { ConcurrencyGate, type LaneClient } from "../../lib/concurrency-lanes/gate.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 import { registerNotAdmittedHandler, resetWorkerAdmitHooksForTests } from "../../lib/concurrency-lanes/worker-admit.js"
 import { resetServerShareForTests, serverShare, serverShareOf } from "../../lib/concurrency-lanes/server-share.js"
@@ -204,6 +209,7 @@ beforeEach(async () => {
   resetWorkerAdmitHooksForTests()
   serverShare("orchestrator", 20)
   refused = []
+  lanesAvailable.on = true
   registerNotAdmittedHandler(async (args) => {
     refused.push({ id: args.row.id, reason: args.wait.reason })
     return "parked"
@@ -428,5 +434,41 @@ describe("the run lane at the orchestrator", () => {
     const acquire = vi.spyOn(gate, "acquire")
     await runOrchestratorJob(job("exec-1"), "t")
     expect(acquire).not.toHaveBeenCalled()
+  })
+})
+
+describe("limits locked (this release): a run pickup never waits for the gate", () => {
+  it("a run starts at once while every gate call hangs; it is counted once the admission lands, and released once", async () => {
+    lanesAvailable.on = false
+    let answer!: () => void
+    const answered = new Promise<void>((r) => { answer = r })
+    const real = makeFakeLaneClient(makeFakeLaneStore())
+    const client = {
+      eval: (...args: Parameters<LaneClient["eval"]>) => answered.then(() => real.eval(...args)),
+      publish: (...args: Parameters<LaneClient["publish"]>) => answered.then(() => real.publish(...args)),
+    } as unknown as LaneClient
+    const held = new ConcurrencyGate({ client: () => client, callTimeoutMs: 600_000 })
+    lanes.gate = held
+    const isEnforced = vi.spyOn(held, "isEnforced")
+    const acquire = vi.spyOn(held, "acquire")
+    const release = vi.spyOn(held, "release")
+    let hold: ConcurrencyHold | undefined
+    mocks.setExecuteNodeImpl(async () => {
+      hold = currentConcurrencyHold()
+      return { output: { text: "x" }, creditsUsed: 0 }
+    })
+    await runOrchestratorJob(job("exec-1"), "t")
+    expect(completedWrite("exec-1")).toBeDefined()
+    expect(hold).toMatchObject({ role: "run", lane: "run", jobId: "exec-1", leaseId: expect.any(String) })
+    // The run start read no enforcement flag; nothing was released before the gate answered.
+    expect(isEnforced).not.toHaveBeenCalled()
+    expect(release).not.toHaveBeenCalled()
+    answer()
+    await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1))
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ mode: "fresh", leaseId: hold!.leaseId })
+    expect(release).toHaveBeenCalledWith(hold!.leaseId, "completed")
+    await new Promise((r) => setTimeout(r, 20))
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await held.snapshot()).lines.find((l) => l.payer === "user:U")?.lanes.run?.running ?? 0).toBe(0)
   })
 })

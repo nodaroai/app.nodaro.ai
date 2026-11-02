@@ -11,6 +11,8 @@ import { createSSEStream } from "../lib/sse.js"
 import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 import { supabase } from "../lib/supabase.js"
 import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
+import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
+import { queueField, queueInfoFor, waitingRowsOf } from "../lib/concurrency-lanes/queue-info.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { completedJobColumns } from "../lib/job-status.js"
@@ -147,6 +149,10 @@ function gateAuth(req: FastifyRequest, reply: FastifyReply): string | null {
   return req.userId
 }
 
+/** What GET /v1/pipelines/:id reads (and answers, without `user_id`). */
+const PIPELINE_READ_COLUMNS =
+  "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage,mode,failure_reason,current_progress_message"
+
 export async function pipelinesRoutes(app: FastifyInstance) {
   // Spend-surface gate for every pipeline POST (creation, approvals, edits,
   // regenerations, chat — they all reserve credits later, inside the pipeline
@@ -197,25 +203,30 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     if (!params.success) {
       return reply.status(400).send({ error: { code: "validation_error" } })
     }
-    const { data, error } = await supabase
+    // The lane stamp (migration 568) tells a pipeline that waits for its run
+    // slot from one not driven yet (both `queued`). Read tolerantly: a database
+    // without the column answers the read without it, and it is not named again.
+    const { data, error } = await readWithLaneStamp("pipeline", (stamp) => supabase
       .from("pipelines")
-      .select(
-        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage,mode,failure_reason,current_progress_message",
-      )
+      .select(`${PIPELINE_READ_COLUMNS}${stamp}` as string)
       .eq("id", params.data.id)
-      .maybeSingle()
+      .maybeSingle())
     if (error) {
       return reply
         .status(500)
         .send({ error: { code: "db_error", detail: error.message } })
     }
     if (!data) return reply.status(404).send({ error: { code: "not_found" } })
+    // The column list is chosen at run time, so the row is typed here.
+    const row = data as unknown as Record<string, unknown> & { id: string; user_id: unknown }
     // Scope to caller — service-role client bypasses RLS so we enforce here.
-    if (data.user_id !== userId) {
+    if (row.user_id !== userId) {
       return reply.status(404).send({ error: { code: "not_found" } })
     }
-    const { user_id: _userId, ...publicFields } = data
-    return publicFields
+    const { user_id: _userId, lane_queued_at: _laneQueuedAt, ...publicFields } = row
+    // A pipeline waiting for its run slot stays `queued` and says where it stands.
+    const queues = await queueInfoFor(waitingRowsOf("pipeline", [row]))
+    return { ...publicFields, ...queueField(row.id, queues) }
   })
 
   // ── PATCH /v1/pipelines/:id — mode switch (manual target only) ─────────

@@ -9,6 +9,7 @@ import { optimizedImageUrl } from "@/lib/image"
 import { grokRegionEdit, grokSegmentMap } from "@/lib/api"
 import { getJobStatusLeanForNode, pollImageRefineToNode } from "../workflow-editor/poll-job"
 import { useT, tx } from "@/lib/i18n"
+import { QueuedPollClock } from "@/lib/queued-poll-clock"
 import { segmentColor } from "@/lib/segment-colors"
 import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/types/nodes"
 
@@ -36,7 +37,9 @@ import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/type
  * generation's KIE task id and cannot edit arbitrary images.
  */
 
-/** ~3 min at 2s ticks — the segment map usually completes in seconds. */
+/** ~3 min at 2s ticks — the segment map usually completes in seconds. A tick
+ *  that finds the job waiting for a free slot (`queued`) is not counted
+ *  (lib/queued-poll-clock.ts). */
 const SEGMENT_POLL_INTERVAL_MS = 2000
 const SEGMENT_POLL_MAX_TICKS = 90
 
@@ -185,7 +188,9 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
     setDetectError(undefined)
     try {
       const { jobId } = await grokSegmentMap(taskId, imageUrl)
-      for (let tick = 0; tick < SEGMENT_POLL_MAX_TICKS; tick++) {
+      const queued = new QueuedPollClock()
+      let ticks = 0
+      while (ticks < SEGMENT_POLL_MAX_TICKS) {
         await new Promise((r) => setTimeout(r, SEGMENT_POLL_INTERVAL_MS))
         if (!aliveRef.current) return
         // Through the node-owning wrapper like every other loop that has a
@@ -195,6 +200,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
         // node stays the one place the hold is recorded, and the next run's
         // RUN_START_RESET clears it.)
         const job = await getJobStatusLeanForNode(jobId, nodeId)
+        if (!queued.observe(job.status)) ticks += 1
         // A held job is waiting on a HUMAN, and a review routinely outlives
         // this 3-minute budget. Say so now instead of burning the remaining
         // ticks and then reporting a timeout that never happened.

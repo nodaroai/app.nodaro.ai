@@ -24,6 +24,8 @@ import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
 import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
+import { isWaitingRow, queueField, queueInfoFor, waitingRowsOf } from "../lib/concurrency-lanes/queue-info.js"
+import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { refuseIfConsentPending } from "../lib/consent-gate.js"
 import { createSSEStream } from "../lib/sse.js"
@@ -1192,8 +1194,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .single()
 
     if (!error && execution) {
+      // A run waiting for its run slot stays `pending` and says where it
+      // stands (a row the lanes never stamped costs no gate read).
+      const queues = await queueInfoFor(waitingRowsOf("execution", [execution]))
       return {
-        data: toExecutionResponse(execution),
+        data: { ...toExecutionResponse(execution), ...queueField(execution.id as string, queues) },
       }
     }
 
@@ -1203,16 +1208,23 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // A child job (CHILD_JOB_COLUMN) is never one: it reads as not found to a
     // non-admin, as on every job read by id.
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-    let jobQuery = supabase
-      .from("jobs")
-      .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
-      .eq("id", parsed.data.id)
-      .eq("user_id", req.userId)
-      .is("workflow_execution_id", null)
-      // A job in the Trash reads as one that does not exist.
-      .is(TRASHED_JOB_COLUMN, null)
-    if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
-    const { data: job, error: jobError } = await jobQuery.single()
+    // Also reads `lane_queued_at` (tolerantly: readWithLaneStamp): a job waits
+    // only once a lane stamped it, and its wait counts from that stamp, as on
+    // GET /v1/jobs/:id. The stamp itself is never sent.
+    const { data: jobRead, error: jobError } = await readWithLaneStamp("job", (stamp) => {
+      let jobQuery = supabase
+        .from("jobs")
+        .select(`id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at${stamp}`)
+        .eq("id", parsed.data.id)
+        .eq("user_id", req.userId!)
+        .is("workflow_execution_id", null)
+        // A job in the Trash reads as one that does not exist.
+        .is(TRASHED_JOB_COLUMN, null)
+      if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
+      return jobQuery.single()
+    })
+    // The stamp makes the column list a union the client cannot type: the row is the columns above.
+    const job = jobRead as unknown as (Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }) | null
 
     if (jobError || !job) {
       return reply.status(404).send({
@@ -1220,8 +1232,10 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
+    // A standalone job waiting for a slot says where it stands, as on GET /v1/jobs/:id.
+    const queues = await queueInfoFor(waitingRowsOf("job", [job]))
     return {
-      data: jobToExecutionResponse(job, isAdmin, await runCreditsFor([job], req.userId)),
+      data: { ...jobToExecutionResponse(job, isAdmin, await runCreditsFor([job], req.userId)), ...queueField(job.id, queues) },
     }
   })
 
@@ -1265,15 +1279,19 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // live updates from here.
       // As the detail read: never a child job for a non-admin (CHILD_JOB_COLUMN).
       const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-      let jobQuery = supabase
-        .from("jobs")
-        .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
-        .eq("id", execId)
-        .eq("user_id", req.userId)
-        .is("workflow_execution_id", null)
-        .is(TRASHED_JOB_COLUMN, null)
-      if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
-      const { data: job, error: jobError } = await jobQuery.single()
+      // With the lane stamp, tolerantly, as the detail read (its `queued` sidecar).
+      const { data: jobRead, error: jobError } = await readWithLaneStamp("job", (stamp) => {
+        let jobQuery = supabase
+          .from("jobs")
+          .select(`id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at${stamp}`)
+          .eq("id", execId)
+          .eq("user_id", req.userId!)
+          .is("workflow_execution_id", null)
+          .is(TRASHED_JOB_COLUMN, null)
+        if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
+        return jobQuery.single()
+      })
+      const job = jobRead as unknown as (Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }) | null
 
       if (jobError || !job) {
         return reply.status(404).send({
@@ -1646,43 +1664,49 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     // --- Source 2: standalone jobs (single-node runs with no execution record) ---
-    let jobsQuery = supabase
-      .from("jobs")
-      .select("id, node_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
-      .eq("workflow_id", workflowId)
-      .eq("user_id", req.userId)
-      .is("workflow_execution_id", null)
-      .is(TRASHED_JOB_COLUMN, null)
-      // A child job is shown only through its parent (CHILD_JOB_COLUMN), as on
-      // every job list: listed beside it, its charge would show twice (the
-      // parent's row carries its run's charge, the steps' included).
-      .is(CHILD_JOB_COLUMN, null)
-      .order("created_at", { ascending: false })
-      .limit(limit + 1)
+    // Also reads `lane_queued_at` (tolerantly: readWithLaneStamp), so a job
+    // waiting for a slot says how long it has waited (jobToExecutionSummary's
+    // `queued` sidecar). The stamp itself is never sent.
+    const jobsRead = readWithLaneStamp("job", (stamp) => {
+      let jobsQuery = supabase
+        .from("jobs")
+        .select(`id, node_id, status, progress, provider, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at${stamp}`)
+        .eq("workflow_id", workflowId)
+        .eq("user_id", req.userId)
+        .is("workflow_execution_id", null)
+        .is(TRASHED_JOB_COLUMN, null)
+        // A child job is shown only through its parent (CHILD_JOB_COLUMN), as on
+        // every job list: listed beside it, its charge would show twice (the
+        // parent's row carries its run's charge, the steps' included).
+        .is(CHILD_JOB_COLUMN, null)
+        .order("created_at", { ascending: false })
+        .limit(limit + 1)
 
-    // source=editor: exclude MCP single-node jobs (they carry no canvas node_id
-    // and have their own surface). app-runner / component / sub-workflow jobs
-    // always carry a workflow_execution_id → already excluded by the `.is(null)`
-    // above. Mirrors the exec query's editor-source filter (line ~780).
-    if (source === "editor") {
-      jobsQuery = jobsQuery.is("mcp_client", null)
-    }
-
-    // Map execution status filter to job statuses
-    if (statusFilter.length > 0) {
-      const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)
-      if (jobStatuses.length === 1) {
-        jobsQuery = jobsQuery.eq("status", jobStatuses[0])
-      } else if (jobStatuses.length > 1) {
-        jobsQuery = jobsQuery.in("status", jobStatuses)
+      // source=editor: exclude MCP single-node jobs (they carry no canvas node_id
+      // and have their own surface). app-runner / component / sub-workflow jobs
+      // always carry a workflow_execution_id → already excluded by the `.is(null)`
+      // above. Mirrors the exec query's editor-source filter (line ~780).
+      if (source === "editor") {
+        jobsQuery = jobsQuery.is("mcp_client", null)
       }
-    }
 
-    if (cursorTimestamp) {
-      jobsQuery = jobsQuery.lt("created_at", cursorTimestamp)
-    }
+      // Map execution status filter to job statuses
+      if (statusFilter.length > 0) {
+        const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)
+        if (jobStatuses.length === 1) {
+          jobsQuery = jobsQuery.eq("status", jobStatuses[0])
+        } else if (jobStatuses.length > 1) {
+          jobsQuery = jobsQuery.in("status", jobStatuses)
+        }
+      }
 
-    const [execResult, jobsResult] = await Promise.all([execQuery, jobsQuery])
+      if (cursorTimestamp) {
+        jobsQuery = jobsQuery.lt("created_at", cursorTimestamp)
+      }
+      return jobsQuery
+    })
+    // The stamp makes the column list a union the client cannot type: the rows are the columns above.
+    const [execResult, jobsResult] = (await Promise.all([execQuery, jobsRead])) as [Awaited<typeof execQuery>, { data: Array<Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }> | null; error: unknown }]
 
     if (execResult.error) {
       return sendInternalError(reply, req, execResult.error, "Failed to load executions")
@@ -1788,36 +1812,42 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     // --- Source 2: standalone jobs (single-node runs) ---
-    let jobsQuery = supabase
-      .from("jobs")
-      .select("id, node_id, workflow_id, user_id, status, progress, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at")
-      .is("workflow_execution_id", null)
-      .is(TRASHED_JOB_COLUMN, null)
-      // As above: a child job is never listed beside its parent.
-      .is(CHILD_JOB_COLUMN, null)
-      .not("workflow_id", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(limit + 1)
+    // With the lane stamp, tolerantly (readWithLaneStamp), for the `queued`
+    // sidecar of a job waiting for a slot; the stamp itself is never sent.
+    const jobsRead = readWithLaneStamp("job", (stamp) => {
+      let jobsQuery = supabase
+        .from("jobs")
+        .select(`id, node_id, workflow_id, user_id, status, progress, mcp_client, input_data, credits, usage_log_id, error_message, started_at, completed_at, created_at${stamp}`)
+        .is("workflow_execution_id", null)
+        .is(TRASHED_JOB_COLUMN, null)
+        // As above: a child job is never listed beside its parent.
+        .is(CHILD_JOB_COLUMN, null)
+        .not("workflow_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(limit + 1)
 
-    if (!isAdminViewAll) {
-      jobsQuery = jobsQuery.eq("user_id", req.userId)
-    }
-    if (limitedTo) jobsQuery = jobsQuery.in("workflow_id", [...limitedTo])
-
-    if (statusFilter.length > 0) {
-      const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)
-      if (jobStatuses.length === 1) {
-        jobsQuery = jobsQuery.eq("status", jobStatuses[0])
-      } else if (jobStatuses.length > 1) {
-        jobsQuery = jobsQuery.in("status", jobStatuses)
+      if (!isAdminViewAll) {
+        jobsQuery = jobsQuery.eq("user_id", req.userId)
       }
-    }
+      if (limitedTo) jobsQuery = jobsQuery.in("workflow_id", [...limitedTo])
 
-    if (cursorTimestamp) {
-      jobsQuery = jobsQuery.lt("created_at", cursorTimestamp)
-    }
+      if (statusFilter.length > 0) {
+        const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)
+        if (jobStatuses.length === 1) {
+          jobsQuery = jobsQuery.eq("status", jobStatuses[0])
+        } else if (jobStatuses.length > 1) {
+          jobsQuery = jobsQuery.in("status", jobStatuses)
+        }
+      }
 
-    const [execResult, jobsResult] = await Promise.all([execQuery, jobsQuery])
+      if (cursorTimestamp) {
+        jobsQuery = jobsQuery.lt("created_at", cursorTimestamp)
+      }
+      return jobsQuery
+    })
+
+    // The stamp makes the column list a union the client cannot type: the rows are the columns above.
+    const [execResult, jobsResult] = (await Promise.all([execQuery, jobsRead])) as [Awaited<typeof execQuery>, { data: Array<Record<string, unknown> & { id: string; user_id: string; workflow_id: string; usage_log_id?: string | null; credits?: number | null }> | null; error: unknown }]
 
     if (execResult.error) {
       return sendInternalError(reply, req, execResult.error, "Failed to load executions")
@@ -2020,6 +2050,15 @@ const JOB_STATUS_MAP: Record<string, string> = {
   pending_review: "pending_review",
 }
 
+/**
+ * The `queued` sidecar of a job waiting for a slot: `waitedSeconds`, whole
+ * seconds since its lane stamp, when the stamp is readable (else left out).
+ */
+function queuedSidecar(laneQueuedAt: unknown, now: number = Date.now()): { queued: true; waitedSeconds?: number } {
+  const at = typeof laneQueuedAt === "string" ? Date.parse(laneQueuedAt) : Number.NaN
+  return Number.isFinite(at) ? { queued: true, waitedSeconds: Math.max(0, Math.floor((now - at) / 1000)) } : { queued: true }
+}
+
 /** Job statuses the canvas treats as IN FLIGHT — a hold is a pending human
  *  decision with credits still reserved, not a terminal state. */
 const HELD_JOB_STATUS = "pending_review"
@@ -2079,6 +2118,13 @@ export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = fa
         // raw status string. Present only when true — mirrors the
         // orchestrator worker, which DELETES the key on the false edge.
         ...(row.status === HELD_JOB_STATUS ? { awaitingReview: true } : {}),
+        // A job waiting for a free concurrency slot reads as "pending" above
+        // (the API's word for it); this sidecar tells the editor's reload
+        // restore it is waiting in line, not stuck, and — when the read has the
+        // row's lane stamp (`lane_queued_at`, the clock the server's own queue
+        // timeout runs from) — for how long, so the restore credits exactly
+        // that. Present only on a queued row.
+        ...(isWaitingRow("job", row) ? queuedSidecar(row.lane_queued_at) : {}),
       },
     },
     totalNodes: 1,

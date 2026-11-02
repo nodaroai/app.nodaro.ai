@@ -36,6 +36,8 @@ describe("TRANSIENT_RUNTIME_KEYS", () => {
       "__listCompleted",
       "__listRunning",
       "__runSkipReason",
+      // The queue badge: replaced on every read of a job waiting for a slot.
+      "queueInfo",
       "__runsInFlight",
       "_upstreamRefresh",
       "__upstreamCount",

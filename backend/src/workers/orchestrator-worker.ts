@@ -32,6 +32,7 @@ import { readExecutionWorkerRow, runUnderRunAdmission } from "../lib/concurrency
 import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
 import { serverShare } from "../lib/concurrency-lanes/server-share.js"
 import { lanesEnforced } from "../lib/concurrency-lanes/sizes.js"
+import { lanesMeasureOnly } from "../lib/concurrency-lanes/slot.js"
 import { nodeQueueReporter } from "./node-queue-reporter.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
@@ -166,12 +167,14 @@ export interface DispatchSubject {
  *     user's lanes then do the limiting, across every run and entry point; the
  *     width is only the engine's safety valve.
  *
- * Reads the enforcement flag once (fails open to "not enforced"). The
+ * Reads the enforcement flag once (fails open to "not enforced"; not at all
+ * while limits cannot be turned on in this release). The
  * orchestrator calls it once per run and keeps the answer for the whole run
  * (`ctx.runDispatch`).
  */
 export async function resolveRunDispatch(subject: DispatchSubject): Promise<{ lanesEnforced: boolean; width: number }> {
-  if (await lanesEnforced()) return { lanesEnforced: true, width: config.ORCHESTRATOR_DISPATCH_WIDTH }
+  // Limits locked: never enforced, so the flag is not read (a Redis call no run start may wait for).
+  if (!lanesMeasureOnly() && (await lanesEnforced())) return { lanesEnforced: true, width: config.ORCHESTRATOR_DISPATCH_WIDTH }
   const { billingContext } = subject
   const width = billingContext.payer === "deployment"
     ? Math.min(billingContext.entitlements.parallelism, MAX_CONCURRENT_NODES_CEILING)

@@ -345,6 +345,22 @@ export async function cloudLaneSizesFor(subject: LaneSubject): Promise<LaneSizes
   return { ...sizesOfTier(plans, sized), ...overrides.get(id) }
 }
 
+/**
+ * The effective tier of the account that pays for a personal or deployment
+ * line, as its sizes read it (the same cached profile read); null when it is
+ * not known — a workspace line (sized by its grade, not an account), a failed
+ * read, or a deployment payer with no profile. A person with no profile is
+ * free, as billing reads it.
+ */
+export async function cloudPayerTier(payer: LaneSubject["payer"]): Promise<string | null> {
+  const { kind, id } = accountOf(payer)
+  if (kind === "workspace") return null
+  const read = await tierCache.get(id, () => readAccountTier(id), () => null)
+  if (read === null) return null
+  if (read === NO_PROFILE_ROW) return kind === "user" ? "free" : null
+  return read
+}
+
 /** Every plan's sizes (each lane plan tier, plus any extra row): the table over the code defaults. */
 export async function cloudPlanSizes(): Promise<Record<string, LaneSizes>> {
   const plans = await planRows()

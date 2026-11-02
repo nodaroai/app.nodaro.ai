@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import { getLocationById } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { LocationNodeData } from "@/types/nodes"
+import { QueuedPollClock } from "@/lib/queued-poll-clock"
 
 /**
  * Background refresh of the canvas LocationNode's asset arrays + status fields
@@ -24,7 +25,9 @@ import type { LocationNodeData } from "@/types/nodes"
  *     (i.e., the gen completed; we should drop the "running" indicator).
  *
  * Hard stop after {@link MAX_POLL_DURATION_MS} to avoid runaway polling if a
- * worker dies without clearing its job row.
+ * worker dies without clearing its job row. The time a read finds one of the
+ * location's jobs waiting for a free slot (`queued`) does not count toward it
+ * (lib/queued-poll-clock.ts): a job waiting in line is not a dead worker.
  */
 
 const POLL_INTERVAL_MS = 6_000
@@ -69,15 +72,18 @@ export function useLocationDataSubscription(args: {
       return
     }
     startTimeRef.current = Date.now()
+    const queued = new QueuedPollClock(startTimeRef.current)
 
     let cancelled = false
     const tick = async () => {
       if (cancelled) return
-      if (Date.now() - (startTimeRef.current ?? 0) > MAX_POLL_DURATION_MS) {
+      if (queued.countedMs(startTimeRef.current ?? 0) > MAX_POLL_DURATION_MS) {
         return // hard stop; user must reopen the studio to recover
       }
       try {
         const loc = await getLocationById(locationDbId)
+        // Waiting in line for a slot extends the hard stop.
+        queued.observe((loc?.pendingJobs ?? []).some((j) => j.status === "queued") ? "queued" : undefined)
         if (cancelled || !loc) return
 
         const patch: Partial<LocationNodeData> = {
@@ -105,6 +111,7 @@ export function useLocationDataSubscription(args: {
         updateNodeData(nodeId, patch)
       } catch {
         // Best-effort polling; transient errors are silent.
+        queued.observe(undefined)
       }
     }
 

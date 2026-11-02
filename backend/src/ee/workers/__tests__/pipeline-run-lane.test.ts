@@ -19,6 +19,11 @@ const refs = vi.hoisted(() => ({
   drive: vi.fn<(fn: () => Promise<unknown>) => Promise<unknown>>(async () => undefined),
 }))
 
+// Waiting is tested here, so turning limits on is made available; a case sets
+// `lanesAvailable.on = false` for the shipped, locked path.
+const lanesAvailable = vi.hoisted(() => ({ on: true }))
+vi.mock("@/lib/concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return lanesAvailable.on } }))
+
 vi.mock("bullmq", async (importOriginal) => {
   const real = await importOriginal<typeof import("bullmq")>()
   class Worker {

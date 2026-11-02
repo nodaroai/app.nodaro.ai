@@ -48,7 +48,7 @@ vi.mock("../../supabase.js", () => {
   return { supabase: { from } }
 })
 
-const { bullEntryFields, claimWithBullEntry, laneColumnsAbsent, noteLaneColumnError, readBullEntry, resetLaneColumnsForTests, stampQueued } = await import("../columns.js")
+const { bullEntryFields, claimWithBullEntry, laneColumnsAbsent, noteLaneColumnError, LANE_STAMP_SELECT, readBullEntry, readWithLaneStamp, resetLaneColumnsForTests, stampQueued } = await import("../columns.js")
 
 const namesLaneColumn = (payload: unknown) => Object.keys((payload ?? {}) as object).some((k) => k.startsWith("lane_"))
 
@@ -99,6 +99,39 @@ describe("claimWithBullEntry", () => {
     const claim = vi.fn(async (_fields: Record<string, string>) => ok)
     await claimWithBullEntry("video-generation", undefined, claim)
     expect(claim.mock.calls).toEqual([[{}]])
+  })
+})
+
+describe("readWithLaneStamp", () => {
+  type R = { data: unknown; error: { code: string; message: string } | null }
+  const missing = (column: string): R => ({ data: null, error: { code: "42703", message: `column workflow_executions.${column} does not exist` } })
+
+  it("hands the read the stamp to end its column list with", async () => {
+    const read = vi.fn(async (_stamp: string): Promise<R> => ({ data: { id: "e1", lane_queued_at: null }, error: null }))
+    expect((await readWithLaneStamp("execution", read)).data).toEqual({ id: "e1", lane_queued_at: null })
+    expect(read.mock.calls).toEqual([[LANE_STAMP_SELECT]])
+    expect(`id, status${LANE_STAMP_SELECT}`).toBe("id, status, lane_queued_at")
+  })
+
+  it("the stamp missing: read again without it, and never named again (on that kind's table)", async () => {
+    const read = vi.fn(async (stamp: string): Promise<R> => (stamp ? missing("lane_queued_at") : { data: { id: "e1" }, error: null }))
+    expect((await readWithLaneStamp("execution", read)).data).toEqual({ id: "e1" })
+    expect(laneColumnsAbsent("workflow_executions")).toBe(true)
+    expect(laneColumnsAbsent("jobs")).toBe(false)
+    await readWithLaneStamp("execution", read)
+    expect(read.mock.calls.map(([c]) => c)).toEqual([LANE_STAMP_SELECT, "", ""])
+  })
+
+  it("a missing column the caller named: its error is answered, and the stamp is not blamed", async () => {
+    const read = vi.fn(async (_stamp: string): Promise<R> => missing("gone_column"))
+    expect((await readWithLaneStamp("pipeline", read)).error?.message).toContain("gone_column")
+    expect(laneColumnsAbsent("pipelines")).toBe(false)
+  })
+
+  it("any other error: answered after one read", async () => {
+    const read = vi.fn(async (_stamp: string): Promise<R> => ({ data: null, error: { code: "57014", message: "statement timeout" } }))
+    expect((await readWithLaneStamp("job", read)).error?.code).toBe("57014")
+    expect(read).toHaveBeenCalledTimes(1)
   })
 })
 

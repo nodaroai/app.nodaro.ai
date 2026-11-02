@@ -1540,10 +1540,20 @@ getStatus(id: string): Promise<{ data: JobStatusResult }>
 Returns the lean status of a job — id, status, progress, output_data,
 error_message, error_hint, credit_status, and completed_at (when the job
 finished, on the server's clock; `null` until it has) (`GET /v1/jobs/:id/status`).
-Far less wire + CPU cost than
-`get()` because it skips `input_data` JSONB and cost/provider columns. Its
-`output_data` still receives the server-only JSON redaction described above.
-Intended for poll loops. Same auth and ownership semantics as `get()`.
+Far less wire + CPU cost than `get()` because it skips `input_data` JSONB and
+cost/provider columns. Its `output_data` still receives the server-only JSON
+redaction described above. Intended for poll loops. Same auth and ownership
+semantics as `get()`.
+
+While the job waits for a free slot (`status: "queued"`), the status also
+carries `queue` (`JobQueueInfo`): `{ lane, position, limit, running, reason,
+waitedSeconds, upgradeHint }` — its place in line and why it waits. The field
+appears **only while the job waits for a slot**; it is absent on every other
+read. `jobs.get()`, `executions.get()` and `pipelines.get()` carry it the
+same way (a workflow run waiting for its turn stays `pending`, a pipeline
+`queued`). Nothing waits for a slot in this
+release yet, so the field does not appear yet. Every field is described in
+[Waiting for a slot](./api-integration.md#waiting-for-a-slot).
 
 ```ts
 const { data } = await client.jobs.getStatus(jobId)
@@ -2659,6 +2669,11 @@ Returns the full execution including per-node state map. Falls back to a
 synthetic single-node-job shape on the server when the ID matches a standalone
 job.
 
+While the run waits for its turn (a free run slot) its `status` stays
+`pending` and it carries `queue` (`JobQueueInfo`, see
+[Waiting for a slot](./api-integration.md#waiting-for-a-slot)); the field is
+present only while it waits.
+
 ```ts
 const { data } = await client.executions.get(executionId)
 console.log(data.status, data.completedNodes, data.totalNodes)
@@ -3404,7 +3419,10 @@ runAndWait(
 
 Runs a single async node to completion: calls `run()`, extracts the `jobId`,
 then client-polls `jobs.getStatus(jobId)` every `opts.pollMs` (default 2000 ms)
-until a terminal status, up to `opts.maxMs` (default ~15 min). A `pending_review`
+until a terminal status, up to `opts.maxMs` (default ~15 min). The `maxMs`
+clock skips only the time the job spends waiting for a free slot (`queued`),
+so waiting for a slot never uses up the wait; every other status, `pending`
+included, counts as before. A `pending_review`
 status ends the poll on the first tick it is observed — with `JobHeldError`,
 not by waiting out `maxMs` — because that status is a human's decision pending,
 not the job's own progress.
@@ -3433,7 +3451,7 @@ release, absent on older jobs and wherever the server could not read the size
 | `cancelOnAbort` | `boolean` | `false` | Also cancel the submitted job when `signal` aborts (`POST /v1/jobs/:id/cancel`, which refunds its hold — except a metered LLM job whose call has started: it answers `inFlight: true`, finishes, and is charged what it used). Best effort: a failed cancel still rejects with the `JobAbortedError`. |
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
-| `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
+| `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`, counted from the first poll. Time the job spends waiting for a free slot (`queued`) does not count; every other status does. |
 | `idempotencyKey` | `string` | — | `Idempotency-Key` for the submit. Reuse it when retrying a call that timed out, so the run is not started or charged twice. |
 
 Throws (all typed, catchable by `instanceof`):
@@ -3444,7 +3462,7 @@ Throws (all typed, catchable by `instanceof`):
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
 - `ModelUnavailableError` — a model this deployment does not offer (or one an admin switched off), refused by the credit guard in `run()` before credits are held.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
-- `JobTimeoutError` — `maxMs` deadline exceeded.
+- `JobTimeoutError` — `maxMs` deadline exceeded (time spent waiting for a slot not counted).
 - `JobAbortedError` — `signal` fired. The job itself keeps running unless `cancelOnAbort` is set; to stop it later, `jobs.cancel(err.jobId)`.
 - `JobHeldError` — the job entered `pending_review` (`code = "job_held"`, carries `jobId`; see
   [Errors](#class-jobhelderror-extends-nodaroerror)). Only on
@@ -4798,6 +4816,11 @@ get(id: string): Promise<PipelineRecord>
 Fetch current pipeline state: `status`, `current_stage`, credit counters,
 `mode`, and `failure_reason` (set when `status='failed'`). Poll this to track
 a headless Auto run to completion. Requires `pipelines:read`.
+
+While the pipeline waits for its turn (a free run slot) its `status` stays
+`queued` and it carries `queue` (`JobQueueInfo`, see
+[Waiting for a slot](./api-integration.md#waiting-for-a-slot)); the field is
+present only while it waits.
 
 ```ts
 const pipeline = await client.pipelines.get(id)
@@ -9224,7 +9247,8 @@ not two.
 
 - `Job` — snake_case wire shape; includes provenance: `source` (`"internal" | "mcp" | "app" | "cli" | "sdk" | "extension" | "web" | "api"`) + `source_detail` (origin host / `extension/<name>` label / `sdk/<version>` / MCP client / app id) so a library view can label or filter media by origin
 - `JobStatus` — `"pending" | "queued" | "processing" | "pending_review" | "completed" | "failed" | "cancelled"`. `pending_review` is **in-flight, not terminal**: a job policy registered by the deployment held the output for human review. Keep waiting — it resolves to `completed` (approved), `failed` (rejected, with `error_hint.kind === "policy-block"`) or `cancelled` (the owner cancelled it; a held job is cancellable like any in-flight job), and `credit_status` reads `"reserved"` for the whole hold. `runAndWait` throws `JobHeldError` on the first held tick rather than waiting it out. Only appears on deployments that register a job policy.
-- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
+- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message?, error_hint?, credit_status?, completed_at?, queue? }`; `queue` is present only while the job waits for a slot (`status: "queued"`)
+- `JobQueueInfo` — the `queue` field of a job, workflow-run or pipeline read: `{ lane: "provider" | "llm" | "local" | "run", position, limit, running, reason: "user_lane" | "provider_ceiling" | "server_busy", waitedSeconds, upgradeHint: "plan" | "workspace" | null }`; see [Waiting for a slot](./api-integration.md#waiting-for-a-slot)
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 - `DeleteJobResult` — `{ success: true }`
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
@@ -9331,7 +9355,7 @@ not two.
 
 ### Pipelines
 
-- `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message }`
+- `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message, queue? }`; `queue` (`JobQueueInfo`) is present on `get()` only while the pipeline waits for a slot
 - `PipelineInput`, `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `AnimateSubGate`, `ChatEnabledStage`, `ProposedChange` — re-exported from `@nodaro/shared`
 - `PipelineInput` — body for `create()`, re-exported from `@nodaro/shared`
 - `PendingApproval` — `{ stage_name: PipelineStageName; output: unknown }`

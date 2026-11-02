@@ -1,5 +1,6 @@
 import type { NodaroClientCore } from "../core.js"
 import type { PipelineInput, PipelineStageName, PipelineStatus, PipelineMode, SubGateName, AnimateSubGate, ChatEnabledStage, ProposedChange } from "@nodaro/shared/pipeline"
+import type { JobQueueInfo } from "./jobs.js"
 
 export type {
   PipelineInput,
@@ -28,6 +29,12 @@ export interface PipelineRecord {
   mode: PipelineMode | null
   failure_reason: string | null
   current_progress_message: string | null
+  /**
+   * Where the pipeline stands in line while it waits for its turn (a free run
+   * slot); its `status` stays `queued` meanwhile. Present on `get()` only while
+   * it waits, never on `list()`. See {@link JobQueueInfo}.
+   */
+  queue?: JobQueueInfo
 }
 
 /** One stage currently awaiting approval (from `pendingApprovals`). */

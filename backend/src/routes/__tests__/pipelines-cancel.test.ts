@@ -253,7 +253,8 @@ describe("POST /v1/pipelines/:id/cancel", () => {
 
     expect(res.statusCode).toBe(200)
     expect(testPipelines.get(PIPELINE_ID)!.status).toBe("cancelled")
-    expect(await gate.describeWait(PIPELINE_ID)).toBeNull()
+    // Out of its line once the withdraw lands (fired, not awaited, while limits are locked).
+    await vi.waitFor(async () => expect(await gate.describeWait(PIPELINE_ID)).toBeNull())
     expect(await gate.describeWait("later-run")).toMatchObject({ position: 1 })
     await app.close()
   })

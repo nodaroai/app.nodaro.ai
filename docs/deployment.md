@@ -1229,6 +1229,16 @@ them off whatever the switch's stored value or `LANES_ENFORCED` says, and
 always allowed. Lanes still measure: every job is counted in its lane, and one
 that would have waited runs at once and is recorded as over its limit.
 
+Any signed-in user can read what applies to them at `GET /v1/me/lanes`:
+whether lanes are enforced on this server (its copy of the switch, refreshed
+every 30 seconds, and kept at its last reading while the server cannot reach
+Redis) and the sizes of their own lines. On Community and Business
+every line has the four `LANE_*_PER_USER` sizes, so a fresh install with the
+defaults answers one line of `provider 12 · llm 24 · local 24 · run 12` and
+`enforced: false`; the community probe (`node tools/community-smoke.mjs <baseUrl>`) checks exactly that. See
+[API integration](./api-integration.md#your-lanes) for the
+answer's shape.
+
 Once a release makes them available, turning concurrency limits on changes
 behaviour: a job over its line's limit then waits in line (status `queued`)
 instead of starting, and starts when a slot of its line frees. Whole runs

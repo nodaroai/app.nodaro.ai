@@ -5,6 +5,7 @@ import { JOB_STATUSES } from "../lib/job-status.js"
 import { JOB_SOURCES } from "../lib/job-source.js"
 import { JOB_RATINGS, JOB_RATING_FILTERS } from "../lib/job-ratings.js"
 import { MAX_JOB_LIST_FILTER_VALUES } from "../lib/job-list-filters.js"
+import { CONCURRENCY_LANES, UPGRADE_HINTS, WAIT_REASONS } from "../lib/concurrency-lanes/vocabulary.js"
 
 /** What `output_data` says of an image job's size — shared by Job and JobStatus. */
 const OUTPUT_DATA_DESCRIPTION =
@@ -12,6 +13,27 @@ const OUTPUT_DATA_DESCRIPTION =
   "with the image's pixel size: `width` / `height` (integers) of `imageUrl` as stored, EXIF orientation applied, and — beside " +
   "`imageUrls` — `images`, one `{ url, width, height }` per entry in the same order (an entry whose size could not be read has only `url`). " +
   "Present on image jobs completed after the size was recorded; absent when it could not be read."
+
+/**
+ * Where a job waiting for a slot stands. Present only while the job waits
+ * (status `queued`); this release never makes a job wait, so it is absent.
+ */
+const JobQueue = z
+  .object({
+    lane: z.enum(CONCURRENCY_LANES).describe("The kind of work the job waits to run as: a provider call, an LLM call, local processing, or a whole run."),
+    position: z.number().int().min(1).describe("Its place in line, 1 = next."),
+    limit: z.number().int().min(0).describe("How many of this kind of work the line it waits in runs at once — yours, or the workspace's when the work is billed to a workspace (0 while it waits for the server rather than in a line)."),
+    running: z.number().int().min(0).describe("How many of them run now in that line (a workspace line counts every member's work; 0 while it waits for the server rather than in a line)."),
+    reason: z
+      .enum(WAIT_REASONS)
+      .describe("Why it waits: your own line is full, the provider is busy across the platform, or the server is busy."),
+    waitedSeconds: z.number().int().min(0).describe("How long it has waited so far."),
+    upgradeHint: z
+      .enum(UPGRADE_HINTS)
+      .nullable()
+      .describe("Set only when the line it waits in is full (`reason: \"user_lane\"`): a bigger plan (`plan`) or the workspace's plan (`workspace`) would let more run at once. Null otherwise — a provider or the server is busy across the platform, or the plan is already Business or above."),
+  })
+  .openapi("JobQueue")
 
 const JobSummary = z
   .object({
@@ -83,6 +105,7 @@ const JobSummary = z
       .nullable()
       .optional()
       .describe("The owner's rating of the job (`PUT /v1/jobs/{id}/rating`), or null when unrated."),
+    queue: JobQueue.optional().describe("Present only on the single-job read (`GET /v1/jobs/{id}`) while the job waits for a slot (status `queued`) — never on the rows of the `GET /v1/jobs` list; see JobQueue."),
   })
   .openapi("Job")
 
@@ -107,6 +130,7 @@ const JobStatus = z
       .describe(
         "Present (true) while the platform's reconcile system is self-healing this job — the worker abandoned it after the provider delivered; it will complete or be refunded automatically.",
       ),
+    queue: JobQueue.optional().describe("Present only while the job waits for a slot (status `queued`); see JobQueue."),
   })
   .openapi("JobStatus")
 
