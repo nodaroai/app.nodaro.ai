@@ -46,10 +46,21 @@ export const ENGINES = [
   "providers/audio/youtube-extractor.ts", // extractYouTubeAudio[WithMeta] (extract-youtube-audio, transcribe)
   "providers/video/trim-audio.ts", // trimAudio (the Trim Audio node / route, given a social link)
   "routes/youtube-audio.ts", // the sync audio route: its own yt-dlp run, gated in place
+  "routes/media-import-url.ts", // a picture from a link (safeFetch, no yt-dlp), gated in place
+  "routes/media-url-import.ts", // a recording from a link (safeFetch, no yt-dlp), gated in place
 ] as const
 
-/** The yt-dlp runners, by name; the library itself (`youtube-dl-exec`) and the spawners' home are runner modules. */
+/** Engines that fetch through safeFetch, not a yt-dlp runner: held to the gate, not to the runner check. */
+const FETCHES_WITHOUT_A_RUNNER: ReadonlySet<string> = new Set(["routes/media-import-url.ts", "routes/media-url-import.ts"])
+
+/**
+ * The runners, by name: the yt-dlp runners (the library itself, `youtube-dl-exec`,
+ * and the spawners' home are runner modules) and the two safeFetch importers
+ * of `lib/media-import.ts` / `lib/media-url-import.ts`.
+ */
 const RUNNER_NAMES = [
+  "importImageFromUrl",
+  "importRecordingFromUrl",
   "youtubedl",
   "runYtDlpOptions",
   "spawnYtDlpDownload",
@@ -63,7 +74,7 @@ const RUNNER_NAMES = [
   "runThroughClientLadder",
 ] as const
 const RUNNER_CALL = new RegExp(`\\b(?:${RUNNER_NAMES.join("|")})\\s*\\(`)
-const RUNNER_MODULE = /(?:^|\/)(?:youtube-dl-exec|ytdlp-process\.js|ytdlp-options-run\.js|ytdlp-bin\.js|youtube-video\.js|social-post-video\.js)$/
+const RUNNER_MODULE = /(?:^|\/)(?:youtube-dl-exec|ytdlp-process\.js|ytdlp-options-run\.js|ytdlp-bin\.js|youtube-video\.js|social-post-video\.js|media-import\.js|media-url-import\.js)$/
 
 /** Every file that may reach a runner, with why; anything else that does is a stray lane. */
 const MAY_REACH_A_RUNNER: ReadonlyMap<string, string> = new Map([
@@ -72,6 +83,9 @@ const MAY_REACH_A_RUNNER: ReadonlyMap<string, string> = new Map([
   ["providers/video/ytdlp-options-run.ts", "runYtDlpOptions itself"],
   ["providers/video/ytdlp-process.ts", "the spawners themselves"],
   ["providers/video/social-post-video.ts", "the social post probe and its download, reached only through the engines and the plugin toolkit"],
+  ["lib/media-import.ts", "importImageFromUrl itself (safeFetch)"],
+  ["lib/media-url-import.ts", "importRecordingFromUrl itself (safeFetch)"],
+  ["lib/mcp/flows/import-inputs.ts", "the MCP flow's copy of an outside picture: reads the gate, spends nothing (it carries no confirmation; an agent's standing authorization is a later change)"],
   ["lib/private-plugins/toolkit.ts", "the private plugin lane: hands the runners to a plugin — NOT gated yet (copyright plan PR 6/7: the other clients)"],
   ["lib/private-plugins/types.ts", "the plugin contract: the TYPE of what the toolkit hands over, no call"],
 ])
@@ -118,6 +132,8 @@ describe("import-gate totality", () => {
     const reference = `import { downloadYouTubeVideo } from "./youtube-video.js"\nconst lanes = { download: downloadYouTubeVideo }`
     expect(runnerImportsOf(reference)[0]?.names).toEqual(["downloadYouTubeVideo"])
     expect(RUNNER_CALL.test(reference)).toBe(false) // a reference is not a call; the import net catches it
+    const fetcher = `import { importImageFromUrl } from "../../media-import.js"`
+    expect(runnerImportsOf(fetcher)[0]?.names).toEqual(["importImageFromUrl"])
     const probeOnly = `import { ytMetadataProbe, type VideoSection } from "../providers/video/youtube-video.js"`
     expect(runnerImportsOf(probeOnly)).toEqual([])
     const typeOnly = `import type { YtDlpRunLimits } from "./ytdlp-process.js"`
@@ -142,10 +158,11 @@ describe("import-gate totality", () => {
     expect(strays, "a new lane that fetches a link must run through an engine (lib/import-gate.ts)").toEqual([])
   })
 
-  it("the allowlist names only files that exist and still reach a runner", () => {
+  it("the allowlist names only files that exist and still reach a runner (an engine may fetch without one)", () => {
     for (const [rel, why] of MAY_REACH_A_RUNNER) {
       const file = files.find((f) => f.rel === rel)
       expect(file, `${rel} (${why}) exists`).toBeDefined()
+      if (FETCHES_WITHOUT_A_RUNNER.has(rel)) continue
       const reaches = runnerImportsOf(file!.source).length > 0 || RUNNER_CALL.test(file!.source)
       expect(reaches, `${rel} (${why}) still reaches a runner; drop it from the list otherwise`).toBe(true)
     }

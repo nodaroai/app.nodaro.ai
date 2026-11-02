@@ -5107,16 +5107,18 @@ setting `content_rights_required` (off by default; `403 rights_confirmation_requ
 once on). The server accepts before it requires, so every client adds its
 checkbox at its own pace; a client always sends one. Every lane that fetches a
 link runs the same check: the video download, the two audio routes above,
-`POST /v1/trim-audio` given a social link (it takes `confirmationId` too), a
-run's own fetch of a Video URL node (video and sound), a transcription or a
-Suno cover given a link, and the MCP audio tool (it posts to
-`/v1/extract-youtube-audio`). **Not covered yet, and a blocker before the
+`POST /v1/trim-audio` given a social link, the picture and recording imports
+`POST /v1/media/import-url` and `POST /v1/media/import-recording` (all three
+take `confirmationId` too), a run's own fetch of a Video URL node (video and
+sound), a transcription or a Suno cover given a link, and the MCP audio tool
+(it posts to `/v1/extract-youtube-audio`). A file uploaded from the person's
+own device is not an import of a link and runs no such check. **Not covered yet, and a blocker before the
 setting is turned on** — these lanes run the check but have no way to send a
 confirmation, so with the setting on each one is refused: a run started from
 the API, MCP, the SDK or a published app that downloads a link itself (every
 run of a Video URL node), `POST /v1/transcribe` and the Suno cover and
-upload-extend routes given a link, the MCP audio tool, and a private plugin's
-own download. Those lanes, and the standing authorization for API keys and
+upload-extend routes given a link, the MCP audio tool, the editor's own
+picture-link import, and a private plugin's own download. Those lanes, and the standing authorization for API keys and
 agents, are a later change.
 
 **Import source policies.** Before the confirmation is checked, the link's

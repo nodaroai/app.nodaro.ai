@@ -303,7 +303,7 @@ export async function consumeRightsConfirmation(input: ConsumeRightsInput): Prom
   // The same download trying again (a worker job's retry after a transient
   // fetch failure, keyed by its job id) passes; another download is refused.
   if (input.requestId && (await consumedByRequest(input.confirmationId)) === input.requestId) return
-  throw new ContentRightsError("rights_confirmation_used", "That confirmation was used for a download already. Confirm again to import.")
+  throw new ContentRightsError("rights_confirmation_used", "That confirmation was used for an import already (a failed one counts). Confirm again to import.")
 }
 
 /** The request id on the confirmation's `consumed` event, or null. */

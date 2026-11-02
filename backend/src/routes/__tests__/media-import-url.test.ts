@@ -35,6 +35,13 @@ vi.mock("@/lib/storage.js", () => ({
   uploadBufferToR2: h.uploadBufferToR2,
 }))
 
+// The import gate has its own tests (media-import-gate.test.ts); here it always allows.
+vi.mock("@/lib/import-gate.js", () => ({
+  isImportRefusal: () => false,
+  requireImportAllowed: vi.fn().mockResolvedValue(undefined),
+  spendImportConfirmation: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("@/utils/file-validation.js", () => ({
   reserveStorageIfWithinLimit: h.reserveStorageIfWithinLimit,
   refundStorage: h.refundStorage,

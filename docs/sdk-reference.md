@@ -419,7 +419,7 @@ HTTP 401. Token missing, expired, or invalid.
 HTTP 403. Permission denied. When the server returns
 `code: "insufficient_scope"`, the missing scope is exposed via `missingScope`.
 
-- `code = "forbidden"`, `status = 403` (only `ModelUnavailableError` sets its own code)
+- `code = "forbidden"`, `status = 403` (only `ModelUnavailableError` and `ImportRefusedError` set their own code)
 - `missingScope?: string` — set when scope check failed
 - **Constructor:** `new ForbiddenError(message?: string, missingScope?: string, code?: string)`
 
@@ -444,6 +444,33 @@ codes. The envelope names no model: what was refused is the request's own
 
 - `code: "model_not_available" | "model_disabled"`, `status = 403`
 - **Constructor:** `new ModelUnavailableError(code: ModelUnavailableCode, message?: string)`
+
+### `class ImportRefusedError extends ForbiddenError`
+
+HTTP 403 refusing an **import of a link** (`media.downloadVideo`,
+`uploads.importUrl`, the audio imports), before anything was fetched: the
+content rights check or the site's policy said no (section "Content rights"
+of the API guide):
+
+| `code` | Refusal |
+|--------|---------|
+| `import_source_disabled` | the link's site is disabled by an administrator; the message names no site |
+| `rights_confirmation_required` | the deployment requires a confirmation and none was sent |
+| `rights_confirmation_not_found` | no confirmation has that id |
+| `rights_confirmation_mismatch` | the confirmation is for another link or another account |
+| `rights_confirmation_stale` | the declaration changed since; read it again and confirm again |
+| `rights_confirmation_expired` | the confirmation is older than an hour |
+| `rights_confirmation_used` | an import was made under it already (an import that failed after its fetch began counts: the lock is spent when the fetch starts) |
+
+The remedy for a `rights_confirmation_*` code is `client.contentRights.confirm({ url })`
+again and a new import with the answered id. It is a `ForbiddenError`, so an
+existing `instanceof ForbiddenError` catch still catches it; check
+`instanceof ImportRefusedError` first and read `code` to show your own
+sentence. `IMPORT_REFUSAL_CODES` (a `ReadonlySet<ImportRefusalCode>`) lists the
+codes.
+
+- `code: ImportRefusalCode`, `status = 403`
+- **Constructor:** `new ImportRefusedError(code: ImportRefusalCode, message?: string)`
 
 ### `class NotFoundError extends NodaroError`
 
@@ -7402,15 +7429,17 @@ to `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened. The
 URL is unguessable but public, so never store a secret in it. It creates no
 library item.
 
-#### `importUrl(url)`
+#### `importUrl(url, options?)`
 
 ```ts
-importUrl(url: string): Promise<ImportUrlResult>
+importUrl(url: string, options?: { confirmationId?: string }): Promise<ImportUrlResult>
 ```
 
-`POST /v1/media/import-url` with the body `{ url }` → copies a picture from a
-web address into your storage and returns it (unwraps the `{ data }`
-envelope). The platform fetches the address (http(s) only, never a private
+`POST /v1/media/import-url` with the body `{ url, confirmationId? }` → copies a
+picture from a web address into your storage and returns it (unwraps the
+`{ data }` envelope). An import of a link runs the content rights check
+(section "Content rights" of the API guide): pass the `confirmationId` from
+`client.contentRights.confirm({ url })` when the deployment requires one. The platform fetches the address (http(s) only, never a private
 address, up to 20 MB) and keeps it only if it decodes as an image (JPEG, PNG,
 WebP, GIF; HEIC/HEIF and AVIF are converted to JPEG or PNG). The stored copy
 is an upload of yours, served with CORS, so a browser canvas can read its
@@ -7422,6 +7451,7 @@ Errors:
 | Status | Error | When |
 |--------|-------|------|
 | 400 | `NodaroError`, `code: "validation_error"` | Not an http(s) address, an address that is a private or reserved IP, not a decodable image, or an image in a format that is not accepted (SVG, TIFF, …; accepted: JPEG, PNG, WebP, AVIF, GIF, HEIC). |
+| 403 | `ImportRefusedError` (a `ForbiddenError`), `code: "import_source_disabled"` or a `rights_confirmation_*` code | The site is disabled by an administrator, or the content rights confirmation is missing (while required), for another link or account, stale, expired or used (a failed import uses it too). |
 | 422 | `NodaroError`, `code: "fetch_failed"` | The address could not be reached (including a host that resolves to a private address), or answered with an error. |
 | 413 | `StorageExceededError`, `reason: "file_too_large"` | The picture is over 20 MB. |
 | 413 | `StorageExceededError`, `reason: "storage_limit_exceeded"` | Your storage is full; `details` carries `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`. |
