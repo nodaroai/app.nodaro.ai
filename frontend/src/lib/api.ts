@@ -4813,6 +4813,10 @@ export interface StartVideoDownloadOptions {
   /** `false` = accept a download with no sound. Absent keeps the server's default
    *  (a silent result fails, and is retried through the proxy pool first). */
   readonly requireAudio?: boolean
+  /** The content rights confirmation this import is made under
+   *  (`nodaroClient.contentRights.confirm`); the server requires one once
+   *  `content_rights_required` is on. */
+  readonly confirmationId?: string
 }
 
 /**
@@ -4824,7 +4828,7 @@ export async function startVideoDownload(
   url: string,
   options: StartVideoDownloadOptions = {},
 ): Promise<{ downloadId: string }> {
-  const { maxHeight, section, exactSection, requireAudio } = options
+  const { maxHeight, section, exactSection, requireAudio, confirmationId } = options
   return apiJson("/v1/download-video", {
     body: {
       url,
@@ -4832,6 +4836,7 @@ export async function startVideoDownload(
       ...(section ? { sectionStartSec: section.startSec, sectionEndSec: section.endSec } : {}),
       ...(section && exactSection !== undefined ? { exactSection } : {}),
       ...(requireAudio !== undefined ? { requireAudio } : {}),
+      ...(confirmationId !== undefined ? { confirmationId } : {}),
     },
     label: "apiErr.startDownloadTheVideoMayBePrivate",
   })

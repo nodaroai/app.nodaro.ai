@@ -1,21 +1,27 @@
 // A source clip from a link (YouTube, TikTok, Instagram, X, Facebook):
 // downloaded into the admin's own media through the platform's link download
 // (`downloadVideoLink`), a YouTube video only in the part picked on its embed.
-// Every failure is worded here from its class; the download's own text (the
+// An import of a link: the admin confirms the content rights declaration
+// first (the box starts unticked and a changed link unticks it), the
+// confirmation is recorded for the link and rides into the download. Every
+// failure is worded here from its class; the download's own text (the
 // downloader's or the platform's) is never shown.
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { detectVideoLinkPlatform } from "@nodaro/shared/video"
+import type { ContentRightsDeclaration } from "@nodaro/sdk/content-rights"
 import { discardMedia, fetchVideoMetadata } from "@/lib/api"
+import { nodaroClient } from "@/lib/nodaro-client"
 import { extractVideoLinkId, type DownloadErrorCode } from "@/lib/video-link"
 import { downloadVideoLink } from "@/lib/video-link-download"
 
 /** Why a link gave no clip. */
-export type LinkFailure = DownloadErrorCode | "unsupported" | "noVideo"
+export type LinkFailure = DownloadErrorCode | "unsupported" | "noVideo" | "rights"
 
 export const LINK_FAILURES: Readonly<Record<LinkFailure, string>> = {
   unsupported: "Paste a link to where the video is.",
   noVideo: "This link does not point at one video. Paste the video's own link.",
+  rights: "Your confirmation could not be recorded. Read the declaration and confirm again.",
   live: "This is a live stream. Use a recorded video.",
   busy: "Too many downloads are running on this account. Wait for one to finish, then try again.",
   private: "This video is private or needs a sign-in. Use a public video.",
@@ -27,7 +33,7 @@ export const LINK_FAILURES: Readonly<Record<LinkFailure, string>> = {
 }
 
 /** Failures another try of the same link may fix. */
-export const RETRYABLE: ReadonlySet<LinkFailure> = new Set<LinkFailure>(["busy", "no_audio", "connection", "generic"])
+export const RETRYABLE: ReadonlySet<LinkFailure> = new Set<LinkFailure>(["rights", "busy", "no_audio", "connection", "generic"])
 
 /** The longest video downloaded whole when its embed cannot play (the platform's embed-free cap, 10 min). */
 export const WHOLE_DOWNLOAD_MAX_SEC = 600
@@ -53,6 +59,12 @@ export interface LinkClip {
   readonly label: string
 }
 
+/** The declaration as the page has it: loading, its text, or why it could not be read. */
+export type DeclarationState =
+  | { readonly status: "loading" }
+  | { readonly status: "ready"; readonly declaration: ContentRightsDeclaration }
+  | { readonly status: "failed"; readonly message: string }
+
 const SITE_NAMES: Readonly<Record<string, string>> = {
   youtube: "YouTube",
   tiktok: "TikTok",
@@ -68,7 +80,14 @@ export function isVideoLink(text: string): boolean {
 
 export interface SourceLink {
   readonly state: LinkState
-  /** Takes a pasted link: refused at once when it is not one; a YouTube video waits for its part; any other downloads whole. */
+  /** The declaration the admin confirms before a link is fetched. */
+  readonly declaration: DeclarationState
+  /** Reads the declaration again after a failed read. */
+  readonly reloadDeclaration: () => void
+  /** The box: ticked for the link about to be fetched; a changed link unticks it. */
+  readonly confirmed: boolean
+  readonly setConfirmed: (confirmed: boolean) => void
+  /** Takes a pasted link: refused at once when it is not one, or when the declaration is not confirmed; a YouTube video waits for its part; any other downloads whole. */
   readonly fetch: (text: string) => void
   /** Downloads the YouTube video's `section` (cut exactly), or the whole video with none; also Try again after a failure. */
   readonly download: (section?: LinkSection) => void
@@ -86,11 +105,15 @@ const NEVER = new AbortController().signal
  */
 export function useSourceLink(onClip: (clip: LinkClip) => void): SourceLink {
   const [state, setState] = useState<LinkState>({ step: "idle" })
+  const [declaration, setDeclaration] = useState<DeclarationState>({ status: "loading" })
+  const [confirmed, setConfirmed] = useState(false)
   const generation = useRef(0)
   const current = useRef<LinkState>(state)
+  const declared = useRef<DeclarationState>(declaration)
   const deliver = useRef(onClip)
   useEffect(() => {
     current.current = state
+    declared.current = declaration
     deliver.current = onClip
   })
   useEffect(
@@ -100,16 +123,50 @@ export function useSourceLink(onClip: (clip: LinkClip) => void): SourceLink {
     [],
   )
 
+  const reloadDeclaration = useCallback(() => {
+    setDeclaration({ status: "loading" })
+    nodaroClient.contentRights.declaration().then(
+      (read) => setDeclaration({ status: "ready", declaration: read }),
+      // Worded here, never in the platform's words.
+      () => setDeclaration({ status: "failed", message: "The declaration could not be loaded." }),
+    )
+  }, [])
+  useEffect(() => {
+    reloadDeclaration()
+  }, [reloadDeclaration])
+
   const start = useCallback(async (url: string, title: string | null, section: LinkSection | undefined, gen: number) => {
     const live = () => generation.current === gen
     setState({ step: "downloading", url, percent: 0 })
-    const outcome = await downloadVideoLink(url, section ? { mode: "section", section } : { mode: "whole" }, {
+    // The confirmation for THIS link, under the declaration shown, recorded
+    // before anything is fetched; the download is made under it.
+    const read = declared.current
+    const confirm = async (): Promise<string> => {
+      if (read.status !== "ready") throw new Error("The declaration is not loaded")
+      return (await nodaroClient.contentRights.confirm({ url, declarationVersion: read.declaration.version })).id
+    }
+    let confirmationId: string
+    try {
+      confirmationId = await confirm()
+    } catch {
+      // The declaration may have changed since it was read (the server refuses
+      // a confirmation under an older version): read it again, untick, and
+      // let the admin confirm the text as it is now.
+      reloadDeclaration()
+      setConfirmed(false)
+      if (live()) setState({ step: "failed", url, failure: "rights", ...(section ? { section } : {}) })
+      return
+    }
+    if (!live()) return
+    const outcome = await downloadVideoLink(url, section ? { mode: "section", section, confirmationId } : { mode: "whole", confirmationId }, {
       onEvent: (event) => {
         if (live() && event.kind === "progress") {
           setState({ step: "downloading", url, percent: Math.max(0, Math.min(100, Math.round(event.percent))) })
         }
       },
       signal: NEVER,
+      // The one restart after the server forgot the download: the first confirmation was spent by the first start.
+      refreshConfirmation: confirm,
     })
     if (outcome.status === "completed") {
       if (!live()) {
@@ -118,22 +175,27 @@ export function useSourceLink(onClip: (clip: LinkClip) => void): SourceLink {
       }
       const site = SITE_NAMES[detectVideoLinkPlatform(url)]
       setState({ step: "idle" })
+      setConfirmed(false)
       deliver.current({ videoUrl: outcome.videoUrl, label: title?.trim() || (site ? `From ${site}` : url) })
       return
     }
     if (!live()) return
     const failure: LinkFailure = outcome.status === "failed" ? outcome.code : "generic"
     setState({ step: "failed", url, failure, ...(section ? { section } : {}) })
-  }, [])
+  }, [reloadDeclaration])
 
   const fetch = useCallback(
     (text: string) => {
       const url = text.trim()
-      const gen = ++generation.current
+      // A link this intake does not take is said at once, confirmed or not.
       if (!isVideoLink(url)) {
+        generation.current += 1
         setState({ step: "failed", url, failure: "unsupported" })
         return
       }
+      // Not confirmed: nothing starts, and nothing in flight is made stale.
+      if (!confirmed) return
+      const gen = ++generation.current
       if (detectVideoLinkPlatform(url) !== "youtube") {
         void start(url, null, undefined, gen)
         return
@@ -153,18 +215,20 @@ export function useSourceLink(onClip: (clip: LinkClip) => void): SourceLink {
         }
       })
     },
-    [start],
+    [confirmed, start],
   )
 
   const download = useCallback(
     (section?: LinkSection) => {
       const now = current.current
       if (now.step !== "range" && now.step !== "failed") return
+      // The box can be unticked after a failure: no download without it.
+      if (!confirmed) return
       const gen = ++generation.current
       const title = now.step === "range" ? now.title : null
       void start(now.url, title, section ?? (now.step === "failed" ? now.section : undefined), gen)
     },
-    [start],
+    [confirmed, start],
   )
 
   const reset = useCallback(() => {
@@ -172,5 +236,5 @@ export function useSourceLink(onClip: (clip: LinkClip) => void): SourceLink {
     setState({ step: "idle" })
   }, [])
 
-  return { state, fetch, download, reset }
+  return { state, declaration, reloadDeclaration, confirmed, setConfirmed, fetch, download, reset }
 }
