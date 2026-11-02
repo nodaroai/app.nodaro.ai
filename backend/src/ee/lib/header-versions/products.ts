@@ -33,6 +33,8 @@ export interface HeaderProduct {
   /** The host each environment is served on. */
   readonly hosts: Readonly<Record<SiteEnvironment, string>>
   readonly source: HeaderSource
+  /** The picture the page shows for the product, by name; the page draws its first letter for a name it does not know, or none. */
+  readonly icon: string | null
 }
 
 /** The header's own repository: its releases are tagged there (`v<version>`), and its package.json names the package. */
@@ -52,6 +54,7 @@ const EntrySchema = z.object({
   production: z.string().trim().toLowerCase().regex(HOST),
   staging: z.string().trim().toLowerCase().regex(HOST),
   source: z.enum(["lockfile", "site-file"]),
+  icon: z.string().trim().regex(/^[a-z0-9-]{1,40}$/).optional(),
 })
 
 export interface ParsedProducts {
@@ -62,7 +65,7 @@ export interface ParsedProducts {
 
 /**
  * `HEADER_VERSIONS_PRODUCTS`: a JSON array of
- * `{ id, label, repo, production, staging, source }`. Malformed JSON lists no
+ * `{ id, label, repo, production, staging, source, icon? }`. Malformed JSON lists no
  * products and says so; a bad entry is refused alone; a repeated id keeps the
  * first.
  */
@@ -83,8 +86,8 @@ export function parseHeaderProducts(raw: string | undefined): ParsedProducts {
         return { ...acc, invalid: [...acc.invalid, { index, reason: issue ? `${issue.path.join(".") || "entry"}: ${issue.message}` : "invalid entry" }] }
       }
       if (acc.products.some((p) => p.id === entry.data.id)) return { ...acc, invalid: [...acc.invalid, { index, reason: `id "${entry.data.id}" is repeated` }] }
-      const { production, staging, ...rest } = entry.data
-      return { ...acc, products: [...acc.products, { ...rest, hosts: { production, staging } }] }
+      const { production, staging, icon, ...rest } = entry.data
+      return { ...acc, products: [...acc.products, { ...rest, hosts: { production, staging }, icon: icon ?? null }] }
     },
     { products: [], invalid: [] },
   )

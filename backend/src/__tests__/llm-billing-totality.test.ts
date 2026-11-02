@@ -194,6 +194,7 @@ const EXEMPT: ReadonlyMap<string, Exemption> = new Map<string, Exemption>([
   ["ee/video-director/author.ts", { why: "its LLM step is inside the fixed video-director product price (routes/video-director.ts) — same posture as D3 fixed media prices / D9 pipelines", via: DIRECT, sites: 1, callers: ["ee/video-director/orchestrate.ts"] }],
   // Admin-only, platform-paid.
   ["ee/lib/gallery-word-suggestions.ts", { why: "admin gallery moderation — a platform cost; no user is charged", via: DIRECT, sites: 1, callers: ["ee/lib/gallery-word-import.ts", "ee/routes/admin-gallery-moderation.ts"] }],
+  ["ee/lib/header-versions/release-summary.ts", { why: "admin Header versions page — one plain summary per header release, kept; a platform cost, no user is charged", via: DIRECT, sites: 1, callers: ["ee/lib/header-versions/header-versions.ts"] }],
   // D9 (owner decision): pipeline products are priced as a whole.
   ["ee/pipelines/llms/call-llm.ts", { why: "D9: pipeline products are priced as a whole — their LLM calls are inside the product price", via: DIRECT, sites: 2, callers: ["ee/pipelines/"] }],
   // The background scrapes' ad / post analysis: metered, but by the reservation
@@ -223,6 +224,9 @@ const CHAIN_PINS: ReadonlyMap<string, readonly string[]> = new Map<string, reado
   // gallery moderation (admin)
   ["ee/lib/gallery-word-import.ts", ["ee/routes/admin-gallery-moderation.ts"]],
   ["ee/routes/admin-gallery-moderation.ts", ["app.ts"]],
+  // header versions (admin): the report service → its route
+  ["ee/lib/header-versions/header-versions.ts", ["ee/routes/admin-header-versions.ts"]],
+  ["ee/routes/admin-header-versions.ts", ["app.ts"]],
   // D3: the Replicate image provider and the video worker
   ["providers/replicate/index.ts", ["providers/index.ts"]],
   ["providers/index.ts", ["server.ts", "workers/video-worker.ts"]],

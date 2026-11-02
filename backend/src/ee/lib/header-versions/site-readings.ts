@@ -31,15 +31,19 @@ export function failure(error: unknown, what: string): { status: "error"; messag
 }
 
 /**
- * How an exact version stands against the newest release. Not ranked: a
- * declared range, and a pin (the environment's build can install another
- * version), or when either side is unknown.
+ * How an exact version stands against the newest release, and, when behind,
+ * how many releases (`releases`: every release's version) it lacks. Not
+ * ranked: a declared range, and a pin (the environment's build can install
+ * another version), or when either side is unknown.
  */
-export function ranked(result: SiteResult, release: string | null): SiteResult {
+export function ranked(result: SiteResult, release: string | null, releases: readonly string[] = []): SiteResult {
   if (result.status !== "ok") return result
-  if (release === null || result.source === "pin" || !isExactVersion(result.version)) return { ...result, standing: null }
-  const order = compareVersions(result.version, release)
-  return { ...result, standing: order === 0 ? "newest" : order < 0 ? "behind" : "ahead" }
+  if (release === null || result.source === "pin" || !isExactVersion(result.version)) return { ...result, standing: null, releasesBehind: null }
+  const version = result.version
+  const order = compareVersions(version, release)
+  // `release` is the highest of `releases`, so every release above the site's version is one it lacks.
+  const lacking = order < 0 ? releases.filter((other) => compareVersions(other, version) > 0).length : 0
+  return { ...result, standing: order === 0 ? "newest" : order < 0 ? "behind" : "ahead", releasesBehind: lacking > 0 ? lacking : null }
 }
 
 /** The deployment as the page shows it. */
@@ -61,6 +65,7 @@ const read = (version: string | null, header: boolean | null, source: VersionSou
   source,
   deploy,
   standing: null,
+  releasesBehind: null,
 })
 
 /** A file the commit should have and that could not be read: said so, never shown as "no header". */

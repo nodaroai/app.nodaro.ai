@@ -16,7 +16,9 @@ import { adminHeaderVersionsRoutes } from "../admin-header-versions.js"
 const REPORT: HeaderVersionsReport = {
   configured: false,
   invalidProducts: [],
+  headerPackage: null,
   latest: { status: "not_configured" },
+  releaseNotes: { status: "not_configured" },
   products: [],
   checkedAt: "2026-11-01T12:00:00.000Z",
 }
