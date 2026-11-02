@@ -178,6 +178,21 @@ export function environmentsThatCannotTakeShotList(envs: readonly TrendEngineEnv
   })
 }
 
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * engine cannot take "Style the role pictures" (`steps.styleRefs`) — none
+ * recorded, or one that does not declare `castSwap.steps` and
+ * `castSwap.styleRefs`. Unknown while the environments are (undefined). Off,
+ * its default, is safe everywhere; On is offered only when this is empty.
+ */
+export function environmentsThatCannotTakeStyleRefs(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
+    const cs = envs.find((e) => e.env === name)?.supports.castSwap
+    return cs?.steps !== true || cs.styleRefs !== true
+  })
+}
+
 /** The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose engine runs "Body from the clip"; unknown while the environments are. */
 export function environmentsThatTakeClipBody(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
   const missing = environmentsThatCannotTakeClipBody(envs)

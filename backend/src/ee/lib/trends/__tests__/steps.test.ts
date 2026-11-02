@@ -21,7 +21,7 @@ import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib
 import type { EngineEnvironment } from "../../engine-environments.js"
 import { composeTrendRun, type ComposedTrendRun } from "../compose.js"
 import { faceMaskSettingsKey, faceMaskState } from "../face-mask.js"
-import { CLIP_BODY_NEED, SHOT_LIST_NEED, STEPS_NEED, publishBlockers } from "../publish-check.js"
+import { CLIP_BODY_NEED, SHOT_LIST_NEED, STEPS_NEED, STYLE_REFS_NEED, publishBlockers } from "../publish-check.js"
 import { withoutUnsupportedFields } from "../run-helpers.js"
 import { trendVersionDataSchema } from "../schemas.js"
 import type { TrendFaceMask, TrendVersionData } from "../types.js"
@@ -210,6 +210,40 @@ describe("Body from the clip (`clipBody`)", () => {
     expect(publishBlockers(data({ steps: precise }), [env("staging", WITH_SHOT_LIST), env("production", WITH_SHOT_LIST)], REQUIRED)).toEqual([])
     // The defaults (Flex on) need nothing, not even steps.
     expect(publishBlockers(data({ steps: { shotList: { flex: { mode: "on" } } } }), [env("staging", ENGINE), env("production", ENGINE)], REQUIRED)).toEqual([])
+  })
+
+  it("Style the role pictures: sent only to an engine that declares castSwap.styleRefs; publish needs it only when On", () => {
+    const WITH_STYLE_REFS = { ...WITH_STEPS, styleRefs: true }
+    const on = { styleRefs: { mode: "on" as const, send: "styled" as const } }
+    expect(trendVersionDataSchema.parse(data({ steps: on })).steps).toEqual(on)
+    setPluginSupports({ castSwap: { ...WITH_STEPS, shotList: true, clipBodySheet: true } } as never)
+    const stripped = run(data({ steps: on }))
+    withoutUnsupportedFields(stripped)
+    expect(Object.hasOwn(stripped.body, "steps")).toBe(false)
+    setPluginSupports({ castSwap: WITH_STYLE_REFS } as never)
+    const sent = run(data({ steps: on }))
+    withoutUnsupportedFields(sent)
+    expect(sent.body.steps).toEqual(on)
+    expect(publishBlockers(data({ steps: on }), [env("staging", WITH_STYLE_REFS), env("production", WITH_STEPS)], REQUIRED)).toEqual([
+      { code: "engine_unsupported", env: "production", need: STYLE_REFS_NEED },
+    ])
+    expect(publishBlockers(data({ steps: on }), [env("staging", WITH_STYLE_REFS), env("production", WITH_STYLE_REFS)], REQUIRED)).toEqual([])
+    expect(STYLE_REFS_NEED).toBe("styleRefs")
+    // Off (the default) needs nothing, not even steps, and is stored as set.
+    const off = { styleRefs: { mode: "off" as const, send: "styled-and-original" as const } }
+    expect(trendVersionDataSchema.parse(data({ steps: off })).steps).toEqual(off)
+    expect(publishBlockers(data({ steps: off }), [env("staging", ENGINE), env("production", ENGINE)], REQUIRED)).toEqual([])
+  })
+
+  it("PIN: a version with no steps composes the same body whatever the engine declares", () => {
+    setPluginSupports({ castSwap: ENGINE } as never)
+    const before = run(data())
+    withoutUnsupportedFields(before)
+    setPluginSupports({ castSwap: { ...WITH_STEPS, clipBodySheet: true, shotList: true, styleRefs: true } } as never)
+    const after = run(data())
+    withoutUnsupportedFields(after)
+    expect(Object.hasOwn(after.body, "steps")).toBe(false)
+    expect(after.body).toEqual(before.body)
   })
 
   it("a version that does not set it never needs clipBodySheet (absent is the engine's own default)", () => {

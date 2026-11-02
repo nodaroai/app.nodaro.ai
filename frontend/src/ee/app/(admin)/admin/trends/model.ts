@@ -399,13 +399,15 @@ export function fromForm(form: TrendForm): TrendDraftBody {
 /** The preparation steps as saved: only the steps set (a copy), undefined when none is. */
 function stepsOfForm(s: CastSwapSteps | undefined): CastSwapSteps | undefined {
   const shotList = normaliseShotList(s?.shotList)
-  if (!s || (s.sheets === undefined && s.enginePrompt === undefined && s.sceneDescription === undefined && s.clipBody === undefined && !shotList)) return undefined
+  if (!s || (s.sheets === undefined && s.enginePrompt === undefined && s.sceneDescription === undefined && s.clipBody === undefined && !shotList && s.styleRefs === undefined)) return undefined
   return structuredClone({
     ...(s.sheets !== undefined ? { sheets: s.sheets } : {}),
     ...(s.enginePrompt !== undefined ? { enginePrompt: s.enginePrompt } : {}),
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
     ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
     ...(shotList ? { shotList } : {}),
+    // Kept as set, Off included: never trimmed to a default (the setting is shared by environments).
+    ...(s.styleRefs !== undefined ? { styleRefs: s.styleRefs } : {}),
   })
 }
 
@@ -613,6 +615,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   steps: "the preparation steps",
   clipBodySheet: "the Body from the clip step",
   shotList: "the shot list step",
+  styleRefs: "the Style the role pictures step",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",

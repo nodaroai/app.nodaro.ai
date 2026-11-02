@@ -23,6 +23,18 @@
  *   (`flex.mode` "off" is refused, `shot_list_flex_always_on`). Sent only to
  *   an engine that declares `castSwap.shotList` (`stepsForEngine`); the
  *   defaults need no engine (`shotListNeedsEngine`).
+ * - `styleRefs` ("Style the role pictures"): for a run that chose an art
+ *   style (Flex only, `direction.style`), each role's reference picture is
+ *   first redrawn in that style by an image model, so the video model sees
+ *   every person already drawn in it. `{ mode, send?, prompt? }`: `send` is
+ *   what the role then sends (`"styled-and-original"`: the styled picture as
+ *   its main reference and the original photo beside it, within the engine's
+ *   picture limit; `"styled"`: the styled picture only; absent =
+ *   `"styled-and-original"`), `prompt` the admin's image instruction in place
+ *   of the engine's. Absent = OFF on every engine, so a run with nothing set
+ *   is today's run exactly. Priced in the run's quote by the engine. Sent only
+ *   to an engine that declares `castSwap.styleRefs` (`stepsForEngine`); Off
+ *   needs no engine (`styleRefsNeedsEngine`).
  *
  * Every step here is non-critical: a failure is skipped (`skippedSteps`), the
  * run goes on. A setting left unset (or empty, `{}`) is today's run exactly:
@@ -68,7 +80,7 @@ export const LLM_INPUTS = ["clip", "rolePhotos", "references", "extraPrompt"] as
 export type LlmInput = (typeof LLM_INPUTS)[number]
 
 /** The steps a run may go on without (`skippedSteps[].step`). */
-export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description", "clip-body"] as const
+export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description", "clip-body", "style-refs"] as const
 export type SkippableStep = (typeof SKIPPABLE_STEPS)[number]
 export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face", "no_frame"] as const
 export type SkipReason = (typeof SKIP_REASONS)[number]
@@ -118,6 +130,15 @@ export interface StepOutputs {
   enginePrompt?: { mode: "template" | "llm"; text?: string }
   /** `shotList`: the run made its shot list (the style's step); `cuts`: the cut times (s) it was told (absent: none measured). */
   scene?: { mode: "template" | "llm"; shotList?: true; cuts?: number[] }
+  /** "Style the role pictures": each role's picture redrawn in the run's art style, and the roles it went on without. */
+  styleRefs?: StyleRefsOutput
+}
+
+/** What "Style the role pictures" recorded: per role the styled picture and what the role sent; the roles skipped. */
+export interface StyleRefsOutput {
+  roles: Array<{ role: number; styledUrl: string; sent: StyleRefsSend }>
+  /** The roles it went on without (`role` is its index in the run's roles), with why. */
+  skipped?: Array<{ role: number; reason: SkipReason }>
 }
 
 /** What the clip-body step recorded for one role. */
@@ -189,12 +210,30 @@ export type ShotListStyle = (typeof SHOT_LIST_STYLES)[number]
 /** The shot list per style. Absent (either style): Precise off, Flex on, with the engine's defaults. */
 export type ShotListSetting = { [S in ShotListStyle]?: ShotListStyleSetting }
 
+/** What a role sends once its picture is styled: the styled picture and the original beside it, or the styled one only. */
+export const STYLE_REFS_SENDS = ["styled-and-original", "styled"] as const
+export type StyleRefsSend = (typeof STYLE_REFS_SENDS)[number]
+
+/** What a role sends when `send` is left out. */
+export const STYLE_REFS_DEFAULT_SEND: StyleRefsSend = "styled-and-original"
+
+/** The longest image instruction "Style the role pictures" may be given. */
+export const STYLE_REFS_PROMPT_MAX = 4000
+
+/** "Style the role pictures": absent = off (see the header). `prompt` replaces the engine's image instruction. */
+export interface StyleRefsSetting {
+  mode: "on" | "off"
+  send?: StyleRefsSend
+  prompt?: string
+}
+
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
   enginePrompt?: TextStepSetting
   sceneDescription?: TextStepSetting
   clipBody?: ClipBodySetting
   shotList?: ShotListSetting
+  styleRefs?: StyleRefsSetting
 }
 
 const llmStepSchema = z.strictObject({
@@ -234,12 +273,19 @@ const shotListSchema = z.strictObject({
   flex: shotListStyleSchema.optional(),
 })
 
+const styleRefsSchema = z.strictObject({
+  mode: z.enum(["on", "off"]),
+  send: z.enum(STYLE_REFS_SENDS).optional(),
+  prompt: z.string().trim().min(1).max(STYLE_REFS_PROMPT_MAX).optional(),
+})
+
 const stepsShape = z.strictObject({
   sheets: sheetsSchema.optional(),
   enginePrompt: textStepSchema.optional(),
   sceneDescription: textStepSchema.optional(),
   clipBody: clipBodySchema.optional(),
   shotList: shotListSchema.optional(),
+  styleRefs: styleRefsSchema.optional(),
 })
 
 type Ctx = z.core.$RefinementCtx<z.output<typeof stepsShape>>
@@ -347,7 +393,7 @@ export function stepsProblems(error: z.ZodError, prefix = ""): CastSwapStepsProb
 export function stepsSet(s: CastSwapSteps | undefined | null): s is CastSwapSteps {
   return (
     !!s &&
-    (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined || shotListSet(s.shotList))
+    (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined || shotListSet(s.shotList) || s.styleRefs !== undefined)
   )
 }
 
@@ -360,6 +406,8 @@ export function normaliseSteps(s: CastSwapSteps | undefined | null): CastSwapSte
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
     ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
     ...(shotListSet(s.shotList) ? { shotList: normaliseShotList(s.shotList) } : {}),
+    // Always kept as set, Off included: the row is shared by environments, never trimmed to one's defaults.
+    ...(s.styleRefs !== undefined ? { styleRefs: s.styleRefs } : {}),
   })
 }
 
@@ -377,6 +425,14 @@ function normaliseShotList(s: ShotListSetting): ShotListSetting {
 }
 
 // ---- Capability gating -----------------------------------------------------
+
+/** The capabilities (`supports().castSwap`) that decide which steps an engine is sent. */
+export interface StepsCapabilities {
+  readonly steps?: boolean
+  readonly clipBodySheet?: boolean
+  readonly shotList?: boolean
+  readonly styleRefs?: boolean
+}
 
 /**
  * Whether a (loaded or recorded) Cast Swap engine takes `steps`
@@ -422,6 +478,30 @@ export function loadedEngineTakesShotList(): boolean {
 }
 
 /**
+ * Whether a (loaded or recorded) Cast Swap engine takes `steps.styleRefs`
+ * ("Style the role pictures"): it takes steps AND declares
+ * `castSwap.styleRefs`. An engine without it is never sent the field.
+ */
+export function engineTakesStyleRefs(cs: { readonly steps?: boolean; readonly styleRefs?: boolean } | undefined): boolean {
+  return engineTakesSteps(cs) && cs?.styleRefs === true
+}
+
+/** Whether this process's Cast Swap engine takes `steps.styleRefs`. */
+export function loadedEngineTakesStyleRefs(): boolean {
+  return engineTakesStyleRefs(getPluginSupports().castSwap)
+}
+
+/**
+ * Whether "Style the role pictures" as set needs an engine that declares
+ * `castSwap.styleRefs` to mean what the admin set: only On. Off (whatever its
+ * `send` and `prompt`) is the default on every engine: one without the step
+ * has it stripped and does not run it.
+ */
+export function styleRefsNeedsEngine(s: StyleRefsSetting | undefined): boolean {
+  return s?.mode === "on"
+}
+
+/**
  * Whether the shot list as set needs an engine that declares
  * `castSwap.shotList` to mean what the admin set: Precise turned on, or an
  * LLM of its own on either style. The defaults (Precise off, Flex on, no LLM)
@@ -452,6 +532,7 @@ export function stepsThatNeedTheEngine(s: CastSwapSteps | undefined | null): Cas
   const normalised = normaliseSteps(s)
   if (normalised && !clipBodyNeedsEngine(normalised.clipBody)) delete normalised.clipBody
   if (normalised && !shotListNeedsEngine(normalised.shotList)) delete normalised.shotList
+  if (normalised && !styleRefsNeedsEngine(normalised.styleRefs)) delete normalised.styleRefs
   return normaliseSteps(normalised)
 }
 
@@ -459,17 +540,19 @@ export function stepsThatNeedTheEngine(s: CastSwapSteps | undefined | null): Cas
  * The setting as sent to an engine with these capabilities (`cs`):
  * `undefined` when the engine takes no steps or nothing is left set, else a
  * copy without its absent keys, without `clipBody` unless the engine
- * declares `castSwap.clipBodySheet`, and without `shotList` unless it
- * declares `castSwap.shotList`.
+ * declares `castSwap.clipBodySheet`, without `shotList` unless it
+ * declares `castSwap.shotList`, and without `styleRefs` unless it declares
+ * `castSwap.styleRefs`.
  */
 export function stepsForEngine(
   s: CastSwapSteps | undefined | null,
-  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean; readonly shotList?: boolean } | undefined,
+  cs: StepsCapabilities | undefined,
 ): CastSwapSteps | undefined {
   if (!engineTakesSteps(cs)) return undefined
   const normalised = normaliseSteps(s)
   if (normalised && !engineTakesClipBodySheet(cs)) delete normalised.clipBody
   if (normalised && !engineTakesShotList(cs)) delete normalised.shotList
+  if (normalised && !engineTakesStyleRefs(cs)) delete normalised.styleRefs
   return normaliseSteps(normalised)
 }
 
@@ -480,7 +563,7 @@ export function stepsForEngine(
  */
 export function withStepsFor<T extends { steps?: CastSwapSteps }>(
   body: T,
-  cs: { readonly steps?: boolean; readonly clipBodySheet?: boolean; readonly shotList?: boolean } | undefined,
+  cs: StepsCapabilities | undefined,
 ): T {
   const { steps, ...rest } = body
   const sent = stepsForEngine(steps, cs)

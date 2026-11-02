@@ -89,6 +89,9 @@ describe("Admin → Nodaro Motion → preparation steps", { timeout: 20_000 }, (
     })
     // Body from the clip alone is a setting of its own.
     expect(stepsToSaved({ "motion-prism": { clipBody: { mode: "off" } } })).toEqual({ "motion-prism": { clipBody: { mode: "off" } } })
+    // Style the role pictures Off is kept as picked: the row is shared by environments.
+    const off = { styleRefs: { mode: "off" as const, send: "styled-and-original" as const } }
+    expect(stepsToSaved({ "motion-pulse": off })).toEqual({ "motion-pulse": off })
   })
 
   it("saving sends exactly the edited object, keyed by the public engine id", async () => {

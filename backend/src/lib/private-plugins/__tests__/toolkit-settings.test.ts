@@ -333,6 +333,22 @@ describe("tk.settings.nodaroMotionSteps", () => {
     })
   })
 
+  it("answers styleRefs only to an engine that declares castSwap.styleRefs", async () => {
+    h.steps = { "motion-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } } }
+    setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "motion-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } },
+      "motion-pro": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } },
+    })
+    stepsEngine(true)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "motion-prism": { enginePrompt: { mode: "template" } },
+      "motion-pro": { enginePrompt: { mode: "template" } },
+    })
+    h.steps = { "motion-pulse": { styleRefs: { mode: "off" } } }
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
+  })
+
   it("answers null to an engine without castSwap.steps", async () => {
     h.steps = saved
     stepsEngine(undefined)

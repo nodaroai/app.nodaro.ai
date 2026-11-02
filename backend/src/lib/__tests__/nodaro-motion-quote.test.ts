@@ -26,6 +26,10 @@ describe("neutralBreakdown", () => {
     expect(neutralBreakdown([1])).toEqual({})
     expect(neutralBreakdown({ seedance: "7" })).toEqual({})
   })
+
+  it("passes a new step's own line through as given (the engine prices Style the role pictures in the quote)", () => {
+    expect(neutralBreakdown({ base: 5, motion: 32, references: 3, styleRefs: 4 })).toEqual({ base: 5, motion: 32, references: 3, styleRefs: 4 })
+  })
 })
 
 /** The base fee: `castSwap` until Cast Swap 0.396.0, both on 0.396.0, `base` only from 0.397.0. */

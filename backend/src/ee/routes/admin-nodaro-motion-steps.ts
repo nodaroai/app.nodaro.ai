@@ -27,7 +27,9 @@
  * is 409 while any environment's engine does not declare
  * `castSwap.clipBodySheet`. Likewise the shot list away from its defaults
  * (`shotListNeedsEngine`: Precise on, or an LLM of its own) while any
- * environment's engine does not declare `castSwap.shotList`. Each save writes an
+ * environment's engine does not declare `castSwap.shotList`; and "Style the
+ * role pictures" On (`styleRefsNeedsEngine`; Off, its default, needs nothing)
+ * while any environment's engine does not declare `castSwap.styleRefs`. Each save writes an
  * `admin_actions` row (`update_nodaro_motion_steps`, before and after). A
  * save that turns an engine's Precise shot list on re-checks that engine's
  * saved Precise prompt overrides on a large run (as the masking save does for
@@ -41,7 +43,8 @@
  * answers null, check the platform's problems alone; the engine's 404 reads
  * the same. The check never forwards `clipBody` to an engine that does not
  * declare `castSwap.clipBodySheet`, nor `shotList` to one that does not
- * declare `castSwap.shotList` (the platform still checks both). Any other
+ * declare `castSwap.shotList`, nor `styleRefs` to one that does not declare
+ * `castSwap.styleRefs` (the platform still checks all three). Any other
  * refusal, or an answer outside the contract, is 502
  * `engine_error` with a fixed sentence (never the engine's words).
  */
@@ -61,10 +64,12 @@ import {
   castSwapStepsSaveSchema,
   clipBodyNeedsEngine,
   shotListNeedsEngine,
+  styleRefsNeedsEngine,
   stepsThatNeedTheEngine,
   loadedEngineTakesClipBodySheet,
   loadedEngineTakesShotList,
   loadedEngineTakesSteps,
+  loadedEngineTakesStyleRefs,
   stepsProblems,
   type CastSwapStepsProblem,
 } from "../../lib/cast-swap-steps.js"
@@ -75,9 +80,11 @@ import {
   cannotTakeClipBodyMessage,
   cannotTakeShotListMessage,
   cannotTakeStepsMessage,
+  cannotTakeStyleRefsMessage,
   environmentsThatCannotTakeClipBody,
   environmentsThatCannotTakeShotList,
   environmentsThatCannotTakeSteps,
+  environmentsThatCannotTakeStyleRefs,
 } from "../lib/nodaro-motion-steps-gate.js"
 import { engineRequest, isRec, parseJson } from "../lib/trends/run-helpers.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -180,16 +187,19 @@ function mergedProblems(platform: CastSwapStepsProblem[], fromEngine: CastSwapSt
 
 /**
  * The setting as this environment's engine may be shown it: no `clipBody` unless it declares
- * `castSwap.clipBodySheet`, no `shotList` unless it declares `castSwap.shotList`.
+ * `castSwap.clipBodySheet`, no `shotList` unless it declares `castSwap.shotList`, no `styleRefs`
+ * unless it declares `castSwap.styleRefs`.
  */
 function forLoadedEngine(steps: unknown): unknown {
   if (!isRec(steps)) return steps
   const dropClipBody = Object.hasOwn(steps, "clipBody") && !loadedEngineTakesClipBodySheet()
   const dropShotList = Object.hasOwn(steps, "shotList") && !loadedEngineTakesShotList()
-  if (!dropClipBody && !dropShotList) return steps
+  const dropStyleRefs = Object.hasOwn(steps, "styleRefs") && !loadedEngineTakesStyleRefs()
+  if (!dropClipBody && !dropShotList && !dropStyleRefs) return steps
   const rest: Record<string, unknown> = { ...steps }
   if (dropClipBody) delete rest.clipBody
   if (dropShotList) delete rest.shotList
+  if (dropStyleRefs) delete rest.styleRefs
   return rest
 }
 
@@ -230,6 +240,13 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
           const lacking = environmentsThatCannotTakeShotList(environments)
           if (lacking.length > 0) {
             return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeShotListMessage(lacking), envs: lacking } })
+          }
+        }
+        // "Style the role pictures" On likewise (Off is its default everywhere).
+        if (needing.some((entry) => styleRefsNeedsEngine(entry?.styleRefs))) {
+          const lacking = environmentsThatCannotTakeStyleRefs(environments)
+          if (lacking.length > 0) {
+            return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeStyleRefsMessage(lacking), envs: lacking } })
           }
         }
       }

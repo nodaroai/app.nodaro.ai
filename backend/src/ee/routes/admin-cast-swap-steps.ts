@@ -9,7 +9,8 @@
  *   the condition, the layout and sheet per role; the engine prompt's mode and
  *   the LLM-written body; the scene step's mode, whether it made the shot
  *   list and the cut times it was told; "Body from the clip"'s frame,
- *   redrawn sheet and image prompt per role), from the server-only
+ *   redrawn sheet and image prompt per role; "Style the role pictures"'s
+ *   styled picture and what each role sent, and the roles it skipped), from the server-only
  *   `output_data.__castSwapStepOutputs`. null when the run recorded none (a
  *   run with no `steps`: today's steps), or the record is of another version.
  * - `sceneText`: the scene description the run used (`__castSwapSceneText`).
@@ -35,10 +36,12 @@ import {
   SHEET_LAYOUTS,
   SKIP_REASONS,
   SKIPPABLE_STEPS,
+  STYLE_REFS_SENDS,
   type ClipBodyOutput,
   type PhotoLabel,
   type SkippedStep,
   type StepOutputs,
+  type StyleRefsOutput,
 } from "../../lib/cast-swap-steps.js"
 
 /** What the admin reads of one Cast Swap run's steps. */
@@ -125,15 +128,44 @@ function readScene(v: Rec, mode: (typeof STEP_MODES)[number]): NonNullable<StepO
   return out
 }
 
-/** The step outputs record; null unless it is version 1 with a roles list. */
+/**
+ * "Style the role pictures"'s record: each role with an index, an http(s) styled picture and a known `sent`;
+ * each skipped role with an index and a known reason. Anything else is left out; null when nothing is left.
+ */
+export function readStyleRefs(v: unknown): StyleRefsOutput | null {
+  if (!isRec(v)) return null
+  const roles = Array.isArray(v.roles)
+    ? v.roles.flatMap((r): StyleRefsOutput["roles"] => {
+      if (!isRec(r) || !isIndex(r.role) || !nonBlank(r.styledUrl) || !/^https?:\/\//.test(r.styledUrl) || !oneOf(STYLE_REFS_SENDS, r.sent)) return []
+      return [{ role: r.role, styledUrl: r.styledUrl, sent: r.sent }]
+    })
+    : []
+  const skipped = Array.isArray(v.skipped)
+    ? v.skipped.flatMap((r): NonNullable<StyleRefsOutput["skipped"]> => {
+      if (!isRec(r) || !isIndex(r.role) || !oneOf(SKIP_REASONS, r.reason)) return []
+      return [{ role: r.role, reason: r.reason }]
+    })
+    : []
+  if (roles.length === 0 && skipped.length === 0) return null
+  return { roles, ...(skipped.length > 0 ? { skipped } : {}) }
+}
+
+/**
+ * The step outputs record; null unless it is version 1 with a roles list (a record that carries only
+ * "Style the role pictures" may leave the roles out: read as none).
+ */
 export function readStepOutputs(v: unknown): StepOutputs | null {
-  if (!isRec(v) || v.v !== 1 || !Array.isArray(v.roles)) return null
-  const out: StepOutputs = { v: 1, roles: v.roles.map(readRole).filter((r): r is RoleOutput => r !== null) }
+  if (!isRec(v) || v.v !== 1) return null
+  if (!Array.isArray(v.roles) && !(v.roles === undefined && isRec(v.styleRefs))) return null
+  const roles: unknown[] = Array.isArray(v.roles) ? v.roles : []
+  const out: StepOutputs = { v: 1, roles: roles.map(readRole).filter((r): r is RoleOutput => r !== null) }
   if (isRec(v.enginePrompt) && oneOf(STEP_MODES, v.enginePrompt.mode)) {
     out.enginePrompt = { mode: v.enginePrompt.mode }
     if (typeof v.enginePrompt.text === "string") out.enginePrompt.text = v.enginePrompt.text
   }
   if (isRec(v.scene) && oneOf(STEP_MODES, v.scene.mode)) out.scene = readScene(v.scene, v.scene.mode)
+  const styleRefs = readStyleRefs(v.styleRefs)
+  if (styleRefs) out.styleRefs = styleRefs
   return out
 }
 

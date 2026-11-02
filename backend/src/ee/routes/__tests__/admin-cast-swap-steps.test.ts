@@ -261,6 +261,53 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     })
   })
 
+  it("reads Style the role pictures: each styled role and the roles skipped, dropping anything outside the contract", async () => {
+    const read = async (record: Record<string, unknown>) => {
+      mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ __castSwapStepOutputs: record }), error: null }))
+      return (await get()).json().data.stepOutputs
+    }
+    const styleRefs = {
+      roles: [
+        { role: 0, styledUrl: "https://cdn.test/styled-0.png", sent: "styled-and-original" },
+        { role: 1, styledUrl: "https://cdn.test/styled-1.png", sent: "styled" },
+      ],
+      skipped: [{ role: 2, reason: "failed" }],
+    }
+    expect(await read({ v: 1, roles: [], styleRefs })).toEqual({ v: 1, roles: [], styleRefs })
+    // A record with only this step may leave the roles out.
+    expect(await read({ v: 1, styleRefs })).toEqual({ v: 1, roles: [], styleRefs })
+    expect(
+      await read({
+        v: 1,
+        roles: [],
+        styleRefs: {
+          roles: [
+            { role: 0, styledUrl: "https://cdn.test/ok.png", sent: "styled", extra: 1 },
+            { role: -1, styledUrl: "https://cdn.test/a.png", sent: "styled" },
+            { role: 1, styledUrl: "javascript:alert(1)", sent: "styled" },
+            { role: 2, styledUrl: "https://cdn.test/b.png", sent: "original" },
+            "nope",
+          ],
+          skipped: [{ role: 3, reason: "no_such_reason" }, { role: 4, reason: "timed_out" }, { reason: "failed" }],
+        },
+      }),
+    ).toEqual({
+      v: 1,
+      roles: [],
+      styleRefs: { roles: [{ role: 0, styledUrl: "https://cdn.test/ok.png", sent: "styled" }], skipped: [{ role: 4, reason: "timed_out" }] },
+    })
+    // Nothing usable: no styleRefs at all.
+    expect(await read({ v: 1, roles: [], styleRefs: { roles: "x" } })).toEqual({ v: 1, roles: [] })
+    expect(await read({ v: 1, roles: [], styleRefs: "x" })).toEqual({ v: 1, roles: [] })
+  })
+
+  it("names a skipped Style the role pictures with its role", async () => {
+    mockFrom.mockReturnValue(
+      jobChain({ data: castSwapRow({ __castSwapStepOutputs: { v: 1, roles: [] }, skippedSteps: [{ step: "style-refs", reason: "failed", role: 0 }] }), error: null }),
+    )
+    expect((await get()).json().data.skippedSteps).toEqual([{ step: "style-refs", reason: "failed", role: 0 }])
+  })
+
   it("a record of another version, or without roles, is no record", async () => {
     for (const record of [{ v: 2, roles: [] }, { v: 1 }, { v: 1, roles: "x" }, "x", null]) {
       mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ __castSwapStepOutputs: record, skippedSteps: "nope" }), error: null }))

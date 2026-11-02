@@ -19,6 +19,10 @@
 // 5. Shot list (ShotListStep.tsx): per style — Precise off / on, Flex always
 //    on — and each one's LLM; anything but the defaults only once every
 //    environment's engine also declares `castSwap.shotList`.
+// 6. Style the role pictures (StyleRefsStep.tsx): for runs with an art style,
+//    each role's picture redrawn in that style first. Off until turned on
+//    (always saved as picked), its Send and image instruction; On only once
+//    every environment's engine also declares `castSwap.styleRefs`.
 // A section whose step the engine marks not critical (`critical`) says it is
 // skipped when it fails: the run goes on without it.
 //
@@ -54,12 +58,14 @@ import {
   environmentsThatCannotTakeClipBody,
   environmentsThatCannotTakeShotList,
   environmentsThatCannotTakeSteps,
+  environmentsThatCannotTakeStyleRefs,
   environmentsThatTakeClipBody,
 } from "../clip-preparation"
 import { fullDepthSceneDescribes } from "@nodaro/render-rules"
 import { ClipBodyStep, clipBodyDefaultMode, clipBodyNeedsEngine } from "./ClipBodyStep"
 import { normaliseShotList, shotListNeedsEngine } from "../shot-list"
 import { ShotListStep } from "./ShotListStep"
+import { StyleRefsStep, styleRefsNeedsEngine } from "./StyleRefsStep"
 import { LABELLER_INPUTS, LlmStepEditor, Problems } from "./LlmStepEditor"
 import { SheetRulesTable } from "./SheetRulesTable"
 import { TextStepSwitch } from "./TextStepSwitch"
@@ -71,7 +77,7 @@ export const STEPS_CHECK_DEBOUNCE_MS = 400
 export function stepsSet(s: CastSwapSteps | undefined | null): s is CastSwapSteps {
   return (
     !!s &&
-    (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined || normaliseShotList(s.shotList) !== undefined)
+    (s.sheets !== undefined || s.enginePrompt !== undefined || s.sceneDescription !== undefined || s.clipBody !== undefined || normaliseShotList(s.shotList) !== undefined || s.styleRefs !== undefined)
   )
 }
 
@@ -84,6 +90,8 @@ export function normaliseSteps(s: CastSwapSteps | undefined | null): CastSwapSte
     ...(s.sceneDescription !== undefined ? { sceneDescription: s.sceneDescription } : {}),
     ...(s.clipBody !== undefined ? { clipBody: s.clipBody } : {}),
     ...(normaliseShotList(s.shotList) ? { shotList: normaliseShotList(s.shotList) } : {}),
+    // Kept as picked, Off included: never trimmed to a default (the setting is shared by environments).
+    ...(s.styleRefs !== undefined ? { styleRefs: s.styleRefs } : {}),
   })
 }
 
@@ -152,7 +160,7 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
       <div>
         <h3 className="text-sm font-semibold">Preparation steps</h3>
         <p className="text-xs text-muted-foreground">
-          How the reference sheets, the engine prompt, the scene description, the body from the clip and the shot list are made. Left as they are, runs are prepared as today.
+          How the reference sheets, the engine prompt, the scene description, the body from the clip, the shot list and the styled role pictures are made. Left as they are, runs are prepared as today.
         </p>
       </div>
       {missing === undefined ? (
@@ -161,7 +169,10 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
           The Cast Swap engine of {missing.join(", ")} cannot take preparation steps yet
           {stepsSet(value) &&
-          (stepsSet({ ...value, clipBody: undefined, shotList: undefined }) || clipBodyNeedsEngine(value.clipBody) || shotListNeedsEngine(value.shotList))
+          (stepsSet({ ...value, clipBody: undefined, shotList: undefined, styleRefs: undefined }) ||
+            clipBodyNeedsEngine(value.clipBody) ||
+            shotListNeedsEngine(value.shotList) ||
+            styleRefsNeedsEngine(value.styleRefs))
             ? ": remove them to publish or save"
             : ""}
           .
@@ -186,6 +197,7 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
         clipBodyMissing={environmentsThatCannotTakeClipBody(envs)}
         clipBodyHas={environmentsThatTakeClipBody(envs)}
         shotListMissing={environmentsThatCannotTakeShotList(envs)}
+        styleRefsMissing={environmentsThatCannotTakeStyleRefs(envs)}
       />
     </div>
   )
@@ -209,6 +221,7 @@ function Sections({
   clipBodyMissing,
   clipBodyHas,
   shotListMissing,
+  styleRefsMissing,
 }: {
   readonly value: CastSwapSteps | undefined
   readonly onChange: (next: CastSwapSteps | undefined) => void
@@ -222,6 +235,8 @@ function Sections({
   readonly clipBodyHas: readonly string[] | undefined
   /** The environments whose engine cannot take the shot list (unknown while loading). */
   readonly shotListMissing: readonly string[] | undefined
+  /** The environments whose engine cannot take Style the role pictures (unknown while loading). */
+  readonly styleRefsMissing: readonly string[] | undefined
 }) {
   const id = useId()
   const disabled = !defaults
@@ -237,7 +252,8 @@ function Sections({
   const sceneProblems = under(problems, "sceneDescription")
   const clipBodyProblems = under(problems, "clipBody")
   const shotListProblems = under(problems, "shotList")
-  const rest = problems.filter((p) => !/^(sheets|enginePrompt|sceneDescription|clipBody|shotList)(\.|$)/.test(p.path))
+  const styleRefsProblems = under(problems, "styleRefs")
+  const rest = problems.filter((p) => !/^(sheets|enginePrompt|sceneDescription|clipBody|shotList|styleRefs)(\.|$)/.test(p.path))
 
   return (
     <>
@@ -356,6 +372,16 @@ function Sections({
           notYetIn={shotListMissing}
           problems={shotListProblems}
           onChange={(shotList) => set({ shotList })}
+        />
+      </Section>
+      <Section title="Style the role pictures" tag={tag("style-refs")}>
+        <StyleRefsStep
+          value={value?.styleRefs}
+          defaults={defaults?.defaults.styleRefs}
+          offered={!disabled && styleRefsMissing !== undefined && styleRefsMissing.length === 0 && !!defaults?.defaults.styleRefs}
+          notYetIn={styleRefsMissing}
+          problems={styleRefsProblems}
+          onChange={(styleRefs) => set({ styleRefs })}
         />
       </Section>
       <Problems list={rest} />

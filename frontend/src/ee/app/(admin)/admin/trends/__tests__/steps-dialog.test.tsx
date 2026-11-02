@@ -133,6 +133,32 @@ describe("StepsDialog", () => {
     expect(within(dialog).getByTestId("job-skipped-steps").textContent).toContain("Body from the clip — role 2: no usable frame")
   })
 
+  it("shows Style the role pictures: each role's styled picture, what it sent, and the roles skipped", async () => {
+    vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({
+      stepOutputs: {
+        v: 1,
+        roles: [],
+        styleRefs: {
+          roles: [
+            { role: 0, styledUrl: "https://cdn.test/styled/role-1.png", sent: "styled-and-original" },
+            { role: 1, styledUrl: "https://cdn.test/styled/role-2.png", sent: "styled" },
+          ],
+          skipped: [{ role: 2, reason: "failed" }],
+        },
+      },
+      sceneText: null,
+      skippedSteps: [{ step: "style-refs", reason: "failed", role: 2 }],
+    })
+    renderWith(<StepsDialog jobId={RUN_ID} onClose={() => {}} />)
+    const dialog = await screen.findByRole("dialog")
+    const out = await within(dialog).findByTestId("style-refs-outputs")
+    expect(within(out).getByRole("img", { name: "Role 1 styled picture" })).toHaveAttribute("src", "https://cdn.test/styled/role-1.png")
+    expect(within(out).getByText("Role 1 · Sent: styled picture + original")).toBeInTheDocument()
+    expect(within(out).getByText("Role 2 · Sent: styled picture only")).toBeInTheDocument()
+    expect(within(out).getByText("Style the role pictures — role 3: failed")).toBeInTheDocument()
+    expect(within(dialog).getByTestId("job-skipped-steps").textContent).toContain("Style the role pictures — role 3: failed")
+  })
+
   it("a template engine prompt shows no body", async () => {
     vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({
       ...STEPS,

@@ -14,7 +14,9 @@
  * (advertised as `tk.capabilities.nodaroMotionSteps`), for every DIRECT run;
  * the toolkit answers null to an engine that does not take steps
  * (`castSwap.steps`), and leaves "Body from the clip" (`clipBody`) out for one
- * that does not declare `castSwap.clipBodySheet` (`stepsForLoadedEngine`). A trend run carries its own trend's `steps`. Written
+ * that does not declare `castSwap.clipBodySheet` (and likewise `shotList` /
+ * `styleRefs` without `castSwap.shotList` / `castSwap.styleRefs`,
+ * `stepsForLoadedEngine`). A trend run carries its own trend's `steps`. Written
  * only by `PUT /v1/admin/nodaro-motion/steps` through
  * `nodaro-motion-steps-store.ts`. This module is pure (no database).
  */

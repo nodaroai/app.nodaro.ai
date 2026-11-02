@@ -11,7 +11,7 @@
  * recorded engine, or one that does not declare it: the face mesh's rule
  * (`nodaro-motion-face-mesh.ts`).
  */
-import { engineTakesClipBodySheet, engineTakesShotList, engineTakesSteps } from "../../lib/cast-swap-steps.js"
+import { engineTakesClipBodySheet, engineTakesShotList, engineTakesSteps, engineTakesStyleRefs } from "../../lib/cast-swap-steps.js"
 import { TREND_PUBLISH_ENVIRONMENTS, type EngineEnvironment } from "./engine-environments.js"
 
 /**
@@ -68,4 +68,24 @@ export function environmentsThatCannotTakeShotList(environments: readonly Engine
 /** The refusal's sentence for the shot list (`environmentsThatCannotTakeShotList`). */
 export function cannotTakeShotListMessage(envs: readonly string[]): string {
   return `The Cast Swap engine in ${envs.join(" and ")} cannot take the shot list step yet, and this setting is shared by every environment: leave that step at its defaults, or wait for the engine.`
+}
+
+/**
+ * The environments (of `TREND_PUBLISH_ENVIRONMENTS`, in that order) whose
+ * engine cannot take "Style the role pictures" (`steps.styleRefs`): none
+ * recorded, or one that does not declare `castSwap.steps` and
+ * `castSwap.styleRefs`. An engine without it is never sent the field, so a
+ * shared setting that turns it On (`styleRefsNeedsEngine`) would quietly run
+ * without it there (Off needs nothing: it is the default on every engine).
+ */
+export function environmentsThatCannotTakeStyleRefs(environments: readonly EngineEnvironment[]): string[] {
+  return TREND_PUBLISH_ENVIRONMENTS.filter((name) => {
+    const env = environments.find((e) => e.env === name)
+    return !env || !engineTakesStyleRefs(env.supports.castSwap)
+  })
+}
+
+/** The refusal's sentence for "Style the role pictures" (`environmentsThatCannotTakeStyleRefs`). */
+export function cannotTakeStyleRefsMessage(envs: readonly string[]): string {
+  return `The Cast Swap engine in ${envs.join(" and ")} cannot take the Style the role pictures step yet, and this setting is shared by every environment: leave that step off, or wait for the engine.`
 }
