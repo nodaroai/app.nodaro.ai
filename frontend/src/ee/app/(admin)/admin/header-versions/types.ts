@@ -31,7 +31,24 @@ export interface SiteView {
   readonly host: string
   readonly url: string
   readonly result: SiteResult
+  /** Where the site's worlds row leads, as the site says itself. */
+  readonly worlds: SiteWorlds
 }
+
+/** One world's link on one site: where it leads, whether the site gave that address itself (else the header's own), and what it answered. */
+export interface SiteWorldLink {
+  readonly id: string
+  readonly href: string
+  readonly own: boolean
+  readonly answer: LinkAnswer
+}
+
+/** Where a site's worlds row leads (`links` in the list's order; none when the row is hidden), or why it is not known. */
+export type SiteWorlds =
+  | { readonly status: "reported"; readonly worldsRow: boolean; readonly links: readonly SiteWorldLink[] }
+  | { readonly status: "not_reported" }
+  | { readonly status: "no_answer" }
+  | { readonly status: "invalid"; readonly message: string }
 
 export type SiteEnvironment = "production" | "staging"
 

@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import type { Plugin } from "vite"
+import { readSiteEnv, siteWorldsFile } from "./site"
 
 /**
  * The shared site header's module resolver (Cloud only).
@@ -55,7 +56,9 @@ import type { Plugin } from "vite"
  * installed (`null` without the package) and whether the site shows it. The
  * version depends on the environment's build settings as well as the commit,
  * so the built site is the one place that knows it; the admin's Header
- * versions page reads it (`backend/src/ee/lib/header-versions/`).
+ * versions page reads it (`backend/src/ee/lib/header-versions/`). Beside it,
+ * `/shell-worlds.json`: where the site's worlds row leads, from the same
+ * function the header's links come from (`site.ts`), for the same reason.
  */
 
 export const SITE_HEADER_ID = "virtual:site-header"
@@ -70,6 +73,8 @@ const PACKAGE = "@nodaroai/shell"
 const FLAG = "VITE_SHARED_HEADER"
 /** Served at the site's root; the backend's `SITE_FILE` reads it by this name. */
 export const SITE_VERSION_FILE = "shell-version.json"
+/** Served at the site's root; the backend's `WORLDS_FILE` reads it by this name. */
+export const SITE_WORLDS_FILE = "shell-worlds.json"
 
 export type SiteHeaderDecision = "package" | "stub" | "missing"
 
@@ -200,6 +205,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   let decision: SiteHeaderDecision = "stub"
   let editor: "package" | "stub" = "stub"
   let versionFile: string | null = null
+  let worldsFile: string | null = null
   return {
     name: "nodaro-site-header",
     enforce: "pre",
@@ -209,8 +215,10 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       const present = installed(options.root)
       decision = siteHeaderDecision({ edition: env.VITE_EDITION, flag: env[FLAG] }, present)
       editor = mediaEditorDecision(env.VITE_EDITION, present)
-      // `/shell-version.json`: a cloud build's only; never on another build or the dev server.
-      versionFile = command === "build" && env.VITE_EDITION === "cloud" ? siteVersionFile(decision, present ? (options.readVersion ?? installedVersion)(options.root) : null) : null
+      // `/shell-version.json` and `/shell-worlds.json`: a cloud build's only; never on another build or the dev server.
+      const publishes = command === "build" && env.VITE_EDITION === "cloud"
+      versionFile = publishes ? siteVersionFile(decision, present ? (options.readVersion ?? installedVersion)(options.root) : null) : null
+      worldsFile = publishes ? siteWorldsFile(readSiteEnv(env), decision === "package") : null
       if (decision === "missing" && command === "build") {
         throw new Error(`${FLAG}=true on a cloud build, but the header package is not installed. Install it (see frontend/src/ee/shell/install-package.sh) or unset the flag.`)
       }
@@ -241,6 +249,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
     },
     generateBundle() {
       if (versionFile !== null) this.emitFile({ type: "asset", fileName: SITE_VERSION_FILE, source: versionFile })
+      if (worldsFile !== null) this.emitFile({ type: "asset", fileName: SITE_WORLDS_FILE, source: worldsFile })
     },
   }
 }

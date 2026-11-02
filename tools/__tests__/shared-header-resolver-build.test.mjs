@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url"
  *   - control: the same flag with no resolver reaches the bundle as true
  *     (so the first case is the resolver's doing);
  *   - cloud + flag on + no package → the build is refused;
- *   - a cloud build writes `shell-version.json` beside the bundle, no other build does.
+ *   - a cloud build writes `shell-version.json` and `shell-worlds.json` beside
+ *     the bundle, no other build does.
  *
  * It needs the workspace's dependencies (vite at the repo root). The tool
  * self-tests job runs tools/__tests__ WITHOUT `npm ci`, so there it skips and
@@ -114,8 +115,9 @@ test("flag on, another edition: the bundle carries the stub and a literal false"
     // The media editor's stub: a part imported by name builds, as null.
     assert.match(r.code, /mediaEditorAvailable = false/)
     assert.match(r.code, /TrimPanel = null/)
-    // Only a cloud build says which header it carries.
+    // Only a cloud build says which header it carries, and where its worlds row leads.
     assert.equal(r.files["shell-version.json"], undefined)
+    assert.equal(r.files["shell-worlds.json"], undefined)
   })
 })
 
@@ -146,5 +148,7 @@ test("flag unset: the bundle has no forced value and the stub", (t) => {
     assert.match(r.code, /headerAvailable = false/)
     // A cloud build publishes which header it carries: here none, and none shown.
     assert.deepEqual(JSON.parse(r.files["shell-version.json"] ?? "null"), { version: null, header: false })
+    // And where its worlds row leads: with no header, no row (the plugin's own module graph builds in Node).
+    assert.deepEqual(JSON.parse(r.files["shell-worlds.json"] ?? "null"), { worldsRow: false, worldHrefs: {} })
   })
 })

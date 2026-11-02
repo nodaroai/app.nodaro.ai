@@ -44,6 +44,8 @@ export interface SiteView {
   readonly host: string
   readonly url: string
   readonly result: SiteResult
+  /** Where the site's worlds row leads, as the site says itself. */
+  readonly worlds: SiteWorlds
 }
 
 export interface ProductView {
@@ -160,6 +162,27 @@ export interface WorldLink {
   readonly group: "simple" | "advanced"
   readonly answer: LinkAnswer
 }
+
+/** One world's link on one site: where it leads, whether the site gave that address itself (else the header's own), and what it answered. */
+export interface SiteWorldLink {
+  readonly id: string
+  readonly href: string
+  readonly own: boolean
+  readonly answer: LinkAnswer
+}
+
+/**
+ * Where a site's worlds row leads, as its own `/shell-worlds.json` says:
+ * every world of the header's list in its order (none when the row is
+ * hidden, or the list is unknown); `not_reported` when the site serves no
+ * such file; `no_answer` when the site did not answer, or failed;
+ * `invalid` when it serves one this page cannot read.
+ */
+export type SiteWorlds =
+  | { readonly status: "reported"; readonly worldsRow: boolean; readonly links: readonly SiteWorldLink[] }
+  | { readonly status: "not_reported" }
+  | { readonly status: "no_answer" }
+  | { readonly status: "invalid"; readonly message: string }
 
 /** The header's explanations of itself, as its own repository keeps them. */
 export type HeaderMapResult =

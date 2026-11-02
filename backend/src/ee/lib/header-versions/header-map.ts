@@ -3,7 +3,7 @@ import type { GitHubReader } from "./github.js"
 import { HEADER_REPO } from "./products.js"
 import type { HeaderMapResult } from "./report-types.js"
 import { failure } from "./site-readings.js"
-import { checkWorlds, type ProbeLink } from "./world-links.js"
+import { checkWorlds, type AskLink } from "./world-links.js"
 
 /**
  * The header's explanations of itself — what is in it, how a change reaches
@@ -141,7 +141,12 @@ const WorldSchema = z
   .object({
     id: ID,
     label: text(60),
-    href: z.string().max(300).refine(https, "must be an https address"),
+    // Written one way, as a site's own address is (`site-worlds.ts`): one place is asked, and counted, once.
+    href: z
+      .string()
+      .max(300)
+      .refine(https, "must be an https address")
+      .transform((href) => new URL(href).href),
     group: z.enum(["simple", "advanced"]),
   })
   .strict()
@@ -175,7 +180,7 @@ export function parseHeaderMap(source: string): { map: ParsedMap } | { problem: 
 }
 
 /** The header's map from its repository, each world's address asked; `null` GitHub: no token. */
-export async function readHeaderMap(github: GitHubReader | null, probe: ProbeLink): Promise<HeaderMapResult> {
+export async function readHeaderMap(github: GitHubReader | null, ask: AskLink): Promise<HeaderMapResult> {
   if (!github) return { status: "not_configured" }
   let source: string | null
   try {
@@ -187,5 +192,5 @@ export async function readHeaderMap(github: GitHubReader | null, probe: ProbeLin
   const read = parseHeaderMap(source)
   if ("problem" in read) return { status: "error", message: read.problem }
   const { asOf, figures, worlds } = read.map
-  return { status: "ok", asOf, url: `https://github.com/${HEADER_REPO}/blob/HEAD/${MAP_FILE}`, figures, worlds: await checkWorlds(worlds, probe) }
+  return { status: "ok", asOf, url: `https://github.com/${HEADER_REPO}/blob/HEAD/${MAP_FILE}`, figures, worlds: await checkWorlds(worlds, ask) }
 }

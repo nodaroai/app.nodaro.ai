@@ -54,7 +54,7 @@ export function NewTabLink({ href, className, children }: { href: string; classN
 }
 
 /** A host too long for its card wraps before a dot, never inside a word. */
-const hostWithBreaks = (host: string) => host.split(".").flatMap((part, i) => (i === 0 ? [part] : [<wbr key={i} />, `.${part}`]))
+export const hostWithBreaks = (host: string) => host.split(".").flatMap((part, i) => (i === 0 ? [part] : [<wbr key={i} />, `.${part}`]))
 
 function HostLink({ site, small }: { site: SiteView; small?: boolean }) {
   return (

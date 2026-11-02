@@ -26,14 +26,17 @@ export function linkFace(answer: LinkAnswer): LinkFace {
   return { label: "Answers", tone: "newest", detail }
 }
 
-export const notFoundCount = (worlds: readonly WorldLink[]): number => worlds.filter((world) => isNotFound(world.answer)).length
+/** Anything asked at an address: a world's default link, or a site's. */
+type Asked = Pick<WorldLink, "answer">
+
+export const notFoundCount = (worlds: readonly Asked[]): number => worlds.filter((world) => isNotFound(world.answer)).length
 
 /**
  * The line over the list. All is well only when every address answered;
  * an address that refused otherwise, or never answered, was not checked, and
  * is counted as such — never folded into "no address answers not found".
  */
-export function linkVerdict(worlds: readonly WorldLink[]): { readonly text: string; readonly tone: Tone } {
+export function linkVerdict(worlds: readonly Asked[]): { readonly text: string; readonly tone: Tone } {
   const missing = notFoundCount(worlds)
   const unchecked = worlds.filter((world) => !isNotFound(world.answer) && linkFace(world.answer).tone !== "newest").length
   if (missing === 0 && unchecked === 0) return { text: "No address answers “not found”.", tone: "newest" }
