@@ -52,6 +52,21 @@ vi.mock("@/lib/dynamic-origins.js", () => ({
   isOriginAllowedDynamic: vi.fn().mockResolvedValue(false),
 }))
 
+// The content rights check (lib/content-rights.ts) has its own tests; here it
+// is a fake so these tests pin what the route does with its answer: forwards
+// the id to the download, and turns its refusal into a 403.
+vi.mock("@/lib/content-rights.js", () => ({
+  ContentRightsError: class ContentRightsError extends Error {
+    constructor(readonly code: string, message: string) {
+      super(message)
+    }
+  },
+  checkRightsConfirmation: vi.fn().mockResolvedValue(null),
+  consumeRightsConfirmation: vi.fn().mockResolvedValue(undefined),
+  recordEvent: vi.fn().mockResolvedValue(true),
+  contentHashOf: vi.fn().mockResolvedValue("ab".repeat(32)),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -67,6 +82,7 @@ import { DownloadSlots } from "../../lib/download-slots.js"
 import { setDownloadSlotsForTests } from "../../lib/download-slots-instance.js"
 import { RedisDownloadLedger } from "../../lib/download-slot-ledger.js"
 import { makeFakeDownloadClient, makeFakeDownloadStore } from "../../lib/__tests__/fake-download-redis.js"
+import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, recordEvent } from "../../lib/content-rights.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -563,6 +579,51 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
         FAKE_VIDEO_BYTES.length,
       ),
     )
+  })
+
+  it("records the confirmation and the file's fingerprint on the row, and notes the download's end on the confirmation", async () => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+    vi.mocked(checkRightsConfirmation).mockResolvedValueOnce({ id: confirmationId } as never)
+    const res = await post({ url: YT_URL, confirmationId })
+    expect(res.statusCode).toBe(200)
+    expect(checkRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ url: YT_URL, userId: TEST_USER_ID, confirmationId, lane: "route" }))
+    expect(consumeRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, url: YT_URL, lane: "route" }))
+    await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
+    expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: confirmationId, content_hash: "ab".repeat(32) })
+    await vi.waitFor(() => expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, kind: "download_completed" })))
+  })
+
+  it("a download without a confirmation records none, and is refused with 403 when the check refuses it", async () => {
+    const res = await post({ url: YT_URL })
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
+    expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: null })
+
+    vi.mocked(checkRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_required", "Confirm first"))
+    const refused = await post({ url: YT_URL })
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error).toEqual({ code: "rights_confirmation_required", message: "Confirm first" })
+    // Refused before anything started: no second download, no slot taken, nothing consumed.
+    expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1)
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("a confirmation is spent only once the download is about to start: a refusal for another reason keeps it, a race on it gives the slot back", async () => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e02"
+    vi.mocked(checkRightsConfirmation).mockResolvedValue({ id: confirmationId } as never)
+    vi.mocked(resolvesOnlyToPublicAddresses).mockResolvedValueOnce(false)
+    const refused = await post({ url: "https://cdn.example.com/clip.mp4", confirmationId })
+    expect(refused.statusCode).toBe(400)
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+
+    vi.mocked(consumeRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_used", "Used already"))
+    const raced = await post({ url: YT_URL, confirmationId })
+    expect(raced.statusCode).toBe(403)
+    expect(raced.json().error.code).toBe("rights_confirmation_used")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+    // The slot went back: the next download for the account starts at once.
+    const next = await post({ url: YT_URL })
+    expect(next.statusCode).toBe(200)
   })
 
   it("an insert failure must NOT fail the download — warn, no increment, video still delivered", async () => {

@@ -22,6 +22,7 @@ import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
 import { LlmResource } from "./resources/llm.js"
 import { MediaResource } from "./resources/media.js"
+import { ContentRightsResource } from "./resources/content-rights.js"
 import { AudioResource } from "./resources/audio.js"
 import { CreditsResource } from "./resources/credits.js"
 import { BillingResource } from "./resources/billing.js"
@@ -89,6 +90,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly voices: VoicesResource
   readonly llm: LlmResource
   readonly media: MediaResource
+  /** Content rights: the declaration confirmed before a link is imported, and the confirmation a download carries. */
+  readonly contentRights: ContentRightsResource
   readonly audio: AudioResource
   readonly credits: CreditsResource
   /** The signed-in person's own settings (the interface language, the monthly statement opt-in, …). */
@@ -154,6 +157,7 @@ export class NodaroClient extends NodaroClientCore {
     this.voices = new VoicesResource(this)
     this.llm = new LlmResource(this)
     this.media = new MediaResource(this)
+    this.contentRights = new ContentRightsResource(this)
     this.audio = new AudioResource(this)
     this.credits = new CreditsResource(this)
     this.userSettings = new UserSettingsResource(this)

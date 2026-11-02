@@ -4953,6 +4953,49 @@ Instagram `plays` is `null` (views are hidden to a logged-out reader) and
 `likes` is the count to show. Labels: `new`, `watching`, `rising`, `hot`,
 `slowing`.
 
+## 13i. Content rights (import confirmations)
+
+Before a link to someone's video is imported (`POST /v1/download-video`), the
+person importing it confirms a declaration: that they hold the rights to the
+content, or the rights holder's permission, and are responsible for how they
+use it. The server keeps a record of every confirmation (who, which link, which
+text, when, from where) and of the download made under it.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/content-rights/declaration` | The current declaration: `{ data: { version, text } }`. Public — a client shows it before anyone signs in. |
+| `POST` | `/v1/content-rights/confirm` | Records that the signed-in account confirmed the declaration for one link (`{ url, declarationVersion }`) → `201 { data: { id, declarationVersion, expiresAt } }`. `409 rights_confirmation_stale` when the declaration changed since the client read it: read it again and ask again. |
+
+The flow in a client: read the declaration, show its `text` with a checkbox
+that starts unticked, call `confirm` with the link once it is ticked, and send
+the answered `id` as `confirmationId` on `POST /v1/download-video`. One
+confirmation opens one download of that link (normalized: the same video with
+different decoration matches, another video never does), by the same account,
+under the current declaration, within an hour; the download then carries it on
+the stored file. Checked and consumed before anything is fetched — a refused
+import never starts.
+
+`POST /v1/download-video` answers `403` with one of these codes when the
+confirmation does not fit: `rights_confirmation_not_found`,
+`rights_confirmation_mismatch` (another account, or another link),
+`rights_confirmation_stale` (the declaration changed), `rights_confirmation_expired`,
+`rights_confirmation_used` (a download was made under it already).
+
+The confirmation is checked (read) before anything else can refuse the import
+and spent only once the download is about to start, so a `429 too_many_downloads`
+or a refused address never uses one up. `POST /v1/content-rights/confirm`
+answers `409` for a stale version; `POST /v1/download-video` answers `403` for
+every confirmation problem, the code above saying which.
+
+Whether a download WITHOUT a confirmation is refused is the deployment's
+setting `content_rights_required` (off by default; `403 rights_confirmation_required`
+once on). The server accepts before it requires, so every client adds its
+checkbox at its own pace; a client always sends one. **Not covered yet, and a
+blocker before the setting is turned on:** a run started from the API, MCP, the
+SDK or a published app that downloads a link itself sends no confirmation, so
+with the setting on every such run of a Video URL node would fail. That lane,
+and the standing authorization for API keys and agents, are a later change.
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

@@ -194,6 +194,9 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   { method: "GET", path: "/v1/models" },
   // The model makers and their published marks: the same public facts.
   { method: "GET", path: "/v1/model-makers" },
+  // The content rights declaration: the text a person confirms before a link
+  // is imported, the same for everyone; a client shows it before any sign-in.
+  { method: "GET", path: "/v1/content-rights/declaration" },
   // The built-in ("factory") preset catalog: the deployment's own list, the
   // same for every caller and holding no user data, so a client app can show
   // it to visitors who are not signed in and ask for a login only when they

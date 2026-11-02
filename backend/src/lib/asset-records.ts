@@ -29,8 +29,12 @@ export async function recordDownloadedVideoAsset(opts: {
   r2Url: string
   thumbnailUrl?: string
   sourceUrl: string
+  /** The content rights confirmation the link was imported under (migration 577), when one was sent. */
+  rightsConfirmationId?: string | null
+  /** The file's own sha256, so the same video imported again is found by it. */
+  contentHash?: string | null
 }): Promise<void> {
-  const { userId, outputId, sizeBytes, r2Key, r2Url, thumbnailUrl, sourceUrl } = opts
+  const { userId, outputId, sizeBytes, r2Key, r2Url, thumbnailUrl, sourceUrl, rightsConfirmationId, contentHash } = opts
   try {
     const { error: insertError } = await supabase.from("assets").insert({
       user_id: userId,
@@ -42,6 +46,8 @@ export async function recordDownloadedVideoAsset(opts: {
       r2_url: r2Url,
       upload_source: "social_download",
       metadata: { thumbnail_url: thumbnailUrl ?? null, source_url: sourceUrl },
+      rights_confirmation_id: rightsConfirmationId ?? null,
+      content_hash: contentHash ?? null,
     })
     if (insertError) {
       console.warn(

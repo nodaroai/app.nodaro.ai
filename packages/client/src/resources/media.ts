@@ -115,7 +115,11 @@ export class MediaResource {
    * `GET /v1/download-video/progress/:downloadId` (server-sent events) and the
    * finished file lands in your library. A section is fetched with ±3 s of
    * padding for the caller to trim; `exactSection: true` cuts it exactly at
-   * `sectionStartSec`–`sectionEndSec` instead.
+   * `sectionStartSec`–`sectionEndSec` instead. `confirmationId` is the content
+   * rights confirmation the import is made under (`contentRights.confirm`):
+   * checked and consumed before the download starts, written on the stored
+   * file; a download without one is refused (`403 rights_confirmation_required`)
+   * once the deployment requires it, so a client always sends one.
    */
   downloadVideo(input: {
     url: string
@@ -124,6 +128,7 @@ export class MediaResource {
     sectionEndSec?: number
     exactSection?: boolean
     requireAudio?: boolean
+    confirmationId?: string
   }): Promise<{ downloadId: string }> {
     return this.client.request<{ downloadId: string }>("POST", "/v1/download-video", { body: input })
   }

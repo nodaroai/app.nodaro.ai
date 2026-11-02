@@ -53,6 +53,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts"] },
   { id: "llm", cli: [], routePrefixes: ["/v1/llm"], mcpFiles: [] },
   { id: "media", cli: ["media"], routePrefixes: ["/v1/media"], mcpFiles: [] },
+  // Content rights: the declaration a person confirms before a link is imported, and the confirmation a download carries.
+  { id: "contentRights", cli: [], routePrefixes: ["/v1/content-rights"], mcpFiles: [] },
   { id: "audio", cli: ["audio"], routePrefixes: [], mcpFiles: ["verbs-audio.ts"] },
   { id: "credits", cli: [], routePrefixes: ["/v1/user/credits", "/v1/credits"], mcpFiles: [] },
   // Plans and prices, the subscription, the billing surface; the browser-session

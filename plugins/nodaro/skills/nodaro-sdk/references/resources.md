@@ -26,6 +26,7 @@
 | `voices` | Voice catalog + library, change, recast (Voice Changer Pro), design, remix, dub |
 | `llm` | Validated structured JSON from a language model |
 | `media` | Social video import, trim, split into parts, metadata, captions, overlays, collage, slideshow |
+| `contentRights` | The declaration a person confirms before a link is imported (`declaration`) and the confirmation a download carries (`confirm` → `confirmationId` on `media.downloadVideo`) |
 | `audio` | Separation, isolation, effects, volume, mix, combine, transcription |
 | `credits` | `balance()`, `modelCosts(ids)`; `transactions()` (runs), `history()` / `exportHistory()` (every movement of the balance, a CSV), `usageSummary()` (totals, by model, over time, by session) |
 | `userSettings` | The person's own settings: `get()` / `update(patch)` — the interface language, gallery visibility, node-menu and canvas preferences, the monthly statement opt-in |
