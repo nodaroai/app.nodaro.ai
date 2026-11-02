@@ -18,9 +18,10 @@ import {
   CAST_SWAP_FACE_MASK_TARGETS,
   type CastSwapFaceMaskTarget,
 } from "@nodaro/shared/models"
-import { VIDEO_DEPTH_COLORMAPS, videoDepthColormaps, type VideoDepthColormap } from "@nodaro/shared/media"
+import { VIDEO_DEPTH_COLORMAPS, VIDEO_FACE_MESH_PARTS, videoDepthColormaps, type VideoDepthColormap, type VideoFaceMeshParts } from "@nodaro/shared/media"
 // Internal only (render-rules, not an Apache grant): a trend face mask's marks and source modes.
 import {
+  CAST_SWAP_DEPTH_BLUR_BOUNDS,
   CAST_SWAP_FACE_MASK_MARK_LABELS,
   CAST_SWAP_FACE_MASK_MARK_LIMITS,
   CAST_SWAP_FULL_DEPTH_SCENES,
@@ -63,6 +64,13 @@ export type { FaceMaskMark, MaskEraseBox }
  * magma, viridis).
  */
 export type FaceMaskingDepthColormap = VideoDepthColormap
+
+/**
+ * What the face mesh draws (`faceMeshParts`, decided 2026-11-02): the full
+ * mesh (`"full"`, left out), the eye and lip outlines only (`"features"`), or
+ * the lip outline only (`"mouth"`) — `/v1/video-face-mesh`'s `parts`.
+ */
+export type FaceMaskingFaceMeshParts = VideoFaceMeshParts
 
 /** The provider Nodaro Motion draws its depth with: its colormaps are the ones a setting may name. */
 const DEPTH_PROVIDER = "video-depth-anything"
@@ -142,6 +150,27 @@ export interface FaceMasking {
    * stripped for one that does not.
    */
   depthColormap?: FaceMaskingDepthColormap
+  /**
+   * Full depth only (decided 2026-11-02; the Nodaro Motion Motion setting's
+   * alone, `faceMaskingMotionSchema`: a trend's setting and the Precise one
+   * refuse the key): the depth map is blurred before it is coloured and
+   * before the face mesh is drawn on it, the number being the blur's sigma at
+   * 1080 px tall (whole steps, `CAST_SWAP_DEPTH_BLUR_BOUNDS`). Absent or 0 =
+   * off; read through `depthBlurSent` (on, full depth, above 0), so 0, or a
+   * value on another source, is never sent. An engine blurs only when it
+   * declares `castSwap.depthBlur` (`engineBlursDepth`): the key is stripped
+   * for one that does not.
+   */
+  depthBlur?: number
+  /**
+   * What the face mesh draws (decided 2026-11-02; the Nodaro Motion Motion
+   * setting's alone, as `depthBlur`): `"full"` (left out), `"features"` or
+   * `"mouth"` (`FaceMaskingFaceMeshParts`). Read through `faceMeshPartsSent`
+   * (the face mesh on, not `"full"`), so a full mesh is never sent the key.
+   * An engine draws a part only when it lists it in `castSwap.faceMeshParts`
+   * (`engineDrawsFaceMeshParts`): the key is stripped for one that does not.
+   */
+  faceMeshParts?: FaceMaskingFaceMeshParts
 }
 
 /**
@@ -291,10 +320,16 @@ export const faceMaskingSchema: z.ZodType<FaceMasking> = z
 /**
  * A direct Motion run's masking (the `nodaro_motion_motion` setting's
  * `masking`): a face mask, or full depth (with its `scene`), never keep
- * people (a trend's alone) and never marks.
+ * people (a trend's alone) and never marks. Its own keys beside the shared
+ * ones (decided 2026-11-02): full depth's `depthBlur` (whole steps within
+ * `CAST_SWAP_DEPTH_BLUR_BOUNDS`) and the face mesh's `faceMeshParts`.
  */
 export const faceMaskingMotionSchema: z.ZodType<FaceMasking> = z
-  .strictObject(faceMaskingShape)
+  .strictObject({
+    ...faceMaskingShape,
+    depthBlur: z.int().min(CAST_SWAP_DEPTH_BLUR_BOUNDS.min).max(CAST_SWAP_DEPTH_BLUR_BOUNDS.max).optional(),
+    faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
+  })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
   .refine((m) => faceMaskingSourceOf(m) !== "keep-people", { path: ["source"], message: "A direct Motion run hides faces or uses full depth: Keep people is a trend setting." })
@@ -614,6 +649,72 @@ export function withFaceMeshFor<T extends FaceMasking>(m: T, drawsFaceMesh: bool
   if (drawsFaceMesh || normalised.faceMesh === undefined) return normalised
   const { faceMesh: _faceMesh, ...rest } = normalised
   return rest as T
+}
+
+/**
+ * The depth blur the setting draws its depth map with: `depthBlur` above 0 on
+ * a full-depth setting that is on; undefined otherwise (no blur: never sent
+ * nor answered), so 0, a value under another source, or one on an "off"
+ * setting reads as before the key existed.
+ */
+export function depthBlurSent(m: Pick<FaceMasking, "mode" | "source" | "depthBlur"> | undefined): number | undefined {
+  if (!m || m.mode === "off" || faceMaskingSourceOf(m) !== "full-depth") return undefined
+  return typeof m.depthBlur === "number" && m.depthBlur > 0 ? m.depthBlur : undefined
+}
+
+/**
+ * The parts the setting's face mesh draws when they are not the full mesh:
+ * `faceMeshParts` `"features"` or `"mouth"` with the face mesh on
+ * (`faceMeshOn`); undefined otherwise (the full mesh: never sent nor
+ * answered).
+ */
+export function faceMeshPartsSent(m: Pick<FaceMasking, "faceMesh" | "source" | "faceMeshParts"> | undefined): Exclude<FaceMaskingFaceMeshParts, "full"> | undefined {
+  const parts = m?.faceMeshParts
+  return faceMeshOn(m) && parts !== undefined && parts !== "full" ? parts : undefined
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine blurs a full-depth map
+ * (`castSwap.depthBlur`). Absent ⇒ an engine from before it, which would draw
+ * the map unblurred: it is never sent the key.
+ */
+export function engineBlursDepth(cs: { readonly depthBlur?: boolean } | undefined): boolean {
+  return cs?.depthBlur === true
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine draws the face mesh's
+ * `parts` (`castSwap.faceMeshParts`). Absent ⇒ an engine from before them,
+ * which draws the full mesh: it is never sent the key.
+ */
+export function engineDrawsFaceMeshParts(
+  cs: { readonly faceMeshParts?: readonly FaceMaskingFaceMeshParts[] } | undefined,
+  parts: FaceMaskingFaceMeshParts,
+): boolean {
+  return (cs?.faceMeshParts ?? []).includes(parts)
+}
+
+/**
+ * The setting as an engine is sent it, depth-blur-wise: `depthBlur` only when
+ * it blurs (`depthBlurSent`) AND the engine blurs (`engineBlursDepth`); else
+ * no key at all, exactly the setting before the key existed. A new object.
+ */
+export function withDepthBlurFor<T extends FaceMasking>(m: T, cs: { readonly depthBlur?: boolean } | undefined): T {
+  const { depthBlur: _blur, ...rest } = m
+  const blur = depthBlurSent(m)
+  return (blur !== undefined && engineBlursDepth(cs) ? { ...rest, depthBlur: blur } : rest) as T
+}
+
+/**
+ * The setting as an engine is sent it, face-mesh-parts-wise: `faceMeshParts`
+ * only when it is not the full mesh (`faceMeshPartsSent`) AND the engine
+ * draws that part (`engineDrawsFaceMeshParts`); else no key at all (the full
+ * mesh, as before the key existed). A new object.
+ */
+export function withFaceMeshPartsFor<T extends FaceMasking>(m: T, cs: { readonly faceMeshParts?: readonly FaceMaskingFaceMeshParts[] } | undefined): T {
+  const { faceMeshParts: _parts, ...rest } = m
+  const parts = faceMeshPartsSent(m)
+  return (parts !== undefined && engineDrawsFaceMeshParts(cs, parts) ? { ...rest, faceMeshParts: parts } : rest) as T
 }
 
 /** Whether this process's Cast Swap engine masks `target` under `source` (`engineMasksTarget` its declaration). */

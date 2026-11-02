@@ -79,6 +79,11 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.videoSceneCuts).toBe(true)
   })
 
+  it("advertises that the face mesh route draws only the parts a child asks for", () => {
+    // routes/__tests__/video-face-mesh.test.ts and services/face-mesh/__tests__ prove the route and the drawing.
+    expect(buildToolkit().capabilities?.videoFaceMeshParts).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

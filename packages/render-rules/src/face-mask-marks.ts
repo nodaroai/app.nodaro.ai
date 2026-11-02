@@ -105,3 +105,12 @@ export const CAST_SWAP_FACE_MASK_MARK_LIMITS = {
  */
 export const CAST_SWAP_SOURCE_MODES = ["faces", "full-depth", "keep-people"] as const
 export type CastSwapSourceMode = (typeof CAST_SWAP_SOURCE_MODES)[number]
+
+/**
+ * A full-depth setting's depth blur (`faceMasking.depthBlur`, decided
+ * 2026-11-02): the Cast Swap engine blurs the gray depth map before it is
+ * coloured and before the face mesh is drawn on it, the number being the
+ * blur's sigma at 1080 px tall (scaled to the map's own height). Whole steps
+ * from `min` (0: off, the setting's default) to `max`.
+ */
+export const CAST_SWAP_DEPTH_BLUR_BOUNDS = { min: 0, max: 40, step: 1 } as const

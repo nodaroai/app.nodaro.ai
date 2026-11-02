@@ -4,7 +4,8 @@
  * tone of the picture under it — drawn on the faces of a clip, frame for
  * frame. An internal step of Nodaro Motion's face masking: the lines go on
  * the masked (or depth) clip so the video model still sees where the mouth
- * and the eyes are.
+ * and the eyes are. A request may draw only the eye and lip outlines, or
+ * only the lip outline (`parts`).
  *
  * Priced by the clip's length at the 30 fps basis Video Mask uses
  * (`videoMaskBilledSeconds`), one row per length bucket.
@@ -25,6 +26,15 @@ export const VIDEO_FACE_MESH_LIMITS = {
   ZONE_MARGIN_PCT_MIN: VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN,
   ZONE_MARGIN_PCT_MAX: VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX,
 } as const
+
+/**
+ * What a face mesh run draws on each face (`VideoFaceMeshRequest.parts`):
+ * `"full"` (the default) the thin wireframe and the darker eye and lip
+ * outlines; `"features"` the eye outlines and the lip outline only, no
+ * wireframe; `"mouth"` the lip outline only.
+ */
+export const VIDEO_FACE_MESH_PARTS = ["full", "features", "mouth"] as const
+export type VideoFaceMeshParts = (typeof VIDEO_FACE_MESH_PARTS)[number]
 
 /**
  * The version of what a face mesh run draws for a given clip and settings:
@@ -88,6 +98,13 @@ export interface VideoFaceMeshRequest {
    * drawn on directly): each line is a gray tone of the pixel under it.
    */
   readonly depthUrl?: string
+  /**
+   * What is drawn on each face (`VIDEO_FACE_MESH_PARTS`): left out or
+   * `"full"`, the wireframe and the eye and lip outlines; `"features"`, the
+   * eye and lip outlines only; `"mouth"`, the lip outline only. The outlines
+   * are drawn as they are in the full mesh (the same tone and width).
+   */
+  readonly parts?: VideoFaceMeshParts
 }
 
 /** A finished `video-face-mesh` job's `output_data`. */
@@ -103,5 +120,7 @@ export interface VideoFaceMeshOutput {
   readonly facesDrawn: number
   /** The map the lines were coloured from (a request with `depthUrl`); absent = gray tones of the pixel under them. */
   readonly colormap?: VideoDepthColormap
+  /** What was drawn when it was not the full mesh (a request with `parts` `"features"` or `"mouth"`); absent = the full mesh. */
+  readonly parts?: Exclude<VideoFaceMeshParts, "full">
   readonly recipe: string
 }

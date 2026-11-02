@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/select"
 import type {
   TrendEngineEnvironment,
+  AdminFaceMeshParts,
   AdminTrendFaceMasking,
   AdminTrendFaceMaskingFill,
   AdminTrendFaceMaskingMode,
@@ -63,7 +64,7 @@ import type {
   AdminTrendFaceMaskingZone,
   AdminTrendFullDepthScene,
 } from "@/lib/api"
-import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
+import { DEPTH_BLUR_BOUNDS, FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
 import {
   DEPTH_COLORMAPS,
   defaultTargetFor,
@@ -102,6 +103,13 @@ const KEEP_TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: s
 const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> = [
   { value: "blur", label: "Blur (default)" },
   { value: "depth", label: "Depth colors" },
+]
+
+/** What the face mesh draws (`faceMeshParts`; the full mesh is the default, saved as no key). */
+const FACE_MESH_PARTS: ReadonlyArray<{ value: AdminFaceMeshParts; label: string; name: string }> = [
+  { value: "full", label: "Full (default)", name: "the full face mesh" },
+  { value: "features", label: "Eyes and mouth", name: "only the eyes and mouth" },
+  { value: "mouth", label: "Mouth only", name: "only the mouth" },
 ]
 
 const COLORMAP_LABELS: Readonly<Record<VideoDepthColormap, string>> = {
@@ -160,6 +168,20 @@ interface Props {
    * `envs` draws it.
    */
   readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
+  /**
+   * Admin → Nodaro Motion's Motion column (a setting every environment
+   * shares): offer Full depth's depth blur, naming the environments whose
+   * engine cannot blur the map (`environmentsThatCannotBlurDepth`). Left out
+   * (a trend's editor, the Precise column): no such control.
+   */
+  readonly depthBlurMissingIn?: readonly string[]
+  /**
+   * Admin → Nodaro Motion's Motion column: offer what the face mesh draws
+   * (Full, Eyes and mouth, Mouth only) while it is on, with, for each part but
+   * the full mesh, the environments whose engine cannot draw it
+   * (`environmentsThatCannotDrawFaceMeshParts`). Left out: no such control.
+   */
+  readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
   /** The source clip's length, when known: Full depth's original scene takes up to 27.5 s. */
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
@@ -179,6 +201,8 @@ export function FaceMaskingEditor({
   bodyMissingIn,
   faceMeshMissingIn,
   depthColormapsMissingIn,
+  depthBlurMissingIn,
+  faceMeshPartsMissingIn,
   clipSec,
   envs,
   offerRoleOutlines = false,
@@ -243,6 +267,19 @@ export function FaceMaskingEditor({
   const colormapLacking = depthColormapsMissingIn
     ? [...new Set(DEPTH_COLORMAPS.filter((c) => c !== defaultColormap).flatMap((c) => depthColormapsMissingIn[c]))]
     : []
+  // The depth blur (Admin → Nodaro Motion's Motion column): Full depth only. One already set stays shown (and can be
+  // set back to 0) whatever the engines say; 0 is off, saved as no key.
+  const depthBlur = value?.depthBlur
+  const depthBlurOn = typeof depthBlur === "number" && depthBlur > 0
+  const depthBlurShown = source === "full-depth" && mode !== "off" && (depthBlurMissingIn !== undefined || depthBlurOn)
+  const depthBlurUnsupported = (depthBlurMissingIn?.length ?? 0) > 0
+  // What the face mesh draws (Admin → Nodaro Motion's Motion column), under its switch while it is on.
+  const meshParts: AdminFaceMeshParts = value?.faceMeshParts ?? "full"
+  const meshPartsShown = meshOn && !keepPeople && (faceMeshPartsMissingIn !== undefined || meshParts !== "full")
+  const meshPartOffered = (p: AdminFaceMeshParts) => p === "full" || (faceMeshPartsMissingIn ? faceMeshPartsMissingIn[p].length === 0 : false)
+  const meshPartsUnsupported = !meshPartOffered(meshParts)
+  const noMeshPartOffered = FACE_MESH_PARTS.every((p) => p.value === "full" || !meshPartOffered(p.value))
+  const meshPartsLacking = faceMeshPartsMissingIn ? [...new Set([...faceMeshPartsMissingIn.features, ...faceMeshPartsMissingIn.mouth])] : []
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
@@ -253,6 +290,7 @@ export function FaceMaskingEditor({
   const faceMeshId = `${id}-face-mesh`
   const outlinesId = `${id}-role-outlines`
   const colormapId = `${id}-depth-colormap`
+  const meshPartsId = `${id}-face-mesh-parts`
 
   return (
     <div className="flex flex-col gap-3">
@@ -347,6 +385,27 @@ export function FaceMaskingEditor({
         </div>
       )}
 
+      {depthBlurShown && (
+        <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">
+          <NumberField
+            label="Depth blur"
+            help={`Blurs the depth map before its colours and the face mesh are drawn on it. 0 is off; the number is the blur's strength at 1080p (it scales with the clip's height), ${DEPTH_BLUR_BOUNDS.min}–${DEPTH_BLUR_BOUNDS.max}.`}
+            value={depthBlur}
+            placeholder={DEPTH_BLUR_BOUNDS.min}
+            bounds={[DEPTH_BLUR_BOUNDS.min, DEPTH_BLUR_BOUNDS.max]}
+            step={DEPTH_BLUR_BOUNDS.step}
+            disabled={depthBlurUnsupported && !depthBlurOn}
+            // 0 (or emptied) removes the key: a setting without the blur is saved exactly as before it existed.
+            onChange={(v) => set({ depthBlur: v === undefined || v === 0 ? undefined : v })}
+          />
+          {depthBlurUnsupported && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {`The Cast Swap engine of ${depthBlurMissingIn!.join(", ")} cannot blur the depth map yet, and this setting is shared by every environment${depthBlurOn ? ": set it to 0 to save" : ""}.`}
+            </span>
+          )}
+        </div>
+      )}
+
       {source === "full-depth" && (
         <FullDepthSceneSelect value={value?.scene} clipSec={clipSec} envs={envs} only={scenes} onChange={(scene) => set({ scene })} />
       )}
@@ -359,8 +418,8 @@ export function FaceMaskingEditor({
               checked={meshOn}
               disabled={meshUnsupported && !meshOn}
               aria-describedby={`${faceMeshId}-hint`}
-              // Off removes the key: a setting without the mesh is saved exactly as before it existed.
-              onCheckedChange={(checked) => set({ faceMesh: checked === true ? true : undefined })}
+              // Off removes the key (and what the mesh draws): a setting without the mesh is saved exactly as before it existed.
+              onCheckedChange={(checked) => set(checked === true ? { faceMesh: true } : { faceMesh: undefined, faceMeshParts: undefined })}
             />
             <label htmlFor={faceMeshId} className="font-medium">
               Face mesh
@@ -376,6 +435,44 @@ export function FaceMaskingEditor({
                 ? `The Cast Swap engine of ${faceMeshMissingIn.join(", ")} cannot draw the face mesh yet, and this setting is shared by every environment${meshOn ? ": turn it off to save" : ""}.`
                 : "No environment's Cast Swap engine draws the face mesh yet: the engine is out of date."}
             </span>
+          )}
+          {meshPartsShown && (
+            <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">
+              <label htmlFor={meshPartsId} className="font-medium">
+                Face mesh lines
+              </label>
+              <Select
+                value={meshParts}
+                disabled={noMeshPartOffered && meshParts === "full"}
+                // The full mesh is no key: a setting without the choice is saved exactly as before it existed.
+                onValueChange={(p) => set({ faceMeshParts: p === "full" ? undefined : (p as AdminFaceMeshParts) })}
+              >
+                <SelectTrigger id={meshPartsId} className="h-9" aria-describedby={`${meshPartsId}-hint`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FACE_MESH_PARTS.map((p) => (
+                    <SelectItem key={p.value} value={p.value} disabled={!meshPartOffered(p.value) && p.value !== meshParts}>
+                      {p.label}
+                      {!meshPartOffered(p.value) ? " (not supported yet)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span id={`${meshPartsId}-hint`} className="text-xs text-muted-foreground">
+                What is drawn on each face: the full mesh, only the eye and lip outlines, or only the lip outline. The prompt names only what is drawn.
+              </span>
+              {meshPartsUnsupported && (
+                <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                  {`The Cast Swap engine of ${faceMeshPartsMissingIn ? faceMeshPartsMissingIn[meshParts as "features" | "mouth"].join(", ") : "an environment"} cannot draw ${FACE_MESH_PARTS.find((p) => p.value === meshParts)!.name} of the face mesh yet, and this setting is shared by every environment: choose Full to save.`}
+                </span>
+              )}
+              {!meshPartsUnsupported && noMeshPartOffered && meshPartsLacking.length > 0 && (
+                <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                  {`The Cast Swap engine of ${meshPartsLacking.join(", ")} cannot draw only parts of the face mesh yet, and this setting is shared by every environment.`}
+                </span>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -531,11 +628,12 @@ interface NumberFieldProps {
   readonly placeholder: number
   readonly bounds: readonly [number, number]
   readonly step: number
+  readonly disabled?: boolean
   readonly onChange: (v: number | undefined) => void
 }
 
 /** Empty = the engine's default (never NaN). */
-function NumberField({ label, help, value, placeholder, bounds: [min, max], step, onChange }: NumberFieldProps) {
+function NumberField({ label, help, value, placeholder, bounds: [min, max], step, disabled, onChange }: NumberFieldProps) {
   const invalid = value !== undefined && !(value >= min && value <= max)
   const id = useId()
   return (
@@ -554,6 +652,7 @@ function NumberField({ label, help, value, placeholder, bounds: [min, max], step
         step={step}
         value={value ?? ""}
         placeholder={String(placeholder)}
+        disabled={disabled}
         aria-invalid={invalid}
         onChange={(e) => {
           const raw = e.target.value

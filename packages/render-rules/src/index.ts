@@ -784,7 +784,7 @@ export {
   type TrendRoleNames,
   type TrendSceneNamingSource,
 } from "./trend-prompts"
-export { CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_SOURCE_MODES, faceMaskMarkSlot, isErasedFaceMaskMark, isMainFaceMaskMark } from "./face-mask-marks"
+export { CAST_SWAP_DEPTH_BLUR_BOUNDS, CAST_SWAP_FACE_MASK_MARK_LABELS, CAST_SWAP_FACE_MASK_MARK_LIMITS, CAST_SWAP_SOURCE_MODES, faceMaskMarkSlot, isErasedFaceMaskMark, isMainFaceMaskMark } from "./face-mask-marks"
 export type { CastSwapFaceMaskMarkLabel, CastSwapSourceMode, FaceMaskMark, FaceMaskMarkLabel, FaceMaskSlotLabel, MaskEraseBox } from "./face-mask-marks"
 export {
   ROLE_OUTLINE_COLOUR_RE,

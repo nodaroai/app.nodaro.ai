@@ -10,8 +10,9 @@
  *      (`face-mesh-crop.ts`, `face-mesh-session.ts`); a presence under 0.5
  *      draws nothing for that face in that frame;
  *   3. the points are smoothed over time per face (`face-mesh-smooth.ts`);
- *   4. the lines are drawn on the clip they go on (`drawOnPath`: the masked or
- *      depth clip) at their place (`face-mesh-draw.ts`), as fractions of the
+ *   4. the lines (all of them, or only the eye and lip outlines, or only the
+ *      lip outline: `parts`) are drawn on the clip they go on (`drawOnPath`:
+ *      the masked or depth clip) at their place (`face-mesh-draw.ts`), as fractions of the
  *      frame — the clips may differ in size — in tones of the picture under
  *      them: a gray of the pixel's own luminance, or, given the gray depth
  *      render and the map (`depth`), a colour of the map.
@@ -31,7 +32,7 @@
 import { once } from "node:events"
 import { join } from "node:path"
 import type { Writable } from "node:stream"
-import type { VideoDepthColormap } from "@nodaro/shared/media"
+import type { VideoDepthColormap, VideoFaceMeshParts } from "@nodaro/shared/media"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { ffmpegFailureMessage, probeVideoOverlayBase, runFfprobe, withFfmpegSlot, type VideoOverlayBaseProbe } from "../../providers/video/ffmpeg-utils.js"
 import { spawnFfmpeg } from "../../providers/video/ffmpeg-process.js"
@@ -69,6 +70,12 @@ export interface DrawFaceMeshInput {
    * tone of the drawn-on pixel itself.
    */
   readonly depth?: { readonly path: string; readonly colormap: VideoDepthColormap }
+  /**
+   * What is drawn on each face (`VideoFaceMeshParts`): left out or `"full"`,
+   * the wireframe and the eye and lip outlines, as before; `"features"`, the
+   * eye and lip outlines alone; `"mouth"`, the lip outline alone.
+   */
+  readonly parts?: VideoFaceMeshParts
   readonly filters: FaceMeshFilters
   /** Where the output is written. */
   readonly outputPath: string
@@ -419,7 +426,7 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
           meshed.push({ box: face, points: fractions.map((v, i) => v * (i % 2 === 0 ? det.width : det.height)) })
         }
         const smoothed = tracker.next(meshed).map((p) => p.map((v, i) => v / (i % 2 === 0 ? det.width : det.height)))
-        const overlay = faceMeshOverlay(smoothed, draw.width, draw.height)
+        const overlay = faceMeshOverlay(smoothed, draw.width, draw.height, input.parts ?? "full")
         if (overlay) {
           framesWithFaces++
           facesDrawn += smoothed.length

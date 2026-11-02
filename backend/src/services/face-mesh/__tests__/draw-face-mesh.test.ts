@@ -85,6 +85,23 @@ describe("drawFaceMeshVideo", () => {
     expect(bluePixels(out, 3)).toBeLessThanOrEqual(bluePixels(FACES, 3))
   }, 120_000)
 
+  it("parts: the eye and lip outlines alone, or the lip outline alone — the same faces, fewer lines drawn on them", async () => {
+    const full = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, filters: OFF, outputPath: join(dir, "parts-full.mp4") })
+    const features = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "features", filters: OFF, outputPath: join(dir, "parts-features.mp4") })
+    const mouth = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "mouth", filters: OFF, outputPath: join(dir, "parts-mouth.mp4") })
+    // The same faces found and drawn on, frame for frame.
+    for (const r of [features, mouth]) {
+      expect([r.frames, r.framesWithFaces, r.facesDrawn]).toEqual([full.frames, full.framesWithFaces, full.facesDrawn])
+      expect(frames(join(dir, r === features ? "parts-features.mp4" : "parts-mouth.mp4"))).toBe(26)
+    }
+    const drawnFull = darkenedPixels(join(dir, "parts-full.mp4"), FACES, 3)
+    const drawnFeatures = darkenedPixels(join(dir, "parts-features.mp4"), FACES, 3)
+    const drawnMouth = darkenedPixels(join(dir, "parts-mouth.mp4"), FACES, 3)
+    expect(drawnMouth).toBeGreaterThan(0)
+    expect(drawnMouth).toBeLessThan(drawnFeatures)
+    expect(drawnFeatures).toBeLessThan(drawnFull)
+  }, 180_000)
+
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
     const none = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("black.mp4", "black", 26), filters: OFF, outputPath: join(dir, "none.mp4") })
     expect(none.facesDrawn).toBe(0)

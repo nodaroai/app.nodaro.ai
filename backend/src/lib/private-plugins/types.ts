@@ -3485,6 +3485,16 @@ export interface PluginCapabilities {
    * False (or absent): an older host, which prices the typical call.
    */
   readonly llmChatEstimateUsage?: boolean
+  /**
+   * `POST /v1/video-face-mesh` (through `tk.http.workerRequest`, a child of
+   * the calling job) takes `parts`: `"full"` (left out: the wireframe and the
+   * eye and lip outlines, exactly as before), `"features"` (the eye and lip
+   * outlines only) or `"mouth"` (the lip outline only), and answers
+   * `output_data.parts` when it drew less than the full mesh. False (or
+   * absent): an older host, whose route drops the key and draws the full
+   * mesh.
+   */
+  readonly videoFaceMeshParts?: boolean
 }
 
 /**
@@ -3531,6 +3541,20 @@ export interface PluginFaceMasking {
    * `supports.castSwap.depthColormaps`.
    */
   depthColormap?: "grayscale" | "turbo" | "inferno" | "magma" | "viridis"
+  /**
+   * Full depth only: the depth map blurred before anything is drawn on it,
+   * the blur's sigma at 1080 px tall (whole steps, 0–40; 0 = off). Answered
+   * by `tk.settings` only when above 0 on full depth, and only to an engine
+   * that declares `supports.castSwap.depthBlur`.
+   */
+  depthBlur?: number
+  /**
+   * What the face mesh draws: `"full"` (left out), `"features"` (the eye and
+   * lip outlines only) or `"mouth"` (the lip outline only). Answered by
+   * `tk.settings` only when the face mesh is on and it is not `"full"`, and
+   * only to an engine that lists it in `supports.castSwap.faceMeshParts`.
+   */
+  faceMeshParts?: "full" | "features" | "mouth"
 }
 
 /**
@@ -4001,6 +4025,24 @@ export interface PluginSupports {
    *   (`GET /v1/cast-swap/style-choice`, so clients keep their Style control)
    *   and refuses to save a forced style while any environment lacks it
    *   (lib/nodaro-motion-style.ts `engineTakesStyleChoice`).
+   * - `depthBlur` (Cast Swap engine ≥ 0.430.0): a full-depth masking setting
+   *   (the Nodaro Motion Motion setting's, read through `tk.settings`) takes
+   *   `depthBlur` (whole, 0–40; absent or 0 = off): the engine blurs the gray
+   *   depth map (a Gaussian blur of that sigma at 1080 px tall, scaled to the
+   *   map's own height) before it colours it and before the face mesh is
+   *   drawn on it. No child, no price, no prompt word. Additive-optional:
+   *   absent ⇒ `false` — the platform answers the settings without the key
+   *   and refuses to save a shared Nodaro Motion setting with it while any
+   *   environment lacks it (lib/cast-swap-face-masking.ts `engineBlursDepth`).
+   * - `faceMeshParts` (Cast Swap engine ≥ 0.430.0): what a masking setting's
+   *   face mesh may draw (`faceMeshParts`): `"full"`, `"features"` (the eye
+   *   and lip outlines only), `"mouth"` (the lip outline only); the engine
+   *   sends `parts` to `/v1/video-face-mesh` where the host draws them
+   *   (`capabilities.videoFaceMeshParts`) and words its `faceMesh` prompt
+   *   line by what was drawn. Additive-optional: absent ⇒ the full mesh only
+   *   — the platform answers the settings without the key and refuses to save
+   *   a shared Nodaro Motion setting with one while any environment lacks it
+   *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshParts`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4043,6 +4085,8 @@ export interface PluginSupports {
     readonly shotList?: boolean
     readonly styleRefs?: boolean
     readonly styleChoice?: boolean
+    readonly depthBlur?: boolean
+    readonly faceMeshParts?: readonly ("full" | "features" | "mouth")[]
   }
 }
 

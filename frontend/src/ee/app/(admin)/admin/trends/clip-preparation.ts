@@ -19,7 +19,7 @@
  */
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
 import { videoDepthColormaps, type VideoDepthColormap } from "@nodaro/shared/media"
-import type { AdminTrendFaceMasking, AdminTrendFaceMaskingSource, AdminTrendFaceMaskingTarget, TrendEngineEnvironment } from "@/lib/api"
+import type { AdminFaceMeshParts, AdminTrendFaceMasking, AdminTrendFaceMaskingSource, AdminTrendFaceMaskingTarget, TrendEngineEnvironment } from "@/lib/api"
 
 export const CLIP_PREPARATIONS: ReadonlyArray<{ value: AdminTrendFaceMaskingSource; label: string; hint: string }> = [
   {
@@ -273,6 +273,42 @@ export function environmentsThatCannotDrawColormaps(
   ) as Record<VideoDepthColormap, string[]>
 }
 
+/**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot blur a full-depth map — none recorded,
+ * or one that does not declare `castSwap.depthBlur` (a Cast Swap engine
+ * before 0.430.0). Unknown while the environments are (undefined). The
+ * setting is shared, so a blur above 0 is saved only when this is empty (the
+ * server refuses the save otherwise, 409 `engine_unsupported`).
+ */
+export function environmentsThatCannotBlurDepth(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.depthBlur !== true)
+}
+
+/** The face mesh's parts other than the full mesh, in display order. */
+export const FACE_MESH_PARTIAL = ["features", "mouth"] as const satisfies readonly AdminFaceMeshParts[]
+
+/**
+ * Admin → Nodaro Motion: for each face mesh part other than the full mesh,
+ * the environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * engine cannot draw it — none recorded, or one whose `castSwap.faceMeshParts`
+ * lacks it (a Cast Swap engine before 0.430.0). Unknown while the environments
+ * are (undefined). A part is offered only while its list is empty (the server
+ * refuses the save otherwise, 409 `engine_unsupported`).
+ */
+export function environmentsThatCannotDrawFaceMeshParts(
+  envs: readonly TrendEngineEnvironment[] | undefined,
+): Readonly<Record<(typeof FACE_MESH_PARTIAL)[number], string[]>> | undefined {
+  if (!envs) return undefined
+  return Object.fromEntries(
+    FACE_MESH_PARTIAL.map((p) => [
+      p,
+      SHARED_SETTING_ENVIRONMENTS.filter((name) => !(envs.find((e) => e.env === name)?.supports.castSwap?.faceMeshParts ?? []).includes(p)),
+    ]),
+  ) as Record<(typeof FACE_MESH_PARTIAL)[number], string[]>
+}
+
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
 export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)
@@ -294,10 +330,16 @@ export function withClipPreparation(
   if (!m && source === "faces") return { masking: undefined, removedMain: 0 }
   const { source: _was, ...rest } = m ?? { mode: "always" as const }
   const next: AdminTrendFaceMasking = isDepthPreparation(source) ? { ...rest, mode: "always", source } : { ...rest }
-  // The scene source is Full depth's alone.
-  if (source !== "full-depth") delete next.scene
-  // The face mesh is never Keep people's; role outlines are Faces hidden's alone.
-  if (source === "keep-people") delete next.faceMesh
+  // The scene source is Full depth's alone; so is the depth blur.
+  if (source !== "full-depth") {
+    delete next.scene
+    delete next.depthBlur
+  }
+  // The face mesh (and what it draws) is never Keep people's; role outlines are Faces hidden's alone.
+  if (source === "keep-people") {
+    delete next.faceMesh
+    delete next.faceMeshParts
+  }
   if (source !== "faces") delete next.roleOutlines
   let removedMain = 0
   if (next.target === "body" && (source === "full-depth" || (source === "faces" && clipPreparationOf(m) === "keep-people"))) delete next.target

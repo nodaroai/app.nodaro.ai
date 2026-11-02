@@ -23,6 +23,7 @@ import {
   TREND_PROMPT_LIMITS,
 } from "@nodaro/shared/models"
 import {
+  CAST_SWAP_DEPTH_BLUR_BOUNDS,
   castSwapImagesSent,
   faceMaskMarkSlot,
   previewMayUseStoredRoleNames,
@@ -116,6 +117,8 @@ export function previewPromptBudget(
  */
 export const FACE_MASKING_DEFAULTS = CAST_SWAP_FACE_MASKING_DEFAULTS
 export const FACE_MASKING_BOUNDS = CAST_SWAP_FACE_MASKING_BOUNDS
+/** A full-depth setting's depth blur: whole steps, 0 (off) to 40 (`@nodaro/render-rules`, which the server's schema reads too). */
+export const DEPTH_BLUR_BOUNDS = CAST_SWAP_DEPTH_BLUR_BOUNDS
 export const ZONE_SIDES = ["leftPct", "rightPct", "topPct", "bottomPct"] as const satisfies ReadonlyArray<keyof AdminTrendFaceMaskingZone>
 export const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
 /** The server's slug rule (migration 549's CHECK); `runs` and `tags` are taken by the run and tag lists. */
@@ -283,6 +286,10 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     // The depth colormap: only where it changes what is drawn (`depthColormapSaved`: depth drawn, not the
     // source's default, not under role outlines); else no key, as before the choice existed.
     ...(depthColormapSaved(m) ? { depthColormap: depthColormapSaved(m) } : {}),
+    // The depth blur: Full depth only, a whole number above 0 (0, or another preparation, is no key, as before it existed).
+    ...(clipPreparationOf(m) === "full-depth" && num(m.depthBlur) && m.depthBlur! > 0 ? { depthBlur: m.depthBlur } : {}),
+    // What the face mesh draws: only with the mesh on and not the full mesh (the default, no key), never with Keep people.
+    ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" && m.faceMeshParts && m.faceMeshParts !== "full" ? { faceMeshParts: m.faceMeshParts } : {}),
     // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
     ...(m.marks && m.marks.length > 0 ? { marks: m.marks.map((mark) => ({ ...mark })) } : {}),
   }
@@ -578,8 +585,14 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
 /** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Nodaro Motion's. */
 export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   const out: string[] = []
-  // Full depth reads the mode only: whatever else is kept (from Faces hidden) is neither shown nor sent.
-  if (clipPreparationOf(m) === "full-depth") return out
+  // Full depth reads the mode (and its depth blur) only: whatever else is kept (from Faces hidden) is neither shown nor sent.
+  if (clipPreparationOf(m) === "full-depth") {
+    const { min, max } = CAST_SWAP_DEPTH_BLUR_BOUNDS
+    if (m.depthBlur !== undefined && !(Number.isInteger(m.depthBlur) && m.depthBlur >= min && m.depthBlur <= max)) {
+      out.push(`Clip preparation: the depth blur is a whole number from ${min} to ${max}.`)
+    }
+    return out
+  }
   const outside = (v: number | undefined, [lo, hi]: readonly [number, number]) => v !== undefined && !(v >= lo && v <= hi)
   const range = ([lo, hi]: readonly [number, number]) => `${lo}–${hi}`
   const { faceHeightPct, zonePct, blurStrengthPct, threshold } = FACE_MASKING_BOUNDS

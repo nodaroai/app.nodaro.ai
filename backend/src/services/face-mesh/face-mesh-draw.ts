@@ -6,6 +6,10 @@
  *   - the tesselation: a thin wireframe (`FACE_MESH_STYLE.mesh`);
  *   - the eye outlines and the lip outline, outer and inner: darker and a
  *     little thicker (`FACE_MESH_STYLE.outline`).
+ * What is drawn is the request's `parts` (`VideoFaceMeshParts`): `"full"`
+ * (the default) both layers; `"features"` the eye and lip outlines alone;
+ * `"mouth"` the lip outline alone. An outline is drawn exactly as in the
+ * full mesh (its tone, its width, the face's box), so `"full"` is unchanged.
  * No colour of their own (decided by the admin 2026-11-01: a video model
  * copied the former blue / green lines into its result): every line is a tone
  * of the picture under it (`lineTone`) — the wireframe × 0.6, the outlines
@@ -29,6 +33,7 @@
  * through untouched.
  */
 import sharp from "sharp"
+import type { VideoFaceMeshParts } from "@nodaro/shared/media"
 import { FACEMESH_LEFT_EYE, FACEMESH_LIPS, FACEMESH_RIGHT_EYE, FACEMESH_TESSELATION } from "./face-mesh-topology.js"
 
 /** How one layer's gray is worked out from the luminance `L` (0–255) under it (`lineTone`). */
@@ -101,11 +106,15 @@ function uniqueEdges(flat: readonly number[]): Uint16Array {
 
 const MESH_EDGES = uniqueEdges(FACEMESH_TESSELATION)
 const OUTLINE_EDGES = uniqueEdges([...FACEMESH_LIPS, ...FACEMESH_LEFT_EYE, ...FACEMESH_RIGHT_EYE])
+/** The lip outline alone, outer and inner (`parts: "mouth"`). */
+const LIP_EDGES = uniqueEdges(FACEMESH_LIPS)
 
 /**
  * Where the lines go on the frame: two SVGs over the same box, white on
- * transparent — the wireframe (`meshSvg`) and the eye and lip outlines
- * (`outlineSvg`) — whose coverage `compositeFaceMesh` tones.
+ * transparent — the wireframe (`meshSvg`; empty when the request draws no
+ * wireframe: `parts` `"features"` or `"mouth"`) and the outlines
+ * (`outlineSvg`: the eyes' and the lips', or the lips' alone for `"mouth"`) —
+ * whose coverage `compositeFaceMesh` tones.
  */
 export interface FaceMeshOverlay {
   readonly meshSvg: string
@@ -134,9 +143,11 @@ const svgOf = (w: number, h: number, body: string): string =>
 /**
  * The overlay for `faces` (each `[x0, y0, …]` fractions) on a `width × height`
  * frame, or null when there is nothing to draw on it (no face, or every face
- * entirely off the frame).
+ * entirely off the frame). `parts` (left out: `"full"`) decides which layers
+ * are drawn; the box and the widths are worked out from every point either
+ * way, so an outline is the same line in each.
  */
-export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: number, height: number): FaceMeshOverlay | null {
+export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: number, height: number, parts: VideoFaceMeshParts = "full"): FaceMeshOverlay | null {
   if (faces.length === 0) return null
   const frameWidth = Math.min(width, height) * FACE_MESH_STYLE.widthPerShortSidePx
   const drawn = faces.map((f) => {
@@ -163,13 +174,15 @@ export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: numb
   if (right - left < 1 || bottom - top < 1) return null
   const w = right - left
   const h = bottom - top
+  const wireframe = parts === "full"
+  const outlineEdges = parts === "mouth" ? LIP_EDGES : OUTLINE_EDGES
   let mesh = ""
   let outline = ""
   for (const d of drawn) {
-    mesh += `<path d="${pathOf(MESH_EDGES, d.px, left, top)}" stroke-width="${r1(d.mesh)}"/>`
-    outline += `<path d="${pathOf(OUTLINE_EDGES, d.px, left, top)}" stroke-width="${r1(d.mesh * FACE_MESH_STYLE.outline.widthFactor)}"/>`
+    if (wireframe) mesh += `<path d="${pathOf(MESH_EDGES, d.px, left, top)}" stroke-width="${r1(d.mesh)}"/>`
+    outline += `<path d="${pathOf(outlineEdges, d.px, left, top)}" stroke-width="${r1(d.mesh * FACE_MESH_STYLE.outline.widthFactor)}"/>`
   }
-  return { meshSvg: svgOf(w, h, mesh), outlineSvg: svgOf(w, h, outline), left, top, width: w, height: h }
+  return { meshSvg: wireframe ? svgOf(w, h, mesh) : "", outlineSvg: svgOf(w, h, outline), left, top, width: w, height: h }
 }
 
 /** An SVG's coverage (its alpha, 0–255) at exactly `width × height`. */
@@ -229,13 +242,14 @@ export async function compositeFaceMesh(
   if (left < 0 || top < 0 || left + w > width || top + h > height) {
     throw new Error(`face mesh: the lines' box ${w}×${h} at ${left},${top} is outside the ${width}×${height} frame`)
   }
-  const [mesh, outline] = await Promise.all([coverageOf(overlay.meshSvg, w, h), coverageOf(overlay.outlineSvg, w, h)])
+  // No wireframe (`parts` other than "full"): no coverage of it — every pixel's wireframe share is 0.
+  const [mesh, outline] = await Promise.all([overlay.meshSvg ? coverageOf(overlay.meshSvg, w, h) : null, coverageOf(overlay.outlineSvg, w, h)])
   const out = Buffer.from(rgb)
   for (let y = 0; y < h; y++) {
     const dy = depth ? Math.min(depth.height - 1, Math.floor(((top + y + 0.5) * depth.height) / height)) : 0
     for (let x = 0; x < w; x++) {
       const c = y * w + x
-      const am = mesh[c]! / 255
+      const am = mesh ? mesh[c]! / 255 : 0
       const ao = outline[c]! / 255
       if (am === 0 && ao === 0) continue
       const i = ((top + y) * width + left + x) * 3
