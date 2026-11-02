@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { cropToFrame, fillFaceMeshInput, landmarksToFrame, roiOfFace, sigmoid, FACE_MESH_ROI_SCALE } from "../face-mesh-crop.js"
-import { FACE_MESH_INPUT_SIZE, FACE_MESH_POINTS } from "../face-mesh-model.js"
+import { FACE_MESH_INPUT_SIZE, FACE_MESH_MODEL_POINTS, FACE_MESH_POINTS } from "../face-mesh-model.js"
 
 const W = 400
 const H = 200
@@ -33,7 +33,8 @@ describe("roiOfFace", () => {
 describe("cropToFrame", () => {
   it("maps the crop's centre to the roi's centre and its corners by the turn", () => {
     const roi = { cx: 100, cy: 50, size: 96, angle: 0 }
-    expect(cropToFrame(roi, 96, 96)).toEqual([100, 50])
+    // The model's crop is 256 × 256: its centre is (128, 128).
+    expect(cropToFrame(roi, FACE_MESH_INPUT_SIZE / 2, FACE_MESH_INPUT_SIZE / 2)).toEqual([100, 50])
     const [x, y] = cropToFrame(roi, 0, 0)
     expect(x).toBeCloseTo(52)
     expect(y).toBeCloseTo(2)
@@ -45,8 +46,8 @@ describe("cropToFrame", () => {
 
   it("landmarksToFrame gives fractions of the frame through the same map", () => {
     const roi = { cx: 200, cy: 100, size: 100, angle: 0.3 }
-    const lm = new Float32Array(FACE_MESH_POINTS * 3)
-    lm[0] = 96; lm[1] = 96 // point 0 at the crop's centre
+    const lm = new Float32Array(FACE_MESH_MODEL_POINTS * 3)
+    lm[0] = FACE_MESH_INPUT_SIZE / 2; lm[1] = FACE_MESH_INPUT_SIZE / 2 // point 0 at the crop's centre
     lm[3] = 10; lm[4] = 150
     const out = landmarksToFrame(lm, roi, W, H)
     expect(out).toHaveLength(FACE_MESH_POINTS * 2)
@@ -56,10 +57,44 @@ describe("cropToFrame", () => {
     expect(out[2]).toBeCloseTo(x / W)
     expect(out[3]).toBeCloseTo(y / H)
   })
+
+  it("landmarksToFrame reads the face's 468 of the model's 478 (x, y, z) points, never the irises after them", () => {
+    const roi = { cx: 200, cy: 100, size: 100, angle: 0 }
+    const lm = new Float32Array(FACE_MESH_MODEL_POINTS * 3)
+    for (let i = 0; i < FACE_MESH_POINTS; i++) {
+      lm[3 * i] = i % 256
+      lm[3 * i + 1] = 255 - (i % 256)
+      lm[3 * i + 2] = -1000 // z: never read
+    }
+    // The irises (468–477): garbage that would show in any point read from them.
+    lm.fill(Number.NaN, FACE_MESH_POINTS * 3)
+    const out = landmarksToFrame(lm, roi, W, H)
+    expect(out).toHaveLength(468 * 2)
+    expect(out.every(Number.isFinite)).toBe(true)
+    // The last face point (467) is still the 468th triple.
+    const [x, y] = cropToFrame(roi, 467 % 256, 255 - (467 % 256))
+    expect(out[2 * 467]).toBeCloseTo(x / W)
+    expect(out[2 * 467 + 1]).toBeCloseTo(y / H)
+  })
+
+  it("landmarksToFrame refuses the former model's 468-point layout (or any other length)", () => {
+    const roi = { cx: 200, cy: 100, size: 100, angle: 0 }
+    expect(() => landmarksToFrame(new Float32Array(468 * 3), roi, W, H)).toThrow(/478/)
+    expect(() => landmarksToFrame(new Float32Array(478 * 3 + 1), roi, W, H)).toThrow(/478/)
+  })
 })
 
 describe("fillFaceMeshInput", () => {
   const n = FACE_MESH_INPUT_SIZE
+
+  it("fills the model's own size by default: 256 × 256 × 3, and refuses the former 192 × 192 input", () => {
+    const bgr = new Uint8Array(W * H * 3).fill(128)
+    const roi = { cx: 200, cy: 100, size: 80, angle: 0 }
+    const out = new Float32Array(256 * 256 * 3)
+    fillFaceMeshInput(bgr, W, H, roi, out)
+    expect(out[out.length - 1]).toBeCloseTo(128 / 255)
+    expect(() => fillFaceMeshInput(bgr, W, H, roi, new Float32Array(192 * 192 * 3))).toThrow(/input/)
+  })
 
   it("samples RGB in [0, 1] from a BGR frame (channels swapped)", () => {
     const bgr = new Uint8Array(W * H * 3)

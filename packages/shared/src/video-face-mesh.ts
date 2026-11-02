@@ -45,9 +45,11 @@ export type VideoFaceMeshParts = (typeof VIDEO_FACE_MESH_PARTS)[number]
  *
  * BUMP IT (to the date of the change) whenever the drawing changes for the
  * same input: the model, the crop, the smoothing, the filters, the colours or
- * the widths. Never for pricing, limits or messages.
+ * the widths. Never for pricing, limits or messages. 2026-11-02: MediaPipe's
+ * refined landmark model (478 points, a 256 × 256 crop) in place of the basic
+ * one; the lines' colours and widths are 2026-11-01's.
  */
-export const VIDEO_FACE_MESH_RECIPE = "2026-11-01"
+export const VIDEO_FACE_MESH_RECIPE = "2026-11-02"
 
 const VIDEO_FACE_MESH_BUCKETS_SEC = [5, 10, 15, 30, 60, 120, 300] as const
 

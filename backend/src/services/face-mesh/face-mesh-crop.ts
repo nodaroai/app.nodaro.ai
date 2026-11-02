@@ -7,11 +7,12 @@
  * runs from the person's right eye — on the image's left when they face the
  * camera — to their left eye). That is the region of interest MediaPipe's own
  * face pipeline gives its landmark model. The crop is sampled bilinearly into
- * the model's 192 × 192 RGB input (outside the frame reads black), and the 468
- * points the model answers in crop pixels map back through the same turn.
+ * the model's 256 × 256 RGB input (`FACE_MESH_INPUT_SIZE`; outside the frame
+ * reads black), and the first 468 of the 478 points the model answers in crop
+ * pixels (the face; the irises are not drawn) map back through the same turn.
  */
 import type { YunetFace } from "../face-detect/yunet-decode.js"
-import { FACE_MESH_INPUT_SIZE, FACE_MESH_POINTS } from "./face-mesh-model.js"
+import { FACE_MESH_INPUT_SIZE, FACE_MESH_MODEL_POINTS, FACE_MESH_POINTS } from "./face-mesh-model.js"
 
 /** The crop's side over the face box's longer side. */
 export const FACE_MESH_ROI_SCALE = 1.5
@@ -98,8 +99,10 @@ export function fillFaceMeshInput(
 }
 
 /**
- * The model's 468 points (x, y in crop pixels; z ignored) as fractions of a
- * `width × height` frame, interleaved `[x0, y0, x1, y1, …]`.
+ * The face's 468 points of the model's 478 (x, y in pixels of the `n × n`
+ * crop; z ignored) as fractions of a `width × height` frame, interleaved
+ * `[x0, y0, x1, y1, …]`: the first 468 (x, y, z) triples are read, the
+ * irises after them (468–477) never.
  */
 export function landmarksToFrame(
   landmarks: ArrayLike<number>,
@@ -108,6 +111,9 @@ export function landmarksToFrame(
   height: number,
   n = FACE_MESH_INPUT_SIZE,
 ): Float64Array {
+  if (landmarks.length !== FACE_MESH_MODEL_POINTS * 3) {
+    throw new Error(`face mesh: ${landmarks.length} landmark values are not the model's ${FACE_MESH_MODEL_POINTS} × 3`)
+  }
   const out = new Float64Array(FACE_MESH_POINTS * 2)
   for (let i = 0; i < FACE_MESH_POINTS; i++) {
     const [x, y] = cropToFrame(roi, landmarks[3 * i]!, landmarks[3 * i + 1]!, n)
