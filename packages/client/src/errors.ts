@@ -70,6 +70,51 @@ export class ModelUnavailableError extends ForbiddenError {
   }
 }
 
+export type ImportRefusalCode =
+  | "import_source_disabled"
+  | "rights_confirmation_required"
+  | "rights_confirmation_not_found"
+  | "rights_confirmation_mismatch"
+  | "rights_confirmation_stale"
+  | "rights_confirmation_expired"
+  | "rights_confirmation_used"
+
+/**
+ * The 403 codes {@link ImportRefusedError} carries: the link's site is
+ * disabled by an administrator (`import_source_disabled`), or the content
+ * rights confirmation is missing while the deployment requires one, does not
+ * exist, is for another link or account, was made under an older declaration,
+ * expired, or was used for an import already.
+ */
+export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<ImportRefusalCode>([
+  "import_source_disabled",
+  "rights_confirmation_required",
+  "rights_confirmation_not_found",
+  "rights_confirmation_mismatch",
+  "rights_confirmation_stale",
+  "rights_confirmation_expired",
+  "rights_confirmation_used",
+])
+
+/**
+ * HTTP 403 refusing an IMPORT OF A LINK (`media.downloadVideo`,
+ * `uploads.importUrl`, the audio imports): the content rights check or the
+ * site's policy said no, before anything was fetched. A
+ * {@link ForbiddenError}, so existing catches keep working; `code` is the
+ * server's own code and says which. The remedy for a `rights_confirmation_*`
+ * code is `contentRights.confirm({ url })` again and a new import with the
+ * answered id; an `import_source_disabled` site has no remedy on the caller's
+ * side, and the message names no site.
+ */
+export class ImportRefusedError extends ForbiddenError {
+  declare readonly code: ImportRefusalCode
+
+  constructor(code: ImportRefusalCode, message = "This link can't be imported here.") {
+    super(message, undefined, code)
+    this.name = "ImportRefusedError"
+  }
+}
+
 export class NotFoundError extends NodaroError {
   constructor(message = "Not found") {
     super(message, "not_found", 404)
@@ -375,7 +420,9 @@ export class JobFailedError extends NodaroError {
 
 /**
  * `nodes.runAndWait` polled past its `maxMs` deadline without the job reaching
- * a terminal status. Not an HTTP error — `status` is 0; catch by type/`code`.
+ * a terminal status. Time the job spent `queued` (waiting for a free slot)
+ * does not count toward the deadline. Not an HTTP error — `status` is 0; catch
+ * by type/`code`.
  */
 export class JobTimeoutError extends NodaroError {
   constructor(
@@ -664,6 +711,11 @@ function selectError(status: number, body: ApiErrorBody): never {
   const modelCode = read.code as ModelUnavailableCode | undefined
   if (status === 403 && modelCode !== undefined && MODEL_UNAVAILABLE_CODES.has(modelCode)) {
     throw new ModelUnavailableError(modelCode, read.message)
+  }
+  // An import of a link refused by the content rights check or the site's policy: its own code is kept.
+  const importCode = read.code as ImportRefusalCode | undefined
+  if (status === 403 && importCode !== undefined && IMPORT_REFUSAL_CODES.has(importCode)) {
+    throw new ImportRefusedError(importCode, read.message)
   }
   if (status === 403 && code === "insufficient_scope") {
     throw new ForbiddenError(read.message, envelope.missingScope)

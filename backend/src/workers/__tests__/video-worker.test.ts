@@ -83,6 +83,11 @@ const mocks = vi.hoisted(() => {
 })
 
 // BullMQ Worker mock — must be a class (called with `new`)
+// Waiting is tested here, so turning limits on is made available; a case sets
+// `lanesAvailable.on = false` for the shipped, locked path.
+const lanesAvailable = vi.hoisted(() => ({ on: true }))
+vi.mock("../../lib/concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return lanesAvailable.on } }))
+
 vi.mock("bullmq", () => {
   class MockWorker {
     on = vi.fn()
@@ -261,7 +266,7 @@ import { DrainAbortError, beginWorkerDrain, _resetWorkerDrainForTests } from "..
 import { createStageJournal } from "../../lib/private-plugins/stage-journal.js"
 import type { PluginStageKey, PluginStageToolkit } from "../../lib/private-plugins/scene3d-contract.js"
 import { DelayedError } from "bullmq"
-import { ConcurrencyGate, type WakeTarget } from "../../lib/concurrency-lanes/gate.js"
+import { ConcurrencyGate, type LaneClient, type WakeTarget } from "../../lib/concurrency-lanes/gate.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 import { registerWakeTargetsHandler, resetWorkerAdmitHooksForTests } from "../../lib/concurrency-lanes/worker-admit.js"
 import { resetServerShareForTests, serverShareOf } from "../../lib/concurrency-lanes/server-share.js"
@@ -308,6 +313,7 @@ function makeBullJob(name: string, data: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   lanes.gate = newLaneGate()
+  lanesAvailable.on = true
   resetWorkerAdmitHooksForTests()
   resetLaneColumnsForTests()
   resetServerShareForTests()
@@ -1736,5 +1742,35 @@ describe("video worker — background scrapes (web-scrape, site-capture, meta-ad
     for (const r of releases.slice(1)) r()
     await Promise.all(running)
     expect(capacitySnapshot("scrape")).toMatchObject({ running: 0, waiting: 0 })
+  })
+})
+
+describe("video worker — limits locked (this release): a pickup never waits for the gate", () => {
+  it("the job is claimed and run at once while every gate call hangs; its slot is released once, when the admission lands", async () => {
+    lanesAvailable.on = false
+    let answer!: () => void
+    const answered = new Promise<void>((r) => { answer = r })
+    const real = makeFakeLaneClient(makeFakeLaneStore())
+    const client = {
+      eval: (...args: Parameters<LaneClient["eval"]>) => answered.then(() => real.eval(...args)),
+      publish: (...args: Parameters<LaneClient["publish"]>) => answered.then(() => real.publish(...args)),
+    } as unknown as LaneClient
+    const held = new ConcurrencyGate({ client: () => client, callTimeoutMs: 600_000 })
+    lanes.gate = held
+    const release = vi.spyOn(held, "release")
+    const { currentConcurrencyHold } = await import("../../lib/concurrency-lanes/hold.js")
+    let hold: unknown
+    mocks.mockHandler.mockImplementationOnce(async () => { hold = currentConcurrencyHold() })
+    createVideoWorker()
+    const processor = mocks.getCapturedProcessor()!
+    await processor(makeBullJob("generate-image"))
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    expect(hold).toMatchObject({ role: "leaf", lane: "provider", jobId: "job-1", leaseId: expect.any(String) })
+    expect(release).not.toHaveBeenCalled()
+    answer()
+    await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1))
+    expect(release).toHaveBeenCalledWith((hold as { leaseId: string }).leaseId, "completed")
+    await new Promise((r) => setTimeout(r, 20))
+    expect(release).toHaveBeenCalledTimes(1)
   })
 })

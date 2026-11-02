@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
-import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot, Mail, Bell } from "lucide-react"
+import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot, Mail, Bell, ShieldCheck } from "lucide-react"
 import { useAdminSettings } from "@/ee/hooks/queries/use-admin-queries"
+import { ImportSourcesCard } from "./import-sources-card"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
 import { Button } from "@/components/ui/button"
@@ -54,6 +55,8 @@ export default function AdminSettingsPage() {
   // The copilot emergency stop. Defaults ON, matching the seed — an absent
   // row means enabled, so a fresh install shows it on.
   const [copilotEnabled, setCopilotEnabled] = useState(true)
+  // Content rights: a link import without a confirmation is refused once this is on.
+  const [contentRightsRequired, setContentRightsRequired] = useState(false)
   const [copilotDefaultTier, setCopilotDefaultTier] = useState("")
   // Sparse: only tiers/fields the admin actually changed. Blank means "use the
   // built-in default", which the backend resolver fills and clamps.
@@ -108,6 +111,7 @@ export default function AdminSettingsPage() {
       setCarouselAutoplay(settings.carousel_video_autoplay)
       setAppsPageAutoplay(settings.apps_page_video_autoplay)
       setCopilotEnabled(settings.copilot_enabled)
+      setContentRightsRequired(settings.content_rights_required ?? false)
       setCopilotDefaultTier(settings.copilot_default_tier ?? "")
       setTierCaps((settings.copilot_tier_caps ?? {}) as CopilotTierCaps)
       setAppsLimit(settings.featured_apps_limit)
@@ -171,6 +175,10 @@ export default function AdminSettingsPage() {
 
     if (copilotEnabled !== settings?.copilot_enabled) {
       updates.push({ key: "copilot_enabled", value: copilotEnabled })
+    }
+
+    if (contentRightsRequired !== (settings?.content_rights_required ?? false)) {
+      updates.push({ key: "content_rights_required", value: contentRightsRequired })
     }
 
     if (copilotDefaultTier && copilotDefaultTier !== settings?.copilot_default_tier) {
@@ -247,6 +255,7 @@ export default function AdminSettingsPage() {
     carouselAutoplay !== settings.carousel_video_autoplay ||
     appsPageAutoplay !== settings.apps_page_video_autoplay ||
     copilotEnabled !== settings.copilot_enabled ||
+    contentRightsRequired !== (settings.content_rights_required ?? false) ||
     (copilotDefaultTier !== "" && copilotDefaultTier !== settings.copilot_default_tier) ||
     tierCapsDirty ||
     appsLimit !== settings.featured_apps_limit ||
@@ -853,6 +862,34 @@ export default function AdminSettingsPage() {
             />
             <p className="text-xs text-muted-foreground">Hour of day, 0–23, Israel time (Asia/Jerusalem). Shared by both digests.</p>
           </div>
+        </div>
+
+        {/* Content rights — the switch that turns the import confirmation from
+            accepted into required, and the sites a link may come from. */}
+        <div className="rounded-lg border bg-card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Content rights</h2>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="pr-4">
+              <Label htmlFor="content-rights-required">Require a rights confirmation before a link is imported</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Off: the server records a confirmation when a client sends one and refuses nothing.
+                On: a video link import without one is refused. Turn it on only once every client
+                sends a confirmation — including runs started from the API, MCP, the SDK and
+                published apps, which do not send one yet.
+              </p>
+            </div>
+            <Switch
+              id="content-rights-required"
+              checked={contentRightsRequired}
+              onCheckedChange={setContentRightsRequired}
+            />
+          </div>
+
+          <ImportSourcesCard />
         </div>
 
         {/* Save Button */}

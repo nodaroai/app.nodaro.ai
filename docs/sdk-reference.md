@@ -419,7 +419,7 @@ HTTP 401. Token missing, expired, or invalid.
 HTTP 403. Permission denied. When the server returns
 `code: "insufficient_scope"`, the missing scope is exposed via `missingScope`.
 
-- `code = "forbidden"`, `status = 403` (only `ModelUnavailableError` sets its own code)
+- `code = "forbidden"`, `status = 403` (only `ModelUnavailableError` and `ImportRefusedError` set their own code)
 - `missingScope?: string` — set when scope check failed
 - **Constructor:** `new ForbiddenError(message?: string, missingScope?: string, code?: string)`
 
@@ -444,6 +444,33 @@ codes. The envelope names no model: what was refused is the request's own
 
 - `code: "model_not_available" | "model_disabled"`, `status = 403`
 - **Constructor:** `new ModelUnavailableError(code: ModelUnavailableCode, message?: string)`
+
+### `class ImportRefusedError extends ForbiddenError`
+
+HTTP 403 refusing an **import of a link** (`media.downloadVideo`,
+`uploads.importUrl`, the audio imports), before anything was fetched: the
+content rights check or the site's policy said no (section "Content rights"
+of the API guide):
+
+| `code` | Refusal |
+|--------|---------|
+| `import_source_disabled` | the link's site is disabled by an administrator; the message names no site |
+| `rights_confirmation_required` | the deployment requires a confirmation and none was sent |
+| `rights_confirmation_not_found` | no confirmation has that id |
+| `rights_confirmation_mismatch` | the confirmation is for another link or another account |
+| `rights_confirmation_stale` | the declaration changed since; read it again and confirm again |
+| `rights_confirmation_expired` | the confirmation is older than an hour |
+| `rights_confirmation_used` | an import was made under it already (an import that failed after its fetch began counts: the lock is spent when the fetch starts) |
+
+The remedy for a `rights_confirmation_*` code is `client.contentRights.confirm({ url })`
+again and a new import with the answered id. It is a `ForbiddenError`, so an
+existing `instanceof ForbiddenError` catch still catches it; check
+`instanceof ImportRefusedError` first and read `code` to show your own
+sentence. `IMPORT_REFUSAL_CODES` (a `ReadonlySet<ImportRefusalCode>`) lists the
+codes.
+
+- `code: ImportRefusalCode`, `status = 403`
+- **Constructor:** `new ImportRefusedError(code: ImportRefusalCode, message?: string)`
 
 ### `class NotFoundError extends NodaroError`
 
@@ -1540,10 +1567,20 @@ getStatus(id: string): Promise<{ data: JobStatusResult }>
 Returns the lean status of a job — id, status, progress, output_data,
 error_message, error_hint, credit_status, and completed_at (when the job
 finished, on the server's clock; `null` until it has) (`GET /v1/jobs/:id/status`).
-Far less wire + CPU cost than
-`get()` because it skips `input_data` JSONB and cost/provider columns. Its
-`output_data` still receives the server-only JSON redaction described above.
-Intended for poll loops. Same auth and ownership semantics as `get()`.
+Far less wire + CPU cost than `get()` because it skips `input_data` JSONB and
+cost/provider columns. Its `output_data` still receives the server-only JSON
+redaction described above. Intended for poll loops. Same auth and ownership
+semantics as `get()`.
+
+While the job waits for a free slot (`status: "queued"`), the status also
+carries `queue` (`JobQueueInfo`): `{ lane, position, limit, running, reason,
+waitedSeconds, upgradeHint }` — its place in line and why it waits. The field
+appears **only while the job waits for a slot**; it is absent on every other
+read. `jobs.get()`, `executions.get()` and `pipelines.get()` carry it the
+same way (a workflow run waiting for its turn stays `pending`, a pipeline
+`queued`). Nothing waits for a slot in this
+release yet, so the field does not appear yet. Every field is described in
+[Waiting for a slot](./api-integration.md#waiting-for-a-slot).
 
 ```ts
 const { data } = await client.jobs.getStatus(jobId)
@@ -2545,7 +2582,7 @@ const { trendId, clip } = await client.trendRadar.approve(candidate.id)
 | `summary()` | `Promise<TrendRadarSummary>` | `GET /v1/trend-radar/summary`. `{ lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget }` — `lastRun` is `{ at, sourcesRead, namesSeen, searchesUsed }` or `null` before the first run. |
 | `candidates(params?)` | `Promise<TrendCandidatePage>` | `GET /v1/trend-radar/candidates`. `{ data: TrendCandidateCard[], next }`; `status` (one `TrendCandidateStatus`; left out = everything but `rejected` and `archived`), `sort` (`"creators"` default, `"dayChange"`, `"firstSeen"`), `cursor` (the previous page's `next`), `limit` 1–200 (default 50). |
 | `candidate(id)` | `Promise<TrendCandidate>` | `GET /v1/trend-radar/candidates/:id`. The card plus `posts` (links and public counts; `embedUrl` is the platform's own player, `stillUrl` its short-lived still), `readings` (one per day, oldest first: `{ date, creators, plays, posts }`), `templatesElsewhere`, `search` (`{ suggest, interest7d, checkedAt }` or `null`), `history`, `checklist` (the thresholds the candidate is held to, `{ key, label, hint, auto }`; `auto` is whether the last reading met it, `null` when it was not read) and `rejectReason`. `NotFoundError` for an unknown id. |
-| `approve(id)` | `Promise<TrendCandidateApproval>` | `POST /v1/trend-radar/candidates/:id/approve`. `{ trendId, clip }`: creates a draft trend named after the candidate and marks the candidate `approved`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin, through the same path as the editor's Video URL node) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why (a private post, a clip outside 4–30 s), and the admin uploads the clip by hand — or `"none"` when there is no top post or the candidate was approved before. Approving again answers the same `trendId`. A `NodaroError` with status 409 and code `slug_taken` when no free slug was found. |
+| `approve(id, options?)` | `Promise<TrendCandidateApproval>` | `POST /v1/trend-radar/candidates/:id/approve` with `{ confirmationId? }`. `{ trendId, clip }`: creates a draft trend named after the candidate and marks the candidate `approved`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin, through the same path as the editor's Video URL node, under the admin's content rights confirmation for the post's link, `contentRights.confirm({ url })` → `confirmationId`; required once `content_rights_required` is on, and without one then the clip is left out with `source_failed` saying why) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why (a private post, a clip outside 4–30 s), and the admin uploads the clip by hand — or `"none"` when there is no top post or the candidate was approved before. Approving again answers the same `trendId`. A `NodaroError` with status 409 and code `slug_taken` when no free slug was found. |
 | `watch(id)` | `Promise<TrendCandidateCard>` | `POST /v1/trend-radar/candidates/:id/watch`. Back to `watching`; the daily run keeps reading it. |
 | `reject(id, { reason })` | `Promise<TrendCandidateCard>` | `POST /v1/trend-radar/candidates/:id/reject`. `rejected`, with the reason (1–500 characters); the run stops reading it. |
 | `settings()` | `Promise<TrendRadarSettings>` | `GET /v1/trend-radar/settings`. `{ sources, thresholds, alerts, retentionDays, runAt }` — `sources` are the sitemap, social and suggestion sources with what their last read found; `thresholds` is `{ minCreators, windowDays, risingPct, slowingPct, maxClipSec, dailySearchBudget }`; `runAt` is `HH:MM` in Israel time. |
@@ -2658,6 +2695,11 @@ get(id: string): Promise<{ data: WorkflowExecution }>
 Returns the full execution including per-node state map. Falls back to a
 synthetic single-node-job shape on the server when the ID matches a standalone
 job.
+
+While the run waits for its turn (a free run slot) its `status` stays
+`pending` and it carries `queue` (`JobQueueInfo`, see
+[Waiting for a slot](./api-integration.md#waiting-for-a-slot)); the field is
+present only while it waits.
 
 ```ts
 const { data } = await client.executions.get(executionId)
@@ -3404,7 +3446,10 @@ runAndWait(
 
 Runs a single async node to completion: calls `run()`, extracts the `jobId`,
 then client-polls `jobs.getStatus(jobId)` every `opts.pollMs` (default 2000 ms)
-until a terminal status, up to `opts.maxMs` (default ~15 min). A `pending_review`
+until a terminal status, up to `opts.maxMs` (default ~15 min). The `maxMs`
+clock skips only the time the job spends waiting for a free slot (`queued`),
+so waiting for a slot never uses up the wait; every other status, `pending`
+included, counts as before. A `pending_review`
 status ends the poll on the first tick it is observed — with `JobHeldError`,
 not by waiting out `maxMs` — because that status is a human's decision pending,
 not the job's own progress.
@@ -3433,7 +3478,7 @@ release, absent on older jobs and wherever the server could not read the size
 | `cancelOnAbort` | `boolean` | `false` | Also cancel the submitted job when `signal` aborts (`POST /v1/jobs/:id/cancel`, which refunds its hold — except a metered LLM job whose call has started: it answers `inFlight: true`, finishes, and is charged what it used). Best effort: a failed cancel still rejects with the `JobAbortedError`. |
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
-| `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
+| `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`, counted from the first poll. Time the job spends waiting for a free slot (`queued`) does not count; every other status does. |
 | `idempotencyKey` | `string` | — | `Idempotency-Key` for the submit. Reuse it when retrying a call that timed out, so the run is not started or charged twice. |
 
 Throws (all typed, catchable by `instanceof`):
@@ -3444,7 +3489,7 @@ Throws (all typed, catchable by `instanceof`):
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
 - `ModelUnavailableError` — a model this deployment does not offer (or one an admin switched off), refused by the credit guard in `run()` before credits are held.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
-- `JobTimeoutError` — `maxMs` deadline exceeded.
+- `JobTimeoutError` — `maxMs` deadline exceeded (time spent waiting for a slot not counted).
 - `JobAbortedError` — `signal` fired. The job itself keeps running unless `cancelOnAbort` is set; to stop it later, `jobs.cancel(err.jobId)`.
 - `JobHeldError` — the job entered `pending_review` (`code = "job_held"`, carries `jobId`; see
   [Errors](#class-jobhelderror-extends-nodaroerror)). Only on
@@ -4798,6 +4843,11 @@ get(id: string): Promise<PipelineRecord>
 Fetch current pipeline state: `status`, `current_stage`, credit counters,
 `mode`, and `failure_reason` (set when `status='failed'`). Poll this to track
 a headless Auto run to completion. Requires `pipelines:read`.
+
+While the pipeline waits for its turn (a free run slot) its `status` stays
+`queued` and it carries `queue` (`JobQueueInfo`, see
+[Waiting for a slot](./api-integration.md#waiting-for-a-slot)); the field is
+present only while it waits.
 
 ```ts
 const pipeline = await client.pipelines.get(id)
@@ -7379,15 +7429,17 @@ to `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened. The
 URL is unguessable but public, so never store a secret in it. It creates no
 library item.
 
-#### `importUrl(url)`
+#### `importUrl(url, options?)`
 
 ```ts
-importUrl(url: string): Promise<ImportUrlResult>
+importUrl(url: string, options?: { confirmationId?: string }): Promise<ImportUrlResult>
 ```
 
-`POST /v1/media/import-url` with the body `{ url }` → copies a picture from a
-web address into your storage and returns it (unwraps the `{ data }`
-envelope). The platform fetches the address (http(s) only, never a private
+`POST /v1/media/import-url` with the body `{ url, confirmationId? }` → copies a
+picture from a web address into your storage and returns it (unwraps the
+`{ data }` envelope). An import of a link runs the content rights check
+(section "Content rights" of the API guide): pass the `confirmationId` from
+`client.contentRights.confirm({ url })` when the deployment requires one. The platform fetches the address (http(s) only, never a private
 address, up to 20 MB) and keeps it only if it decodes as an image (JPEG, PNG,
 WebP, GIF; HEIC/HEIF and AVIF are converted to JPEG or PNG). The stored copy
 is an upload of yours, served with CORS, so a browser canvas can read its
@@ -7399,6 +7451,7 @@ Errors:
 | Status | Error | When |
 |--------|-------|------|
 | 400 | `NodaroError`, `code: "validation_error"` | Not an http(s) address, an address that is a private or reserved IP, not a decodable image, or an image in a format that is not accepted (SVG, TIFF, …; accepted: JPEG, PNG, WebP, AVIF, GIF, HEIC). |
+| 403 | `ImportRefusedError` (a `ForbiddenError`), `code: "import_source_disabled"` or a `rights_confirmation_*` code | The site is disabled by an administrator, or the content rights confirmation is missing (while required), for another link or account, stale, expired or used (a failed import uses it too). |
 | 422 | `NodaroError`, `code: "fetch_failed"` | The address could not be reached (including a host that resolves to a private address), or answered with an error. |
 | 413 | `StorageExceededError`, `reason: "file_too_large"` | The picture is over 20 MB. |
 | 413 | `StorageExceededError`, `reason: "storage_limit_exceeded"` | Your storage is full; `details` carries `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`. |
@@ -9224,7 +9277,8 @@ not two.
 
 - `Job` — snake_case wire shape; includes provenance: `source` (`"internal" | "mcp" | "app" | "cli" | "sdk" | "extension" | "web" | "api"`) + `source_detail` (origin host / `extension/<name>` label / `sdk/<version>` / MCP client / app id) so a library view can label or filter media by origin
 - `JobStatus` — `"pending" | "queued" | "processing" | "pending_review" | "completed" | "failed" | "cancelled"`. `pending_review` is **in-flight, not terminal**: a job policy registered by the deployment held the output for human review. Keep waiting — it resolves to `completed` (approved), `failed` (rejected, with `error_hint.kind === "policy-block"`) or `cancelled` (the owner cancelled it; a held job is cancellable like any in-flight job), and `credit_status` reads `"reserved"` for the whole hold. `runAndWait` throws `JobHeldError` on the first held tick rather than waiting it out. Only appears on deployments that register a job policy.
-- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
+- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message?, error_hint?, credit_status?, completed_at?, queue? }`; `queue` is present only while the job waits for a slot (`status: "queued"`)
+- `JobQueueInfo` — the `queue` field of a job, workflow-run or pipeline read: `{ lane: "provider" | "llm" | "local" | "run", position, limit, running, reason: "user_lane" | "provider_ceiling" | "server_busy", waitedSeconds, upgradeHint: "plan" | "workspace" | null }`; see [Waiting for a slot](./api-integration.md#waiting-for-a-slot)
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 - `DeleteJobResult` — `{ success: true }`
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
@@ -9331,7 +9385,7 @@ not two.
 
 ### Pipelines
 
-- `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message }`
+- `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message, queue? }`; `queue` (`JobQueueInfo`) is present on `get()` only while the pipeline waits for a slot
 - `PipelineInput`, `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `AnimateSubGate`, `ChatEnabledStage`, `ProposedChange` — re-exported from `@nodaro/shared`
 - `PipelineInput` — body for `create()`, re-exported from `@nodaro/shared`
 - `PendingApproval` — `{ stage_name: PipelineStageName; output: unknown }`

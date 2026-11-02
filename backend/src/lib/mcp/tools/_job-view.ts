@@ -125,7 +125,7 @@ export function jobInputView(input: unknown): Record<string, unknown> | null {
 
 export const JOB_VIEW_SCHEMA = {
   jobId: z.string(),
-  /** pending | processing | completed | failed | cancelled | pending_review — plus `timeout` / `aborted` from wait_for_job. */
+  /** pending | queued | processing | completed | failed | cancelled | pending_review — plus `timeout` / `aborted` from wait_for_job. */
   status: z.string(),
   progress: z.number().nullable().optional(),
   jobType: z.string().nullable().optional(),

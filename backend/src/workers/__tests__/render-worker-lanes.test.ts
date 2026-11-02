@@ -45,6 +45,11 @@ const mocks = vi.hoisted(() => {
 })
 
 const lanes = vi.hoisted(() => ({ gate: null as unknown, sizes: { provider: 1, llm: 2, local: 1, run: 1 } }))
+// Waiting is tested here, so turning limits on is made available; a case sets
+// `lanesAvailable.on = false` for the shipped, locked path.
+const lanesAvailable = vi.hoisted(() => ({ on: true }))
+vi.mock("../../lib/concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return lanesAvailable.on } }))
+
 vi.mock("../../lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
 vi.mock("../../lib/concurrency-lanes/sizes.js", () => ({ laneSizesFor: async () => lanes.sizes }))
 

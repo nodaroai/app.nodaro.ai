@@ -12,7 +12,7 @@ import {
 import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
-import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation } from "../lib/content-rights.js"
+import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
 
 const downloadVideoBody = z
   .object({
@@ -102,13 +102,14 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     const userId = req.userId
     const { url, sectionStartSec, sectionEndSec, exactSection, maxHeight: rawMaxHeight, requireAudio, confirmationId } = parsed.data
 
-    // The rights check (a read) comes before anything else that can refuse the
-    // import; the confirmation is SPENT only once the slot is held, below, so
-    // a consumed confirmation always has a download behind it.
+    // The site's policy and the rights check (reads) come before anything else
+    // that can refuse the import; the confirmation is SPENT only once the slot
+    // is held, below, so a consumed confirmation always has a download behind it.
+    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
     try {
-      await checkRightsConfirmation({ url, userId, confirmationId, lane: "route" })
+      await requireImportAllowed(url, rights)
     } catch (e) {
-      if (e instanceof ContentRightsError) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
       throw e
     }
 
@@ -153,14 +154,12 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
 
     // Nothing else can refuse the import now: spend the confirmation. A race
     // with another download on the same id gives the slot back and refuses.
-    if (confirmationId) {
-      try {
-        await consumeRightsConfirmation({ confirmationId, url, lane: "route", requestId: req.id })
-      } catch (e) {
-        slot.release()
-        if (e instanceof ContentRightsError) return reply.status(403).send({ error: { code: e.code, message: e.message } })
-        throw e
-      }
+    try {
+      await spendImportConfirmation(url, rights)
+    } catch (e) {
+      slot.release()
+      if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      throw e
     }
 
     // Start download in background. Direct files carry the 500MB cap; social

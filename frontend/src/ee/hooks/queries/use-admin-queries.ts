@@ -906,6 +906,8 @@ export function useAdminSettings() {
         // the backend's own default — an ABSENT row means on, so a fresh
         // install shows the switch on rather than off.
         copilot_enabled: (settings.copilot_enabled as boolean) ?? true,
+        // Content rights: whether a link import without a confirmation is refused. Off until every client sends one.
+        content_rights_required: (settings.content_rights_required as boolean | undefined) ?? false,
         copilot_default_tier: (settings.copilot_default_tier as string) ?? "",
         copilot_tier_caps: (settings.copilot_tier_caps && typeof settings.copilot_tier_caps === "object"
           ? settings.copilot_tier_caps

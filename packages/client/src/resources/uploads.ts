@@ -64,10 +64,15 @@ export class UploadsResource {
    * `validation_error` (400: not an http(s) address, or not an image) or
    * `fetch_failed` (422: the address could not be reached or answered with an
    * error).
+   *
+   * An import of a link runs the platform's content rights check: pass the
+   * `confirmationId` from `contentRights.confirm({ url })` when the deployment
+   * requires one (`403 rights_confirmation_required` otherwise). A site an
+   * administrator disabled answers `403 import_source_disabled`.
    */
-  async importUrl(url: string): Promise<ImportUrlResult> {
+  async importUrl(url: string, options: { confirmationId?: string } = {}): Promise<ImportUrlResult> {
     const res = await this.client.request<{ data: ImportUrlResult }>("POST", "/v1/media/import-url", {
-      body: { url },
+      body: { url, ...(options.confirmationId ? { confirmationId: options.confirmationId } : {}) },
     })
     return res.data
   }

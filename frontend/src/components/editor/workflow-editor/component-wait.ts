@@ -1,7 +1,8 @@
 import { getComponentWaitLimit, type ComponentWaitLimit } from "@/lib/api"
 
 /** The editor's own wait on a component run — unchanged for a run with
- *  nothing budgeted inside (and the floor for every run). */
+ *  nothing budgeted inside (and the floor for every run). Time the job waits
+ *  for a free slot does not count toward it (see `reached`). */
 export const COMPONENT_CLIENT_TIMEOUT_MS = 30 * 60 * 1000
 
 /** Consecutive failed lookups tolerated before the wait falls back to the limit
@@ -34,7 +35,11 @@ export const COMPONENT_WAIT_LOOKUP_ATTEMPTS = 3
  * `COMPONENT_WAIT_LOOKUP_ATTEMPTS` in a row, then the known limit stands.
  *
  * `reached` is `elapsed >= limit` — the exit condition of the `while (elapsed <
- * TIMEOUT_MS)` loop it replaces.
+ * TIMEOUT_MS)` loop it replaces. The executor passes the elapsed time that
+ * counts: since the wait began, less the time the component's job was seen
+ * waiting for a free slot (`queued`, lib/queued-poll-clock.ts) — so waiting in
+ * line never uses up the 30 minutes, and a job never seen queued waits exactly
+ * as before.
  */
 export class ComponentWaitDeadline {
   private limit = COMPONENT_CLIENT_TIMEOUT_MS

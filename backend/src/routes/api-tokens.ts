@@ -44,6 +44,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { refuseLimitedKey } from "../middleware/token-workflow-scope.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
+import { queueField, queueInfoFor, waitingRowsOf } from "../lib/concurrency-lanes/queue-info.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 // ---------------------------------------------------------------------------
@@ -862,19 +864,23 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         // Stop polling if client disconnects
         let clientDisconnected = false
         req.raw.on("close", () => { clientDisconnected = true })
+        // The last read of the run: one still waiting for its run slot says where it stands on the timeout answer.
+        let lastRead: Record<string, unknown> | null = null
 
         while (Date.now() - start < timeout && !clientDisconnected) {
           await new Promise((resolve) => setTimeout(resolve, 5000))
 
           if (clientDisconnected) break
 
-          const { data: exec } = await supabase
+          const { data } = await readWithLaneStamp("execution", (stamp) => supabase
             .from("workflow_executions")
-            .select("status, node_states, total_credits_used, completed_at")
+            .select(`id, status, node_states, total_credits_used, completed_at${stamp}` as string)
             .eq("id", execution.id)
-            .single()
+            .single())
+          const exec = data as unknown as Record<string, unknown> | null
 
           if (!exec) break
+          lastRead = exec
 
           if (
             exec.status === "completed" ||
@@ -894,10 +900,12 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         if (clientDisconnected) return
 
         // Timed out waiting — return 202 with executionId
+        const queues = await queueInfoFor(lastRead ? waitingRowsOf("execution", [lastRead]) : [])
         return reply.status(202).send({
           executionId: execution.id,
           status: "pending",
           message: "Execution still in progress. Poll /status/:execId for updates.",
+          ...queueField(execution.id, queues),
         })
       }
 
@@ -919,12 +927,17 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         })
       }
 
-      const { data: execution, error } = await supabase
-        .from("workflow_executions")
-        .select("id, workflow_id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
-        .eq("id", parsed.data.execId)
-        .eq("user_id", resolved.userId)
-        .single()
+      // `lane_queued_at` (read tolerantly) tells a run waiting for its run slot.
+      const { data, error } = await readWithLaneStamp(
+        "execution",
+        (stamp) => supabase
+          .from("workflow_executions")
+          .select(`id, workflow_id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at${stamp}` as string)
+          .eq("id", parsed.data.execId)
+          .eq("user_id", resolved.userId)
+          .single(),
+      )
+      const execution = data as unknown as Record<string, unknown> & { id: string } | null
 
       if (error || !execution) {
         return reply.status(404).send({
@@ -939,6 +952,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       }
 
       const outcome = executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null)
+      // A run waiting for its run slot stays `pending` and says where it stands.
+      const queues = await queueInfoFor(waitingRowsOf("execution", [execution]))
       return reply.send({
         executionId: execution.id,
         status: execution.status,
@@ -950,6 +965,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         errorMessage: execution.error_message,
         createdAt: execution.created_at,
         completedAt: execution.completed_at,
+        ...queueField(execution.id, queues),
       })
     })
 

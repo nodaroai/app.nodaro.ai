@@ -3,8 +3,6 @@ import { promises as fs } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
-import { ytProxyOption } from "../providers/video/yt-proxy.js"
-import { runYtDlpOptions } from "../providers/video/ytdlp-options-run.js"
 import { variantJobId } from "@nodaro/shared/workflow"
 import { renderResultStamp, isRenderNodeType } from "@nodaro/shared/nodes"
 import { config, hasCredits } from "../lib/config.js"
@@ -15,6 +13,7 @@ import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, ge
 import { uploadJobScratchFile } from "../lib/job-scratch.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
+import type { ImportRights } from "../lib/import-gate.js"
 import sharp from "sharp"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { getSizeLimit } from "../utils/file-validation.js"
@@ -130,70 +129,26 @@ export function isSocialUrl(url: string): boolean {
 }
 
 /**
- * Download a social link's audio and store it. With `scratchJobId` (Suno's
- * cover and upload-extend: a provider input) the copy goes to that job's
- * scratch folder, emptied when the job ends (decided 2026-10-09). Without it
- * (a workflow run's link fetch, whose audio later nodes read) it keeps its
- * own key.
+ * The import rights a worker job carries (`lib/import-gate.ts`): the job's
+ * owner, the confirmation its route checked and put in the job data
+ * (`confirmationId`), and the job id as the request id, so a retry of the
+ * same job after a transient fetch failure spends the same confirmation
+ * again and passes (`consumeRightsConfirmation` is idempotent per request).
+ * A job with no owner can match no confirmation, and passes only while the
+ * deployment does not require one. The lane is the route's: every job that
+ * fetches a link is enqueued by its route (the orchestrator calls routes too).
  */
-export async function downloadAudioToR2(url: string, opts: { scratchJobId?: string } = {}): Promise<string> {
-  const outputId = randomUUID()
-  const baseName = `yt-audio-${outputId}`
-  const outputTemplate = join(tmpdir(), `${baseName}.%(ext)s`)
-  const expectedPath = join(tmpdir(), `${baseName}.mp3`)
-
-  console.log(`[worker] Downloading audio from social URL: ${url}`)
-
-  const ytDlpOptions: Record<string, unknown> = {
-    extractAudio: true,
-    audioFormat: "mp3",
-    audioQuality: 0,
-    output: outputTemplate,
-    noPlaylist: true,
-    noCheckCertificates: true,
-    preferFreeFormats: true,
-    // Residential proxy for YouTube (datacenter IP bot-block); no-op when unset.
-    ...ytProxyOption(url),
-    extractorArgs: "youtube:player_client=android",
-    addHeader: [
-      "referer:youtube.com",
-      "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    ],
+export function importRightsOf(job: Pick<Job, "data">, ctx: Pick<JobContext, "jobId" | "jobUserId">): ImportRights {
+  const data = job.data as { confirmationId?: unknown }
+  return {
+    userId: ctx.jobUserId ?? "",
+    confirmationId: typeof data.confirmationId === "string" ? data.confirmationId : null,
+    lane: "route",
+    requestId: ctx.jobId,
   }
-  // `-x --audio-format mp3` runs yt-dlp's own ffmpeg to ENCODE: admitted like any ffmpeg, and stopped
-  // with its whole process group at the hold.
-  await runYtDlpOptions(url, ytDlpOptions)
-
-  // Find the actual audio file
-  let actualPath = expectedPath
-  try {
-    await fs.access(expectedPath)
-  } catch {
-    const alternatives = [".m4a", ".webm", ".opus", ".ogg", ".wav"]
-    let found = false
-    for (const ext of alternatives) {
-      const altPath = join(tmpdir(), `${baseName}${ext}`)
-      try {
-        await fs.access(altPath)
-        actualPath = altPath
-        found = true
-        break
-      } catch { continue }
-    }
-    if (!found) throw new Error("yt-dlp did not produce an output file")
-  }
-
-  const stat = await fs.stat(actualPath)
-  if (stat.size === 0) throw new Error("Downloaded audio file is empty")
-
-  const r2Url = opts.scratchJobId
-    ? await uploadJobScratchFile(actualPath, "cover-src", "mp3", "audio/mpeg", opts.scratchJobId)
-    : await uploadFileWithKeyToR2(actualPath, `audios/cover-src-${outputId}.mp3`, "audio/mpeg")
-  await fs.unlink(actualPath).catch(() => {})
-
-  console.log(`[worker] Audio downloaded and uploaded to R2: ${r2Url}`)
-  return r2Url
 }
+
+export { downloadAudioToR2 } from "./download-audio.js"
 
 /**
  * Check if job was cancelled before saving completion result.

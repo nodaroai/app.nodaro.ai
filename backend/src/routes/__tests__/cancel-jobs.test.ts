@@ -535,8 +535,11 @@ describe("POST /v1/jobs/cancel-all — concurrency lanes", () => {
     const res = await app.inject({ method: "POST", url: "/v1/jobs/cancel-all", payload: { userId: TEST_USER_ID } })
 
     expect(res.json()).toEqual({ success: true, cancelled: 2 })
-    expect(await gate.describeWait("queued-1")).toBeNull()
-    expect(await gate.describeWait("queued-2")).toBeNull()
+    // Out of their line once the withdraws land (fired, not awaited, while limits are locked).
+    await vi.waitFor(async () => {
+      expect(await gate.describeWait("queued-1")).toBeNull()
+      expect(await gate.describeWait("queued-2")).toBeNull()
+    })
     expect(await gate.describeWait("other-waiting")).toMatchObject({ position: 1 })
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-q1")
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-q2")

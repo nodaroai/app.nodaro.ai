@@ -41,6 +41,7 @@ import {
 } from "../lib/trend-radar/store.js"
 import { makeSearch, runDue, runTrendRadar } from "../lib/trend-radar/run.js"
 import { attachTopPostClip } from "../lib/trend-radar/attach-clip.js"
+import { isImportRefusal, requireImportAllowed } from "../../lib/import-gate.js"
 import { TREND_CANDIDATE_SORTS, TREND_CANDIDATE_STATUSES, TREND_RADAR_SOURCE_KINDS } from "../lib/trend-radar/types.js"
 
 const SESSION_ONLY_MSG = "Trend Radar answers a signed-in admin session only"
@@ -55,6 +56,7 @@ const listQuery = z.object({
 })
 
 const idParams = z.object({ id: z.string().regex(UUID_RE, "Not a candidate id.") })
+const approveBody = z.strictObject({ confirmationId: z.string().uuid().optional() })
 
 const rejectBody = z.strictObject({ reason: z.string().trim().min(1).max(500) })
 
@@ -163,10 +165,29 @@ export async function trendRadarRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/trend-radar/candidates/:id/approve", { preHandler: adminSession }, async (req, reply) => {
     const p = idParams.safeParse(req.params)
     if (!p.success) return badRequest(reply, p.error)
+    // The content rights confirmation the admin made for the top post's link
+    // (`POST /v1/content-rights/confirm`): the clip's download is made under
+    // it, as the admin's own. Optional until `content_rights_required` is on;
+    // without one then, the draft is created and the clip is left out (the
+    // candidate's history says why).
+    const b = approveBody.safeParse(req.body ?? {})
+    if (!b.success) return badRequest(reply, b.error)
     try {
       const row = await readCandidateRow(p.data.id)
       if (!row) return reply.status(404).send({ error: { code: "not_found", message: "Candidate not found" } })
       if (row.status === "approved" && row.trend_id) return { data: { trendId: row.trend_id, clip: "none" } }
+      // A confirmation sent is read against the top post AS THE SERVER HAS IT
+      // now, before anything is claimed: one made for a post the daily run has
+      // since replaced, or stale, expired or another account's, is a 403 the
+      // admin sees, not a note in the history after the draft exists.
+      if (b.data.confirmationId && row.top_post && req.userId) {
+        try {
+          await requireImportAllowed(row.top_post.url, { userId: req.userId, confirmationId: b.data.confirmationId, lane: "admin" })
+        } catch (e) {
+          if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+          throw e
+        }
+      }
       const data = trendVersionDataSchema.safeParse({ name: { en: row.name }, source: null, previewStart: 0, slots: [], references: [], examples: [] })
       if (!data.success) return badRequest(reply, data.error)
       // Claim the row first (a conditional write): two approves at once, or
@@ -200,7 +221,7 @@ export async function trendRadarRoutes(app: FastifyInstance): Promise<void> {
       const post = row.top_post
       const clip = post && req.userId ? "attaching" : "none"
       if (post && req.userId) {
-        void attachTopPostClip({ trendId, candidateId: row.id, post, userId: req.userId }).catch((e: unknown) => {
+        void attachTopPostClip({ trendId, candidateId: row.id, post, userId: req.userId, ...(b.data.confirmationId ? { confirmationId: b.data.confirmationId } : {}) }).catch((e: unknown) => {
           req.log.warn({ err: e, trendId }, "[trend-radar] attaching the top post's clip failed")
         })
       }

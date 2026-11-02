@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../../lib/url-validator.js"
+import { requireImportAllowed, spendImportConfirmation, type ImportRights } from "../../lib/import-gate.js"
 import { resolveAttemptChain } from "../video/yt-proxy.js"
 import { probeMediaDuration } from "../video/ffmpeg-utils.js"
 import {
@@ -51,8 +52,8 @@ export function buildYtAudioExtractionArgs(url: string, outputPath: string, prox
  * one wasted web rung today is cheap, and it self-heals into best formats if a
  * JS runtime ever lands in the image.
  */
-export async function extractYouTubeAudio(youtubeUrl: string): Promise<string> {
-  return (await extractYouTubeAudioWithMeta(youtubeUrl)).url
+export async function extractYouTubeAudio(youtubeUrl: string, rights: ImportRights): Promise<string> {
+  return (await extractYouTubeAudioWithMeta(youtubeUrl, rights)).url
 }
 
 /** The extracted audio plus its measured length. */
@@ -68,8 +69,12 @@ export interface ExtractedYouTubeAudio {
  * URL-sourced master carry a real duration on its node: without it every
  * duration-bucketed consumer (Edit Plan's credit estimate first among them)
  * quotes its CEILING for a YouTube source, refusing runs the user can afford.
+ *
+ * An import of a link: the site's policy and the content rights confirmation
+ * are checked first and the confirmation spent right before yt-dlp runs
+ * (`lib/import-gate.ts`); a refusal is the gate's own error, before any fetch.
  */
-export async function extractYouTubeAudioWithMeta(youtubeUrl: string): Promise<ExtractedYouTubeAudio> {
+export async function extractYouTubeAudioWithMeta(youtubeUrl: string, rights: ImportRights): Promise<ExtractedYouTubeAudio> {
   // SSRF gate, same as the video lane's in-function check: the worker calls
   // this directly and yt-dlp does its own DNS+HTTP (bypassing safeFetch), so
   // the allowlist here is defense-in-depth beyond the route's Zod.
@@ -82,6 +87,9 @@ export async function extractYouTubeAudioWithMeta(youtubeUrl: string): Promise<E
   if (!hostnameMatchesAllowlist(host, YOUTUBE_HOSTS)) {
     throw new YtUrlNotAllowedError(`host not allowed: ${host}`)
   }
+  // Outside the try below: a refusal is the gate's own error, never rewrapped.
+  await requireImportAllowed(youtubeUrl, rights)
+  await spendImportConfirmation(youtubeUrl, rights)
 
   const outputId = randomUUID()
   const outputPath = join(tmpdir(), `yt-extract-${outputId}.mp3`)

@@ -2,7 +2,7 @@
 // gate's JS twin. Which slot a picked-up job takes (or borrows, or none), in
 // which mode, on which line — and that a lane problem never fails a job.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { ConcurrencyGate, LaneGateTimeoutError, type WakeTarget } from "../gate.js"
+import { ConcurrencyGate, LANE_LEASE_RENEW_MS, LaneGateTimeoutError, type LaneClient, type WakeTarget } from "../gate.js"
 import type { LaneSizes, PayerKey } from "../types.js"
 import { makeFakeLaneClient, makeFakeLaneStore, type FakeLaneStore } from "./fake-lane-redis.js"
 import { makeSweepDb, type SweepDb } from "./fake-sweep-db.js"
@@ -17,6 +17,11 @@ const refs = vi.hoisted(() => ({
   /** The payer account this instance's surface profile names (a deployment-payer instance), if any. */
   payerAccount: undefined as string | undefined,
 }))
+// Waiting is tested here, so turning limits on is made available; a case sets
+// `lanesAvailable.on = false` for the shipped, locked path.
+const lanesAvailable = vi.hoisted(() => ({ on: true }))
+vi.mock("../enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return lanesAvailable.on } }))
+
 vi.mock("../../surface-profile.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../surface-profile.js")>()
   return {
@@ -103,6 +108,7 @@ beforeEach(async () => {
   resetLaneCountersForTests()
   resetServerShareForTests()
   resetWorkerAdmitHooksForTests()
+  lanesAvailable.on = true
   await gate.setEnforced(true)
 })
 
@@ -664,5 +670,195 @@ describe("pickupStatusesFor", () => {
     expect(pickupStatusesFor("lane-readd-job-1")).toEqual(["queued"])
     expect(pickupStatusesFor("bull-1")).toEqual(["pending", "queued", "processing"])
     expect(pickupStatusesFor(undefined)).toEqual(["pending", "queued", "processing"])
+  })
+})
+
+describe("limits locked (this release): a pickup never waits for the gate", () => {
+  function deferred(): { promise: Promise<void>; resolve: () => void } {
+    let resolve!: () => void
+    const promise = new Promise<void>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+  async function until(check: () => Promise<boolean> | boolean): Promise<void> {
+    const end = Date.now() + 3_000
+    while (!(await check())) {
+      if (Date.now() > end) throw new Error("condition not met in time")
+      await new Promise((r) => setTimeout(r, 5))
+    }
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 20))
+  const pick = (over: Partial<WorkerRow> = {}, job = bull("image-to-video")) =>
+    admitOrPark({ job, token: "tok", queue: "video-generation", row: row(over) })
+
+  /** A gate whose every Redis call is held until `answer()`, then run on the same store: a Redis that hangs, then recovers. */
+  function heldGate(): { gate: ConcurrencyGate; answer: () => void } {
+    const held = deferred()
+    const real = makeFakeLaneClient(store)
+    const client = {
+      eval: (...args: Parameters<LaneClient["eval"]>) => held.promise.then(() => real.eval(...args)),
+      publish: (...args: Parameters<LaneClient["publish"]>) => held.promise.then(() => real.publish(...args)),
+    } as unknown as LaneClient
+    return { gate: new ConcurrencyGate({ client: () => client, callTimeoutMs: 600_000 }), answer: held.resolve }
+  }
+
+  beforeEach(() => {
+    lanesAvailable.on = false
+  })
+
+  it("a job is admitted at once while every gate call hangs; its lease is freed once, when the admission lands", async () => {
+    const held = heldGate()
+    refs.gate = held.gate
+    const acquire = vi.spyOn(held.gate, "acquire")
+    const release = vi.spyOn(held.gate, "release")
+    const a = await pick()
+    expect(a).not.toBeNull()
+    expect(a!.hold).toMatchObject({ role: "leaf", lane: "provider", userId: "U", payer: "user:U", jobId: "job-1", leaseId: expect.any(String) })
+    expect(a!.leaseId).toBe(a!.hold.leaseId)
+    // The job ended before the gate answered anything: its release does not wait either.
+    await a!.release("completed")
+    expect(release).not.toHaveBeenCalled()
+    held.answer()
+    await until(() => release.mock.calls.length === 1)
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ mode: "fresh", leaseId: a!.leaseId })
+    expect(release).toHaveBeenCalledWith(a!.leaseId, "completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await laneOf("provider"))?.running ?? 0).toBe(0)
+    expect(serverShareOccupancy().video?.byUser ?? {}).toEqual({})
+  })
+
+  it("a release asked before the admission lands: no renew timer ever starts for the late lease, which is released once", async () => {
+    const held = heldGate()
+    refs.gate = held.gate
+    const release = vi.spyOn(held.gate, "release")
+    const renew = vi.spyOn(held.gate, "renew")
+    const setInterval = vi.spyOn(globalThis, "setInterval")
+    const renewTimers = () => setInterval.mock.calls.filter((c) => c[1] === LANE_LEASE_RENEW_MS).length
+    const a = await pick()
+    await a!.release("completed")
+    held.answer()
+    await until(() => release.mock.calls.length === 1)
+    expect(release).toHaveBeenCalledWith(a!.leaseId, "completed")
+    await settle()
+    expect(renewTimers()).toBe(0)
+    expect(renew).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await laneOf("provider"))?.running ?? 0).toBe(0)
+  })
+
+  it("an admission that lands before the release keeps its lease alive until then", async () => {
+    const setInterval = vi.spyOn(globalThis, "setInterval")
+    const clearInterval = vi.spyOn(globalThis, "clearInterval")
+    const renewTimers = () => setInterval.mock.results.filter((_r, i) => setInterval.mock.calls[i]![1] === LANE_LEASE_RENEW_MS)
+    const a = await pick()
+    await until(async () => ((await laneOf("provider"))?.running ?? 0) === 1)
+    expect(renewTimers()).toHaveLength(1)
+    await a!.release("completed")
+    await until(async () => ((await laneOf("provider"))?.running ?? 0) === 0)
+    expect(clearInterval).toHaveBeenCalledWith(renewTimers()[0]!.value)
+  })
+
+  it("an admission that lands while the job runs is counted, and released once when the job ends", async () => {
+    const release = vi.spyOn(gate, "release")
+    const a = await pick()
+    await until(async () => ((await laneOf("provider"))?.running ?? 0) === 1)
+    expect(serverShareOccupancy().video?.byUser).toEqual({ U: 1 })
+    expect(release).not.toHaveBeenCalled()
+    await a!.release("failed")
+    await until(() => release.mock.calls.length === 1)
+    expect(release).toHaveBeenCalledWith(a!.leaseId, "failed")
+    await a!.release("completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await laneOf("provider"))?.running ?? 0).toBe(0)
+    expect(serverShareOccupancy().video?.byUser ?? {}).toEqual({})
+  })
+
+  it("a re-admitted job releases the lease its admission landed (its old one), never the id it asked for", async () => {
+    const old = await gate.acquire({ meta: { ...otherMeta("job-1", "provider"), bullJobId: "bull-1" }, size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+    if (!old.granted) throw new Error("expected a grant")
+    const acquire = vi.spyOn(gate, "acquire")
+    const release = vi.spyOn(gate, "release")
+    const a = await pick({ status: "processing" })
+    await until(() => acquire.mock.calls.length === 1)
+    expect(acquire.mock.calls[0]![0].mode).toBe("readmit")
+    await a!.release("completed")
+    await until(() => release.mock.calls.length === 1)
+    expect(release).toHaveBeenCalledWith(old.leaseId, "completed")
+    expect(old.leaseId).not.toBe(a!.leaseId)
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await laneOf("provider"))?.running ?? 0).toBe(0)
+  })
+
+  it("a job its line would refuse is never parked: it runs, its entry withdrawn, counted as ungated", async () => {
+    await fill("provider")
+    const parked = vi.fn(async () => "parked" as const)
+    registerNotAdmittedHandler(parked)
+    const withdraw = vi.spyOn(gate, "withdraw")
+    const a = await pick()
+    expect(a).not.toBeNull()
+    await vi.waitFor(() => expect(withdraw).toHaveBeenCalledWith("job-1"))
+    expect(parked).not.toHaveBeenCalled()
+    expect(laneCounters().ungated).toEqual({ "image-to-video": 1 })
+    expect(await laneOf("provider")).toMatchObject({ running: 1, queued: 0 })
+    await a!.release("completed")
+  })
+
+  it("a gate that fails: the job runs, counted as ungated, and its release frees nothing", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined)
+    vi.spyOn(gate, "acquire").mockRejectedValue(new Error("redis down"))
+    const release = vi.spyOn(gate, "release")
+    const a = await pick()
+    expect(a).not.toBeNull()
+    await until(() => laneCounters().ungated["image-to-video"] === 1)
+    await a!.release("completed")
+    await settle()
+    expect(release).not.toHaveBeenCalled()
+    expect(serverShareOccupancy().video?.byUser ?? {}).toEqual({})
+  })
+
+  it("a hand-over asked before the admission lands releases its lease as handoff once it does; the job's own release then frees nothing more", async () => {
+    const held = heldGate()
+    refs.gate = held.gate
+    const release = vi.spyOn(held.gate, "release")
+    const video = await pick({}, bull("add-captions"))
+    // The handler hands its slot over before it enqueues the render: at once.
+    await handOffConcurrencySlot("job-1")
+    expect(release).not.toHaveBeenCalled()
+    held.answer()
+    await until(() => release.mock.calls.length === 1)
+    expect(release).toHaveBeenCalledWith(video!.leaseId, "handoff")
+    await video!.release("completed")
+    await settle()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect((await laneOf("local"))?.running ?? 0).toBe(0)
+  })
+
+  it("a job re-picked under another entry's lease (the captions render) never releases or hands it off", async () => {
+    const render = await gate.acquire({
+      meta: { ...otherMeta("job-1", "local"), queue: "video-render", bullJobId: "render-job-1" }, size: 1, mode: "readmit", leaseTtlMs: 3_600_000,
+    })
+    if (!render.granted) throw new Error("expected a grant")
+    const acquire = vi.spyOn(gate, "acquire")
+    const release = vi.spyOn(gate, "release")
+    const video = await pick({ status: "processing" }, bull("add-captions"))
+    await until(() => acquire.mock.calls.length === 1)
+    await settle()
+    await handOffConcurrencySlot("job-1")
+    await video!.release("completed")
+    await settle()
+    expect(release).not.toHaveBeenCalled()
+    expect(await laneOf("local")).toMatchObject({ running: 1 })
+  })
+
+  it("a nested coordinator (a run's own job) holds no lease, and its admission takes none", async () => {
+    const acquire = vi.spyOn(gate, "acquire")
+    const a = await pick({ workflow_execution_id: "exec-1" }, bull("video-director"))
+    expect(a!.hold).toMatchObject({ role: "coordinator", lane: null, leaseId: null })
+    await settle()
+    expect(acquire).not.toHaveBeenCalled()
+    await a!.release("completed")
   })
 })

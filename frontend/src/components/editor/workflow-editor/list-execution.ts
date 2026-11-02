@@ -4,9 +4,6 @@ import type {
   WorkflowNode,
   SceneNodeDataType,
 } from "@/types/nodes";
-import { getCachedTier } from "@/hooks/use-auth";
-import { TIER_PARALLELISM } from "@/lib/pricing-data";
-import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
 import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutPlan } from "@nodaro/shared/workflow"
@@ -19,6 +16,7 @@ import { USE_CASE_LIST_DRIVEN, isUseCaseNodeType, usecaseFanOutRefusalOf } from 
 import { usecaseLabelVars, usecaseListDrivenKey } from "@/lib/use-case-request-body";
 import { toast } from "sonner";
 import { nodeRunError } from "./node-run-message";
+import { listFanOutWidth } from "./list-fan-out-width";
 
 /** An item that never ran: the per-item guard's "Cancelled" (a Stop, or the
  *  batch cancelling the rest after a failure), or settledWithLimit's
@@ -69,9 +67,9 @@ export async function executeNodeForList(
     toast.error(message);
     throw new Error(message);
   }
-  const MAX_PARALLEL_ITERATIONS = hasCredits()
-    ? (TIER_PARALLELISM[getCachedTier()] ?? TIER_PARALLELISM.free)
-    : 12;
+  // The server's line size when it enforces concurrency lanes, else the tier
+  // table — from what is cached now: the fan-out never waits for the server.
+  const MAX_PARALLEL_ITERATIONS = listFanOutWidth(useWorkflowStore.getState().workflowId);
 
   const { updateNodeData } = useWorkflowStore.getState();
   const runId = crypto.randomUUID();

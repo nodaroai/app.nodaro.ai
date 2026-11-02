@@ -239,9 +239,17 @@ export class TrendRadarResource {
    * background — the candidate's `history` then says `source_attached` or
    * `source_failed` with why — and `"none"` when there is no top post or the
    * candidate was approved before. Approving again answers the same trend.
+   *
+   * The clip's download is an import of a link: pass the `confirmationId`
+   * from `contentRights.confirm({ url: candidate.topPost.url, declarationVersion })` so the
+   * download is made under the admin's confirmation (required once the
+   * deployment turns `content_rights_required` on; without one then, the
+   * draft is still created and the clip is left out, `source_failed` saying why).
    */
-  async approve(id: string): Promise<TrendCandidateApproval> {
-    const res = await this.client.request<{ data: TrendCandidateApproval }>("POST", `/v1/trend-radar/candidates/${encodeURIComponent(id)}/approve`)
+  async approve(id: string, options: { confirmationId?: string } = {}): Promise<TrendCandidateApproval> {
+    const res = await this.client.request<{ data: TrendCandidateApproval }>("POST", `/v1/trend-radar/candidates/${encodeURIComponent(id)}/approve`, {
+      body: options.confirmationId ? { confirmationId: options.confirmationId } : {},
+    })
     return res.data
   }
 

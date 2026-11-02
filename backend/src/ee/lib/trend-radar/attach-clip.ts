@@ -21,7 +21,7 @@ import type { TrendCandidatePost } from "./types.js"
 export const ATTACH_CLIP_MAX_MS = 15 * 60 * 1000
 
 export interface AttachClipDeps {
-  download: (url: string, userId: string) => Promise<{ videoUrl: string }>
+  download: (url: string, userId: string, confirmationId: string | null) => Promise<{ videoUrl: string }>
   copy: (trendId: string, videoUrl: string) => Promise<{ url: string; durationSec?: number; width?: number; height?: number; display?: TrendVersionData["source"] extends infer S ? (S extends { display?: infer D } ? D : never) : never; sha256?: string }>
   readDraft: (trendId: string) => Promise<{ data: TrendVersionData; revision: string } | null>
   saveDraft: (trendId: string, data: TrendVersionData, expectedRevision: string) => Promise<unknown>
@@ -29,7 +29,10 @@ export interface AttachClipDeps {
 }
 
 const DEFAULT_DEPS: AttachClipDeps = {
-  download: (url, userId) => downloadVideoForRun({ url, userId, maxHeight: 1080, maxMs: ATTACH_CLIP_MAX_MS }),
+  // The import gate (lib/import-gate.ts) is inside the downloader: the site's
+  // policy and the admin's confirmation for this link, or a `source_failed`
+  // note with the gate's message.
+  download: (url, userId, confirmationId) => downloadVideoForRun({ url, userId, maxHeight: 1080, maxMs: ATTACH_CLIP_MAX_MS, rightsConfirmationId: confirmationId }),
   copy: (trendId, videoUrl) => copyToTrendStorage(trendId, videoUrl, "video", { durationSec: TREND_SOURCE_SECONDS, display: true }),
   readDraft: async (trendId) => {
     const state = await getDraftState(trendId)
@@ -44,6 +47,8 @@ export interface AttachClipInput {
   candidateId: string
   post: Pick<TrendCandidatePost, "url" | "author" | "platform">
   userId: string
+  /** The admin's content rights confirmation for the post's link (`POST /v1/content-rights/confirm`), when one was made. */
+  confirmationId?: string
 }
 
 export type AttachClipResult = { ok: true; durationSec: number } | { ok: false; why: string }
@@ -61,7 +66,7 @@ export async function attachTopPostClip(input: AttachClipInput, deps: AttachClip
   }
   if (!isAllowedSocialVideoUrl(input.post.url)) return fail("the top post's link is not one the downloader reads")
   try {
-    const { videoUrl } = await deps.download(input.post.url, input.userId)
+    const { videoUrl } = await deps.download(input.post.url, input.userId, input.confirmationId ?? null)
     const stored = await deps.copy(input.trendId, videoUrl)
     if (typeof stored.durationSec !== "number") return fail("the clip's length could not be read")
     const draft = await deps.readDraft(input.trendId)

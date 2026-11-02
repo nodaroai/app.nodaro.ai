@@ -89,7 +89,11 @@ export async function readBodyCapped(res: Response, maxBytes: number): Promise<B
 export async function importImageFromUrl(
   userId: string,
   url: string,
+  // `beforeFetch` runs right before the fetch (the import gate spends the
+  // confirmation there, lib/import-gate.ts); what it throws propagates.
+  opts: { beforeFetch?: () => Promise<void> } = {},
 ): Promise<MediaImportResult> {
+  await opts.beforeFetch?.()
   // ── Fetch (SSRF-gated, timeboxed) ──
   let res: Response
   try {

@@ -28,6 +28,18 @@ export function payerKeyOf(ctx: BillingContext): PayerKey {
 }
 
 /**
+ * The line a request's own calls count in, sized by: the payer's line, and the
+ * tier a non-personal line is sized at (`entitlements.tierForGates`; a
+ * personal line's tier is read from the account, so `null` here). No context
+ * (no billing service on this install) is the personal line. One copy for the
+ * request scope and `GET /v1/me/lanes`.
+ */
+export function lineOfBillingContext(userId: string, ctx: BillingContext | undefined): { userId: string; payer: PayerKey; tier: string | null } {
+  if (!ctx) return { userId, payer: `user:${userId}`, tier: null }
+  return { userId, payer: payerKeyOf(ctx), tier: ctx.payer === "user" ? null : (ctx.entitlements?.tierForGates ?? null) }
+}
+
+/**
  * The line of a job whose payload carries no billing context or no `userId`
  * (the `scene-render-child` payload is `{ jobId, sceneRenderChild: true }`;
  * the captions `render` hand-off carries the caption job's), read from its

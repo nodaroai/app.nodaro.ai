@@ -20,8 +20,16 @@ import { applyJobListFilters, jobListFilterSelect, ratingsNotAvailable, withoutF
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../../job-owner-state.js"
 import { JOB_RATINGS, JOB_RATING_FILTERS, setJobRating } from "../../job-ratings.js"
 import { liveSessionsOfJobs } from "../../job-sessions.js"
+import { queueInfoFor, waitingRowsOf, withoutLaneStamp, type QueueInfo } from "../../concurrency-lanes/queue-info.js"
+import { readWithLaneStamp } from "../../concurrency-lanes/columns.js"
+import { mcpQueueText } from "../../concurrency-lanes/queue-copy.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
+
+// What get_job reads. display_cost (USD) is excluded — see list_jobs.
+// error_hint (migration 376) backs failureGuidance's suggestedProvider.
+const GET_JOB_COLUMNS =
+  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id" as const
 // Rating a job writes to it, as REST's PUT /v1/jobs/:id/rating needs assets:write.
 const jobsRateGate: ToolGate = { required: ["assets:write"] }
 
@@ -347,9 +355,10 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
     {
       title: "Get Job",
       description:
-        "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
+        "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | queued | processing | completed | failed | cancelled | pending_review), " +
         "progress, jobType, assetKind, outputUrl (the finished image/video/audio; width/height in pixels when known), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled, the run's steps included; can be lower), creditsHeld (the run's hold) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
+        "queued = waiting for a free slot: guidance gives its place in line; not a failure, do not re-run. " +
         "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs).",
       inputSchema: {
         job_id: z.string().min(1),
@@ -371,32 +380,41 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           isError: true,
         }
       }
-      const { data, error } = await supabase
-        .from("jobs")
-        .select(
-          // display_cost (USD) excluded — see list_jobs comment above.
-          // error_hint (migration 376) backs failureGuidance's suggestedProvider.
-          "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id",
-        )
-        .eq("id", args.job_id)
-        .eq("user_id", session.userId)
-        // A child job reads as one that does not exist (CHILD_JOB_COLUMN); an
-        // MCP session has no admin reading. So does a job in the Trash.
-        .is(CHILD_JOB_COLUMN, null)
-        .is(TRASHED_JOB_COLUMN, null)
-        .maybeSingle()
+      // lane_queued_at (read tolerantly) is the clock of a waiting job's
+      // queue.waitedSeconds, as on the REST job reads; never sent.
+      const { data: read, error } = await readWithLaneStamp(
+        "job",
+        (stamp) =>
+          supabase
+            .from("jobs")
+            // The stamp is read for the queue's clock only; the row is typed as the columns.
+            .select(`${GET_JOB_COLUMNS}${stamp}` as typeof GET_JOB_COLUMNS)
+            .eq("id", args.job_id)
+            .eq("user_id", session.userId)
+            // A child job reads as one that does not exist (CHILD_JOB_COLUMN); an
+            // MCP session has no admin reading. So does a job in the Trash.
+            .is(CHILD_JOB_COLUMN, null)
+            .is(TRASHED_JOB_COLUMN, null)
+            .maybeSingle(),
+      )
       if (error) {
         return {
           content: [{ type: "text", text: `Error: ${error.message}` }],
           isError: true,
         }
       }
-      if (!data) {
+      if (!read) {
         return {
           content: [{ type: "text", text: `Job ${args.job_id} not found` }],
           isError: true,
         }
       }
+      // A job waiting for a slot: where it stands in its line (no gate read
+      // for any other job; none on a gate error).
+      const waiting = waitingRowsOf("job", [read])
+      const queue = waiting.length > 0 ? (await queueInfoFor(waiting)).get(read.id) : undefined
+      const guidance = queue ? queuedGuidance(queue) : undefined
+      const data = withoutLaneStamp(read)
       // On failure, add an explicit `retryable` flag (mirrors get_asset) plus
       // `guidance` and — for a safety-block with a catalog fallback —
       // `suggestedProvider`, a real model id the SAME request can retry on.
@@ -431,14 +449,22 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
                 "charged again. Poll `get_job` later: the output appears when the review approves " +
                 "it, or the job becomes `failed` with a policy reason if it is rejected.",
             }
-          : { data: publicData }
+          : queue && guidance
+            ? {
+                // Waiting for a free slot (concurrency lanes): not a failure,
+                // and nothing to re-run — the job keeps its place in line.
+                data: { ...publicData, queue },
+                guidance,
+              }
+            : { data: publicData }
+      const view = jobView(filled as Parameters<typeof jobView>[0])
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
         // The one envelope (audit 2026-09-06 fix #2): the text keeps its
         // `{ data, … }` shape for existing clients; hosts and agents that read
         // structuredContent get the same normalised view get_asset and
         // wait_for_job return.
-        structuredContent: jobView(filled as Parameters<typeof jobView>[0]),
+        structuredContent: guidance ? { ...view, guidance } : view,
       }
     },
   )
@@ -468,7 +494,8 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         `Block until one of your jobs finishes and return the same job envelope get_job returns. Each call waits at most ${WAIT_FOR_JOB_CALL_CEILING_S} s ` +
         "(longer than that, MCP clients cut the call off). " +
         "If the job is still running then, the result is status `timeout` (not an error) with its progress: call wait_for_job again with the same job_id — it resumes, nothing is lost — and never re-run the generation. " +
-        "A held job answers `pending_review` at once — do not re-run it. A video can take 2–10 minutes: expect several calls.",
+        "A held job answers `pending_review` at once — do not re-run it. A job waiting for a free slot answers `timeout` with its place in line: call again. " +
+        "A video can take 2–10 minutes: expect several calls.",
       inputSchema: {
         job_id: z.string().min(1),
         timeout_s: z
@@ -499,7 +526,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       if (error) return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true }
       if (!own) return { content: [{ type: "text", text: `Job ${args.job_id} not found` }], isError: true }
       const waitS = waitForJobCallSeconds(args.timeout_s)
-      const waited = await waitForJob({ jobId: args.job_id, timeoutMs: waitS * 1000, signal: extra?.signal })
+      const waited = await waitForJob({ jobId: args.job_id, timeoutMs: waitS * 1000, signal: extra?.signal, withQueue: true })
       if (waited.status === "timeout" || waited.status === "aborted") {
         const seen = waited.lastSeen
         const view = {
@@ -512,6 +539,15 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           errorMessage: null,
           createdAt: seen?.createdAt ?? null,
           startedAt: seen?.startedAt ?? null,
+        }
+        // A job still waiting for a free slot is told as such, with its place
+        // in line — never as running, and never as a failure.
+        if (waited.status === "timeout" && seen?.queue) {
+          const guidance = queuedGuidance(seen.queue)
+          return {
+            content: [{ type: "text", text: `Job ${args.job_id} has not started yet. ${guidance}` }],
+            structuredContent: { ...view, guidance },
+          }
         }
         const text =
           waited.status === "timeout"
@@ -581,6 +617,14 @@ function registerRateJob(server: McpServer, session: McpSession): void {
       return { content: [{ type: "text", text: JSON.stringify({ data: { jobId: args.job_id, rating: outcome.rating } }) }] }
     },
   )
+}
+
+/** What a job waiting for a slot is not: a failure, or a reason to run it again. */
+const STILL_QUEUED_NEXT_STEP = "Waiting is not a failure: the job keeps its place and nothing is lost. Do not re-run the generation."
+
+/** get_job's guidance for a job waiting for a slot: its place in line, then what to do. */
+function queuedGuidance(queue: QueueInfo): string {
+  return `${mcpQueueText(queue)} ${STILL_QUEUED_NEXT_STEP}`
 }
 
 /** The `timeout` answer: how far the job got and how long it has run, then what to do next. */

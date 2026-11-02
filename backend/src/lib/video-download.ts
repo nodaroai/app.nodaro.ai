@@ -6,7 +6,8 @@ import { promises as fs } from "node:fs"
 import { createReadStream } from "node:fs"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "./storage.js"
 import { recordDownloadedVideoAsset } from "./asset-records.js"
-import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, contentHashOf, recordEvent } from "./content-rights.js"
+import { contentHashOf, recordEvent } from "./content-rights.js"
+import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "./import-gate.js"
 import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
 import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
 import type { DownloadSlot } from "./download-slots.js"
@@ -241,8 +242,9 @@ export interface TrackedDownloadRequest {
   readonly requireAudio?: boolean
   /**
    * The content rights confirmation this import is made under (migration 577),
-   * already checked and consumed by the caller (`requireRightsConfirmation`);
-   * written on the file's row and the download's end noted on it.
+   * already checked and spent by the caller (`lib/import-gate.ts`:
+   * `requireImportAllowed`, then `spendImportConfirmation` once the slot is
+   * held); written on the file's row and the download's end noted on it.
    */
   readonly rightsConfirmationId?: string | null
 }
@@ -367,22 +369,20 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
  * flight, so the file lands in storage unused and its slot frees when it ends.
  */
 export async function downloadVideoForRun(options: RunDownloadOptions): Promise<{ videoUrl: string; thumbnailUrl?: string }> {
-  const rights = { url: options.url, userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const }
+  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const }
   try {
-    await checkRightsConfirmation(rights)
+    await requireImportAllowed(options.url, rights)
   } catch (e) {
-    if (e instanceof ContentRightsError) throw new RunDownloadError(e.message, "failed")
+    if (isImportRefusal(e)) throw new RunDownloadError(e.message, "failed")
     throw e
   }
   const slot = await acquireSlot(options.userId, options.signal, options.slotWaitMs ?? RUN_DOWNLOAD_SLOT_WAIT_MS)
-  if (options.rightsConfirmationId) {
-    try {
-      await consumeRightsConfirmation({ confirmationId: options.rightsConfirmationId, url: options.url, lane: "run" })
-    } catch (e) {
-      slot.release()
-      if (e instanceof ContentRightsError) throw new RunDownloadError(e.message, "failed")
-      throw e
-    }
+  try {
+    await spendImportConfirmation(options.url, rights)
+  } catch (e) {
+    slot.release()
+    if (isImportRefusal(e)) throw new RunDownloadError(e.message, "failed")
+    throw e
   }
   const { state, done } = startTrackedDownload(options, slot)
   await within(done, options.signal, options.maxMs ?? RUN_DOWNLOAD_MAX_MS)

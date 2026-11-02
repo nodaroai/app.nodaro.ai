@@ -69,6 +69,31 @@ export function bullEntryFields(queue: LaneQueueName, bullJobId: string | null |
 
 const isMissingColumnError = (error: PgError): boolean => !!error?.code && MISSING_COLUMN_CODES.has(error.code)
 
+/** What a tolerant status read appends to its column list: the lane stamp, or nothing. */
+export const LANE_STAMP_SELECT = ", lane_queued_at" as const
+export type LaneStampSelect = typeof LANE_STAMP_SELECT | ""
+
+/** The table of each row kind (the reverse of ROW_KIND). */
+const TABLE_OF_KIND = Object.fromEntries(Object.entries(ROW_KIND).map(([table, kind]) => [kind, table])) as Record<LaneRowKind, LaneTable>
+
+/**
+ * A status read that also names `lane_queued_at` (to tell a row waiting for a
+ * slot) on the table of `kind`. `read(stamp)` writes its query in place and
+ * ends its column list with `stamp`: LANE_STAMP_SELECT, or `""` once the table
+ * is known to lack the column. On a missing-column error the read runs again
+ * without it; only when that one succeeds is the column remembered as absent —
+ * a missing column the caller named answers that error as it always did.
+ */
+export async function readWithLaneStamp<R extends { error: PgError }>(kind: LaneRowKind, read: (stamp: LaneStampSelect) => PromiseLike<R>): Promise<R> {
+  const table = TABLE_OF_KIND[kind]
+  if (laneColumnsAbsent(table)) return read("")
+  const first = await read(LANE_STAMP_SELECT)
+  if (!isMissingColumnError(first.error)) return first
+  const retry = await read("")
+  if (!retry.error) noteLaneColumnError(table, first.error)
+  return retry
+}
+
 /**
  * A worker's pickup claim, writing the job's BullMQ entry in the same UPDATE
  * (one statement per pickup): `claim(fields)` runs the claim with `fields`

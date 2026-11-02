@@ -100,6 +100,13 @@ vi.mock("../captions-mappers.js", async (importOriginal) => ({
   whisperWordsToCaptions: mocks.whisperToCaptions,
 }))
 
+// The import gate has its own tests (import-gate.test.ts, youtube-extractor-gate.test.ts);
+// here it is a fake that always allows.
+vi.mock("@/lib/import-gate.js", () => ({
+  requireImportAllowed: vi.fn().mockResolvedValue(undefined),
+  spendImportConfirmation: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Config required by KieAudioProvider transitively — mocked too.
 vi.mock("@/lib/config.js", () => ({
   config: { KIE_API_KEY: "k", NODE_ENV: "test", EDITION: "cloud" },
@@ -115,6 +122,9 @@ import { extractYouTubeAudio, extractYouTubeAudioWithMeta } from "../youtube-ext
 import { textToAudio } from "../text-to-audio.js"
 import { generateMusic } from "../generate-music.js"
 import { transcribe } from "../transcribe.js"
+
+/** The import rights every extraction carries (the gate is a fake above). */
+const RIGHTS = { userId: "u1", lane: "route" as const }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -137,7 +147,7 @@ describe("extractYouTubeAudioWithMeta", () => {
   it("returns the R2 url plus the length probed from the LOCAL file", async () => {
     mocks.uploadFileToR2.mockResolvedValueOnce("https://r2/yt-extract-abc.mp3")
 
-    const out = await extractYouTubeAudioWithMeta("https://youtube.com/watch?v=xyz")
+    const out = await extractYouTubeAudioWithMeta("https://youtube.com/watch?v=xyz", RIGHTS)
 
     expect(out).toEqual({ url: "https://r2/yt-extract-abc.mp3", durationSeconds: 3564.2 })
     // Probed the temp file — not the uploaded url (that would be a second download).
@@ -147,7 +157,7 @@ describe("extractYouTubeAudioWithMeta", () => {
   })
 
   it("probes BEFORE the temp file is deleted", async () => {
-    await extractYouTubeAudioWithMeta("https://youtube.com/watch?v=xyz")
+    await extractYouTubeAudioWithMeta("https://youtube.com/watch?v=xyz", RIGHTS)
     const probeOrder = mocks.probeMediaDuration.mock.invocationCallOrder[0]!
     const unlinkOrder = mocks.fsUnlink.mock.invocationCallOrder[0]!
     expect(probeOrder).toBeLessThan(unlinkOrder)
@@ -157,7 +167,7 @@ describe("extractYouTubeAudioWithMeta", () => {
     mocks.probeMediaDuration.mockRejectedValueOnce(new Error("ffprobe exited 1"))
     mocks.uploadFileToR2.mockResolvedValueOnce("https://r2/yt-extract-abc.mp3")
 
-    const out = await extractYouTubeAudioWithMeta("https://youtube.com/watch?v=xyz")
+    const out = await extractYouTubeAudioWithMeta("https://youtube.com/watch?v=xyz", RIGHTS)
 
     expect(out).toEqual({ url: "https://r2/yt-extract-abc.mp3" })
     expect("durationSeconds" in out).toBe(false)
@@ -166,7 +176,7 @@ describe("extractYouTubeAudioWithMeta", () => {
 
   it("does not probe when the download failed", async () => {
     mocks.spawnYtDlp.mockRejectedValue(new Error("download failed"))
-    await expect(extractYouTubeAudioWithMeta("https://youtube.com/watch?v=bad")).rejects.toThrow()
+    await expect(extractYouTubeAudioWithMeta("https://youtube.com/watch?v=bad", RIGHTS)).rejects.toThrow()
     expect(mocks.probeMediaDuration).not.toHaveBeenCalled()
   })
 })
@@ -175,7 +185,7 @@ describe("extractYouTubeAudio", () => {
   it("downloads via the shared hardened spawn, uploads to R2, and returns the R2 URL", async () => {
     mocks.uploadFileToR2.mockResolvedValueOnce("https://r2/yt-extract-abc.mp3")
 
-    const url = await extractYouTubeAudio("https://youtube.com/watch?v=xyz")
+    const url = await extractYouTubeAudio("https://youtube.com/watch?v=xyz", RIGHTS)
 
     expect(url).toBe("https://r2/yt-extract-abc.mp3")
     // Rung 1 (default client) succeeded — exactly one spawn.
@@ -183,7 +193,7 @@ describe("extractYouTubeAudio", () => {
   })
 
   it("passes the audio flags, the spoof headers, and the long audio idle timeout", async () => {
-    await extractYouTubeAudio("https://youtu.be/xyz")
+    await extractYouTubeAudio("https://youtu.be/xyz", RIGHTS)
 
     const [args, , opts] = mocks.spawnYtDlp.mock.calls[0]
     expect(args[0]).toBe("https://youtu.be/xyz")
@@ -202,7 +212,7 @@ describe("extractYouTubeAudio", () => {
   it("falls down the client ladder: web fails, tv succeeds", async () => {
     mocks.spawnYtDlp.mockRejectedValueOnce(new Error("No supported JavaScript runtime could be found"))
 
-    await extractYouTubeAudio("https://www.youtube.com/watch?v=abc")
+    await extractYouTubeAudio("https://www.youtube.com/watch?v=abc", RIGHTS)
 
     expect(mocks.spawnYtDlp).toHaveBeenCalledTimes(2)
     const secondArgs = mocks.spawnYtDlp.mock.calls[1][0] as string[]
@@ -211,18 +221,18 @@ describe("extractYouTubeAudio", () => {
   })
 
   it("rejects a non-YouTube host BEFORE any spawn (SSRF gate)", async () => {
-    await expect(extractYouTubeAudio("https://evil.example/watch?v=x")).rejects.toThrow(/host not allowed/)
+    await expect(extractYouTubeAudio("https://evil.example/watch?v=x", RIGHTS)).rejects.toThrow(/host not allowed/)
     expect(mocks.spawnYtDlp).not.toHaveBeenCalled()
   })
 
   it("calls fs.access to verify the downloaded file exists", async () => {
-    await extractYouTubeAudio("https://youtube.com/watch?v=x")
+    await extractYouTubeAudio("https://youtube.com/watch?v=x", RIGHTS)
 
     expect(mocks.fsAccess).toHaveBeenCalledOnce()
   })
 
   it("uploads to R2 with audio media type", async () => {
-    await extractYouTubeAudio("https://youtube.com/watch?v=x")
+    await extractYouTubeAudio("https://youtube.com/watch?v=x", RIGHTS)
 
     const [, label, mediaType] = mocks.uploadFileToR2.mock.calls[0]
     expect(label).toMatch(/^yt-extract-/)
@@ -230,7 +240,7 @@ describe("extractYouTubeAudio", () => {
   })
 
   it("cleans up the temp file after successful upload", async () => {
-    await extractYouTubeAudio("https://youtube.com/watch?v=x")
+    await extractYouTubeAudio("https://youtube.com/watch?v=x", RIGHTS)
 
     expect(mocks.fsUnlink).toHaveBeenCalledOnce()
     // Cleanup uses the same path the download wrote to
@@ -240,7 +250,7 @@ describe("extractYouTubeAudio", () => {
   it("throws and cleans up when every ladder rung fails", async () => {
     mocks.spawnYtDlp.mockRejectedValue(new Error("video unavailable"))
 
-    await expect(extractYouTubeAudio("https://youtube.com/watch?v=bad")).rejects.toThrow(
+    await expect(extractYouTubeAudio("https://youtube.com/watch?v=bad", RIGHTS)).rejects.toThrow(
       /video unavailable/,
     )
     // All three YouTube rungs were tried before giving up.
@@ -253,7 +263,7 @@ describe("extractYouTubeAudio", () => {
   it("throws and cleans up when fs.access fails (file missing after dl)", async () => {
     mocks.fsAccess.mockRejectedValueOnce(new Error("ENOENT: no such file"))
 
-    await expect(extractYouTubeAudio("https://youtube.com/watch?v=x")).rejects.toThrow(/ENOENT/)
+    await expect(extractYouTubeAudio("https://youtube.com/watch?v=x", RIGHTS)).rejects.toThrow(/ENOENT/)
     expect(mocks.fsUnlink).toHaveBeenCalledOnce()
     expect(mocks.uploadFileToR2).not.toHaveBeenCalled()
   })
@@ -261,7 +271,7 @@ describe("extractYouTubeAudio", () => {
   it("normalises non-Error throwables to a generic message", async () => {
     mocks.spawnYtDlp.mockRejectedValue("string error not an Error instance")
 
-    await expect(extractYouTubeAudio("https://youtube.com/watch?v=x")).rejects.toThrow(
+    await expect(extractYouTubeAudio("https://youtube.com/watch?v=x", RIGHTS)).rejects.toThrow(
       /Failed to extract YouTube audio/,
     )
   })
@@ -271,7 +281,7 @@ describe("extractYouTubeAudio", () => {
     // still succeed because the .catch(() => {}) swallows it.
     mocks.fsUnlink.mockRejectedValueOnce(new Error("EBUSY"))
 
-    const url = await extractYouTubeAudio("https://youtube.com/watch?v=x")
+    const url = await extractYouTubeAudio("https://youtube.com/watch?v=x", RIGHTS)
     expect(url).toBe("https://r2/uploaded.mp3")
   })
 })

@@ -672,12 +672,11 @@ const tier3: CharacterizedOperation[] = [
     name: "trim-audio-wav",
     tier: 3,
     run: async (f) => {
-      const { audioPath } = await trimAudio({
-        videoUrl: fixtureUrl(f.clipMp4),
-        audioFormat: "wav",
-        startTime: 0.5,
-        endTime: 2,
-      })
+      // A fixture is a direct file, not an import of a link: the gate is never asked.
+      const { audioPath } = await trimAudio(
+        { videoUrl: fixtureUrl(f.clipMp4), audioFormat: "wav", startTime: 0.5, endTime: 2 },
+        { userId: "characterization", lane: "run" },
+      )
       return single(audioPath, "audio")
     },
   },

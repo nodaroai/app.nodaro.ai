@@ -33,11 +33,17 @@ function deps(over: Partial<AttachClipDeps> = {}) {
 const input = { trendId: "t1", candidateId: "c1", post: { url: "https://www.tiktok.com/@a/video/7300000000000000001", author: "a", platform: "tiktok" as const }, userId: "admin" }
 
 describe("attachTopPostClip", () => {
+  it("the admin's confirmation for the link rides into the downloader (the import gate is inside it)", async () => {
+    const { d } = deps()
+    await attachTopPostClip({ ...input, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" }, d)
+    expect(d.download).toHaveBeenCalledWith(input.post.url, "admin", "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01")
+  })
+
   it("downloads as the admin, stores the clip as the draft's source and notes it", async () => {
     const { d, notes, saved } = deps()
     const out = await attachTopPostClip(input, d)
     expect(out).toEqual({ ok: true, durationSec: 10 })
-    expect(d.download).toHaveBeenCalledWith(input.post.url, "admin")
+    expect(d.download).toHaveBeenCalledWith(input.post.url, "admin", null)
     expect(d.copy).toHaveBeenCalledWith("t1", "https://cdn.test/library/clip.mp4")
     expect(saved).toEqual([["t1", { ...DRAFT, source: { videoUrl: "https://cdn.test/trends/t1/source.mp4", durationSec: 10, width: 1080, height: 1920, sha256: "abc" } }, "r1"]])
     expect(notes).toEqual([["c1", "source_attached", "tiktok post by a, 10s"]])

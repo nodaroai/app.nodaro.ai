@@ -23,6 +23,7 @@ import type { Redis } from "ioredis"
 import { LANE_GATE_SCRIPTS } from "./gate-scripts.js"
 import type { ConcurrencyLane, LaneEntryMeta, LaneQueueName, LaneSnapshot, LaneUserEntry, PayerKey, WaitInfo, WaitReason } from "./types.js"
 import { randomUUID } from "node:crypto"
+import { withinTimeout } from "./within-timeout.js"
 
 /** The slice of an ioredis client the gate uses. */
 export type LaneClient = Pick<Redis, "eval" | "publish">
@@ -119,15 +120,8 @@ export class LaneGateUnavailableError extends LaneGateTimeoutError {
 }
 
 /** `promise`, or a rejection with LaneGateTimeoutError after `ms`. The timer never outlives the call. */
-function withinTimeout<T>(promise: Promise<T>, ms: number, call: string): Promise<T> {
-  // The losing promise may still settle (or reject) much later: never leave that unhandled.
-  promise.catch(() => undefined)
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new LaneGateTimeoutError(call, ms)), ms)
-    timer.unref?.()
-  })
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+function gateCallWithin<T>(promise: Promise<T>, ms: number, call: string): Promise<T> {
+  return withinTimeout(promise, ms, () => new LaneGateTimeoutError(call, ms))
 }
 
 type Reply = Record<string, unknown> & { wake: WakeTarget[] }
@@ -249,6 +243,22 @@ export class ConcurrencyGate {
     return present(r.wait) ? toWait(r.wait) : null
   }
 
+  /**
+   * Where each of `jobIds` stands, in one call: an entry per job that waits,
+   * with the payer line it waits in (null for a server-share wait outside any
+   * line). A job that does not wait has no entry. No ids, no call.
+   */
+  async describeWaits(jobIds: readonly string[]): Promise<Map<string, { wait: WaitInfo; payer: PayerKey | null }>> {
+    const out = new Map<string, { wait: WaitInfo; payer: PayerKey | null }>()
+    if (jobIds.length === 0) return out
+    const r = await this.run("describeMany", { jobIds: [...new Set(jobIds)] })
+    for (const e of asArray<{ jobId: string; wait: unknown; payer: unknown }>(r.waits)) {
+      if (!present(e.wait)) continue
+      out.set(e.jobId, { wait: toWait(e.wait), payer: typeof e.payer === "string" && e.payer.length > 0 ? (e.payer as PayerKey) : null })
+    }
+    return out
+  }
+
   /** The payer line a job waits in; null when it waits in none (or only for a server share). */
   async waitingPayer(jobId: string): Promise<PayerKey | null> {
     const r = await this.run("describe", { jobId })
@@ -334,7 +344,7 @@ export class ConcurrencyGate {
   private async run(name: keyof typeof LANE_GATE_SCRIPTS, req: Record<string, unknown>): Promise<Reply> {
     if (this.opts.connected && !this.opts.connected()) throw new LaneGateUnavailableError(name)
     // Redis EVAL of the constant scripts in gate-scripts.ts — nothing user-supplied is evaluated.
-    const raw = await withinTimeout(this.opts.client().eval(
+    const raw = await gateCallWithin(this.opts.client().eval(
       LANE_GATE_SCRIPTS[name], 0, this.prefix, this.now(), LANE_RESERVATION_TTL_MS, LANE_WAITER_TTL_MS, LANE_RELEASED_TTL_MS, JSON.stringify(req),
     ), this.callTimeoutMs, name)
     const reply = JSON.parse(String(raw)) as Record<string, unknown>
@@ -351,7 +361,7 @@ export class ConcurrencyGate {
     }
     const client = this.opts.client()
     await Promise.all(targets.map((t) =>
-      withinTimeout(client.publish(this.channel, JSON.stringify(t)), this.callTimeoutMs, "publish").catch((err: unknown) => {
+      gateCallWithin(client.publish(this.channel, JSON.stringify(t)), this.callTimeoutMs, "publish").catch((err: unknown) => {
         // The reservation stands; the waiter's backstop brings it back.
         console.warn(`[concurrency-lanes] could not publish the wake of job ${t.jobId}: ${(err as Error).message}`)
       }),

@@ -29,7 +29,13 @@
 // or failure path does not load BullMQ and the admission graph. Without one,
 // the gate's published wake reaches the subscriber of the process running the
 // queue.
+//
+// While limits cannot be turned on in this release (LANES_ENFORCEMENT_AVAILABLE
+// false), nothing ever waits in a line — every take is granted at once or
+// withdraws itself — so there is nothing for a cancel to wait for: the
+// withdraw is fired, never awaited, and still clears whatever an entry left.
 import type { WakeTarget } from "./gate.js"
+import { LANES_ENFORCEMENT_AVAILABLE } from "./enforcement-available.js"
 import { loadConcurrencyGate, warnLaneRateLimited } from "./hold.js"
 
 /** The most a withdraw holds its caller, gate call, wake publish and promote together. */
@@ -78,10 +84,15 @@ async function withdrawAndWake(jobId: string): Promise<void> {
  * Take a job (or a run, by its id) out of its line and any server-share wait,
  * and wake whoever gets the slot it held reserved. Idempotent; never throws
  * (a failure is logged at most once a minute); returns within
- * LANE_WITHDRAW_DEADLINE_MS.
+ * LANE_WITHDRAW_DEADLINE_MS — at once while limits are locked.
  */
 export async function withdrawFromLane(jobId: string): Promise<void> {
   if (!jobId) return
+  // Limits locked: fired, never awaited (see the module comment). Never rejects.
+  if (!LANES_ENFORCEMENT_AVAILABLE) {
+    void withdrawAndWake(jobId)
+    return
+  }
   // withdrawAndWake never rejects: every step catches and logs.
   if (!(await withinDeadline(withdrawAndWake(jobId), LANE_WITHDRAW_DEADLINE_MS))) {
     warnLaneRateLimited("a withdraw did not finish in time; its caller went on", new Error(`no answer within ${LANE_WITHDRAW_DEADLINE_MS} ms`))

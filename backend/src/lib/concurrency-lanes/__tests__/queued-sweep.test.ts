@@ -41,6 +41,9 @@ const refs = vi.hoisted(() => ({
   quietUsers: new Set<string>(),
 }))
 
+// Jobs wait in a line only where limits can be turned on: that path is made
+// available here (this release locks it, and a locked withdraw is not awaited).
+vi.mock("../enforcement-available.js", () => ({ LANES_ENFORCEMENT_AVAILABLE: true }))
 vi.mock("bullmq", async (importOriginal) => {
   const real = await importOriginal<typeof import("bullmq")>()
   class Queue {

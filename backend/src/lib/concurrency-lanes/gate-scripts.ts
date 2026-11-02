@@ -331,6 +331,27 @@ end
 return reply({ wait = out, payer = hget(ek(J), 'payer') or NULL })
 `
 
+/**
+ * REQ: { jobIds } → { waits } — DESCRIBE for many jobs in one call, for the
+ * status reads: one `{ jobId, wait, payer }` per job that waits, in the order
+ * asked; a job that does not wait is left out.
+ */
+const DESCRIBE_MANY = `${PRELUDE}
+purge()
+settle()
+local out = {}
+for _, J in ipairs(REQ.jobIds) do
+  local w = nil
+  if hget(sk(J), 'pool') then
+    w = serverWaitInfo(J)
+  elseif hget(ek(J), 'line') then
+    w = waitInfo(J)
+  end
+  if w then out[#out + 1] = { jobId = J, wait = w, payer = hget(ek(J), 'payer') or NULL } end
+end
+return reply({ waits = out })
+`
+
 const HAS_RESERVATION = `${PRELUDE}
 purge()
 settle()
@@ -434,6 +455,7 @@ export const LANE_GATE_SCRIPTS = {
   serverWait: SERVER_WAIT,
   withdraw: WITHDRAW,
   describe: DESCRIBE,
+  describeMany: DESCRIBE_MANY,
   hasReservation: HAS_RESERVATION,
   allWaiters: ALL_WAITERS,
   heads: HEADS,

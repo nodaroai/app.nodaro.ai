@@ -2,7 +2,7 @@
 // payload that carries none — from its jobs row.
 import { describe, expect, it } from "vitest"
 import { payloadBillingContext, type BillingContext } from "../../billing-context.js"
-import { payerKeyOf, payerOfRow } from "../payer.js"
+import { lineOfBillingContext, payerKeyOf, payerOfRow } from "../payer.js"
 
 const workspaceCtx: BillingContext = {
   payer: "workspace",
@@ -55,5 +55,25 @@ describe("payerOfRow", () => {
 
   it("a row with no workspace is the personal line, its tier left to the caller", () => {
     expect(payerOfRow({ user_id: "u1", workspace_id: null })).toEqual({ payer: "user:u1", tier: null })
+  })
+})
+
+describe("lineOfBillingContext", () => {
+  const deployment = (tierForGates: string | undefined): BillingContext => ({
+    payer: "deployment",
+    userId: "u1",
+    payerId: "p1",
+    entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates } as never,
+  })
+
+  it.each([
+    ["no context (no billing service): the personal line, tier read from the account", undefined, { payer: "user:u1", tier: null }],
+    ["a personal context: the personal line, tier read from the account", { payer: "user", userId: "u1" } as BillingContext, { payer: "user:u1", tier: null }],
+    ["a degraded personal context: still the personal line", { payer: "user", userId: "u1", degraded: true } as BillingContext, { payer: "user:u1", tier: null }],
+    ["a workspace context: its line, at its entitlement grade", workspaceCtx, { payer: "workspace:w1", tier: "business" }],
+    ["a deployment context: the payer's line, at the payer's grade", deployment("standard"), { payer: "deployment:p1", tier: "standard" }],
+    ["a deployment context with no grade: the payer's line, tier left to the sizer", deployment(undefined), { payer: "deployment:p1", tier: null }],
+  ])("%s", (_name, ctx, expected) => {
+    expect(lineOfBillingContext("u1", ctx)).toEqual({ userId: "u1", ...expected })
   })
 })

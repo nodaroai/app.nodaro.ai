@@ -915,6 +915,28 @@ await check("billing surface is 'none' on the keyless community install (no Cost
   return "surface providerId 'none', mountCostTab false, answered tokenless"
 })
 
+await check("concurrency lanes report the env sizes and are not enforced on a fresh install", async () => {
+  // GET /v1/me/lanes is a core route: community has no plans, so every line is
+  // sized by the LANE_*_PER_USER defaults, and limits cannot be turned on in
+  // this release. No workspaces and no deployment payer here: one line, the
+  // caller's own.
+  const { status, json, text } = await api("/v1/me/lanes", { token: ctx.token })
+  assert(status === 200, `expected 200, got ${status}: ${text.slice(0, 200)}`)
+  const data = json?.data
+  assert(data?.enforced === false, `expected enforced=false, got ${JSON.stringify(data?.enforced)}`)
+  const lines = data?.lines ?? []
+  assert(lines.length === 1, `expected exactly the personal line, got ${JSON.stringify(lines)}`)
+  assert(typeof lines[0].payer === "string" && lines[0].payer.startsWith("user:"), `expected a personal line, got ${JSON.stringify(lines[0].payer)}`)
+  assert(lines[0].current === true, `expected the personal line to be the current one, got current=${JSON.stringify(lines[0].current)}`)
+  const want = { provider: 12, llm: 24, local: 24, run: 12 }
+  const got = lines[0].sizes ?? {}
+  for (const [lane, size] of Object.entries(want)) {
+    assert(got[lane] === size, `lane ${lane}: expected ${size}, got ${JSON.stringify(got[lane])} (sizes ${JSON.stringify(got)})`)
+  }
+  assert(Object.keys(got).length === Object.keys(want).length, `unexpected lanes in ${JSON.stringify(got)}`)
+  return "one personal line {provider 12, llm 24, local 24, run 12}, enforced=false"
+})
+
 await check("discovery does not advertise nodes this edition cannot run", async () => {
   const cloudOnly = readCloudOnlyNodeTypes()
   if (!cloudOnly) {

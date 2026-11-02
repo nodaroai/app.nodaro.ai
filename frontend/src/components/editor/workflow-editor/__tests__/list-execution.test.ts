@@ -27,6 +27,13 @@ vi.mock("../execution-graph", () => ({
   extractNodeOutput: (...args: unknown[]) => mockExtractNodeOutput(...args),
 }))
 
+// How many items run at once (covered by list-fan-out-width.test.ts): today's
+// off-Cloud 12 unless a test says otherwise.
+const mockListFanOutWidth = vi.fn((_workflowId: unknown) => 12)
+vi.mock("../list-fan-out-width", () => ({
+  listFanOutWidth: (workflowId: unknown) => mockListFanOutWidth(workflowId),
+}))
+
 import { executeNodeForList, expandLoopResults, writeListResultMeta } from "../list-execution"
 import type { ExecutionContext } from "../types"
 import type { WorkflowNode } from "@/types/nodes"
@@ -62,6 +69,24 @@ describe("executeNodeForList", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNodes = [makeNode()]
+  })
+
+  it("runs no more items at once than the fan-out width (the server's lane size when enforced)", async () => {
+    mockListFanOutWidth.mockReturnValueOnce(2)
+    let running = 0
+    let peak = 0
+    mockExecuteNode.mockImplementation(async () => {
+      running++
+      peak = Math.max(peak, running)
+      await new Promise((r) => setTimeout(r, 5))
+      running--
+    })
+    mockExtractNodeOutput.mockReturnValue("result.png")
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b", "c", "d", "e"], makeCtx())
+
+    expect(mockExecuteNode).toHaveBeenCalledTimes(5)
+    expect(peak).toBe(2)
   })
 
   it("initializes list execution state", async () => {

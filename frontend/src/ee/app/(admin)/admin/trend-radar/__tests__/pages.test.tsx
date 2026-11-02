@@ -23,7 +23,12 @@ const fake = vi.hoisted(() => ({
   run: vi.fn(),
 }))
 
-vi.mock("../client", () => ({ radarClient: { trendRadar: fake } }))
+const fakeRights = vi.hoisted(() => ({
+  declaration: vi.fn(),
+  confirm: vi.fn(),
+}))
+
+vi.mock("../client", () => ({ radarClient: { trendRadar: fake, contentRights: fakeRights } }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
@@ -113,6 +118,10 @@ beforeEach(() => {
     return next
   })
   fake.approve.mockResolvedValue({ trendId: "t-1", clip: "attaching" })
+  fakeRights.declaration.mockReset()
+  fakeRights.confirm.mockReset()
+  fakeRights.declaration.mockResolvedValue({ version: 1, text: "I confirm that I hold the rights to this content." })
+  fakeRights.confirm.mockResolvedValue({ id: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01", declarationVersion: 1, expiresAt: "2026-11-02T07:00:00Z" })
   fake.watch.mockResolvedValue(card({ status: "watching" }))
   fake.reject.mockResolvedValue(card({ status: "rejected" }))
   fake.run.mockResolvedValue({ runId: "r", startedAt: new Date().toISOString() })
@@ -153,24 +162,74 @@ describe("the queue", () => {
 })
 
 describe("one candidate", () => {
+  const TOP_POST = { platform: "tiktok" as const, url: "https://www.tiktok.com/@a/video/1", author: "a", postedAt: "2026-10-03", plays: 8_400_000, likes: null, soundName: "subway phone remix", stillUrl: null, embedUrl: null, durationSec: 10 }
+
   it("shows the readings, posts and thresholds; Open as draft trend approves and goes to the editor", async () => {
+    fake.candidate.mockResolvedValue(full({ topPost: TOP_POST }))
     renderAt("/admin/trend-radar/c1")
     expect(await screen.findByRole("heading", { name: "Phone on the Train" })).toBeInTheDocument()
     expect(screen.getByText("14 creators")).toBeInTheDocument()
     expect(screen.getByRole("img", { name: /Creators 9 to 14/ })).toBeInTheDocument()
     expect(screen.getByText("@a")).toBeInTheDocument()
     expect(screen.getByText("5 or more distinct creators")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: /Open as draft trend/ }))
-    await waitFor(() => expect(fake.approve).toHaveBeenCalledWith("c1"))
+    // The clip's download needs the admin's confirmation of the declaration for the top post's link.
+    const approveButton = screen.getByRole("button", { name: /Open as draft trend/ })
+    expect(approveButton).toBeDisabled()
+    expect(await screen.findByText("I confirm that I hold the rights to this content.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("checkbox", { name: /I confirm the declaration/ }))
+    await waitFor(() => expect(approveButton).toBeEnabled())
+    fireEvent.click(approveButton)
+    await waitFor(() => expect(fakeRights.confirm).toHaveBeenCalledWith({ url: "https://www.tiktok.com/@a/video/1", declarationVersion: 1 }))
+    await waitFor(() => expect(fake.approve).toHaveBeenCalledWith("c1", { confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" }))
     expect(await screen.findByText("trend editor")).toBeInTheDocument()
   })
 
+  it("a declaration that fails to load says so and offers another try; the button stays off", async () => {
+    fake.candidate.mockResolvedValue(full({ topPost: TOP_POST }))
+    // The query retries once on its own; both reads fail here.
+    fakeRights.declaration.mockRejectedValue(new Error("Network down"))
+    renderAt("/admin/trend-radar/c1")
+    await screen.findByRole("heading", { name: "Phone on the Train" })
+    // The query's one retry waits a second before the error shows.
+    expect(await screen.findByText("Network down", {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Open as draft trend/ })).toBeDisabled()
+    fakeRights.declaration.mockResolvedValue({ version: 1, text: "I confirm that I hold the rights to this content." })
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(await screen.findByText("I confirm that I hold the rights to this content.")).toBeInTheDocument()
+  })
+
+  it("a confirmation that cannot be recorded stops the approve", async () => {
+    fake.candidate.mockResolvedValue(full({ topPost: TOP_POST }))
+    fakeRights.confirm.mockRejectedValue(new Error("The declaration changed; read the current text and confirm again."))
+    renderAt("/admin/trend-radar/c1")
+    await screen.findByText("I confirm that I hold the rights to this content.")
+    fireEvent.click(screen.getByRole("checkbox", { name: /I confirm the declaration/ }))
+    await waitFor(() => expect(screen.getByRole("button", { name: /Open as draft trend/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: /Open as draft trend/ }))
+    const { toast } = await import("sonner")
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("The declaration changed; read the current text and confirm again."))
+    expect(fake.approve).not.toHaveBeenCalled()
+  })
+
+  it("a candidate with no top post is approved without a confirmation", async () => {
+    renderAt("/admin/trend-radar/c1")
+    await screen.findByRole("heading", { name: "Phone on the Train" })
+    expect(screen.queryByRole("checkbox", { name: /I confirm the declaration/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Open as draft trend/ }))
+    await waitFor(() => expect(fake.approve).toHaveBeenCalledWith("c1", {}))
+    expect(fakeRights.confirm).not.toHaveBeenCalled()
+  })
+
   it("Keep watching sends the candidate back; a failed approve says why", async () => {
+    fake.candidate.mockResolvedValue(full({ topPost: TOP_POST }))
     renderAt("/admin/trend-radar/c1")
     await screen.findByRole("heading", { name: "Phone on the Train" })
     fireEvent.click(screen.getByRole("button", { name: "Keep watching" }))
     await waitFor(() => expect(fake.watch).toHaveBeenCalledWith("c1"))
     fake.approve.mockRejectedValue(new Error("A trend with this name exists already"))
+    await screen.findByText("I confirm that I hold the rights to this content.")
+    fireEvent.click(screen.getByRole("checkbox", { name: /I confirm the declaration/ }))
+    await waitFor(() => expect(screen.getByRole("button", { name: /Open as draft trend/ })).toBeEnabled())
     fireEvent.click(screen.getByRole("button", { name: /Open as draft trend/ }))
     const { toast } = await import("sonner")
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("A trend with this name exists already"))

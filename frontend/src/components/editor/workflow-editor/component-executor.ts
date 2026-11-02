@@ -8,11 +8,13 @@ import {
 } from "@nodaro/shared/apps"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
+import { updateQueueInfoIfChanged } from "./node-queue-info"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { shouldAbandonNode } from "./abandon-guard"
 import { RUN_START_RESET } from "./poll-job"
 import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection"
 import { ComponentWaitDeadline } from "./component-wait"
+import { QueuedPollClock } from "@/lib/queued-poll-clock"
 import { tx } from "@/lib/i18n"
 import { executionErrorText } from "@/lib/execution-error-text"
 
@@ -112,13 +114,15 @@ export async function executeComponent(
     updateNodeData(node.id, { currentJobId: jobId })
 
     // Poll wrapper job — for 30 minutes, or as long as the server allows when
-    // the run renders something long inside (ComponentWaitDeadline).
+    // the run renders something long inside (ComponentWaitDeadline). The time
+    // the wrapper job is seen waiting for a free slot (`queued`) does not count.
     const startTime = Date.now()
     const deadline = new ComponentWaitDeadline(jobId)
+    const queued = new QueuedPollClock(startTime)
     let lastProgress = -1
     let pollFailures = 0
 
-    while (!(await deadline.reached(Date.now() - startTime))) {
+    while (!(await deadline.reached(queued.countedMs(startTime)))) {
       if (ctx.isWorkflowStale()) throw new Error("Workflow changed during execution")
 
       // A check that cannot reach the server is not the component failing: it
@@ -128,6 +132,7 @@ export async function executeComponent(
       try {
         job = await getJobStatusLean(jobId)
       } catch (err) {
+        queued.observe(undefined)
         pollFailures++
         if (shouldStopPolling(err, pollFailures, { nodeId: node.id, jobId })) {
           throw new Error(jobGoneMessage())
@@ -136,6 +141,9 @@ export async function executeComponent(
         continue
       }
       pollFailures = 0
+      queued.observe(job.status)
+      // The queue badge, as getJobStatusLeanForNode keeps it for the other loops.
+      updateQueueInfoIfChanged(node.id, jobId, job, useWorkflowStore.getState())
       clearJobConnectionLost({ nodeId: node.id, jobId })
 
       if (

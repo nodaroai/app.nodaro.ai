@@ -357,6 +357,8 @@ export const queryKeys = {
       ["admin", "reports", page, status ?? ""] as const,
     alerts: () => ["admin", "alerts"] as const,
     settings: () => ["admin", "settings"] as const,
+    /** Admin → Settings → Content rights: the import source policies (migration 578). */
+    importSources: () => ["admin", "import-sources"] as const,
     messageTemplates: () => ["admin", "message-templates"] as const,
     userMessages: (userId: string) =>
       ["admin", "user-messages", userId] as const,
@@ -430,6 +432,8 @@ export const queryKeys = {
     trendRadarCandidates: (status: string, sort: string) => ["admin", "trend-radar", "candidates", status, sort] as const,
     trendRadarCandidate: (id: string) => ["admin", "trend-radar", "candidate", id] as const,
     trendRadarSettings: () => ["admin", "trend-radar", "settings"] as const,
+    /** The content rights declaration an admin confirms before a candidate's top post is downloaded. */
+    trendRadarDeclaration: () => ["admin", "trend-radar", "declaration"] as const,
     /** Admin → Nodaro Motion: the face masking per engine. */
     nodaroMotionMasking: () => ["admin", "nodaro-motion", "masking"] as const,
     /** A trend's engine prompt, as the engine reads the saved draft at `revision` (each write moves it, so a draft save refreshes it). */

@@ -6,6 +6,16 @@
 // its lease would be handed that lease, and the video job's own release would
 // then free the slot the render is running in.
 //
+// That ordering holds only where limits can be turned on. While they are
+// locked (worker-admit.ts admitWithoutWaiting) the video job's admission is
+// fired, and so is its hand-over: handOffConcurrencySlot returns at once and
+// the release reaches the gate whenever the admission has landed — possibly
+// after the render was enqueued. Under a slow Redis the render's re-admission
+// can then find the video job's lease still held, take it as `foreign` and run
+// holding none of its own, and the hand-over frees that lease: the render runs
+// uncounted. An undercount for the render's run, never a leaked lease or a
+// slot freed twice.
+//
 // No imports: the handlers reach it without pulling in the admission module.
 
 type HandOff = () => Promise<void>

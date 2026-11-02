@@ -17,6 +17,7 @@
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
 import { composeSet } from "./unit-compose"
+import { MAX_QUEUED_CREDIT_MS } from "./queued-poll-clock"
 
 /** Stuck-job horizon for an ordinary single-node Run: 30 minutes. (It was set
  *  to mirror the backend `NODE_TIMEOUT_MS` when that was 30 minutes; the
@@ -101,6 +102,20 @@ interface SingleNodeState {
   /** Backend sidecar (`NodeExecutionState.awaitingReview`) — never a status
    *  member, so nothing that switches on status has to learn a new case. */
   awaitingReview?: boolean
+  /** Backend sidecar: the job waits for a free concurrency slot (`queued`,
+   *  which the status reports as `pending`). Present only when true. */
+  queued?: boolean
+  /** With `queued`: whole seconds it has waited, from its lane stamp (absent
+   *  when the server could not read one). */
+  waitedSeconds?: number
+}
+
+/** The time a waiting job's restore horizon is extended by: the time it has
+ *  waited for a slot, as the server measured it, up to MAX_QUEUED_CREDIT_MS;
+ *  nothing for a job not waiting or with no figure. */
+function queuedCreditMs(state: SingleNodeState | undefined): number {
+  const seconds = state?.queued === true ? state.waitedSeconds : undefined
+  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? Math.min(MAX_QUEUED_CREDIT_MS, seconds * 1000) : 0
 }
 
 /** The (single) nodeState of a single-node job summary, or undefined. */
@@ -169,9 +184,16 @@ export function collectRestorableSingleNodeJobs(
     // it again and pays for a second reservation while the first is still
     // parked. The backend's own hold-expiry sweep terminalizes it at the TTL,
     // and the restored poll ends on that write like any other terminal one.
+    //
+    // A job WAITING FOR A FREE SLOT (the `queued` sidecar) is not stuck either:
+    // its horizon is extended by the time it has waited (`waitedSeconds`, from
+    // its lane stamp), up to the most queued time any clock credits
+    // (lib/queued-poll-clock.ts) — as every editor clock extends by the time
+    // it saw a job queued. Time it spent `pending` counts as before.
     const held = isHeld(state)
     const ageMs = nowMs - new Date(item.createdAt).getTime()
-    if (!held && Number.isFinite(ageMs) && ageMs > restoreMaxAgeMs(node.type)) continue
+    const horizonMs = restoreMaxAgeMs(node.type) + queuedCreditMs(state)
+    if (!held && Number.isFinite(ageMs) && ageMs > horizonMs) continue
 
     seen.add(nodeId)
     out.push({

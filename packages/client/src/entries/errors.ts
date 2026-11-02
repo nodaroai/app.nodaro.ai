@@ -11,6 +11,8 @@ export {
   ForbiddenError,
   ModelUnavailableError,
   MODEL_UNAVAILABLE_CODES,
+  ImportRefusedError,
+  IMPORT_REFUSAL_CODES,
   NotFoundError,
   RateLimitedError,
   InsufficientCreditsError,
@@ -33,4 +35,4 @@ export {
   throwFromResponse,
 } from "../errors.js"
 
-export type { CreditCapCode, HeldFinalRun, ModelUnavailableCode, WorkflowConflictCode } from "../errors.js"
+export type { CreditCapCode, HeldFinalRun, ImportRefusalCode, ModelUnavailableCode, WorkflowConflictCode } from "../errors.js"

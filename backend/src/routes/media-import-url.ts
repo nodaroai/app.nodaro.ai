@@ -3,6 +3,8 @@ import { z } from "zod"
 import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { importImageFromUrl } from "../lib/media-import.js"
+import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
+import { recordEvent } from "../lib/content-rights.js"
 
 /**
  * POST /v1/media/import-url — import a remote IMAGE into the caller's storage.
@@ -12,20 +14,31 @@ import { importImageFromUrl } from "../lib/media-import.js"
  * lands it on our R2 (which serves CORS), after which it behaves exactly like
  * an upload: crop it, analyze it, delete it via /v1/media/delete.
  *
- * Body:      { url: string }   (http(s); safeUrlSchema + safeFetch SSRF gates)
+ * An import of a link, so an ENGINE of the import gate (`lib/import-gate.ts`):
+ * the site's policy and the content rights confirmation are checked before
+ * anything is fetched (403 with the gate's code), the confirmation spent
+ * right before the fetch (the lib's `beforeFetch`), and the import's end
+ * noted on it. A fetch that fails afterwards has spent the confirmation: the
+ * one-use lock is atomic, so every spend has an attempt behind it.
+ *
+ * Body:      { url: string, confirmationId?: string }   (http(s); safeUrlSchema + safeFetch SSRF gates)
  * Response:  { data: { url, thumbnailUrl, assetId, mimeType, sizeBytes,
  *              filename, width, height } } — width/height are the decoded
  *              pixel size (0 when it could not be read).
  * Errors:    400 validation_error (not an image / bad url),
+ *            403 import_source_disabled | rights_confirmation_* (the gate),
  *            413 file_too_large | storage_limit_exceeded,
  *            422 fetch_failed (unreachable / non-2xx origin).
  *
  * All fetch/validation/storage semantics live in lib/media-import.ts; this
- * route only authenticates, validates, and formats.
+ * route only authenticates, validates, gates, and formats.
  */
 
 export const mediaImportUrlBody = z.object({
   url: safeUrlSchema,
+  // The content rights confirmation this import is made under
+  // (`POST /v1/content-rights/confirm`). Optional until `content_rights_required` is on.
+  confirmationId: z.string().uuid().optional(),
 })
 
 export async function mediaImportUrlRoutes(app: FastifyInstance) {
@@ -44,7 +57,20 @@ export async function mediaImportUrlRoutes(app: FastifyInstance) {
       })
     }
 
-    const result = await importImageFromUrl(userId, parsed.data.url)
+    const { url, confirmationId } = parsed.data
+    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
+    let result: Awaited<ReturnType<typeof importImageFromUrl>>
+    try {
+      await requireImportAllowed(url, rights)
+      result = await importImageFromUrl(userId, url, { beforeFetch: () => spendImportConfirmation(url, rights) })
+    } catch (e) {
+      if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      throw e
+    }
+    if (confirmationId) {
+      const detail = result.ok ? { kind: "download_completed" as const, detail: { url: result.url } } : { kind: "download_failed" as const, detail: { code: result.code } }
+      recordEvent({ confirmationId, ...detail, lane: "route", requestId: req.id }).catch(() => undefined)
+    }
     if (!result.ok) {
       return reply.status(result.status).send({
         error: { code: result.code, message: result.message, ...(result.details ?? {}) },

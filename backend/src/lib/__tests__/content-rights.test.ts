@@ -21,16 +21,22 @@ vi.mock("../app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({ cont
 
 vi.mock("../supabase.js", () => {
   const table = (name: string) => {
-    const q: Record<string, unknown> & { _eq?: [string, unknown]; _order?: string } = {}
+    const q: Record<string, unknown> & { _eq?: [string, unknown]; _eqs: Array<[string, unknown]>; _order?: string } = { _eqs: [] }
     const chain = {
       select: () => chain,
       order: () => chain,
       limit: () => chain,
       eq: (col: string, value: unknown) => {
         q._eq = [col, value]
+        q._eqs = [...q._eqs, [col, value]]
         return chain
       },
       maybeSingle: async () => {
+        if (name === "rights_events") {
+          const wanted = q._eqs.find(([col]) => col === "confirmation_id")?.[1]
+          const consumed = mem.events.find((e) => e.confirmation_id === wanted && e.kind === "consumed")
+          return { data: consumed ? { request_id: consumed.request_id ?? null } : null, error: null }
+        }
         if (name === "rights_declarations") {
           const top = [...mem.declarations].sort((a, b) => b.version - a.version)[0] ?? null
           return { data: top, error: null }
@@ -174,6 +180,25 @@ describe("requireRightsConfirmation", () => {
     expect(mem.events.filter((e) => e.kind === "consumed")).toHaveLength(0)
     await consumeRightsConfirmation({ confirmationId: made.id, url, lane: "route" })
     await expect(consumeRightsConfirmation({ confirmationId: made.id, url, lane: "route" })).rejects.toMatchObject({ code: "rights_confirmation_used" })
+  })
+
+  it("a spend is idempotent per request: the same job's retry passes, another request or none is refused", async () => {
+    const made = await createConfirmation({ userId: "u1", url, declarationVersion: 1, lane: "editor" })
+    await consumeRightsConfirmation({ confirmationId: made.id, url, lane: "route", requestId: "job-1" })
+    await expect(consumeRightsConfirmation({ confirmationId: made.id, url, lane: "route", requestId: "job-1" })).resolves.toBeUndefined()
+    expect(mem.events.filter((e) => e.kind === "consumed")).toHaveLength(1)
+    await expect(consumeRightsConfirmation({ confirmationId: made.id, url, lane: "route", requestId: "job-2" })).rejects.toMatchObject({ code: "rights_confirmation_used" })
+    await expect(consumeRightsConfirmation({ confirmationId: made.id, url, lane: "route" })).rejects.toMatchObject({ code: "rights_confirmation_used" })
+    // A spend recorded with no request id is nobody's retry.
+    const other = await createConfirmation({ userId: "u1", url, declarationVersion: 1, lane: "editor" })
+    await consumeRightsConfirmation({ confirmationId: other.id, url, lane: "route" })
+    await expect(consumeRightsConfirmation({ confirmationId: other.id, url, lane: "route", requestId: "job-1" })).rejects.toMatchObject({ code: "rights_confirmation_used" })
+  })
+
+  it("a refusal is final for a worker: it is a deterministic job error", async () => {
+    const { isDeterministicJobError } = await import("../deterministic-job-error.js")
+    expect(isDeterministicJobError(new ContentRightsError("rights_confirmation_required", "x"))).toBe(true)
+    expect(isDeterministicJobError(new Error("yt-dlp failed", { cause: new ContentRightsError("rights_confirmation_used", "x") }))).toBe(true)
   })
 
   it("the error is a ContentRightsError with its code", async () => {

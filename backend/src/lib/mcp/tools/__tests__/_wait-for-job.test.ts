@@ -2,11 +2,20 @@ import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const maybeSingle = vi.fn()
-  return { maybeSingle, select: vi.fn((_columns: string) => ({ eq: vi.fn(() => ({ maybeSingle })) })) }
+  return {
+    maybeSingle,
+    select: vi.fn((_columns: string) => ({ eq: vi.fn(() => ({ maybeSingle })) })),
+    queueInfoFor: vi.fn(async (_rows: Array<{ id: string; queuedAt: string | null }>) => new Map<string, unknown>()),
+  }
 })
 
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn(() => ({ select: mocks.select })) },
+}))
+
+vi.mock("../../../concurrency-lanes/queue-info.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../concurrency-lanes/queue-info.js")>()),
+  queueInfoFor: mocks.queueInfoFor,
 }))
 
 import { waitForJob } from "../_wait-for-job.js"
@@ -282,5 +291,56 @@ describe("waitForJob — the child's error_hint", () => {
     expectTypeOf<PluginJobErrorHint>().toEqualTypeOf<ErrorHint>()
     expectTypeOf<PluginWaitForJobResult["errorHint"]>().toEqualTypeOf<PluginJobErrorHint | null | undefined>()
     expectTypeOf<Awaited<ReturnType<typeof waitForJob>>["errorHint"]>().toExtend<PluginWaitForJobResult["errorHint"]>()
+  })
+})
+
+// The MCP wait_for_job tool answers a job still waiting for a slot with its
+// place in line: on a timeout of a job last seen `queued`, and only when the
+// caller asks (`withQueue`), the wait reads the queue once onto lastSeen.
+describe("waitForJob — a queued job's place in line", () => {
+  const QUEUE = { lane: "provider", position: 3, limit: 4, running: 4, reason: "user_lane", waitedSeconds: 30, upgradeHint: null }
+
+  beforeEach(() => {
+    mocks.maybeSingle.mockReset()
+    mocks.queueInfoFor.mockReset()
+    mocks.queueInfoFor.mockResolvedValue(new Map())
+  })
+
+  const STAMP = "2026-10-30T12:00:00.000Z"
+  const queuedRow = { id: "job-q", status: "queued", output_data: null, job_type: "generate-video", error_message: null, lane_queued_at: STAMP }
+
+  it("a queued job's timeout carries its queue on lastSeen, read once, its wait counted from the row's lane stamp", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: queuedRow, error: null })
+    mocks.queueInfoFor.mockResolvedValue(new Map([["job-q", QUEUE]]))
+    const result = await waitForJob({ jobId: "job-q", timeoutMs: 1, withQueue: true })
+    expect(result.status).toBe("timeout")
+    expect(result.lastSeen).toMatchObject({ status: "queued", queue: QUEUE })
+    expect(mocks.queueInfoFor).toHaveBeenCalledTimes(1)
+    expect(mocks.queueInfoFor).toHaveBeenCalledWith([{ id: "job-q", queuedAt: STAMP }])
+    // The place-in-line read names the stamp.
+    expect(mocks.select.mock.calls.at(-1)![0]).toContain("lane_queued_at")
+  })
+
+  it("a job queued with no lane stamp (not written by the park) is not waiting: no gate read, no queue key", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: { ...queuedRow, lane_queued_at: null }, error: null })
+    const result = await waitForJob({ jobId: "job-q", timeoutMs: 1, withQueue: true })
+    expect(result.status).toBe("timeout")
+    expect(result.lastSeen).not.toHaveProperty("queue")
+    expect(mocks.queueInfoFor).not.toHaveBeenCalled()
+  })
+
+  it("a queued job the gate has no answer for carries no queue key", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: queuedRow, error: null })
+    const result = await waitForJob({ jobId: "job-q", timeoutMs: 1, withQueue: true })
+    expect(result.status).toBe("timeout")
+    expect(result.lastSeen).not.toHaveProperty("queue")
+  })
+
+  it("never asks the gate for a job not last seen queued, nor for a caller that did not ask", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: { status: "processing", output_data: null, job_type: "generate-video", error_message: null }, error: null })
+    expect((await waitForJob({ jobId: "job-p", timeoutMs: 1, withQueue: true })).lastSeen).not.toHaveProperty("queue")
+    mocks.maybeSingle.mockResolvedValue({ data: { status: "queued", output_data: null, job_type: "generate-video", error_message: null }, error: null })
+    expect((await waitForJob({ jobId: "job-q", timeoutMs: 1 })).lastSeen).not.toHaveProperty("queue")
+    expect(mocks.queueInfoFor).not.toHaveBeenCalled()
   })
 })

@@ -76,7 +76,16 @@ vi.mock("@/ee/billing/credits.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+// Concurrency lanes: a real gate over the JS twin of its scripts (a fresh store per test).
+const lanes = vi.hoisted(() => ({ gate: null as unknown }))
+vi.mock("@/lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
+
 import { apiTokenRoutes } from "../api-tokens.js"
+import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"
+import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
+import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
+import { resetLaneColumnsForTests } from "../../lib/concurrency-lanes/columns.js"
+import { resetQueueInfoWarningForTests } from "../../lib/concurrency-lanes/queue-info.js"
 import { supabase } from "../../lib/supabase.js"
 import {
   __setDeploymentPayerForTests,
@@ -94,6 +103,9 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  const laneStore = makeFakeLaneStore()
+  lanes.gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(laneStore) })
+  resetLaneColumnsForTests()
   // Module-level state, not a mock: vi.clearAllMocks() does not reset it,
   // so every test starts on a pristine (inert) payer seam.
   __resetDeploymentPayerForTests()
@@ -764,6 +776,117 @@ describe("GET /v1/api/status and /v1/api/result — a key limited to some workfl
     runOf(ALLOWED)
     expect((await get(`/v1/api/status/${RUN}`)).statusCode).toBe(200)
     expect((await get(`/v1/api/result/${RUN}`)).statusCode).toBe(200)
+  })
+})
+
+describe("GET /v1/api/status and POST /v1/api/run?wait=true — the queue field", () => {
+  // A run waiting for its run slot stays `pending` and says where it stands —
+  // the only status read a run started with an API key has.
+  const WORKFLOW_ID = "00000000-0000-4000-8000-000000000042"
+  const RUN = "00000000-0000-4000-8000-0000000000e1"
+  const STAMP = "2026-01-01T00:00:05Z"
+  const runRow = (over: Record<string, unknown> = {}) => ({
+    id: RUN, workflow_id: WORKFLOW_ID, status: "pending", node_states: {}, total_nodes: 1, completed_nodes: 0, failed_nodes: 0,
+    total_credits_used: 0, error_message: null, created_at: STAMP, completed_at: null, lane_queued_at: STAMP, ...over,
+  })
+  const runMeta = (jobId: string): LaneEntryMeta => ({
+    jobId, userId: TEST_USER_ID, payer: "workspace:W1", lane: "run", provider: null, source: "api", sourceDetail: null,
+    jobType: "workflow-execution", model: null, queue: "workflow-orchestration", bullJobId: jobId,
+  })
+  /** The run waits behind another one in a line of one. */
+  async function parkRun() {
+    const gate = lanes.gate as ConcurrencyGate
+    await gate.setEnforced(true)
+    await gate.acquire({ meta: runMeta("other-run"), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+    await gate.acquire({ meta: runMeta(RUN), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+  }
+  /** Every read answers `executionRow` for workflow_executions (and the workflow for workflows); records the columns asked for. */
+  function mockReads(executionRow: Record<string, unknown>, missingStamp = false) {
+    mockResolveToken.mockResolvedValue({ id: TEST_TOKEN_ID, userId: TEST_USER_ID, workflowIds: [], rateLimit: 60, tokenHash: "th-queue", workspaceId: null })
+    const selects: string[] = []
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      let cols = ""
+      const chain: Record<string, unknown> = {}
+      for (const m of ["eq", "in", "is", "order", "limit", "lt", "insert"]) chain[m] = vi.fn().mockReturnValue(chain)
+      chain.select = vi.fn((c: string) => {
+        cols = c ?? ""
+        if (table === "workflow_executions") selects.push(cols)
+        return chain
+      })
+      chain.single = vi.fn(async () => {
+        if (table === "workflows") return { data: { id: WORKFLOW_ID, nodes: [{ id: "text-1", type: "text-prompt", data: { label: "Prompt", text: "a cat" } }], edges: [] }, error: null }
+        if (missingStamp && cols.includes("lane_queued_at")) return { data: null, error: { code: "42703", message: "column workflow_executions.lane_queued_at does not exist" } }
+        return { data: executionRow, error: null }
+      })
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+      return chain as never
+    })
+    return selects
+  }
+  const getStatus = () => app.inject({ method: "GET", url: `/v1/api/status/${RUN}`, headers: { authorization: "Bearer ndr_test_token" } })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("a waiting run reports queue while staying pending", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(Date.parse(STAMP) + 30_000)
+    await parkRun()
+    mockReads(runRow())
+    const res = await getStatus()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ executionId: RUN, status: "pending" })
+    expect(res.json().queue).toEqual({ lane: "run", position: 1, limit: 1, running: 1, reason: "user_lane", waitedSeconds: 30, upgradeHint: "workspace" })
+    expect(res.json()).not.toHaveProperty("lane_queued_at")
+  })
+
+  it("a run the lanes never stamped, or a running one, has no queue and makes no gate call", async () => {
+    const describeWaits = vi.spyOn(lanes.gate as ConcurrencyGate, "describeWaits")
+    for (const row of [runRow({ lane_queued_at: null }), runRow({ status: "running" })]) {
+      mockReads(row)
+      const res = await getStatus()
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).not.toHaveProperty("queue")
+    }
+    expect(describeWaits).not.toHaveBeenCalled()
+  })
+
+  it("a gate that fails: the status still answers 200, without queue", async () => {
+    await parkRun()
+    vi.spyOn(lanes.gate as ConcurrencyGate, "describeWaits").mockRejectedValue(new Error("Redis said no"))
+    resetQueueInfoWarningForTests()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    mockReads(runRow())
+    const res = await getStatus()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ executionId: RUN, status: "pending" })
+    expect(res.json()).not.toHaveProperty("queue")
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it("a database without the lane column answers the status without it, and stops naming it", async () => {
+    const selects = mockReads(runRow({ lane_queued_at: undefined }), true)
+    expect((await getStatus()).statusCode).toBe(200)
+    expect((await getStatus()).statusCode).toBe(200)
+    expect(selects.map((c) => c.includes("lane_queued_at"))).toEqual([true, false, false])
+  })
+
+  it("?wait=true that times out while the run waits for its slot: the 202 carries queue", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "Date"] })
+    await parkRun()
+    mockReads(runRow())
+    const pending = app.inject({
+      method: "POST",
+      url: "/v1/api/run?wait=true&timeout=5",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID },
+    })
+    let res: Awaited<typeof pending> | undefined
+    void pending.then((r) => { res = r })
+    for (let i = 0; i < 20 && !res; i++) await vi.advanceTimersByTimeAsync(1_000)
+    expect(res?.statusCode).toBe(202)
+    expect(res?.json()).toMatchObject({ executionId: RUN, status: "pending", queue: { lane: "run", position: 1, reason: "user_lane", upgradeHint: "workspace" } })
   })
 })
 

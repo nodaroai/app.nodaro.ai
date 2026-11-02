@@ -133,7 +133,7 @@ describe("yt-dlp admission census", () => {
    * 1. The library's call sites: file -> function -> does its options object encode?
    * Only runs that COPY streams may use the library (`encodes: false`): it stops its
    * child by Node's `signal`, which cannot reach yt-dlp's own ffmpeg. The audio lanes
-   * (`routes/youtube-audio.ts`, `workers/shared.ts`) run through `runYtDlpOptions`.
+   * (`routes/youtube-audio.ts`, `workers/download-audio.ts`) run through `runYtDlpOptions`.
    */
   const LIBRARY_LANES: Record<string, { fn: string; calls: number; encodes: boolean; why: string }> = {
     "providers/video/trim-audio.ts": {
@@ -226,7 +226,7 @@ describe("yt-dlp admission census", () => {
   /** 5. The options-object lanes that ENCODE run through `runYtDlpOptions`: file -> function. */
   const OPTIONS_LANES: Record<string, string> = {
     "routes/youtube-audio.ts": "youtubeAudioRoutes",
-    "workers/shared.ts": "downloadAudioToR2",
+    "workers/download-audio.ts": "downloadAudioToR2",
   }
 
   it("the audio lanes encode, run through runYtDlpOptions, and no longer touch the library", () => {
@@ -260,7 +260,7 @@ describe("yt-dlp admission census", () => {
     "providers/video/ytdlp-ffmpeg-limits.ts": "the thread pin and the reservation of a transcoding run: they read the classifier's flags (the funnel applies them)",
     "providers/video/trim-audio.ts": "library options (LIBRARY_LANES): merge only",
     "routes/youtube-audio.ts": "options object for runYtDlpOptions: audio mp3 encode (ENCODES audio, admitted, group-killed at the hold)",
-    "workers/shared.ts": "options object for runYtDlpOptions: audio mp3 encode (ENCODES audio, admitted, group-killed at the hold)",
+    "workers/download-audio.ts": "options object for runYtDlpOptions: audio mp3 encode (ENCODES audio, admitted, group-killed at the hold)",
     "lib/private-plugins/toolkit-lanes.ts": "names the toolkit member `extractAudio` (an ffmpeg member's concurrency lane), not a yt-dlp option: starts no yt-dlp run",
   }
   /** Flags (and their library spellings) only yt-dlp understands. */

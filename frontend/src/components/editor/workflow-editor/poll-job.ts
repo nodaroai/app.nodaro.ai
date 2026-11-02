@@ -35,6 +35,8 @@ import {
   updateAwaitingReviewIfChanged,
   type ExecutionContext,
 } from "./types";
+import { updateQueueInfoIfChanged } from "./node-queue-info";
+import { QueuedPollClock } from "@/lib/queued-poll-clock";
 
 /**
  * `getJobStatusLean` plus the ONE side effect every node-owning poll loop
@@ -54,6 +56,10 @@ import {
  * half is `jobAwaitingReview: undefined` on every terminal patch, plus the
  * overlay's own `executionStatus === "running"` gate.
  *
+ * `queueInfo` (where a job waiting for a free slot stands in line, read by
+ * BaseNode's queue badge) is kept here for the same reason: one write for
+ * every loop, cleared by the first read that finds the job out of `queued`.
+ *
  * The same one-place reasoning covers `jobConnectionLost`: every loop's failed
  * check goes through `shouldStopPolling` (poll-connection.ts), which raises the
  * flag, and the first check that gets through clears it here.
@@ -62,6 +68,9 @@ export async function getJobStatusLeanForNode(jobId: string, nodeId: string) {
   const job = await getJobStatusLean(jobId); // raw-status-ok: this IS the wrapper
   const { updateNodeData } = useWorkflowStore.getState();
   updateAwaitingReviewIfChanged(nodeId, job.status === "pending_review", updateNodeData);
+  // Where the job stands in line while it waits for a free slot — the queue
+  // badge — gone the moment a read finds it anything but `queued`.
+  updateQueueInfoIfChanged(nodeId, jobId, job, useWorkflowStore.getState());
   clearJobConnectionLost({ nodeId, jobId });
   return job;
 }
@@ -97,9 +106,12 @@ export async function pollJobOutputWithEnd(
 ): Promise<{ output: Record<string, unknown>; completedAt?: string }> {
   const budgetMs = opts.budgetMs ?? JOB_POLL_DEFAULT_BUDGET_MS;
   const startedAt = Date.now();
+  // The budget is extended by the time the job is seen waiting for a free
+  // slot (`queued`): waiting in line never uses it up.
+  const queued = new QueuedPollClock(startedAt);
   let attempt = 0;
   let transientFailures = 0;
-  while (Date.now() - startedAt < budgetMs) {
+  while (queued.countedMs(startedAt) < budgetMs) {
     if (opts.signal?.aborted) {
       void cancelJob(jobId).catch(() => {});
       throw new DOMException("Aborted", "AbortError");
@@ -113,7 +125,9 @@ export async function pollJobOutputWithEnd(
       // The wrapper (not the raw read) so a job HELD for review paints
       // BaseNode's "Awaiting review" overlay instead of a bare spinner.
       job = await getJobStatusLeanForNode(jobId, nodeId);
+      queued.observe(job.status);
     } catch (err) {
+      queued.observe(undefined);
       transientFailures += 1;
       if (shouldStopPolling(err, transientFailures, { nodeId, jobId })) {
         throw new Error(jobGoneMessage());
@@ -214,6 +228,8 @@ export const RUN_START_RESET = {
   jobConnectionLost: undefined,
   // Nor the chip of a run that skipped this node for want of input.
   __runSkipReason: undefined,
+  // Nor the previous run's place in line.
+  queueInfo: undefined,
 } as const;
 
 export function pollJobToCompletion(

@@ -32,6 +32,7 @@ import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { NavigateWithGuardContext } from "@/hooks/use-navigate-with-guard";
 import { ExecutionsTab } from "../executions-tab";
 import { useTriggeredRunFollow } from "./use-triggered-run-follow";
+import { useLaneSizesPrefetch } from "./use-lane-sizes-prefetch";
 import { followTriggeredRun, paintEndedTriggeredRun } from "./follow-triggered-run";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
@@ -626,6 +627,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
   // Workflow loading and lifecycle
   // ---------------------------------------------------------------------------
+
+  // The concurrency line sizes a List fan-out reads, cached before any run
+  // (not read-only: no run can start there, as the executions query below).
+  useLaneSizesPrefetch(followWorkflowId, !isReadOnly);
 
   // Set the active workflow ID so single-node runs tag their jobs with it
   useEffect(() => {

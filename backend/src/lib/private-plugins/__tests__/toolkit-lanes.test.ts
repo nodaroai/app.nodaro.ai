@@ -4,9 +4,11 @@
 // member call's own funnel calls run inside its slot (one acquire, never two),
 // a job's leaf slot covers it, and with the lanes off nothing changes.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-// These tests wait for slots, so they run on the path where limits can be
-// turned on (test-only: this release locks them, and a locked take never waits).
-vi.mock("../../concurrency-lanes/enforcement-available.js", () => ({ LANES_ENFORCEMENT_AVAILABLE: true }))
+// The member calls run in both modes: where limits can be turned on (test-only,
+// takes are waited for) and locked, as this release ships (a take is fired and
+// counted, never waited for). Waiting itself is tested on the first only.
+const availability = vi.hoisted(() => ({ on: true }))
+vi.mock("../../concurrency-lanes/enforcement-available.js", () => ({ get LANES_ENFORCEMENT_AVAILABLE() { return availability.on } }))
 import { ConcurrencyGate, type WakeTarget } from "../../concurrency-lanes/gate.js"
 import { primaryProviderOfLlm } from "../../concurrency-lanes/provider-of.js"
 import type { LaneSizes } from "../../concurrency-lanes/types.js"
@@ -102,7 +104,18 @@ async function fill(lane: LeafLane): Promise<string> {
   return r.leaseId
 }
 
+/** Poll until `check` holds (a fired take lands when it lands: never count microtask turns). */
+async function until(check: () => Promise<boolean> | boolean): Promise<void> {
+  const end = Date.now() + 3_000
+  while (!(await check())) {
+    if (Date.now() > end) throw new Error("condition not met in time")
+    await new Promise((r) => setTimeout(r, 5))
+  }
+}
+const settle = () => new Promise((r) => setTimeout(r, 20))
+
 beforeEach(async () => {
+  availability.on = true
   const store = makeFakeLaneStore()
   gate = new ConcurrencyGate({ client: () => makeFakeLaneClient(store) })
   refs.gate = gate
@@ -122,7 +135,14 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("toolkit members hold a slot for the whole call", () => {
+describe.each([
+  { available: true, mode: "limits available" },
+  { available: false, mode: "limits locked (this release)" },
+])("toolkit members hold a slot for the whole call ($mode)", ({ available }) => {
+  beforeEach(() => {
+    availability.on = available
+  })
+
   it("a toolkit provider call inside a coordinator job takes a front slot for the whole member call", async () => {
     const tk = buildToolkit()
     const acquire = vi.spyOn(gate, "acquire")
@@ -130,25 +150,31 @@ describe("toolkit members hold a slot for the whole call", () => {
     const r = await runHolding(coordinator, () => tk.providers.textToVideo("castle", "kling-3.0", 5, "16:9"))
     expect(r).toEqual({ url: "https://cdn.test/castle.mp4", taskId: "task-1" })
     // ONE acquire for create → poll → result: the egress's own slot ran inside it.
+    await until(() => release.mock.calls.length === 1)
+    await settle()
     expect(acquire).toHaveBeenCalledTimes(1)
     const call = acquire.mock.calls[0]![0]
     expect(call.mode).toBe("front")
     expect(call.meta).toMatchObject({ lane: "provider", provider: "kie", model: "kling-3.0", jobType: "tk.providers.textToVideo", queue: "inline", userId: "U" })
     expect(call.meta.jobId.startsWith("job-1:call:")).toBe(true)
-    // Held through the poll, released when the member returned.
-    expect(refs.heldWhilePolling).toEqual([1])
+    // Held through the poll (when the take is waited for; a fired one lands when it lands), released once the member returned.
+    if (available) expect(refs.heldWhilePolling).toEqual([1])
     expect(release).toHaveBeenCalledTimes(1)
     expect(release.mock.calls[0]![1]).toBe("completed")
     expect(await runningOf("provider")).toBe(0)
+    expect(laneCounters().ungated).toEqual({})
   })
 
   it("an ffmpeg member and an llm member take one slot of their own lane each", async () => {
     const tk = buildToolkit()
     const acquire = vi.spyOn(gate, "acquire")
+    const release = vi.spyOn(gate, "release")
     await runHolding(coordinator, async () => {
       expect(await tk.ffmpeg.runFfmpeg(["-i", "a"])).toBe("ran -i a")
       expect(await tk.llm.completeStructured({ model: "gemini-3.6-flash", prompt: "p" }, {})).toEqual({ ok: "gemini-3.6-flash" })
     })
+    await until(() => release.mock.calls.length === 2)
+    await settle()
     // The structured call's own llm slot ran inside the member's: two acquires in all, not three.
     expect(acquire.mock.calls.map((c) => [c[0].meta.lane, c[0].meta.jobType, c[0].meta.provider])).toEqual([
       ["local", "tk.ffmpeg.runFfmpeg", "local"],
@@ -156,7 +182,8 @@ describe("toolkit members hold a slot for the whole call", () => {
       // with no LLM key (CI), "kie" / "google" where one is set.
       ["llm", "tk.llm.completeStructured", primaryProviderOfLlm({ modelId: "gemini-3.6-flash", system: "", messages: [] })],
     ])
-    expect(refs.heldWhilePolling).toEqual([1, 1])
+    if (available) expect(refs.heldWhilePolling).toEqual([1, 1])
+    expect(release).toHaveBeenCalledTimes(2)
     expect(await runningOf("local")).toBe(0)
     expect(await runningOf("llm")).toBe(0)
   })
@@ -169,6 +196,7 @@ describe("toolkit members hold a slot for the whole call", () => {
       await tk.ffmpeg.runFfmpeg(["-i", "a"])
       await tk.llm.completeStructured({ model: "gemini-3.6-flash", prompt: "p" }, {})
     })
+    await settle()
     expect(acquire).not.toHaveBeenCalled()
     expect(laneCounters().ungated).toEqual({})
   })
@@ -179,6 +207,7 @@ describe("toolkit members hold a slot for the whole call", () => {
     expect(lanes.memberLaneOf(tk.providers.getVideoTaskStatus)).toBeUndefined()
     const r = await runHolding(coordinator, () => tk.providers.getVideoTaskStatus("task-1"))
     expect(r).toEqual({ state: "succeeded", videoUrl: "https://cdn.test/done.mp4" })
+    await settle()
     expect(acquire).not.toHaveBeenCalled()
   })
 
@@ -186,11 +215,41 @@ describe("toolkit members hold a slot for the whole call", () => {
     const tk = buildToolkit()
     const acquire = vi.spyOn(gate, "acquire")
     await tk.providers.textToVideo("castle", "kling-3.0", 5, "16:9")
+    await settle()
     expect(acquire).not.toHaveBeenCalled()
     // The egress's billed create is part of the member call: not counted again.
     expect(laneCounters().ungated).toEqual({ "tk.providers.textToVideo": 1 })
     // The pass-through hold is no job's: a queue-aware poll under it keeps its plain budget.
     expect(refs.log).toEqual(["waitsAsJob:false"])
+  })
+})
+
+describe("limits locked (this release): a member call never waits for the gate", () => {
+  it("member calls run at once while the gate hangs; each lease is released once, when its take lands", async () => {
+    availability.on = false
+    let answer!: () => void
+    const answered = new Promise<void>((r) => { answer = r })
+    const real = gate.acquire.bind(gate)
+    const acquire = vi.spyOn(gate, "acquire").mockImplementation(async (req) => {
+      await answered
+      return real(req)
+    })
+    const release = vi.spyOn(gate, "release")
+    const tk = buildToolkit()
+    const results = await runHolding(coordinator, () => Promise.all([
+      tk.providers.textToVideo("castle", "kling-3.0", 5, "16:9"),
+      tk.ffmpeg.runFfmpeg(["-i", "a"]),
+      tk.llm.completeStructured({ model: "gemini-3.6-flash", prompt: "p" }, {}),
+    ]))
+    expect(results).toEqual([{ url: "https://cdn.test/castle.mp4", taskId: "task-1" }, "ran -i a", { ok: "gemini-3.6-flash" }])
+    expect(release).not.toHaveBeenCalled()
+    answer()
+    await until(() => release.mock.calls.length === 3)
+    await settle()
+    expect(acquire).toHaveBeenCalledTimes(3)
+    expect(release.mock.calls.map((c) => c[0]).sort()).toEqual(acquire.mock.calls.map((c) => c[0].leaseId).sort())
+    expect(release).toHaveBeenCalledTimes(3)
+    for (const lane of ["provider", "local", "llm"] as const) expect(await runningOf(lane)).toBe(0)
   })
 })
 

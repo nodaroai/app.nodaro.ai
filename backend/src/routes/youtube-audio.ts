@@ -10,12 +10,17 @@ import { ytProxyOption } from "../providers/video/yt-proxy.js"
 import { runYtDlpOptions } from "../providers/video/ytdlp-options-run.js"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
 
 const videoAudioBody = z.object({
   url: safeUrlSchema.refine(
     (url) => isAllowedSocialVideoUrl(url),
     { message: "Must be a link to a video's page" },
   ),
+  // The content rights confirmation this import is made under
+  // (`POST /v1/content-rights/confirm`): checked and spent before the fetch.
+  // Optional until `content_rights_required` is on.
+  confirmationId: z.string().uuid().optional(),
 })
 
 export async function youtubeAudioRoutes(app: FastifyInstance) {
@@ -27,7 +32,32 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { url } = parsed.data
+    const { url, confirmationId } = parsed.data
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+
+    // The site's policy and the rights check (reads) come before anything
+    // else; the confirmation is spent right before yt-dlp runs, below.
+    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
+    try {
+      await requireImportAllowed(url, rights)
+    } catch (e) {
+      if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      throw e
+    }
+
+    // Nothing else can refuse the import now: spend the confirmation, then
+    // fetch. Outside the try below: a spend failure that is not a refusal is
+    // the server's own error, never a "youtube_error" with its text.
+    try {
+      await spendImportConfirmation(url, rights)
+    } catch (e) {
+      if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      throw e
+    }
+
     const outputId = randomUUID()
     // Use %(ext)s template so yt-dlp controls the final extension
     const baseName = `yt-audio-${outputId}`

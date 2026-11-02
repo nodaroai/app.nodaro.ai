@@ -1747,6 +1747,23 @@ to you: do not prompt the user for more parameters and do not re-run the job —
 call `tasks/result` again later, and it completes on approval or fails with a
 policy reason if the review rejects it.
 
+A job reports `status: "queued"` while it is **waiting for a free slot** (your
+plan runs a set number of jobs at once). That is an in-flight status too, not a
+failure: do not re-run the request. When the server can read where the job
+stands, the text payload's `data` carries a `queue` field (the same one the REST
+job status returns, see [Waiting for a slot](../api-integration.md#waiting-for-a-slot))
+and a `guidance` sentence gives its place in line — for example
+`Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting.`
+— followed, when your own line is full and a bigger plan would help, by
+`Need more at once? Upgrade your plan.` (or, for a workspace's line,
+`Need more at once? Ask your workspace owner to upgrade.`). A job waiting
+because the platform is busy reads
+`Waiting — busy across the platform, 3rd in line. Call wait_for_job again to keep waiting.`
+The envelope's `guidance` carries the same sentence. Jobs wait for a slot only
+once an administrator turns concurrency limits on (an admin setting, off by
+default, that cannot be turned on yet in this release); until then no job
+reports `queued` for this reason.
+
 **Input:** `{ job_id: uuid }`
 
 
@@ -1755,7 +1772,7 @@ policy reason if the review rejects it.
 `height`, `outputData`, `input`, `errorMessage`, `credits`, `creditsCharged`,
 `creditsHeld`, `creditsReleased`, `createdAt`, `startedAt`, `completedAt`, plus
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
-job. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
+job, and `guidance` on a job waiting for a free slot. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
 without `input` and without the charge figures).
 
 `width` / `height` are the output's pixel size, present when the job recorded
@@ -1822,6 +1839,16 @@ rather than a result. If the job is still running then, the result has
 generation must not be re-run. A video can take 2–10 minutes, so expect several
 calls (or poll `get_job` every 5–10 s). A held job answers `pending_review` at
 once (do not re-run it).
+
+A job still **waiting for a free slot** (`queued`, see [`get_job`](#get_job))
+also answers `status: "timeout"` when the call's wait ends, but the text says it
+has not started yet and gives its place in line, and the envelope's `guidance`
+carries the same sentence — for example
+`Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting.`
+Waiting is not a failure: call `wait_for_job` again with the same `job_id`, and
+never re-run the generation. When the server cannot read the line at that
+moment, the answer is the plain still-running one above.
+
 ---
 
 ### `diagnose_run`

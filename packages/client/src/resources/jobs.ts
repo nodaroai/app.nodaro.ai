@@ -129,6 +129,48 @@ export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | Inp
  */
 export type CreditStatus = "reserved" | "committed" | "refunded"
 
+/**
+ * Where a job (or a workflow run) that is waiting for a free concurrency slot
+ * stands in line — the `queue` field of a status read. Present ONLY while it
+ * waits (a job's `status` is `queued`); absent on every other read, and when
+ * the server could not read the line at that moment.
+ *
+ * HAND-COPIED MIRROR of `QueueInfo` in the platform's
+ * `backend/src/lib/concurrency-lanes/queue-info.ts` (its `lane`, `reason` and
+ * `upgradeHint` lists are `vocabulary.ts` there). Nothing links the two at
+ * build time: a change there has to be pasted here in the same change, with a
+ * changeset. Treat an unknown `lane` or `reason` like a known one you do not
+ * special-case.
+ */
+export interface JobQueueInfo {
+  /**
+   * The kind of work it waits to run as: `provider` (a call to an AI
+   * provider), `llm` (a text model call), `local` (processing on the
+   * platform's servers) or `run` (a whole workflow run or pipeline).
+   */
+  lane: "provider" | "llm" | "local" | "run"
+  /** Its place in line: `1` runs next. */
+  position: number
+  /** How many of that kind its line runs at once (`0` for a `server_busy` wait). */
+  limit: number
+  /** How many run in that line now (`0` for a `server_busy` wait). */
+  running: number
+  /**
+   * `user_lane`: the line (yours, or the workspace's) is full. `provider_ceiling`:
+   * the provider is busy across the platform. `server_busy`: the server is busy
+   * across the platform.
+   */
+  reason: "user_lane" | "provider_ceiling" | "server_busy"
+  /** How long it has waited so far, in whole seconds, from when it first started waiting for a slot. */
+  waitedSeconds: number
+  /**
+   * What would let more run at once — set only when the line itself is full
+   * (`reason: "user_lane"`): `"plan"`, a bigger plan; `"workspace"`, the
+   * workspace's plan (the work is billed to a workspace). `null` otherwise.
+   */
+  upgradeHint: "plan" | "workspace" | null
+}
+
 /** A job owner's rating of their job — set with {@link JobsResource.rate}. */
 export type JobRating = "good" | "bad"
 
@@ -226,6 +268,12 @@ export interface Job {
    * unrated. Returned by `get()` and `list()`; absent like `favorited`.
    */
   rating?: JobRating | null
+  /**
+   * Where the job stands in line while it waits for a free slot: present on
+   * `get()` only while `status` is `queued` (never on `list()`). See
+   * {@link JobQueueInfo}.
+   */
+  queue?: JobQueueInfo
 }
 
 export interface CancelJobResult {
@@ -351,6 +399,8 @@ export interface JobStatusResult {
   credit_status?: CreditStatus | null
   /** When the job finished, on the server's clock; null until it has. */
   completed_at?: string | null
+  /** Present only while `status` is `queued` (the job waits for a free slot). See {@link JobQueueInfo}. */
+  queue?: JobQueueInfo
 }
 
 export class JobsResource {

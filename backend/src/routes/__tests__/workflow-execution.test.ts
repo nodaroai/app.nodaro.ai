@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------
@@ -150,6 +150,7 @@ const lanes = vi.hoisted(() => ({ gate: null as unknown }))
 vi.mock("@/lib/concurrency-lanes/instance.js", () => ({ concurrencyGate: () => lanes.gate }))
 
 import { workflowExecutionRoutes, toExecutionSummary, jobToExecutionSummary } from "../workflow-execution.js"
+import { resetLaneColumnsForTests } from "../../lib/concurrency-lanes/columns.js"
 import { ConcurrencyGate } from "../../lib/concurrency-lanes/gate.js"
 import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
@@ -1254,6 +1255,114 @@ describe("GET /v1/workflow-executions/:id", () => {
       expect(res.json().data.triggerData).toEqual(inputData)
     })
   })
+
+  // A run waiting for its run slot stays `pending` and says where it stands
+  // (concurrency lanes); a row the lanes never stamped costs the read no gate call.
+  describe("the queue field", () => {
+    const executionRow = (over: Record<string, unknown>) => ({
+      id: TEST_EXEC_ID, workflow_id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, status: "pending", trigger_type: "manual",
+      trigger_data: null, node_states: {}, total_nodes: 2, completed_nodes: 0, failed_nodes: 0, total_credits_used: 0,
+      error_message: null, started_at: null, completed_at: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+      ...over,
+    })
+    const runMeta = (jobId: string): LaneEntryMeta => ({
+      jobId, userId: TEST_USER_ID, payer: "workspace:W1", lane: "run", provider: null, source: "manual", sourceDetail: null,
+      jobType: "workflow-execution", model: null, queue: "workflow-orchestration", bullJobId: jobId,
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it("a waiting execution reports queue while staying pending", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] })
+      vi.setSystemTime(Date.parse("2026-01-01T00:00:47Z"))
+      const gate = lanes.gate as ConcurrencyGate
+      await gate.setEnforced(true)
+      await gate.acquire({ meta: runMeta("other-run"), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+      await gate.acquire({ meta: runMeta(TEST_EXEC_ID), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+      vi.mocked(supabase.from).mockReturnValue(
+        makeRecorder({ data: executionRow({ lane_queued_at: "2026-01-01T00:00:05Z" }), error: null }).proxy as never,
+      )
+      const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}`)
+      expect(res.statusCode).toBe(200)
+      const data = res.json().data
+      expect(data.status).toBe("pending")
+      expect(data.queue).toMatchObject({ lane: "run", position: 1, limit: 1, running: 1, reason: "user_lane", upgradeHint: "workspace" })
+      // Counted from the row's own lane stamp, the clock its queue timeout runs from.
+      expect(data.queue.waitedSeconds).toBe(42)
+      expect(data).not.toHaveProperty("lane_queued_at")
+    })
+
+    it("a pending execution the lanes never stamped, or a running one, has no queue and makes no gate call", async () => {
+      const describeWaits = vi.spyOn(lanes.gate as ConcurrencyGate, "describeWaits")
+      for (const row of [executionRow({}), executionRow({ status: "running", lane_queued_at: "2026-01-01T00:00:05Z" })]) {
+        vi.mocked(supabase.from).mockReturnValue(makeRecorder({ data: row, error: null }).proxy as never)
+        const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}`)
+        expect(res.statusCode).toBe(200)
+        expect(res.json().data).not.toHaveProperty("queue")
+      }
+      expect(describeWaits).not.toHaveBeenCalled()
+    })
+
+    /** The detail read of a standalone job: no execution of that id, the job row from `jobs` (its select recorded). */
+    function mockStandaloneJob(row: Record<string, unknown>): string[] {
+      const selects: string[] = []
+      vi.mocked(supabase.from).mockImplementation(((table: string) => {
+        if (table === "workflow_executions") return makeRecorder({ data: null, error: { code: "PGRST116", message: "not found" } }).proxy
+        if (table === "jobs") {
+          const r = makeRecorder({ data: row, error: null })
+          const proxy = new Proxy(r.proxy as object, {
+            get(target, prop) {
+              if (prop === "select") return (cols: string) => { selects.push(cols); return proxy }
+              return Reflect.get(target, prop)
+            },
+          })
+          return proxy
+        }
+        return makeRecorder({ data: [], error: null }).proxy
+      }) as never)
+      return selects
+    }
+    const standaloneJob = (over: Record<string, unknown>) => ({
+      id: TEST_EXEC_ID, node_id: "n1", workflow_id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workflow_execution_id: null, status: "queued",
+      progress: 0, provider: null, mcp_client: null, input_data: { type: "generate-image" }, credits: 4, usage_log_id: null,
+      error_message: null, started_at: null, completed_at: null, created_at: "2026-01-01T00:00:00Z", ...over,
+    })
+    const jobMeta = (jobId: string): LaneEntryMeta => ({
+      jobId, userId: TEST_USER_ID, payer: `user:${TEST_USER_ID}`, lane: "provider", provider: "kie", source: "web", sourceDetail: null,
+      jobType: "generate-image", model: null, queue: "video-generation", bullJobId: `bull-${jobId}`,
+    })
+
+    it("a standalone job waiting for a slot: its queue counts from the row's lane stamp, as on GET /v1/jobs/:id", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] })
+      vi.setSystemTime(Date.parse("2026-01-01T02:00:00Z"))
+      const gate = lanes.gate as ConcurrencyGate
+      await gate.setEnforced(true)
+      await gate.acquire({ meta: jobMeta("other-job"), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+      // The gate's entry is new (re-added after a Redis restart, say); the row first parked two hours ago.
+      await gate.acquire({ meta: jobMeta(TEST_EXEC_ID), size: 1, mode: "fresh", leaseTtlMs: 3_600_000 })
+      const selects = mockStandaloneJob(standaloneJob({ lane_queued_at: "2026-01-01T00:00:00Z" }))
+      const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}`)
+      expect(res.statusCode).toBe(200)
+      const data = res.json().data
+      expect(selects.some((c) => c.includes("lane_queued_at"))).toBe(true)
+      expect(data.queue).toMatchObject({ lane: "provider", position: 1, reason: "user_lane", waitedSeconds: 7200 })
+      expect(data.nodeStates.n1).toMatchObject({ status: "pending", queued: true, waitedSeconds: 7200 })
+      expect(res.body).not.toContain("lane_queued_at")
+    })
+
+    it("a standalone job `queued` with no lane stamp is not waiting: no queue, no sidecar, no gate call", async () => {
+      const describeWaits = vi.spyOn(lanes.gate as ConcurrencyGate, "describeWaits")
+      mockStandaloneJob(standaloneJob({ lane_queued_at: null }))
+      const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}`)
+      expect(res.statusCode).toBe(200)
+      const data = res.json().data
+      expect(data).not.toHaveProperty("queue")
+      expect(data.nodeStates.n1).not.toHaveProperty("queued")
+      expect(describeWaits).not.toHaveBeenCalled()
+    })
+  })
 })
 
 // ==========================================================================
@@ -1467,7 +1576,8 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
 
       expect(res.statusCode).toBe(200)
       expect(updates).toEqual([expect.objectContaining({ status: mode ? "stopping" : "cancelled" })])
-      expect(await gate.describeWait(TEST_EXEC_ID)).toBeNull()
+      // Out of its line once the withdraw lands (fired, not awaited, while limits are locked).
+      await vi.waitFor(async () => expect(await gate.describeWait(TEST_EXEC_ID)).toBeNull())
       expect(await gate.describeWait("later-run")).toMatchObject({ position: 1 })
     })
   }
@@ -2122,6 +2232,66 @@ describe("GET /v1/workflows/:id/executions", () => {
     expect(data[0].status).toBe("completed")
     expect(data[0].triggerType).toBe("manual")
     expect(data[0].totalNodes).toBe(2)
+  })
+
+  /** One supabase mock for both reads: the runs read answers `[]`; the jobs read answers `jobsLimit`'s results in turn. */
+  function mockListReads(jobsLimit: ReturnType<typeof vi.fn>) {
+    const selects: string[] = []
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn((columns: string) => {
+        selects.push(columns)
+        return {
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+              is: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnValue({ limit: jobsLimit }),
+              }),
+            }),
+          }),
+        }
+      }),
+    } as never)
+    return selects
+  }
+
+  const queuedJobRow = (extra: Record<string, unknown>) => ({
+    id: TEST_JOB_ID, node_id: "canvas-node-1", status: "queued", input_data: { type: "generate-image" }, credits: 4,
+    error_message: null, started_at: null, completed_at: null, created_at: "2026-01-01T00:00:00Z", ...extra,
+  })
+
+  it("a standalone job waiting for a slot says how long it has waited, read from its lane stamp", async () => {
+    const queuedAt = new Date(Date.now() - 90_000).toISOString()
+    const selects = mockListReads(vi.fn().mockResolvedValue({ data: [queuedJobRow({ lane_queued_at: queuedAt })], error: null }))
+
+    const res = await authedGet(`/v1/workflows/${TEST_WORKFLOW_ID}/executions`)
+    expect(res.statusCode).toBe(200)
+    expect(selects.some((c) => c.includes("lane_queued_at"))).toBe(true)
+    const state = res.json().data[0].nodeStates["canvas-node-1"]
+    expect(state.queued).toBe(true)
+    expect(state.waitedSeconds).toBeGreaterThanOrEqual(90)
+    expect(res.body).not.toContain("lane_queued_at")
+  })
+
+  it("lists jobs as before when the lane stamp column is missing", async () => {
+    // The read remembers the column as absent for the process: forget it after.
+    onTestFinished(() => resetLaneColumnsForTests())
+    const jobsLimit = vi.fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: 'column jobs.lane_queued_at does not exist' } })
+      .mockResolvedValueOnce({ data: [queuedJobRow({})], error: null })
+    const selects = mockListReads(jobsLimit)
+
+    const res = await authedGet(`/v1/workflows/${TEST_WORKFLOW_ID}/executions`)
+    expect(res.statusCode).toBe(200)
+    const jobSelects = selects.filter((c) => c.includes("node_id"))
+    expect(jobSelects).toHaveLength(2)
+    expect(jobSelects[1]).not.toContain("lane_queued_at")
+    // Read without the stamp, the row cannot say it waits: no sidecar (a job waits only once a lane stamped it).
+    const state = res.json().data[0].nodeStates["canvas-node-1"]
+    expect(state.status).toBe("pending")
+    expect(state.queued).toBeUndefined()
+    expect(state.waitedSeconds).toBeUndefined()
   })
 
   it("maps standalone job statuses correctly", async () => {
@@ -2886,6 +3056,46 @@ describe("held jobs are restorable — pending_review in the active-status query
     expect(admin.errorMessage).toBe("failed for the hidden role")
   })
 
+  it("jobToExecutionSummary reports a job waiting for a slot as pending, with the queued sidecar and how long it has waited", () => {
+    const queuedAt = new Date(Date.now() - 125_000).toISOString()
+    const summary = jobToExecutionSummary({
+      id: "job-uuid-queued", node_id: "canvas-node-8", status: "queued", provider: "kie",
+      input_data: { type: "generate-image" }, progress: 0, credits: 4, error_message: null,
+      started_at: null, completed_at: null, created_at: "t-1", lane_queued_at: queuedAt,
+    }) as Record<string, unknown> & { status: string; nodeStates: Record<string, Record<string, unknown>> }
+
+    expect(summary.status).toBe("pending")
+    const state = summary.nodeStates["canvas-node-8"]
+    expect(state.status).toBe("pending")
+    expect(state.queued).toBe(true)
+    // Whole seconds since the lane stamp (allow a second for the test itself).
+    expect(state.waitedSeconds).toBeGreaterThanOrEqual(125)
+    expect(state.waitedSeconds).toBeLessThanOrEqual(126)
+    // The stamp itself is never sent.
+    expect(JSON.stringify(summary)).not.toContain("lane_queued_at")
+    expect(JSON.stringify(summary)).not.toContain(queuedAt)
+  })
+
+  const queuedSummary = (lane_queued_at: unknown) => jobToExecutionSummary({
+    id: "job-q2", node_id: "n2", status: "queued", provider: "kie", input_data: { type: "generate-image" },
+    progress: 0, credits: 4, error_message: null, started_at: null, completed_at: null, created_at: "t-1", lane_queued_at,
+  }) as { nodeStates: Record<string, Record<string, unknown>> }
+
+  it("a queued job with no lane stamp (not written by the park, or read without it) carries no sidecar", () => {
+    for (const lane_queued_at of [undefined, null, ""]) {
+      const state = queuedSummary(lane_queued_at).nodeStates["n2"]
+      expect(state.status).toBe("pending")
+      expect("queued" in state).toBe(false)
+      expect("waitedSeconds" in state).toBe(false)
+    }
+  })
+
+  it("a queued job whose lane stamp cannot be read as a time carries the sidecar without a wait", () => {
+    const state = queuedSummary("not a time").nodeStates["n2"]
+    expect(state.queued).toBe(true)
+    expect("waitedSeconds" in state).toBe(false)
+  })
+
   it("a normal running job carries no awaitingReview sidecar", () => {
     const summary = jobToExecutionSummary({
       id: "job-uuid-1",
@@ -2903,5 +3113,7 @@ describe("held jobs are restorable — pending_review in the active-status query
 
     expect(summary.status).toBe("running")
     expect(summary.nodeStates["n1"].awaitingReview).toBeUndefined()
+    expect(summary.nodeStates["n1"].queued).toBeUndefined()
+    expect(summary.nodeStates["n1"].waitedSeconds).toBeUndefined()
   })
 })

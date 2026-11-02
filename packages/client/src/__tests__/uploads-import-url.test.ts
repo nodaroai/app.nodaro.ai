@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { createClient, StaticTokenAuth, NodaroError, StorageExceededError } from "../index.js"
+import { createClient, StaticTokenAuth, NodaroError, StorageExceededError, ForbiddenError, ImportRefusedError } from "../index.js"
 import type { ImportUrlResult } from "../index.js"
 
 function mockOk<T>(body: T) {
@@ -38,6 +38,26 @@ describe("uploads.importUrl", () => {
     expect(init.headers["Content-Type"]).toBe("application/json")
     expect(JSON.parse(init.body)).toEqual({ url: SOURCE })
     expect(result).toEqual(IMPORTED)
+  })
+
+  it("sends the content rights confirmation when given one, and nothing for it otherwise", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: IMPORTED })).mockReturnValueOnce(mockOk({ data: IMPORTED }))
+    await client(fetchMock).uploads.importUrl(SOURCE, { confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" })
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({ url: SOURCE, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" })
+    await client(fetchMock).uploads.importUrl(SOURCE, {})
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body)).toEqual({ url: SOURCE })
+  })
+
+  it("rejects a 403 from the import gate with an ImportRefusedError carrying the server's code", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(403, { error: { code: "rights_confirmation_required", message: "Confirm that you hold the rights to this content before it is imported." } }),
+    )
+    const err = await client(fetchMock).uploads.importUrl(SOURCE).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ImportRefusedError)
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect((err as ImportRefusedError).status).toBe(403)
+    expect((err as ImportRefusedError).code).toBe("rights_confirmation_required")
+    expect((err as ImportRefusedError).message).toBe("Confirm that you hold the rights to this content before it is imported.")
   })
 
   it("rejects a 422 fetch_failed with a NodaroError carrying that code", async () => {

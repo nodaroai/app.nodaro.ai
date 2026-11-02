@@ -87,6 +87,7 @@ const FREE: ReadonlyMap<string, string> = new Map([
   ["getUserCredits", "reads the balance"],
   ["getWorkflowExecution", "reads a run"],
   ["getComponentWaitLimit", "reads a limit"],
+  ["getMyLanes", "reads the caller's concurrency limits (a list fan-out's width)"],
   ["getCharacter", "reads an entity row"],
   ["getObjectById", "reads an entity row"],
   ["getLocationById", "reads an entity row"],

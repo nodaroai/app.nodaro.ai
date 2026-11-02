@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { DEFAULT_SECTIONS, SHEET_SKINS, SHEET_TYPES, SHEET_ASPECTS, planSheetGeneration, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetSection, type SheetSkin, type SheetType } from "@nodaro/shared/entities"
-import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
+import { generateReferenceSheet } from "@/lib/api"
 import { useT, tx } from "@/lib/i18n"
 import type { SheetTabAdapter } from "./sheet-tab-adapter"
 import { CharacterSheetPanel } from "./character-sheet-panel"
 import { SheetGallery } from "./sheet-gallery"
+import { pollSheetJob } from "./poll-sheet-job"
 
 /**
  * Shared "Sheet" tab for the Character / Object / Location studio modals.
@@ -26,9 +27,6 @@ import { SheetGallery } from "./sheet-gallery"
  */
 
 type Status = "idle" | "generating" | "done" | "error"
-
-const SHEET_POLL_MS = 2000
-const SHEET_POLL_MAX_ATTEMPTS = 180 // ~6 min ceiling
 
 interface ReferenceSheetTabProps {
   readonly adapter: SheetTabAdapter
@@ -64,36 +62,6 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
 
   const isGenerating = status === "generating"
   const canGenerate = Boolean(sourceImageUrl) && !isGenerating
-
-  async function pollSheet(jobId: string): Promise<{ imageUrl: string; panelUrls: string[] }> {
-    for (let attempt = 0; attempt < SHEET_POLL_MAX_ATTEMPTS; attempt++) {
-      await new Promise((r) => setTimeout(r, SHEET_POLL_MS))
-      // Fetch the latest status. A transient network failure is swallowed and
-      // retried next tick; a TERMINAL job status (completed/failed/cancelled) is
-      // handled outside the catch so the loop always exits on it — never waits
-      // for the timeout just because a `failed` job's `error_message` didn't
-      // match some message pattern.
-      let job: Awaited<ReturnType<typeof getJobStatusLean>> | undefined
-      try {
-        job = await getJobStatusLean(jobId)
-      } catch {
-        continue // transient fetch failure — retry
-      }
-      if (job.status === "completed") {
-        const out = job.output_data as { imageUrl?: string; panelUrls?: string[] } | undefined
-        if (out?.imageUrl) return { imageUrl: out.imageUrl, panelUrls: out.panelUrls ?? [] }
-        throw new Error(tx("entity.sheetNoImageUrl"))
-      }
-      // A held job is parked on a human reviewer and will outlive this bound by
-      // hours. Break out NOW with the truth instead of falling through to
-      // "timed out" (a lie) or an empty panel that never fills.
-      if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
-      if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error_message ?? tx(job.status === "cancelled" ? "entity.sheetCancelledFallback" : "entity.sheetFailedFallback"))
-      }
-    }
-    throw new Error(tx("entity.sheetTimedOut"))
-  }
 
   async function onGenerate(): Promise<void> {
     if (!sourceImageUrl) {
@@ -142,7 +110,7 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
         entityDbId: dbId,
         flavour,
       })
-      const { imageUrl: url, panelUrls } = await pollSheet(jobId)
+      const { imageUrl: url, panelUrls } = await pollSheetJob(jobId)
       setResultUrl(url)
 
       // Append the new sheet to staged so the "Existing sheets" grid + the

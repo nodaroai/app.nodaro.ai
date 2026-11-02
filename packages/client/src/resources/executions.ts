@@ -1,5 +1,6 @@
 import type { NodaroClientCore } from "../core.js"
 import type { ExecutionOutcome, NodeExecutionStateWire } from "@nodaro/shared/workflow"
+import type { JobQueueInfo } from "./jobs.js"
 
 export type ExecutionStatus =
   | "pending"
@@ -82,6 +83,13 @@ export interface WorkflowExecution {
   completedAt: string | null
   createdAt: string
   updatedAt: string
+  /**
+   * Where the run stands in line while it waits for its turn (a free run
+   * slot); its `status` stays `pending` meanwhile. Present on `get()` only
+   * while it waits — a single-node job read here carries it while the job is
+   * `queued`. See {@link JobQueueInfo}.
+   */
+  queue?: JobQueueInfo
 }
 
 /** Summary returned by `listForWorkflow()`. Excludes per-row `triggerData`/`updatedAt`. */

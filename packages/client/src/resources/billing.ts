@@ -57,7 +57,11 @@ export interface BillingPlan {
   prices: BillingPlanPrices | null
   /** The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. */
   signupCredits: number | null
-  /** How many nodes of one workflow run at once. */
+  /**
+   * How many nodes of one workflow run at once. Once Nodaro Cloud enforces its
+   * concurrency limits, the plan's limit on generations running at once,
+   * shared by all of an account's runs.
+   */
   parallelism: number
   /** Storage for your media, in bytes. */
   storageBytes: number

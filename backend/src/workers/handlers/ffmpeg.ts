@@ -59,6 +59,7 @@ import {
   completeFfmpegVideoJob,
   completeFfmpegAudioJob,
   setJobProgress,
+  importRightsOf,
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
@@ -304,7 +305,7 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
     jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; startTime?: number; endTime?: number
   }
   console.log(`[worker] trim-audio ${ctx.jobId}`)
-  const result = await trimAudio({ videoUrl, audioFormat, startTime, endTime })
+  const result = await trimAudio({ videoUrl, audioFormat, startTime, endTime }, importRightsOf(job, ctx))
   await setJobProgress(job, ctx.jobId, 80)
   const audioR2Url = await uploadFileToR2(result.audioPath, ctx.jobId, "audio", ctx.jobUserId)
   await cleanupWorkDir(dirname(result.audioPath))
