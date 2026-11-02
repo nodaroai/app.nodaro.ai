@@ -938,7 +938,7 @@ describe("extract-youtube-audio handler", () => {
     await handler(job as never, makeCtx())
 
     // The import rights ride along: the job's owner, the confirmation its route put in the job data.
-    expect(mocks.mockExtractYouTubeAudioWithMeta).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" })
+    expect(mocks.mockExtractYouTubeAudioWithMeta).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null })
   })
 
   it("passes the confirmation the route put in the job data to the extractor, which spends it at the fetch under the job's id", async () => {
@@ -949,6 +949,9 @@ describe("extract-youtube-audio handler", () => {
       confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01",
       lane: "route",
       requestId: "job-1",
+      via: null,
+      appId: null,
+      authorizationId: null,
     })
     // extract-youtube-audio outputs raw audioUrl — keeps direct markJobCompleted (not via finalize).
     // The length rides beside it so the caller can record it ON the node.
@@ -1374,7 +1377,7 @@ describe("safe-direction: PRE-provider (input-side) failure → plain error (ref
     expect(mocks.mockTranscribe).not.toHaveBeenCalled() // provider never reached
     expect(isPostProcessingError(err)).toBe(false)
     // The extraction is an import of a link: it carries the job's import rights.
-    expect(mocks.mockExtractYouTubeAudio).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" })
+    expect(mocks.mockExtractYouTubeAudio).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null })
   })
 })
 

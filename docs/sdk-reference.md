@@ -456,6 +456,7 @@ of the API guide):
 |--------|---------|
 | `import_source_disabled` | the link's site is disabled by an administrator; the message names no site |
 | `rights_confirmation_required` | the deployment requires a confirmation and none was sent |
+| `rights_authorization_required` | the deployment requires a confirmation, the import came through an API key, a connected app or an AI agent, and the account holds no standing authorization (`contentRights.authorize`, by the person in their own session) |
 | `rights_confirmation_not_found` | no confirmation has that id |
 | `rights_confirmation_mismatch` | the confirmation is for another link or another account |
 | `rights_confirmation_stale` | the declaration changed since; read it again and confirm again |
@@ -6775,6 +6776,55 @@ const { downloadId } = await client.media.downloadVideo({ url, maxHeight: 1080, 
 Whether a download without a confirmation is refused is the deployment's
 setting (`403 rights_confirmation_required` once it is); a client always sends
 one.
+
+#### `authorization()`
+
+```ts
+authorization(): Promise<{ id: string; declarationVersion: number; createdAt: string } | null>
+```
+
+The account's standing authorization for imports through its API keys,
+connected apps and AI agents (`GET /v1/content-rights/authorization`), or
+`null` when there is none: never given, revoked, or given under an older
+declaration than the current one. With one, every import a key or an agent
+makes without a `confirmationId` is recorded as a confirmation derived from it
+and passes; without one, and with the deployment's setting on, such an import
+is refused with `rights_authorization_required`.
+
+#### `authorize(input)`
+
+```ts
+authorize(input: { declarationVersion: number }): Promise<{
+  id: string
+  declarationVersion: number
+  createdAt: string
+}>
+```
+
+Records that the person authorized imports through their keys and agents
+under the declaration version they saw (`POST /v1/content-rights/authorization`).
+The person's own session only: a key, an app or an agent answers
+`403 forbidden`, so a client calls it from the person's signed-in session
+(Settings does), never from the key it is meant to cover. A
+`409 rights_confirmation_stale` means the declaration changed since it was
+read — read it again and ask again.
+
+#### `revokeAuthorization()`
+
+```ts
+revokeAuthorization(): Promise<{ revoked: boolean }>
+```
+
+Revokes the standing authorization (`DELETE /v1/content-rights/authorization`);
+the record stays. The person's own session only. `revoked` is `false` when
+there was none to revoke.
+
+```ts
+const { version, text } = await client.contentRights.declaration()
+// … show `text` with a checkbox; once ticked, in the person's session:
+await client.contentRights.authorize({ declarationVersion: version })
+// From now on, the account's keys and agents import links without a confirmation.
+```
 
 ---
 

@@ -184,6 +184,53 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion: same } })).statusCode).toBe(200)
   })
 
+  it("takes a Full depth's depth blur only while every environment's engine blurs (a Cast Swap engine from 0.430.0); 0 asks no engine", async () => {
+    const BLURS = { ...HIDES, depthBlur: true }
+    h.envs = [envRow("production", BLURS), envRow("staging", BLURS)]
+    const motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", depthBlur: 28 } } }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    expect(h.upserts.at(-1)).toMatchObject({ value: { "motion-prism": { masking: { depthBlur: 28 } } } })
+    h.envs = [envRow("production", BLURS), envRow("staging", HIDES)]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/cannot blur the depth map/) })
+    expect(h.upserts).toHaveLength(1)
+    // 0 (off) asks no engine.
+    h.envs = []
+    expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", depthBlur: 0 } } })).statusCode).toBe(200)
+  })
+
+  it("takes face mesh parts other than the full mesh only while every environment's engine lists them; the full mesh asks no engine", async () => {
+    const PARTS = { ...HIDES, faceMesh: true, faceMeshParts: ["full", "features", "mouth"] }
+    h.envs = [envRow("production", PARTS), envRow("staging", PARTS)]
+    const motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "features" } },
+      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } },
+    }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    h.envs = [envRow("production", { ...PARTS, faceMeshParts: ["full", "features"] }), envRow("staging", PARTS)]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/cannot draw only the eyes and mouth or only the mouth of the face mesh/) })
+    expect(h.upserts).toHaveLength(1)
+    // The full mesh asks only for the mesh itself.
+    h.envs = [envRow("production", { ...HIDES, faceMesh: true }), envRow("staging", { ...HIDES, faceMesh: true })]
+    expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "full" } } })).statusCode).toBe(200)
+  })
+
+  it("refuses a depth blur past 40, below 0 or not whole, and an unknown part, writing nothing", async () => {
+    for (const masking of [
+      { mode: "always", source: "full-depth", depthBlur: 41 },
+      { mode: "always", source: "full-depth", depthBlur: -1 },
+      { mode: "always", source: "full-depth", depthBlur: 28.5 },
+      { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "eyes" },
+    ]) {
+      const res = await put({ "motion-prism": { masking } })
+      expect(res.statusCode, JSON.stringify(masking)).toBe(400)
+    }
+    expect(h.upserts).toEqual([])
+  })
+
   it("takes Full depth's description + original scene only while every environment's engine lists it", async () => {
     const BOTH = { ...HIDES, fullDepthScenes: ["description", "original", "none", "description-and-original"] }
     const motion = { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" } } }

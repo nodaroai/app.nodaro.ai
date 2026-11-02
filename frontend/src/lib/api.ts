@@ -11381,6 +11381,22 @@ export interface AdminTrendFaceMasking {
    */
   depthColormap?: VideoDepthColormap
   /**
+   * Full depth only (Admin → Nodaro Motion's Motion setting; a trend's
+   * setting does not take it yet): the depth map blurred before it is
+   * coloured and before the face mesh is drawn on it, the blur's sigma at
+   * 1080 px tall, whole steps 0–40. 0 is off and saved as no key; offered
+   * only where the engine declares `castSwap.depthBlur`.
+   */
+  depthBlur?: number
+  /**
+   * What the face mesh draws (Admin → Nodaro Motion's Motion setting, as
+   * `depthBlur`): left out = the full mesh; `"features"` the eye and lip
+   * outlines only; `"mouth"` the lip outline only. Saved only when the face
+   * mesh is on and it is not `"full"`, offered only where the engine lists it
+   * in `castSwap.faceMeshParts`.
+   */
+  faceMeshParts?: AdminFaceMeshParts
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11389,6 +11405,9 @@ export interface AdminTrendFaceMasking {
    */
   marks?: AdminTrendFaceMaskMark[]
 }
+
+/** What a setting's face mesh draws: the full mesh, the eye and lip outlines only, or the lip outline only. */
+export type AdminFaceMeshParts = "full" | "features" | "mouth"
 
 /**
  * What a face mask mark says about the faces in its box: `"erased"` (left
@@ -11884,6 +11903,10 @@ export interface TrendEngineEnvironment {
       styleRefs?: boolean
       /** The engine enforces the admin's Style choice on direct runs (`nodaro_motion_style`); absent = it takes the request's style. */
       styleChoice?: boolean
+      /** The engine blurs a full-depth map (`faceMasking.depthBlur`); absent = it cannot. */
+      depthBlur?: boolean
+      /** The face mesh parts the engine draws (`faceMasking.faceMeshParts`); absent = the full mesh only. */
+      faceMeshParts?: AdminFaceMeshParts[]
     }
   } & Record<string, unknown>
   updatedAt: string

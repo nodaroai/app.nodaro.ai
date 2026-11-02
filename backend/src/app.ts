@@ -1,7 +1,7 @@
 import Fastify, { type FastifyRequest } from "fastify"
 import { requestLogSerializer } from "./lib/log-redaction.js"
 import { installLaneRequestScope } from "./lib/concurrency-lanes/request-scope.js"
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled } from "./lib/config.js"
@@ -127,6 +127,7 @@ import { developerAppRoutes } from "./routes/developer-apps.js"
 import { downloadVideoRoutes } from "./routes/download-video.js"
 import { videoMetadataRoutes } from "./routes/video-metadata.js"
 import { contentRightsRoutes } from "./routes/content-rights.js"
+import { contentComplaintsRoutes } from "./routes/content-complaints.js"
 import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
 import { imageProxyRoutes } from "./routes/image-proxy.js"
@@ -493,6 +494,16 @@ export async function buildApp() {
     // URLs — with the plain default, every /v1/social/callback hit wrote a
     // live authorization code into the deployment logs (lib/log-redaction.ts).
     logger: { serializers: { req: requestLogSerializer } },
+    // A request id unique across replicas and restarts. Fastify's default is
+    // `req-<n>`, a per-process counter: two replicas hand out the same id, and
+    // the content rights ledger keys a spend's retry on it (`rights_events.
+    // request_id`, lib/content-rights.ts) — a shared id would let one request
+    // pass as another's retry.
+    genReqId: () => randomUUID(),
+    // ...and the server's own, never a caller's: a `request-id` header is not
+    // honored (Fastify 5's default, pinned here because the ledger depends on
+    // it — a caller naming its own id could replay a spend as its "retry").
+    requestIdHeader: false,
     bodyLimit: 1_048_576, // 1 MB for JSON endpoints
     // Default is 100 chars per path param. Our HMAC-signed upload-page
     // tokens (`/v1/upload-page/:token`) are ~330 chars (base64url-encoded
@@ -680,6 +691,7 @@ export async function buildApp() {
   await app.register(downloadVideoRoutes)
   await app.register(videoMetadataRoutes)
   await app.register(contentRightsRoutes)
+  await app.register(contentComplaintsRoutes)
   await app.register(extractYouTubeAudioRoutes)
   await app.register(textToAudioRoutes)
   await app.register(imageProxyRoutes)

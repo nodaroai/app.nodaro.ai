@@ -6,7 +6,7 @@ import { promises as fs } from "node:fs"
 import { createReadStream } from "node:fs"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "./storage.js"
 import { recordDownloadedVideoAsset } from "./asset-records.js"
-import { contentHashOf, recordEvent } from "./content-rights.js"
+import { contentHashOf, recordEvent, type ImportVia } from "./content-rights.js"
 import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "./import-gate.js"
 import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
 import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
@@ -364,18 +364,22 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
    * one-use lock (`consumeRightsConfirmation`) instead of being refused.
    */
   readonly requestId?: string | null
+  /** How the run was started (`lib/import-via.ts`): a key's or an agent's run stands on a standing authorization. */
+  readonly importVia?: ImportVia | null
 }
 
 /**
  * The download a RUN needs, awaited: checks the content rights confirmation
  * (the same check the route makes; a refusal is a `failed` download), waits
- * for a slot, spends the confirmation, then downloads through the very path
- * the route uses and resolves with the stored file. A stop of the run
- * abandons the WAIT only — the provider has no way to kill a download in
- * flight, so the file lands in storage unused and its slot frees when it ends.
+ * for a slot, spends the confirmation (the one given, or one derived from a
+ * standing authorization), then downloads through the very path the route
+ * uses — under the confirmation spent — and resolves with the stored file. A
+ * stop of the run abandons the WAIT only — the provider has no way to kill a
+ * download in flight, so the file lands in storage unused and its slot frees
+ * when it ends.
  */
 export async function downloadVideoForRun(options: RunDownloadOptions): Promise<{ videoUrl: string; thumbnailUrl?: string }> {
-  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const, requestId: options.requestId ?? null }
+  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const, requestId: options.requestId ?? null, via: options.importVia ?? null }
   try {
     await requireImportAllowed(options.url, rights)
   } catch (e) {
@@ -383,14 +387,15 @@ export async function downloadVideoForRun(options: RunDownloadOptions): Promise<
     throw e
   }
   const slot = await acquireSlot(options.userId, options.signal, options.slotWaitMs ?? RUN_DOWNLOAD_SLOT_WAIT_MS)
+  let spent: string | null
   try {
-    await spendImportConfirmation(options.url, rights)
+    spent = await spendImportConfirmation(options.url, rights)
   } catch (e) {
     slot.release()
     if (isImportRefusal(e)) throw new RunDownloadError(e.message, "failed")
     throw e
   }
-  const { state, done } = startTrackedDownload(options, slot)
+  const { state, done } = startTrackedDownload({ ...options, rightsConfirmationId: spent }, slot)
   await within(done, options.signal, options.maxMs ?? RUN_DOWNLOAD_MAX_MS)
   if (state.phase === "completed" && state.videoUrl) {
     return { videoUrl: state.videoUrl, ...(state.thumbnailUrl ? { thumbnailUrl: state.thumbnailUrl } : {}) }

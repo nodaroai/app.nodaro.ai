@@ -88,7 +88,22 @@ const TREND_RADAR_SESSION_ONLY_REASONS = {
 const PRESET_ORGANISATION =
   "preset folders, their order and bulk file import organise the editor's preset lists, which an agent has no use for; they are on the REST API, the SDK and the CLI"
 
+/**
+ * The public complaints form (routes/content-complaints.ts) is a page a
+ * complainant fills without an account: the statements it shows, the
+ * submission, and the one-time link in the email that proves their address.
+ * It is documented on the REST API page as the form's contract, and has no
+ * SDK method or MCP tool: a complaint is a person's legal act, made on the
+ * page, never a client's or an agent's call.
+ */
+const CONTENT_COMPLAINTS_REASONS = {
+  sdk: "the public complaints form's own contract: a complainant fills the page without an account, and a complaint is a person's legal act, never an SDK client's call",
+  mcp: "an agent never files a legal complaint in a person's name; the public page does, without an account",
+} as const
+
 export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
+  { feature: "route:content-complaints", surface: "sdk", reason: CONTENT_COMPLAINTS_REASONS.sdk },
+  { feature: "route:content-complaints", surface: "mcp", reason: CONTENT_COMPLAINTS_REASONS.mcp },
   // Connected apps answer a signed-in browser session only: an app must not
   // list or revoke the grants it lives under.
   {
@@ -121,12 +136,16 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   },
   // Content rights: a PERSON confirms the declaration with a checkbox in the
   // client that imports the link; a command line and an agent have no checkbox.
-  // Their standing authorization (saved once in the account's settings) is a
-  // later change; until then their downloads go through while the deployment
-  // does not require a confirmation.
+  // Their imports stand on the standing authorization the person gives ONCE,
+  // in their own session (Settings; `POST /v1/content-rights/authorization`
+  // refuses a key, an app and an agent), so none of these routes is theirs.
   ...(["GET /v1/content-rights/declaration", "POST /v1/content-rights/confirm"] as const).flatMap((atom) => [
-    { feature: "contentRights", surface: "cli" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; the CLI's standing authorization is a later change" },
-    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; an agent's standing authorization is a later change" },
+    { feature: "contentRights", surface: "cli" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; a key's import stands on the standing authorization the person gives in Settings" },
+    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; an agent's import stands on the standing authorization the person gives in Settings" },
+  ]),
+  ...(["GET /v1/content-rights/authorization", "POST /v1/content-rights/authorization", "DELETE /v1/content-rights/authorization"] as const).flatMap((atom) => [
+    { feature: "contentRights", surface: "cli" as const, atom, reason: "the standing authorization is given and revoked by the person in their own session (the server refuses a key), and a key reading it learns nothing a refused import does not say" },
+    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the standing authorization is given and revoked by the person in their own session (the server refuses an agent): an agent must not authorize its own imports" },
   ]),
   {
     feature: "characters",

@@ -22,6 +22,11 @@
 // What this environment's Cast Swap engine cannot do yet of the column's
 // setting (`supports`, from the setting's GET; `motionEngineGaps`) is said
 // under it: the engine plugin is out of date.
+//
+// Two controls are this column's alone (the trend editor and the Precise
+// column have neither): Full depth's depth blur (0–40, 0 = off) and what the
+// face mesh draws (Full, Eyes and mouth, Mouth only), each naming the
+// environments whose engine cannot do it yet (the setting is shared).
 
 import { useId } from "react"
 import { Button } from "@/components/ui/button"
@@ -96,14 +101,26 @@ interface Props {
   readonly envs?: readonly TrendEngineEnvironment[]
   /** For each depth colormap, the environments whose engine cannot draw it (`environmentsThatCannotDrawColormaps`); unknown when left out. */
   readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
+  /** The environments whose engine cannot blur a Full depth's map (`environmentsThatCannotBlurDepth`); unknown when left out (no control). */
+  readonly depthBlurMissingIn?: readonly string[]
+  /** For each face mesh part but the full mesh, the environments whose engine cannot draw it (`environmentsThatCannotDrawFaceMeshParts`); unknown when left out (no control). */
+  readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
 }
 
-export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMeshMissingIn, envs, depthColormapsMissingIn }: Props) {
+export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMeshMissingIn, envs, depthColormapsMissingIn, depthBlurMissingIn, faceMeshPartsMissingIn }: Props) {
   const shotList = flexIsFullDepth(envs)
   return (
     <div className="flex flex-col gap-3">
       {shotList ? (
-        <FullDepthMasking value={value} onChange={onChange} faceMeshMissingIn={faceMeshMissingIn} envs={envs} depthColormapsMissingIn={depthColormapsMissingIn} />
+        <FullDepthMasking
+          value={value}
+          onChange={onChange}
+          faceMeshMissingIn={faceMeshMissingIn}
+          envs={envs}
+          depthColormapsMissingIn={depthColormapsMissingIn}
+          depthBlurMissingIn={depthBlurMissingIn}
+          faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+        />
       ) : (
         <ChoiceMasking
           value={value}
@@ -111,6 +128,8 @@ export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMes
           bodyMissingIn={bodyMissingIn}
           faceMeshMissingIn={faceMeshMissingIn}
           depthColormapsMissingIn={depthColormapsMissingIn}
+          depthBlurMissingIn={depthBlurMissingIn}
+          faceMeshPartsMissingIn={faceMeshPartsMissingIn}
         />
       )}
       <PromptStyleSelect
@@ -129,10 +148,13 @@ export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMes
   )
 }
 
-type MaskingProps = Pick<Props, "value" | "onChange" | "bodyMissingIn" | "faceMeshMissingIn" | "envs" | "depthColormapsMissingIn">
+type MaskingProps = Pick<
+  Props,
+  "value" | "onChange" | "bodyMissingIn" | "faceMeshMissingIn" | "envs" | "depthColormapsMissingIn" | "depthBlurMissingIn" | "faceMeshPartsMissingIn"
+>
 
 /** The shot list's rule: Full depth alone, its scene a description or a description + the original. */
-function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColormapsMissingIn }: MaskingProps) {
+function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColormapsMissingIn, depthBlurMissingIn, faceMeshPartsMissingIn }: MaskingProps) {
   const m = value?.masking
   const full = !!m && m.mode !== "off" && clipPreparationOf(m) === "full-depth"
   const runsAs = full ? shotListSceneOf(sceneOf(m)) : null
@@ -167,6 +189,8 @@ function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColor
         source="full-depth"
         faceMeshMissingIn={faceMeshMissingIn}
         depthColormapsMissingIn={depthColormapsMissingIn}
+        depthBlurMissingIn={depthBlurMissingIn}
+        faceMeshPartsMissingIn={faceMeshPartsMissingIn}
         envs={envs}
         scenes={SHOT_LIST_SCENES}
         // A change sets the engine's own Full depth (left unset, the default is the same setting).
@@ -178,7 +202,7 @@ function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColor
 }
 
 /** The rule before the shot list: Same as Precise, Faces hidden or Full depth. */
-function ChoiceMasking({ value, onChange, bodyMissingIn, faceMeshMissingIn, depthColormapsMissingIn }: MaskingProps) {
+function ChoiceMasking({ value, onChange, bodyMissingIn, faceMeshMissingIn, depthColormapsMissingIn, depthBlurMissingIn, faceMeshPartsMissingIn }: MaskingProps) {
   const id = useId()
   const choice = maskingChoiceOf(value?.masking)
   const hint = MASKING_CHOICES.find((c) => c.value === choice)?.hint
@@ -212,6 +236,8 @@ function ChoiceMasking({ value, onChange, bodyMissingIn, faceMeshMissingIn, dept
           bodyMissingIn={bodyMissingIn}
           faceMeshMissingIn={faceMeshMissingIn}
           depthColormapsMissingIn={depthColormapsMissingIn}
+          depthBlurMissingIn={depthBlurMissingIn}
+          faceMeshPartsMissingIn={faceMeshPartsMissingIn}
           // No `envs`: a scene only some engines declare is never offered on this shared setting
           // (the server refuses it until every environment's engine lists it).
           // Off is kept as Off ({ mode: "off" }), never read as "Same as Precise".

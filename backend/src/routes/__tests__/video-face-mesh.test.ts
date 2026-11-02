@@ -183,6 +183,25 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     }))
   })
 
+  it("parts: the eye and lip outlines, or the lip outline, ride to the worker and the job as sent; an unknown value is refused", async () => {
+    for (const parts of ["features", "mouth", "full"] as const) {
+      vi.mocked(videoQueue.add).mockClear()
+      const res = await asChild({ ...BODY, parts })
+      expect(res.statusCode).toBe(202)
+      expect(videoQueue.add).toHaveBeenCalledWith("video-face-mesh", expect.objectContaining({ parts }))
+      expect(inserted!.input_data).toMatchObject({ parts })
+    }
+    vi.mocked(videoQueue.add).mockClear()
+    expect((await asChild({ ...BODY, parts: "eyes" })).statusCode).toBe(400)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("no parts: never defaulted — the job and the queue as before the key existed", async () => {
+    expect((await asChild(BODY)).statusCode).toBe(202)
+    expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("parts")
+    expect(inserted!.input_data).not.toHaveProperty("parts")
+  })
+
   it("grayscale needs no depth render; a depth render alone is taken (grayscale)", async () => {
     expect((await asChild({ ...BODY, colormap: "grayscale" })).statusCode).toBe(202)
     expect((await asChild({ ...BODY, depthUrl: "https://example.com/depth-gray.mp4" })).statusCode).toBe(202)

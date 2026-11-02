@@ -400,3 +400,36 @@ describe("tk.settings.nodaroMotionStyle", () => {
     expectTypeOf<NodaroMotionStyleForPlugin>().toExtend<PluginNodaroMotionStyle>()
   })
 })
+
+describe("tk.settings: the depth blur and the face mesh's parts", () => {
+  beforeEach(() => {
+    h.masking = null
+    h.motion = null
+    h.failed = false
+  })
+
+  it("answers each only to an engine that declares it, and only where it changes what is drawn", async () => {
+    h.motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "features" } },
+      // 0 and the full mesh: never answered, whatever the engine declares.
+      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 0, faceMeshParts: "full" } },
+    }
+    try {
+      setPluginSupports({ castSwap: { ...CS, faceMesh: true, depthBlur: true, faceMeshParts: ["full", "features", "mouth"] } } as never)
+      const motion = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "features" } })
+      expect(motion!["motion-pro"]).toEqual(motion!["motion-prism"])
+      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true } })
+      // An engine from before them (or one without the mesh): the setting as it was before the keys existed.
+      for (const castSwap of [{ ...CS, faceMesh: true }, { ...CS, faceMesh: true, depthBlur: true, faceMeshParts: ["full", "mouth"] }, CS]) {
+        setPluginSupports({ castSwap } as never)
+        const older = await buildToolkit().settings!.nodaroMotionMotion!()
+        const m = (older!["motion-prism"] as unknown as { masking: Record<string, unknown> }).masking
+        expect(Object.hasOwn(m, "faceMeshParts"), JSON.stringify(castSwap)).toBe(false)
+        expect(Object.hasOwn(m, "depthBlur"), JSON.stringify(castSwap)).toBe((castSwap as { depthBlur?: boolean }).depthBlur === true)
+      }
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+})

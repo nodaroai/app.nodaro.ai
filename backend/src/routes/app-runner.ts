@@ -42,6 +42,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { importViaOf } from "../lib/import-via.js"
 import { quickFieldRefusal } from "../lib/exposed-quick-field-check.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
 import { appRunViewStates } from "../lib/app-run-states.js"
@@ -702,6 +703,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         workflowId: appRow.workflow_id,
         userId: req.userId,
         triggerType: "manual",
+        ...(importViaOf(req) ? { importVia: importViaOf(req) as "session" | "api" | "app" | "mcp" } : {}),
         inputOverrides,
         appVersionId: appRow.id,
         nodeIds,
@@ -736,6 +738,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         appVersionId: appRow.id,
         workflowId: appRow.workflow_id,
         userId: req.userId,
+        ...(importViaOf(req) ? { importVia: importViaOf(req) as "session" | "api" | "app" | "mcp" } : {}),
         appId: appRow.id,
         inputOverrides,
         nodeIds,

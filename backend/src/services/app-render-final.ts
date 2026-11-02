@@ -19,6 +19,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { appRenderFinalStamp, linkAppRunFinal } from "../lib/app-run-final-column.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
+import type { ImportVia } from "../lib/content-rights.js"
 
 export interface ExecuteAppRenderFinalParams {
   readonly runId: string
@@ -39,6 +40,8 @@ export interface ExecuteAppRenderFinalParams {
   /** A person in the app runner is there to review a Preview further on. */
   readonly reviewerPresent: boolean
   readonly webFreeMode?: boolean
+  /** How the final was started (`lib/import-via.ts`): what its imports of links are held to. */
+  readonly importVia?: ImportVia
   readonly billingContext?: BillingContext
   readonly idempotencyKey?: string
 }
@@ -86,6 +89,7 @@ export async function executeAppRenderFinal(params: ExecuteAppRenderFinalParams)
     nodeIds: [...params.nodeIds],
     continueFromExecutionId: params.continueFromExecutionId,
     webFreeMode: params.webFreeMode,
+    ...(params.importVia ? { importVia: params.importVia } : {}),
     billingContext: payloadBillingContext({ userId: params.userId, billingContext: params.billingContext }),
     // From the app runner's mark (`appReviewerPresent`): a person in the app
     // runner can press Render final on a Preview further on.

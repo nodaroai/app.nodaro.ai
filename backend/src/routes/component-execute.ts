@@ -8,6 +8,7 @@ import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { executeAppRun } from "../services/app-execution.js"
 import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
+import { importViaOf } from "../lib/import-via.js"
 import type { ComponentMetadata } from "@nodaro/shared/apps"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
@@ -257,6 +258,8 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           componentDepth,
           executingComponentIds,
           webFreeMode: req.webFreeMode === true,
+          // The way the parent run was started (forwarded on the internal lane): its imports of links are held to the same authorization.
+          ...(importViaOf(req) ? { importVia: importViaOf(req)! } : {}),
           billingContext: runBillingContext,
           ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
           ...(forwardedCheapLanesOnly ? { cheapLanesOnly: true } : {}),

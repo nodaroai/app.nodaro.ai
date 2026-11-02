@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import type { HeaderVersionsReport, ProductView, ReleaseNote, SiteEnvironment, SiteResult } from "../types"
+import type { HeaderMapResult, HeaderVersionsReport, ProductView, ReleaseNote, SiteEnvironment, SiteResult } from "../types"
 
 const edition = vi.hoisted(() => ({ cloud: true }))
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
@@ -71,12 +71,76 @@ const NOTE: ReleaseNote = {
   ],
 }
 
+const MAP: HeaderMapResult = {
+  status: "ok",
+  asOf: "0.12.0",
+  url: "https://github.com/acme/header/blob/HEAD/docs/map.json",
+  figures: {
+    anatomy: {
+      heading: "What the bar holds",
+      barLabel: "All of it is the bar",
+      parts: {
+        logo: { name: "Mark", note: "Goes home." },
+        worlds: { name: "Places" },
+        developers: { name: "Tools" },
+        language: { name: "Tongue" },
+        credits: { name: "Coins" },
+        account: { name: "Me" },
+      },
+      caption: "A bar on every page.",
+    },
+    runtime: {
+      inside: [{ name: "Row", note: "and more" }, { name: "Menu" }],
+      toProducts: "Each one installs it",
+      fromPages: "From every page it asks:",
+      services: [{ name: "Backend", address: "/api", via: "Through the client", note: "Balances" }, { name: "Login" }],
+      caption: "Built once, shown everywhere.",
+    },
+    worlds: {
+      heading: "Where the links lead",
+      listLabel: "The places",
+      groups: { simple: { name: "Plain", note: "Default: example.com/<place>" }, advanced: { name: "Own sites" } },
+      toProducts: "Each one may swap them",
+      toDestinations: "By default they lead to:",
+    },
+    release: {
+      heading: "How a change ships",
+      lanes: [
+        { name: "Upstream", where: "acme/header", steps: [{ name: "Merge", gate: "Checks pass." }, { name: "Tag", strong: true }] },
+        { name: "Downstream", steps: [{ name: "Adopt" }] },
+      ],
+    },
+    phone: {
+      heading: "On a phone",
+      header: { name: "Top", measure: "--top-h", note: "Published" },
+      page: { name: "Page" },
+      productBar: { name: "Actions", detail: "Go, Stop", note: "Sits here" },
+      bottomBar: { name: "Bottom", detail: "A · B", measure: "--bottom-h", note: "Taller on a phone" },
+      a11y: { measure: "--lift", note: "Lifted" },
+    },
+    contract: {
+      heading: "Who gives what",
+      columns: [
+        { title: "The product gives", items: [{ name: "Its client", note: "and cache" }] },
+        { title: "The bar gives", items: [{ name: "Its height" }] },
+      ],
+    },
+  },
+  worlds: [
+    { id: "gallery", label: "Gallery", href: "https://example.com/gallery", group: "simple", answer: { status: "answered", code: 404 } },
+    { id: "board", label: "Board", href: "https://board.example.com", group: "simple", answer: { status: "answered", code: 200 } },
+    { id: "slow", label: "Slow", href: "https://slow.example.com", group: "simple", answer: { status: "no_answer", message: "No answer within 8 seconds." } },
+    { id: "editor", label: "Editor", href: "https://editor.example.com", group: "advanced", answer: { status: "answered", code: 503 } },
+  ],
+}
+
 const REPORT: HeaderVersionsReport = {
   configured: true,
   invalidProducts: [],
   headerPackage: "@acme/header",
   latest: { status: "ok", version: "0.13.0", tagsUrl: "https://github.com/nodaroai/shell/tags" },
   releaseNotes: { status: "ok", releases: [NOTE], older: 0, compared: 9 },
+  headerMap: MAP,
   checkedAt: "2026-11-01T12:05:00.000Z",
   products: [
     product(
@@ -205,6 +269,110 @@ describe("HeaderVersionsPage", () => {
     if (said !== "Every site serves the newest release.") expect(within(section).queryByText("Every site serves the newest release.")).toBeNull()
   })
 
+  it("the worlds figure: the list, the products under it, and each site its default addresses lead to, with what each answered", async () => {
+    fetchMock.mockImplementation(() => answer(REPORT))
+    renderPage()
+    const figure = await screen.findByRole("figure", { name: "Where the links lead" })
+    // The list the header holds, its groups apart.
+    expect(within(within(figure).getByRole("list", { name: "Own sites" })).getByText("Editor")).toBeInTheDocument()
+    expect(within(figure).getByText("Default: example.com/<place>")).toBeInTheDocument()
+    // Which addresses a product passes is not reported yet: every product says so, none is drawn leading anywhere.
+    expect(within(figure).getAllByText("Not reported yet")).toHaveLength(REPORT.products.length)
+    expect(within(figure).getByTestId("world-links-verdict")).toHaveTextContent("1 of 4 addresses answer “not found”; 2 of 4 could not be checked.")
+    // Grouped by the site each address leads to; a site with a page not found is said so.
+    const gallery = within(figure).getByTestId("host-example.com")
+    expect(gallery).toHaveTextContent("Pages not found here")
+    expect(within(gallery).getByTestId("link-gallery")).toHaveTextContent("Not found 404")
+    expect(within(figure).getByTestId("host-board.example.com")).toHaveTextContent("Every page here answers")
+    expect(within(figure).getByTestId("link-board")).toHaveTextContent("Answers 200")
+    expect(within(figure).getByTestId("link-slow")).toHaveAttribute("title", "No answer within 8 seconds.")
+    expect(within(figure).getByTestId("host-editor.example.com")).toHaveTextContent("Some pages could not be checked")
+    expect(within(figure).getByTestId("link-editor")).toHaveTextContent("Error 503")
+    expect(within(gallery).getByRole("link", { name: /^\/gallery\s*\(opens in a new tab\)$/ })).toHaveAttribute("href", "https://example.com/gallery")
+  })
+
+  it("every address answering: says no address answers not found", async () => {
+    const worlds = MAP.status === "ok" ? MAP.worlds.map((world) => ({ ...world, answer: { status: "answered" as const, code: 200 } })) : []
+    fetchMock.mockImplementation(() => answer({ ...REPORT, headerMap: { ...MAP, worlds } }))
+    renderPage()
+    const figure = await screen.findByRole("figure", { name: "Where the links lead" })
+    expect(within(figure).getByTestId("world-links-verdict")).toHaveTextContent("No address answers “not found”.")
+  })
+
+  it("around the product map: the header's own parts inside its box, and the services it reaches from every product's page", async () => {
+    fetchMock.mockImplementation(() => answer(REPORT))
+    renderPage()
+    await screen.findByTestId("product-app")
+    expect(within(screen.getByRole("list", { name: "Inside the header" })).getAllByRole("listitem").map((part) => part.textContent)).toEqual(["Rowand more", "Menu"])
+    expect(screen.getByText("Each one installs it")).toBeInTheDocument()
+    const services = screen.getByRole("group", { name: "From every page it asks:" })
+    expect(services).toHaveTextContent("Through the client")
+    expect(services).toHaveTextContent("Backend/apiBalances")
+    expect(services).toHaveTextContent("Login")
+    expect(screen.getByText("Built once, shown everywhere.")).toBeInTheDocument()
+  })
+
+  it("how the header works: each figure in the header's own words, the version they were written for, and where to edit them", async () => {
+    fetchMock.mockImplementation(() => answer(REPORT))
+    renderPage()
+    const section = await screen.findByRole("region", { name: "How the header works" })
+    // The bar: every part named under it.
+    const bar = within(section).getByRole("figure", { name: "What the bar holds" })
+    for (const name of ["Mark", "Goes home.", "Places", "Tools", "Tongue", "Coins", "Me", "All of it is the bar", "A bar on every page."]) expect(bar).toHaveTextContent(name)
+    // The release: each lane's steps in order, and the check beside a step.
+    const lanes = within(within(section).getByRole("figure", { name: "How a change ships" })).getAllByRole("region")
+    expect(lanes.map((lane) => lane.getAttribute("aria-label"))).toEqual(["Upstream", "Downstream"])
+    const upstream = within(lanes[0]!).getByRole("list")
+    expect(upstream.tagName).toBe("OL")
+    expect(within(upstream).getAllByRole("listitem").map((step) => step.textContent)).toEqual(["MergeChecks pass.", "Tag"])
+    // The phone: its bands and the measures beside them.
+    const phone = within(section).getByRole("figure", { name: "On a phone" })
+    for (const words of ["Top", "--top-h", "Published", "Actions", "Go, Stop", "Bottom", "--bottom-h", "Taller on a phone", "--lift", "Lifted"]) expect(phone).toHaveTextContent(words)
+    // Who gives what: one card per direction.
+    const contract = within(section).getByRole("region", { name: "Who gives what" })
+    expect(within(contract).getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(["The product gives", "The bar gives"])
+    expect(within(contract).getByText("Its client")).toBeInTheDocument()
+    expect(within(contract).getByText("and cache")).toBeInTheDocument()
+    // Written for an older version than the newest release: both are said.
+    expect(section).toHaveTextContent("Written for 0.12.0; the newest release is 0.13.0.")
+    expect(within(section).getByRole("link", { name: /Edit them in the header's repository/ })).toHaveAttribute("href", "https://github.com/acme/header/blob/HEAD/docs/map.json")
+  })
+
+  it("a figure the file leaves out is not drawn", async () => {
+    const headerMap = { ...MAP, figures: { contract: MAP.status === "ok" ? MAP.figures.contract : undefined } }
+    fetchMock.mockImplementation(() => answer({ ...REPORT, headerMap }))
+    renderPage()
+    const section = await screen.findByRole("region", { name: "How the header works" })
+    expect(within(section).queryAllByRole("figure")).toHaveLength(0)
+    expect(within(section).getByRole("region", { name: "Who gives what" })).toBeInTheDocument()
+    expect(screen.queryByRole("list", { name: "Inside the header" })).toBeNull()
+  })
+
+  it("the explanations are text, never markup: tags and emphasis are shown as typed", async () => {
+    const markup = "<img src=x onerror=alert(1)> **bold** <b>b</b>"
+    const figures = MAP.status === "ok" ? MAP.figures : {}
+    const headerMap = { ...MAP, figures: { ...figures, anatomy: { ...figures.anatomy, heading: "<em>Heading</em>", caption: markup } } }
+    fetchMock.mockImplementation(() => answer({ ...REPORT, headerMap }))
+    renderPage()
+    const section = await screen.findByRole("region", { name: "How the header works" })
+    expect(within(section).getByText(markup)).toBeInTheDocument()
+    expect(within(section).getByText("<em>Heading</em>")).toBeInTheDocument()
+    expect(section.querySelector("img, b, em, strong")).toBeNull()
+  })
+
+  it.each([
+    [{ status: "missing" }, "No explanations found in the header's repository (or the GitHub token cannot see it)."],
+    [{ status: "error", message: "docs/map.json is not valid JSON." }, "docs/map.json is not valid JSON."],
+  ])("how the header works, without explanations to show, says why: %o", async (headerMap, said) => {
+    fetchMock.mockImplementation(() => answer({ ...REPORT, headerMap }))
+    renderPage()
+    const section = await screen.findByRole("region", { name: "How the header works" })
+    expect(within(section).getByText(said)).toBeInTheDocument()
+    // No worlds to ask without the file, and no figure drawn.
+    expect(screen.queryAllByRole("figure")).toHaveLength(0)
+    expect(screen.queryByRole("list", { name: "Inside the header" })).toBeNull()
+  })
+
   it("no products listed: names the setting and its shape; refused entries are said, never hidden", async () => {
     fetchMock.mockImplementation(() =>
       answer({ ...REPORT, products: [], invalidProducts: [{ index: 1, reason: "production: Invalid string" }, { index: -1, reason: "HEADER_VERSIONS_PRODUCTS is not valid JSON." }] }),
@@ -226,6 +394,7 @@ describe("HeaderVersionsPage", () => {
         headerPackage: null,
         latest: { status: "not_configured" },
         releaseNotes: { status: "not_configured" },
+        headerMap: { status: "not_configured" },
         products: [product("tools", { status: "not_configured" }, { status: "not_configured" })],
       }),
     )
@@ -239,6 +408,7 @@ describe("HeaderVersionsPage", () => {
     expect(screen.getByText("Shared header")).toBeInTheDocument()
     expect(screen.queryByTestId("up-to-date")).toBeNull()
     expect(screen.queryByRole("region", { name: "What changed between the versions" })).toBeNull()
+    expect(screen.queryByRole("region", { name: "How the header works" })).toBeNull()
   })
 
   it("Refresh asks past the server's kept answer and shows the new one", async () => {

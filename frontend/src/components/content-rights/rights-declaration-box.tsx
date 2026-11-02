@@ -20,11 +20,13 @@ export interface RightsDeclarationBoxProps {
   readonly textClass?: string
   /** Keeps pointer and key events inside the box — on the canvas they would drag the node. */
   readonly contained?: boolean
+  /** The short line beside the checkbox. Default: the one link import's ("for this link"). */
+  readonly label?: string
 }
 
 const STOP = (e: { stopPropagation(): void }) => e.stopPropagation()
 
-export function RightsDeclarationBox({ checked, disabled, onCheckedChange, textClass = "text-xs", contained }: RightsDeclarationBoxProps) {
+export function RightsDeclarationBox({ checked, disabled, onCheckedChange, textClass = "text-xs", contained, label }: RightsDeclarationBoxProps) {
   const t = useT()
   const declaration = useRightsDeclaration()
   const [open, setOpen] = useState(false)
@@ -54,7 +56,7 @@ export function RightsDeclarationBox({ checked, disabled, onCheckedChange, textC
           onCheckedChange={(value) => onCheckedChange(value === true)}
           className="mt-0.5"
         />
-        <span>{t("videolink.rightsConfirm")}</span>
+        <span>{label ?? t("videolink.rightsConfirm")}</span>
       </label>
       <button
         type="button"

@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 import { ENVIRONMENT_LOOK, NewTabLink } from "./product-card"
 import { ACCENT_TEXT } from "./product-icon"
 import { ENVIRONMENTS, newestVersion, upToDateCount } from "./site-face"
-import type { HeaderVersionsReport } from "./types"
+import type { HeaderVersionsReport, Named } from "./types"
 
 /**
  * The header itself on top — its name, its newest release, how many sites run
@@ -35,7 +35,22 @@ function NewestRelease({ report }: { report: HeaderVersionsReport }) {
   return <span className={cn(big, "text-muted-foreground")}>—</span>
 }
 
+/** The header's own parts, inside its box, as its repository names them. */
+function Inside({ parts }: { parts: readonly Named[] }) {
+  return (
+    <ul aria-label="Inside the header" className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${parts.length}, minmax(0, 1fr))` }}>
+      {parts.map((part) => (
+        <li key={part.name} className="rounded-lg border bg-card px-2 py-2 text-[12.5px] leading-snug">
+          <div>{part.name}</div>
+          {part.note && <div className="text-xs text-muted-foreground">{part.note}</div>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function ShellSummary({ report, refreshing, onRefresh }: { report: HeaderVersionsReport; refreshing: boolean; onRefresh: () => void }) {
+  const inside = report.headerMap.status === "ok" ? report.headerMap.figures.runtime?.inside : undefined
   const { upToDate, total } = upToDateCount(report)
   const ranked = newestVersion(report) !== null && total > 0
   return (
@@ -65,18 +80,19 @@ export function ShellSummary({ report, refreshing, onRefresh }: { report: Header
           )}
           <div className={cn(CHIP, "text-muted-foreground")}>Checked {checkedAt(report.checkedAt)}</div>
         </div>
+        {inside && <Inside parts={inside} />}
       </div>
     </div>
   )
 }
 
 /** The line from the header down to the bar over the cards; decoration only. */
-export function Connector({ count }: { count: number }) {
+export function Connector({ count, label = "Each product installs a version and shows it" }: { count: number; label?: string }) {
   const inset = `calc((100% - ${(count - 1) * CARD_GAP_PX}px) / ${2 * count})`
   return (
     <div className="relative h-[29px]">
       <div aria-hidden className="absolute inset-x-0 top-0 mx-auto h-7 w-0.5 bg-primary" />
-      <div className={cn("absolute start-[calc(50%+10px)] top-1.5 text-[13px]", ACCENT_TEXT)}>Each product installs a version and shows it</div>
+      <div className={cn("absolute start-[calc(50%+10px)] top-1.5 text-[13px]", ACCENT_TEXT)}>{label}</div>
       {count > 1 && <div aria-hidden className="absolute top-[27px] h-0.5 bg-primary" style={{ insetInline: inset }} />}
     </div>
   )

@@ -4,7 +4,9 @@ import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { importImageFromUrl } from "../lib/media-import.js"
 import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
+import { importViaOf } from "../lib/import-via.js"
 import { recordEvent } from "../lib/content-rights.js"
+import { requireAppWriteScope } from "../lib/scope-prehandler.js"
 
 /**
  * POST /v1/media/import-url — import a remote IMAGE into the caller's storage.
@@ -42,7 +44,8 @@ export const mediaImportUrlBody = z.object({
 })
 
 export async function mediaImportUrlRoutes(app: FastifyInstance) {
-  app.post("/v1/media/import-url", async (req, reply) => {
+  // An import lands a file in the account: a connected app needs a scope that lets it write.
+  app.post("/v1/media/import-url", { preHandler: requireAppWriteScope() }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
@@ -58,18 +61,24 @@ export async function mediaImportUrlRoutes(app: FastifyInstance) {
     }
 
     const { url, confirmationId } = parsed.data
-    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
+    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id, via: importViaOf(req), appId: req.appAuthorization?.appId ?? null, authorizationId: req.appAuthorization?.authorizationId ?? null }
+    // The confirmation the fetch ran under: the one sent, or one derived from a key's standing authorization.
+    let spent: string | null = null
     let result: Awaited<ReturnType<typeof importImageFromUrl>>
     try {
       await requireImportAllowed(url, rights)
-      result = await importImageFromUrl(userId, url, { beforeFetch: () => spendImportConfirmation(url, rights) })
+      result = await importImageFromUrl(userId, url, {
+        beforeFetch: async () => {
+          spent = await spendImportConfirmation(url, rights)
+        },
+      })
     } catch (e) {
       if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
       throw e
     }
-    if (confirmationId) {
+    if (spent) {
       const detail = result.ok ? { kind: "download_completed" as const, detail: { url: result.url } } : { kind: "download_failed" as const, detail: { code: result.code } }
-      recordEvent({ confirmationId, ...detail, lane: "route", requestId: req.id }).catch(() => undefined)
+      recordEvent({ confirmationId: spent, ...detail, lane: "route", requestId: req.id }).catch(() => undefined)
     }
     if (!result.ok) {
       return reply.status(result.status).send({

@@ -36,9 +36,13 @@
  * one whose Full depth takes its scene from the description AND the original
  * (`"description-and-original"`) while any environment's engine does not list
  * that scene (`castSwap.fullDepthScenes`): an engine from before it cannot
- * read the setting at all; and one whose masking names a depth colormap
+ * read the setting at all; one whose masking names a depth colormap
  * (`depthColormap`) while any environment's engine cannot draw that map
- * (`nodaro-motion-depth-colormap.ts`).
+ * (`nodaro-motion-depth-colormap.ts`); one whose full depth blurs the depth
+ * map (`depthBlur` above 0) while any environment's engine cannot
+ * (`nodaro-motion-depth-blur.ts`); and one whose face mesh draws only some
+ * of its parts (`faceMeshParts`) while any environment's engine does not list
+ * them (`nodaro-motion-face-mesh.ts`).
  *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_motion`)
  * with the setting before and after.
@@ -61,7 +65,15 @@ import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engin
 import { engineTakesScene } from "../lib/trends/prompt-style.js"
 import { fullDepthSceneOf, type FaceMaskingScene } from "../../lib/cast-swap-face-masking.js"
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
-import { cannotDrawFaceMeshMessage, drawsFaceMesh, environmentsThatCannotDrawFaceMesh } from "../lib/nodaro-motion-face-mesh.js"
+import {
+  cannotDrawFaceMeshMessage,
+  cannotDrawFaceMeshPartsMessage,
+  drawsFaceMesh,
+  environmentsThatCannotDrawFaceMesh,
+  environmentsThatCannotDrawFaceMeshParts,
+  faceMeshPartsOfSetting,
+} from "../lib/nodaro-motion-face-mesh.js"
+import { cannotBlurDepthMessage, depthBlurOfSetting, environmentsThatCannotBlurDepth } from "../lib/nodaro-motion-depth-blur.js"
 import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
@@ -122,7 +134,10 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
       })
       // A depth colormap likewise (each map named, once).
       const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
-      if (hides || meshes || scenes.length > 0 || colormaps.length > 0) {
+      // A depth blur, and face mesh parts other than the full mesh (each named, once), likewise.
+      const blurs = NODARO_MOTION_ENGINES.some((engine) => depthBlurOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
+      const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
+      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || blurs || parts.length > 0) {
         const environments = await listEngineEnvironments()
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -150,6 +165,14 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
         if (maps.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } })
+        }
+        const blur = blurs ? environmentsThatCannotBlurDepth(environments) : []
+        if (blur.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotBlurDepthMessage(blur), envs: blur } })
+        }
+        const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
+        if (partsLacking.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } })
         }
       }
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style

@@ -109,6 +109,37 @@ describe("createGitHubReader", () => {
     expect(await reader.fileAt("acme/tools", "package.json", "abc")).toBeNull()
   })
 
+  it("reads a file as it stands on the default branch, conditionally; a missing file is null", async () => {
+    const encoded = Buffer.from('{"asOf":"1.0.0"}', "utf8").toString("base64")
+    let calls = 0
+    const { fetch, seen } = recorder((url) => {
+      if (url.pathname.endsWith("missing.json")) return Response.json({ message: "Not Found" }, { status: 404 })
+      calls++
+      return calls === 1 ? Response.json({ type: "file", encoding: "base64", content: encoded }, { headers: { etag: 'W/"m1"' } }) : new Response(null, { status: 304 })
+    })
+    const reader = createGitHubReader("tok", { fetch })
+    expect(await reader.currentFile("acme/shell", "docs/map.json")).toBe('{"asOf":"1.0.0"}')
+    expect(seen[0]?.url.pathname).toBe("/repos/acme/shell/contents/docs/map.json")
+    // No commit named: the default branch as it stands.
+    expect(seen[0]?.url.searchParams.has("ref")).toBe(false)
+    // Unchanged since: GitHub's 304 hands back the text it sent before.
+    expect(await reader.currentFile("acme/shell", "docs/map.json")).toBe('{"asOf":"1.0.0"}')
+    expect(seen[1]?.headers.get("if-none-match")).toBe('W/"m1"')
+    expect(await reader.currentFile("acme/shell", "docs/missing.json")).toBeNull()
+  })
+
+  it("decodes GitHub's base64 as it sends it: wrapped in lines, carrying UTF-8 beyond ASCII", async () => {
+    const text = JSON.stringify({ note: "Explore, Image, Video… and “More”", padding: "x".repeat(120) })
+    const wrapped = Buffer.from(text, "utf8").toString("base64").replace(/(.{60})/g, "$1\n")
+    const reader = createGitHubReader("tok", { fetch: async () => Response.json({ type: "file", encoding: "base64", content: wrapped }) })
+    expect(await reader.currentFile("acme/shell", "docs/map.json")).toBe(text)
+  })
+
+  it("a file sent in a form it cannot decode is a refusal, never empty text", async () => {
+    const reader = createGitHubReader("tok", { fetch: async () => Response.json({ type: "file", encoding: "none", content: "" }) })
+    await expect(reader.currentFile("acme/shell", "docs/map.json")).rejects.toBeInstanceOf(GitHubError)
+  })
+
   it("a refusal carries GitHub's words and status; no connection is said plainly", async () => {
     const refused = createGitHubReader("tok", { fetch: async () => Response.json({ message: "Bad credentials" }, { status: 401 }) })
     await expect(refused.tags("acme/shell")).rejects.toMatchObject({ status: 401, message: "GitHub answered 401: Bad credentials" })

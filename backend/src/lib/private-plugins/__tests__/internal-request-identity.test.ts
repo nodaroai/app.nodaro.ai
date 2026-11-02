@@ -166,6 +166,8 @@ describe("tk.http.internalRequest owns how the body is read and who it acts as",
           "x-internal-orchestrator": "1",
           "X-App-Run": "true",
           "x-web-free-mode": "true",
+          // A plugin naming a way in for the user it acts as (a standing authorization's cover, a session's say-so).
+          "X-Internal-Import-Via": "session",
           "X-Nodaro-Workspace": "00000000-0000-4000-8000-0000000000c3",
           Authorization: "Bearer someone-else",
           Cookie: "sb=someone-else",
@@ -182,7 +184,7 @@ describe("tk.http.internalRequest owns how the body is read and who it acts as",
       expect(got.isAppRun).toBe(false)
       expect(got.webFreeMode).toBe(false)
       expect(got.headers["x-internal-user-id"]).toBe(CALLER)
-      for (const name of ["x-internal-orchestrator", "x-app-run", "x-web-free-mode", "x-nodaro-workspace", "authorization", "cookie"]) {
+      for (const name of ["x-internal-orchestrator", "x-internal-import-via", "x-app-run", "x-web-free-mode", "x-nodaro-workspace", "authorization", "cookie"]) {
         expect(got.headers[name]).toBeUndefined()
       }
       expect(got.headers.host).not.toBe("elsewhere.example")

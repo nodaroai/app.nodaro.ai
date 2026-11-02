@@ -19,6 +19,7 @@ const REPORT: HeaderVersionsReport = {
   headerPackage: null,
   latest: { status: "not_configured" },
   releaseNotes: { status: "not_configured" },
+  headerMap: { status: "not_configured" },
   products: [],
   checkedAt: "2026-11-01T12:00:00.000Z",
 }

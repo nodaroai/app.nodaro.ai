@@ -52,10 +52,18 @@ describe("the run's real video-link downloader", () => {
     })
     const track = await realVideoLinkFetchDeps.downloadAudio(URL_, { userId: "u1", confirmationId: CONFIRMATION, requestId: "exec-1:src" })
     expect(track).toBe("https://cdn.test/a.mp3")
-    const rights = { userId: "u1", confirmationId: CONFIRMATION, lane: "run", requestId: "exec-1:src" }
+    const rights = { userId: "u1", confirmationId: CONFIRMATION, lane: "run", requestId: "exec-1:src", via: null }
     expect(requireImportAllowed).toHaveBeenCalledWith(URL_, rights)
     expect(downloadAudioToR2).toHaveBeenCalledWith(URL_, rights)
     expect(order).toEqual(["gate", "slot"])
+  })
+
+  it("the way the run was started reaches both engines as the rights' way in", async () => {
+    await realVideoLinkFetchDeps.downloadVideo({ url: URL_, userId: "u1", via: "mcp" })
+    expect(downloadVideoForRun).toHaveBeenCalledWith(expect.objectContaining({ importVia: "mcp" }))
+    await realVideoLinkFetchDeps.downloadAudio(URL_, { userId: "u1", via: "api" })
+    expect(requireImportAllowed).toHaveBeenCalledWith(URL_, expect.objectContaining({ via: "api" }))
+    expect(downloadAudioToR2).toHaveBeenCalledWith(URL_, expect.objectContaining({ via: "api" }))
   })
 
   it("a refused sound import never reaches the slot", async () => {

@@ -318,3 +318,71 @@ describe("compositeFaceMesh on a coloured depth map", () => {
     await expect(compositeFaceMesh(grayDepth(), GW, GH, overlay(), { rgb: Buffer.alloc(9), width: GW, height: GH, table })).rejects.toThrow(/depth/)
   })
 })
+
+describe("parts: the full mesh, the eye and lip outlines, or the lip outline", () => {
+  const faces = () => [face(0.3, 0.2, 0.4, 0.6)]
+  const gray = () => frame(W, H, () => [128, 128, 128])
+  const changedAt = (a: Buffer, b: Buffer): Set<number> => {
+    const out = new Set<number>()
+    for (let i = 0; i < a.length; i += 3) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) out.add(i / 3)
+    return out
+  }
+
+  it('"full" is the overlay of before, byte for byte (the default)', () => {
+    expect(faceMeshOverlay(faces(), W, H, "full")).toEqual(faceMeshOverlay(faces(), W, H))
+    expect(faceMeshOverlay([face(0.02, 0.05, 0.96, 0.9)], 400, 200, "full")).toEqual(faceMeshOverlay([face(0.02, 0.05, 0.96, 0.9)], 400, 200))
+  })
+
+  it('"features": no wireframe, the outlines exactly the full mesh\'s (the same box and widths)', () => {
+    const full = faceMeshOverlay(faces(), W, H)!
+    const features = faceMeshOverlay(faces(), W, H, "features")!
+    expect(features.meshSvg).toBe("")
+    expect(features.outlineSvg).toBe(full.outlineSvg)
+    expect([features.left, features.top, features.width, features.height]).toEqual([full.left, full.top, full.width, full.height])
+  })
+
+  it('"mouth": no wireframe, the lip outline alone — its path a part of the full outline\'s', () => {
+    const full = faceMeshOverlay(faces(), W, H)!
+    const mouth = faceMeshOverlay(faces(), W, H, "mouth")!
+    expect(mouth.meshSvg).toBe("")
+    const segments = (svg: string) => (svg.match(/M/g) ?? []).length
+    // 40 lip edges, of the 40 + 16 + 16 the outlines join (each edge one "M…L…" segment).
+    expect(segments(mouth.outlineSvg)).toBe(40)
+    expect(segments(full.outlineSvg)).toBe(72)
+    const pathOf = (svg: string) => /d="([^"]*)"/.exec(svg)![1]!
+    expect(pathOf(full.outlineSvg).startsWith(pathOf(mouth.outlineSvg))).toBe(true)
+    expect(mouth.outlineSvg.match(/stroke-width="[^"]*"/)![0]).toBe(full.outlineSvg.match(/stroke-width="[^"]*"/)![0])
+  })
+
+  it("what each draws is a part of what the full mesh draws: mouth ⊂ features ⊂ full, and the outlines' pixels the same", async () => {
+    const rgb = gray()
+    const full = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H)!)
+    const features = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H, "features")!)
+    const mouth = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H, "mouth")!)
+    const fullAt = changedAt(rgb, full)
+    const featuresAt = changedAt(rgb, features)
+    const mouthAt = changedAt(rgb, mouth)
+    expect(mouthAt.size).toBeGreaterThan(0)
+    expect(mouthAt.size).toBeLessThan(featuresAt.size)
+    expect(featuresAt.size).toBeLessThan(fullAt.size)
+    for (const p of mouthAt) expect(featuresAt.has(p)).toBe(true)
+    for (const p of featuresAt) expect(fullAt.has(p)).toBe(true)
+    // An outline pixel the wireframe does not touch is the same in each.
+    const outlineOnly = await compositeFaceMesh(rgb, W, H, { ...faceMeshOverlay(faces(), W, H)!, meshSvg: "" })
+    for (const p of featuresAt) expect([...features.subarray(3 * p, 3 * p + 3)]).toEqual([...outlineOnly.subarray(3 * p, 3 * p + 3)])
+  })
+
+  it("on a coloured depth map too: no wireframe drawn, the outlines in the map's tones", async () => {
+    const table = depthColormapTable("inferno")
+    const gOf = (x: number) => Math.round((x / (W - 1)) * 255)
+    const depth = { rgb: frame(W, H, (x) => [gOf(x), gOf(x), gOf(x)]), width: W, height: H, table }
+    const rgb = frame(W, H, (x) => [table[3 * gOf(x)]!, table[3 * gOf(x) + 1]!, table[3 * gOf(x) + 2]!])
+    const full = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H)!, depth)
+    const features = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H, "features")!, depth)
+    const fullAt = changedAt(rgb, full)
+    const featuresAt = changedAt(rgb, features)
+    expect(featuresAt.size).toBeGreaterThan(0)
+    expect(featuresAt.size).toBeLessThan(fullAt.size)
+    for (const p of featuresAt) expect(fullAt.has(p)).toBe(true)
+  })
+})

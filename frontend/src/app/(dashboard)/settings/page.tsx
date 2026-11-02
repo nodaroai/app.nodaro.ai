@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { ConsentSettingsSlot } from "@/components/layout/consent-settings-slot"
+import { StandingAuthorizationCard } from "@/components/content-rights/standing-authorization-card"
 import { hasAdmin, hasCredits, isCloud } from "@/lib/edition"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { toast } from "sonner"
@@ -418,6 +419,10 @@ export default function SettingsPage() {
         </div>
         <ChevronRight className={cn("h-5 w-5 text-muted-foreground", isRtl && "rotate-180")} />
       </Link>
+
+      {/* Content rights — every edition: a key's or an agent's import of a
+          link has no box to tick, so the person authorizes those once here. */}
+      <StandingAuthorizationCard />
 
       {/* Provider keys — self-hosted editions manage them under Integrations
           (next to the nodaro.ai connection); this is the pointer for anyone

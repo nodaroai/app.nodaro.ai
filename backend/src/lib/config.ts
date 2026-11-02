@@ -245,6 +245,13 @@ export const envSchema = z.object({
   /** The Loops transactional template of the monthly credit statement
    *  (ee/notifications/monthly-statement.ts). Empty = no statements are sent. */
   LOOPS_MONTHLY_STATEMENT_ID: z.string().default(""),
+  /** The Loops transactional templates of the public complaints form
+   *  (lib/complaint-mail.ts): the one-time link that proves the complainant's
+   *  email (data variables `reference`, `verifyUrl`), and the acknowledgment
+   *  once it is proven (`reference`). Empty = the case is still opened and
+   *  the handler sees it was never mailed. */
+  LOOPS_COMPLAINT_VERIFY_ID: z.string().default(""),
+  LOOPS_COMPLAINT_RECEIVED_ID: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

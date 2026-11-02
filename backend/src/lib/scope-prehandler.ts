@@ -28,6 +28,32 @@ export function requireAppScope(scope: Scope) {
   }
 }
 
+/** Whether a connected app's grant lets it act on the owner's behalf: any `:write` or `:execute` scope. */
+export function appScopesCanWrite(scopes: readonly string[]): boolean {
+  return scopes.some((s) => s.endsWith(":execute") || s.endsWith(":write"))
+}
+
+/**
+ * Like {@link requireAppScope}, for a route that acts on the owner's behalf
+ * without spending credits (an import of a link into their files, a content
+ * rights confirmation in their name): an OAuth app passes with ANY `:write` or
+ * `:execute` scope — the same line the credit guard draws for a generation —
+ * and one granted only read scopes is refused. No-op for every other caller.
+ * Same halt rule — the refusal RETURNS the reply.
+ */
+export function requireAppWriteScope() {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> => {
+    if (!req.appAuthorization) return
+    if (appScopesCanWrite(req.appAuthorization.scopes)) return
+    return reply.status(403).send({
+      error: {
+        code: "insufficient_scope",
+        message: "This app's granted scopes do not permit acting on the account's files; a :write or :execute scope is required.",
+      },
+    })
+  }
+}
+
 /**
  * Like {@link requireAppScope}, for a route that more than one scope already
  * reveals: an OAuth app passes with ANY of `scopes`. A refusal names the first

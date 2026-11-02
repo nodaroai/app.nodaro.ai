@@ -58,6 +58,8 @@ function libsThatFetch() {
 beforeEach(async () => {
   vi.clearAllMocks()
   mocks.recordEvent.mockResolvedValue(true)
+  // The gate answers the confirmation the import runs under (the one sent here).
+  mocks.spendImportConfirmation.mockImplementation(async (_url: string, rights: { confirmationId?: string | null }) => rights.confirmationId ?? null)
   libsThatFetch()
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {

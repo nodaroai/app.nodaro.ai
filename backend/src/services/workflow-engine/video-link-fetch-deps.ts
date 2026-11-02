@@ -32,10 +32,10 @@ export const realVideoLinkFetchDeps: VideoLinkFetchDeps = {
       return { durationSec: null, title: null, isLive: false }
     }
   },
-  downloadVideo: ({ url, userId, maxHeight, section, signal, confirmationId, requestId }) =>
-    downloadVideoForRun({ url, userId, maxHeight, section, signal, rightsConfirmationId: confirmationId ?? null, requestId: requestId ?? null }),
-  downloadAudio: async (url, { userId, signal, confirmationId, requestId }) => {
-    const rights: ImportRights = { userId, confirmationId: confirmationId ?? null, lane: "run", requestId: requestId ?? null }
+  downloadVideo: ({ url, userId, maxHeight, section, signal, confirmationId, requestId, via }) =>
+    downloadVideoForRun({ url, userId, maxHeight, section, signal, rightsConfirmationId: confirmationId ?? null, requestId: requestId ?? null, importVia: via ?? null }),
+  downloadAudio: async (url, { userId, signal, confirmationId, requestId, via }) => {
+    const rights: ImportRights = { userId, confirmationId: confirmationId ?? null, lane: "run", requestId: requestId ?? null, via: via ?? null }
     await requireImportAllowed(url, rights)
     return withDownloadSlot(userId, () => downloadAudioToR2(url, rights), { signal })
   },

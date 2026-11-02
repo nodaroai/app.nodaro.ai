@@ -87,6 +87,96 @@ export type ReleaseNotesResult =
   | { readonly status: "not_configured" }
   | { readonly status: "error"; readonly message: string }
 
+/** One thing named in a figure, with an optional line about it. Plain text, never markup. */
+export interface Named {
+  readonly name: string
+  readonly note?: string
+}
+
+/** A band of the phone figure; `measure` names the CSS property that sizes it. */
+export interface PhoneBand {
+  readonly name: string
+  readonly detail?: string
+  readonly measure?: string
+  readonly note?: string
+}
+
+/** The words of each figure the page draws; a figure the file leaves out is not drawn. */
+export interface MapFigures {
+  readonly anatomy?: {
+    readonly heading: string
+    readonly barLabel: string
+    readonly parts: Readonly<Record<"logo" | "worlds" | "developers" | "language" | "credits" | "account", Named>>
+    readonly caption?: string
+  }
+  readonly runtime?: {
+    readonly inside: readonly Named[]
+    readonly toProducts: string
+    readonly fromPages: string
+    readonly services: readonly { readonly name: string; readonly address?: string; readonly via?: string; readonly note?: string }[]
+    readonly caption?: string
+  }
+  readonly worlds?: {
+    readonly heading: string
+    readonly listLabel: string
+    readonly groups: Readonly<Record<"simple" | "advanced", Named>>
+    readonly toProducts: string
+    readonly toDestinations: string
+    readonly caption?: string
+  }
+  readonly release?: {
+    readonly heading: string
+    readonly lanes: readonly { readonly name: string; readonly where?: string; readonly steps: readonly { readonly name: string; readonly gate?: string; readonly strong?: boolean }[] }[]
+    readonly caption?: string
+  }
+  readonly phone?: {
+    readonly heading: string
+    readonly header: PhoneBand
+    readonly page: PhoneBand
+    readonly productBar: PhoneBand
+    readonly bottomBar: PhoneBand
+    readonly a11y: { readonly measure?: string; readonly note?: string }
+    readonly caption?: string
+  }
+  readonly contract?: {
+    readonly heading: string
+    readonly columns: readonly { readonly title: string; readonly items: readonly Named[] }[]
+    readonly caption?: string
+  }
+}
+
+/**
+ * What a world's address answered when the page asked it: the HTTP status
+ * after redirects, or no answer. A site that serves one page at every address
+ * answers 200 even where no such page exists; only a real "not found" tells.
+ */
+export type LinkAnswer = { readonly status: "answered"; readonly code: number } | { readonly status: "no_answer"; readonly message: string }
+
+/** A world of the header's worlds row, at the address the header gives it by default. */
+export interface WorldLink {
+  readonly id: string
+  readonly label: string
+  readonly href: string
+  readonly group: "simple" | "advanced"
+  readonly answer: LinkAnswer
+}
+
+/** The header's explanations of itself, as its own repository keeps them. */
+export type HeaderMapResult =
+  | {
+      readonly status: "ok"
+      /** The header version the text was written for. */
+      readonly asOf: string
+      /** The file on GitHub. */
+      readonly url: string
+      readonly figures: MapFigures
+      readonly worlds: readonly WorldLink[]
+    }
+  /** The header's repository keeps no such file (yet). */
+  | { readonly status: "missing" }
+  | { readonly status: "not_configured" }
+  | { readonly status: "error"; readonly message: string }
+
 export interface HeaderVersionsReport {
   /** Whether the GitHub token is set; without it only a site's own file can be read. */
   readonly configured: boolean
@@ -97,6 +187,8 @@ export interface HeaderVersionsReport {
   readonly latest: LatestResult
   /** What each release since the oldest version in use brought. */
   readonly releaseNotes: ReleaseNotesResult
+  /** How the header works, and what its worlds' addresses answer. */
+  readonly headerMap: HeaderMapResult
   readonly products: readonly ProductView[]
   readonly checkedAt: string
 }

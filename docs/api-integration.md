@@ -5080,6 +5080,9 @@ text, when, from where) and of the download made under it.
 |---|---|---|
 | `GET` | `/v1/content-rights/declaration` | The current declaration: `{ data: { version, text } }`. Public — a client shows it before anyone signs in. |
 | `POST` | `/v1/content-rights/confirm` | Records that the signed-in account confirmed the declaration for one link (`{ url, declarationVersion }`) → `201 { data: { id, declarationVersion, expiresAt } }`. `409 rights_confirmation_stale` when the declaration changed since the client read it: read it again and ask again. |
+| `GET` | `/v1/content-rights/authorization` | The account's standing authorization for imports through its API keys and AI agents: `{ data: { id, declarationVersion, createdAt } }`, or `{ data: null }` when there is none (never given, revoked, or given under an older declaration). |
+| `POST` | `/v1/content-rights/authorization` | Records one for the current declaration (`{ declarationVersion }`) → `201 { data: { id, declarationVersion, createdAt } }`. The person's own session only: a key, an agent or a connected app answers `403 forbidden`. `409 rights_confirmation_stale` when the declaration changed since. |
+| `DELETE` | `/v1/content-rights/authorization` | Revokes it (the record stays) → `{ data: { revoked } }`. The person's own session only. |
 
 The flow in a client: read the declaration, show its `text` with a checkbox
 that starts unticked, call `confirm` with the link once it is ticked, and send
@@ -5091,7 +5094,9 @@ the stored file. Checked and consumed before anything is fetched — a refused
 import never starts.
 
 `POST /v1/download-video` answers `403` with one of these codes when the
-confirmation does not fit: `rights_confirmation_not_found`,
+confirmation does not fit (`rights_authorization_required` is the import of a
+key or an agent with no confirmation and no standing authorization, below):
+`rights_confirmation_not_found`,
 `rights_confirmation_mismatch` (another account, or another link),
 `rights_confirmation_stale` (the declaration changed), `rights_confirmation_expired`,
 `rights_confirmation_used` (a download was made under it already).
@@ -5128,13 +5133,46 @@ downloads confirm as they go, one confirmation per download; a published app's
 page confirms a link whose sound the run fetches when Run is pressed, for that
 run.
 
-**Not covered yet, and a blocker before the
-setting is turned on** — these lanes run the check but have no way to send a
-confirmation, so with the setting on each one is refused: a run started by an
-agent over MCP (`run_app`, `run_workflow`: nobody ticks a box), `POST /v1/transcribe`
-and the Suno cover and upload-extend routes given a link, the MCP audio tool,
-the editor's own picture-link import, and a private plugin's own download.
-Those lanes, and the standing authorization for API keys and agents, are a
+**The standing authorization (API keys, connected apps, AI agents).** An
+import made through a personal API key or billing key, a connected OAuth app,
+or an AI agent over MCP (`run_app`, `run_workflow`, the audio tool, and every
+import a run so started makes) has nobody to tick a box per link. The person
+authorizes those imports ONCE, in their own session: Settings → "Imports
+through API keys, connected apps and AI agents", or
+`POST /v1/content-rights/authorization` from a session (the SDK's
+`contentRights.authorize`). Every such import is then recorded as a
+confirmation DERIVED from that authorization — one per download, as a ticked
+box would be — and the import passes without a `confirmationId`. A
+`confirmationId` sent along is still honored first. The authorization names
+the declaration version it was given for: a new declaration asks for a new
+one, exactly as it asks for a new tick, and until then the account counts as
+not authorized. Revoking keeps the record and ends the cover from then on.
+
+A connected app imports, and confirms, only with a scope that lets it write
+for the account (any `:write` or `:execute` scope, the line a generation
+draws): an app granted read scopes alone is answered `403 insufficient_scope`
+by the import routes and by `POST /v1/content-rights/confirm`, before any
+rights check, so it neither imports nor stands on the authorization. A run a
+key, an app or an agent started carries its way in to every import the run
+makes: the Video URL node's fetches, the routes its nodes call, and the
+worker-run nodes that fetch a link (a transcription, a Suno cover or extend,
+a trim of a link's sound).
+
+With `content_rights_required` on, an import through a key, an app or an agent
+with neither a confirmation nor a standing authorization is refused with
+`403 rights_authorization_required` (the SDK's `ImportRefusedError` carries the
+code); the remedy is the person authorizing in their settings, never the key
+or the agent itself (`POST /v1/content-rights/authorization` answers
+`403 forbidden` to anything but a session). A run or a request that reaches an
+import from no way in at all (a schedule's or a webhook's run, a server's own
+relay) is covered by no authorization and, with the setting on, refused like a
+person who did not tick.
+
+**Not covered yet** — these lanes run the check but have no way to send a
+confirmation, so with the setting on each one is refused unless it came
+through a key or an agent with a standing authorization: `POST /v1/transcribe`
+and the Suno cover and upload-extend routes given a link, the editor's own
+picture-link import, and a private plugin's own download. Those lanes are a
 later change.
 
 **Import source policies.** Before the confirmation is checked, the link's
@@ -5146,6 +5184,50 @@ is no way to ask for a permission yet). The site is the host of the link as
 submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
+
+## 13j. Content complaints (the public form)
+
+The form at `/copyright-complaints` on the app's host, where anyone reports
+content on the platform that they believe infringes their rights: a
+**copyright infringement notice** (the fields and the two statements the
+copyright policy names), or **another complaint** (unauthorized use of an
+image or likeness, unauthorized voice use, impersonation or identity misuse,
+a privacy violation, or another legal complaint). The routes are public: a
+complainant has no account here. They are the form's own contract and have
+no SDK method, CLI command or MCP tool — a complaint is a person's legal act,
+made on the page.
+
+| Method | Route | What it does |
+|--------|-------|--------------|
+| `GET` | `/v1/content-complaints/statements` | The two statements a copyright notice affirms, verbatim: `{ data: { goodFaith, accuracy } }`. The form shows them and never carries their text. |
+| `POST` | `/v1/content-complaints` | Opens a case. `{ kind: "copyright", name, email, address, phone, claimantRole: "owner" \| "agent", originalWork, originalWorkUrl?, reportedContent, explanation, signature, goodFaith: true, accuracy: true }`, or `{ kind: "other", category, name, email, reportedContent, explanation, address?, phone? }` with `category` one of `likeness`, `voice`, `impersonation`, `privacy`, `other`. → `202 { data: { reference, verificationRequired: true } }`. `400 validation_error` for a missing field or an unaffirmed statement; `429` after five submissions from one network in ten minutes; `503 complaints_unavailable` on a deployment with no encryption key. |
+| `GET` | `/v1/content-complaints/verify?token=` | The one-time link in the email: proves the complainant's address and sends the person back to the form with `?verified=ok`, or `?verified=invalid` for a link already used, expired (72 hours) or unknown. |
+
+**What a submission does.** The case is opened at once, before any email,
+with a reference number (`CR-<year>-<number>`) the complainant quotes from
+then on; nothing a complainant sends is ever dropped. The complainant's
+personal details are stored encrypted, bound to the deployment's key, and
+what they submitted (the work, the explanation, the statements affirmed) is
+frozen: the case moves (its status, its handler, its decision) but the
+submission never changes, and a case is never deleted. The links the
+complainant gives are matched, as text, against the platform's own records
+(a confirmation made for that link, a file imported from it, a file whose
+own address it is); nothing a complainant writes is ever fetched. The answer
+is the same whether or not the links name anything the platform holds: the
+form reveals nothing about what is stored.
+
+**Verification and the acknowledgment.** The complainant is emailed a link
+good for 72 hours; opening it marks the case verified and sends the
+acknowledgment with the reference number, once: the same link opened again
+(a mail scanner's prefetch, a second click) lands on the same page and sends
+nothing more. One address is sent at most three verification emails a day;
+the cases beyond that are still opened. A deployment with no mailer, no
+template (`LOOPS_COMPLAINT_VERIFY_ID` and `LOOPS_COMPLAINT_RECEIVED_ID`,
+Cloud) or no `PUBLIC_URL` still opens and keeps the case; the case's log says
+the email never went, and the handler reaches the complainant from the case.
+Once the case exists, nothing that follows (the email, the log) turns the
+answer into a failure. A complaint never removes or restricts content by
+itself: every case is handled by a person.
 
 ## 14. Pipelines
 

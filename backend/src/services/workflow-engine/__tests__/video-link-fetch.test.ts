@@ -153,6 +153,16 @@ describe("fetching a Video URL node's link on the server — the card's rules, b
       const request = d.downloadVideo.mock.calls[0]![0] as Record<string, unknown>
       expect("confirmationId" in request).toBe(false)
       expect("requestId" in request).toBe(false)
+      expect("via" in request).toBe(false)
+    })
+
+    it("the way the run was started rides into every fetch, video and sound", async () => {
+      const video = deps()
+      await fetchVideoLinksForRun({ nodes: [link("src", { youtubeUrl: TIKTOK }), node("va", "video-analysis")], edges: [edge("src", "va")], userId: "u1", executionId: "exec-1", importVia: "mcp" }, video)
+      expect(video.downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ via: "mcp", requestId: "exec-1:src" }))
+      const sound = deps()
+      await fetchVideoLinksForRun({ nodes: [link("src", { youtubeUrl: TIKTOK }), node("tr", "transcribe")], edges: [edge("src", "tr")], userId: "u1", importVia: "api" }, sound)
+      expect(sound.downloadAudio).toHaveBeenCalledWith(TIKTOK, expect.objectContaining({ userId: "u1", via: "api" }))
     })
   })
 

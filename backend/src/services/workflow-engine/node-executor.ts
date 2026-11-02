@@ -2580,12 +2580,18 @@ async function executeWorkerNode(
 
   // 4. Update payload with usageLogId. A run kept to the cheap lanes says so
   // on every worker payload (a handler that makes a model call reads it;
-  // every other one ignores the key), so no node type has to be listed.
+  // every other one ignores the key), so no node type has to be listed. The
+  // way the run was started rides the same way (`importVia`): a handler that
+  // fetches a link reads it through `importRightsOf` (workers/shared.ts), so a
+  // key's or an agent's run stands on the account's standing authorization in
+  // its worker-queued nodes as it does in its routes; every other handler
+  // ignores the key.
   const enrichedPayload = {
     ...payload,
     usageLogId,
     ...(refVideoDurationsSec ? { refVideoDurationsSec } : {}),
     ...(ctx.cheapLanesOnly ? { cheapLanesOnly: true } : {}),
+    ...(ctx.importVia ? { importVia: ctx.importVia } : {}),
   }
 
   // 5. Enqueue to BullMQ (lower priority than interactive single-node runs)

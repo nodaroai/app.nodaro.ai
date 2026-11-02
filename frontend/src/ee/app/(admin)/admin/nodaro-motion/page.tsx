@@ -61,8 +61,10 @@ import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAu
 import { prismReferenceAudioModesEveryEngineTakes, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
 import {
+  environmentsThatCannotBlurDepth,
   environmentsThatCannotDrawColormaps,
   environmentsThatCannotDrawFaceMesh,
+  environmentsThatCannotDrawFaceMeshParts,
   environmentsThatCannotForceStyle,
   environmentsThatCannotHideBodies,
 } from "../trends/clip-preparation"
@@ -102,6 +104,9 @@ export default function AdminNodaroMotionPage() {
   const faceMeshMissingIn = environmentsThatCannotDrawFaceMesh(envs.data)
   // The depth colormaps likewise: each offered only once every environment's engine draws it.
   const depthColormapsMissingIn = environmentsThatCannotDrawColormaps(envs.data)
+  // The Motion column's depth blur and face mesh parts likewise (a Cast Swap engine from 0.430.0 declares them).
+  const depthBlurMissingIn = environmentsThatCannotBlurDepth(envs.data)
+  const faceMeshPartsMissingIn = environmentsThatCannotDrawFaceMeshParts(envs.data)
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
@@ -263,6 +268,8 @@ export default function AdminNodaroMotionPage() {
                         bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
                         depthColormapsMissingIn={depthColormapsMissingIn}
+                        depthBlurMissingIn={depthBlurMissingIn}
+                        faceMeshPartsMissingIn={faceMeshPartsMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
                       />
                     ) : motionQuery.error ? (

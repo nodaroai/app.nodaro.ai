@@ -67,6 +67,8 @@ export const VIDEO_LINK_FETCH_CONCURRENCY = 2
 export interface VideoLinkFetchRights {
   readonly confirmationId?: string
   readonly requestId?: string
+  /** How the run was started (`lib/import-via.ts`): a key's or an agent's run stands on a standing authorization. */
+  readonly via?: "session" | "api" | "app" | "mcp"
 }
 
 export interface VideoLinkFetchDeps {
@@ -109,6 +111,8 @@ export interface VideoLinkFetchInput {
   readonly userId: string
   /** The execution this fetch belongs to: with the node's id, the request a confirmation is spent by. */
   readonly executionId?: string
+  /** How the run was started: what every fetch here is held to (`VideoLinkFetchRights.via`). */
+  readonly importVia?: "session" | "api" | "app" | "mcp"
   readonly signal?: AbortSignal
   /** A fetch begins / ends, for the run's progress. */
   readonly onFetch?: (nodeId: string, phase: "start" | "end") => void
@@ -182,6 +186,7 @@ function rightsOf(node: VideoLinkFetchNode, input: VideoLinkFetchInput): VideoLi
   return {
     ...(confirmationId !== "" ? { confirmationId } : {}),
     ...(input.executionId ? { requestId: `${input.executionId}:${node.id}` } : {}),
+    ...(input.importVia ? { via: input.importVia } : {}),
   }
 }
 

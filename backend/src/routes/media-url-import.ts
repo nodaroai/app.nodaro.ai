@@ -4,7 +4,9 @@ import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { importRecordingFromUrl } from "../lib/media-url-import.js"
 import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
+import { importViaOf } from "../lib/import-via.js"
 import { recordEvent } from "../lib/content-rights.js"
+import { requireAppWriteScope } from "../lib/scope-prehandler.js"
 
 /**
  * POST /v1/media/import-recording — import a remote AUDIO/VIDEO recording (up to
@@ -45,8 +47,9 @@ export async function mediaUrlImportRoutes(app: FastifyInstance) {
   app.post(
     "/v1/media/import-recording",
     // A server-side multi-GB fetch is expensive; cap request rate on top of the
-    // per-user/global in-flight caps in the lib.
-    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    // per-user/global in-flight caps in the lib. An import lands a file in the
+    // account: a connected app needs a scope that lets it write.
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } }, preHandler: requireAppWriteScope() },
     async (req, reply) => {
       const userId = req.userId
       if (!userId) {
@@ -63,25 +66,32 @@ export async function mediaUrlImportRoutes(app: FastifyInstance) {
       }
 
       const { url, confirmationId } = parsed.data
-      const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
+      const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id, via: importViaOf(req), appId: req.appAuthorization?.appId ?? null, authorizationId: req.appAuthorization?.authorizationId ?? null }
 
       // Cancel the server-side download if the client hangs up — a
       // disconnected request must not keep streaming for 40 minutes.
       const ac = new AbortController()
       req.raw.on("close", () => ac.abort())
 
+      // The confirmation the fetch ran under: the one sent, or one derived from a key's standing authorization.
+      let spent: string | null = null
       let result: Awaited<ReturnType<typeof importRecordingFromUrl>>
       try {
         await requireImportAllowed(url, rights)
-        result = await importRecordingFromUrl(userId, url, { signal: ac.signal, beforeFetch: () => spendImportConfirmation(url, rights) })
+        result = await importRecordingFromUrl(userId, url, {
+          signal: ac.signal,
+          beforeFetch: async () => {
+            spent = await spendImportConfirmation(url, rights)
+          },
+        })
       } catch (e) {
         if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
         throw e
       }
       // A 429 never reached the fetch, so nothing was spent and nothing is noted.
-      if (confirmationId && (result.ok || result.status !== 429)) {
+      if (spent && (result.ok || result.status !== 429)) {
         const detail = result.ok ? { kind: "download_completed" as const, detail: { url: result.url } } : { kind: "download_failed" as const, detail: { code: result.code } }
-        recordEvent({ confirmationId, ...detail, lane: "route", requestId: req.id }).catch(() => undefined)
+        recordEvent({ confirmationId: spent, ...detail, lane: "route", requestId: req.id }).catch(() => undefined)
       }
       if (!result.ok) {
         return reply.status(result.status).send({

@@ -70,6 +70,7 @@ import {
 import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { config } from "../lib/config.js"
+import { IMPORT_VIA_HEADER } from "../lib/import-via.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -287,7 +288,7 @@ async function createAnalysisChild(
   if (typeof workspace === "string") headers[WORKSPACE_HEADER_LOWER] = workspace
   // Spend-surface flags. They only mean anything behind the internal secret,
   // and that is exactly the branch above that re-asserts it.
-  for (const flag of ["x-app-run", "x-web-free-mode"] as const) {
+  for (const flag of ["x-app-run", "x-web-free-mode", IMPORT_VIA_HEADER] as const) {
     const value = req.headers[flag]
     if (typeof value === "string") headers[flag] = value
   }

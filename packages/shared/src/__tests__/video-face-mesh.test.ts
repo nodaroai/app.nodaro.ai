@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   VIDEO_FACE_MESH_LIMITS,
+  VIDEO_FACE_MESH_PARTS,
   VIDEO_FACE_MESH_PATH,
   VIDEO_FACE_MESH_RECIPE,
   videoFaceMeshCreditId,
@@ -47,5 +48,11 @@ describe("video face mesh pricing rows", () => {
   it("names the route and a dated recipe", () => {
     expect(VIDEO_FACE_MESH_PATH).toBe("/v1/video-face-mesh")
     expect(VIDEO_FACE_MESH_RECIPE).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe("video face mesh parts", () => {
+  it("the full mesh first (the default), then the eye and lip outlines, then the lip outline", () => {
+    expect(VIDEO_FACE_MESH_PARTS).toEqual(["full", "features", "mouth"])
   })
 })

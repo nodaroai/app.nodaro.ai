@@ -122,6 +122,32 @@ describe("handleVideoFaceMesh", () => {
     expect(mocks.markJobCompleted.mock.calls[0]![1].output_data).not.toHaveProperty("colormap")
   })
 
+  it("parts: only the eye and lip outlines, or only the lip outline, drawn and named in the output", async () => {
+    for (const parts of ["features", "mouth"] as const) {
+      vi.clearAllMocks()
+      mocks.createWorkDir.mockResolvedValue("/w")
+      mocks.drawFaceMeshVideo.mockResolvedValue({ outputPath: "/w/face-mesh.mp4", width: 720, height: 1280, frames: 505, framesWithFaces: 491, facesDrawn: 841, cpuMs: 20_000 })
+      mocks.shouldSaveJobResult.mockResolvedValue(true)
+      mocks.markJobCompleted.mockResolvedValue(true)
+      await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", drawOnUrl: "https://x/depth.mp4", parts }), ctx)
+      expect(mocks.drawFaceMeshVideo).toHaveBeenCalledWith(expect.objectContaining({ parts }))
+      expect(mocks.markJobCompleted.mock.calls[0]![1].output_data).toMatchObject({ parts, recipe: VIDEO_FACE_MESH_RECIPE })
+    }
+  })
+
+  it('no parts, "full" or an unknown value: the full mesh — the drawer and the output exactly as before', async () => {
+    for (const parts of [undefined, "full", "eyes"]) {
+      vi.clearAllMocks()
+      mocks.createWorkDir.mockResolvedValue("/w")
+      mocks.drawFaceMeshVideo.mockResolvedValue({ outputPath: "/w/face-mesh.mp4", width: 720, height: 1280, frames: 505, framesWithFaces: 491, facesDrawn: 841, cpuMs: 20_000 })
+      mocks.shouldSaveJobResult.mockResolvedValue(true)
+      mocks.markJobCompleted.mockResolvedValue(true)
+      await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", ...(parts ? { parts } : {}) }), ctx)
+      expect(mocks.drawFaceMeshVideo.mock.calls[0]![0]).not.toHaveProperty("parts")
+      expect(mocks.markJobCompleted.mock.calls[0]![1].output_data).not.toHaveProperty("parts")
+    }
+  })
+
   it("a coloured map with no depth render fails deterministically, before anything is downloaded", async () => {
     await expect(handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", colormap: "inferno" }), ctx)).rejects.toBeInstanceOf(DeterministicJobError)
     expect(mocks.downloadFile).not.toHaveBeenCalled()

@@ -4,15 +4,18 @@ import { createCommitFiles, type CommitFiles } from "./commit-files.js"
 import { liveDeployment, type Deployed, type DeploymentRecord } from "./deployed.js"
 import { createDeploymentSource, type DeploymentSource } from "./deployment-source.js"
 import { createGitHubReader, type FetchLike, type GitHubReader } from "./github.js"
+import { readHeaderMap } from "./header-map.js"
 import { HEADER_REPO, parseHeaderProducts, type HeaderProduct, type ParsedProducts, type SiteEnvironment } from "./products.js"
 import { releasesOf, type Release } from "./read-version.js"
 import { createReleaseNotes, type ReleaseNotes, type SiteVersion } from "./release-notes.js"
 import { createReleaseSummaries, type Summarize } from "./release-summary.js"
 import type { HeaderVersionsReport, HeaderVersionsService, LatestResult, ProductView, ReleaseNotesResult, SiteResult, SiteView } from "./report-types.js"
 import { failure, ranked, readLockfileSite, readSiteFileSite } from "./site-readings.js"
+import { probeLink, type ProbeLink } from "./world-links.js"
 
 export type {
   DeployView,
+  HeaderMapResult,
   HeaderVersionsReport,
   HeaderVersionsService,
   LatestResult,
@@ -34,7 +37,9 @@ export { ranked } from "./site-readings.js"
  * the same answer, built at most once a minute per process. Deployments and
  * their statuses are asked again on every build (conditionally, see
  * `github.ts`); what never changes is kept: a file at a commit, the commits
- * between two release tags, and a release's plain summary.
+ * between two release tags, and a release's plain summary. The header's own
+ * explanations are read as they stand on each build too, and its worlds'
+ * addresses asked (`header-map.ts`).
  */
 
 const REPORT_TTL_MS = 60_000
@@ -48,6 +53,8 @@ interface Sources {
   readonly deployments: DeploymentSource | null
   readonly notes: ReleaseNotes | null
   readonly fetch: FetchLike
+  /** Asks a world's address; never the plain `fetch`, whose hosts come from the deployment's own list. */
+  readonly probe: ProbeLink
   readonly now: () => number
   readonly products: ParsedProducts
 }
@@ -141,10 +148,11 @@ async function headerPackage(src: Sources): Promise<string | null> {
 }
 
 async function build(src: Sources): Promise<HeaderVersionsReport> {
-  const [{ latest, releases }, views, packageName] = await Promise.all([
+  const [{ latest, releases }, views, packageName, headerMap] = await Promise.all([
     headerReleases(src),
     Promise.all(src.products.products.map((product) => productView(src, product))),
     headerPackage(src),
+    readHeaderMap(src.github, src.probe),
   ])
   const release = latest.status === "ok" ? latest.version : null
   const versions = releases.map((r) => r.version)
@@ -155,6 +163,7 @@ async function build(src: Sources): Promise<HeaderVersionsReport> {
     headerPackage: packageName,
     latest,
     releaseNotes: await releaseNotes(src, latest, releases, views),
+    headerMap,
     products: views.map((view) => ({ ...view, sites: { production: rank(view.sites.production), staging: rank(view.sites.staging) } })),
     checkedAt: new Date(src.now()).toISOString(),
   }
@@ -168,7 +177,7 @@ async function build(src: Sources): Promise<HeaderVersionsReport> {
  */
 export function createHeaderVersions(
   env: { githubToken: string; productsJson?: string },
-  deps: { fetch?: FetchLike; github?: GitHubReader; now?: () => number; products?: readonly HeaderProduct[]; summarize?: Summarize } = {},
+  deps: { fetch?: FetchLike; github?: GitHubReader; now?: () => number; probe?: ProbeLink; products?: readonly HeaderProduct[]; summarize?: Summarize } = {},
 ): HeaderVersionsService {
   const fetch: FetchLike = deps.fetch ?? ((url, init) => globalThis.fetch(url, init))
   const now = deps.now ?? Date.now
@@ -180,6 +189,7 @@ export function createHeaderVersions(
     deployments: github ? createDeploymentSource(github) : null,
     notes: github ? createReleaseNotes(github, deps.summarize ?? createReleaseSummaries()) : null,
     fetch,
+    probe: deps.probe ?? probeLink,
     now,
     products: deps.products ? { products: deps.products, invalid: [] } : parseHeaderProducts(env.productsJson),
   }

@@ -11,6 +11,8 @@ import { runYtDlpOptions } from "../providers/video/ytdlp-options-run.js"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
+import { importViaOf } from "../lib/import-via.js"
+import { requireAppWriteScope } from "../lib/scope-prehandler.js"
 
 const videoAudioBody = z.object({
   url: safeUrlSchema.refine(
@@ -24,7 +26,8 @@ const videoAudioBody = z.object({
 })
 
 export async function youtubeAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/youtube-audio", async (req, reply) => {
+  // An import lands a file in the account: a connected app needs a scope that lets it write.
+  app.post("/v1/youtube-audio", { preHandler: requireAppWriteScope() }, async (req, reply) => {
     const parsed = videoAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -40,7 +43,7 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
 
     // The site's policy and the rights check (reads) come before anything
     // else; the confirmation is spent right before yt-dlp runs, below.
-    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id }
+    const rights = { userId, confirmationId, lane: "route" as const, requestId: req.id, via: importViaOf(req), appId: req.appAuthorization?.appId ?? null, authorizationId: req.appAuthorization?.authorizationId ?? null }
     try {
       await requireImportAllowed(url, rights)
     } catch (e) {

@@ -57,6 +57,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
 import { hasCredits } from "../lib/config.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { importViaOf } from "../lib/import-via.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { personalPayer, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
@@ -309,6 +310,8 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
         inputOverrides: sent,
         reviewerPresent,
         webFreeMode: await resolveWebSurfaceFlag(req),
+        // How the final was started: its imports of links are held to the same authorization as the caller's own.
+        ...(importViaOf(req) ? { importVia: importViaOf(req)! } : {}),
         billingContext: req.billingContext ?? personalPayer(userId),
         idempotencyKey: headerKey.length >= MIN_IDEMPOTENCY_KEY_LENGTH ? headerKey : undefined,
       })

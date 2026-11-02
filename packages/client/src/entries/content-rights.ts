@@ -5,4 +5,9 @@
  * re-exports every entry, so each name here is also importable from
  * `@nodaro/sdk`.
  */
-export { ContentRightsResource, type ContentRightsDeclaration, type ContentRightsConfirmation } from "../resources/content-rights.js"
+export {
+  ContentRightsResource,
+  type ContentRightsAuthorization,
+  type ContentRightsDeclaration,
+  type ContentRightsConfirmation,
+} from "../resources/content-rights.js"

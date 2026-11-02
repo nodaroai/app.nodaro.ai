@@ -61,6 +61,7 @@ const DeletedAppsPage = lazy(() => import("@/app/(dashboard)/apps/deleted/page")
 const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
 const ExplorePage = lazy(() => import("@/ee/app/explore/page"))
 const AccessibilityStatementPage = lazy(() => import("@/ee/app/accessibility/page"))
+const CopyrightComplaintsPage = lazy(() => import("@/app/copyright-complaints/page"))
 const InvitationPage = lazy(() => import("@/ee/app/join/invitation-page"))
 const JoinCodePage = lazy(() => import("@/ee/app/join/join-code-page"))
 const NewOrgPage = lazy(() => import("@/ee/app/org/new-org-page"))
@@ -283,6 +284,14 @@ export const router = createBrowserRouter([
         errorElement: <RouteErrorBoundary />,
       }]
     : []),
+  // The public complaints form: a complainant has no account here. Every
+  // edition (a self-hosted install receives the same complaints). Linked from
+  // nowhere until the handler's screen exists.
+  {
+    path: "/copyright-complaints",
+    element: <SuspenseWrapper><CopyrightComplaintsPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
   // Public, no-auth return page for embedded Stripe Checkout (new-tab flow).
   // Only reachable by returning from Stripe, which never happens without
   // billing — and the page talks about plans and credits. Also withheld when

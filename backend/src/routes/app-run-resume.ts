@@ -47,6 +47,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
 import { hasCredits } from "../lib/config.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { importViaOf } from "../lib/import-via.js"
 import { personalPayer, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
@@ -358,6 +359,8 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
         continueMode: "from-failed",
         appRunResume: true,
         webFreeMode,
+        // How the retry was started: its imports of links are held to the same authorization as the caller's own.
+        ...(importViaOf(req) ? { importVia: importViaOf(req)! } : {}),
         billingContext,
         reviewerPresent,
       }

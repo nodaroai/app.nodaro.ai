@@ -448,6 +448,46 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     )
   })
 
+  it("the Motion column's Full depth offers the depth blur and what the face mesh draws (a Cast Swap engine from 0.430.0); the Precise column neither", async () => {
+    const user = userEvent.setup()
+    const latest = (env: string): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env,
+      supports: {
+        castSwap: {
+          ...ENVIRONMENTS[0]!.supports.castSwap,
+          steps: true,
+          shotList: true,
+          faceMesh: true,
+          depthBlur: true,
+          faceMeshParts: ["full", "features", "mouth"],
+          fullDepthScenes: ["description", "original", "none", "description-and-original"],
+        },
+      },
+    })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [latest("production"), latest("staging")] } })
+    routes[`PUT ${MOTION_URL}`] = (init) => ({
+      body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-02T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Pulse/)
+    const blur = await within(motion).findByRole("spinbutton", { name: "Depth blur" })
+    await user.type(blur, "28")
+    await user.click(within(motion).getByRole("checkbox", { name: "Face mesh" }))
+    await user.click(within(motion).getByRole("combobox", { name: "Face mesh lines" }))
+    await user.click(screen.getByRole("option", { name: "Mouth only" }))
+    // The Precise column (Faces hidden) has neither.
+    const precise = within(await section(/Pulse/)).getByRole("group", { name: /Pulse Precise$/ })
+    expect(within(precise).queryByRole("spinbutton", { name: "Depth blur" })).toBeNull()
+    expect(within(precise).queryByRole("combobox", { name: "Face mesh lines" })).toBeNull()
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
+        { motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "mouth" } } } },
+      ]),
+    )
+  })
+
   it("once every environment runs the shot list, a stored scene with no shot list says what it runs as", async () => {
     const shotList = (env: string): TrendEngineEnvironment => ({
       ...ENVIRONMENTS[0]!,
