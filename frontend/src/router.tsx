@@ -129,6 +129,9 @@ const AdminReview = lazy(() => import("@/ee/app/(admin)/admin/review/page"))
 const AdminTrends = lazy(() => import("@/ee/app/(admin)/admin/trends/page"))
 const AdminTrendEditor = lazy(() => import("@/ee/app/(admin)/admin/trends/detail/page"))
 const AdminNodaroMotion = lazy(() => import("@/ee/app/(admin)/admin/nodaro-motion/page"))
+const AdminTrendRadar = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/page"))
+const AdminTrendRadarSettings = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/settings-page"))
+const AdminTrendRadarCandidate = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/candidate-page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -197,6 +200,10 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
             { path: "trends", element: <SuspenseWrapper><AdminTrends /></SuspenseWrapper> },
             { path: "trends/:id", element: <SuspenseWrapper><AdminTrendEditor /></SuspenseWrapper> },
             { path: "nodaro-motion", element: <SuspenseWrapper><AdminNodaroMotion /></SuspenseWrapper> },
+            // The radar's queue, its settings and one candidate: Cloud only, like the trends it feeds.
+            { path: "trend-radar", element: <SuspenseWrapper><AdminTrendRadar /></SuspenseWrapper> },
+            { path: "trend-radar/settings", element: <SuspenseWrapper><AdminTrendRadarSettings /></SuspenseWrapper> },
+            { path: "trend-radar/:id", element: <SuspenseWrapper><AdminTrendRadarCandidate /></SuspenseWrapper> },
           ]
         : []),
     ],
